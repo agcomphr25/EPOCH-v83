@@ -404,19 +404,13 @@ router.post('/finalized', async (req: Request, res: Response) => {
       const allFeatures = await storage.getAllFeatures();
       const allStockModels = await storage.getAllStockModels();
       
-      // Debug: Check what we're getting from the database
-      console.log(`📊 Loaded ${allFeatures.length} features from database`);
-      const sampleFeature = allFeatures.find(f => f.id === 'action_inlet');
-      if (sampleFeature) {
-        console.log('📊 Sample feature (action_inlet):', {
-          id: sampleFeature.id,
-          displayName: sampleFeature.displayName,
-          hasOptions: !!sampleFeature.options,
-          optionsType: typeof sampleFeature.options,
-          optionsLength: Array.isArray(sampleFeature.options) ? sampleFeature.options.length : 'not array',
-          firstOption: Array.isArray(sampleFeature.options) && sampleFeature.options.length > 0 ? sampleFeature.options[0] : null
-        });
-      }
+      // Helper function to create a fallback display name from a value
+      const createFallbackDisplayName = (value: string): string => {
+        return value
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+      };
       
       // Get stock model information
       const stockModel = allStockModels.find(m => m.id === order.modelId);
@@ -448,6 +442,9 @@ router.post('/finalized', async (req: Request, res: Response) => {
                     const selectionPrice = option.price || 0;
                     featureSelectionPrices[selectionValue] = selectionPrice;
                     totalPrice += selectionPrice;
+                  } else {
+                    // Fallback: create display name from value
+                    featureSelectionDisplayNames[selectionValue] = createFallbackDisplayName(selectionValue);
                   }
                 }
                 featurePrices[featureKey] = totalPrice;
@@ -460,7 +457,8 @@ router.post('/finalized', async (req: Request, res: Response) => {
                   featureSelectionPrices[featureValue] = selectionPrice;
                   featurePrices[featureKey] = selectionPrice;
                 } else {
-                  // No option found, use feature base price
+                  // Fallback: create display name from value and use feature base price
+                  featureSelectionDisplayNames[featureValue] = createFallbackDisplayName(featureValue);
                   featurePrices[featureKey] = featureDetail.price || 0;
                 }
               }

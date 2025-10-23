@@ -59,6 +59,14 @@ router.post('/', async (req, res) => {
     // Get features information for pricing and display names
     const allFeatures = await storage.getAllFeatures();
     
+    // Helper function to create a fallback display name from a value
+    const createFallbackDisplayName = (value: string): string => {
+      return value
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    };
+    
     // Build comprehensive feature data for PDF
     const featurePrices: Record<string, number> = {};
     const featureDisplayNames: Record<string, string> = {};
@@ -86,6 +94,9 @@ router.post('/', async (req, res) => {
                   const selectionPrice = option.price || 0;
                   featureSelectionPrices[selectionValue] = selectionPrice;
                   totalPrice += selectionPrice;
+                } else {
+                  // Fallback: create display name from value
+                  featureSelectionDisplayNames[selectionValue] = createFallbackDisplayName(selectionValue);
                 }
               }
               featurePrices[featureKey] = totalPrice;
@@ -98,7 +109,8 @@ router.post('/', async (req, res) => {
                 featureSelectionPrices[featureValue] = selectionPrice;
                 featurePrices[featureKey] = selectionPrice;
               } else {
-                // No option found, use feature base price
+                // Fallback: create display name from value and use feature base price
+                featureSelectionDisplayNames[featureValue] = createFallbackDisplayName(featureValue);
                 featurePrices[featureKey] = featureDetail.price || 0;
               }
             }

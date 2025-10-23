@@ -16,6 +16,7 @@ Search standardization: All department queue pages use unified OrderSearchBox co
 Navigation dropdown behavior: All navbar dropdown menus close automatically after selection.
 
 ## Recent Changes
+- **Admin-Only Resend Email for Finalized Orders** (Oct 23, 2025): Extended the resend email functionality to support FINALIZED orders with admin-only authorization. Admins can now resend review and confirm emails for finalized orders via hover button on both AllOrdersPage and OrdersList. Backend enforces admin authorization with session validation and role checking, falling back to hardcoded admin users (epoch, glennj, tasham) when database lookup fails.
 - **Order Status Filter and Email Resend** (Oct 23, 2025): Added PENDING_SIGNATURE status filter to All Orders page with complete filtering logic combining department and status filters. Implemented hover-activated resend email button for PENDING_SIGNATURE orders, allowing staff to re-trigger customer confirmation emails via POST `/api/followup-orders/:orderId/resend-email` with validation.
 - **Asset Path Resolution System** (Oct 23, 2025): Implemented robust asset path resolver (`server/src/utils/assetPaths.ts`) that works consistently across development and production environments. All logo loading functions now use this centralized resolver instead of fragile relative paths.
 - **Email Branding and Contact** (Oct 23, 2025): Company logo now properly appears in email header using base64 encoding. Contact email updated from info@agcomposites.com to sales@agcomposites.com throughout all email templates.

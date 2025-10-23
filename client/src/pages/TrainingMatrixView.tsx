@@ -36,6 +36,7 @@ type TrainingMatrixEntry = {
   lastScore: number | null;
   status: string;
   notes: string | null;
+  isLegacy?: boolean | null;
 };
 
 type Certification = {
@@ -176,8 +177,11 @@ export default function TrainingMatrixView() {
         : b.name.localeCompare(a.name);
     });
 
-    const trainings = matrixData && matrixData.length > 0 
-      ? Array.from(new Set(matrixData.map((e) => e.trainingName))).sort((a, b) =>
+    // Filter out legacy certifications - only show module training
+    const moduleTrainingData = matrixData ? matrixData.filter(entry => !entry.isLegacy) : [];
+    
+    const trainings = moduleTrainingData && moduleTrainingData.length > 0 
+      ? Array.from(new Set(moduleTrainingData.map((e) => e.trainingName))).sort((a, b) =>
           sortOrder === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
         )
       : [];
@@ -201,8 +205,8 @@ export default function TrainingMatrixView() {
         : trainings;
 
     const matrixMap = new Map<string, TrainingMatrixEntry>();
-    if (matrixData) {
-      matrixData.forEach((entry) => {
+    if (moduleTrainingData) {
+      moduleTrainingData.forEach((entry) => {
         const key = `${entry.employeeName}-${entry.trainingName}`;
         matrixMap.set(key, entry);
       });
@@ -502,7 +506,7 @@ export default function TrainingMatrixView() {
   };
 
   const renderCertificationsTab = () => {
-    if (certsLoading || employeesLoading) {
+    if (matrixLoading || employeesLoading) {
       return (
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-200 rounded w-1/4"></div>
@@ -526,19 +530,32 @@ export default function TrainingMatrixView() {
       department: emp.department,
     }));
 
-    const employees = employeeList.sort((a, b) =>
-      sortOrder === 'asc'
-        ? a.name.localeCompare(b.name)
-        : b.name.localeCompare(a.name)
-    );
+    // Owners list - these should appear at the bottom
+    const owners = ['Dave', 'Angie', 'Matt', 'Laurie'];
+    const isOwner = (name: string) =>
+      owners.some((owner) => name.toLowerCase().includes(owner.toLowerCase()));
 
-    // Extract unique certifications (filter out nulls)
-    const certifications = certificationsData && certificationsData.length > 0
-      ? Array.from(new Set(certificationsData.map((c) => c.certificationName)))
-          .filter((name) => name !== null && name !== undefined)
-          .sort((a, b) =>
-            sortOrder === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
-          )
+    // Sort employees based on sortOrder, with owners always at the bottom
+    const employees = employeeList.sort((a, b) => {
+      const aIsOwner = isOwner(a.name);
+      const bIsOwner = isOwner(b.name);
+
+      if (aIsOwner && !bIsOwner) return 1;
+      if (!aIsOwner && bIsOwner) return -1;
+
+      return sortOrder === 'asc'
+        ? a.name.localeCompare(b.name)
+        : b.name.localeCompare(a.name);
+    });
+
+    // Filter for legacy certifications only
+    const legacyCertData = matrixData ? matrixData.filter(entry => entry.isLegacy === true) : [];
+
+    // Extract unique certifications
+    const certifications = legacyCertData && legacyCertData.length > 0
+      ? Array.from(new Set(legacyCertData.map((c) => c.trainingName))).sort((a, b) =>
+          sortOrder === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
+        )
       : [];
 
     const filteredEmployees = searchTerm
@@ -547,11 +564,11 @@ export default function TrainingMatrixView() {
         )
       : employees;
 
-    // Create lookup map
-    const certMap = new Map<string, EmployeeCertification>();
-    if (certificationsData) {
-      certificationsData.forEach((cert) => {
-        const key = `${cert.employeeName}-${cert.certificationName}`;
+    // Create lookup map for legacy certifications
+    const certMap = new Map<string, TrainingMatrixEntry>();
+    if (legacyCertData) {
+      legacyCertData.forEach((cert) => {
+        const key = `${cert.employeeName}-${cert.trainingName}`;
         certMap.set(key, cert);
       });
     }
@@ -563,7 +580,7 @@ export default function TrainingMatrixView() {
     const completedCertCount = (employeeName: string) => {
       return certifications.filter((cert) => {
         const entry = getCert(employeeName, cert);
-        return entry?.isActive || entry?.dateEarned;
+        return entry?.status === 'COMPLETED';
       }).length;
     };
 
@@ -667,10 +684,8 @@ export default function TrainingMatrixView() {
                     </td>
                     {certifications.map((cert) => {
                       const entry = getCert(employee.name, cert);
-                      const isEarned =
-                        entry?.isActive || entry?.dateEarned;
-                      const date = formatDate(entry?.dateEarned || null);
-                      const expiryDate = formatDate(entry?.expiryDate || null);
+                      const isCompleted = entry?.status === 'COMPLETED';
+                      const date = formatDate(entry?.lastCompleted || null);
 
                       return (
                         <td
@@ -678,17 +693,12 @@ export default function TrainingMatrixView() {
                           className="p-3 text-center border-l"
                           data-testid={`cell-cert-${employee.name.replace(/\s+/g, '-').toLowerCase()}-${cert.replace(/\s+/g, '-').toLowerCase()}`}
                         >
-                          {isEarned ? (
+                          {isCompleted ? (
                             <div className="flex flex-col items-center gap-1">
                               <CheckCircle2 className="h-5 w-5 text-green-600" />
                               {date && (
                                 <span className="text-xs text-muted-foreground">
-                                  Earned: {date}
-                                </span>
-                              )}
-                              {expiryDate && (
-                                <span className="text-xs text-orange-600">
-                                  Expires: {expiryDate}
+                                  {date}
                                 </span>
                               )}
                               {entry?.notes && (

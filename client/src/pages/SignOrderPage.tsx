@@ -27,6 +27,16 @@ interface FollowupOrder {
     features?: Record<string, any>;
     notes?: string;
     shipping?: number;
+    customerName?: string;
+    customerEmail?: string;
+    customerPhone?: string;
+    customerAddress?: {
+      street: string;
+      street2?: string;
+      city: string;
+      state: string;
+      zipCode: string;
+    };
   };
 }
 
@@ -165,6 +175,47 @@ export default function SignOrderPage() {
                   <div>
                     <p className="text-sm text-gray-500 dark:text-gray-400">Customer PO</p>
                     <p className="font-medium" data-testid="text-customer-po">{orderSummary.customerPO}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Customer Information */}
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Customer Information</h3>
+              <div className="space-y-3">
+                {orderSummary.customerName && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Name:</span>
+                    <span className="font-medium" data-testid="text-customer-name">{orderSummary.customerName}</span>
+                  </div>
+                )}
+                {orderSummary.customerEmail && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Email:</span>
+                    <span className="font-medium" data-testid="text-customer-email">{orderSummary.customerEmail}</span>
+                  </div>
+                )}
+                {orderSummary.customerPhone && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Phone:</span>
+                    <span className="font-medium" data-testid="text-customer-phone">{orderSummary.customerPhone}</span>
+                  </div>
+                )}
+                {orderSummary.customerAddress && (
+                  <div>
+                    <p className="text-gray-600 dark:text-gray-400 mb-2">Shipping Address:</p>
+                    <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-md">
+                      <p className="font-medium" data-testid="text-shipping-address-street">{orderSummary.customerAddress.street}</p>
+                      {orderSummary.customerAddress.street2 && (
+                        <p className="font-medium" data-testid="text-shipping-address-street2">{orderSummary.customerAddress.street2}</p>
+                      )}
+                      <p className="font-medium" data-testid="text-shipping-address-city">
+                        {orderSummary.customerAddress.city}, {orderSummary.customerAddress.state} {orderSummary.customerAddress.zipCode}
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>

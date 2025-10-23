@@ -522,11 +522,75 @@ router.post('/:orderId/resend-email', async (req, res) => {
       });
     }
 
-    // Verify PDF exists
-    if (!followupOrder.pdfPath || !fs.existsSync(followupOrder.pdfPath)) {
-      return res.status(400).json({ 
-        error: 'PDF not found. Please create a new follow-up order.' 
-      });
+    // Get customer address
+    const addresses = await storage.getCustomerAddresses(order.customerId || '');
+    const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
+
+    // Get stock model information
+    const stockModels = await storage.getAllStockModels();
+    const stockModel = stockModels.find(m => m.id === order.modelId);
+
+    // Get features information for pricing and display names
+    const allFeatures = await storage.getAllFeatures();
+    
+    // Helper function to create a fallback display name from a value
+    const createFallbackDisplayName = (value: string): string => {
+      return value
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    };
+    
+    // Build comprehensive feature data for PDF
+    const featurePrices: Record<string, number> = {};
+    const featureDisplayNames: Record<string, string> = {};
+    const featureSelectionDisplayNames: Record<string, string> = {};
+    const featureSelectionPrices: Record<string, number> = {};
+
+    if (order.features && typeof order.features === 'object') {
+      for (const [featureKey, featureValue] of Object.entries(order.features)) {
+        if (featureValue && featureValue !== false && featureValue !== '') {
+          const featureDetail = allFeatures.find((f: any) => f.id === featureKey);
+          if (featureDetail) {
+            // Store feature-level display name
+            featureDisplayNames[featureKey] = featureDetail.displayName || featureDetail.name || featureKey;
+            
+            // Process feature selections to get display names and prices
+            const featureOptions = (featureDetail as any).options || [];
+            
+            if (Array.isArray(featureValue)) {
+              // Handle array of selections (like rails)
+              let totalPrice = 0;
+              for (const selectionValue of featureValue) {
+                const option = featureOptions.find((opt: any) => opt.value === selectionValue);
+                if (option) {
+                  featureSelectionDisplayNames[selectionValue] = option.displayName || option.label || selectionValue;
+                  const selectionPrice = option.price || 0;
+                  featureSelectionPrices[selectionValue] = selectionPrice;
+                  totalPrice += selectionPrice;
+                } else {
+                  // Fallback: create display name from value
+                  featureSelectionDisplayNames[selectionValue] = createFallbackDisplayName(selectionValue);
+                }
+              }
+              featurePrices[featureKey] = totalPrice;
+            } else {
+              // Handle single selection
+              const option = featureOptions.find((opt: any) => opt.value === featureValue);
+              if (option) {
+                featureSelectionDisplayNames[featureValue] = option.displayName || option.label || featureValue;
+                const selectionPrice = option.price || 0;
+                featureSelectionPrices[featureValue] = selectionPrice;
+                featurePrices[featureKey] = selectionPrice;
+              } else {
+                // Fallback: create display name from value and use feature base price
+                featureSelectionDisplayNames[featureValue] = createFallbackDisplayName(featureValue);
+                featurePrices[featureKey] = featureDetail.price || 0;
+              }
+            }
+          }
+        }
+      }
     }
 
     // Generate signature link using existing token
@@ -535,7 +599,66 @@ router.post('/:orderId/resend-email', async (req, res) => {
       : 'http://localhost:5000';
     const signatureLink = `${baseUrl}/sign-order/${followupOrder.signatureToken}`;
 
-    // Send email
+    // Prepare order data for PDF with LATEST discount information
+    const orderData = {
+      orderId: order.orderId,
+      orderDate: new Date(order.orderDate),
+      dueDate: new Date(order.dueDate),
+      customerId: order.customerId || '',
+      customerPO: order.customerPO || undefined,
+      customerName: customer.name,
+      customerEmail: customer.email,
+      customerPhone: customer.phone || undefined,
+      customerCompany: customer.company || undefined,
+      customerAddress: defaultAddress ? {
+        street: defaultAddress.street,
+        street2: defaultAddress.street2 || undefined,
+        city: defaultAddress.city,
+        state: defaultAddress.state,
+        zipCode: defaultAddress.zipCode,
+        country: defaultAddress.country,
+      } : undefined,
+      modelId: order.modelId || undefined,
+      modelName: stockModel?.name || undefined,
+      modelDisplayName: stockModel?.displayName || undefined,
+      modelPrice: stockModel?.price || 0,
+      handedness: order.handedness || undefined,
+      features: order.features as Record<string, any> || undefined,
+      featurePrices,
+      featureDisplayNames,
+      featureSelectionDisplayNames,
+      featureSelectionPrices,
+      notes: order.notes || undefined,
+      shipping: order.shipping || 0,
+      paymentStatus: 'PENDING' as const,
+      discountCode: order.discountCode || undefined,
+      customDiscountType: order.customDiscountType || undefined,
+      customDiscountValue: order.customDiscountValue || undefined,
+      showCustomDiscount: order.showCustomDiscount || undefined,
+    };
+
+    console.log('🔄 Regenerating PDF with latest order data including discounts:', {
+      orderId: orderData.orderId,
+      discountCode: orderData.discountCode,
+      customDiscountType: orderData.customDiscountType,
+      customDiscountValue: orderData.customDiscountValue,
+      showCustomDiscount: orderData.showCustomDiscount,
+    });
+
+    // Regenerate PDF with latest order data (including updated discounts)
+    const pdfBuffer = await generateSalesOrderPDF(orderData, true);
+    const pdfFilename = `sales_order_${orderId}_${Date.now()}.pdf`;
+    const pdfPath = path.join(uploadsDir, pdfFilename);
+    fs.writeFileSync(pdfPath, pdfBuffer);
+
+    // Update follow-up order with new PDF path
+    await storage.updateFollowupOrder(followupOrder.id, {
+      pdfPath,
+      pdfGenerated: true,
+      pdfGeneratedAt: new Date(),
+    });
+
+    // Send email with regenerated PDF
     const emailData = {
       orderId: order.orderId,
       customerName: customer.name,
@@ -551,7 +674,7 @@ router.post('/:orderId/resend-email', async (req, res) => {
       signatureLink,
     };
 
-    const emailResult = await sendFollowupOrderEmail(emailData, followupOrder.pdfPath);
+    const emailResult = await sendFollowupOrderEmail(emailData, pdfPath);
 
     if (emailResult.success) {
       // Update email sent timestamp

@@ -930,7 +930,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       currentY -= logoHeight + 15; // Added spacing between logo and contact info
 
       // Company contact information under logo
-      page.drawText('230 Hamer Rd, Owens Crossroads, AL 35763', {
+      page.drawText('230 Hamer Rd, Owens Cross Roads, AL 35763', {
         x: margin,
         y: currentY,
         size: 8,
@@ -2619,7 +2619,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     });
 
     page2Y -= 20;
-    page2.drawText('AG Composites | 230 Hamer Rd, Owens Crossroads, AL 35763', {
+    page2.drawText('AG Composites | 230 Hamer Rd, Owens Cross Roads, AL 35763', {
       x: margin,
       y: page2Y,
       size: 8,

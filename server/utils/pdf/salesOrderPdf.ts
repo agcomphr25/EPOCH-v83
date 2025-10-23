@@ -111,7 +111,7 @@ export async function generateSalesOrderPDF(
 
     currentY -= logoHeight + 15;
 
-    page.drawText('230 Hamer Rd, Owens Crossroads, AL 35763', {
+    page.drawText('230 Hamer Rd, Owens Cross Roads, AL 35763', {
       x: margin,
       y: currentY,
       size: 8,
@@ -694,7 +694,7 @@ export async function generateSalesOrderPDF(
   });
 
   page2Y -= 15;
-  page2.drawText('AG Composites | 230 Hamer Rd, Owens Crossroads, AL 35763', {
+  page2.drawText('AG Composites | 230 Hamer Rd, Owens Cross Roads, AL 35763', {
     x: margin,
     y: page2Y,
     size: 8,

@@ -116,6 +116,19 @@ router.post('/', async (req, res) => {
       paymentStatus: 'PENDING' as const, // New orders are always pending
     };
 
+    console.log('📄 PDF Order Data Debug:', {
+      orderId: orderData.orderId,
+      modelId: orderData.modelId,
+      modelDisplayName: orderData.modelDisplayName,
+      modelPrice: orderData.modelPrice,
+      featuresCount: orderData.features ? Object.keys(orderData.features).length : 0,
+      features: orderData.features,
+      featurePricesCount: Object.keys(featurePrices).length,
+      featurePrices,
+      featureDisplayNamesCount: Object.keys(featureDisplayNames).length,
+      featureDisplayNames,
+    });
+
     // Generate PDF
     const pdfBuffer = await generateSalesOrderPDF(orderData, true);
     const pdfFilename = `sales_order_${orderId}_${Date.now()}.pdf`;

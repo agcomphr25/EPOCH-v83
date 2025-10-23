@@ -553,11 +553,6 @@ export default function VendorManagement() {
       approvalPdfUrl: data.approvalPdfUrl || undefined,
     };
 
-    console.log('Submitting vendor data:', {
-      approvalSource: normalizedData.approvalSource,
-      approvalPdfUrl: normalizedData.approvalPdfUrl,
-    });
-
     if (editingVendor) {
       updateVendorMutation.mutate({
         id: editingVendor.id,

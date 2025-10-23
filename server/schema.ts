@@ -2218,6 +2218,10 @@ export const vendors = pgTable('vendors', {
   approved: boolean('approved').notNull().default(false),
   evaluated: boolean('evaluated').notNull().default(false),
   evaluationDate: date('evaluation_date'),
+  qualityScore: integer('quality_score'), // 1-5: 1=Poor, 2=Needs improvement, 3=Acceptable, 4=Good, 5=Excellent
+  costScore: integer('cost_score'), // 1-5: 1=Poor, 2=Needs improvement, 3=Acceptable, 4=Good, 5=Excellent
+  deliveryScore: integer('delivery_score'), // 1-5: 1=Poor, 2=Needs improvement, 3=Acceptable, 4=Good, 5=Excellent
+  responseScore: integer('response_score'), // 1-5: 1=Poor, 2=Needs improvement, 3=Acceptable, 4=Good, 5=Excellent
   notes: text('notes'),
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -2355,6 +2359,10 @@ export const insertVendorSchema = createInsertSchema(vendors)
     approved: z.boolean().default(false),
     evaluated: z.boolean().default(false),
     evaluationDate: z.string().optional().nullable(),
+    qualityScore: z.number().int().min(1).max(5).optional().nullable(),
+    costScore: z.number().int().min(1).max(5).optional().nullable(),
+    deliveryScore: z.number().int().min(1).max(5).optional().nullable(),
+    responseScore: z.number().int().min(1).max(5).optional().nullable(),
     notes: z.string().optional(),
     isActive: z.boolean().default(true),
   });

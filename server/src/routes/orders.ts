@@ -5,7 +5,7 @@ import { eq, sql, desc } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
 import {
-  insertOrderDraftSchema,
+  insertAllOrderSchema,
   insertOrderSchema,
   insertPurchaseOrderSchema,
   insertPurchaseOrderItemSchema,
@@ -363,50 +363,245 @@ router.get('/draft/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Create finalized order directly (new streamlined process)
+// Create order with PENDING_SIGNATURE status and send follow-up email for customer confirmation
 router.post('/finalized', async (req: Request, res: Response) => {
   try {
-    const orderData = insertOrderDraftSchema.parse(req.body);
-    const finalizedOrder = await storage.createFinalizedOrder(
-      orderData,
-      req.body.finalizedBy
-    );
-    res.status(201).json(finalizedOrder);
+    const orderData = insertAllOrderSchema.parse(req.body);
+    
+    // Create with PENDING_SIGNATURE status - order will stay here until customer signs
+    const order = await storage.createFinalizedOrder({
+      ...orderData,
+      status: 'PENDING_SIGNATURE',
+      currentDepartment: 'Awaiting Customer Signature'
+    });
+    
+    console.log(`📧 Order ${order.orderId} created with PENDING_SIGNATURE status - sending confirmation email to customer...`);
+    
+    // Automatically create followup order and send email
+    try {
+      // Import dependencies
+      const { nanoid } = await import('nanoid');
+      const { generateSalesOrderPDF } = await import('../../utils/pdf/salesOrderPdf');
+      const { sendFollowupOrderEmail } = await import('../../utils/followupOrderEmail');
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      // Get customer details
+      const customer = await storage.getCustomerById(orderData.customerId || '');
+      if (!customer || !customer.email) {
+        console.warn(`⚠️  No email found for customer ${orderData.customerId} - skipping follow-up email`);
+        return res.status(201).json(order);
+      }
+      
+      // Get customer address
+      const addresses = await storage.getCustomerAddresses(String(customer.id));
+      const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
+      
+      // Generate unique signature token
+      const signatureToken = nanoid(32);
+      
+      // Get features and stock models
+      const allFeatures = await storage.getAllFeatures();
+      const allStockModels = await storage.getAllStockModels();
+      
+      // Helper function to create a fallback display name from a value
+      const createFallbackDisplayName = (value: string): string => {
+        return value
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+      };
+      
+      // Get stock model information
+      const stockModel = allStockModels.find(m => m.id === order.modelId);
+      
+      // Build comprehensive feature data for PDF
+      const featurePrices: Record<string, number> = {};
+      const featureDisplayNames: Record<string, string> = {};
+      const featureSelectionDisplayNames: Record<string, string> = {};
+      const featureSelectionPrices: Record<string, number> = {};
+      
+      if (order.features && typeof order.features === 'object') {
+        for (const [featureKey, featureValue] of Object.entries(order.features)) {
+          if (featureValue && featureValue !== false && featureValue !== '') {
+            const featureDetail = allFeatures.find((f: any) => f.id === featureKey);
+            if (featureDetail) {
+              // Store feature-level display name
+              featureDisplayNames[featureKey] = featureDetail.displayName || featureDetail.name || featureKey;
+              
+              // Process feature selections to get display names and prices
+              const featureOptions = (featureDetail as any).options || [];
+              
+              if (Array.isArray(featureValue)) {
+                // Handle array of selections (like rails)
+                let totalPrice = 0;
+                for (const selectionValue of featureValue) {
+                  const option = featureOptions.find((opt: any) => opt.value === selectionValue);
+                  if (option) {
+                    featureSelectionDisplayNames[selectionValue] = option.displayName || option.label || selectionValue;
+                    const selectionPrice = option.price || 0;
+                    featureSelectionPrices[selectionValue] = selectionPrice;
+                    totalPrice += selectionPrice;
+                  } else {
+                    // Fallback: create display name from value
+                    featureSelectionDisplayNames[selectionValue] = createFallbackDisplayName(selectionValue);
+                  }
+                }
+                featurePrices[featureKey] = totalPrice;
+              } else {
+                // Handle single selection
+                const option = featureOptions.find((opt: any) => opt.value === featureValue);
+                if (option) {
+                  featureSelectionDisplayNames[featureValue] = option.displayName || option.label || featureValue;
+                  const selectionPrice = option.price || 0;
+                  featureSelectionPrices[featureValue] = selectionPrice;
+                  featurePrices[featureKey] = selectionPrice;
+                } else {
+                  // Fallback: create display name from value and use feature base price
+                  featureSelectionDisplayNames[featureValue] = createFallbackDisplayName(featureValue);
+                  featurePrices[featureKey] = featureDetail.price || 0;
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Prepare order data for PDF (using actual order from database)
+      const pdfOrderData = {
+        orderId: order.orderId,
+        orderDate: new Date(order.orderDate),
+        dueDate: new Date(order.dueDate),
+        customerId: order.customerId || '',
+        customerPO: order.customerPO || undefined,
+        customerName: customer.name,
+        customerEmail: customer.email,
+        customerPhone: customer.phone || undefined,
+        customerAddress: defaultAddress ? {
+          street: defaultAddress.street,
+          street2: defaultAddress.street2 || undefined,
+          city: defaultAddress.city,
+          state: defaultAddress.state,
+          zipCode: defaultAddress.zipCode,
+          country: defaultAddress.country,
+        } : undefined,
+        modelId: order.modelId || undefined,
+        modelName: stockModel?.name || undefined,
+        modelDisplayName: stockModel?.displayName || undefined,
+        modelPrice: stockModel?.price || 0,
+        handedness: order.handedness || undefined,
+        features: order.features as Record<string, any> || undefined,
+        featurePrices,
+        featureDisplayNames,
+        featureSelectionDisplayNames,
+        featureSelectionPrices,
+        notes: order.notes || undefined,
+        shipping: order.shipping || 0,
+        paymentStatus: 'PENDING' as const,
+      };
+      
+      // Generate PDF
+      const uploadsDir = 'uploads/followup-orders';
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      const pdfBuffer = await generateSalesOrderPDF(pdfOrderData, true);
+      const pdfFilename = `sales_order_${order.orderId}_${Date.now()}.pdf`;
+      const pdfPath = path.join(uploadsDir, pdfFilename);
+      fs.writeFileSync(pdfPath, pdfBuffer);
+      
+      // Create order summary for email
+      const orderSummary = {
+        orderId: order.orderId,
+        orderDate: order.orderDate,
+        dueDate: order.dueDate,
+        customerPO: order.customerPO,
+        modelId: order.modelId,
+        handedness: order.handedness,
+        features: order.features,
+        notes: order.notes,
+        shipping: order.shipping,
+      };
+      
+      // Create followup order record
+      const followupOrder = await storage.createFollowupOrder({
+        orderId: order.orderId,
+        customerId: order.customerId || '',
+        customerEmail: customer.email,
+        signatureToken,
+        pdfGenerated: true,
+        pdfPath,
+        pdfGeneratedAt: new Date(),
+        orderSummary,
+      });
+      
+      console.log(`✅ Follow-up order created for ${order.orderId}, sending email...`);
+      
+      // Prepare email data
+      const baseUrl = process.env.REPLIT_DOMAINS 
+        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+        : 'http://localhost:5000';
+      
+      const emailData = {
+        orderId: order.orderId,
+        customerName: customer.name,
+        customerEmail: customer.email,
+        customerPO: order.customerPO || '',
+        modelId: stockModel?.displayName || order.modelId || 'Custom',
+        orderDate: new Date(order.orderDate).toISOString().split('T')[0],
+        dueDate: new Date(order.dueDate).toISOString().split('T')[0],
+        signatureLink: `${baseUrl}/sign-order/${signatureToken}`,
+        features: order.features as Record<string, any> || undefined,
+      };
+      
+      // Send email
+      await sendFollowupOrderEmail(emailData, pdfPath);
+      
+      // Update followup order to mark email as sent
+      await storage.updateFollowupOrder(followupOrder.id, {
+        emailSent: true,
+        emailSentAt: new Date(),
+      });
+      
+      console.log(`📧 Confirmation email sent for order ${order.orderId}`);
+    } catch (emailError) {
+      console.error('Error sending follow-up email:', emailError);
+      // Don't fail the order creation if email fails
+    }
+    
+    res.status(201).json(order);
   } catch (error) {
-    console.error('Create finalized order error:', error);
+    console.error('Create order error:', error);
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
-    res.status(500).json({ error: 'Failed to create finalized order' });
+    res.status(500).json({ error: 'Failed to create order' });
   }
 });
 
-// Create draft order (legacy method for special cases)
+// Create draft order (legacy method - now creates PENDING_SIGNATURE orders)
 router.post('/draft', async (req: Request, res: Response) => {
   try {
-    const orderData = insertOrderDraftSchema.parse(req.body);
+    const orderData = insertAllOrderSchema.parse(req.body);
 
-    // Check if this should be a finalized order instead
-    if (orderData.status === 'FINALIZED') {
-      console.log(
-        `🔄 REDIRECTING: Order ${orderData.orderId} marked as FINALIZED - creating directly in production queue`
-      );
-      const finalizedOrder = await storage.createFinalizedOrder(
-        orderData,
-        req.body.finalizedBy
-      );
-      return res.status(201).json(finalizedOrder);
-    }
-
-    // Only create draft for non-finalized orders
-    const draft = await storage.createOrderDraft(orderData);
-    res.status(201).json(draft);
+    // Create as PENDING_SIGNATURE or FINALIZED based on status
+    const finalStatus = orderData.status === 'FINALIZED' ? 'FINALIZED' : 'PENDING_SIGNATURE';
+    
+    console.log(`🔄 Creating order ${orderData.orderId} with status: ${finalStatus}`);
+    
+    const order = await storage.createFinalizedOrder({
+      ...orderData,
+      status: finalStatus
+    }, req.body.finalizedBy);
+    
+    res.status(201).json(order);
   } catch (error) {
-    console.error('Create draft error:', error);
+    console.error('Create order error:', error);
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
-    res.status(500).json({ error: 'Failed to create order draft' });
+    res.status(500).json({ error: 'Failed to create order' });
   }
 });
 
@@ -417,7 +612,7 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
     console.log('Update data received:', req.body);
 
     // Validate the input data using the schema
-    const updates = insertOrderDraftSchema.partial().parse(req.body);
+    const updates = insertAllOrderSchema.partial().parse(req.body);
     console.log('Validated updates:', updates);
 
     // CRITICAL SERVER-SIDE VALIDATION: Prevent null/empty modelId for non-custom orders
@@ -430,37 +625,10 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
       });
     }
 
-    // CRITICAL FIX: Try to update draft order first since this is the /draft endpoint
-    let updatedOrder;
-    try {
-      console.log('Attempting to update draft order first...');
-      updatedOrder = await storage.updateOrderDraft(orderId, updates);
-      console.log('Updated draft order successfully:', updatedOrder);
-      return res.json(updatedOrder);
-    } catch (draftError) {
-      console.log(
-        'Draft order not found, attempting finalized order update...'
-      );
-      console.log('Draft error:', (draftError as Error).message);
-
-      // If draft update fails, try to update as a finalized order
-      try {
-        console.log('Calling updateFinalizedOrder...');
-        updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
-        console.log('Updated finalized order successfully:', updatedOrder);
-        return res.json(updatedOrder);
-      } catch (finalizedError) {
-        console.error(
-          'Finalized order update failed:',
-          (finalizedError as Error).message
-        );
-        return res
-          .status(404)
-          .json({
-            error: `Order ${orderId} not found in drafts or finalized orders`,
-          });
-      }
-    }
+    // Update the order in all_orders table
+    const updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
+    console.log('Updated order successfully:', updatedOrder);
+    return res.json(updatedOrder);
   } catch (error) {
     console.error('Update order error:', error);
     if (error instanceof Error) {

@@ -5,7 +5,7 @@ import {
   payments,
   creditCardTransactions,
   allOrders,
-  orderDrafts,
+  
   insertPaymentSchema,
   insertCreditCardTransactionSchema,
 } from '../../schema';

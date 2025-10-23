@@ -172,6 +172,21 @@ app.use((req, res, next) => {
     
     console.log('📅 Monthly vendor evaluation reset scheduled (1st of each month at 12:01 AM)');
 
+    // Set up daily follow-up order reminder check
+    // Runs at 09:00 AM every day to send reminders for orders older than 7 days
+    cron.schedule('0 9 * * *', async () => {
+      try {
+        console.log('📧 Running daily follow-up order reminder check...');
+        const { sendReminderForOverdueOrders } = await import('./utils/followupOrderReminder.js');
+        const result = await sendReminderForOverdueOrders();
+        console.log(`✅ Reminder check complete: ${result.sent} sent, ${result.failed || 0} failed`);
+      } catch (error) {
+        console.error('❌ Failed to send follow-up reminders:', error);
+      }
+    });
+    
+    console.log('📧 Daily follow-up order reminders scheduled (every day at 9:00 AM)');
+
     const server = await registerRoutes(app);
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

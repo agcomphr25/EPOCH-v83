@@ -8,7 +8,6 @@ import {
   features,
   stockModels,
   orders,
-  orderDrafts,
   payments,
   forms,
   formSubmissions,
@@ -88,6 +87,8 @@ import {
   // Vendors table
   vendors,
   vendorContacts,
+  // Follow-up orders table
+  followupOrders,
 
   // Types
   type Order,
@@ -123,6 +124,8 @@ import {
   type InventoryItem,
   type InsertInventoryItem,
   type InventoryScan,
+  type FollowupOrder,
+  type InsertFollowupOrder,
   type InsertInventoryScan,
   type PartsRequest,
   type InsertPartsRequest,
@@ -749,6 +752,16 @@ export interface IStorage {
   createVendor(data: InsertVendor): Promise<Vendor>;
   updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor>;
   deleteVendor(id: number): Promise<void>;
+
+  // Follow-up order methods
+  createFollowupOrder(data: InsertFollowupOrder): Promise<FollowupOrder>;
+  getFollowupOrder(id: number): Promise<FollowupOrder | undefined>;
+  getFollowupOrderByToken(token: string): Promise<FollowupOrder | undefined>;
+  getFollowupOrderByOrderId(orderId: string): Promise<FollowupOrder | undefined>;
+  updateFollowupOrder(id: number, data: Partial<InsertFollowupOrder>): Promise<FollowupOrder>;
+  getAllFollowupOrders(): Promise<FollowupOrder[]>;
+  getPendingFollowupOrders(): Promise<FollowupOrder[]>;
+  getOverdueFollowupOrders(daysOld: number): Promise<FollowupOrder[]>;
 
   // Module 8: Customer Addresses CRUD
   getAllAddresses(): Promise<CustomerAddress[]>;
@@ -1788,18 +1801,10 @@ export class DatabaseStorage implements IStorage {
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           // Find the highest sequence number for current year-month prefix
-          // Check draft orders, finalized orders, and active reservations
-          const [draftOrderResult, finalizedOrderResult, reservationResult] =
+          // Check finalized orders and active reservations
+          const [finalizedOrderResult, reservationResult] =
             await Promise.all([
-              // Get highest sequence from draft orders
-              db
-                .select({ orderId: orderDrafts.orderId })
-                .from(orderDrafts)
-                .where(like(orderDrafts.orderId, `${currentPrefix}%`))
-                .orderBy(desc(orderDrafts.orderId))
-                .limit(1),
-
-              // Get highest sequence from finalized orders
+              // Get highest sequence from finalized orders (includes all orders now)
               db
                 .select({ orderId: allOrders.orderId })
                 .from(allOrders)
@@ -1823,14 +1828,6 @@ export class DatabaseStorage implements IStorage {
             ]);
 
           let maxSequence = 0;
-
-          // Check highest sequence from draft orders
-          if (draftOrderResult.length > 0) {
-            const parsed = parseOrderId(draftOrderResult[0].orderId);
-            if (parsed && parsed.prefix === currentPrefix) {
-              maxSequence = Math.max(maxSequence, parsed.sequence);
-            }
-          }
 
           // Check highest sequence from finalized orders
           if (finalizedOrderResult.length > 0) {
@@ -5253,6 +5250,80 @@ export class DatabaseStorage implements IStorage {
       .where(eq(vendorContacts.id, id));
   }
 
+  // Follow-up order methods
+  async createFollowupOrder(data: InsertFollowupOrder): Promise<FollowupOrder> {
+    const [followupOrder] = await db
+      .insert(followupOrders)
+      .values(data)
+      .returning();
+    return followupOrder;
+  }
+
+  async getFollowupOrder(id: number): Promise<FollowupOrder | undefined> {
+    const [followupOrder] = await db
+      .select()
+      .from(followupOrders)
+      .where(eq(followupOrders.id, id));
+    return followupOrder;
+  }
+
+  async getFollowupOrderByToken(token: string): Promise<FollowupOrder | undefined> {
+    const [followupOrder] = await db
+      .select()
+      .from(followupOrders)
+      .where(eq(followupOrders.signatureToken, token));
+    return followupOrder;
+  }
+
+  async getFollowupOrderByOrderId(orderId: string): Promise<FollowupOrder | undefined> {
+    const [followupOrder] = await db
+      .select()
+      .from(followupOrders)
+      .where(eq(followupOrders.orderId, orderId));
+    return followupOrder;
+  }
+
+  async updateFollowupOrder(
+    id: number,
+    data: Partial<InsertFollowupOrder>
+  ): Promise<FollowupOrder> {
+    const [updated] = await db
+      .update(followupOrders)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(followupOrders.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getAllFollowupOrders(): Promise<FollowupOrder[]> {
+    return await db.select().from(followupOrders).orderBy(desc(followupOrders.createdAt));
+  }
+
+  async getPendingFollowupOrders(): Promise<FollowupOrder[]> {
+    return await db
+      .select()
+      .from(followupOrders)
+      .where(eq(followupOrders.signatureSigned, false))
+      .orderBy(desc(followupOrders.createdAt));
+  }
+
+  async getOverdueFollowupOrders(daysOld: number): Promise<FollowupOrder[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+    
+    return await db
+      .select()
+      .from(followupOrders)
+      .where(
+        and(
+          eq(followupOrders.signatureSigned, false),
+          eq(followupOrders.reminderSent, false),
+          lt(followupOrders.createdAt, cutoffDate)
+        )
+      )
+      .orderBy(followupOrders.createdAt);
+  }
+
   // Module 8: Customer Addresses CRUD
   async getAllAddresses(): Promise<CustomerAddress[]> {
     return await db
@@ -8504,7 +8575,10 @@ export class DatabaseStorage implements IStorage {
     orderData: InsertOrderDraft,
     finalizedBy?: string
   ): Promise<AllOrder> {
-    // Special handling for orders with no stock model - route directly to Shipping QC
+    // If status is PENDING_SIGNATURE, don't auto-route to production
+    const isPendingSignature = orderData.status === 'PENDING_SIGNATURE';
+    
+    // Special handling for orders with no stock model - route directly to Shipping QC (unless pending signature)
     const hasNoStockModel =
       !orderData.modelId ||
       orderData.modelId.toLowerCase() === 'none' ||
@@ -8512,19 +8586,29 @@ export class DatabaseStorage implements IStorage {
 
     let currentDepartment: string;
     let barcode: string;
+    let status: string;
 
-    if (hasNoStockModel) {
+    if (isPendingSignature) {
+      console.log(
+        `📝 Order ${orderData.orderId} created with PENDING_SIGNATURE status - awaiting customer confirmation`
+      );
+      currentDepartment = orderData.currentDepartment || 'Awaiting Customer Signature';
+      barcode = orderData.barcode || `PENDING-${orderData.orderId}`;
+      status = 'PENDING_SIGNATURE';
+    } else if (hasNoStockModel) {
       console.log(
         `🚀 CREATE APPROVED: Order ${orderData.orderId} has no stock model - routing directly to Shipping QC`
       );
       currentDepartment = 'Shipping QC';
       barcode = orderData.barcode || `NOSTOCK-${orderData.orderId}`;
+      status = 'FINALIZED';
     } else {
       console.log(
         `✅ CREATE APPROVED: Order ${orderData.orderId} has valid stock model "${orderData.modelId}" - going directly to P1 Production Queue`
       );
       currentDepartment = 'P1 Production Queue';
       barcode = orderData.barcode || `P1-${orderData.orderId}`;
+      status = 'FINALIZED';
     }
 
     // Create the finalized order data directly - exclude id field explicitly
@@ -8551,7 +8635,7 @@ export class DatabaseStorage implements IStorage {
       priceOverride: orderData.priceOverride,
       shipping: orderData.shipping || 0,
       tikkaOption: orderData.tikkaOption,
-      status: 'FINALIZED',
+      status: status,
       barcode: barcode,
       currentDepartment: currentDepartment,
       departmentHistory: [],

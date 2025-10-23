@@ -124,6 +124,7 @@ interface PaginatedOrdersResponse {
 export default function AllOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
   const [sortBy, setSortBy] = useState<
     'orderDate' | 'dueDate' | 'customer' | 'model' | 'enteredDate'
   >('orderDate');
@@ -297,6 +298,29 @@ export default function AllOrdersPage() {
     },
   });
 
+  // Resend signature email mutation
+  const resendSignatureEmailMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest(`/api/followup-orders/${orderId}/resend-email`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Email Sent',
+        description: 'Review and sign email has been resent to the customer.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description:
+          'Failed to send email: ' + (error.message || 'Unknown error'),
+        variant: 'destructive',
+      });
+    },
+  });
+
   // CSV Export handlers
   const handleExportCSV = async () => {
     try {
@@ -421,6 +445,8 @@ export default function AllOrdersPage() {
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
       case 'DRAFT':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
+      case 'PENDING_SIGNATURE':
+        return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300';
       case 'FINALIZED':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
       case 'IN_PROGRESS':
@@ -436,7 +462,7 @@ export default function AllOrdersPage() {
     }
   };
 
-  // Filter orders based on search and department, excluding cancelled orders
+  // Filter orders based on search, department, and status, excluding cancelled orders
   const filteredOrders = React.useMemo(() => {
     if (!allOrders) return [];
 
@@ -451,9 +477,14 @@ export default function AllOrdersPage() {
         selectedDepartment === 'all' ||
         order.currentDepartment === selectedDepartment;
 
+      // Status filter
+      const statusMatch =
+        selectedStatus === 'all' ||
+        order.status?.toUpperCase() === selectedStatus.toUpperCase();
+
       // Search filter - search in multiple fields including FB Order Number
       if (!searchTerm.trim()) {
-        return departmentMatch;
+        return departmentMatch && statusMatch;
       }
 
       const searchLower = searchTerm.toLowerCase();
@@ -470,9 +501,9 @@ export default function AllOrdersPage() {
         field?.includes(searchLower)
       );
 
-      return departmentMatch && searchMatch;
+      return departmentMatch && statusMatch && searchMatch;
     });
-  }, [allOrders, searchTerm, selectedDepartment]);
+  }, [allOrders, searchTerm, selectedDepartment, selectedStatus]);
 
   // Function to calculate search relevance score
   const getSearchRelevanceScore = (order: any, searchTerm: string) => {
@@ -535,7 +566,7 @@ export default function AllOrdersPage() {
   // Reset to page 1 when filters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedDepartment, sortBy]);
+  }, [searchTerm, selectedDepartment, selectedStatus, sortBy]);
 
   // Calculate client-side pagination
   const paginationData = React.useMemo(() => {
@@ -652,6 +683,29 @@ export default function AllOrdersPage() {
                 </Select>
               </div>
 
+              {/* Status Filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Status:</span>
+                <Select
+                  value={selectedStatus}
+                  onValueChange={setSelectedStatus}
+                >
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="All Statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="PENDING_SIGNATURE">Pending Signature</SelectItem>
+                    <SelectItem value="FINALIZED">Finalized</SelectItem>
+                    <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                    <SelectItem value="FULFILLED">Fulfilled</SelectItem>
+                    <SelectItem value="SHIPPED">Shipped</SelectItem>
+                    <SelectItem value="HOLDING">Holding</SelectItem>
+                    <SelectItem value="DRAFT">Draft</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Sort by:</span>
                 <Select
@@ -710,12 +764,34 @@ export default function AllOrdersPage() {
                         </span>
                       </OrderSummaryTooltip>
                       {order.status && (
-                        <Badge
-                          className={`${getStatusColor(order.status)} text-xs px-1 py-0`}
-                          title={`Order Status: ${order.status}`}
-                        >
-                          {order.status}
-                        </Badge>
+                        <div className="relative group/status">
+                          <Badge
+                            className={`${getStatusColor(order.status)} text-xs px-1 py-0`}
+                            title={`Order Status: ${order.status}`}
+                          >
+                            {order.status}
+                          </Badge>
+                          {/* Resend Email Button - Show on hover for PENDING_SIGNATURE */}
+                          {order.status?.toUpperCase() === 'PENDING_SIGNATURE' && (
+                            <div className="absolute left-full top-0 ml-2 hidden group-hover/status:block z-20">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 bg-white hover:bg-orange-50 border-orange-300 text-orange-700"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  resendSignatureEmailMutation.mutate(order.orderId);
+                                }}
+                                disabled={resendSignatureEmailMutation.isPending}
+                                title="Resend Review and Sign Email"
+                                data-testid={`button-resend-email-${order.orderId}`}
+                              >
+                                <Mail className="h-3 w-3 mr-1" />
+                                Resend Email
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                       )}
                       {hasUnresolvedKickback(order.orderId) && (
                         <Badge

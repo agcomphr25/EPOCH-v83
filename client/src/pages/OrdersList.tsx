@@ -290,6 +290,29 @@ export default function OrdersList() {
     },
   });
 
+  // Resend signature email mutation
+  const resendSignatureEmailMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest(`/api/followup-orders/${orderId}/resend-email`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      showToast({
+        title: 'Email Sent',
+        description: 'Review and sign email has been resent successfully.',
+      });
+    },
+    onError: (error: any) => {
+      showToast({
+        title: 'Error',
+        description:
+          'Failed to resend email: ' + (error.message || 'Unknown error'),
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Create kickback mutation
   const createKickbackMutation = useMutation({
     mutationFn: async (data: KickbackFormData) => {
@@ -633,6 +656,7 @@ export default function OrdersList() {
     // Fixed list of valid statuses
     const availableStatuses = [
       'HOLDING',
+      'PENDING_SIGNATURE',
       'FINALIZED',
       'IN_PROGRESS',
       'FULFILLED',
@@ -903,6 +927,8 @@ export default function OrdersList() {
           return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
         case 'DRAFT':
           return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
+        case 'PENDING_SIGNATURE':
+          return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300';
         case 'FINALIZED':
           return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
         case 'IN_PROGRESS':
@@ -1190,12 +1216,34 @@ export default function OrdersList() {
                             </span>
                           </OrderSummaryTooltip>
                           {order.status && (
-                            <Badge
-                              className={`${getStatusColor(order.status)} text-xs px-1 py-0`}
-                              title={`Order Status: ${order.status}`}
-                            >
-                              {order.status}
-                            </Badge>
+                            <div className="relative group/status">
+                              <Badge
+                                className={`${getStatusColor(order.status)} text-xs px-1 py-0`}
+                                title={`Order Status: ${order.status}`}
+                              >
+                                {order.status}
+                              </Badge>
+                              {/* Resend Email Button - Show on hover for PENDING_SIGNATURE */}
+                              {order.status?.toUpperCase() === 'PENDING_SIGNATURE' && (
+                                <div className="absolute left-full top-0 ml-2 hidden group-hover/status:block z-20">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2 bg-white hover:bg-orange-50 border-orange-300 text-orange-700"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      resendSignatureEmailMutation.mutate(order.orderId);
+                                    }}
+                                    disabled={resendSignatureEmailMutation.isPending}
+                                    title="Resend Review and Sign Email"
+                                    data-testid={`button-resend-email-${order.orderId}`}
+                                  >
+                                    <Mail className="h-3 w-3 mr-1" />
+                                    Resend Email
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
                           )}
                           {hasUnresolvedKickback(order.orderId) && (
                             <Badge

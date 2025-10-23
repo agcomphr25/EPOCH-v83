@@ -121,6 +121,7 @@ import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
 import MetalAccessoriesTracker from './pages/MetalAccessoriesTracker';
 import DocumentIntelligence from './pages/DocumentIntelligence';
+import SignOrderPage from './pages/SignOrderPage';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -133,7 +134,8 @@ function ConditionalNavigation() {
     location === '/darleneb-dashboard' ||
     location === '/ag-dashboard' ||
     location === '/staciw-dashboard' ||
-    location === '/login';
+    location === '/login' ||
+    location.startsWith('/sign-order/'); // Hide navigation on customer sign order page
 
   return hideNavigation ? null : <Navigation />;
 }
@@ -667,6 +669,12 @@ function App() {
                   <Route
                     path="/shipping/label/:orderId"
                     component={ShippingLabelPage}
+                  />
+
+                  {/* Sign Order Route - Public route for customers */}
+                  <Route
+                    path="/sign-order/:token"
+                    component={SignOrderPage}
                   />
 
                   {/* Catch-all route for 404 */}

@@ -236,39 +236,8 @@ export async function generateSalesOrderPDF(
     font: boldFont,
   });
 
-  // BILL TO (left side)
-  let customerTextY = customerBoxY + customerBoxHeight - 45;
-  page.drawText('BILL TO:', {
-    x: margin + 8,
-    y: customerTextY,
-    size: 10,
-    font: boldFont,
-  });
-
-  customerTextY -= 15;
-  page.drawText(orderData.customerName, {
-    x: margin + 8,
-    y: customerTextY,
-    size: 10,
-    font: font,
-  });
-
-  if (orderData.customerEmail || orderData.customerPhone) {
-    customerTextY -= 13;
-    const contactInfo = [];
-    if (orderData.customerEmail) contactInfo.push(`Email: ${orderData.customerEmail}`);
-    if (orderData.customerPhone) contactInfo.push(`Phone: ${orderData.customerPhone}`);
-    
-    page.drawText(contactInfo.join(' | '), {
-      x: margin + 8,
-      y: customerTextY,
-      size: 8,
-      font: font,
-    });
-  }
-
-  // SHIP TO (right side)
-  const shipToX = margin + 280;
+  // SHIP TO
+  const shipToX = margin + 8;
   let shipCurrentY = customerBoxY + customerBoxHeight - 45;
 
   page.drawText('SHIP TO:', {

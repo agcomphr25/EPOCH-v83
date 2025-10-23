@@ -645,18 +645,10 @@ export async function generateSalesOrderPDF(
 
   // Terms and Conditions Section
   page2Y -= 120;
-  page2.drawText('TERMS AND CONDITIONS - STANDARD', {
-    x: margin,
-    y: page2Y,
-    size: 12,
-    font: boldFont,
-  });
-
-  page2Y -= 20;
   page2.drawText('Initial Terms and Conditions', {
     x: margin,
     y: page2Y,
-    size: 10,
+    size: 12,
     font: boldFont,
   });
   

@@ -522,9 +522,30 @@ export default function VendorManagement() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold" data-testid="text-page-title">
-          Vendor Management
-        </h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-3xl font-bold" data-testid="text-page-title">
+            Vendor Management
+          </h1>
+          {vendorsData && (() => {
+            const vendorsWithScores = vendorsData.data.filter(v => 
+              v.qualityScore || v.costScore || v.deliveryScore || v.responseScore
+            );
+            if (vendorsWithScores.length === 0) return null;
+            
+            const totalPoints = vendorsWithScores.reduce((sum, vendor) => {
+              return sum + (vendor.qualityScore ?? 0) + (vendor.costScore ?? 0) + 
+                     (vendor.deliveryScore ?? 0) + (vendor.responseScore ?? 0);
+            }, 0);
+            const maxPossiblePoints = vendorsWithScores.length * 20;
+            const overallAverage = ((totalPoints / maxPossiblePoints) * 100).toFixed(1);
+            
+            return (
+              <div className="text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full font-semibold">
+                Overall Average: {overallAverage}%
+              </div>
+            );
+          })()}
+        </div>
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogTrigger asChild>
             <Button
@@ -1478,9 +1499,6 @@ export default function VendorManagement() {
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Score (/20)
                 </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Avg (%)
-                </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Actions
                 </th>
@@ -1490,7 +1508,7 @@ export default function VendorManagement() {
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={9}
                     className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
                   >
                     Loading vendors...
@@ -1499,7 +1517,7 @@ export default function VendorManagement() {
               ) : vendorsData?.data.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={9}
                     className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
                   >
                     No vendors found
@@ -1564,15 +1582,6 @@ export default function VendorManagement() {
                         if (!hasScores) return '—';
                         const totalScore = (vendor.qualityScore ?? 0) + (vendor.costScore ?? 0) + (vendor.deliveryScore ?? 0) + (vendor.responseScore ?? 0);
                         return totalScore;
-                      })()}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400 text-center">
-                      {(() => {
-                        const hasScores = vendor.qualityScore || vendor.costScore || vendor.deliveryScore || vendor.responseScore;
-                        if (!hasScores) return '—';
-                        const totalScore = (vendor.qualityScore ?? 0) + (vendor.costScore ?? 0) + (vendor.deliveryScore ?? 0) + (vendor.responseScore ?? 0);
-                        const avgScore = ((totalScore / 20) * 100).toFixed(0);
-                        return `${avgScore}%`;
                       })()}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">

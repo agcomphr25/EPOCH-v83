@@ -400,42 +400,28 @@ router.post('/finalized', async (req: Request, res: Response) => {
       // Generate unique signature token
       const signatureToken = nanoid(32);
       
-      // Get features and selections to convert IDs to display names
+      // Get features and stock models
       const allFeatures = await storage.getAllFeatures();
       const allStockModels = await storage.getAllStockModels();
       
-      // Convert feature IDs to display names for customer-friendly presentation
-      const featuresWithDisplayNames: Record<string, any> = {};
+      // Get stock model information
+      const stockModel = allStockModels.find(m => m.id === order.modelId);
+      
+      // Build feature prices and display names for PDF
+      const featurePrices: Record<string, number> = {};
+      const featureDisplayNames: Record<string, string> = {};
+      
       if (order.features && typeof order.features === 'object') {
-        for (const [featureId, value] of Object.entries(order.features)) {
-          const feature = allFeatures.find(f => f.id === featureId);
-          if (!feature) continue;
-          
-          const featureDisplayName = feature.displayName || feature.name || featureId;
-          
-          // Convert feature values to display names
-          if (Array.isArray(value)) {
-            // Array of selections
-            const displayValues = value.map((val: string) => {
-              if (!feature.options || !Array.isArray(feature.options)) return val;
-              const option = feature.options.find((opt: any) => opt.value === val);
-              return option?.displayName || option?.label || val;
-            });
-            featuresWithDisplayNames[featureDisplayName] = displayValues.join(', ');
-          } else if (value && feature.options && Array.isArray(feature.options)) {
-            // Single selection
-            const option = feature.options.find((opt: any) => opt.value === value);
-            featuresWithDisplayNames[featureDisplayName] = option?.displayName || option?.label || value;
-          } else {
-            // Raw value
-            featuresWithDisplayNames[featureDisplayName] = value;
+        for (const [featureKey, featureValue] of Object.entries(order.features)) {
+          if (featureValue && featureValue !== false && featureValue !== '') {
+            const featureDetail = allFeatures.find((f: any) => f.id === featureKey);
+            if (featureDetail) {
+              featurePrices[featureKey] = featureDetail.price || 0;
+              featureDisplayNames[featureKey] = featureDetail.displayName || featureDetail.name || featureKey;
+            }
           }
         }
       }
-      
-      // Get model display name
-      const stockModel = allStockModels.find(m => m.id === order.modelId);
-      const modelDisplayName = stockModel?.displayName || order.modelId || 'Custom Order';
       
       // Prepare order data for PDF (using actual order from database)
       const pdfOrderData = {
@@ -455,13 +441,17 @@ router.post('/finalized', async (req: Request, res: Response) => {
           zipCode: defaultAddress.zipCode,
           country: defaultAddress.country,
         } : undefined,
-        modelId: modelDisplayName,
+        modelId: order.modelId || undefined,
+        modelName: stockModel?.name || undefined,
+        modelDisplayName: stockModel?.displayName || undefined,
+        modelPrice: stockModel?.price || 0,
         handedness: order.handedness || undefined,
-        features: featuresWithDisplayNames,  // Use display names for customer-friendly PDF
+        features: order.features as Record<string, any> || undefined,
+        featurePrices,
+        featureDisplayNames,
         notes: order.notes || undefined,
         shipping: order.shipping || 0,
-        subtotal: undefined,
-        total: undefined,
+        paymentStatus: 'PENDING' as const,
       };
       
       // Generate PDF
@@ -512,11 +502,11 @@ router.post('/finalized', async (req: Request, res: Response) => {
         customerName: customer.name,
         customerEmail: customer.email,
         customerPO: order.customerPO || '',
-        modelId: modelDisplayName,  // Use display name
+        modelId: stockModel?.displayName || order.modelId || 'Custom',
         orderDate: new Date(order.orderDate).toISOString().split('T')[0],
         dueDate: new Date(order.dueDate).toISOString().split('T')[0],
         signatureLink: `${baseUrl}/sign-order/${signatureToken}`,
-        features: featuresWithDisplayNames,  // Add features with display names
+        features: order.features as Record<string, any> || undefined,
       };
       
       // Send email

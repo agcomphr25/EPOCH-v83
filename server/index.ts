@@ -105,6 +105,9 @@ app.use(express.urlencoded({ extended: false }));
 // Also add express.static as fallback
 app.use('/attached_assets', express.static(assetsPath));
 
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;

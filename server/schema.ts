@@ -2215,6 +2215,8 @@ export const vendors = pgTable('vendors', {
   zipCode: text('zip_code'),
   country: text('country').default('United States'),
   scope: text('scope'), // Materials/products vendor is approved to supply
+  approvalSource: text('approval_source'), // "Certification" or "Supplier Approval Form"
+  approvalPdfUrl: text('approval_pdf_url'), // Path to uploaded PDF document
   approved: boolean('approved').notNull().default(false),
   evaluated: boolean('evaluated').notNull().default(false),
   evaluationDate: date('evaluation_date'),
@@ -2356,6 +2358,8 @@ export const insertVendorSchema = createInsertSchema(vendors)
     zipCode: z.string().optional(),
     country: z.string().optional(),
     scope: z.string().optional(),
+    approvalSource: z.string().optional(),
+    approvalPdfUrl: z.string().optional(),
     approved: z.boolean().default(false),
     evaluated: z.boolean().default(false),
     evaluationDate: z.string().optional().nullable(),

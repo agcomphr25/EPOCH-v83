@@ -328,7 +328,35 @@ export async function generateSalesOrderPDF(
 
   currentY -= 15;
 
-  const featuresTableHeight = 240;
+  // Calculate dynamic table height based on number of features
+  const featureOrder = [
+    'handedness',
+    'action_length',
+    'shank_length',
+    'action_inlet',
+    'bottom_metal',
+    'barrel_inlet',
+    'qd_accessory',
+    'length_of_pull',
+    'rail_accessory',
+    'texture_options',
+    'swivel_studs',
+    'other_options',
+    'paint_options'
+  ];
+  
+  let featureCount = 1; // Start with 1 for Stock Model
+  if (orderData.features) {
+    for (const featureKey of featureOrder) {
+      if (orderData.features[featureKey]) {
+        featureCount++;
+      }
+    }
+  }
+  
+  // Calculate height: header (20) + model line (15) + features (15 each) + separator (20) + subtotal (25) + shipping (25) + total (30) + padding (20)
+  const featuresTableHeight = 20 + (featureCount * 15) + 20 + 25 + 25 + 30 + 20;
+  
   page.drawRectangle({
     x: margin,
     y: currentY - featuresTableHeight,
@@ -420,7 +448,7 @@ export async function generateSalesOrderPDF(
 
     for (const featureKey of featureOrder) {
       const featureValue = orderData.features[featureKey];
-      if (featureValue && summaryLineY > currentY - featuresTableHeight + 50) {
+      if (featureValue) {
         // Get feature display name
         const displayName = orderData.featureDisplayNames?.[featureKey] || featureKey;
         const featurePrice = orderData.featurePrices?.[featureKey] || 0;
@@ -465,7 +493,7 @@ export async function generateSalesOrderPDF(
   }
 
   // Separator line before totals
-  summaryLineY = currentY - featuresTableHeight + 80;
+  summaryLineY -= 5;
   page.drawLine({
     start: { x: margin + 10, y: summaryLineY },
     end: { x: margin + printableWidth - 10, y: summaryLineY },

@@ -15,6 +15,11 @@ Critical requirement: All completed functionality must be hard-coded to prevent 
 Search standardization: All department queue pages use unified OrderSearchBox component with "Search orders by Order ID or FishBowl Number..." placeholder for consistent user experience.
 Navigation dropdown behavior: All navbar dropdown menus close automatically after selection.
 
+## Recent Changes
+- **PDF Dynamic Sizing** (Oct 23, 2025): Features box in sales order PDFs now dynamically resizes based on the number of features present in the order, preventing content overflow.
+- **Customer Sign Page Security** (Oct 23, 2025): Navigation bar is hidden on customer sign order pages (/sign-order/:token) to prevent unauthorized access to internal systems.
+- **Business Address Correction** (Oct 23, 2025): Corrected business address from "Owens Crossroads" to "Owens Cross Roads" in all PDF documents.
+
 ## System Architecture
 The application utilizes a monorepo structure with a full-stack TypeScript approach.
 

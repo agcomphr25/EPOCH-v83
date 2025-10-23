@@ -1413,8 +1413,16 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     currentY -= 15;
 
-    // Create bordered container for features table
-    const featuresTableHeight = 240; // Increased height to accommodate all features
+    // Calculate dynamic table height based on features present
+    const orderFeatures = order.features as OrderFeatures | undefined;
+    
+    // All features are always displayed (even if "Not selected" or with default values)
+    // Count: Stock Model + 12 standard features
+    let featureCount = 13;
+    
+    // Calculate height: header (20) + features (15 each) + separator (20) + subtotal (25) + shipping (25) + total (30) + padding (20)
+    const featuresTableHeight = 20 + (featureCount * 15) + 20 + 25 + 25 + 30 + 20;
+    
     const boxStartY = currentY; // Mark start position for box height calculation
     page.drawRectangle({
       x: margin,

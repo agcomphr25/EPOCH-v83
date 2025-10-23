@@ -1,6 +1,7 @@
 import { sendEmailViaSendGrid } from './sendgrid';
 import * as fs from 'fs';
 import * as path from 'path';
+import { resolveAssetPath } from '../src/utils/assetPaths';
 
 interface EmailOrderData {
   orderId: string;
@@ -152,7 +153,7 @@ function generateEmailHTML(orderData: EmailOrderData, logoBase64?: string): stri
   <!-- Footer -->
   <div style="border-top: 1px solid #e0e0e0; padding-top: 20px; margin-top: 30px; text-align: center;">
     <p style="margin: 0 0 10px 0; font-size: 14px; color: #666;">
-      Questions about your order? Contact us at <a href="mailto:info@agcomposites.com" style="color: #2c3e50; text-decoration: none;"><strong>info@agcomposites.com</strong></a>
+      Questions about your order? Contact us at <a href="mailto:sales@agcomposites.com" style="color: #2c3e50; text-decoration: none;"><strong>sales@agcomposites.com</strong></a>
     </p>
     <p style="margin: 0; font-size: 12px; color: #999;">
       &copy; ${new Date().getFullYear()} AG Composites. All rights reserved.
@@ -217,7 +218,7 @@ IMPORTANT: Production will begin only after you have reviewed and
 signed this order.
 
 ─────────────────────────────────────────────────────────────
-Questions about your order? Contact us at info@agcomposites.com
+Questions about your order? Contact us at sales@agcomposites.com
 
 © ${new Date().getFullYear()} AG Composites. All rights reserved.
   `;
@@ -235,10 +236,12 @@ export async function sendFollowupOrderEmail(
     // Read and encode company logo
     let logoBase64: string | undefined;
     try {
-      const logoPath = path.join(__dirname, '../src/assets/logo_updated.png');
+      const logoPath = resolveAssetPath('logo_updated.png');
       if (fs.existsSync(logoPath)) {
         const logoBuffer = fs.readFileSync(logoPath);
         logoBase64 = logoBuffer.toString('base64');
+      } else {
+        console.warn('Logo file not found at:', logoPath);
       }
     } catch (error) {
       console.warn('Could not load company logo for email:', error);

@@ -2,6 +2,7 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { resolveAssetPath } from '../../src/utils/assetPaths';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,10 +48,12 @@ interface OrderData {
 
 async function embedCompanyLogo(pdfDoc: PDFDocument) {
   try {
-    const logoPath = path.join(__dirname, '../../src/assets/logo_updated.png');
+    const logoPath = resolveAssetPath('logo_updated.png');
     if (fs.existsSync(logoPath)) {
       const logoImageBytes = fs.readFileSync(logoPath);
       return await pdfDoc.embedPng(logoImageBytes);
+    } else {
+      console.warn('Logo file not found at:', logoPath);
     }
   } catch (error) {
     console.warn('Could not load company logo:', error);

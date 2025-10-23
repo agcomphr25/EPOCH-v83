@@ -16,6 +16,7 @@ Search standardization: All department queue pages use unified OrderSearchBox co
 Navigation dropdown behavior: All navbar dropdown menus close automatically after selection.
 
 ## Recent Changes
+- **Discount Display on Sales Order PDF** (Oct 23, 2025): Added discount information to sales order PDFs. When an order has a custom discount (percentage or fixed amount), it now appears between the subtotal and shipping with red text showing the discount code/percentage and amount deducted. The features table height dynamically adjusts to accommodate the discount line.
 - **Customer Information on Sign Page** (Oct 23, 2025): Added comprehensive customer information display to the review and sign sales order page, including customer name, email, phone number, and complete shipping address with proper formatting.
 - **Standard Terms and Conditions** (Oct 23, 2025): Updated both email and PDF to include specific standardized Terms and Conditions requiring customer review of specs, 30-day change policy, Remington clone disclaimer, estimated completion date notice, and confirmation requirement before production begins.
 - **PDF Dynamic Sizing** (Oct 23, 2025): Features box in sales order PDFs now dynamically resizes based on the number of features present in the order, preventing content overflow.

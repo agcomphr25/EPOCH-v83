@@ -2004,7 +2004,7 @@ router.get('/export/csv-all', async (req: Request, res: Response) => {
   }
 });
 
-// Update order urgency/priority - Mark order as urgent/rush
+// Update order urgency/priority - Mark order as urgent
 router.put('/:orderId/urgency', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
@@ -2027,12 +2027,12 @@ router.put('/:orderId/urgency', async (req: Request, res: Response) => {
     }
 
     // Calculate priority score based on urgency level
-    // Lower score = higher priority. High urgency gets score of 1000 to move to top
+    // Lower score = higher priority. Urgent/critical gets lowest score to move to top
     const priorityScores = {
-      critical: 1000,  // Highest priority - moves to very top
-      high: 1000,      // Also highest - Rush orders
-      medium: 50,
-      low: 100,
+      critical: 1,     // Highest priority - moves to very top
+      high: 1,         // Also highest - Urgent orders
+      medium: 5000,    // Medium priority
+      low: 9999,       // Lowest priority
     };
 
     const priorityScore = priorityScores[urgency as keyof typeof priorityScores];

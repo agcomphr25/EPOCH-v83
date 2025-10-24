@@ -1312,11 +1312,11 @@ export default function OrdersList() {
                           {(order.urgency === 'high' || order.urgency === 'critical') && (
                             <Badge
                               className="bg-orange-500 text-white dark:bg-orange-600 dark:text-white text-xs px-2 py-0.5 font-bold animate-pulse"
-                              title="High Priority / Rush Order"
+                              title="High Priority / Urgent Order"
                               data-testid={`badge-urgent-${order.orderId}`}
                             >
                               <Zap className="h-3 w-3 mr-1 inline" />
-                              RUSH!!!
+                              URGENT!!!
                             </Badge>
                           )}
                           {hasUnresolvedKickback(order.orderId) && (
@@ -1565,7 +1565,7 @@ export default function OrdersList() {
                                   data-testid={`button-remove-urgent-${order.orderId}`}
                                 >
                                   <Zap className="mr-2 h-4 w-4" />
-                                  {setUrgencyMutation.isPending ? 'Updating...' : 'Remove Rush Priority'}
+                                  {setUrgencyMutation.isPending ? 'Updating...' : 'Remove Urgent Priority'}
                                 </DropdownMenuItem>
                               ) : (
                                 <DropdownMenuItem
@@ -1580,7 +1580,7 @@ export default function OrdersList() {
                                   data-testid={`button-set-urgent-${order.orderId}`}
                                 >
                                   <Zap className="mr-2 h-4 w-4" />
-                                  {setUrgencyMutation.isPending ? 'Updating...' : 'Set Urgent/Rush'}
+                                  {setUrgencyMutation.isPending ? 'Updating...' : 'Set as Urgent'}
                                 </DropdownMenuItem>
                               )}
                               {order.isCancelled ? (

@@ -9184,15 +9184,13 @@ export class DatabaseStorage implements IStorage {
     usedByScheduled: number;
     available: number;
   }> {
-    const { moldSettings } = await import('./schema');
-    
-    // Get total mold capacity from mold_settings table
-    const moldSettingsData = await db
+    // Get total mold capacity from molds table
+    const moldsData = await db
       .select()
-      .from(moldSettings)
-      .where(eq(moldSettings.enabled, true));
+      .from(molds)
+      .where(eq(molds.enabled, true));
 
-    const totalCapacity = moldSettingsData.reduce(
+    const totalCapacity = moldsData.reduce(
       (sum, mold) => sum + (mold.multiplier || 1),
       0
     );

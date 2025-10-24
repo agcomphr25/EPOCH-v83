@@ -31,6 +31,7 @@ import {
   Package,
 } from 'lucide-react';
 import { format, startOfWeek, addDays } from 'date-fns';
+import PrintableWeeklySchedule from '@/components/PrintableWeeklySchedule';
 
 interface Order {
   id: number;
@@ -85,28 +86,24 @@ export default function WeeklyLayupScheduler() {
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [moldCountInput, setMoldCountInput] = useState<string>('1');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
 
   // Fetch regular production orders
   const { data: regularOrders = [], isLoading: isLoadingOrders } = useQuery<Order[]>({
     queryKey: ['/api/production-queue/prioritized'],
   });
 
-  // Fetch P1 PO products
-  const { data: poProducts = [], isLoading: isLoadingPO } = useQuery<POProduct[]>({
+  // Fetch P1 PO products (grouped by customer/PO)
+  const { data: poProductGroups = [], isLoading: isLoadingPO } = useQuery<any[]>({
     queryKey: ['/api/p1-po-queue'],
-    select: (data: any[]) => {
-      return data.flatMap(group => group.items || []);
-    },
   });
+
+  // Flatten the grouped PO products into a single array
+  const poProducts: POProduct[] = poProductGroups.flatMap(group => group.items || []);
 
   // Fetch weekly schedule
   const { data: weeklySchedule = [], isLoading: isLoadingSchedule } = useQuery<any[]>({
-    queryKey: ['/api/weekly-schedule', weekStartDate],
-    queryFn: async () => {
-      const response = await fetch(`/api/weekly-schedule/${weekStartDate}`);
-      if (!response.ok) throw new Error('Failed to fetch weekly schedule');
-      return response.json();
-    },
+    queryKey: [`/api/weekly-schedule/${weekStartDate}`],
   });
 
   // Fetch mold availability
@@ -193,7 +190,7 @@ export default function WeeklyLayupScheduler() {
         title: 'Success',
         description: 'Items assigned to schedule',
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/weekly-schedule', weekStartDate] });
+      queryClient.invalidateQueries({ queryKey: [`/api/weekly-schedule/${weekStartDate}`] });
       setSelectedOrders(new Set());
       setSelectedPOProducts(new Set());
       setIsAssignDialogOpen(false);
@@ -249,7 +246,7 @@ export default function WeeklyLayupScheduler() {
         title: 'Removed',
         description: 'Assignment removed from schedule',
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/weekly-schedule', weekStartDate] });
+      queryClient.invalidateQueries({ queryKey: [`/api/weekly-schedule/${weekStartDate}`] });
     },
   });
 
@@ -287,7 +284,11 @@ export default function WeeklyLayupScheduler() {
               data-testid="input-week-start"
             />
           </div>
-          <Button variant="outline" data-testid="button-print-schedule">
+          <Button 
+            variant="outline" 
+            onClick={() => setShowPrintPreview(true)}
+            data-testid="button-print-schedule"
+          >
             <Printer className="h-4 w-4 mr-2" />
             Print Schedule
           </Button>
@@ -447,6 +448,28 @@ export default function WeeklyLayupScheduler() {
           </div>
         </div>
       </div>
+
+      {/* Print Preview Dialog */}
+      <Dialog open={showPrintPreview} onOpenChange={setShowPrintPreview}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Print Weekly Schedule</DialogTitle>
+          </DialogHeader>
+          <PrintableWeeklySchedule 
+            weekStartDate={weekStartDate}
+            daySchedules={daySchedules}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPrintPreview(false)}>
+              Close
+            </Button>
+            <Button onClick={() => window.print()}>
+              <Printer className="h-4 w-4 mr-2" />
+              Print
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Assign Dialog */}
       <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>

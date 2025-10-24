@@ -88,6 +88,7 @@ export default function WeeklyLayupScheduler() {
   // Fetch regular production orders
   const { data: regularOrders = [], isLoading: isLoadingOrders, error: ordersError } = useQuery<Order[]>({
     queryKey: ['/api/production-queue/prioritized'],
+    queryFn: () => apiRequest('/api/production-queue/prioritized'),
     retry: 1,
     staleTime: 30000,
   });
@@ -97,10 +98,16 @@ export default function WeeklyLayupScheduler() {
     queryKey: ['/api/p1-po-queue'],
   });
 
-  // Flatten and sort PO products by PO number
+  // Flatten and sort PO products by customer, then PO number
   const poProducts: POProduct[] = useMemo(() => {
     const flattened = poProductGroups.flatMap(group => group.items || []);
-    return flattened.sort((a, b) => (a.poNumber || '').localeCompare(b.poNumber || ''));
+    return flattened.sort((a, b) => {
+      // First sort by customer name
+      const customerCompare = (a.customerName || '').localeCompare(b.customerName || '');
+      if (customerCompare !== 0) return customerCompare;
+      // Then sort by PO number
+      return (a.poNumber || '').localeCompare(b.poNumber || '');
+    });
   }, [poProductGroups]);
 
   // Fetch weekly schedule
@@ -109,7 +116,7 @@ export default function WeeklyLayupScheduler() {
   });
 
   // Fetch mold availability
-  const { data: moldAvailability } = useQuery({
+  const { data: moldAvailability } = useQuery<{ totalCapacity: number; used: number }>({
     queryKey: ['/api/p1-po-queue/mold-availability'],
   });
 

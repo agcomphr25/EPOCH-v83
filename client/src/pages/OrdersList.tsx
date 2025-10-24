@@ -1552,19 +1552,37 @@ export default function OrdersList() {
                                 <LinkIcon className="mr-2 h-4 w-4" />
                                 Link Orders
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  setUrgencyMutation.mutate({
-                                    orderId: order.orderId,
-                                    urgency: 'high',
-                                  })
-                                }
-                                className="text-orange-600"
-                                data-testid={`button-set-urgent-${order.orderId}`}
-                              >
-                                <Zap className="mr-2 h-4 w-4" />
-                                Set Urgent/Rush
-                              </DropdownMenuItem>
+                              {(order.urgency === 'high' || order.urgency === 'critical') ? (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    setUrgencyMutation.mutate({
+                                      orderId: order.orderId,
+                                      urgency: 'medium',
+                                    })
+                                  }
+                                  className="text-gray-600"
+                                  disabled={setUrgencyMutation.isPending}
+                                  data-testid={`button-remove-urgent-${order.orderId}`}
+                                >
+                                  <Zap className="mr-2 h-4 w-4" />
+                                  {setUrgencyMutation.isPending ? 'Updating...' : 'Remove Rush Priority'}
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    setUrgencyMutation.mutate({
+                                      orderId: order.orderId,
+                                      urgency: 'high',
+                                    })
+                                  }
+                                  className="text-orange-600"
+                                  disabled={setUrgencyMutation.isPending}
+                                  data-testid={`button-set-urgent-${order.orderId}`}
+                                >
+                                  <Zap className="mr-2 h-4 w-4" />
+                                  {setUrgencyMutation.isPending ? 'Updating...' : 'Set Urgent/Rush'}
+                                </DropdownMenuItem>
+                              )}
                               {order.isCancelled ? (
                                 <DropdownMenuItem
                                   onClick={() =>

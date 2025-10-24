@@ -87,6 +87,7 @@ import {
   // Vendors table
   vendors,
   vendorContacts,
+  vendorMonthlyEvaluations,
   // Follow-up orders table
   followupOrders,
 
@@ -263,6 +264,8 @@ import {
   type InsertVendor,
   type VendorContact,
   type InsertVendorContact,
+  type VendorMonthlyEvaluation,
+  type InsertVendorMonthlyEvaluation,
   // Magic link token types
   magicLinkTokens,
   type MagicLinkToken,
@@ -752,6 +755,14 @@ export interface IStorage {
   createVendor(data: InsertVendor): Promise<Vendor>;
   updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor>;
   deleteVendor(id: number): Promise<void>;
+  
+  // Vendor monthly evaluations methods
+  getVendorMonthlyEvaluations(vendorId: number, year?: number): Promise<VendorMonthlyEvaluation[]>;
+  getVendorMonthlyEvaluation(vendorId: number, month: number, year: number): Promise<VendorMonthlyEvaluation | undefined>;
+  createVendorMonthlyEvaluation(data: InsertVendorMonthlyEvaluation): Promise<VendorMonthlyEvaluation>;
+  updateVendorMonthlyEvaluation(id: number, data: Partial<InsertVendorMonthlyEvaluation>): Promise<VendorMonthlyEvaluation>;
+  deleteVendorMonthlyEvaluation(id: number): Promise<void>;
+  bulkCreateVendorMonthlyEvaluations(data: InsertVendorMonthlyEvaluation[]): Promise<VendorMonthlyEvaluation[]>;
 
   // Follow-up order methods
   createFollowupOrder(data: InsertFollowupOrder): Promise<FollowupOrder>;
@@ -5248,6 +5259,57 @@ export class DatabaseStorage implements IStorage {
       .update(vendorContacts)
       .set({ isActive: false })
       .where(eq(vendorContacts.id, id));
+  }
+
+  // Vendor Monthly Evaluations CRUD
+  async getVendorMonthlyEvaluations(vendorId: number, year?: number): Promise<VendorMonthlyEvaluation[]> {
+    const conditions = [eq(vendorMonthlyEvaluations.vendorId, vendorId)];
+    if (year) {
+      conditions.push(eq(vendorMonthlyEvaluations.year, year));
+    }
+    return await db
+      .select()
+      .from(vendorMonthlyEvaluations)
+      .where(and(...conditions))
+      .orderBy(vendorMonthlyEvaluations.year, vendorMonthlyEvaluations.month);
+  }
+
+  async getVendorMonthlyEvaluation(vendorId: number, month: number, year: number): Promise<VendorMonthlyEvaluation | undefined> {
+    const [evaluation] = await db
+      .select()
+      .from(vendorMonthlyEvaluations)
+      .where(
+        and(
+          eq(vendorMonthlyEvaluations.vendorId, vendorId),
+          eq(vendorMonthlyEvaluations.month, month),
+          eq(vendorMonthlyEvaluations.year, year)
+        )
+      )
+      .limit(1);
+    return evaluation;
+  }
+
+  async createVendorMonthlyEvaluation(data: InsertVendorMonthlyEvaluation): Promise<VendorMonthlyEvaluation> {
+    const [evaluation] = await db.insert(vendorMonthlyEvaluations).values(data).returning();
+    return evaluation;
+  }
+
+  async updateVendorMonthlyEvaluation(id: number, data: Partial<InsertVendorMonthlyEvaluation>): Promise<VendorMonthlyEvaluation> {
+    const [evaluation] = await db
+      .update(vendorMonthlyEvaluations)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(vendorMonthlyEvaluations.id, id))
+      .returning();
+    return evaluation;
+  }
+
+  async deleteVendorMonthlyEvaluation(id: number): Promise<void> {
+    await db.delete(vendorMonthlyEvaluations).where(eq(vendorMonthlyEvaluations.id, id));
+  }
+
+  async bulkCreateVendorMonthlyEvaluations(data: InsertVendorMonthlyEvaluation[]): Promise<VendorMonthlyEvaluation[]> {
+    if (data.length === 0) return [];
+    return await db.insert(vendorMonthlyEvaluations).values(data).returning();
   }
 
   // Follow-up order methods

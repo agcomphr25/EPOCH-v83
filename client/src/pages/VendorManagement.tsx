@@ -665,6 +665,68 @@ export default function VendorManagement() {
     }
   };
 
+  const handleEvaluationsCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.csv')) {
+      toast({
+        title: 'Invalid file type',
+        description: 'Please upload a CSV file',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setImportingCsv(true);
+    try {
+      const text = await file.text();
+      
+      // Use Papa Parse for proper CSV parsing
+      const parsed = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header: string) => header.trim(),
+      });
+
+      // Send CSV data to backend for processing
+      const response = await apiRequest('/api/vendors/import-evaluations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvData: parsed.data }),
+      });
+
+      const result = response as any;
+
+      toast({
+        title: 'Import Complete',
+        description: `Processed: ${result.processed}, Matched: ${result.matched}, Created: ${result.created}${result.unmatched.length > 0 ? `, Unmatched: ${result.unmatched.length}` : ''}`,
+      });
+
+      if (result.unmatched.length > 0) {
+        console.log('Unmatched vendors:', result.unmatched);
+      }
+
+      if (result.errors.length > 0) {
+        console.log('Import errors:', result.errors);
+      }
+
+      // Invalidate both vendors and evaluations caches
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+      setIsImportDialogOpen(false);
+      e.target.value = ''; // Reset file input
+    } catch (error) {
+      console.error('CSV import error:', error);
+      toast({
+        title: 'Import failed',
+        description: 'Failed to import monthly evaluations',
+        variant: 'destructive',
+      });
+    } finally {
+      setImportingCsv(false);
+    }
+  };
+
   const onSubmit = (data: VendorFormData) => {
     const normalizedData = {
       ...data,
@@ -1493,8 +1555,17 @@ export default function VendorManagement() {
 
               {/* Tab 4: Evaluation & Notes */}
               <TabsContent value="evaluation" className="space-y-4 mt-4">
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-4 mb-4">
+                  <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Monthly Vendor Evaluations (2025)</h4>
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    Track monthly performance scores for Quality, Cost, Delivery, and Response (1-5 scale).
+                  </p>
+                </div>
+
+                {editingVendor && <MonthlyEvaluationsTable vendorId={editingVendor.id} />}
+
                 <div className="bg-amber-50 border border-amber-200 rounded-md p-4 mb-4">
-                  <h4 className="font-semibold text-amber-900 mb-2">Vendor Evaluation</h4>
+                  <h4 className="font-semibold text-amber-900 mb-2">Overall Vendor Evaluation</h4>
                   <p className="text-sm text-amber-700">
                     Rate the vendor on 4 criteria using a 1-5 scale.
                   </p>
@@ -2084,40 +2155,74 @@ export default function VendorManagement() {
 
       {/* CSV Import Dialog */}
       <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Import Vendors from CSV</DialogTitle>
+            <DialogTitle>Import from CSV</DialogTitle>
             <p className="text-sm text-gray-500">
-              Upload a CSV file with vendor data. The file should include columns for:
-              Supplier Name, Start/Renewal Date, Method of Approval, and Approval Expiration.
+              Choose what type of data you want to import
             </p>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
-              <Upload className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-              <Label
-                htmlFor="csv-upload"
-                className="cursor-pointer text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
-              >
-                Click to upload CSV file
-              </Label>
-              <Input
-                id="csv-upload"
-                type="file"
-                accept=".csv"
-                onChange={handleCsvImport}
-                className="hidden"
-                data-testid="input-csv-upload"
-                disabled={importingCsv}
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                CSV files only
+          <div className="space-y-6">
+            {/* Vendors Import */}
+            <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4">
+              <h3 className="font-semibold mb-2">Import Vendors</h3>
+              <p className="text-sm text-gray-500 mb-3">
+                CSV should include: Supplier Name, Start/Renewal Date, Method of Approval, and Approval Expiration.
               </p>
-              {importingCsv && (
-                <p className="text-sm text-blue-600 mt-3">
-                  Importing vendors...
-                </p>
-              )}
+              <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                <Upload className="w-10 h-10 mx-auto mb-2 text-gray-400" />
+                <Label
+                  htmlFor="csv-upload"
+                  className="cursor-pointer text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
+                >
+                  Upload Vendors CSV
+                </Label>
+                <Input
+                  id="csv-upload"
+                  type="file"
+                  accept=".csv"
+                  onChange={handleCsvImport}
+                  className="hidden"
+                  data-testid="input-csv-upload"
+                  disabled={importingCsv}
+                />
+                {importingCsv && (
+                  <p className="text-sm text-blue-600 mt-2">
+                    Importing...
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Monthly Evaluations Import */}
+            <div className="border border-blue-300 dark:border-blue-600 rounded-lg p-4 bg-blue-50 dark:bg-blue-900/20">
+              <h3 className="font-semibold mb-2">Import Monthly Evaluations</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                CSV should include vendor names and monthly scores (Jan-Quality, Jan-Cost, etc.). Vendor names must match existing vendors.
+              </p>
+              <div className="border-2 border-dashed border-blue-300 dark:border-blue-600 rounded-lg p-6 text-center bg-white dark:bg-gray-900">
+                <Upload className="w-10 h-10 mx-auto mb-2 text-blue-400" />
+                <Label
+                  htmlFor="evaluations-csv-upload"
+                  className="cursor-pointer text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
+                >
+                  Upload Evaluations CSV
+                </Label>
+                <Input
+                  id="evaluations-csv-upload"
+                  type="file"
+                  accept=".csv"
+                  onChange={handleEvaluationsCsvImport}
+                  className="hidden"
+                  data-testid="input-evaluations-csv-upload"
+                  disabled={importingCsv}
+                />
+                {importingCsv && (
+                  <p className="text-sm text-blue-600 mt-2">
+                    Importing evaluations...
+                  </p>
+                )}
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -2133,6 +2238,223 @@ export default function VendorManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// Monthly Evaluations Table Component
+function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
+  const { toast } = useToast();
+  const [selectedYear, setSelectedYear] = useState(2025);
+  const [editingCell, setEditingCell] = useState<{month: number; field: string} | null>(null);
+  const [cellValue, setCellValue] = useState('');
+
+  const months = [
+    { name: 'Jan', num: 1 },
+    { name: 'Feb', num: 2 },
+    { name: 'Mar', num: 3 },
+    { name: 'Apr', num: 4 },
+    { name: 'May', num: 5 },
+    { name: 'Jun', num: 6 },
+    { name: 'Jul', num: 7 },
+    { name: 'Aug', num: 8 },
+    { name: 'Sep', num: 9 },
+    { name: 'Oct', num: 10 },
+    { name: 'Nov', num: 11 },
+    { name: 'Dec', num: 12 },
+  ];
+
+  // Fetch monthly evaluations
+  const { data: evaluations = [], isLoading, refetch } = useQuery({
+    queryKey: ['/api/vendors', vendorId, 'evaluations', { year: selectedYear }],
+  });
+
+  // Save evaluation mutation
+  const saveEvaluationMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await apiRequest(`/api/vendors/${vendorId}/evaluations`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors', vendorId, 'evaluations'] });
+      toast({ title: 'Success', description: 'Evaluation saved successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to save evaluation', variant: 'destructive' });
+    },
+  });
+
+  const getEvaluationForMonth = (month: number) => {
+    return evaluations.find((e: any) => e.month === month && e.year === selectedYear);
+  };
+
+  const handleCellClick = (month: number, field: string) => {
+    const evaluation = getEvaluationForMonth(month);
+    const value = evaluation?.[field] || '';
+    setCellValue(value.toString());
+    setEditingCell({ month, field });
+  };
+
+  const handleCellSave = async (month: number, field: string) => {
+    const evaluation = getEvaluationForMonth(month);
+    const numValue = cellValue ? parseInt(cellValue) : null;
+
+    if (numValue && (numValue < 1 || numValue > 5)) {
+      toast({ title: 'Error', description: 'Score must be between 1 and 5', variant: 'destructive' });
+      return;
+    }
+
+    const data: any = {
+      month,
+      year: selectedYear,
+      [field]: numValue,
+    };
+
+    // Preserve existing scores
+    if (evaluation) {
+      data.qualityScore = evaluation.qualityScore;
+      data.costScore = evaluation.costScore;
+      data.deliveryScore = evaluation.deliveryScore;
+      data.responseScore = evaluation.responseScore;
+      data[field] = numValue;
+    }
+
+    await saveEvaluationMutation.mutateAsync(data);
+    setEditingCell(null);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, month: number, field: string) => {
+    if (e.key === 'Enter') {
+      handleCellSave(month, field);
+    } else if (e.key === 'Escape') {
+      setEditingCell(null);
+    }
+  };
+
+  const renderCell = (month: number, field: string) => {
+    const evaluation = getEvaluationForMonth(month);
+    const value = evaluation?.[field];
+    const isEditing = editingCell?.month === month && editingCell?.field === field;
+
+    if (isEditing) {
+      return (
+        <Input
+          type="number"
+          min="1"
+          max="5"
+          value={cellValue}
+          onChange={(e) => setCellValue(e.target.value)}
+          onBlur={() => handleCellSave(month, field)}
+          onKeyDown={(e) => handleKeyDown(e, month, field)}
+          className="w-12 h-8 text-center p-1"
+          autoFocus
+          data-testid={`input-${field}-${month}`}
+        />
+      );
+    }
+
+    return (
+      <div
+        onClick={() => handleCellClick(month, field)}
+        className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 h-8 flex items-center justify-center rounded"
+        data-testid={`cell-${field}-${month}`}
+      >
+        {value || '-'}
+      </div>
+    );
+  };
+
+  if (isLoading) {
+    return <div className="text-center py-4">Loading evaluations...</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div>
+          <Label>Select Year</Label>
+          <Select value={selectedYear.toString()} onValueChange={(v) => setSelectedYear(parseInt(v))}>
+            <SelectTrigger className="w-32" data-testid="select-year">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="2024">2024</SelectItem>
+              <SelectItem value="2025">2025</SelectItem>
+              <SelectItem value="2026">2026</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse border border-gray-300 dark:border-gray-600 text-sm">
+          <thead>
+            <tr className="bg-gray-100 dark:bg-gray-800">
+              <th className="border border-gray-300 dark:border-gray-600 p-2 text-left">Criteria</th>
+              {months.map((month) => (
+                <th key={month.num} className="border border-gray-300 dark:border-gray-600 p-2 text-center w-16">
+                  {month.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="border border-gray-300 dark:border-gray-600 p-2 font-medium">Quality</td>
+              {months.map((month) => (
+                <td key={month.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
+                  {renderCell(month.num, 'qualityScore')}
+                </td>
+              ))}
+            </tr>
+            <tr className="bg-gray-50 dark:bg-gray-900/50">
+              <td className="border border-gray-300 dark:border-gray-600 p-2 font-medium">Cost</td>
+              {months.map((month) => (
+                <td key={month.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
+                  {renderCell(month.num, 'costScore')}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <td className="border border-gray-300 dark:border-gray-600 p-2 font-medium">Delivery</td>
+              {months.map((month) => (
+                <td key={month.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
+                  {renderCell(month.num, 'deliveryScore')}
+                </td>
+              ))}
+            </tr>
+            <tr className="bg-gray-50 dark:bg-gray-900/50">
+              <td className="border border-gray-300 dark:border-gray-600 p-2 font-medium">Response</td>
+              {months.map((month) => (
+                <td key={month.num} className="border border-gray-300 dark:border-gray-600 p-1 text-center">
+                  {renderCell(month.num, 'responseScore')}
+                </td>
+              ))}
+            </tr>
+            <tr className="bg-blue-50 dark:bg-blue-900/20 font-bold">
+              <td className="border border-gray-300 dark:border-gray-600 p-2">Total</td>
+              {months.map((month) => {
+                const evaluation = getEvaluationForMonth(month.num);
+                const total = evaluation?.totalScore || 0;
+                return (
+                  <td key={month.num} className="border border-gray-300 dark:border-gray-600 p-2 text-center" data-testid={`total-${month.num}`}>
+                    {total > 0 ? total : '-'}
+                  </td>
+                );
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="text-xs text-gray-500 dark:text-gray-400">
+        <p>• Click any cell to edit the score (1-5)</p>
+        <p>• Press Enter to save, Escape to cancel</p>
+        <p>• Total score is calculated automatically</p>
+      </div>
     </div>
   );
 }

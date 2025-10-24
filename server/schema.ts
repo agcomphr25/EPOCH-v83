@@ -2248,6 +2248,24 @@ export const vendorContacts = pgTable('vendor_contacts', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+export const vendorMonthlyEvaluations = pgTable('vendor_monthly_evaluations', {
+  id: serial('id').primaryKey(),
+  vendorId: integer('vendor_id')
+    .references(() => vendors.id, { onDelete: 'cascade' })
+    .notNull(),
+  month: integer('month').notNull(), // 1-12 for Jan-Dec
+  year: integer('year').notNull(),
+  qualityScore: integer('quality_score'), // 1-5
+  costScore: integer('cost_score'), // 1-5
+  deliveryScore: integer('delivery_score'), // 1-5
+  responseScore: integer('response_score'), // 1-5
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  uniqueVendorMonthYear: unique().on(table.vendorId, table.month, table.year),
+}));
+
 export const communicationLogs = pgTable('communication_logs', {
   id: serial('id').primaryKey(),
   orderId: text('order_id'), // Made nullable for general communications
@@ -2399,6 +2417,23 @@ export const insertVendorContactSchema = createInsertSchema(vendorContacts)
     isActive: z.boolean().default(true),
   });
 
+export const insertVendorMonthlyEvaluationSchema = createInsertSchema(vendorMonthlyEvaluations)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    vendorId: z.number().int(),
+    month: z.number().int().min(1).max(12),
+    year: z.number().int().min(2000).max(2100),
+    qualityScore: z.number().int().min(1).max(5).optional().nullable(),
+    costScore: z.number().int().min(1).max(5).optional().nullable(),
+    deliveryScore: z.number().int().min(1).max(5).optional().nullable(),
+    responseScore: z.number().int().min(1).max(5).optional().nullable(),
+    notes: z.string().optional(),
+  });
+
 // Order Attachments Table
 export const orderAttachments = pgTable('order_attachments', {
   id: serial('id').primaryKey(),
@@ -2542,6 +2577,8 @@ export type InsertVendor = z.infer<typeof insertVendorSchema>;
 export type Vendor = typeof vendors.$inferSelect;
 export type InsertVendorContact = z.infer<typeof insertVendorContactSchema>;
 export type VendorContact = typeof vendorContacts.$inferSelect;
+export type InsertVendorMonthlyEvaluation = z.infer<typeof insertVendorMonthlyEvaluationSchema>;
+export type VendorMonthlyEvaluation = typeof vendorMonthlyEvaluations.$inferSelect;
 
 // Types for Module 17 - Nonconformance
 export type InsertNonconformanceRecord = z.infer<

@@ -2,7 +2,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle2, Circle, ArrowUpDown, Calendar, Plus, Edit, Trash2, Upload } from 'lucide-react';
+import { CheckCircle2, Circle, Minus, ArrowUpDown, Calendar, Plus, Edit, Trash2, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -708,7 +708,7 @@ export default function TrainingMatrixView() {
                               )}
                             </div>
                           ) : (
-                            <Circle className="h-5 w-5 text-red-400 mx-auto" />
+                            <Minus className="h-5 w-5 text-blue-500 mx-auto" />
                           )}
                         </td>
                       );
@@ -726,7 +726,7 @@ export default function TrainingMatrixView() {
             <span>Certified</span>
           </div>
           <div className="flex items-center gap-2">
-            <Circle className="h-4 w-4 text-red-400" />
+            <Minus className="h-4 w-4 text-blue-500" />
             <span>Not Certified</span>
           </div>
         </div>

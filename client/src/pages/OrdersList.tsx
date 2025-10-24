@@ -139,6 +139,10 @@ interface Order {
   cancelReason?: string;
   // Verification Information
   isVerified?: boolean;
+  // Urgency/Priority fields
+  urgency?: 'critical' | 'high' | 'medium' | 'low';
+  priorityScore?: number;
+  isManualUrgency?: boolean;
   createdAt: string;
   updatedAt: string;
 }

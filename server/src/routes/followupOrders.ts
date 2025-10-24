@@ -4,6 +4,7 @@ import { storage } from '../../storage';
 import { insertFollowupOrderSchema } from '../../schema';
 import { generateSalesOrderPDF, embedSignatureInPDF } from '../../utils/pdf/salesOrderPdf';
 import { sendFollowupOrderEmail } from '../../utils/followupOrderEmail';
+import { sendOrderSignedConfirmation } from '../../utils/orderSignedConfirmation';
 import * as fs from 'fs';
 import * as path from 'path';
 import { nanoid } from 'nanoid';
@@ -475,6 +476,39 @@ router.post('/:id/sign', async (req, res) => {
     } catch (finalizeError) {
       console.error('Error finalizing order:', finalizeError);
       throw new Error('Failed to finalize order after signature');
+    }
+
+    // Send confirmation email to customer
+    try {
+      const order = await storage.getOrderById(followupOrder.orderId);
+      const customer = await storage.getCustomerById(followupOrder.customerId);
+      
+      if (order && customer && customer.email) {
+        // Defensive date handling to avoid "Invalid Date" strings
+        const formatDate = (date: any): string => {
+          if (!date) return 'N/A';
+          const parsed = new Date(date);
+          return isNaN(parsed.getTime()) ? 'N/A' : parsed.toLocaleDateString();
+        };
+
+        const confirmationEmailData = {
+          orderId: followupOrder.orderId,
+          customerName: customer.name,
+          customerEmail: customer.email,
+          orderDate: formatDate(order.orderDate),
+          dueDate: formatDate(order.dueDate),
+        };
+
+        const emailResult = await sendOrderSignedConfirmation(confirmationEmailData);
+        
+        if (emailResult.success) {
+          console.log(`📧 Confirmation email sent to ${customer.email} for order ${followupOrder.orderId}`);
+        } else {
+          console.error(`❌ Failed to send confirmation email: ${emailResult.error}`);
+        }
+      }
+    } catch (emailError) {
+      console.error('Error sending confirmation email (non-critical):', emailError);
     }
 
     res.json({

@@ -45,6 +45,8 @@ import {
   CheckCircle,
   FileText,
   BarChart3,
+  DollarSign,
+  Eye,
 } from 'lucide-react';
 import {
   Table,
@@ -606,6 +608,10 @@ export default function CustomerManagement() {
   const [isProcessingCSV, setIsProcessingCSV] = useState(false);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
+  // Balance Due Dialog state
+  const [isBalanceDueDialogOpen, setIsBalanceDueDialogOpen] = useState(false);
+  const [balanceDueCustomerId, setBalanceDueCustomerId] = useState<string | null>(null);
+
   // Fetch customers using bypass route
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ['/api/customers/bypass'],
@@ -616,6 +622,13 @@ export default function CustomerManagement() {
   const { data: addressesData = [] } = useQuery<CustomerAddress[]>({
     queryKey: ['/api/addresses/all'],
     queryFn: () => apiRequest('/api/addresses/all'),
+  });
+
+  // Fetch balance due for selected customer
+  const { data: balanceDueData, isLoading: balanceDueLoading } = useQuery({
+    queryKey: ['/api/customers', balanceDueCustomerId, 'balance-due'],
+    enabled: !!balanceDueCustomerId,
+    queryFn: () => apiRequest(`/api/customers/${balanceDueCustomerId}/balance-due`),
   });
 
   // Fetch addresses for selected customer
@@ -1676,6 +1689,7 @@ export default function CustomerManagement() {
                   <TableHead>Address</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
+                  <TableHead className="text-right">Balance Due</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1759,12 +1773,29 @@ export default function CustomerManagement() {
                         {new Date(customer.createdAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                          onClick={() => {
+                            setBalanceDueCustomerId(customer.id.toString());
+                            setIsBalanceDueDialogOpen(true);
+                          }}
+                          data-testid={`button-view-balance-${customer.id}`}
+                          title="View Balance Due"
+                        >
+                          <DollarSign className="h-4 w-4 mr-1" />
+                          View
+                        </Button>
+                      </TableCell>
+                      <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleEditCustomer(customer)}
                             title="Edit Customer & Address"
+                            data-testid={`button-edit-customer-${customer.id}`}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -1773,6 +1804,7 @@ export default function CustomerManagement() {
                             size="sm"
                             onClick={() => handleDeleteCustomer(customer)}
                             title="Delete Customer"
+                            data-testid={`button-delete-customer-${customer.id}`}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -2640,6 +2672,129 @@ export default function CustomerManagement() {
               disabled={deleteCustomerMutation.isPending}
             >
               {deleteCustomerMutation.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Balance Due Details Dialog */}
+      <Dialog open={isBalanceDueDialogOpen} onOpenChange={setIsBalanceDueDialogOpen}>
+        <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-orange-600" />
+              Balance Due Details
+            </DialogTitle>
+          </DialogHeader>
+
+          {balanceDueLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+              <span className="ml-3 text-gray-600">Loading balance information...</span>
+            </div>
+          ) : balanceDueData ? (
+            <div className="space-y-6">
+              {/* Summary Card */}
+              <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-orange-900">Total Outstanding Balance</p>
+                      <p className="text-3xl font-bold text-orange-700 mt-1">
+                        ${balanceDueData.totalBalanceDue?.toFixed(2) || '0.00'}
+                      </p>
+                      <p className="text-sm text-orange-600 mt-1">
+                        {balanceDueData.orderCount || 0} unpaid order{balanceDueData.orderCount !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <DollarSign className="h-16 w-16 text-orange-300" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Orders List */}
+              {balanceDueData.orders && balanceDueData.orders.length > 0 ? (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Unpaid Orders</h3>
+                  
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Order ID</TableHead>
+                        <TableHead>Customer PO</TableHead>
+                        <TableHead>Order Date</TableHead>
+                        <TableHead className="text-right">Order Total</TableHead>
+                        <TableHead className="text-right">Paid</TableHead>
+                        <TableHead className="text-right">Refunded</TableHead>
+                        <TableHead className="text-right">Net Paid</TableHead>
+                        <TableHead className="text-right">Balance Due</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {balanceDueData.orders.map((order: any) => (
+                        <TableRow key={order.orderId} data-testid={`row-order-${order.orderId}`}>
+                          <TableCell className="font-medium" data-testid={`text-order-id-${order.orderId}`}>
+                            {order.orderId}
+                          </TableCell>
+                          <TableCell data-testid={`text-customer-po-${order.orderId}`}>
+                            {order.customerPO || '-'}
+                          </TableCell>
+                          <TableCell data-testid={`text-order-date-${order.orderId}`}>
+                            {new Date(order.orderDate).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-right" data-testid={`text-order-total-${order.orderId}`}>
+                            ${order.orderTotal?.toFixed(2) || '0.00'}
+                          </TableCell>
+                          <TableCell className="text-right text-green-600" data-testid={`text-total-paid-${order.orderId}`}>
+                            ${order.totalPaid?.toFixed(2) || '0.00'}
+                          </TableCell>
+                          <TableCell className="text-right text-red-600" data-testid={`text-total-refunded-${order.orderId}`}>
+                            -${order.totalRefunded?.toFixed(2) || '0.00'}
+                          </TableCell>
+                          <TableCell 
+                            className={`text-right font-medium ${order.netPaid < 0 ? 'text-red-600' : 'text-blue-600'}`} 
+                            data-testid={`text-net-paid-${order.orderId}`}
+                          >
+                            {order.netPaid < 0 ? `-$${Math.abs(order.netPaid).toFixed(2)}` : `$${order.netPaid?.toFixed(2) || '0.00'}`}
+                            {order.netPaid < 0 && (
+                              <span className="text-xs ml-1">(Credit)</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-orange-600" data-testid={`text-balance-due-${order.orderId}`}>
+                            ${order.balanceDue?.toFixed(2) || '0.00'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-12 bg-green-50 rounded-lg border border-green-200">
+                  <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-3" />
+                  <p className="text-lg font-semibold text-green-800">No Outstanding Balance</p>
+                  <p className="text-sm text-green-600 mt-1">
+                    This customer has no unpaid orders.
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600">No balance information available</p>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsBalanceDueDialogOpen(false);
+                setBalanceDueCustomerId(null);
+              }}
+              data-testid="button-close-balance-dialog"
+            >
+              Close
             </Button>
           </div>
         </DialogContent>

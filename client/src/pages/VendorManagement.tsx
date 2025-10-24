@@ -127,6 +127,10 @@ export default function VendorManagement() {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
 
+  // CSV import state
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importingCsv, setImportingCsv] = useState(false);
+
   // Filter and pagination state
   const [search, setSearch] = useState('');
   const [approved, setApproved] = useState<'any' | 'true' | 'false'>('any');
@@ -539,6 +543,121 @@ export default function VendorManagement() {
     form.setValue('approvalPdfUrl', '');
   };
 
+  const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.csv')) {
+      toast({
+        title: 'Invalid file type',
+        description: 'Please upload a CSV file',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setImportingCsv(true);
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(line => line.trim());
+      const headers = lines[0].split(',');
+
+      // Find column indices
+      const nameIdx = headers.findIndex(h => h.trim().toLowerCase().includes('supplier name'));
+      const startDateIdx = headers.findIndex(h => h.trim().toLowerCase().includes('start/renewal'));
+      const approvalMethodIdx = headers.findIndex(h => h.trim().toLowerCase().includes('method of approval'));
+      const expirationIdx = headers.findIndex(h => h.trim().toLowerCase().includes('approval expiration'));
+
+      const vendorsToImport = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',');
+        const name = values[nameIdx]?.trim();
+        
+        if (!name) continue; // Skip empty rows
+
+        const startDate = values[startDateIdx]?.trim();
+        const approvalMethod = values[approvalMethodIdx]?.trim();
+        const expiration = values[expirationIdx]?.trim();
+
+        // Determine approval source from Method of Approval
+        let approvalSource = '';
+        if (approvalMethod) {
+          if (approvalMethod.toLowerCase().includes('.pdf')) {
+            approvalSource = 'Certification';
+          } else if (approvalMethod.toLowerCase().includes('supplier approval form')) {
+            approvalSource = 'Supplier Approval Form';
+          }
+        }
+
+        // Parse dates - handle various formats like "1/2025", "01/2024", "9/2025"
+        const parseDate = (dateStr: string): string => {
+          if (!dateStr || dateStr === 'N/A') return '';
+          
+          // Handle M/YYYY or MM/YYYY format
+          if (dateStr.match(/^\d{1,2}\/\d{4}$/)) {
+            const [month, year] = dateStr.split('/');
+            return `${year}-${month.padStart(2, '0')}-01`;
+          }
+          
+          // Handle MM/DD/YYYY format
+          if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+            const [month, day, year] = dateStr.split('/');
+            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          }
+          
+          return '';
+        };
+
+        vendorsToImport.push({
+          name,
+          startRenewalDate: parseDate(startDate),
+          approvalExpiration: parseDate(expiration),
+          approvalSource,
+          approved: false,
+          evaluated: false,
+        });
+      }
+
+      // Bulk create vendors
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const vendor of vendorsToImport) {
+        try {
+          await apiRequest('/api/vendors', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(vendor),
+          });
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to import vendor: ${vendor.name}`, error);
+          errorCount++;
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+
+      toast({
+        title: 'Import complete',
+        description: `Successfully imported ${successCount} vendors. ${errorCount > 0 ? `${errorCount} failed.` : ''}`,
+      });
+
+      setIsImportDialogOpen(false);
+      e.target.value = ''; // Reset file input
+    } catch (error) {
+      console.error('CSV import error:', error);
+      toast({
+        title: 'Import failed',
+        description: 'Failed to parse CSV file',
+        variant: 'destructive',
+      });
+    } finally {
+      setImportingCsv(false);
+    }
+  };
+
   const onSubmit = (data: VendorFormData) => {
     const normalizedData = {
       ...data,
@@ -617,16 +736,27 @@ export default function VendorManagement() {
             );
           })()}
         </div>
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogTrigger asChild>
-            <Button
-              onClick={() => handleOpenModal()}
-              data-testid="button-create-vendor"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Vendor
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsImportDialogOpen(true)}
+            data-testid="button-import-csv"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Import CSV
+          </Button>
+          <Button
+            onClick={() => handleOpenModal()}
+            data-testid="button-create-vendor"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Vendor
+          </Button>
+        </div>
+      </div>
+
+      {/* Vendor Edit/Create Dialog */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle data-testid="text-modal-title">
@@ -1529,8 +1659,7 @@ export default function VendorManagement() {
               </TabsContent>
             </Tabs>
           </DialogContent>
-        </Dialog>
-      </div>
+      </Dialog>
 
       {/* Filters */}
       <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg mb-6 space-y-4">
@@ -1945,6 +2074,58 @@ export default function VendorManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* CSV Import Dialog */}
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import Vendors from CSV</DialogTitle>
+            <p className="text-sm text-gray-500">
+              Upload a CSV file with vendor data. The file should include columns for:
+              Supplier Name, Start/Renewal Date, Method of Approval, and Approval Expiration.
+            </p>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
+              <Upload className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+              <Label
+                htmlFor="csv-upload"
+                className="cursor-pointer text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
+              >
+                Click to upload CSV file
+              </Label>
+              <Input
+                id="csv-upload"
+                type="file"
+                accept=".csv"
+                onChange={handleCsvImport}
+                className="hidden"
+                data-testid="input-csv-upload"
+                disabled={importingCsv}
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                CSV files only
+              </p>
+              {importingCsv && (
+                <p className="text-sm text-blue-600 mt-3">
+                  Importing vendors...
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsImportDialogOpen(false)}
+              disabled={importingCsv}
+              data-testid="button-close-import"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

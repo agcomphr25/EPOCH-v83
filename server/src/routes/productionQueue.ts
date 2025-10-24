@@ -320,7 +320,9 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         o.status,
         o.customer_id as customerId,
         o.features,
-        0 as priorityScore,
+        COALESCE(o.priority_score, 9999) as priorityScore,
+        o.urgency,
+        o.is_manual_urgency as isManualUrgency,
         0 as queuePosition,
         o.created_at as createdAt,
         c.name as customerName
@@ -334,6 +336,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         AND o.model_id != 'no_stock'
         AND (o.features->>'action_length' IS NOT NULL AND o.features->>'action_length' != '' AND o.features->>'action_length' != 'null')
       ORDER BY 
+        COALESCE(o.priority_score, 9999) ASC,
         o.due_date ASC,
         o.created_at ASC
     `;
@@ -364,6 +367,8 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         customerName: order.customername,
         features: order.features,
         priorityScore: order.priorityscore || 1000 - index,
+        urgency: order.urgency,
+        isManualUrgency: order.ismanualurgency,
         queuePosition: index + 1,
         daysToDue,
         isOverdue: daysToDue < 0,

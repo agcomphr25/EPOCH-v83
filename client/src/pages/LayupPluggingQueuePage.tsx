@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   FileText,
   Eye,
+  Zap,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -157,8 +158,15 @@ function QueueOrderItem({
       <div
         className={`${cardStyling.text} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}
       >
-        <div className="flex items-center font-bold">
+        <div className="flex items-center gap-1.5 font-bold flex-wrap justify-center">
           {getDisplayOrderId(order) || 'No ID'}
+
+          {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+            <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-1.5 py-0.5 font-bold text-xs">
+              <Zap className="w-2.5 h-2.5" />
+              URGENT
+            </Badge>
+          )}
 
           {(order.poId || order.productionOrderId) && (
             <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded font-semibold">

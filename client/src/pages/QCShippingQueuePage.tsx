@@ -17,6 +17,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -660,7 +661,15 @@ export default function QCShippingQueuePage() {
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center justify-between">
           <div className="flex flex-col gap-0.5">
-            <span>{order.orderId}</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span>{order.orderId}</span>
+              {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
+                  <Zap className="w-3 h-3" />
+                  URGENT!!!
+                </Badge>
+              )}
+            </div>
             {order.fbOrderNumber && (
               <span className="text-xs text-gray-600 font-normal">
                 FB: {order.fbOrderNumber}

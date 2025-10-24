@@ -3196,6 +3196,9 @@ export class DatabaseStorage implements IStorage {
           createdAt: allOrders.createdAt,
           updatedAt: allOrders.updatedAt,
           assignedTechnician: allOrders.assignedTechnician,
+          urgency: allOrders.urgency,
+          priorityScore: allOrders.priorityScore,
+          isManualUrgency: allOrders.isManualUrgency,
         })
         .from(allOrders)
         .leftJoin(

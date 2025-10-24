@@ -185,13 +185,13 @@ export default function ProductionQueueManager() {
   // Removed: Move selected PO items to layup scheduler mutation
   // All P1 PO functionality now managed via OEM Priority Settings
 
-  // Progress orders to Layup/Plugging mutation
-  const progressToLayupPluggingMutation = useMutation({
+  // Progress orders to Barcode mutation
+  const progressToBarcodeMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
       const progressPromises = orderIds.map((orderId) =>
         apiRequest(`/api/orders/${orderId}/progress`, {
           method: 'POST',
-          body: { toDepartment: 'Layup/Plugging' },
+          body: { toDepartment: 'Barcode' },
         })
       );
       return Promise.all(progressPromises);
@@ -202,7 +202,7 @@ export default function ProductionQueueManager() {
       });
       toast({
         title: 'Success',
-        description: `Successfully progressed ${selectedQueueOrders.size} order(s) to Layup/Plugging`,
+        description: `Successfully progressed ${selectedQueueOrders.size} order(s) to Barcode`,
       });
       setSelectedQueueOrders(new Set());
     },
@@ -236,9 +236,9 @@ export default function ProductionQueueManager() {
     }
   };
 
-  const handleProgressSelectedToLayupPlugging = () => {
+  const handleProgressSelectedToBarcode = () => {
     if (selectedQueueOrders.size === 0) return;
-    progressToLayupPluggingMutation.mutate(Array.from(selectedQueueOrders));
+    progressToBarcodeMutation.mutate(Array.from(selectedQueueOrders));
   };
 
   const getUrgencyBadgeColor = (urgencyLevel: string) => {
@@ -536,13 +536,14 @@ export default function ProductionQueueManager() {
                     </Button>
                     {selectedQueueOrders.size > 0 && (
                       <Button
-                        onClick={handleProgressSelectedToLayupPlugging}
-                        disabled={progressToLayupPluggingMutation.isPending}
+                        onClick={handleProgressSelectedToBarcode}
+                        disabled={progressToBarcodeMutation.isPending}
                         className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
                         size="sm"
+                        data-testid="button-progress-barcode"
                       >
                         <ArrowRight className="h-4 w-4" />
-                        Progress to Layup/Plugging ({selectedQueueOrders.size})
+                        Progress to Barcode ({selectedQueueOrders.size})
                       </Button>
                     )}
                   </div>

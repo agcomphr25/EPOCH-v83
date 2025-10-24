@@ -30,6 +30,7 @@ import layupScheduleRoutes from './layupSchedule';
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import p1POQueueRoutes from './p1POQueue';
+import weeklyScheduleRoutes from './weeklySchedule';
 import refundRoutes from './refunds';
 import moldSyncRoutes from './moldSync';
 import authRoutes from './auth';
@@ -171,6 +172,9 @@ export function registerRoutes(app: Express): Server {
 
   // P1 PO Queue routes
   app.use('/api/p1-po-queue', p1POQueueRoutes);
+
+  // Weekly Schedule routes
+  app.use('/api/weekly-schedule', weeklyScheduleRoutes);
 
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);

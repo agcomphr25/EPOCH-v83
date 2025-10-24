@@ -27,6 +27,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -50,7 +51,11 @@ import {
   XCircle,
   User,
   Package,
+  Upload,
+  FileText,
+  X,
 } from 'lucide-react';
+import Papa from 'papaparse';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -78,6 +83,10 @@ const vendorFormSchema = insertVendorSchema.extend({
     .optional()
     .or(z.literal('')),
   scope: z.string().optional(),
+  approvalSource: z.string().optional(),
+  approvalPdfUrl: z.string().optional(),
+  startRenewalDate: z.string().optional(),
+  approvalExpiration: z.string().optional(),
   evaluationDate: z.string().optional(),
   qualityScore: z.number().int().min(1).max(5).optional().nullable(),
   costScore: z.number().int().min(1).max(5).optional().nullable(),
@@ -115,6 +124,14 @@ export default function VendorManagement() {
   // Pending contacts for new vendors (before vendor is created)
   const [pendingContacts, setPendingContacts] = useState<PendingContact[]>([]);
 
+  // File upload state
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+
+  // CSV import state
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importingCsv, setImportingCsv] = useState(false);
+
   // Filter and pagination state
   const [search, setSearch] = useState('');
   const [approved, setApproved] = useState<'any' | 'true' | 'false'>('any');
@@ -142,6 +159,10 @@ export default function VendorManagement() {
       additionalEmail: '',
       phone: '',
       scope: '',
+      approvalSource: '',
+      approvalPdfUrl: '',
+      startRenewalDate: '',
+      approvalExpiration: '',
       approved: false,
       evaluated: false,
       evaluationDate: '',
@@ -424,6 +445,10 @@ export default function VendorManagement() {
         country: vendor.country || 'United States',
 
         scope: vendor.scope || '',
+        approvalSource: vendor.approvalSource || '',
+        approvalPdfUrl: vendor.approvalPdfUrl || '',
+        startRenewalDate: vendor.startRenewalDate || '',
+        approvalExpiration: vendor.approvalExpiration || '',
         approved: vendor.approved,
         evaluated: vendor.evaluated,
         evaluationDate: vendor.evaluationDate || '',
@@ -470,6 +495,174 @@ export default function VendorManagement() {
     setIsAddingContact(false);
     setEditingContact(null);
     contactForm.reset();
+    // Reset file upload state
+    setUploadedFile(null);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast({
+        title: 'Invalid file type',
+        description: 'Please upload a PDF file',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUploadingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/vendors/upload/approval', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+
+      const data = await response.json();
+      form.setValue('approvalPdfUrl', data.url);
+      setUploadedFile(file);
+      toast({ title: 'File uploaded successfully' });
+    } catch (error) {
+      toast({
+        title: 'Upload failed',
+        description: 'Failed to upload file',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setUploadedFile(null);
+    form.setValue('approvalPdfUrl', '');
+  };
+
+  const handleCsvImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.csv')) {
+      toast({
+        title: 'Invalid file type',
+        description: 'Please upload a CSV file',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setImportingCsv(true);
+    try {
+      const text = await file.text();
+      
+      // Use Papa Parse for proper CSV parsing
+      const parsed = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header: string) => header.trim(),
+      });
+
+      const vendorsToImport = [];
+
+      for (const row of parsed.data as any[]) {
+        const name = row['Supplier Name']?.trim();
+        
+        if (!name) continue; // Skip empty rows
+
+        const startDate = row['Start/Renewal Date']?.trim();
+        const approvalMethod = row['Method of Approval']?.trim();
+        const expiration = row['Approval Expiration']?.trim();
+
+        // Determine approval source from Method of Approval
+        let approvalSource = '';
+        if (approvalMethod) {
+          // Check for "Supplier Approval Form" first before generic PDF check
+          if (approvalMethod.toLowerCase().includes('supplier approval form')) {
+            approvalSource = 'Supplier Approval Form';
+          } else if (approvalMethod.toLowerCase().includes('.pdf')) {
+            approvalSource = 'Certification';
+          }
+        }
+
+        // Parse dates - handle various formats like "1/2025", "01/2024", "9/2025", "8/27/28"
+        const parseDate = (dateStr: string): string => {
+          if (!dateStr || dateStr === 'N/A') return '';
+          
+          // Handle M/YYYY or MM/YYYY format
+          if (dateStr.match(/^\d{1,2}\/\d{4}$/)) {
+            const [month, year] = dateStr.split('/');
+            return `${year}-${month.padStart(2, '0')}-01`;
+          }
+          
+          // Handle MM/DD/YYYY format (4-digit year)
+          if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+            const [month, day, year] = dateStr.split('/');
+            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          }
+          
+          // Handle MM/DD/YY format (2-digit year) - assume 20xx
+          if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{2}$/)) {
+            const [month, day, year] = dateStr.split('/');
+            const fullYear = `20${year}`;
+            return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          }
+          
+          return '';
+        };
+
+        vendorsToImport.push({
+          name,
+          startRenewalDate: parseDate(startDate),
+          approvalExpiration: parseDate(expiration),
+          approvalSource,
+          approved: false,
+          evaluated: false,
+        });
+      }
+
+      // Bulk create vendors
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const vendor of vendorsToImport) {
+        try {
+          await apiRequest('/api/vendors', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(vendor),
+          });
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to import vendor: ${vendor.name}`, error);
+          errorCount++;
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+
+      toast({
+        title: 'Import complete',
+        description: `Successfully imported ${successCount} vendors. ${errorCount > 0 ? `${errorCount} failed.` : ''}`,
+      });
+
+      setIsImportDialogOpen(false);
+      e.target.value = ''; // Reset file input
+    } catch (error) {
+      console.error('CSV import error:', error);
+      toast({
+        title: 'Import failed',
+        description: 'Failed to parse CSV file',
+        variant: 'destructive',
+      });
+    } finally {
+      setImportingCsv(false);
+    }
   };
 
   const onSubmit = (data: VendorFormData) => {
@@ -488,6 +681,10 @@ export default function VendorManagement() {
 
       evaluationDate: data.evaluationDate || undefined,
       notes: data.notes || undefined,
+      approvalSource: data.approvalSource || undefined,
+      approvalPdfUrl: data.approvalPdfUrl || undefined,
+      startRenewalDate: data.startRenewalDate || undefined,
+      approvalExpiration: data.approvalExpiration || undefined,
     };
 
     if (editingVendor) {
@@ -546,16 +743,27 @@ export default function VendorManagement() {
             );
           })()}
         </div>
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogTrigger asChild>
-            <Button
-              onClick={() => handleOpenModal()}
-              data-testid="button-create-vendor"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Vendor
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsImportDialogOpen(true)}
+            data-testid="button-import-csv"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Import CSV
+          </Button>
+          <Button
+            onClick={() => handleOpenModal()}
+            data-testid="button-create-vendor"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Vendor
+          </Button>
+        </div>
+      </div>
+
+      {/* Vendor Edit/Create Dialog */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle data-testid="text-modal-title">
@@ -575,7 +783,7 @@ export default function VendorManagement() {
                     `(${pendingContacts.length})`}
                 </TabsTrigger>
                 <TabsTrigger value="scope" data-testid="tab-scope">
-                  Scope
+                  Scope Approval
                 </TabsTrigger>
                 <TabsTrigger value="evaluation" data-testid="tab-evaluation">
                   Evaluation & Notes
@@ -684,6 +892,24 @@ export default function VendorManagement() {
 
                       />
                     </div>
+
+                    <FormField
+                      control={form.control}
+                      name="startRenewalDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Start/Renewal Date</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="date"
+                              {...field}
+                              data-testid="input-start-renewal-date"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
                     <DialogFooter>
                       <Button
@@ -1094,6 +1320,130 @@ export default function VendorManagement() {
 
                     <FormField
                       control={form.control}
+                      name="approvalSource"
+                      render={({ field }) => (
+                        <FormItem className="space-y-3">
+                          <FormLabel>Approval Source</FormLabel>
+                          <FormControl>
+                            <RadioGroup
+                              onValueChange={field.onChange}
+                              value={field.value}
+                              className="flex flex-col space-y-1"
+                            >
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem
+                                  value="Certification"
+                                  id="certification"
+                                  data-testid="radio-certification"
+                                />
+                                <Label
+                                  htmlFor="certification"
+                                  className="font-normal cursor-pointer"
+                                >
+                                  Certification
+                                </Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem
+                                  value="Supplier Approval Form"
+                                  id="supplier-approval"
+                                  data-testid="radio-supplier-approval"
+                                />
+                                <Label
+                                  htmlFor="supplier-approval"
+                                  className="font-normal cursor-pointer"
+                                >
+                                  Supplier Approval Form
+                                </Label>
+                              </div>
+                            </RadioGroup>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="space-y-2">
+                      <Label>Approval Document (PDF)</Label>
+                      {!uploadedFile && !form.watch('approvalPdfUrl') ? (
+                        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                          <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                          <Label
+                            htmlFor="file-upload"
+                            className="cursor-pointer text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                          >
+                            Click to upload PDF
+                          </Label>
+                          <Input
+                            id="file-upload"
+                            type="file"
+                            accept="application/pdf"
+                            onChange={handleFileUpload}
+                            className="hidden"
+                            data-testid="input-file-upload"
+                            disabled={uploadingFile}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            PDF files only
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-5 h-5 text-blue-600" />
+                              <span className="text-sm font-medium">
+                                {uploadedFile?.name || 'Approval Document.pdf'}
+                              </span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleRemoveFile}
+                              data-testid="button-remove-file"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          {form.watch('approvalPdfUrl') && (
+                            <a
+                              href={form.watch('approvalPdfUrl')}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2 inline-block"
+                              data-testid="link-view-pdf"
+                            >
+                              View PDF
+                            </a>
+                          )}
+                        </div>
+                      )}
+                      {uploadingFile && (
+                        <p className="text-xs text-gray-500">Uploading...</p>
+                      )}
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="approvalExpiration"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Approval Expiration</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="date"
+                              {...field}
+                              data-testid="input-approval-expiration"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
                       name="scope"
                       render={({ field }) => (
                         <FormItem>
@@ -1316,8 +1666,7 @@ export default function VendorManagement() {
               </TabsContent>
             </Tabs>
           </DialogContent>
-        </Dialog>
-      </div>
+      </Dialog>
 
       {/* Filters */}
       <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg mb-6 space-y-4">
@@ -1732,6 +2081,58 @@ export default function VendorManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* CSV Import Dialog */}
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import Vendors from CSV</DialogTitle>
+            <p className="text-sm text-gray-500">
+              Upload a CSV file with vendor data. The file should include columns for:
+              Supplier Name, Start/Renewal Date, Method of Approval, and Approval Expiration.
+            </p>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
+              <Upload className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+              <Label
+                htmlFor="csv-upload"
+                className="cursor-pointer text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
+              >
+                Click to upload CSV file
+              </Label>
+              <Input
+                id="csv-upload"
+                type="file"
+                accept=".csv"
+                onChange={handleCsvImport}
+                className="hidden"
+                data-testid="input-csv-upload"
+                disabled={importingCsv}
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                CSV files only
+              </p>
+              {importingCsv && (
+                <p className="text-sm text-blue-600 mt-3">
+                  Importing vendors...
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsImportDialogOpen(false)}
+              disabled={importingCsv}
+              data-testid="button-close-import"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

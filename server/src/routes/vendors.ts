@@ -1,10 +1,53 @@
 import { Router, Request, Response } from 'express';
 import { insertVendorSchema, insertVendorContactSchema } from '@shared/schema';
 import { z } from 'zod';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
 
 import { storage } from '../../storage';
 
 const router = Router();
+
+// Ensure vendor-approvals directory exists
+const uploadsDir = path.join(process.cwd(), 'uploads');
+const vendorApprovalsDir = path.join(uploadsDir, 'vendor-approvals');
+
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+if (!fs.existsSync(vendorApprovalsDir)) {
+  fs.mkdirSync(vendorApprovalsDir, { recursive: true });
+}
+
+// Configure multer for vendor approval PDFs
+const vendorApprovalStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, vendorApprovalsDir);
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const hash = crypto.randomBytes(8).toString('hex');
+    const ext = path.extname(file.originalname);
+    cb(null, `vendor_approval_${timestamp}_${hash}${ext}`);
+  },
+});
+
+const vendorApprovalUpload = multer({
+  storage: vendorApprovalStorage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'));
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+});
 
 // Query params schema for list vendors
 const listVendorsQuerySchema = z.object({
@@ -239,5 +282,26 @@ router.delete(
     }
   }
 );
+
+// POST /api/vendors/upload/approval - Upload vendor approval PDF
+router.post('/upload/approval', vendorApprovalUpload.single('file'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const fileUrl = `/uploads/vendor-approvals/${req.file.filename}`;
+    
+    res.status(200).json({
+      url: fileUrl,
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      size: req.file.size,
+    });
+  } catch (error) {
+    console.error('Vendor approval upload error:', error);
+    res.status(500).json({ error: 'Failed to upload file' });
+  }
+});
 
 export default router;

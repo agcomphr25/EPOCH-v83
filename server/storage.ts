@@ -2169,6 +2169,9 @@ export class DatabaseStorage implements IStorage {
         cancelledAt: allOrders.cancelledAt,
         cancelReason: allOrders.cancelReason,
         isVerified: allOrders.isVerified,
+        urgency: allOrders.urgency,
+        priorityScore: allOrders.priorityScore,
+        isManualUrgency: allOrders.isManualUrgency,
         createdAt: allOrders.createdAt,
         updatedAt: allOrders.updatedAt,
       })

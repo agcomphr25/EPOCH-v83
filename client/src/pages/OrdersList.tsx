@@ -309,6 +309,12 @@ export default function OrdersList() {
       queryClient.invalidateQueries({
         queryKey: ['/api/orders/pipeline-counts'],
       });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/all'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/layup-schedule'],
+      });
       showToast({
         title: 'Urgency Updated',
         description: 'Order has been marked as high priority/rush!',

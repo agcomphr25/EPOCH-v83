@@ -29,6 +29,7 @@ import layupScheduleRoutes from './layupSchedule';
 // import gatewayReportsRoutes from './gatewayReports'; // Temporarily removed
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
+import p1POQueueRoutes from './p1POQueue';
 import refundRoutes from './refunds';
 import moldSyncRoutes from './moldSync';
 import authRoutes from './auth';
@@ -167,6 +168,9 @@ export function registerRoutes(app: Express): Server {
 
   // PO Products routes
   app.use('/api/po-products', poProductsRoutes);
+
+  // P1 PO Queue routes
+  app.use('/api/p1-po-queue', p1POQueueRoutes);
 
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);

@@ -2530,30 +2530,47 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Terms and Conditions Section on Page 2
     page2Y -= 120;
-    page2.drawText('TERMS AND CONDITIONS', {
+    page2.drawText('STOCKS WARRANTY: 100% Guaranteed Satisfaction', {
       x: margin,
       y: page2Y,
       size: 12,
       font: boldFont,
     });
 
-    page2Y -= 20;
-    const terms = [
-      '• Payment: 50% deposit required to begin production, balance due upon completion',
-      '• Lead Time: Custom manufacturing typically 4-6 weeks from deposit',
-      '• Custom items are non-returnable unless defective',
-      '• Shipping costs additional - calculated at time of shipment',
-      '• Prices valid for 30 days from quote date',
+    page2Y -= 18;
+    const warrantyTerms = [
+      'Every AG Composites stock carries a Lifetime Warranty against cracking, warping, splitting, breaking',
+      'or becoming unserviceable. If a problem occurs, the stock will be repaired, replaced or the purchase',
+      'price will be refunded at our option. Paint defects caused through normal use of the stock by the',
+      'consumer are not warrantied. Contact us to return a product.',
+      '',
+      'The warranty is voided if the end user modifies the stock, adds bedding or uses the stock for a',
+      'purpose for which it was not designed. All AGC stocks have been extensively tested and carry a',
+      'warranty up to 300 RUM caliber. Using a more energetic caliber voids the warranty and AGC is not',
+      'responsible for any damage or injury as a result of using the stock outside its tested capabilities.',
+      '',
+      'AGC only warranties products we produce. No warranty is applied to accessories or products we',
+      'purchase from other manufacturers.',
+      '',
+      'If for any reason you are not 100% satisfied with your AG stock, return it within 30 days in good',
+      'condition for a full refund or exchange. Shipping and handling charges are non-refundable. In addition,',
+      'due to credit card transaction fees you will receive your refund minus 4%.',
+      '',
+      'We only guarantee the fitment for the actions, barrel channels and bottom metals we offer. If you order',
+      'a stock with one of our options and try to put a different brand hardware in the stock, we DO NOT',
+      'GUARANTEE that it will fit. Even though manufacturers say their hardware is a "Rem Clone" there is a',
+      'high probability that there will be subtle differences resulting in fitment issues. In this case you can',
+      'return the stock in good condition with no modifications. We will assess a $75 re-stocking fee.',
     ];
 
-    terms.forEach((term) => {
+    warrantyTerms.forEach((term) => {
       page2.drawText(term, {
         x: margin,
         y: page2Y,
-        size: 8,
+        size: 7,
         font: font,
       });
-      page2Y -= 15;
+      page2Y -= 11;
     });
 
     // Acceptance signature area

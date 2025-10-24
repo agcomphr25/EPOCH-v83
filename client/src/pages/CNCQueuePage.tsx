@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   FileText,
   TrendingDown,
+  Zap,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
@@ -300,7 +301,7 @@ export default function CNCQueuePage() {
     });
 
     // Debug logging to help identify mismatches in production
-    console.log('🔍 CNC Queue - Total orders:', allOrders.length);
+    console.log('🔍 CNC Queue - Total orders:', (allOrders as any[]).length);
     console.log('🔍 CNC Queue - Filtered orders:', allCncOrders.length);
 
     const uniqueOrders = allCncOrders.filter(
@@ -352,6 +353,13 @@ export default function CNCQueuePage() {
         (order.department === 'Finish' && order.status === 'IN_PROGRESS')
     ).length;
   }, [allOrders]);
+
+  // Count urgent/rush orders in CNC department
+  const urgentCNCCount = useMemo(() => {
+    return cncOrders.filter(
+      (order: any) => order.urgency === 'high' || order.urgency === 'critical'
+    ).length;
+  }, [cncOrders]);
 
   // Unified selection handlers
   const toggleOrderSelection = (orderId: string, departmentType: string) => {
@@ -593,7 +601,7 @@ export default function CNCQueuePage() {
       </Card>
 
       {/* Department Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {/* Previous Department Count */}
         <Card className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800">
           <CardHeader className="pb-3">
@@ -608,6 +616,24 @@ export default function CNCQueuePage() {
             </div>
             <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
               Orders from previous department
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Urgent Orders Count */}
+        <Card className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-red-700 dark:text-red-300 flex items-center gap-2">
+              <Zap className="h-5 w-5" />
+              Rush Orders
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-red-600 dark:text-red-400">
+              {urgentCNCCount}
+            </div>
+            <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+              High priority orders in CNC
             </p>
           </CardContent>
         </Card>

@@ -696,7 +696,7 @@ export async function generateSalesOrderPDF(
     '3. Remington "clones" are not made by Remington and may not fit as exactly as Remington',
     '   models do.',
     '4. The Estimated Completion Date is an estimation based on our current capacity and the',
-    '   specs of your order. We make every effort to ship stocks by the Estimated Completion Date.',
+    '   specs of your order. We make every effort to ship stocks by the Estimated Completion Date',
     '5. Please sign and return a copy of this form, or reply to the email that you are in agreement',
     '   with the specs of your order and these terms and conditions. We are not able to place any',
     '   order into production without a confirmation.',

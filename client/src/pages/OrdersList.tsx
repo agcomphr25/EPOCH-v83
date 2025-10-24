@@ -850,6 +850,15 @@ export default function OrdersList() {
       );
     };
 
+    // Helper function to check if order has rush fees
+    const hasRushFee = (order: Order, feeType: 'rush_fee1' | 'rush_fee2') => {
+      if (!order.features?.other_options) return false;
+      const otherOptions = Array.isArray(order.features.other_options) 
+        ? order.features.other_options 
+        : [];
+      return otherOptions.includes(feeType);
+    };
+
     const getActionLengthAbbreviation = (features: any) => {
       if (!features || typeof features !== 'object') return '';
 
@@ -1317,6 +1326,24 @@ export default function OrdersList() {
                             >
                               <Zap className="h-3 w-3 mr-1 inline" />
                               URGENT!!!
+                            </Badge>
+                          )}
+                          {hasRushFee(order, 'rush_fee2') && (
+                            <Badge
+                              className="bg-purple-600 text-white dark:bg-purple-700 dark:text-white text-xs px-2 py-0.5 font-semibold"
+                              title="Rush Fee 2 - Expedite ($250)"
+                              data-testid={`badge-expedite-${order.orderId}`}
+                            >
+                              EXPEDITE
+                            </Badge>
+                          )}
+                          {hasRushFee(order, 'rush_fee1') && (
+                            <Badge
+                              className="bg-blue-600 text-white dark:bg-blue-700 dark:text-white text-xs px-2 py-0.5 font-semibold"
+                              title="Rush Fee 1 - Rush ($200)"
+                              data-testid={`badge-rush-${order.orderId}`}
+                            >
+                              RUSH
                             </Badge>
                           )}
                           {hasUnresolvedKickback(order.orderId) && (

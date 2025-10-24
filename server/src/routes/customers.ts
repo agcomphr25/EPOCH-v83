@@ -612,6 +612,21 @@ router.post('/validate-address', async (req: Request, res: Response) => {
   }
 });
 
+// Get balance due summary for all customers
+router.get('/balance-due-summary/all', async (req: Request, res: Response) => {
+  try {
+    console.log('📊 API: Getting balance due summary for all customers');
+    const summary = await storage.getBalanceDueSummaryForAllCustomers();
+    res.json(summary);
+  } catch (error) {
+    console.error('Error getting balance due summary:', error);
+    res.status(500).json({
+      error: 'Failed to get balance due summary',
+      details: (error as any).message,
+    });
+  }
+});
+
 // Get balance due for a specific customer
 router.get('/:id/balance-due', async (req: Request, res: Response) => {
   try {

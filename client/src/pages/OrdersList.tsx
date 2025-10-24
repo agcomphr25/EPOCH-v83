@@ -1303,6 +1303,16 @@ export default function OrdersList() {
                               )}
                             </div>
                           )}
+                          {(order.urgency === 'high' || order.urgency === 'critical') && (
+                            <Badge
+                              className="bg-orange-500 text-white dark:bg-orange-600 dark:text-white text-xs px-2 py-0.5 font-bold animate-pulse"
+                              title="High Priority / Rush Order"
+                              data-testid={`badge-urgent-${order.orderId}`}
+                            >
+                              <Zap className="h-3 w-3 mr-1 inline" />
+                              RUSH!!!
+                            </Badge>
+                          )}
                           {hasUnresolvedKickback(order.orderId) && (
                             <Badge
                               className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 text-xs px-1 py-0 cursor-pointer hover:bg-red-200 hover:text-red-900 transition-colors"

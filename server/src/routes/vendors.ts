@@ -304,4 +304,203 @@ router.post('/upload/approval', vendorApprovalUpload.single('file'), async (req:
   }
 });
 
+// Vendor Monthly Evaluations Routes
+
+// GET /api/vendors/:vendorId/evaluations - Get monthly evaluations for a vendor
+router.get('/:vendorId/evaluations', async (req: Request, res: Response) => {
+  try {
+    const vendorId = parseInt(req.params.vendorId);
+    const year = req.query.year ? parseInt(req.query.year as string) : undefined;
+
+    if (!Number.isInteger(vendorId)) {
+      return res.status(400).json({ error: 'Invalid vendor ID' });
+    }
+
+    const evaluations = await storage.getVendorMonthlyEvaluations(vendorId, year);
+    res.json(evaluations);
+  } catch (error) {
+    console.error('Get vendor monthly evaluations error:', error);
+    res.status(500).json({ error: 'Failed to fetch vendor monthly evaluations' });
+  }
+});
+
+// POST /api/vendors/:vendorId/evaluations - Create or update a monthly evaluation
+router.post('/:vendorId/evaluations', async (req: Request, res: Response) => {
+  try {
+    const vendorId = parseInt(req.params.vendorId);
+    if (!Number.isInteger(vendorId)) {
+      return res.status(400).json({ error: 'Invalid vendor ID' });
+    }
+
+    const { month, year, qualityScore, costScore, deliveryScore, responseScore, notes } = req.body;
+
+    // Validation
+    if (!month || !year) {
+      return res.status(400).json({ error: 'Month and year are required' });
+    }
+
+    // Check if evaluation exists
+    const existing = await storage.getVendorMonthlyEvaluation(vendorId, month, year);
+
+    let evaluation;
+    if (existing) {
+      // Update existing
+      evaluation = await storage.updateVendorMonthlyEvaluation(existing.id, {
+        qualityScore,
+        costScore,
+        deliveryScore,
+        responseScore,
+        notes,
+      });
+    } else {
+      // Create new
+      evaluation = await storage.createVendorMonthlyEvaluation({
+        vendorId,
+        month,
+        year,
+        qualityScore,
+        costScore,
+        deliveryScore,
+        responseScore,
+        notes,
+      });
+    }
+
+    res.json(evaluation);
+  } catch (error) {
+    console.error('Create/update vendor monthly evaluation error:', error);
+    res.status(500).json({ error: 'Failed to save vendor monthly evaluation' });
+  }
+});
+
+// DELETE /api/vendors/:vendorId/evaluations/:evaluationId - Delete a monthly evaluation
+router.delete('/:vendorId/evaluations/:evaluationId', async (req: Request, res: Response) => {
+  try {
+    const evaluationId = parseInt(req.params.evaluationId);
+    if (!Number.isInteger(evaluationId)) {
+      return res.status(400).json({ error: 'Invalid evaluation ID' });
+    }
+
+    await storage.deleteVendorMonthlyEvaluation(evaluationId);
+    res.json({ success: true, message: 'Evaluation deleted successfully' });
+  } catch (error) {
+    console.error('Delete vendor monthly evaluation error:', error);
+    res.status(500).json({ error: 'Failed to delete vendor monthly evaluation' });
+  }
+});
+
+// POST /api/vendors/import-evaluations - Import evaluations from CSV
+router.post('/import-evaluations', async (req: Request, res: Response) => {
+  try {
+    const { csvData } = req.body;
+
+    if (!csvData || !Array.isArray(csvData)) {
+      return res.status(400).json({ error: 'Invalid CSV data' });
+    }
+
+    const results = {
+      processed: 0,
+      matched: 0,
+      unmatched: [] as string[],
+      created: 0,
+      errors: [] as any[],
+    };
+
+    // Get all vendors for matching
+    const vendorsResult = await storage.getAllVendors({ pageSize: 1000 });
+    const vendors = vendorsResult.data;
+
+    // Parse CSV and match vendors
+    for (const row of csvData) {
+      results.processed++;
+
+      const vendorName = row['PL2 Supplier 2025'];
+      if (!vendorName || vendorName.trim() === '') {
+        continue;
+      }
+
+      // Try to match vendor by name (case-insensitive)
+      const matchedVendor = vendors.find(v => 
+        v.name.toLowerCase().trim() === vendorName.toLowerCase().trim()
+      );
+
+      if (!matchedVendor) {
+        results.unmatched.push(vendorName);
+        continue;
+      }
+
+      results.matched++;
+
+      // Extract monthly scores from CSV columns
+      const months = [
+        { name: 'Jan', num: 1 },
+        { name: 'Feb', num: 2 },
+        { name: 'Mar', num: 3 },
+        { name: 'Apr', num: 4 },
+        { name: 'May', num: 5 },
+        { name: 'Jun', num: 6 },
+        { name: 'Jul', num: 7 },
+        { name: 'Aug', num: 8 },
+        { name: 'Sep', num: 9 },
+        { name: 'Oct', num: 10 },
+        { name: 'Nov', num: 11 },
+        { name: 'Dec', num: 12 },
+      ];
+
+      for (const month of months) {
+        const qualityKey = `${month.name}- Quality`;
+        const costKey = `${month.name}- Cost`;
+        const deliveryKey = `${month.name}- Delivery`;
+        const responseKey = `${month.name}- Response`;
+
+        const qualityScore = row[qualityKey] ? parseInt(row[qualityKey]) : null;
+        const costScore = row[costKey] ? parseInt(row[costKey]) : null;
+        const deliveryScore = row[deliveryKey] ? parseInt(row[deliveryKey]) : null;
+        const responseScore = row[responseKey] ? parseInt(row[responseKey]) : null;
+
+        // Only create if at least one score is present
+        if (qualityScore || costScore || deliveryScore || responseScore) {
+          try {
+            // Check if evaluation already exists
+            const existing = await storage.getVendorMonthlyEvaluation(matchedVendor.id, month.num, 2025);
+
+            if (existing) {
+              // Update existing
+              await storage.updateVendorMonthlyEvaluation(existing.id, {
+                qualityScore,
+                costScore,
+                deliveryScore,
+                responseScore,
+              });
+            } else {
+              // Create new
+              await storage.createVendorMonthlyEvaluation({
+                vendorId: matchedVendor.id,
+                month: month.num,
+                year: 2025,
+                qualityScore,
+                costScore,
+                deliveryScore,
+                responseScore,
+              });
+              results.created++;
+            }
+          } catch (error) {
+            results.errors.push({
+              vendor: vendorName,
+              month: month.name,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            });
+          }
+        }
+      }
+    }
+
+    res.json(results);
+  } catch (error) {
+    console.error('Import vendor evaluations error:', error);
+    res.status(500).json({ error: 'Failed to import vendor evaluations' });
+  }
+});
+
 export default router;

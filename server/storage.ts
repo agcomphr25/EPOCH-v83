@@ -440,6 +440,7 @@ export interface IStorage {
   }>; // Returns paginated finalized orders with payment status
   getUnpaidOrders(): Promise<any[]>; // Returns orders that need payment
   getUnpaidOrdersByCustomer(customerId: string): Promise<any[]>; // Returns unpaid orders for specific customer
+  getBalanceDueSummaryForAllCustomers(): Promise<Array<{ customerId: string; totalBalanceDue: number; orderCount: number }>>; // Returns balance due summary for all customers
   getOrderById(orderId: string): Promise<OrderDraft | AllOrder | null>; // Get order by ID, checking both drafts and finalized orders
   getOrdersByIds(orderIds: string[]): Promise<Array<OrderDraft | AllOrder>>; // Get multiple orders by IDs
 
@@ -2833,6 +2834,118 @@ export class DatabaseStorage implements IStorage {
       return ordersWithDetails.filter((order) => order.balanceDue > 0);
     } catch (error) {
       console.error('Error fetching unpaid orders by customer:', error);
+      throw error;
+    }
+  }
+
+  // Get balance due summary for all customers in one efficient query
+  async getBalanceDueSummaryForAllCustomers(): Promise<Array<{ customerId: string; totalBalanceDue: number; orderCount: number }>> {
+    try {
+      console.log('📊 Fetching balance due summary for all customers...');
+      
+      // Load cached data for order total calculations
+      const stockModelsData = await this.getAllStockModels();
+      const features = await this.getAllFeatures();
+      const persistentDiscounts = await this.getAllPersistentDiscounts();
+
+      // Get all unpaid orders grouped by customer
+      const unpaidOrders = await db
+        .select({
+          id: allOrders.id,
+          orderId: allOrders.orderId,
+          customerId: allOrders.customerId,
+        })
+        .from(allOrders)
+        .where(eq(allOrders.isPaid, false))
+        .orderBy(allOrders.customerId);
+
+      // Get all refund data in one query
+      const allRefunds = await db
+        .select({
+          orderId: refundRequests.orderId,
+          refundAmount: sql<number>`COALESCE(${refundRequests.refundAmount}, ${refundRequests.amount}, 0)`.as('refundAmount'),
+        })
+        .from(refundRequests)
+        .where(eq(refundRequests.status, 'PROCESSED'));
+
+      const refundMap = new Map<string, number>();
+      allRefunds.forEach((refund) => {
+        const current = refundMap.get(refund.orderId) || 0;
+        refundMap.set(refund.orderId, current + refund.refundAmount);
+      });
+
+      // Group orders by customer ID
+      const ordersByCustomer = new Map<string, string[]>();
+      unpaidOrders.forEach((order) => {
+        if (order.customerId) {
+          if (!ordersByCustomer.has(order.customerId)) {
+            ordersByCustomer.set(order.customerId, []);
+          }
+          ordersByCustomer.get(order.customerId)!.push(order.orderId);
+        }
+      });
+
+      // Calculate balance due for each customer
+      const summaries: Array<{ customerId: string; totalBalanceDue: number; orderCount: number }> = [];
+
+      for (const [customerId, orderIds] of ordersByCustomer.entries()) {
+        let customerTotalBalance = 0;
+        let ordersWithBalance = 0;
+
+        for (const orderId of orderIds) {
+          // Get payment total for this order
+          const paymentSums = await db
+            .select({
+              totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
+            })
+            .from(payments)
+            .where(eq(payments.orderId, orderId))
+            .groupBy(payments.orderId);
+
+          const totalPaid = paymentSums.length > 0 ? paymentSums[0].totalPaid : 0;
+
+          // Get full order data to calculate total
+          const fullOrder = await db
+            .select()
+            .from(allOrders)
+            .where(eq(allOrders.orderId, orderId))
+            .limit(1);
+
+          if (fullOrder.length > 0) {
+            // Calculate order total
+            const orderTotal = await this.calculateOrderTotalOptimized(
+              fullOrder[0],
+              stockModelsData,
+              features,
+              persistentDiscounts
+            );
+
+            // Get refund amount
+            const totalRefunded = refundMap.get(orderId) || 0;
+            
+            // Balance due = Order Total - Payments + Refunds
+            const balanceDue = Math.max(0, orderTotal - totalPaid + totalRefunded);
+
+            if (balanceDue > 0) {
+              customerTotalBalance += balanceDue;
+              ordersWithBalance++;
+            }
+          }
+        }
+
+        if (ordersWithBalance > 0) {
+          summaries.push({
+            customerId,
+            totalBalanceDue: Math.round(customerTotalBalance * 100) / 100,
+            orderCount: ordersWithBalance,
+          });
+        }
+      }
+
+      console.log(`📊 Found ${summaries.length} customers with outstanding balances`);
+      return summaries;
+    } catch (error) {
+      console.error('Error fetching balance due summary for all customers:', error);
       throw error;
     }
   }

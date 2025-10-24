@@ -3813,6 +3813,20 @@ export const poProductSelections = pgTable('po_product_selections', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Weekly Schedule Assignments table for tracking layup scheduling
+export const weeklyScheduleAssignments = pgTable('weekly_schedule_assignments', {
+  id: serial('id').primaryKey(),
+  weekStartDate: date('week_start_date').notNull(),
+  dayOfWeek: text('day_of_week').notNull(),
+  itemType: text('item_type').notNull(),
+  orderId: text('order_id'),
+  poProductId: integer('po_product_id').references(() => poProducts.id, { onDelete: 'cascade' }),
+  moldCount: integer('mold_count').notNull().default(1),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Insert schema for PO Products - Updated for P1 PO Queue System
 export const insertPOProductSchema = createInsertSchema(poProducts, {
   customerName: z.string().min(1, 'Customer name is required'),
@@ -3837,6 +3851,19 @@ export const insertPOProductSelectionSchema = createInsertSchema(poProductSelect
     createdAt: true,
   });
 
+// Insert schema for Weekly Schedule Assignments
+export const insertWeeklyScheduleAssignmentSchema = createInsertSchema(weeklyScheduleAssignments, {
+  weekStartDate: z.string().min(1, 'Week start date is required'),
+  dayOfWeek: z.enum(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']),
+  itemType: z.enum(['order', 'po_product']),
+  moldCount: z.number().min(1, 'Mold count must be at least 1'),
+})
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  });
+
 // Types for PO Products
 export type InsertPOProduct = z.infer<typeof insertPOProductSchema>;
 export type POProduct = typeof poProducts.$inferSelect;
@@ -3844,6 +3871,10 @@ export type POProduct = typeof poProducts.$inferSelect;
 // Types for PO Product Selections
 export type InsertPOProductSelection = z.infer<typeof insertPOProductSelectionSchema>;
 export type POProductSelection = typeof poProductSelections.$inferSelect;
+
+// Types for Weekly Schedule Assignments
+export type InsertWeeklyScheduleAssignment = z.infer<typeof insertWeeklyScheduleAssignmentSchema>;
+export type WeeklyScheduleAssignment = typeof weeklyScheduleAssignments.$inferSelect;
 
 // Insert schema for Refund Requests
 export const insertRefundRequestSchema = createInsertSchema(refundRequests)

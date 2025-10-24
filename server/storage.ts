@@ -1212,6 +1212,15 @@ export interface IStorage {
     available: number;
   }>;
 
+  // Weekly Schedule Methods
+  createWeeklyScheduleAssignment(data: InsertWeeklyScheduleAssignment): Promise<WeeklyScheduleAssignment>;
+  getWeeklySchedule(weekStartDate: string): Promise<WeeklyScheduleAssignment[]>;
+  getWeeklyScheduleWithDetails(weekStartDate: string): Promise<any[]>;
+  getDailyMoldUsage(weekStartDate: string, dayOfWeek: string): Promise<number>;
+  updateScheduleAssignment(id: number, moldCount: number): Promise<WeeklyScheduleAssignment>;
+  deleteScheduleAssignment(id: number): Promise<void>;
+  clearWeeklySchedule(weekStartDate: string): Promise<void>;
+
   // Internal Messaging Methods
   getAllInternalMessages(): Promise<
     (InternalMessage & { recipients: MessageRecipient[] })[]
@@ -9175,6 +9184,8 @@ export class DatabaseStorage implements IStorage {
     usedByScheduled: number;
     available: number;
   }> {
+    const { moldSettings } = await import('./schema');
+    
     // Get total mold capacity from mold_settings table
     const moldSettingsData = await db
       .select()
@@ -9195,6 +9206,121 @@ export class DatabaseStorage implements IStorage {
       usedByScheduled,
       available: totalCapacity - usedByScheduled,
     };
+  }
+
+  // Weekly Schedule Methods Implementation
+  async createWeeklyScheduleAssignment(data: InsertWeeklyScheduleAssignment): Promise<WeeklyScheduleAssignment> {
+    const { weeklyScheduleAssignments } = await import('./schema');
+    
+    const [assignment] = await db
+      .insert(weeklyScheduleAssignments)
+      .values({
+        ...data,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    
+    return assignment;
+  }
+
+  async getWeeklySchedule(weekStartDate: string): Promise<WeeklyScheduleAssignment[]> {
+    const { weeklyScheduleAssignments } = await import('./schema');
+    
+    return await db
+      .select()
+      .from(weeklyScheduleAssignments)
+      .where(eq(weeklyScheduleAssignments.weekStartDate, weekStartDate))
+      .orderBy(weeklyScheduleAssignments.dayOfWeek);
+  }
+
+  async getWeeklyScheduleWithDetails(weekStartDate: string): Promise<any[]> {
+    const { weeklyScheduleAssignments, allOrders, poProducts } = await import('./schema');
+    
+    const assignments = await db
+      .select()
+      .from(weeklyScheduleAssignments)
+      .where(eq(weeklyScheduleAssignments.weekStartDate, weekStartDate))
+      .orderBy(weeklyScheduleAssignments.dayOfWeek);
+
+    const enrichedAssignments = await Promise.all(
+      assignments.map(async (assignment) => {
+        if (assignment.itemType === 'order' && assignment.orderId) {
+          const [order] = await db
+            .select()
+            .from(allOrders)
+            .where(eq(allOrders.orderId, assignment.orderId))
+            .limit(1);
+          
+          return {
+            ...assignment,
+            orderDetails: order || null,
+          };
+        } else if (assignment.itemType === 'po_product' && assignment.poProductId) {
+          const [poProduct] = await db
+            .select()
+            .from(poProducts)
+            .where(eq(poProducts.id, assignment.poProductId))
+            .limit(1);
+          
+          return {
+            ...assignment,
+            poProductDetails: poProduct || null,
+          };
+        }
+        
+        return assignment;
+      })
+    );
+
+    return enrichedAssignments;
+  }
+
+  async getDailyMoldUsage(weekStartDate: string, dayOfWeek: string): Promise<number> {
+    const { weeklyScheduleAssignments } = await import('./schema');
+    
+    const assignments = await db
+      .select()
+      .from(weeklyScheduleAssignments)
+      .where(
+        and(
+          eq(weeklyScheduleAssignments.weekStartDate, weekStartDate),
+          eq(weeklyScheduleAssignments.dayOfWeek, dayOfWeek)
+        )
+      );
+
+    return assignments.reduce((sum, assignment) => sum + (assignment.moldCount || 0), 0);
+  }
+
+  async updateScheduleAssignment(id: number, moldCount: number): Promise<WeeklyScheduleAssignment> {
+    const { weeklyScheduleAssignments } = await import('./schema');
+    
+    const [updated] = await db
+      .update(weeklyScheduleAssignments)
+      .set({
+        moldCount,
+        updatedAt: new Date(),
+      })
+      .where(eq(weeklyScheduleAssignments.id, id))
+      .returning();
+    
+    return updated;
+  }
+
+  async deleteScheduleAssignment(id: number): Promise<void> {
+    const { weeklyScheduleAssignments } = await import('./schema');
+    
+    await db
+      .delete(weeklyScheduleAssignments)
+      .where(eq(weeklyScheduleAssignments.id, id));
+  }
+
+  async clearWeeklySchedule(weekStartDate: string): Promise<void> {
+    const { weeklyScheduleAssignments } = await import('./schema');
+    
+    await db
+      .delete(weeklyScheduleAssignments)
+      .where(eq(weeklyScheduleAssignments.weekStartDate, weekStartDate));
   }
 
   // Internal Messaging Methods Implementation

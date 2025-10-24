@@ -479,9 +479,12 @@ router.post('/:id/sign', async (req, res) => {
     }
 
     // Send confirmation email to customer
+    console.log(`🔔 Attempting to send confirmation email for order ${followupOrder.orderId}...`);
     try {
       const order = await storage.getOrderById(followupOrder.orderId);
       const customer = await storage.getCustomerById(followupOrder.customerId);
+      
+      console.log(`🔍 Order retrieved: ${order ? 'Yes' : 'No'}, Customer retrieved: ${customer ? 'Yes' : 'No'}, Customer email: ${customer?.email || 'N/A'}`);
       
       if (order && customer && customer.email) {
         // Defensive date handling to avoid "Invalid Date" strings
@@ -506,6 +509,8 @@ router.post('/:id/sign', async (req, res) => {
         } else {
           console.error(`❌ Failed to send confirmation email: ${emailResult.error}`);
         }
+      } else {
+        console.log(`⚠️ Skipping confirmation email - Order: ${order ? 'found' : 'missing'}, Customer: ${customer ? 'found' : 'missing'}, Email: ${customer?.email || 'missing'}`);
       }
     } catch (emailError) {
       console.error('Error sending confirmation email (non-critical):', emailError);

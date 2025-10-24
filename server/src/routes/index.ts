@@ -4305,16 +4305,23 @@ export function registerRoutes(app: Express): Server {
   // Get Finish QC completion report
   app.get('/api/reports/finish-qc-completed', async (req, res) => {
     try {
-      const { storage } = await import('../../storage');
       const { pool } = await import('../../db');
+      
+      if (!pool) {
+        console.error('📊 Database pool is not available');
+        return res.status(500).json({ error: 'Database connection not available' });
+      }
       
       // Calculate date range (last week)
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 7);
       
+      console.log('📊 Querying Finish QC report from', startDate, 'to', endDate);
+      
       // Query orders that have department_history with a Finish QC exit
-      const result = await pool.query(
+      // Note: Neon serverless returns array directly, not { rows: [...] }
+      const allOrders = await pool.query(
         `SELECT 
           order_id,
           customer_po,
@@ -4328,11 +4335,10 @@ export function registerRoutes(app: Express): Server {
         FROM all_orders
         WHERE department_history IS NOT NULL
           AND jsonb_array_length(department_history) > 0
-        ORDER BY assigned_technician, order_id`,
-        []
+        ORDER BY assigned_technician, order_id`
       );
       
-      const allOrders = result.rows;
+      console.log('📊 Query returned', allOrders?.length || 0, 'orders with department history');
       
       // Filter to only include orders that were progressed OUT of Finish QC in the last week
       const filteredOrders = allOrders.filter((order: any) => {

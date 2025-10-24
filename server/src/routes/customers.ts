@@ -612,26 +612,20 @@ router.post('/validate-address', async (req: Request, res: Response) => {
   }
 });
 
-// Get balance due summary for all customers
-router.get('/balance-due-summary/all', async (req: Request, res: Response) => {
-  try {
-    console.log('📊 API: Getting balance due summary for all customers');
-    const summary = await storage.getBalanceDueSummaryForAllCustomers();
-    res.json(summary);
-  } catch (error) {
-    console.error('Error getting balance due summary:', error);
-    res.status(500).json({
-      error: 'Failed to get balance due summary',
-      details: (error as any).message,
-    });
-  }
-});
-
-// Get balance due for a specific customer
+// Get balance due for a specific customer (glennj only)
 router.get('/:id/balance-due', async (req: Request, res: Response) => {
   try {
+    // Restrict to glennj only
+    const user = (req as any).user;
+    if (!user || user.username !== 'glennj') {
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'Only glennj can access balance due information',
+      });
+    }
+
     const customerId = req.params.id;
-    console.log(`Calculating balance due for customer ${customerId}`);
+    console.log(`Calculating balance due for customer ${customerId} (requested by ${user.username})`);
 
     // Get unpaid orders for this customer using existing method
     const unpaidOrders = await storage.getUnpaidOrdersByCustomer(customerId);

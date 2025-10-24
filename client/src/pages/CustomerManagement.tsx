@@ -612,6 +612,15 @@ export default function CustomerManagement() {
   const [isBalanceDueDialogOpen, setIsBalanceDueDialogOpen] = useState(false);
   const [balanceDueCustomerId, setBalanceDueCustomerId] = useState<string | null>(null);
 
+  // Fetch current user session
+  const { data: session } = useQuery({
+    queryKey: ['/api/auth/session'],
+    queryFn: () => apiRequest('/api/auth/session'),
+  });
+
+  // Check if current user is glennj (only user with access to balance due)
+  const isGlennj = session?.username === 'glennj';
+
   // Fetch customers using bypass route
   const { data: customers = [], isLoading } = useQuery({
     queryKey: ['/api/customers/bypass'],
@@ -1689,7 +1698,9 @@ export default function CustomerManagement() {
                   <TableHead>Address</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Balance Due</TableHead>
+                  {isGlennj && (
+                    <TableHead className="text-right">Balance Due</TableHead>
+                  )}
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1772,22 +1783,24 @@ export default function CustomerManagement() {
                       <TableCell>
                         {new Date(customer.createdAt).toLocaleDateString()}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                          onClick={() => {
-                            setBalanceDueCustomerId(customer.id.toString());
-                            setIsBalanceDueDialogOpen(true);
-                          }}
-                          data-testid={`button-view-balance-${customer.id}`}
-                          title="View Balance Due"
-                        >
-                          <DollarSign className="h-4 w-4 mr-1" />
-                          View
-                        </Button>
-                      </TableCell>
+                      {isGlennj && (
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                            onClick={() => {
+                              setBalanceDueCustomerId(customer.id.toString());
+                              setIsBalanceDueDialogOpen(true);
+                            }}
+                            data-testid={`button-view-balance-${customer.id}`}
+                            title="View Balance Due Details"
+                          >
+                            <DollarSign className="h-4 w-4 mr-1" />
+                            View Balance
+                          </Button>
+                        </TableCell>
+                      )}
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button

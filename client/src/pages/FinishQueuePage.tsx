@@ -22,6 +22,7 @@ import {
   CheckCircle,
   AlertTriangle,
   FileText,
+  Zap,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -597,10 +598,16 @@ export default function FinishQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
+                                    <Zap className="w-3 h-3" />
+                                    URGENT!!!
+                                  </Badge>
+                                )}
                                 {order.fbOrderNumber && (
                                   <Badge
                                     variant="outline"
@@ -705,10 +712,16 @@ export default function FinishQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
+                                    <Zap className="w-3 h-3" />
+                                    URGENT!!!
+                                  </Badge>
+                                )}
                                 {order.fbOrderNumber && (
                                   <Badge
                                     variant="outline"
@@ -813,10 +826,16 @@ export default function FinishQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
+                                    <Zap className="w-3 h-3" />
+                                    URGENT!!!
+                                  </Badge>
+                                )}
                                 {order.fbOrderNumber && (
                                   <Badge
                                     variant="outline"
@@ -918,10 +937,16 @@ export default function FinishQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
+                                    <Zap className="w-3 h-3" />
+                                    URGENT!!!
+                                  </Badge>
+                                )}
                                 {order.fbOrderNumber && (
                                   <Badge
                                     variant="outline"
@@ -1023,10 +1048,16 @@ export default function FinishQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
+                                    <Zap className="w-3 h-3" />
+                                    URGENT!!!
+                                  </Badge>
+                                )}
                                 {order.fbOrderNumber && (
                                   <Badge
                                     variant="outline"
@@ -1128,10 +1159,16 @@ export default function FinishQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
+                                    <Zap className="w-3 h-3" />
+                                    URGENT!!!
+                                  </Badge>
+                                )}
                                 {order.fbOrderNumber && (
                                   <Badge
                                     variant="outline"
@@ -1233,10 +1270,16 @@ export default function FinishQueuePage() {
                         >
                           <CardContent className="p-3">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-semibold">
                                   {getDisplayOrderId(order)}
                                 </span>
+                                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
+                                    <Zap className="w-3 h-3" />
+                                    URGENT!!!
+                                  </Badge>
+                                )}
                                 {order.fbOrderNumber && (
                                   <Badge
                                     variant="outline"

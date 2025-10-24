@@ -47,6 +47,7 @@ import {
   Eye,
   TrendingDown,
   Edit,
+  Zap,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
@@ -677,10 +678,16 @@ export default function BarcodeQueuePage() {
                               />
 
                               <div className="flex-1 space-y-2">
-                                <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <span className="font-semibold text-lg">
                                     {getDisplayOrderId(order)}
                                   </span>
+                                  {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                                    <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-1 font-bold">
+                                      <Zap className="w-3 h-3" />
+                                      URGENT!!!
+                                    </Badge>
+                                  )}
                                   {isOverdue && (
                                     <Badge
                                       variant="destructive"

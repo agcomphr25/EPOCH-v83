@@ -5,6 +5,7 @@ import { insertFollowupOrderSchema } from '../../schema';
 import { generateSalesOrderPDF, embedSignatureInPDF } from '../../utils/pdf/salesOrderPdf';
 import { sendFollowupOrderEmail } from '../../utils/followupOrderEmail';
 import { sendOrderSignedConfirmation } from '../../utils/orderSignedConfirmation';
+import { calculatePriorityScore } from '../../utils/priorityScore';
 import * as fs from 'fs';
 import * as path from 'path';
 import { nanoid } from 'nanoid';
@@ -464,15 +465,28 @@ router.post('/:id/sign', async (req, res) => {
     console.log(`✅ Customer signed order ${followupOrder.orderId} - finalizing and moving to production...`);
     
     try {
-      // Update the order status to FINALIZED, set current department, and copy signature data
+      // Get current order to access features for priority calculation
+      const currentOrder = await storage.getOrderById(followupOrder.orderId);
+      
+      // Calculate priority score based on rush fees and urgency
+      const priorityScore = calculatePriorityScore(
+        currentOrder?.features,
+        currentOrder?.urgency,
+        currentOrder?.isManualUrgency
+      );
+      
+      console.log(`📊 Calculated priority score for order ${followupOrder.orderId}: ${priorityScore}`);
+      
+      // Update the order status to FINALIZED, set current department, copy signature data, and set priority
       await storage.updateFinalizedOrder(followupOrder.orderId, {
         status: 'FINALIZED',
         currentDepartment: 'P1 Production Queue',
         signatureData,
-        signedAt: new Date()
+        signedAt: new Date(),
+        priorityScore
       });
       
-      console.log(`🎯 Order ${followupOrder.orderId} finalized and in production queue with signature`);
+      console.log(`🎯 Order ${followupOrder.orderId} finalized and in production queue with signature (priority: ${priorityScore})`);
     } catch (finalizeError) {
       console.error('Error finalizing order:', finalizeError);
       throw new Error('Failed to finalize order after signature');

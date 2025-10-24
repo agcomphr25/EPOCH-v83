@@ -46,6 +46,7 @@ import {
   User,
   Package,
   ArrowRight,
+  Zap,
 } from 'lucide-react';
 
 interface ProductionQueueOrder {
@@ -61,6 +62,8 @@ interface ProductionQueueOrder {
   customerName?: string;
   features?: any;
   priorityScore: number;
+  urgency?: 'critical' | 'high' | 'medium' | 'low';
+  isManualUrgency?: boolean;
   queuePosition: number;
   daysToDue: number;
   isOverdue: boolean;
@@ -311,7 +314,7 @@ export default function ProductionQueueManager() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
@@ -319,6 +322,20 @@ export default function ProductionQueueManager() {
               <div>
                 <p className="text-sm text-gray-500">Total Orders</p>
                 <p className="text-xl font-bold">{productionQueue.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-orange-50 border-orange-200">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <Zap className="w-5 h-5 text-orange-600 animate-pulse" />
+              <div>
+                <p className="text-sm text-orange-600 font-semibold">Rush Orders</p>
+                <p className="text-xl font-bold text-orange-700">
+                  {productionQueue.filter((o) => o.isManualUrgency).length}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -599,12 +616,20 @@ export default function ProductionQueueManager() {
                               #{order.queuePosition}
                             </TableCell>
                             <TableCell className="font-medium">
-                              <div>
-                                {order.fbOrderNumber || order.orderId}
-                                {order.fbOrderNumber && (
-                                  <div className="text-xs text-gray-500">
-                                    {order.orderId}
-                                  </div>
+                              <div className="flex items-center gap-2">
+                                <div>
+                                  {order.fbOrderNumber || order.orderId}
+                                  {order.fbOrderNumber && (
+                                    <div className="text-xs text-gray-500">
+                                      {order.orderId}
+                                    </div>
+                                  )}
+                                </div>
+                                {order.isManualUrgency && (
+                                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-1 font-bold">
+                                    <Zap className="w-3 h-3" />
+                                    RUSH!!!
+                                  </Badge>
                                 )}
                               </div>
                             </TableCell>

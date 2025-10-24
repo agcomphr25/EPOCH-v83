@@ -80,6 +80,7 @@ import {
   XCircle,
   AlertTriangle,
   Link as LinkIcon,
+  Zap,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
@@ -285,6 +286,39 @@ export default function OrdersList() {
         title: 'Error',
         description:
           'Failed to restore order: ' + (error.message || 'Unknown error'),
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Set order urgency mutation
+  const setUrgencyMutation = useMutation({
+    mutationFn: async ({ orderId, urgency }: { orderId: string; urgency: string }) => {
+      return apiRequest(`/api/orders/${orderId}/urgency`, {
+        method: 'PUT',
+        body: JSON.stringify({ urgency }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/with-payment-status'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/production-queue/prioritized'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/pipeline-counts'],
+      });
+      showToast({
+        title: 'Urgency Updated',
+        description: 'Order has been marked as high priority/rush!',
+      });
+    },
+    onError: (error: any) => {
+      showToast({
+        title: 'Error',
+        description:
+          'Failed to update urgency: ' + (error.message || 'Unknown error'),
         variant: 'destructive',
       });
     },
@@ -1501,6 +1535,19 @@ export default function OrdersList() {
                               >
                                 <LinkIcon className="mr-2 h-4 w-4" />
                                 Link Orders
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setUrgencyMutation.mutate({
+                                    orderId: order.orderId,
+                                    urgency: 'high',
+                                  })
+                                }
+                                className="text-orange-600"
+                                data-testid={`button-set-urgent-${order.orderId}`}
+                              >
+                                <Zap className="mr-2 h-4 w-4" />
+                                Set Urgent/Rush
                               </DropdownMenuItem>
                               {order.isCancelled ? (
                                 <DropdownMenuItem

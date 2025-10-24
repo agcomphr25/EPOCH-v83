@@ -16,14 +16,15 @@ Search standardization: All department queue pages use unified OrderSearchBox co
 Navigation dropdown behavior: All navbar dropdown menus close automatically after selection.
 
 ## Recent Changes
-- **Rush Fee Badge System & Automated Priority Scoring** (Oct 24, 2025): ✅ COMPLETE - Implemented comprehensive rush fee badge display and automated priority scoring based on order entry rush fee selections:
-  - **Badge Display**: Orders with "Rush Fee 1" (rush_fee1) show blue "RUSH" badge. Orders with "Rush Fee 2 - Expedite" (rush_fee2) show purple "EXPEDITE" badge. Badges appear in All Orders list and Production Queue Manager alongside existing URGENT badges.
-  - **Automated Priority Calculation**: New utility function `calculatePriorityScore()` automatically calculates priority based on order features when orders are finalized. Priority hierarchy (lower score = higher priority): Manual Urgent=1, Expedite=2500 (75% up), Rush=5000 (50% up), Normal=9999.
-  - **Order Finalization Integration**: Priority scores automatically calculated and set when customers sign orders via review/sign workflow, based on rush_fee1/rush_fee2 selections in features.other_options array.
-  - **Visual Hierarchy**: Color-coded badges provide clear visual distinction - Orange (animated) for Manual Urgent, Purple for Expedite, Blue for Rush, maintaining visual priority hierarchy in queue displays.
-- **Order Urgency/Priority System** (Oct 24, 2025): ✅ COMPLETE & VERIFIED - Implemented end-to-end urgency/priority system for rush orders across all application layers:
+- **Rush Fee System Redesign** (Oct 24, 2025): ✅ COMPLETE - Completely redesigned rush fee functionality to affect due dates instead of priority scoring:
+  - **Updated Names**: Changed "Rush Fee 2" → "Expedite" ($250) and "Rush Fee 1" → "Rush" ($200) in order entry screen
+  - **Due Date Adjustment**: Expedite reduces due date by 4 weeks (28 days), Rush reduces due date by 2 weeks (14 days)
+  - **Badge Display**: Orders with Expedite show purple "EXPEDITE" badge, Rush shows blue "RUSH" badge in All Orders and Production Queue
+  - **Simplified Priority**: Removed rush fee priority scoring - orders now sorted by due date within priority levels (Manual Urgent=1, All Others=9999)
+  - **Automatic Toast Notifications**: System shows user-friendly notifications when rush fees adjust due dates
+- **Order Urgency/Priority System** (Oct 24, 2025): ✅ COMPLETE & VERIFIED - Implemented end-to-end urgency/priority system for manually flagged urgent orders:
   - **Frontend**: Staff can mark orders as urgent via "Set as Urgent" dropdown in All Orders list. Urgent orders display animated orange "URGENT!!!" badge with lightning bolt icon in both All Orders and Production Queue views
-  - **Production Queue Sorting**: Urgent orders automatically move to top of production queue (priority_score=1), sorted ahead of Expedite (2500), Rush (5000), and normal orders (9999)
+  - **Production Queue Sorting**: Urgent orders automatically move to top of production queue (priority_score=1), sorted ahead of all normal orders (priority_score=9999). Within each priority level, orders are sorted by due_date ASC
   - **Dashboard Metrics**: Production Queue and department dashboards show dedicated "Urgent Orders" count card with pulsing orange badge highlighting urgent orders requiring immediate attention
   - **Backend**: API endpoint PUT /api/orders/:orderId/urgency updates urgency levels with automatic priority scoring. Production queue endpoint /api/production-queue/prioritized returns orders sorted by priority_score ASC → due_date ASC → created_at ASC
   - **Data Layer**: Database schema includes urgency (critical/high/medium/low), priorityScore (numeric for sorting), and isManualUrgency (boolean flag) fields. All order retrieval queries (getAllOrdersWithPaymentStatus, production queue) include urgency fields

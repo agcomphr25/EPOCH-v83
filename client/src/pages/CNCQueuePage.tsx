@@ -788,10 +788,16 @@ export default function CNCQueuePage() {
                       />
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <span className="font-semibold text-sm truncate">
                             {getDisplayOrderId(order)}
                           </span>
+                          {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                            <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
+                              <Zap className="w-3 h-3" />
+                              URGENT!!!
+                            </Badge>
+                          )}
                           {isOverdue && (
                             <Badge
                               variant="destructive"

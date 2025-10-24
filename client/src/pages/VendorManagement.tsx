@@ -55,6 +55,7 @@ import {
   FileText,
   X,
 } from 'lucide-react';
+import Papa from 'papaparse';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -559,38 +560,37 @@ export default function VendorManagement() {
     setImportingCsv(true);
     try {
       const text = await file.text();
-      const lines = text.split('\n').filter(line => line.trim());
-      const headers = lines[0].split(',');
-
-      // Find column indices
-      const nameIdx = headers.findIndex(h => h.trim().toLowerCase().includes('supplier name'));
-      const startDateIdx = headers.findIndex(h => h.trim().toLowerCase().includes('start/renewal'));
-      const approvalMethodIdx = headers.findIndex(h => h.trim().toLowerCase().includes('method of approval'));
-      const expirationIdx = headers.findIndex(h => h.trim().toLowerCase().includes('approval expiration'));
+      
+      // Use Papa Parse for proper CSV parsing
+      const parsed = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header: string) => header.trim(),
+      });
 
       const vendorsToImport = [];
 
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',');
-        const name = values[nameIdx]?.trim();
+      for (const row of parsed.data as any[]) {
+        const name = row['Supplier Name']?.trim();
         
         if (!name) continue; // Skip empty rows
 
-        const startDate = values[startDateIdx]?.trim();
-        const approvalMethod = values[approvalMethodIdx]?.trim();
-        const expiration = values[expirationIdx]?.trim();
+        const startDate = row['Start/Renewal Date']?.trim();
+        const approvalMethod = row['Method of Approval']?.trim();
+        const expiration = row['Approval Expiration']?.trim();
 
         // Determine approval source from Method of Approval
         let approvalSource = '';
         if (approvalMethod) {
-          if (approvalMethod.toLowerCase().includes('.pdf')) {
-            approvalSource = 'Certification';
-          } else if (approvalMethod.toLowerCase().includes('supplier approval form')) {
+          // Check for "Supplier Approval Form" first before generic PDF check
+          if (approvalMethod.toLowerCase().includes('supplier approval form')) {
             approvalSource = 'Supplier Approval Form';
+          } else if (approvalMethod.toLowerCase().includes('.pdf')) {
+            approvalSource = 'Certification';
           }
         }
 
-        // Parse dates - handle various formats like "1/2025", "01/2024", "9/2025"
+        // Parse dates - handle various formats like "1/2025", "01/2024", "9/2025", "8/27/28"
         const parseDate = (dateStr: string): string => {
           if (!dateStr || dateStr === 'N/A') return '';
           
@@ -600,10 +600,17 @@ export default function VendorManagement() {
             return `${year}-${month.padStart(2, '0')}-01`;
           }
           
-          // Handle MM/DD/YYYY format
+          // Handle MM/DD/YYYY format (4-digit year)
           if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
             const [month, day, year] = dateStr.split('/');
             return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          }
+          
+          // Handle MM/DD/YY format (2-digit year) - assume 20xx
+          if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{2}$/)) {
+            const [month, day, year] = dateStr.split('/');
+            const fullYear = `20${year}`;
+            return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
           }
           
           return '';

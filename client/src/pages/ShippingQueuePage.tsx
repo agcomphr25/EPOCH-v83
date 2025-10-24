@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Package, ArrowLeft, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Package, ArrowLeft, CheckCircle, AlertTriangle, Zap } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useLocation } from 'wouter';
@@ -1119,10 +1119,18 @@ export default function ShippingQueuePage() {
                 onClick={(e) => e.stopPropagation()} // Prevent card selection when clicking checkbox
               />
               <div className="flex flex-col gap-0.5">
-                <div
-                  className={`text-sm font-semibold ${isSelected ? 'text-blue-700' : 'text-blue-600'}`}
-                >
-                  {order.orderId}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div
+                    className={`text-sm font-semibold ${isSelected ? 'text-blue-700' : 'text-blue-600'}`}
+                  >
+                    {order.orderId}
+                  </div>
+                  {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                    <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
+                      <Zap className="w-3 h-3" />
+                      URGENT!!!
+                    </Badge>
+                  )}
                 </div>
                 {order.fbOrderNumber && (
                   <div className="text-xs text-gray-600">

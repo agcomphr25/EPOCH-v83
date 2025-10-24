@@ -641,12 +641,18 @@ export default function ProductionQueueManager() {
                                   </Badge>
                                 )}
                                 {hasRushFee(order, 'rush_fee2') && (
-                                  <Badge className="bg-purple-600 text-white flex items-center gap-1 px-2 py-1 font-semibold">
+                                  <Badge 
+                                    className="bg-purple-600 text-white flex items-center gap-1 px-2 py-1 font-semibold"
+                                    title="Expedite - 4 weeks faster ($250)"
+                                  >
                                     EXPEDITE
                                   </Badge>
                                 )}
                                 {hasRushFee(order, 'rush_fee1') && (
-                                  <Badge className="bg-blue-600 text-white flex items-center gap-1 px-2 py-1 font-semibold">
+                                  <Badge 
+                                    className="bg-blue-600 text-white flex items-center gap-1 px-2 py-1 font-semibold"
+                                    title="Rush - 2 weeks faster ($200)"
+                                  >
                                     RUSH
                                   </Badge>
                                 )}

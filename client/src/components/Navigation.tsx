@@ -330,6 +330,12 @@ export default function Navigation() {
       description: 'Advanced reporting with PDF/CSV export',
     },
     {
+      path: '/finish-qc-completed-report',
+      label: 'Finish QC Completed Report',
+      icon: CheckSquare,
+      description: 'Orders completed in Finish QC by technician and progression user',
+    },
+    {
       path: '/ag-bottom-metal-report',
       label: 'AG Bottom Metal Report',
       icon: DollarSign,

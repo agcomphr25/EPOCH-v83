@@ -4225,23 +4225,52 @@ export function registerRoutes(app: Express): Server {
 
       const updatedOrders = [];
       const currentTimestamp = new Date();
+      const progressedBy = req.user?.username || 'System';
 
       for (const orderId of orderIds) {
         const order = await storage.getOrderById(orderId);
         if (order) {
+          const fromDepartment = (order as any).currentDepartment;
+          
+          // Get existing department history or initialize empty array
+          const existingHistory = (order as any).departmentHistory || [];
+          const departmentHistory = Array.isArray(existingHistory) ? existingHistory : [];
+          
+          // Add new history entry
+          departmentHistory.push({
+            fromDepartment,
+            toDepartment,
+            timestamp: currentTimestamp.toISOString(),
+            progressedBy,
+            assignedTechnician: (order as any).assignedTechnician || null,
+          });
+
           // Update department and completion timestamp
           const updateData: any = {
             currentDepartment: toDepartment,
             updatedAt: currentTimestamp,
+            departmentHistory,
           };
 
           // Set completion timestamp for previous department
-          if ((order as any).currentDepartment === 'Barcode') {
+          if (fromDepartment === 'Barcode') {
             updateData.barcodeCompletedAt = currentTimestamp;
-          } else if ((order as any).currentDepartment === 'Layup') {
+          } else if (fromDepartment === 'Layup') {
             updateData.layupCompletedAt = currentTimestamp;
-          } else if ((order as any).currentDepartment === 'CNC') {
+          } else if (fromDepartment === 'CNC') {
             updateData.cncCompletedAt = currentTimestamp;
+          } else if (fromDepartment === 'Finish' || fromDepartment === 'Finish Queue') {
+            updateData.finishCompletedAt = currentTimestamp;
+          } else if (fromDepartment === 'Finish QC') {
+            updateData.finishCompletedAt = currentTimestamp;
+          } else if (fromDepartment === 'Gunsmith') {
+            updateData.gunsmithCompletedAt = currentTimestamp;
+          } else if (fromDepartment === 'Paint') {
+            updateData.paintCompletedAt = currentTimestamp;
+          } else if (fromDepartment === 'QC' || fromDepartment === 'QC Shipping Queue') {
+            updateData.qcCompletedAt = currentTimestamp;
+          } else if (fromDepartment === 'Shipping' || fromDepartment === 'Shipping Management') {
+            updateData.shippingCompletedAt = currentTimestamp;
           }
 
           // Try updating finalized order first, fall back to draft
@@ -4257,7 +4286,7 @@ export function registerRoutes(app: Express): Server {
           updatedOrders.push(updatedOrder);
 
           console.log(
-            `✅ Progressed ${orderId} from ${(order as any).currentDepartment} to ${toDepartment}`
+            `✅ Progressed ${orderId} from ${fromDepartment} to ${toDepartment} by ${progressedBy}`
           );
         }
       }
@@ -4270,6 +4299,112 @@ export function registerRoutes(app: Express): Server {
     } catch (_error) {
       console.error('🔄 Progress orders _error:', _error);
       res.status(500).json({ _error: 'Failed to progress orders' });
+    }
+  });
+
+  // Get Finish QC completion report
+  app.get('/api/reports/finish-qc-completed', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const { pool } = await import('../../db');
+      
+      // Calculate date range (last week)
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 7);
+      
+      // Query orders that have department_history with a Finish QC exit
+      const result = await pool.query(
+        `SELECT 
+          order_id,
+          customer_po,
+          fb_order_number,
+          model_id,
+          assigned_technician,
+          current_department,
+          department_history,
+          due_date,
+          order_date
+        FROM all_orders
+        WHERE department_history IS NOT NULL
+          AND jsonb_array_length(department_history) > 0
+        ORDER BY assigned_technician, order_id`,
+        []
+      );
+      
+      const allOrders = result.rows;
+      
+      // Filter to only include orders that were progressed OUT of Finish QC in the last week
+      const filteredOrders = allOrders.filter((order: any) => {
+        if (!order.department_history || !Array.isArray(order.department_history)) {
+          return false;
+        }
+        
+        // Find entries where order left Finish QC
+        const finishQCExit = order.department_history.find(
+          (entry: any) => entry.fromDepartment === 'Finish QC'
+        );
+        
+        if (!finishQCExit || !finishQCExit.timestamp) {
+          return false;
+        }
+        
+        // Check if the exit happened in the last week
+        const exitDate = new Date(finishQCExit.timestamp);
+        return exitDate >= startDate && exitDate <= endDate;
+      });
+      
+      // Group by technician and extract progression data
+      const grouped: Record<string, any[]> = {};
+      
+      for (const order of filteredOrders) {
+        const technician = order.assigned_technician || 'Unassigned';
+        
+        if (!grouped[technician]) {
+          grouped[technician] = [];
+        }
+        
+        // Find the progression entry from Finish QC
+        const finishQCProgression = order.department_history.find(
+          (entry: any) => entry.fromDepartment === 'Finish QC'
+        );
+        
+        const progressedBy = finishQCProgression?.progressedBy || 'Unknown';
+        const progressionDate = finishQCProgression?.timestamp;
+        const completedAt = progressionDate;
+        
+        grouped[technician].push({
+          orderId: order.order_id,
+          customerPO: order.customer_po,
+          fbOrderNumber: order.fb_order_number,
+          modelId: order.model_id,
+          currentDepartment: order.current_department,
+          completedAt,
+          progressedBy,
+          progressionDate,
+          dueDate: order.due_date,
+          orderDate: order.order_date,
+        });
+      }
+      
+      // Sort orders within each technician group by completion date (most recent first)
+      Object.keys(grouped).forEach(tech => {
+        grouped[tech].sort((a, b) => {
+          const dateA = new Date(a.completedAt).getTime();
+          const dateB = new Date(b.completedAt).getTime();
+          return dateB - dateA; // Descending order
+        });
+      });
+      
+      res.json({
+        startDate,
+        endDate,
+        totalOrders: filteredOrders.length,
+        byTechnician: grouped,
+      });
+    } catch (_error) {
+      console.error('📊 Finish QC report _error:', _error);
+      res.status(500).json({ _error: 'Failed to generate report' });
     }
   });
 

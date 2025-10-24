@@ -354,6 +354,22 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
       );
 
+      // If manual urgency is set, use that; otherwise calculate from due date
+      let urgencyLevel: 'critical' | 'high' | 'medium' | 'normal';
+      if (order.ismanualurgency && order.urgency) {
+        // Map database urgency values to urgencyLevel
+        urgencyLevel = order.urgency === 'critical' ? 'critical' 
+                     : order.urgency === 'high' ? 'high'
+                     : order.urgency === 'medium' ? 'medium'
+                     : 'normal';
+      } else {
+        // Calculate from due date
+        urgencyLevel = daysToDue < 0 ? 'critical'
+                     : daysToDue <= 7 ? 'high'
+                     : daysToDue <= 14 ? 'medium'
+                     : 'normal';
+      }
+
       return {
         orderId: order.orderid,
         fbOrderNumber: order.fbordernumber,
@@ -372,14 +388,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         queuePosition: index + 1,
         daysToDue,
         isOverdue: daysToDue < 0,
-        urgencyLevel:
-          daysToDue < 0
-            ? 'critical'
-            : daysToDue <= 7
-              ? 'high'
-              : daysToDue <= 14
-                ? 'medium'
-                : 'normal',
+        urgencyLevel,
       };
     });
 

@@ -84,6 +84,8 @@ const vendorFormSchema = insertVendorSchema.extend({
   scope: z.string().optional(),
   approvalSource: z.string().optional(),
   approvalPdfUrl: z.string().optional(),
+  startRenewalDate: z.string().optional(),
+  approvalExpiration: z.string().optional(),
   evaluationDate: z.string().optional(),
   qualityScore: z.number().int().min(1).max(5).optional().nullable(),
   costScore: z.number().int().min(1).max(5).optional().nullable(),
@@ -154,6 +156,8 @@ export default function VendorManagement() {
       scope: '',
       approvalSource: '',
       approvalPdfUrl: '',
+      startRenewalDate: '',
+      approvalExpiration: '',
       approved: false,
       evaluated: false,
       evaluationDate: '',
@@ -438,6 +442,8 @@ export default function VendorManagement() {
         scope: vendor.scope || '',
         approvalSource: vendor.approvalSource || '',
         approvalPdfUrl: vendor.approvalPdfUrl || '',
+        startRenewalDate: vendor.startRenewalDate || '',
+        approvalExpiration: vendor.approvalExpiration || '',
         approved: vendor.approved,
         evaluated: vendor.evaluated,
         evaluationDate: vendor.evaluationDate || '',
@@ -551,6 +557,8 @@ export default function VendorManagement() {
       notes: data.notes || undefined,
       approvalSource: data.approvalSource || undefined,
       approvalPdfUrl: data.approvalPdfUrl || undefined,
+      startRenewalDate: data.startRenewalDate || undefined,
+      approvalExpiration: data.approvalExpiration || undefined,
     };
 
     if (editingVendor) {
@@ -638,7 +646,7 @@ export default function VendorManagement() {
                     `(${pendingContacts.length})`}
                 </TabsTrigger>
                 <TabsTrigger value="scope" data-testid="tab-scope">
-                  Scope
+                  Scope Approval
                 </TabsTrigger>
                 <TabsTrigger value="evaluation" data-testid="tab-evaluation">
                   Evaluation & Notes
@@ -747,6 +755,24 @@ export default function VendorManagement() {
 
                       />
                     </div>
+
+                    <FormField
+                      control={form.control}
+                      name="startRenewalDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Start/Renewal Date</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="date"
+                              {...field}
+                              data-testid="input-start-renewal-date"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
                     <DialogFooter>
                       <Button
@@ -1260,6 +1286,24 @@ export default function VendorManagement() {
                         <p className="text-xs text-gray-500">Uploading...</p>
                       )}
                     </div>
+
+                    <FormField
+                      control={form.control}
+                      name="approvalExpiration"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Approval Expiration</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="date"
+                              {...field}
+                              data-testid="input-approval-expiration"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
                     <FormField
                       control={form.control}

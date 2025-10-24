@@ -1,12 +1,14 @@
 /**
- * Calculate priority score for an order based on rush fees and urgency
+ * Calculate priority score for an order based on manual urgency
  * Lower score = higher priority (sorts to top of queue)
  * 
  * Priority hierarchy:
  * 1. Manual urgency (URGENT!!!) = 1
- * 2. Expedite (rush_fee2) = 2500 (75% up from bottom)
- * 3. Rush (rush_fee1) = 5000 (50% up from bottom)
- * 4. Normal = 9999 (lowest priority)
+ * 2. Normal = 9999 (lowest priority)
+ * 
+ * Note: Rush and Expedite fees affect the due date directly (not priority score).
+ * Production queue is sorted by priority_score, then due_date, so earlier due dates
+ * will naturally be processed sooner.
  */
 
 export function calculatePriorityScore(
@@ -19,21 +21,7 @@ export function calculatePriorityScore(
     return 1;
   }
 
-  // Check for rush fees in features.other_options
-  const otherOptions = features?.other_options || [];
-  const hasExpedite = Array.isArray(otherOptions) && otherOptions.includes('rush_fee2');
-  const hasRush = Array.isArray(otherOptions) && otherOptions.includes('rush_fee1');
-
-  // Expedite gets 75% priority (25% from top in 0-10000 scale)
-  if (hasExpedite) {
-    return 2500;
-  }
-
-  // Rush gets 50% priority (50% from top in 0-10000 scale)
-  if (hasRush) {
-    return 5000;
-  }
-
-  // Normal priority (lowest)
+  // All other orders have normal priority
+  // Orders are sorted by due date within this priority level
   return 9999;
 }

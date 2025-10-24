@@ -1335,7 +1335,7 @@ export default function OrdersList() {
                           {hasRushFee(order, 'rush_fee2') && (
                             <Badge
                               className="bg-purple-600 text-white dark:bg-purple-700 dark:text-white text-xs px-2 py-0.5 font-semibold"
-                              title="Rush Fee 2 - Expedite ($250)"
+                              title="Expedite - 4 weeks faster ($250)"
                               data-testid={`badge-expedite-${order.orderId}`}
                             >
                               EXPEDITE
@@ -1344,7 +1344,7 @@ export default function OrdersList() {
                           {hasRushFee(order, 'rush_fee1') && (
                             <Badge
                               className="bg-blue-600 text-white dark:bg-blue-700 dark:text-white text-xs px-2 py-0.5 font-semibold"
-                              title="Rush Fee 1 - Rush ($200)"
+                              title="Rush - 2 weeks faster ($200)"
                               data-testid={`badge-rush-${order.orderId}`}
                             >
                               RUSH

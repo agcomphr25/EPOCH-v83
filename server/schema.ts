@@ -3769,7 +3769,7 @@ export type InsertCustomerSatisfactionResponse = z.infer<
 export type CustomerSatisfactionResponse =
   typeof customerSatisfactionResponses.$inferSelect;
 
-// PO Products table for Purchase Order product configurations - Updated from EPOCH v8.3
+// PO Products table for Purchase Order product configurations - Updated for P1 PO Queue System
 export const poProducts = pgTable('po_products', {
   id: serial('id').primaryKey(),
   customerName: text('customer_name').notNull(),
@@ -3792,39 +3792,58 @@ export const poProducts = pgTable('po_products', {
   flatTop: boolean('flat_top').default(false),
   notes: text('notes'),
   productType: text('product_type'),
+  // New fields for P1 PO Queue system
+  poNumber: text('po_number'),
+  dueDate: date('due_date'),
+  quantity: integer('quantity').default(1),
+  customerPoLine: text('customer_po_line'),
+  targetWeek: text('target_week'),
+  linkedOrderId: text('linked_order_id'),
+  status: text('status').default('pending'),
+  priorityNote: text('priority_note'),
 });
 
-// Insert schema for PO Products - Updated from EPOCH v8.3
-export const insertPOProductSchema = createInsertSchema(poProducts)
+// PO Product Selections table for tracking selection batches
+export const poProductSelections = pgTable('po_product_selections', {
+  id: serial('id').primaryKey(),
+  poProductId: integer('po_product_id').notNull().references(() => poProducts.id, { onDelete: 'cascade' }),
+  selectionBatchId: text('selection_batch_id').notNull(),
+  quantitySelected: integer('quantity_selected').notNull().default(1),
+  selectionSource: text('selection_source').default('p1'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Insert schema for PO Products - Updated for P1 PO Queue System
+export const insertPOProductSchema = createInsertSchema(poProducts, {
+  customerName: z.string().min(1, 'Customer name is required'),
+  productName: z.string().min(1, 'Product name is required'),
+  price: z.number().min(0, 'Price must be positive').default(0),
+  quantity: z.number().min(1, 'Quantity must be at least 1').default(1),
+})
   .omit({
     id: true,
     createdAt: true,
     updatedAt: true,
-  })
-  .extend({
-    customerName: z.string().min(1, 'Customer name is required'),
-    productName: z.string().min(1, 'Product name is required'),
-    material: z.string().optional().nullable(),
-    handedness: z.string().optional().nullable(),
-    stockModel: z.string().optional().nullable(),
-    actionLength: z.string().optional().nullable(),
-    actionInlet: z.string().optional().nullable(),
-    bottomMetal: z.string().optional().nullable(),
-    barrelInlet: z.string().optional().nullable(),
-    qds: z.string().optional().nullable(),
-    swivelStuds: z.string().optional().nullable(),
-    paintOptions: z.string().optional().nullable(),
-    texture: z.string().optional().nullable(),
-    price: z.number().min(0, 'Price must be positive').default(0),
-    isActive: z.boolean().default(true),
-    flatTop: z.boolean().default(false),
-    notes: z.string().optional().nullable(),
-    productType: z.string().optional().nullable(),
+  });
+
+// Insert schema for PO Product Selections
+export const insertPOProductSelectionSchema = createInsertSchema(poProductSelections, {
+  poProductId: z.number().min(1, 'PO Product ID is required'),
+  selectionBatchId: z.string().min(1, 'Selection batch ID is required'),
+  quantitySelected: z.number().min(1, 'Quantity must be at least 1'),
+})
+  .omit({
+    id: true,
+    createdAt: true,
   });
 
 // Types for PO Products
 export type InsertPOProduct = z.infer<typeof insertPOProductSchema>;
 export type POProduct = typeof poProducts.$inferSelect;
+
+// Types for PO Product Selections
+export type InsertPOProductSelection = z.infer<typeof insertPOProductSelectionSchema>;
+export type POProductSelection = typeof poProductSelections.$inferSelect;
 
 // Insert schema for Refund Requests
 export const insertRefundRequestSchema = createInsertSchema(refundRequests)

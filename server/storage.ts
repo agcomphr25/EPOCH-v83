@@ -1196,6 +1196,22 @@ export interface IStorage {
   ): Promise<POProduct>;
   deletePOProduct(id: number): Promise<void>;
 
+  // P1 PO Queue Methods
+  getP1POQueueGrouped(): Promise<{
+    customer: string;
+    poNumber: string;
+    items: POProduct[];
+    earliestDueDate: string | null;
+    totalQuantity: number;
+  }[]>;
+  createPOProductSelection(data: InsertPOProductSelection): Promise<POProductSelection>;
+  getPOProductSelections(batchId: string): Promise<POProductSelection[]>;
+  getMoldAvailability(): Promise<{
+    totalCapacity: number;
+    usedByScheduled: number;
+    available: number;
+  }>;
+
   // Internal Messaging Methods
   getAllInternalMessages(): Promise<
     (InternalMessage & { recipients: MessageRecipient[] })[]
@@ -9074,6 +9090,111 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date(),
       })
       .where(eq(poProducts.id, id));
+  }
+
+  // P1 PO Queue Methods Implementation
+  async getP1POQueueGrouped(): Promise<{
+    customer: string;
+    poNumber: string;
+    items: POProduct[];
+    earliestDueDate: string | null;
+    totalQuantity: number;
+  }[]> {
+    // Get all active PO products with pending status
+    const products = await db
+      .select()
+      .from(poProducts)
+      .where(
+        and(
+          eq(poProducts.isActive, true),
+          eq(poProducts.status, 'pending')
+        )
+      )
+      .orderBy(asc(poProducts.customerName), asc(poProducts.dueDate));
+
+    // Group by customer and PO number
+    const grouped = new Map<string, {
+      customer: string;
+      poNumber: string;
+      items: POProduct[];
+      earliestDueDate: string | null;
+      totalQuantity: number;
+    }>();
+
+    for (const product of products) {
+      const key = `${product.customerName}||${product.poNumber || 'NO_PO'}`;
+      
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          customer: product.customerName,
+          poNumber: product.poNumber || 'NO_PO',
+          items: [],
+          earliestDueDate: product.dueDate,
+          totalQuantity: 0,
+        });
+      }
+
+      const group = grouped.get(key)!;
+      group.items.push(product);
+      group.totalQuantity += product.quantity || 1;
+      
+      // Update earliest due date
+      if (product.dueDate && (!group.earliestDueDate || product.dueDate < group.earliestDueDate)) {
+        group.earliestDueDate = product.dueDate;
+      }
+    }
+
+    return Array.from(grouped.values());
+  }
+
+  async createPOProductSelection(data: InsertPOProductSelection): Promise<POProductSelection> {
+    const { poProductSelections } = await import('./schema');
+    
+    const [selection] = await db
+      .insert(poProductSelections)
+      .values({
+        ...data,
+        createdAt: new Date(),
+      })
+      .returning();
+    
+    return selection;
+  }
+
+  async getPOProductSelections(batchId: string): Promise<POProductSelection[]> {
+    const { poProductSelections } = await import('./schema');
+    
+    return await db
+      .select()
+      .from(poProductSelections)
+      .where(eq(poProductSelections.selectionBatchId, batchId));
+  }
+
+  async getMoldAvailability(): Promise<{
+    totalCapacity: number;
+    usedByScheduled: number;
+    available: number;
+  }> {
+    // Get total mold capacity from mold_settings table
+    const moldSettingsData = await db
+      .select()
+      .from(moldSettings)
+      .where(eq(moldSettings.enabled, true));
+
+    const totalCapacity = moldSettingsData.reduce(
+      (sum, mold) => sum + (mold.multiplier || 1),
+      0
+    );
+
+    // Get molds used by scheduled orders in layup scheduler
+    // This is a simplified implementation - you may need to adjust based on your scheduling logic
+    const usedByScheduled = 0; // Placeholder - implement based on your scheduling system
+
+    return {
+      totalCapacity,
+      usedByScheduled,
+      available: totalCapacity - usedByScheduled,
+    };
   }
 
   // Internal Messaging Methods Implementation

@@ -877,6 +877,29 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Get comprehensive order data from storage with payment status
     const { storage } = await import('../../storage');
+    
+    // Check if there's a signed PDF for this order
+    const followupOrder = await storage.getFollowupOrderByOrderId(orderId);
+    if (followupOrder && followupOrder.signedPdfPath && followupOrder.signatureSigned) {
+      // Serve the signed PDF if it exists
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      const signedPdfPath = path.join(process.cwd(), followupOrder.signedPdfPath);
+      
+      if (fs.existsSync(signedPdfPath)) {
+        console.log(`📄 Serving signed PDF for order ${orderId}`);
+        const pdfBuffer = fs.readFileSync(signedPdfPath);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="sales_order_${orderId}_signed.pdf"`);
+        return res.send(pdfBuffer);
+      } else {
+        console.warn(`⚠️ Signed PDF path exists in database but file not found: ${signedPdfPath}`);
+      }
+    }
+    
+    // If no signed PDF exists, generate a new one
+    console.log(`📄 Generating new sales order PDF for ${orderId}`);
     const order = await storage.getOrderById(orderId);
     const stockModels = await storage.getAllStockModels();
     const customers = await storage.getAllCustomers();

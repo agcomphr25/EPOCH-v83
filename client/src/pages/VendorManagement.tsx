@@ -2265,7 +2265,7 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
   ];
 
   // Fetch monthly evaluations
-  const { data: evaluations = [], isLoading, refetch } = useQuery({
+  const { data: evaluations = [], isLoading, refetch } = useQuery<any[]>({
     queryKey: ['/api/vendors', vendorId, 'evaluations', { year: selectedYear }],
   });
 

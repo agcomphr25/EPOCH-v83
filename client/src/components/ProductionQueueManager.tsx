@@ -576,6 +576,7 @@ export default function ProductionQueueManager() {
                         <TableHead>Stock Model</TableHead>
                         <TableHead>Action Length</TableHead>
                         <TableHead>Bottom Metal</TableHead>
+                        <TableHead>LOP / Fill</TableHead>
                         <TableHead>Due Date</TableHead>
                         <TableHead>Days to Due</TableHead>
                         <TableHead>Urgency</TableHead>
@@ -607,6 +608,17 @@ export default function ProductionQueueManager() {
                         const bottomMetalDisplay = showBottomMetal
                           ? bottomMetal.replace(/_/g, ' ').toUpperCase()
                           : '';
+
+                        // Check for LOP adjustments
+                        const lop = order.features?.length_of_pull;
+                        const hasLopAdjustment = lop && lop !== 'no_lop_change' && lop.includes('lop_adj_');
+                        const lopDisplay = hasLopAdjustment 
+                          ? lop.replace('lop_adj_', 'LOP ').replace('_', '.')
+                          : '';
+
+                        // Check for heavy fill option
+                        const otherOptions = order.features?.other_options || [];
+                        const hasHeavyFill = Array.isArray(otherOptions) && otherOptions.includes('heavy_fill');
 
                         return (
                           <TableRow
@@ -686,6 +698,20 @@ export default function ProductionQueueManager() {
                                   {bottomMetalDisplay}
                                 </Badge>
                               )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                {hasLopAdjustment && (
+                                  <Badge className="bg-green-100 text-green-800 border-green-200 font-semibold text-xs">
+                                    {lopDisplay}
+                                  </Badge>
+                                )}
+                                {hasHeavyFill && (
+                                  <Badge className="bg-purple-100 text-purple-800 border-purple-200 font-semibold text-xs">
+                                    HEAVY FILL
+                                  </Badge>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">

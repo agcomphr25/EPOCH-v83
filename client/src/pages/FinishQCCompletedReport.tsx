@@ -262,7 +262,7 @@ export default function FinishQCCompletedReport() {
                       {orders.map((order) => (
                         <TableRow key={order.orderId} data-testid={`row-order-${order.orderId}`}>
                           <TableCell className="font-medium">
-                            {getDisplayOrderId(order.orderId)}
+                            {getDisplayOrderId({ orderId: order.orderId, fbOrderNumber: order.fbOrderNumber })}
                           </TableCell>
                           <TableCell>
                             {order.fbOrderNumber ? (

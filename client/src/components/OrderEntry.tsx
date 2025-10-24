@@ -270,28 +270,18 @@ export default function OrderEntry() {
 
     const otherOptions = features.other_options || [];
 
-    // Check for rush fee options
-    const hasRushFee1 = otherOptions.some(
-      (option: string) =>
-        option.toLowerCase().includes('rush') &&
-        option.toLowerCase().includes('fee') &&
-        option.includes('1')
-    );
-    const hasRushFee2 = otherOptions.some(
-      (option: string) =>
-        option.toLowerCase().includes('rush') &&
-        option.toLowerCase().includes('fee') &&
-        option.includes('2')
-    );
+    // Check for rush fee options by value
+    const hasRush = otherOptions.includes('rush_fee1');
+    const hasExpedite = otherOptions.includes('rush_fee2');
 
     let adjustedDate = new Date(baseDueDate);
 
-    if (hasRushFee2) {
-      // Rush Fee 2: reduce by 42 days (6 weeks)
-      adjustedDate.setDate(adjustedDate.getDate() - 42);
-    } else if (hasRushFee1) {
-      // Rush Fee 1: reduce by 28 days (4 weeks)
+    if (hasExpedite) {
+      // Expedite: reduce by 28 days (4 weeks)
       adjustedDate.setDate(adjustedDate.getDate() - 28);
+    } else if (hasRush) {
+      // Rush: reduce by 14 days (2 weeks)
+      adjustedDate.setDate(adjustedDate.getDate() - 14);
     }
 
     // Only update if the calculated date is different from current due date and user hasn't manually set it
@@ -304,18 +294,18 @@ export default function OrderEntry() {
       const isAdjModel = modelName.toLowerCase().includes('adj');
       const baseWeeks = isAdjModel ? 16 : 14; // 112 days = 16 weeks, 98 days = 14 weeks
 
-      if (hasRushFee2) {
-        const finalWeeks = baseWeeks - 6; // 42 days = 6 weeks
-        toast({
-          title: 'Due Date Updated',
-          description: `Due date reduced from ${baseWeeks} weeks to ${finalWeeks} weeks due to Rush Fee 2 selection`,
-          duration: 3000,
-        });
-      } else if (hasRushFee1) {
+      if (hasExpedite) {
         const finalWeeks = baseWeeks - 4; // 28 days = 4 weeks
         toast({
           title: 'Due Date Updated',
-          description: `Due date reduced from ${baseWeeks} weeks to ${finalWeeks} weeks due to Rush Fee 1 selection`,
+          description: `Due date reduced from ${baseWeeks} weeks to ${finalWeeks} weeks due to Expedite selection`,
+          duration: 3000,
+        });
+      } else if (hasRush) {
+        const finalWeeks = baseWeeks - 2; // 14 days = 2 weeks
+        toast({
+          title: 'Due Date Updated',
+          description: `Due date reduced from ${baseWeeks} weeks to ${finalWeeks} weeks due to Rush selection`,
           duration: 3000,
         });
       } else {
@@ -336,14 +326,10 @@ export default function OrderEntry() {
     isLoadingOrder,
   ]); // Include modelId to recalculate when model changes
 
-  // Update base due date when user manually changes due date (and no rush fees are selected)
+  // Update base due date when user manually changes due date (and no rush/expedite fees are selected)
   useEffect(() => {
     const otherOptions = features.other_options || [];
-    const hasAnyRushFee = otherOptions.some(
-      (option: string) =>
-        option.toLowerCase().includes('rush') &&
-        option.toLowerCase().includes('fee')
-    );
+    const hasAnyRushFee = otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2');
 
     // Only update base due date if no rush fees are currently selected
     // Add a small delay to prevent immediate recalculation cycles

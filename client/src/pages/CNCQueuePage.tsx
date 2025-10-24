@@ -625,7 +625,7 @@ export default function CNCQueuePage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-red-700 dark:text-red-300 flex items-center gap-2">
               <Zap className="h-5 w-5" />
-              Rush Orders
+              Urgent Orders
             </CardTitle>
           </CardHeader>
           <CardContent>

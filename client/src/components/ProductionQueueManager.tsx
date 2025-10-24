@@ -332,7 +332,7 @@ export default function ProductionQueueManager() {
             <div className="flex items-center gap-2">
               <Zap className="w-5 h-5 text-orange-600 animate-pulse" />
               <div>
-                <p className="text-sm text-orange-600 font-semibold">Rush Orders</p>
+                <p className="text-sm text-orange-600 font-semibold">Urgent Orders</p>
                 <p className="text-xl font-bold text-orange-700">
                   {productionQueue.filter((o) => o.isManualUrgency).length}
                 </p>
@@ -628,7 +628,7 @@ export default function ProductionQueueManager() {
                                 {order.isManualUrgency && (
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-1 font-bold">
                                     <Zap className="w-3 h-3" />
-                                    RUSH!!!
+                                    URGENT!!!
                                   </Badge>
                                 )}
                               </div>

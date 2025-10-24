@@ -612,4 +612,94 @@ router.post('/validate-address', async (req: Request, res: Response) => {
   }
 });
 
+// Get balance due for a specific customer
+router.get('/:id/balance-due', async (req: Request, res: Response) => {
+  try {
+    const customerId = req.params.id;
+    console.log(`Calculating balance due for customer ${customerId}`);
+
+    // Get unpaid orders for this customer using existing method
+    const unpaidOrders = await storage.getUnpaidOrdersByCustomer(customerId);
+
+    // Get refund data for these orders
+    const { refundRequests } = await import('@shared/schema');
+    const { db } = await import('../../db');
+    const { eq, inArray, sql: drizzleSql } = await import('drizzle-orm');
+
+    // Get all processed refunds for this customer's orders
+    const orderIds = unpaidOrders.map((o) => o.orderId);
+    let refundsData: Array<{ orderId: string; totalRefunded: number }> = [];
+
+    if (orderIds.length > 0) {
+      const { and } = await import('drizzle-orm');
+      
+      const refunds = await db
+        .select({
+          orderId: refundRequests.orderId,
+          totalRefunded: drizzleSql`SUM(COALESCE(${refundRequests.refundAmount}, ${refundRequests.amount}, 0))`.as('totalRefunded'),
+        })
+        .from(refundRequests)
+        .where(
+          and(
+            inArray(refundRequests.orderId, orderIds),
+            eq(refundRequests.status, 'PROCESSED')
+          )
+        )
+        .groupBy(refundRequests.orderId);
+
+      refundsData = refunds.map((r: any) => ({
+        orderId: r.orderId as string,
+        totalRefunded: Number(r.totalRefunded || 0),
+      }));
+    }
+
+    // Create a map for quick refund lookup
+    const refundMap = new Map(refundsData.map((r) => [r.orderId, r.totalRefunded]));
+
+    // Enrich unpaid orders with refund information and adjust balance
+    // IMPORTANT: Refunds INCREASE the balance due (money owed back to customer reduces what they paid)
+    const ordersWithRefunds = unpaidOrders.map((order) => {
+      const totalRefunded = refundMap.get(order.orderId) || 0;
+      // Balance due = Order Total - (Payments - Refunds)
+      // Which simplifies to: Balance due = Order Total - Payments + Refunds
+      const adjustedBalance = Math.max(0, order.balanceDue + totalRefunded);
+      // Calculate net paid amount for display (payments minus refunds)
+      // NOTE: This can be negative if refunds exceed payments (over-refund/credit situation)
+      const netPaid = order.totalPaid - totalRefunded;
+
+      return {
+        orderId: order.orderId,
+        customerPO: order.customerPO,
+        orderDate: order.orderDate,
+        dueDate: order.dueDate,
+        status: order.status,
+        orderTotal: order.totalAmount,
+        totalPaid: order.totalPaid,
+        netPaid: Math.round(netPaid * 100) / 100, // Round to 2 decimal places
+        totalRefunded: totalRefunded,
+        balanceDue: adjustedBalance,
+      };
+    });
+
+    // Filter out orders with $0 balance after refunds
+    const ordersWithBalance = ordersWithRefunds.filter((o) => o.balanceDue > 0);
+
+    // Calculate total balance due
+    const totalBalanceDue = ordersWithBalance.reduce((sum, order) => sum + order.balanceDue, 0);
+
+    res.json({
+      customerId,
+      orders: ordersWithBalance,
+      totalBalanceDue: Math.round(totalBalanceDue * 100) / 100,
+      orderCount: ordersWithBalance.length,
+    });
+  } catch (error) {
+    console.error('Error calculating balance due:', error);
+    res.status(500).json({
+      error: 'Failed to calculate balance due',
+      details: (error as any).message,
+    });
+  }
+});
+
 export default router;

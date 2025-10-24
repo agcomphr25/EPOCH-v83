@@ -97,6 +97,7 @@ import CNCQueuePage from './pages/CNCQueuePage';
 import FinishQCQueuePage from './pages/FinishQCQueuePage';
 import FinishQueuePage from './pages/FinishQueuePage';
 import FinishQCPage from './pages/FinishQCPage';
+import FinishQCCompletedReport from './pages/FinishQCCompletedReport';
 import GunsimthQueuePage from './pages/GunsimthQueuePage';
 import PaintQueuePage from './pages/PaintQueuePage';
 import QCShippingQueuePage from './pages/QCShippingQueuePage';
@@ -281,6 +282,7 @@ function App() {
                   <Route path="/orders-simple" component={OrdersListSimple} />
                   <Route path="/all-orders" component={AllOrdersPage} />
                   <Route path="/order-reports" component={OrderReports} />
+                  <Route path="/finish-qc-completed-report" component={FinishQCCompletedReport} />
                   <Route path="/discounts" component={DiscountManagement} />
                   <Route path="/feature-manager" component={FeatureManager} />
                   <Route path="/stock-models" component={StockModels} />

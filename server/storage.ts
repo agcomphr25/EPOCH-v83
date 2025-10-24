@@ -2926,6 +2926,10 @@ export class DatabaseStorage implements IStorage {
         isFlattop: allOrders.isFlattop,
         createdAt: allOrders.createdAt,
         updatedAt: allOrders.updatedAt,
+        // Urgency/Priority fields
+        urgency: allOrders.urgency,
+        priorityScore: allOrders.priorityScore,
+        isManualUrgency: allOrders.isManualUrgency,
         // Customer name
         customerName: customers.name,
         // Stock model display name
@@ -3053,6 +3057,10 @@ export class DatabaseStorage implements IStorage {
         altShipToEmail: allOrders.altShipToEmail,
         altShipToPhone: allOrders.altShipToPhone,
         altShipToAddress: allOrders.altShipToAddress,
+        // Urgency/Priority fields
+        urgency: allOrders.urgency,
+        priorityScore: allOrders.priorityScore,
+        isManualUrgency: allOrders.isManualUrgency,
         // Customer name
         customerName: customers.name,
       })

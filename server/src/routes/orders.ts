@@ -2004,6 +2004,69 @@ router.get('/export/csv-all', async (req: Request, res: Response) => {
   }
 });
 
+// Update order urgency/priority - Mark order as urgent/rush
+router.put('/:orderId/urgency', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { urgency } = req.body;
+
+    // Validate urgency value
+    const validUrgencies = ['critical', 'high', 'medium', 'low'];
+    if (!urgency || !validUrgencies.includes(urgency)) {
+      return res.status(400).json({ 
+        error: 'Invalid urgency level. Must be one of: critical, high, medium, low' 
+      });
+    }
+
+    console.log(`🚨 Setting order ${orderId} urgency to: ${urgency}`);
+
+    // Find the order
+    const order = await storage.getOrderById(orderId);
+    if (!order) {
+      return res.status(404).json({ error: `Order ${orderId} not found` });
+    }
+
+    // Calculate priority score based on urgency level
+    // Lower score = higher priority. High urgency gets score of 1000 to move to top
+    const priorityScores = {
+      critical: 1000,  // Highest priority - moves to very top
+      high: 1000,      // Also highest - Rush orders
+      medium: 50,
+      low: 100,
+    };
+
+    const priorityScore = priorityScores[urgency as keyof typeof priorityScores];
+
+    // Update the order with new urgency and priority score
+    await db
+      .update(allOrders)
+      .set({
+        urgency: urgency,
+        priorityScore: priorityScore,
+        isManualUrgency: true, // Mark as manually set
+        updatedAt: new Date(),
+      })
+      .where(eq(allOrders.orderId, orderId));
+
+    console.log(`✅ Order ${orderId} updated: urgency=${urgency}, priorityScore=${priorityScore}`);
+
+    // Fetch updated order to return
+    const updatedOrder = await storage.getOrderById(orderId);
+
+    res.json({
+      success: true,
+      order: updatedOrder,
+      message: `Order ${orderId} urgency updated to ${urgency}`,
+    });
+  } catch (error) {
+    console.error(`❌ PUT /${req.params.orderId}/urgency error:`, error);
+    res.status(500).json({ 
+      error: 'Failed to update order urgency',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // Get a single order by ID - MUST BE LAST to avoid catching other routes
 router.get('/:orderId', async (req: Request, res: Response) => {
   try {

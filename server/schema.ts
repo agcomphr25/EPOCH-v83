@@ -141,6 +141,10 @@ export const allOrders = pgTable('all_orders', {
   ).default(false),
   // Technician Assignment
   assignedTechnician: text('assigned_technician'),
+  // Priority and Urgency Information
+  urgency: text('urgency').default('low'), // 'critical', 'high', 'medium', 'low'
+  priorityScore: integer('priority_score').default(50), // Lower = higher priority
+  isManualUrgency: boolean('is_manual_urgency').default(false), // True if manually set by user
   // Customer Signature Data
   signatureData: text('signature_data'), // Base64 signature image from customer
   signedAt: timestamp('signed_at'), // When customer signed the order

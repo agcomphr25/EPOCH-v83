@@ -235,13 +235,9 @@ export default function OrderEntry() {
       const newBaseDueDate = calculateBaseDueDate();
       setBaseDueDate(newBaseDueDate);
 
-      // Only update actual due date if no rush fees are currently selected and user hasn't manually set date
+      // Only update actual due date if no rush/expedite fees are currently selected and user hasn't manually set date
       const otherOptions = features.other_options || [];
-      const hasAnyRushFee = otherOptions.some(
-        (option: string) =>
-          option.toLowerCase().includes('rush') &&
-          option.toLowerCase().includes('fee')
-      );
+      const hasAnyRushFee = otherOptions.includes('rush_fee1') || otherOptions.includes('rush_fee2');
 
       if (!hasAnyRushFee && !isManualDueDate) {
         setDueDate(newBaseDueDate);

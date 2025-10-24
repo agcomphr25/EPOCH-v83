@@ -94,6 +94,15 @@ export default function ProductionQueueManager() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
+  // Helper function to check if order has rush fees
+  const hasRushFee = (order: ProductionQueueOrder, feeType: 'rush_fee1' | 'rush_fee2') => {
+    if (!order.features?.other_options) return false;
+    const otherOptions = Array.isArray(order.features.other_options) 
+      ? order.features.other_options 
+      : [];
+    return otherOptions.includes(feeType);
+  };
+
   // Removed: P1 PO week selection dialog state - now managed via OEM Priority Settings
 
   // State for P1 Production Queue order selection
@@ -629,6 +638,16 @@ export default function ProductionQueueManager() {
                                   <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-1 font-bold">
                                     <Zap className="w-3 h-3" />
                                     URGENT!!!
+                                  </Badge>
+                                )}
+                                {hasRushFee(order, 'rush_fee2') && (
+                                  <Badge className="bg-purple-600 text-white flex items-center gap-1 px-2 py-1 font-semibold">
+                                    EXPEDITE
+                                  </Badge>
+                                )}
+                                {hasRushFee(order, 'rush_fee1') && (
+                                  <Badge className="bg-blue-600 text-white flex items-center gap-1 px-2 py-1 font-semibold">
+                                    RUSH
                                   </Badge>
                                 )}
                               </div>

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import { Zap } from 'lucide-react';
 
 interface OrderTooltipProps {
   order: any;
@@ -163,17 +164,27 @@ export function OrderTooltip({
         <CardHeader className="pb-2">
           <div className="flex justify-between items-start">
             <div className="space-y-1">
-              {order.fbOrderNumber && order.fbOrderNumber.trim() !== '' ? (
-                <>
-                  <div className="font-semibold text-lg">
-                    FB: {order.fbOrderNumber}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    ID: {order.orderId}
-                  </div>
-                </>
-              ) : (
-                <div className="font-semibold text-lg">{order.orderId}</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {order.fbOrderNumber && order.fbOrderNumber.trim() !== '' ? (
+                  <>
+                    <div className="font-semibold text-lg">
+                      FB: {order.fbOrderNumber}
+                    </div>
+                  </>
+                ) : (
+                  <div className="font-semibold text-lg">{order.orderId}</div>
+                )}
+                {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
+                  <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
+                    <Zap className="w-3 h-3" />
+                    URGENT!!!
+                  </Badge>
+                )}
+              </div>
+              {order.fbOrderNumber && order.fbOrderNumber.trim() !== '' && (
+                <div className="text-xs text-gray-500">
+                  ID: {order.orderId}
+                </div>
               )}
             </div>
             <div className="flex items-center gap-2">

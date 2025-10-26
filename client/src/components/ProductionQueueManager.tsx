@@ -258,7 +258,7 @@ export default function ProductionQueueManager() {
     mutationFn: async () => {
       // Prepare selected P1 PO items with their selected quantities
       const selectedPOItemsArray: any[] = [];
-      p1PurchaseOrders.forEach((customer) => {
+      safePurchaseOrders.forEach((customer) => {
         customer.purchaseOrders.forEach((po) => {
           const selectedItems = selectedPOItems.get(po.poNumber);
           if (selectedItems) {
@@ -462,8 +462,11 @@ export default function ProductionQueueManager() {
     updatePrioritiesMutation.mutate(updatedOrders);
   };
 
+  // Ensure p1PurchaseOrders is always an array
+  const safePurchaseOrders = Array.isArray(p1PurchaseOrders) ? p1PurchaseOrders : [];
+
   // Filter out "no stock" items and calculate total items needing layup
-  const totalPOItemsNeedingLayup = p1PurchaseOrders.reduce(
+  const totalPOItemsNeedingLayup = safePurchaseOrders.reduce(
     (total, customer) =>
       total +
       customer.purchaseOrders.reduce(
@@ -476,8 +479,8 @@ export default function ProductionQueueManager() {
 
   // Filter and sort purchase orders by selected PO and due date, excluding "no stock" items
   const filteredPurchaseOrders = (selectedPOFilter === 'all'
-    ? p1PurchaseOrders
-    : p1PurchaseOrders.map((customer) => ({
+    ? safePurchaseOrders
+    : safePurchaseOrders.map((customer) => ({
         ...customer,
         purchaseOrders: customer.purchaseOrders.filter(
           (po) => po.poNumber === selectedPOFilter
@@ -500,7 +503,7 @@ export default function ProductionQueueManager() {
   // Get all unique PO numbers for dropdown
   const allPONumbers = Array.from(
     new Set(
-      p1PurchaseOrders.flatMap((customer) =>
+      safePurchaseOrders.flatMap((customer) =>
         customer.purchaseOrders.map((po) => po.poNumber)
       )
     )

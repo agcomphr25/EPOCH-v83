@@ -356,15 +356,24 @@ export default function ProductionQueueManager() {
     0
   );
 
-  // Filter purchase orders by selected PO
-  const filteredPurchaseOrders = selectedPOFilter === 'all'
+  // Filter and sort purchase orders by selected PO and due date
+  const filteredPurchaseOrders = (selectedPOFilter === 'all'
     ? p1PurchaseOrders
     : p1PurchaseOrders.map((customer) => ({
         ...customer,
         purchaseOrders: customer.purchaseOrders.filter(
           (po) => po.poNumber === selectedPOFilter
         ),
-      })).filter((customer) => customer.purchaseOrders.length > 0);
+      })).filter((customer) => customer.purchaseOrders.length > 0)
+  ).map((customer) => ({
+    ...customer,
+    purchaseOrders: [...customer.purchaseOrders].sort((a, b) => {
+      // Sort by due date (expectedDelivery)
+      const dateA = a.expectedDelivery ? new Date(a.expectedDelivery).getTime() : Infinity;
+      const dateB = b.expectedDelivery ? new Date(b.expectedDelivery).getTime() : Infinity;
+      return dateA - dateB;
+    }),
+  }));
 
   // Get all unique PO numbers for dropdown
   const allPONumbers = Array.from(

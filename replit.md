@@ -37,6 +37,7 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 -   **Linked Orders Management**: Functionality to link multiple orders for combined processing/shipping, including an approval code system for unlinking.
 -   **Urgency/Priority System**: Implemented for manually flagged urgent orders with visual badges, production queue sorting, and dedicated dashboard metrics.
 -   **Rush Fee System**: Redesigned to adjust due dates for "Expedite" and "Rush" orders, with corresponding visual badges and notifications.
+-   **P1 Purchase Orders Queue**: Production Queue Manager displays open purchase orders with stock items needing layup, grouped by customer with PO filtering and remaining quantity tracking.
 
 ### Technical Implementations
 -   **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

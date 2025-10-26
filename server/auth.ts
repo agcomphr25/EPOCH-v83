@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto';
 
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { eq, and, lt, gt } from 'drizzle-orm';
+import { eq, and, lt, gt, sql } from 'drizzle-orm';
 
 import { db } from './db';
 import { users, userSessions, employeeAuditLog } from './schema';

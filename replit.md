@@ -1,7 +1,24 @@
 # EPOCH v8 - Manufacturing ERP System
 
 ## Overview
-EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. Its purpose is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The project aims to be a leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. The system incorporates robust features like a Bill of Materials (BOM) system, Google OAuth integration, and a global search function to provide a complete and efficient solution.
+EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. Its purpose is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The project aims to be a leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. The system incorporates robust features like a Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System to provide a complete and efficient solution.
+
+## Recent Changes
+**Parts List Management System** (October 26, 2025)
+- Enhanced inventory items with comprehensive MRP/COGS fields:
+  - SKU field for inventory tracking (informational)
+  - Purchase information: cost per, purchase unit (e.g., "80 lb box")
+  - Usage information: usage quantity per unit, usage unit, COGS per unit (for BOM calculations)
+  - Secondary supplier part number tracking
+  - Stock item flag (automatically set when SKU contains "Stock")
+  - Production line utilization flags: PL1, PL2, Facilities, Admin, Services
+- CSV Import/Export functionality with intelligent parsing:
+  - Splits "Utilized" column into separate boolean flags (PL1, PL2, Facilities, Admin, Services)
+  - Evaluates fractional cost formats (e.g., "27/20" = $1.35 per unit)
+  - Handles currency symbols and various cost formats
+  - Exports data with "Utilized" column reconstructed from boolean flags
+- Improved form organization with sectioned layout (Basic Info, Supplier Info, Cost & Quantity, Production Line Utilization, Additional Info)
+- Fixed critical session cleanup error (added missing `sql` import in auth.ts)
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.

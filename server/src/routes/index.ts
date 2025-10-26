@@ -99,6 +99,7 @@ export function registerRoutes(app: Express): Server {
 
   // Inventory management routes
   app.use('/api/inventory', inventoryRoutes);
+  app.use('/api/enhanced', inventoryRoutes); // Mount again for enhanced routes
 
   // Customer management routes
   app.use('/api/customers', customersRoutes);

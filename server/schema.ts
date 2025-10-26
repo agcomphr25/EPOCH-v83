@@ -470,15 +470,27 @@ export const formSubmissions = pgTable('form_submissions', {
 export const inventoryItems = pgTable('inventory_items', {
   id: serial('id').primaryKey(),
   agPartNumber: text('ag_part_number').notNull().unique(), // AG Part#
+  sku: text('sku'), // SKU - Links to stock models (informational)
   name: text('name').notNull(), // Name
   type: text('type'), // Type: Purchased or Manufactured
   source: text('source'), // Source
   supplierPartNumber: text('supplier_part_number'), // Supplier Part #
-  costPer: real('cost_per'), // Cost per
+  secondarySupplierPartNumber: text('secondary_supplier_part_number'), // Secondary Supplier Part #
+  costPer: real('cost_per'), // Purchase cost from vendor (e.g., $491.20 for 80lb box)
+  purchaseUnit: text('purchase_unit'), // What is purchased (e.g., "80 lb box", "20/carton")
+  usageQuantityPerUnit: real('usage_quantity_per_unit'), // How much used per manufactured unit (e.g., 50 grams)
+  usageUnit: text('usage_unit'), // Unit of measurement for usage (e.g., "grams", "each")
+  cogsPerUnit: real('cogs_per_unit'), // Calculated or manual COGS per manufactured unit
   orderDate: date('order_date'), // Order Date
   department: text('department'), // Dept.
   secondarySource: text('secondary_source'), // Secondary Source
   notes: text('notes'), // Notes
+  isStockItem: boolean('is_stock_item').default(false), // Used in stock models
+  utilizedInPL1: boolean('utilized_in_pl1').default(false), // Used in Production Line 1
+  utilizedInPL2: boolean('utilized_in_pl2').default(false), // Used in Production Line 2
+  utilizedInFacilities: boolean('utilized_in_facilities').default(false), // Used in Facilities
+  utilizedInAdmin: boolean('utilized_in_admin').default(false), // Used in Admin
+  utilizedInServices: boolean('utilized_in_services').default(false), // Used in Services
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -1309,14 +1321,27 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
   })
   .extend({
     agPartNumber: z.string().min(1, 'AG Part# is required'),
+    sku: z.string().optional().nullable(),
     name: z.string().min(1, 'Name is required'),
+    type: z.string().optional().nullable(),
     source: z.string().optional().nullable(),
     supplierPartNumber: z.string().optional().nullable(),
+    secondarySupplierPartNumber: z.string().optional().nullable(),
     costPer: z.number().min(0).optional().nullable(),
+    purchaseUnit: z.string().optional().nullable(),
+    usageQuantityPerUnit: z.number().min(0).optional().nullable(),
+    usageUnit: z.string().optional().nullable(),
+    cogsPerUnit: z.number().min(0).optional().nullable(),
     orderDate: z.coerce.date().optional().nullable(),
     department: z.string().optional().nullable(),
     secondarySource: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
+    isStockItem: z.boolean().default(false),
+    utilizedInPL1: z.boolean().default(false),
+    utilizedInPL2: z.boolean().default(false),
+    utilizedInFacilities: z.boolean().default(false),
+    utilizedInAdmin: z.boolean().default(false),
+    utilizedInServices: z.boolean().default(false),
     isActive: z.boolean().default(true),
   });
 

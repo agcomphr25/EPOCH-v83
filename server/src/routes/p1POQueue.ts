@@ -5,6 +5,20 @@ import { nanoid } from 'nanoid';
 
 const router = Router();
 
+// Get all open P1 Purchase Orders grouped by customer
+router.get('/purchase-orders/open', async (req: Request, res: Response) => {
+  try {
+    const openPOs = await storage.getOpenP1PurchaseOrders();
+    res.json(openPOs);
+  } catch (error) {
+    console.error('Error retrieving open P1 purchase orders:', error);
+    res.status(500).json({
+      error: 'Failed to fetch open P1 purchase orders',
+      details: (error as any).message,
+    });
+  }
+});
+
 // Get all P1 PO queue items grouped by customer and PO number
 router.get('/', async (req: Request, res: Response) => {
   try {

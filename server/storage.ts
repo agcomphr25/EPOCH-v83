@@ -193,6 +193,7 @@ import {
   type InsertPurchaseOrderItem,
   type ProductionOrder,
   type InsertProductionOrder,
+  type P1POQueueCustomer,
   type P2Customer,
   type InsertP2Customer,
   type P2PurchaseOrder,
@@ -814,6 +815,7 @@ export interface IStorage {
     data: Partial<InsertPurchaseOrder>
   ): Promise<PurchaseOrder>;
   deletePurchaseOrder(id: number): Promise<void>;
+  getOpenP1PurchaseOrders(): Promise<P1POQueueCustomer[]>;
 
   // P2 Customers CRUD
   getAllP2Customers(): Promise<P2Customer[]>;
@@ -5582,6 +5584,79 @@ export class DatabaseStorage implements IStorage {
     await db.delete(purchaseOrderItems).where(eq(purchaseOrderItems.poId, id));
     // Then delete the PO
     await db.delete(purchaseOrders).where(eq(purchaseOrders.id, id));
+  }
+
+  async getOpenP1PurchaseOrders(): Promise<P1POQueueCustomer[]> {
+    // Get all open purchase orders with their items
+    const openPOs = await db
+      .select({
+        poId: purchaseOrders.id,
+        poNumber: purchaseOrders.poNumber,
+        customerId: purchaseOrders.customerId,
+        customerName: purchaseOrders.customerName,
+        poDate: purchaseOrders.poDate,
+        expectedDelivery: purchaseOrders.expectedDelivery,
+        itemId: purchaseOrderItems.id,
+        itemType: purchaseOrderItems.itemType,
+        stockItemId: purchaseOrderItems.itemId,
+        itemName: purchaseOrderItems.itemName,
+        quantity: purchaseOrderItems.quantity,
+        orderCount: purchaseOrderItems.orderCount,
+        specifications: purchaseOrderItems.specifications,
+        notes: purchaseOrderItems.notes,
+      })
+      .from(purchaseOrders)
+      .innerJoin(purchaseOrderItems, eq(purchaseOrders.id, purchaseOrderItems.poId))
+      .where(eq(purchaseOrders.status, 'OPEN'))
+      .orderBy(asc(purchaseOrders.customerName), asc(purchaseOrders.poNumber));
+
+    // Group by customer and PO
+    const customerMap = new Map<string, P1POQueueCustomer>();
+
+    for (const row of openPOs) {
+      const remainingQty = row.quantity - (row.orderCount || 0);
+      
+      // Only include items that still need to be laid up
+      if (remainingQty <= 0) continue;
+
+      let customer = customerMap.get(row.customerId);
+      if (!customer) {
+        customer = {
+          customerId: row.customerId,
+          customerName: row.customerName,
+          purchaseOrders: [],
+        };
+        customerMap.set(row.customerId, customer);
+      }
+
+      let po = customer.purchaseOrders.find((p) => p.poId === row.poId);
+      if (!po) {
+        po = {
+          poId: row.poId,
+          poNumber: row.poNumber,
+          poDate: row.poDate?.toString() || '',
+          expectedDelivery: row.expectedDelivery?.toString() || '',
+          items: [],
+        };
+        customer.purchaseOrders.push(po);
+      }
+
+      po.items.push({
+        id: row.itemId,
+        poId: row.poId,
+        poNumber: row.poNumber,
+        itemType: row.itemType,
+        itemId: row.stockItemId,
+        itemName: row.itemName,
+        quantityOrdered: row.quantity,
+        quantityFulfilled: row.orderCount || 0,
+        remainingQuantity: remainingQty,
+        specifications: row.specifications,
+        notes: row.notes || undefined,
+      });
+    }
+
+    return Array.from(customerMap.values());
   }
 
   // Purchase Order Items CRUD

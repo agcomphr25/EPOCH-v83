@@ -2964,6 +2964,33 @@ export type P2PurchaseOrderItem = typeof p2PurchaseOrderItems.$inferSelect;
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;
 export type ProductionOrder = typeof productionOrders.$inferSelect;
 
+// P1 Purchase Order Queue Types
+export interface P1POQueueItem {
+  id: number;
+  poId: number;
+  poNumber: string;
+  itemType: string;
+  itemId: string;
+  itemName: string;
+  quantityOrdered: number;
+  quantityFulfilled: number;
+  remainingQuantity: number;
+  specifications?: any;
+  notes?: string;
+}
+
+export interface P1POQueueCustomer {
+  customerId: string;
+  customerName: string;
+  purchaseOrders: {
+    poId: number;
+    poNumber: string;
+    poDate: string;
+    expectedDelivery: string;
+    items: P1POQueueItem[];
+  }[];
+}
+
 export const orderStatusEnum = pgEnum('order_status', [
   'DRAFT',
   'CONFIRMED',

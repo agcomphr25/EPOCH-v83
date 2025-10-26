@@ -404,15 +404,17 @@ export default function ProductionQueueManager() {
     setSelectedPOItems((prev) => {
       const newMap = new Map(prev);
       const itemMap = newMap.get(poNumber) || new Map();
-      const allSelected = items.every((item) => itemMap.get(item.id) === item.quantity);
+      // Filter out "no stock" items from selection
+      const eligibleItems = items.filter((item) => item.stockModel !== "no stock");
+      const allSelected = eligibleItems.every((item) => itemMap.get(item.id) === item.quantity);
       
       if (allSelected) {
         // Deselect all
         newMap.delete(poNumber);
       } else {
-        // Select all with their full quantities
+        // Select all eligible items with their full quantities
         const newItemMap = new Map();
-        items.forEach((item) => {
+        eligibleItems.forEach((item) => {
           newItemMap.set(item.id, item.quantity);
         });
         newMap.set(poNumber, newItemMap);
@@ -460,19 +462,19 @@ export default function ProductionQueueManager() {
     updatePrioritiesMutation.mutate(updatedOrders);
   };
 
-  // Calculate total items needing layup
+  // Filter out "no stock" items and calculate total items needing layup
   const totalPOItemsNeedingLayup = p1PurchaseOrders.reduce(
     (total, customer) =>
       total +
       customer.purchaseOrders.reduce(
         (customerTotal, po) =>
-          customerTotal + po.totalItems,
+          customerTotal + po.items.filter(item => item.stockModel !== "no stock").reduce((sum, item) => sum + item.quantity, 0),
         0
       ),
     0
   );
 
-  // Filter and sort purchase orders by selected PO and due date
+  // Filter and sort purchase orders by selected PO and due date, excluding "no stock" items
   const filteredPurchaseOrders = (selectedPOFilter === 'all'
     ? p1PurchaseOrders
     : p1PurchaseOrders.map((customer) => ({
@@ -483,13 +485,17 @@ export default function ProductionQueueManager() {
       })).filter((customer) => customer.purchaseOrders.length > 0)
   ).map((customer) => ({
     ...customer,
-    purchaseOrders: [...customer.purchaseOrders].sort((a, b) => {
+    purchaseOrders: [...customer.purchaseOrders].map((po) => ({
+      ...po,
+      items: po.items.filter((item) => item.stockModel !== "no stock"),
+      totalItems: po.items.filter((item) => item.stockModel !== "no stock").reduce((sum, item) => sum + item.quantity, 0),
+    })).sort((a, b) => {
       // Sort by due date (expectedDelivery)
       const dateA = a.expectedDelivery ? new Date(a.expectedDelivery).getTime() : Infinity;
       const dateB = b.expectedDelivery ? new Date(b.expectedDelivery).getTime() : Infinity;
       return dateA - dateB;
     }),
-  }));
+  })).filter((customer) => customer.purchaseOrders.some(po => po.items.length > 0));
 
   // Get all unique PO numbers for dropdown
   const allPONumbers = Array.from(

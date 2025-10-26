@@ -58,11 +58,10 @@ router.post('/generate', async (req: Request, res: Response) => {
           pq.order_id as "orderId",
           pq.fb_order_number as "fbOrderNumber",
           pq.model_id as "stockModel",
-          pq.customer_id as "customerId",
-          c.customer_name as "customerName",
+          pq.customer as "customerId",
+          pq.customer as "customerName",
           pq.due_date as "dueDate"
         FROM production_queue pq
-        LEFT JOIN customers c ON pq.customer_id = c.id::text
         WHERE pq.order_id = ANY($1)
         `,
         [selectedOrderIds]

@@ -594,12 +594,6 @@ export default function WeeklyLayupScheduler() {
                       {format(new Date(daySchedule.date), 'MMM dd')}
                     </div>
                   </div>
-                  <div className="flex items-center justify-between mt-2 text-sm">
-                    <span>Molds:</span>
-                    <Badge variant={daySchedule.moldsAvailable < 0 ? 'destructive' : 'secondary'}>
-                      {daySchedule.moldsUsed} / {moldAvailability?.totalCapacity || 0}
-                    </Badge>
-                  </div>
                 </CardHeader>
                 <CardContent className="p-2">
                   <Accordion type="single" collapsible className="mb-2">

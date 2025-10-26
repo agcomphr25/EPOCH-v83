@@ -28,12 +28,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import {
   RefreshCw,
@@ -47,7 +53,12 @@ import {
   Package,
   ArrowRight,
   Zap,
+  ShoppingCart,
+  ChevronDown,
+  CalendarCheck,
 } from 'lucide-react';
+import type { P1POQueueCustomer } from '@shared/schema';
+import { LayupSchedulePreview } from './LayupSchedulePreview';
 
 interface ProductionQueueOrder {
   orderId: string;
@@ -110,6 +121,23 @@ export default function ProductionQueueManager() {
     new Set()
   );
 
+  // State for P1 Purchase Orders filter
+  const [selectedPOFilter, setSelectedPOFilter] = useState<string>('all');
+
+  // State for P1 Purchase Order item selection (Map of PO number to Map of item ID to selected quantity)
+  const [selectedPOItems, setSelectedPOItems] = useState<Map<string, Map<number, number>>>(
+    new Map()
+  );
+
+  // State for layup schedule preview modal
+  const [schedulePreviewOpen, setSchedulePreviewOpen] = useState(false);
+  const [generatedSchedule, setGeneratedSchedule] = useState<{
+    scheduledItems: any[];
+    overflowItems: any[];
+    weekStart: string;
+    totalItems: number;
+  } | null>(null);
+
   // Fetch prioritized production queue
   const {
     data: productionQueue = [],
@@ -118,6 +146,16 @@ export default function ProductionQueueManager() {
   } = useQuery<ProductionQueueOrder[]>({
     queryKey: ['/api/production-queue/prioritized'],
     queryFn: () => apiRequest('/api/production-queue/prioritized'),
+  });
+
+  // Fetch open P1 Purchase Orders
+  const {
+    data: p1PurchaseOrders = [],
+    isLoading: isLoadingPOs,
+    refetch: refetchPOs,
+  } = useQuery<P1POQueueCustomer[]>({
+    queryKey: ['/api/p1-po-queue/purchase-orders/open'],
+    queryFn: () => apiRequest('/api/p1-po-queue/purchase-orders/open'),
   });
 
   // P1 Purchase Order items query removed - now managed via OEM Priority Settings
@@ -215,6 +253,102 @@ export default function ProductionQueueManager() {
     },
   });
 
+  // Generate layup schedule mutation
+  const generateScheduleMutation = useMutation({
+    mutationFn: async () => {
+      // Prepare selected P1 PO items with their selected quantities
+      const selectedPOItemsArray: any[] = [];
+      p1PurchaseOrders.forEach((customer) => {
+        customer.purchaseOrders.forEach((po) => {
+          const selectedItems = selectedPOItems.get(po.poNumber);
+          if (selectedItems) {
+            po.items.forEach((item) => {
+              const selectedQuantity = selectedItems.get(item.id);
+              if (selectedQuantity && selectedQuantity > 0) {
+                selectedPOItemsArray.push({
+                  poNumber: po.poNumber,
+                  itemId: item.id,
+                  stockModel: item.stockModel || '',
+                  quantity: selectedQuantity, // Use selected quantity instead of remaining
+                });
+              }
+            });
+          }
+        });
+      });
+
+      return apiRequest('/api/layup-schedule/generate', {
+        method: 'POST',
+        body: {
+          selectedOrderIds: Array.from(selectedQueueOrders),
+          selectedPOItems: selectedPOItemsArray,
+        },
+      });
+    },
+    onSuccess: (result: any) => {
+      setGeneratedSchedule({
+        scheduledItems: result.scheduledItems || [],
+        overflowItems: result.overflowItems || [],
+        weekStart: result.weekStart || '',
+        totalItems: result.totalItems || 0,
+      });
+      setSchedulePreviewOpen(true);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Schedule Generation Failed',
+        description: error.message || 'Failed to generate layup schedule',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Approve schedule mutation
+  const approveScheduleMutation = useMutation({
+    mutationFn: async () => {
+      if (!generatedSchedule) return;
+
+      const entries = generatedSchedule.scheduledItems.map((item) => ({
+        orderId: item.orderId,
+        scheduledDate: item.scheduledDate,
+        moldId: item.moldId,
+        employeeAssignments: [],
+      }));
+
+      return apiRequest('/api/layup-schedule/save', {
+        method: 'POST',
+        body: {
+          entries,
+          workDays: [1, 2, 3, 4, 5],
+          weekStart: generatedSchedule.weekStart,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Schedule Approved',
+        description: `Successfully scheduled ${generatedSchedule?.scheduledItems.length} items`,
+      });
+      
+      // Clear selections
+      setSelectedQueueOrders(new Set());
+      setSelectedPOItems(new Map());
+      setSchedulePreviewOpen(false);
+      setGeneratedSchedule(null);
+      
+      // Refresh queues
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p1-po-queue/purchase-orders/open'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Schedule Approval Failed',
+        description: error.message || 'Failed to save layup schedule',
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Handlers for P1 Production Queue selection
   const handleToggleOrderSelection = (orderId: string) => {
     setSelectedQueueOrders((prev) => {
@@ -239,6 +373,55 @@ export default function ProductionQueueManager() {
   const handleProgressSelectedToBarcode = () => {
     if (selectedQueueOrders.size === 0) return;
     progressToBarcodeMutation.mutate(Array.from(selectedQueueOrders));
+  };
+
+  // Handlers for P1 PO item selection with quantity support
+  const handlePOItemQuantityChange = (poNumber: string, itemId: number, quantity: number, maxQuantity: number) => {
+    const validQuantity = Math.max(0, Math.min(quantity, maxQuantity));
+    
+    setSelectedPOItems((prev) => {
+      const newMap = new Map(prev);
+      const itemMap = newMap.get(poNumber) || new Map();
+      const newItemMap = new Map(itemMap);
+      
+      if (validQuantity === 0) {
+        newItemMap.delete(itemId);
+      } else {
+        newItemMap.set(itemId, validQuantity);
+      }
+      
+      if (newItemMap.size === 0) {
+        newMap.delete(poNumber);
+      } else {
+        newMap.set(poNumber, newItemMap);
+      }
+      
+      return newMap;
+    });
+  };
+
+  const handleSelectAllPOItems = (poNumber: string, items: any[]) => {
+    setSelectedPOItems((prev) => {
+      const newMap = new Map(prev);
+      const itemMap = newMap.get(poNumber) || new Map();
+      // Filter out "no stock" items from selection
+      const eligibleItems = items.filter((item) => item.stockModel !== "no stock");
+      const allSelected = eligibleItems.every((item) => itemMap.get(item.id) === item.quantity);
+      
+      if (allSelected) {
+        // Deselect all
+        newMap.delete(poNumber);
+      } else {
+        // Select all eligible items with their full quantities
+        const newItemMap = new Map();
+        eligibleItems.forEach((item) => {
+          newItemMap.set(item.id, item.quantity);
+        });
+        newMap.set(poNumber, newItemMap);
+      }
+      
+      return newMap;
+    });
   };
 
   const getUrgencyBadgeColor = (urgencyLevel: string) => {
@@ -279,7 +462,51 @@ export default function ProductionQueueManager() {
     updatePrioritiesMutation.mutate(updatedOrders);
   };
 
-  if (isLoading || isLoadingAttention) {
+  // Filter out "no stock" items and calculate total items needing layup
+  const totalPOItemsNeedingLayup = p1PurchaseOrders.reduce(
+    (total, customer) =>
+      total +
+      customer.purchaseOrders.reduce(
+        (customerTotal, po) =>
+          customerTotal + po.items.filter(item => item.stockModel !== "no stock").reduce((sum, item) => sum + item.quantity, 0),
+        0
+      ),
+    0
+  );
+
+  // Filter and sort purchase orders by selected PO and due date, excluding "no stock" items
+  const filteredPurchaseOrders = (selectedPOFilter === 'all'
+    ? p1PurchaseOrders
+    : p1PurchaseOrders.map((customer) => ({
+        ...customer,
+        purchaseOrders: customer.purchaseOrders.filter(
+          (po) => po.poNumber === selectedPOFilter
+        ),
+      })).filter((customer) => customer.purchaseOrders.length > 0)
+  ).map((customer) => ({
+    ...customer,
+    purchaseOrders: [...customer.purchaseOrders].map((po) => ({
+      ...po,
+      items: po.items.filter((item) => item.stockModel !== "no stock"),
+      totalItems: po.items.filter((item) => item.stockModel !== "no stock").reduce((sum, item) => sum + item.quantity, 0),
+    })).sort((a, b) => {
+      // Sort by due date (expectedDelivery)
+      const dateA = a.expectedDelivery ? new Date(a.expectedDelivery).getTime() : Infinity;
+      const dateB = b.expectedDelivery ? new Date(b.expectedDelivery).getTime() : Infinity;
+      return dateA - dateB;
+    }),
+  })).filter((customer) => customer.purchaseOrders.some(po => po.items.length > 0));
+
+  // Get all unique PO numbers for dropdown
+  const allPONumbers = Array.from(
+    new Set(
+      p1PurchaseOrders.flatMap((customer) =>
+        customer.purchaseOrders.map((po) => po.poNumber)
+      )
+    )
+  ).sort();
+
+  if (isLoading || isLoadingAttention || isLoadingPOs) {
     return (
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
         <Card>
@@ -304,10 +531,14 @@ export default function ProductionQueueManager() {
         </div>
         <div className="flex items-center gap-3">
           <Button
-            onClick={() => refetch()}
+            onClick={() => {
+              refetch();
+              refetchPOs();
+            }}
             variant="outline"
-            disabled={isLoading}
+            disabled={isLoading || isLoadingPOs}
             className="flex items-center gap-2"
+            data-testid="button-refresh"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
@@ -322,6 +553,54 @@ export default function ProductionQueueManager() {
           </Button>
         </div>
       </div>
+
+      {/* Schedule Selected Items Button */}
+      {(selectedQueueOrders.size > 0 || Array.from(selectedPOItems.values()).some(map => map.size > 0)) && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-blue-900">
+                {(() => {
+                  const regularCount = selectedQueueOrders.size;
+                  const poCount = Array.from(selectedPOItems.values()).reduce((sum, map) => {
+                    return sum + Array.from(map.values()).reduce((qtySum, qty) => qtySum + qty, 0);
+                  }, 0);
+                  const total = regularCount + poCount;
+                  return `${total} Item${total !== 1 ? 's' : ''} Selected`;
+                })()}
+              </h3>
+              <p className="text-sm text-blue-700">
+                {selectedQueueOrders.size} from Regular Queue, {' '}
+                {Array.from(selectedPOItems.values()).reduce((sum, map) => {
+                  return sum + Array.from(map.values()).reduce((qtySum, qty) => qtySum + qty, 0);
+                }, 0)} from Purchase Orders
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedQueueOrders(new Set());
+                  setSelectedPOItems(new Map());
+                }}
+                data-testid="button-clear-all-selections"
+              >
+                Clear All
+              </Button>
+              <Button
+                onClick={() => generateScheduleMutation.mutate()}
+                disabled={generateScheduleMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
+                data-testid="button-generate-schedule"
+              >
+                <CalendarCheck className="w-4 h-4" />
+                {generateScheduleMutation.isPending ? 'Generating...' : 'Generate Layup Schedule'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
@@ -500,6 +779,300 @@ export default function ProductionQueueManager() {
                         ))}
                     </TableBody>
                   </Table>
+                )}
+              </CardContent>
+            </AccordionContent>
+          </Card>
+        </AccordionItem>
+
+        {/* P1 Purchase Orders Queue */}
+        <AccordionItem value="purchase-orders">
+          <Card>
+            <AccordionTrigger 
+              className="px-6 py-4 hover:no-underline"
+              data-testid="accordion-purchase-orders"
+            >
+              <CardHeader className="p-0">
+                <CardTitle className="flex items-center gap-2">
+                  <ShoppingCart className="w-5 h-5 text-blue-600" />
+                  P1 Purchase Orders ({totalPOItemsNeedingLayup} items need layup)
+                </CardTitle>
+                <p className="text-sm text-gray-500 text-left">
+                  Open purchase orders with stock items that need to be laid up
+                </p>
+              </CardHeader>
+            </AccordionTrigger>
+            <AccordionContent>
+              <CardContent>
+                {/* Action bar for selected items */}
+                {(() => {
+                  const totalSelected = Array.from(selectedPOItems.values()).reduce(
+                    (sum, map) => sum + Array.from(map.values()).reduce((qtySum, qty) => qtySum + qty, 0),
+                    0
+                  );
+                  return totalSelected > 0 ? (
+                    <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-blue-600" />
+                        <span className="font-medium text-blue-900">
+                          {totalSelected} {totalSelected === 1 ? 'item' : 'items'} selected
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedPOItems(new Map())}
+                          data-testid="button-clear-selection"
+                        >
+                          Clear Selection
+                        </Button>
+                        <Button
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          size="sm"
+                          onClick={() => {
+                            toast({
+                              title: 'Action Pending',
+                              description: `Ready to process ${totalSelected} selected items`,
+                            });
+                          }}
+                          data-testid="button-process-selected"
+                        >
+                          <ArrowRight className="w-4 h-4 mr-2" />
+                          Process Selected Items
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
+                {p1PurchaseOrders.length > 0 && (
+                  <div className="mb-4">
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Filter by PO Number:
+                    </label>
+                    <Select
+                      value={selectedPOFilter}
+                      onValueChange={setSelectedPOFilter}
+                    >
+                      <SelectTrigger className="w-64" data-testid="select-po-filter">
+                        <SelectValue placeholder="All Purchase Orders" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Purchase Orders</SelectItem>
+                        {allPONumbers.map((poNumber) => (
+                          <SelectItem key={poNumber} value={poNumber}>
+                            {poNumber}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {filteredPurchaseOrders.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <ShoppingCart className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p>No open purchase orders requiring layup</p>
+                    <p className="text-sm">All PO items have been fulfilled</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {filteredPurchaseOrders.map((customer) => (
+                      <div
+                        key={customer.customerId}
+                        className="border rounded-lg p-4 bg-gray-50"
+                        data-testid={`customer-section-${customer.customerId}`}
+                      >
+                        <div className="flex items-center gap-2 mb-4">
+                          <User className="w-5 h-5 text-gray-600" />
+                          <h3 
+                            className="text-lg font-semibold text-gray-900"
+                            data-testid={`text-customer-name-${customer.customerId}`}
+                          >
+                            {customer.customerName}
+                          </h3>
+                          <Badge 
+                            variant="outline" 
+                            className="ml-2"
+                            data-testid={`badge-customer-id-${customer.customerId}`}
+                          >
+                            {customer.customerId}
+                          </Badge>
+                        </div>
+
+                        {customer.purchaseOrders.map((po) => (
+                          <Collapsible
+                            key={po.poNumber}
+                            className="mb-4 last:mb-0 bg-white rounded-md shadow-sm"
+                            data-testid={`po-section-${po.poNumber}`}
+                          >
+                            <CollapsibleTrigger className="w-full p-4 hover:bg-gray-50 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <ChevronDown className="w-4 h-4 text-gray-500" />
+                                <Badge 
+                                  className="bg-blue-600 text-white font-medium"
+                                  data-testid={`badge-po-number-${po.poNumber}`}
+                                >
+                                  PO: {po.poNumber}
+                                </Badge>
+                                {po.expectedDelivery && (
+                                  <span 
+                                    className="text-sm text-gray-500"
+                                    data-testid={`text-due-date-${po.poNumber}`}
+                                  >
+                                    Due: {new Date(po.expectedDelivery).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </div>
+                              <Badge 
+                                variant="outline"
+                                data-testid={`badge-items-total-${po.poNumber}`}
+                              >
+                                {po.totalItems} {po.totalItems === 1 ? 'item' : 'items'}
+                              </Badge>
+                            </CollapsibleTrigger>
+                            
+                            <CollapsibleContent className="p-4 pt-0">
+                              {/* Select All Checkbox */}
+                              <div className="mb-3 flex items-center gap-2">
+                                <Checkbox
+                                  id={`select-all-${po.poNumber}`}
+                                  checked={
+                                    po.items.length > 0 &&
+                                    po.items.every((item) => 
+                                      (selectedPOItems.get(po.poNumber) || new Map()).get(item.id) === item.quantity
+                                    )
+                                  }
+                                  onCheckedChange={() => handleSelectAllPOItems(po.poNumber, po.items)}
+                                  data-testid={`checkbox-select-all-${po.poNumber}`}
+                                />
+                                <label
+                                  htmlFor={`select-all-${po.poNumber}`}
+                                  className="text-sm font-medium text-gray-700 cursor-pointer"
+                                >
+                                  Select All Items
+                                  {(() => {
+                                    const itemMap = selectedPOItems.get(po.poNumber);
+                                    const totalQty = itemMap ? Array.from(itemMap.values()).reduce((sum, qty) => sum + qty, 0) : 0;
+                                    return totalQty > 0 ? (
+                                      <span className="ml-2 text-blue-600">
+                                        ({totalQty} unit{totalQty !== 1 ? 's' : ''} selected)
+                                      </span>
+                                    ) : null;
+                                  })()}
+                                </label>
+                              </div>
+
+                              <Table data-testid={`table-po-items-${po.poNumber}`}>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="w-40">Quantity to Schedule</TableHead>
+                                    <TableHead>Product Name</TableHead>
+                                    <TableHead>Stock Model</TableHead>
+                                    <TableHead>Action Length</TableHead>
+                                    <TableHead>Material</TableHead>
+                                    <TableHead>Handedness</TableHead>
+                                    <TableHead>Available Qty</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Notes</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {po.items.map((item) => {
+                                    const selectedQty = (selectedPOItems.get(po.poNumber) || new Map()).get(item.id) || 0;
+                                    return (
+                                      <TableRow
+                                        key={item.id}
+                                        data-testid={`row-po-item-${item.id}`}
+                                        className={selectedQty > 0 ? 'bg-blue-50' : ''}
+                                      >
+                                        <TableCell>
+                                          <div className="flex items-center gap-2">
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-8 w-8 p-0"
+                                              onClick={() => handlePOItemQuantityChange(po.poNumber, item.id, selectedQty - 1, item.quantity)}
+                                              disabled={selectedQty === 0}
+                                              data-testid={`button-decrement-${item.id}`}
+                                            >
+                                              -
+                                            </Button>
+                                            <Input
+                                              type="number"
+                                              min="0"
+                                              max={item.quantity}
+                                              value={selectedQty}
+                                              onChange={(e) => {
+                                                const val = parseInt(e.target.value) || 0;
+                                                handlePOItemQuantityChange(po.poNumber, item.id, val, item.quantity);
+                                              }}
+                                              className="w-16 h-8 text-center"
+                                              data-testid={`input-quantity-${item.id}`}
+                                            />
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-8 w-8 p-0"
+                                              onClick={() => handlePOItemQuantityChange(po.poNumber, item.id, selectedQty + 1, item.quantity)}
+                                              disabled={selectedQty >= item.quantity}
+                                              data-testid={`button-increment-${item.id}`}
+                                            >
+                                              +
+                                            </Button>
+                                            <span className="text-xs text-gray-500 ml-1">
+                                              of {item.quantity}
+                                            </span>
+                                          </div>
+                                        </TableCell>
+                                      <TableCell className="font-medium">
+                                        {item.productName}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Badge variant="outline">
+                                          {item.stockModel || '-'}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-sm">
+                                        {item.actionLength || '-'}
+                                      </TableCell>
+                                      <TableCell className="text-sm">
+                                        {item.material || '-'}
+                                      </TableCell>
+                                      <TableCell className="text-sm">
+                                        {item.handedness || '-'}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Badge className="bg-orange-500 text-white">
+                                          {item.quantity}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell>
+                                        <Badge 
+                                          variant={
+                                            item.status === 'completed' ? 'default' :
+                                            item.status === 'pending' ? 'secondary' :
+                                            'outline'
+                                          }
+                                        >
+                                          {item.status || 'pending'}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-sm text-gray-600 max-w-xs truncate">
+                                        {item.notes || '-'}
+                                      </TableCell>
+                                    </TableRow>
+                                    )
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </CardContent>
             </AccordionContent>
@@ -780,6 +1353,20 @@ export default function ProductionQueueManager() {
       </Accordion>
 
       {/* Week Selection Dialog removed - P1 PO functionality now managed via OEM Priority Settings */}
+
+      {/* Layup Schedule Preview Modal */}
+      {generatedSchedule && (
+        <LayupSchedulePreview
+          open={schedulePreviewOpen}
+          onClose={() => setSchedulePreviewOpen(false)}
+          scheduledItems={generatedSchedule.scheduledItems}
+          overflowItems={generatedSchedule.overflowItems}
+          weekStart={generatedSchedule.weekStart}
+          totalItems={generatedSchedule.totalItems}
+          onApprove={() => approveScheduleMutation.mutate()}
+          isApproving={approveScheduleMutation.isPending}
+        />
+      )}
     </div>
   );
 }

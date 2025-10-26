@@ -193,6 +193,7 @@ import {
   type InsertPurchaseOrderItem,
   type ProductionOrder,
   type InsertProductionOrder,
+  type P1POQueueCustomer,
   type P2Customer,
   type InsertP2Customer,
   type P2PurchaseOrder,
@@ -280,6 +281,8 @@ import {
   or,
   ilike,
   isNull,
+  isNotNull,
+  not,
   sql,
   ne,
   like,
@@ -814,6 +817,7 @@ export interface IStorage {
     data: Partial<InsertPurchaseOrder>
   ): Promise<PurchaseOrder>;
   deletePurchaseOrder(id: number): Promise<void>;
+  getOpenP1PurchaseOrders(): Promise<P1POQueueCustomer[]>;
 
   // P2 Customers CRUD
   getAllP2Customers(): Promise<P2Customer[]>;
@@ -5582,6 +5586,77 @@ export class DatabaseStorage implements IStorage {
     await db.delete(purchaseOrderItems).where(eq(purchaseOrderItems.poId, id));
     // Then delete the PO
     await db.delete(purchaseOrders).where(eq(purchaseOrders.id, id));
+  }
+
+  async getOpenP1PurchaseOrders(): Promise<P1POQueueCustomer[]> {
+    // Get all open purchase orders with their items
+    const openPOs = await db
+      .select()
+      .from(purchaseOrders)
+      .where(eq(purchaseOrders.status, 'OPEN'))
+      .orderBy(asc(purchaseOrders.customerName), asc(purchaseOrders.poNumber));
+
+    // Group by customer
+    const customerMap = new Map<string, P1POQueueCustomer>();
+
+    for (const po of openPOs) {
+      const customerId = po.customerId?.toString() || po.customerName;
+      
+      let customer = customerMap.get(customerId);
+      if (!customer) {
+        customer = {
+          customerId,
+          customerName: po.customerName,
+          purchaseOrders: [],
+        };
+        customerMap.set(customerId, customer);
+      }
+
+      // Get items for this PO
+      const items = await db
+        .select()
+        .from(purchaseOrderItems)
+        .where(eq(purchaseOrderItems.poId, po.id))
+        .orderBy(purchaseOrderItems.createdAt);
+
+      const poItems: P1POQueueItem[] = items.map((item) => {
+        // Parse specifications JSON
+        const specs = item.specifications as any || {};
+        
+        return {
+          id: item.id,
+          poNumber: po.poNumber,
+          productName: item.itemName || '',
+          stockModel: specs.stockModel || null,
+          actionLength: specs.actionLength || null,
+          material: specs.material || null,
+          handedness: specs.handedness || null,
+          actionInlet: specs.actionInlet || null,
+          bottomMetal: specs.bottomMetal || null,
+          barrelInlet: specs.barrelInlet || null,
+          qds: specs.qds || null,
+          swivelStuds: specs.swivelStuds || null,
+          paintOptions: specs.paintOptions || null,
+          texture: specs.texture || null,
+          flatTop: specs.flatTop || null,
+          quantity: item.quantity,
+          status: item.stockStatus || 'pending',
+          notes: item.notes || item.productionNotes || null,
+          dueDate: item.dueDate?.toString() || null,
+          linkedOrderId: null,
+        };
+      });
+
+      customer.purchaseOrders.push({
+        poNumber: po.poNumber,
+        poDate: po.poDate?.toString() || null,
+        expectedDelivery: po.expectedDelivery?.toString() || null,
+        totalItems: poItems.reduce((sum, item) => sum + item.quantity, 0),
+        items: poItems,
+      });
+    }
+
+    return Array.from(customerMap.values());
   }
 
   // Purchase Order Items CRUD

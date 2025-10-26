@@ -49,7 +49,6 @@ import P2PurchaseOrders from './pages/P2PurchaseOrders';
 import POProductsPage from './pages/POProductsPage';
 import ProductionTracking from './pages/ProductionTracking';
 import BarcodeScannerPage from './pages/BarcodeScannerPage';
-import LayupSchedulerPage from './pages/LayupSchedulerPage';
 import P2LayupSchedulerPage from './pages/P2LayupSchedulerPage';
 import AllOrdersPage from './pages/AllOrdersPage';
 import OrderReports from './pages/OrderReports';
@@ -107,8 +106,6 @@ import NonconformanceDashboard from './components/NonconformanceDashboard';
 import NonconformanceReport from './components/NonconformanceReport';
 import RFQRiskAssessment from './pages/RFQRiskAssessment';
 import ProductionQueueManager from './components/ProductionQueueManager';
-import P1POQueuePage from './pages/P1POQueuePage';
-import WeeklyLayupScheduler from './pages/WeeklyLayupScheduler';
 import EnhancedLayupSchedulerPage from './pages/EnhancedLayupSchedulerPage';
 import WorkDayAwareScheduler from './components/WorkDayAwareScheduler';
 import PurchaseReviewChecklist from './pages/PurchaseReviewChecklist';
@@ -582,10 +579,6 @@ function App() {
 
                   {/* Queue Management Routes */}
                   <Route
-                    path="/layup-scheduler"
-                    component={LayupSchedulerPage}
-                  />
-                  <Route
                     path="/enhanced-layup-scheduler"
                     component={EnhancedLayupSchedulerPage}
                   />
@@ -604,14 +597,6 @@ function App() {
                   <Route
                     path="/production-queue"
                     component={ProductionQueueManager}
-                  />
-                  <Route
-                    path="/p1-po-queue"
-                    component={P1POQueuePage}
-                  />
-                  <Route
-                    path="/weekly-layup-scheduler"
-                    component={WeeklyLayupScheduler}
                   />
 
                   {/* Nonconformance Tracking Routes */}

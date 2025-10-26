@@ -54,8 +54,10 @@ import {
   Zap,
   ShoppingCart,
   ChevronDown,
+  CalendarCheck,
 } from 'lucide-react';
 import type { P1POQueueCustomer } from '@shared/schema';
+import { LayupSchedulePreview } from './LayupSchedulePreview';
 
 interface ProductionQueueOrder {
   orderId: string;
@@ -125,6 +127,15 @@ export default function ProductionQueueManager() {
   const [selectedPOItems, setSelectedPOItems] = useState<Map<string, Set<number>>>(
     new Map()
   );
+
+  // State for layup schedule preview modal
+  const [schedulePreviewOpen, setSchedulePreviewOpen] = useState(false);
+  const [generatedSchedule, setGeneratedSchedule] = useState<{
+    scheduledItems: any[];
+    overflowItems: any[];
+    weekStart: string;
+    totalItems: number;
+  } | null>(null);
 
   // Fetch prioritized production queue
   const {
@@ -236,6 +247,101 @@ export default function ProductionQueueManager() {
       toast({
         title: 'Error',
         description: error.message || 'Failed to progress orders',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Generate layup schedule mutation
+  const generateScheduleMutation = useMutation({
+    mutationFn: async () => {
+      // Prepare selected P1 PO items
+      const selectedPOItemsArray: any[] = [];
+      p1PurchaseOrders.forEach((customer) => {
+        customer.purchaseOrders.forEach((po) => {
+          const selectedItems = selectedPOItems.get(po.poNumber);
+          if (selectedItems) {
+            po.items.forEach((item) => {
+              if (selectedItems.has(item.id)) {
+                selectedPOItemsArray.push({
+                  poNumber: po.poNumber,
+                  itemId: item.id,
+                  stockModel: item.specifications?.model || '',
+                  quantity: item.remainingQuantity,
+                });
+              }
+            });
+          }
+        });
+      });
+
+      return apiRequest('/api/layup-schedule/generate', {
+        method: 'POST',
+        body: {
+          selectedOrderIds: Array.from(selectedQueueOrders),
+          selectedPOItems: selectedPOItemsArray,
+        },
+      });
+    },
+    onSuccess: (result: any) => {
+      setGeneratedSchedule({
+        scheduledItems: result.scheduledItems || [],
+        overflowItems: result.overflowItems || [],
+        weekStart: result.weekStart || '',
+        totalItems: result.totalItems || 0,
+      });
+      setSchedulePreviewOpen(true);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Schedule Generation Failed',
+        description: error.message || 'Failed to generate layup schedule',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Approve schedule mutation
+  const approveScheduleMutation = useMutation({
+    mutationFn: async () => {
+      if (!generatedSchedule) return;
+
+      const entries = generatedSchedule.scheduledItems.map((item) => ({
+        orderId: item.orderId,
+        scheduledDate: item.scheduledDate,
+        moldId: item.moldId,
+        employeeAssignments: [],
+      }));
+
+      return apiRequest('/api/layup-schedule/save', {
+        method: 'POST',
+        body: {
+          entries,
+          workDays: [1, 2, 3, 4, 5],
+          weekStart: generatedSchedule.weekStart,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Schedule Approved',
+        description: `Successfully scheduled ${generatedSchedule?.scheduledItems.length} items`,
+      });
+      
+      // Clear selections
+      setSelectedQueueOrders(new Set());
+      setSelectedPOItems(new Map());
+      setSchedulePreviewOpen(false);
+      setGeneratedSchedule(null);
+      
+      // Refresh queues
+      queryClient.invalidateQueries({ queryKey: ['/api/production-queue/prioritized'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p1-po-queue/purchase-orders/open'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Schedule Approval Failed',
+        description: error.message || 'Failed to save layup schedule',
         variant: 'destructive',
       });
     },
@@ -431,6 +537,50 @@ export default function ProductionQueueManager() {
           </Button>
         </div>
       </div>
+
+      {/* Schedule Selected Items Button */}
+      {(selectedQueueOrders.size > 0 || Array.from(selectedPOItems.values()).some(set => set.size > 0)) && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-blue-900">
+                {(() => {
+                  const regularCount = selectedQueueOrders.size;
+                  const poCount = Array.from(selectedPOItems.values()).reduce((sum, set) => sum + set.size, 0);
+                  const total = regularCount + poCount;
+                  return `${total} Item${total !== 1 ? 's' : ''} Selected`;
+                })()}
+              </h3>
+              <p className="text-sm text-blue-700">
+                {selectedQueueOrders.size} from Regular Queue, {' '}
+                {Array.from(selectedPOItems.values()).reduce((sum, set) => sum + set.size, 0)} from Purchase Orders
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedQueueOrders(new Set());
+                  setSelectedPOItems(new Map());
+                }}
+                data-testid="button-clear-all-selections"
+              >
+                Clear All
+              </Button>
+              <Button
+                onClick={() => generateScheduleMutation.mutate()}
+                disabled={generateScheduleMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
+                data-testid="button-generate-schedule"
+              >
+                <CalendarCheck className="w-4 h-4" />
+                {generateScheduleMutation.isPending ? 'Generating...' : 'Generate Layup Schedule'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
@@ -1143,6 +1293,20 @@ export default function ProductionQueueManager() {
       </Accordion>
 
       {/* Week Selection Dialog removed - P1 PO functionality now managed via OEM Priority Settings */}
+
+      {/* Layup Schedule Preview Modal */}
+      {generatedSchedule && (
+        <LayupSchedulePreview
+          open={schedulePreviewOpen}
+          onClose={() => setSchedulePreviewOpen(false)}
+          scheduledItems={generatedSchedule.scheduledItems}
+          overflowItems={generatedSchedule.overflowItems}
+          weekStart={generatedSchedule.weekStart}
+          totalItems={generatedSchedule.totalItems}
+          onApprove={() => approveScheduleMutation.mutate()}
+          isApproving={approveScheduleMutation.isPending}
+        />
+      )}
     </div>
   );
 }

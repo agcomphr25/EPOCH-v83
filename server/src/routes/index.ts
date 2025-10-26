@@ -2871,11 +2871,11 @@ export function registerRoutes(app: Express): Server {
       // Get all items for this purchase order
       const poItems = await storage.getPurchaseOrderItems(poId);
       const stockModelItems = poItems.filter(
-        (item) => item.itemId && item.itemId.trim()
+        (item) => item.itemId && item.itemId.trim() && item.itemType === 'stock_model'
       );
 
       console.log(
-        `🏭 Found ${stockModelItems.length} stock model items to convert to production orders`
+        `🏭 Found ${stockModelItems.length} stock model items to convert to production orders (filtered out ${poItems.length - stockModelItems.length} non-stock items)`
       );
 
       const createdOrders = [];

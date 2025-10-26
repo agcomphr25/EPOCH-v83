@@ -5612,11 +5612,16 @@ export class DatabaseStorage implements IStorage {
         customerMap.set(customerId, customer);
       }
 
-      // Get items for this PO
+      // Get items for this PO - only stock models
       const items = await db
         .select()
         .from(purchaseOrderItems)
-        .where(eq(purchaseOrderItems.poId, po.id))
+        .where(
+          and(
+            eq(purchaseOrderItems.poId, po.id),
+            eq(purchaseOrderItems.itemType, 'stock_model')
+          )
+        )
         .orderBy(purchaseOrderItems.createdAt);
 
       const poItems: P1POQueueItem[] = items.map((item) => {

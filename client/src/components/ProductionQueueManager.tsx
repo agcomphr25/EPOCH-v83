@@ -47,7 +47,9 @@ import {
   Package,
   ArrowRight,
   Zap,
+  ShoppingCart,
 } from 'lucide-react';
+import type { P1POQueueCustomer } from '@shared/schema';
 
 interface ProductionQueueOrder {
   orderId: string;
@@ -110,6 +112,9 @@ export default function ProductionQueueManager() {
     new Set()
   );
 
+  // State for P1 Purchase Orders filter
+  const [selectedPOFilter, setSelectedPOFilter] = useState<string>('all');
+
   // Fetch prioritized production queue
   const {
     data: productionQueue = [],
@@ -118,6 +123,16 @@ export default function ProductionQueueManager() {
   } = useQuery<ProductionQueueOrder[]>({
     queryKey: ['/api/production-queue/prioritized'],
     queryFn: () => apiRequest('/api/production-queue/prioritized'),
+  });
+
+  // Fetch open P1 Purchase Orders
+  const {
+    data: p1PurchaseOrders = [],
+    isLoading: isLoadingPOs,
+    refetch: refetchPOs,
+  } = useQuery<P1POQueueCustomer[]>({
+    queryKey: ['/api/p1-po-queue/purchase-orders/open'],
+    queryFn: () => apiRequest('/api/p1-po-queue/purchase-orders/open'),
   });
 
   // P1 Purchase Order items query removed - now managed via OEM Priority Settings
@@ -279,7 +294,42 @@ export default function ProductionQueueManager() {
     updatePrioritiesMutation.mutate(updatedOrders);
   };
 
-  if (isLoading || isLoadingAttention) {
+  // Calculate total items needing layup
+  const totalPOItemsNeedingLayup = p1PurchaseOrders.reduce(
+    (total, customer) =>
+      total +
+      customer.purchaseOrders.reduce(
+        (customerTotal, po) =>
+          customerTotal +
+          po.items.reduce(
+            (poTotal, item) => poTotal + item.remainingQuantity,
+            0
+          ),
+        0
+      ),
+    0
+  );
+
+  // Filter purchase orders by selected PO
+  const filteredPurchaseOrders = selectedPOFilter === 'all'
+    ? p1PurchaseOrders
+    : p1PurchaseOrders.map((customer) => ({
+        ...customer,
+        purchaseOrders: customer.purchaseOrders.filter(
+          (po) => po.poNumber === selectedPOFilter
+        ),
+      })).filter((customer) => customer.purchaseOrders.length > 0);
+
+  // Get all unique PO numbers for dropdown
+  const allPONumbers = Array.from(
+    new Set(
+      p1PurchaseOrders.flatMap((customer) =>
+        customer.purchaseOrders.map((po) => po.poNumber)
+      )
+    )
+  ).sort();
+
+  if (isLoading || isLoadingAttention || isLoadingPOs) {
     return (
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
         <Card>
@@ -304,10 +354,14 @@ export default function ProductionQueueManager() {
         </div>
         <div className="flex items-center gap-3">
           <Button
-            onClick={() => refetch()}
+            onClick={() => {
+              refetch();
+              refetchPOs();
+            }}
             variant="outline"
-            disabled={isLoading}
+            disabled={isLoading || isLoadingPOs}
             className="flex items-center gap-2"
+            data-testid="button-refresh"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
@@ -500,6 +554,167 @@ export default function ProductionQueueManager() {
                         ))}
                     </TableBody>
                   </Table>
+                )}
+              </CardContent>
+            </AccordionContent>
+          </Card>
+        </AccordionItem>
+
+        {/* P1 Purchase Orders Queue */}
+        <AccordionItem value="purchase-orders">
+          <Card>
+            <AccordionTrigger 
+              className="px-6 py-4 hover:no-underline"
+              data-testid="accordion-purchase-orders"
+            >
+              <CardHeader className="p-0">
+                <CardTitle className="flex items-center gap-2">
+                  <ShoppingCart className="w-5 h-5 text-blue-600" />
+                  P1 Purchase Orders ({totalPOItemsNeedingLayup} items need layup)
+                </CardTitle>
+                <p className="text-sm text-gray-500 text-left">
+                  Open purchase orders with stock items that need to be laid up
+                </p>
+              </CardHeader>
+            </AccordionTrigger>
+            <AccordionContent>
+              <CardContent>
+                {p1PurchaseOrders.length > 0 && (
+                  <div className="mb-4">
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Filter by PO Number:
+                    </label>
+                    <Select
+                      value={selectedPOFilter}
+                      onValueChange={setSelectedPOFilter}
+                    >
+                      <SelectTrigger className="w-64" data-testid="select-po-filter">
+                        <SelectValue placeholder="All Purchase Orders" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Purchase Orders</SelectItem>
+                        {allPONumbers.map((poNumber) => (
+                          <SelectItem key={poNumber} value={poNumber}>
+                            {poNumber}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {filteredPurchaseOrders.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <ShoppingCart className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p>No open purchase orders requiring layup</p>
+                    <p className="text-sm">All PO items have been fulfilled</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {filteredPurchaseOrders.map((customer) => (
+                      <div
+                        key={customer.customerId}
+                        className="border rounded-lg p-4 bg-gray-50"
+                        data-testid={`customer-section-${customer.customerId}`}
+                      >
+                        <div className="flex items-center gap-2 mb-4">
+                          <User className="w-5 h-5 text-gray-600" />
+                          <h3 
+                            className="text-lg font-semibold text-gray-900"
+                            data-testid={`text-customer-name-${customer.customerId}`}
+                          >
+                            {customer.customerName}
+                          </h3>
+                          <Badge 
+                            variant="outline" 
+                            className="ml-2"
+                            data-testid={`badge-customer-id-${customer.customerId}`}
+                          >
+                            {customer.customerId}
+                          </Badge>
+                        </div>
+
+                        {customer.purchaseOrders.map((po) => (
+                          <div
+                            key={po.poId}
+                            className="mb-4 last:mb-0 bg-white rounded-md p-4 shadow-sm"
+                            data-testid={`po-section-${po.poNumber}`}
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <Badge 
+                                  className="bg-blue-600 text-white font-medium"
+                                  data-testid={`badge-po-number-${po.poNumber}`}
+                                >
+                                  PO: {po.poNumber}
+                                </Badge>
+                                <span 
+                                  className="text-sm text-gray-500"
+                                  data-testid={`text-due-date-${po.poNumber}`}
+                                >
+                                  Due: {new Date(po.expectedDelivery).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <Badge 
+                                variant="outline"
+                                data-testid={`badge-items-remaining-${po.poNumber}`}
+                              >
+                                {po.items.reduce(
+                                  (sum, item) => sum + item.remainingQuantity,
+                                  0
+                                )}{' '}
+                                items to layup
+                              </Badge>
+                            </div>
+
+                            <Table data-testid={`table-po-items-${po.poNumber}`}>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Item Name</TableHead>
+                                  <TableHead>Item ID</TableHead>
+                                  <TableHead>Type</TableHead>
+                                  <TableHead>Ordered</TableHead>
+                                  <TableHead>Fulfilled</TableHead>
+                                  <TableHead>Remaining</TableHead>
+                                  <TableHead>Notes</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {po.items.map((item) => (
+                                  <TableRow
+                                    key={item.id}
+                                    data-testid={`row-po-item-${item.id}`}
+                                  >
+                                    <TableCell className="font-medium">
+                                      {item.itemName}
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge variant="outline">{item.itemId}</Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge variant="secondary">
+                                        {item.itemType.replace('_', ' ')}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell>{item.quantityOrdered}</TableCell>
+                                    <TableCell>{item.quantityFulfilled}</TableCell>
+                                    <TableCell>
+                                      <Badge className="bg-orange-500 text-white">
+                                        {item.remainingQuantity}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-sm text-gray-600">
+                                      {item.notes || '-'}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </CardContent>
             </AccordionContent>

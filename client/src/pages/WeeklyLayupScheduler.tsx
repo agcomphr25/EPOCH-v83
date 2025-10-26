@@ -35,14 +35,16 @@ interface Order {
   orderId: string;
   fbOrderNumber: string;
   customerName: string;
-  stockModel: string;
-  material: string;
-  actionLength: string;
-  shankLength: string;
-  lop: number;
-  adl: string;
-  heavyFill: boolean;
+  stockModelId: string;
+  modelId: string;
   dueDate: string;
+  features?: {
+    action_length?: string;
+    lop?: number;
+    adl?: string;
+    heavy_fill?: boolean;
+    [key: string]: any;
+  };
 }
 
 interface POProduct {

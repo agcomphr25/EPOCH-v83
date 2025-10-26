@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import {
   Accordion,
   AccordionContent,
@@ -123,8 +124,8 @@ export default function ProductionQueueManager() {
   // State for P1 Purchase Orders filter
   const [selectedPOFilter, setSelectedPOFilter] = useState<string>('all');
 
-  // State for P1 Purchase Order item selection (Map of PO number to Set of item IDs)
-  const [selectedPOItems, setSelectedPOItems] = useState<Map<string, Set<number>>>(
+  // State for P1 Purchase Order item selection (Map of PO number to Map of item ID to selected quantity)
+  const [selectedPOItems, setSelectedPOItems] = useState<Map<string, Map<number, number>>>(
     new Map()
   );
 
@@ -255,19 +256,20 @@ export default function ProductionQueueManager() {
   // Generate layup schedule mutation
   const generateScheduleMutation = useMutation({
     mutationFn: async () => {
-      // Prepare selected P1 PO items
+      // Prepare selected P1 PO items with their selected quantities
       const selectedPOItemsArray: any[] = [];
       p1PurchaseOrders.forEach((customer) => {
         customer.purchaseOrders.forEach((po) => {
           const selectedItems = selectedPOItems.get(po.poNumber);
           if (selectedItems) {
             po.items.forEach((item) => {
-              if (selectedItems.has(item.id)) {
+              const selectedQuantity = selectedItems.get(item.id);
+              if (selectedQuantity && selectedQuantity > 0) {
                 selectedPOItemsArray.push({
                   poNumber: po.poNumber,
                   itemId: item.id,
-                  stockModel: item.specifications?.model || '',
-                  quantity: item.remainingQuantity,
+                  stockModel: item.stockModel || '',
+                  quantity: selectedQuantity, // Use selected quantity instead of remaining
                 });
               }
             });
@@ -373,23 +375,25 @@ export default function ProductionQueueManager() {
     progressToBarcodeMutation.mutate(Array.from(selectedQueueOrders));
   };
 
-  // Handlers for P1 PO item selection
-  const handleTogglePOItem = (poNumber: string, itemId: number) => {
+  // Handlers for P1 PO item selection with quantity support
+  const handlePOItemQuantityChange = (poNumber: string, itemId: number, quantity: number, maxQuantity: number) => {
+    const validQuantity = Math.max(0, Math.min(quantity, maxQuantity));
+    
     setSelectedPOItems((prev) => {
       const newMap = new Map(prev);
-      const itemSet = newMap.get(poNumber) || new Set();
-      const newItemSet = new Set(itemSet);
+      const itemMap = newMap.get(poNumber) || new Map();
+      const newItemMap = new Map(itemMap);
       
-      if (newItemSet.has(itemId)) {
-        newItemSet.delete(itemId);
+      if (validQuantity === 0) {
+        newItemMap.delete(itemId);
       } else {
-        newItemSet.add(itemId);
+        newItemMap.set(itemId, validQuantity);
       }
       
-      if (newItemSet.size === 0) {
+      if (newItemMap.size === 0) {
         newMap.delete(poNumber);
       } else {
-        newMap.set(poNumber, newItemSet);
+        newMap.set(poNumber, newItemMap);
       }
       
       return newMap;
@@ -399,13 +403,19 @@ export default function ProductionQueueManager() {
   const handleSelectAllPOItems = (poNumber: string, items: any[]) => {
     setSelectedPOItems((prev) => {
       const newMap = new Map(prev);
-      const itemSet = newMap.get(poNumber) || new Set();
-      const allSelected = items.every((item) => itemSet.has(item.id));
+      const itemMap = newMap.get(poNumber) || new Map();
+      const allSelected = items.every((item) => itemMap.get(item.id) === item.quantity);
       
       if (allSelected) {
+        // Deselect all
         newMap.delete(poNumber);
       } else {
-        newMap.set(poNumber, new Set(items.map((item) => item.id)));
+        // Select all with their full quantities
+        const newItemMap = new Map();
+        items.forEach((item) => {
+          newItemMap.set(item.id, item.quantity);
+        });
+        newMap.set(poNumber, newItemMap);
       }
       
       return newMap;
@@ -539,21 +549,25 @@ export default function ProductionQueueManager() {
       </div>
 
       {/* Schedule Selected Items Button */}
-      {(selectedQueueOrders.size > 0 || Array.from(selectedPOItems.values()).some(set => set.size > 0)) && (
+      {(selectedQueueOrders.size > 0 || Array.from(selectedPOItems.values()).some(map => map.size > 0)) && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-semibold text-blue-900">
                 {(() => {
                   const regularCount = selectedQueueOrders.size;
-                  const poCount = Array.from(selectedPOItems.values()).reduce((sum, set) => sum + set.size, 0);
+                  const poCount = Array.from(selectedPOItems.values()).reduce((sum, map) => {
+                    return sum + Array.from(map.values()).reduce((qtySum, qty) => qtySum + qty, 0);
+                  }, 0);
                   const total = regularCount + poCount;
                   return `${total} Item${total !== 1 ? 's' : ''} Selected`;
                 })()}
               </h3>
               <p className="text-sm text-blue-700">
                 {selectedQueueOrders.size} from Regular Queue, {' '}
-                {Array.from(selectedPOItems.values()).reduce((sum, set) => sum + set.size, 0)} from Purchase Orders
+                {Array.from(selectedPOItems.values()).reduce((sum, map) => {
+                  return sum + Array.from(map.values()).reduce((qtySum, qty) => qtySum + qty, 0);
+                }, 0)} from Purchase Orders
               </p>
             </div>
             <div className="flex gap-2">
@@ -787,7 +801,7 @@ export default function ProductionQueueManager() {
                 {/* Action bar for selected items */}
                 {(() => {
                   const totalSelected = Array.from(selectedPOItems.values()).reduce(
-                    (sum, set) => sum + set.size,
+                    (sum, map) => sum + Array.from(map.values()).reduce((qtySum, qty) => qtySum + qty, 0),
                     0
                   );
                   return totalSelected > 0 ? (
@@ -921,7 +935,7 @@ export default function ProductionQueueManager() {
                                   checked={
                                     po.items.length > 0 &&
                                     po.items.every((item) => 
-                                      (selectedPOItems.get(po.poNumber) || new Set()).has(item.id)
+                                      (selectedPOItems.get(po.poNumber) || new Map()).get(item.id) === item.quantity
                                     )
                                   }
                                   onCheckedChange={() => handleSelectAllPOItems(po.poNumber, po.items)}
@@ -932,41 +946,80 @@ export default function ProductionQueueManager() {
                                   className="text-sm font-medium text-gray-700 cursor-pointer"
                                 >
                                   Select All Items
-                                  {(selectedPOItems.get(po.poNumber)?.size || 0) > 0 && (
-                                    <span className="ml-2 text-blue-600">
-                                      ({selectedPOItems.get(po.poNumber)?.size || 0} selected)
-                                    </span>
-                                  )}
+                                  {(() => {
+                                    const itemMap = selectedPOItems.get(po.poNumber);
+                                    const totalQty = itemMap ? Array.from(itemMap.values()).reduce((sum, qty) => sum + qty, 0) : 0;
+                                    return totalQty > 0 ? (
+                                      <span className="ml-2 text-blue-600">
+                                        ({totalQty} unit{totalQty !== 1 ? 's' : ''} selected)
+                                      </span>
+                                    ) : null;
+                                  })()}
                                 </label>
                               </div>
 
                               <Table data-testid={`table-po-items-${po.poNumber}`}>
                                 <TableHeader>
                                   <TableRow>
-                                    <TableHead className="w-12">Select</TableHead>
+                                    <TableHead className="w-40">Quantity to Schedule</TableHead>
                                     <TableHead>Product Name</TableHead>
                                     <TableHead>Stock Model</TableHead>
                                     <TableHead>Action Length</TableHead>
                                     <TableHead>Material</TableHead>
                                     <TableHead>Handedness</TableHead>
-                                    <TableHead>Qty</TableHead>
+                                    <TableHead>Available Qty</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Notes</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {po.items.map((item) => (
-                                    <TableRow
-                                      key={item.id}
-                                      data-testid={`row-po-item-${item.id}`}
-                                    >
-                                      <TableCell>
-                                        <Checkbox
-                                          checked={(selectedPOItems.get(po.poNumber) || new Set()).has(item.id)}
-                                          onCheckedChange={() => handleTogglePOItem(po.poNumber, item.id)}
-                                          data-testid={`checkbox-po-item-${item.id}`}
-                                        />
-                                      </TableCell>
+                                  {po.items.map((item) => {
+                                    const selectedQty = (selectedPOItems.get(po.poNumber) || new Map()).get(item.id) || 0;
+                                    return (
+                                      <TableRow
+                                        key={item.id}
+                                        data-testid={`row-po-item-${item.id}`}
+                                        className={selectedQty > 0 ? 'bg-blue-50' : ''}
+                                      >
+                                        <TableCell>
+                                          <div className="flex items-center gap-2">
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-8 w-8 p-0"
+                                              onClick={() => handlePOItemQuantityChange(po.poNumber, item.id, selectedQty - 1, item.quantity)}
+                                              disabled={selectedQty === 0}
+                                              data-testid={`button-decrement-${item.id}`}
+                                            >
+                                              -
+                                            </Button>
+                                            <Input
+                                              type="number"
+                                              min="0"
+                                              max={item.quantity}
+                                              value={selectedQty}
+                                              onChange={(e) => {
+                                                const val = parseInt(e.target.value) || 0;
+                                                handlePOItemQuantityChange(po.poNumber, item.id, val, item.quantity);
+                                              }}
+                                              className="w-16 h-8 text-center"
+                                              data-testid={`input-quantity-${item.id}`}
+                                            />
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-8 w-8 p-0"
+                                              onClick={() => handlePOItemQuantityChange(po.poNumber, item.id, selectedQty + 1, item.quantity)}
+                                              disabled={selectedQty >= item.quantity}
+                                              data-testid={`button-increment-${item.id}`}
+                                            >
+                                              +
+                                            </Button>
+                                            <span className="text-xs text-gray-500 ml-1">
+                                              of {item.quantity}
+                                            </span>
+                                          </div>
+                                        </TableCell>
                                       <TableCell className="font-medium">
                                         {item.productName}
                                       </TableCell>
@@ -1004,7 +1057,8 @@ export default function ProductionQueueManager() {
                                         {item.notes || '-'}
                                       </TableCell>
                                     </TableRow>
-                                  ))}
+                                    )
+                                  })}
                                 </TableBody>
                               </Table>
                             </CollapsibleContent>

@@ -173,6 +173,33 @@ export default function WeeklyLayupScheduler() {
     );
   };
 
+  // Get molds used on a specific day
+  const getMoldsUsedOnDay = (dayOfWeek: string) => {
+    const dayAssignments = weeklySchedule.filter((a: any) => a.dayOfWeek === dayOfWeek);
+    const usedMoldIds = new Set<string>();
+    
+    dayAssignments.forEach((assignment: any) => {
+      const details = assignment.orderDetails || assignment.poProductDetails;
+      if (details?.stockModel) {
+        const availableMolds = getAvailableMolds(details.stockModel);
+        const moldsToUse = Math.min(assignment.moldCount || 1, availableMolds.length);
+        availableMolds.slice(0, moldsToUse).forEach((mold: any) => {
+          usedMoldIds.add(mold.moldId);
+        });
+      }
+    });
+    
+    return usedMoldIds;
+  };
+
+  // Get available molds for a specific day
+  const getAvailableMoldsForDay = (dayOfWeek: string) => {
+    const usedMoldIds = getMoldsUsedOnDay(dayOfWeek);
+    return allMolds.filter((mold: any) => 
+      mold.enabled && !usedMoldIds.has(mold.moldId)
+    );
+  };
+
   // Toggle selection handlers
   const toggleOrderSelection = (orderId: string) => {
     setSelectedOrders(prev => {
@@ -438,16 +465,19 @@ export default function WeeklyLayupScheduler() {
                             <div className="text-sm space-y-1.5">
                               <div className="font-semibold text-base">{order.stockModel}</div>
                               <div className="font-medium text-sm text-gray-700 dark:text-gray-300">{order.material}</div>
-                              <div className="text-xs text-gray-500">{order.customerName}</div>
-                              {order.lop > 0 && (
-                                <div className="text-xs"><span className="text-gray-600">LOP:</span> {order.lop}"</div>
-                              )}
-                              {order.adl && order.adl !== 'N/A' && (
-                                <div className="text-xs"><span className="text-gray-600">ADL:</span> {order.adl}</div>
-                              )}
-                              {order.heavyFill && (
-                                <Badge variant="destructive" className="text-xs mt-1">Heavy Fill</Badge>
-                              )}
+                              <div className="font-medium text-sm text-gray-700 dark:text-gray-300">Action: {order.actionLength}</div>
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {order.adl && order.adl !== 'N/A' && (
+                                  <Badge variant="default" className="text-xs">ADL: {order.adl}</Badge>
+                                )}
+                                {order.lop > 0 && (
+                                  <Badge variant="secondary" className="text-xs">LOP: {order.lop}"</Badge>
+                                )}
+                                {order.heavyFill && (
+                                  <Badge variant="destructive" className="text-xs">Heavy Fill</Badge>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-400 mt-1">{order.customerName}</div>
                               {availableMolds.length > 0 && (
                                 <div className="mt-2 pt-2 border-t">
                                   <div className="text-xs text-gray-600 mb-1">Molds:</div>
@@ -501,8 +531,9 @@ export default function WeeklyLayupScheduler() {
                             <div className="text-sm space-y-1.5">
                               <div className="font-semibold text-base">{po.stockModel}</div>
                               <div className="font-medium text-sm text-gray-700 dark:text-gray-300">{po.material}</div>
-                              <div className="text-xs text-gray-500">{po.customerName}</div>
-                              <div className="text-xs">Qty: {po.quantity}</div>
+                              <div className="font-medium text-sm text-gray-700 dark:text-gray-300">Action: {po.actionLength}</div>
+                              <div className="text-xs text-gray-500">Qty: {po.quantity}</div>
+                              <div className="text-xs text-gray-400 mt-1">{po.customerName}</div>
                               {availableMolds.length > 0 && (
                                 <div className="mt-2 pt-2 border-t">
                                   <div className="text-xs text-gray-600 mb-1">Molds:</div>
@@ -571,7 +602,26 @@ export default function WeeklyLayupScheduler() {
                   </div>
                 </CardHeader>
                 <CardContent className="p-2">
-                  <div className="space-y-2 max-h-[calc(100vh-350px)] overflow-y-auto">
+                  <Accordion type="single" collapsible className="mb-2">
+                    <AccordionItem value="available-molds" className="border-0">
+                      <AccordionTrigger className="py-2 text-xs font-medium text-gray-600 dark:text-gray-400 hover:no-underline">
+                        Available Molds ({getAvailableMoldsForDay(daySchedule.dayOfWeek).length})
+                      </AccordionTrigger>
+                      <AccordionContent className="pb-2">
+                        <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+                          {getAvailableMoldsForDay(daySchedule.dayOfWeek).map((mold: any) => (
+                            <Badge key={mold.id} variant="outline" className="text-xs">
+                              {mold.moldId}
+                            </Badge>
+                          ))}
+                          {getAvailableMoldsForDay(daySchedule.dayOfWeek).length === 0 && (
+                            <span className="text-xs text-gray-400">All molds in use</span>
+                          )}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                  <div className="space-y-2 max-h-[calc(100vh-450px)] overflow-y-auto">
                     {daySchedule.assignments.map((assignment: any) => {
                       const details = assignment.orderDetails || assignment.poProductDetails;
                       const availableMolds = details?.stockModel ? getAvailableMolds(details.stockModel) : [];

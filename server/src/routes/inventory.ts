@@ -221,11 +221,19 @@ function parseCostValue(value: string): number | null {
   // Remove dollar signs and whitespace
   const cleaned = value.replace(/[$\s]/g, '');
 
-  // Handle formats like "27/20" - take the first number
+  // Handle fractional formats like "27/20" - evaluate as division
   if (cleaned.includes('/')) {
     const parts = cleaned.split('/');
-    const num = parseFloat(parts[0]);
-    return !isNaN(num) ? num : null;
+    if (parts.length !== 2) return null;
+
+    const numerator = parseFloat(parts[0]);
+    const denominator = parseFloat(parts[1]);
+
+    if (isNaN(numerator) || isNaN(denominator) || denominator === 0) {
+      return null;
+    }
+
+    return numerator / denominator;
   }
 
   const num = parseFloat(cleaned);

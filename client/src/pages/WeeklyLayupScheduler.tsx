@@ -31,7 +31,6 @@ import { format, startOfWeek, addDays } from 'date-fns';
 import PrintableWeeklySchedule from '@/components/PrintableWeeklySchedule';
 
 interface Order {
-  id: number;
   orderId: string;
   fbOrderNumber: string;
   customerName: string;
@@ -51,12 +50,20 @@ interface POProduct {
   id: number;
   customerName: string;
   productName: string;
-  poNumber: string;
   stockModel: string;
   material: string;
   actionLength: string;
-  dueDate: string;
   quantity: number;
+  poNumber?: string;
+  dueDate?: string;
+}
+
+interface POGroup {
+  customer: string;
+  poNumber: string;
+  items: POProduct[];
+  totalQuantity: number;
+  earliestDueDate?: string;
 }
 
 interface DaySchedule {
@@ -96,21 +103,46 @@ export default function WeeklyLayupScheduler() {
   });
 
   // Fetch P1 PO products (grouped by customer/PO)
-  const { data: poProductGroups = [], isLoading: isLoadingPO } = useQuery<any[]>({
+  const { data: poProductGroups = [], isLoading: isLoadingPO } = useQuery<POGroup[]>({
     queryKey: ['/api/p1-po-queue'],
   });
 
-  // Flatten and sort PO products by customer, then PO number
-  const poProducts: POProduct[] = useMemo(() => {
-    const flattened = poProductGroups.flatMap(group => group.items || []);
-    return flattened.sort((a, b) => {
-      // First sort by customer name
-      const customerCompare = (a.customerName || '').localeCompare(b.customerName || '');
-      if (customerCompare !== 0) return customerCompare;
-      // Then sort by PO number
-      return (a.poNumber || '').localeCompare(b.poNumber || '');
-    });
-  }, [poProductGroups]);
+  // Helper function to format material type display
+  const formatMaterialType = (modelId: string, stockModelId: string, actionLength?: string) => {
+    const parts: string[] = [];
+    
+    // Material prefix
+    if (modelId.startsWith('cf_') || stockModelId.includes('cf_')) {
+      parts.push('CF');
+    } else if (modelId.startsWith('ag_') || stockModelId.includes('ag_')) {
+      parts.push('AG');
+    }
+    
+    // Action length
+    if (actionLength === 'short') {
+      parts.push('SA');
+    } else if (actionLength === 'long') {
+      parts.push('LA');
+    }
+    
+    // Check for adjustable in model name
+    if (modelId.includes('adj') || stockModelId.includes('adj')) {
+      parts.push('Adj.');
+    }
+    
+    // Extract model name
+    const modelName = stockModelId
+      .replace(/^(cf_|ag_)/, '')
+      .replace(/_adj/, '')
+      .replace(/_/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+    
+    parts.push(modelName);
+    
+    return parts.join(' ');
+  };
 
   // Fetch weekly schedule
   const { data: weeklySchedule = [], isLoading: isLoadingSchedule } = useQuery<any[]>({
@@ -153,20 +185,20 @@ export default function WeeklyLayupScheduler() {
         order.orderId.toLowerCase().includes(query) ||
         order.fbOrderNumber?.toLowerCase().includes(query) ||
         order.customerName?.toLowerCase().includes(query) ||
-        order.stockModel?.toLowerCase().includes(query)
+        order.stockModelId?.toLowerCase().includes(query)
     );
   }, [regularOrders, searchQuery]);
 
-  const filteredPOProducts = useMemo(() => {
-    if (!searchQuery.trim()) return poProducts;
+  const filteredPOGroups = useMemo(() => {
+    if (!searchQuery.trim()) return poProductGroups;
     const query = searchQuery.toLowerCase();
-    return poProducts.filter(
-      (po: POProduct) =>
-        po.customerName.toLowerCase().includes(query) ||
-        po.poNumber?.toLowerCase().includes(query) ||
-        po.productName.toLowerCase().includes(query)
+    return poProductGroups.filter(
+      (group: POGroup) =>
+        group.customer.toLowerCase().includes(query) ||
+        group.poNumber?.toLowerCase().includes(query) ||
+        group.items.some(item => item.productName.toLowerCase().includes(query))
     );
-  }, [poProducts, searchQuery]);
+  }, [poProductGroups, searchQuery]);
 
   // Get available molds for a stock model
   const getAvailableMolds = (stockModel: string) => {
@@ -446,55 +478,40 @@ export default function WeeklyLayupScheduler() {
                     </AccordionTrigger>
                     <AccordionContent className="px-4 pb-4">
                       {filteredOrders.slice(0, 100).map((order: Order) => {
-                        const availableMolds = getAvailableMolds(order.stockModel);
+                        const materialType = formatMaterialType(order.modelId, order.stockModelId, order.features?.action_length);
                         return (
                           <div
                             key={order.orderId}
                             onClick={() => toggleOrderSelection(order.orderId)}
-                            className={`p-3 mb-2 rounded border cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                            className={`p-3 mb-2 rounded border cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
                               selectedOrders.has(order.orderId)
                                 ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500'
-                                : ''
+                                : 'border-gray-200 dark:border-gray-700'
                             }`}
                             data-testid={`order-${order.orderId}`}
                           >
                             <div className="flex justify-between items-start mb-2">
-                              <div className="font-medium text-base">{order.orderId}</div>
+                              <div className="font-bold text-lg">{order.orderId}</div>
                               {order.dueDate && (
                                 <div className="text-xs text-gray-500">Due: {format(new Date(order.dueDate), 'MMM dd')}</div>
                               )}
                             </div>
-                            <div className="text-sm space-y-1.5">
-                              <div className="font-semibold text-base">{order.stockModel}</div>
-                              <div className="font-medium text-sm text-gray-700 dark:text-gray-300">{order.material}</div>
-                              <div className="font-medium text-sm text-gray-700 dark:text-gray-300">Action: {order.actionLength}</div>
+                            <div className="space-y-1.5">
+                              <div className="font-semibold text-base text-gray-900 dark:text-gray-100">
+                                {materialType}
+                              </div>
                               <div className="flex flex-wrap gap-1 mt-2">
-                                {order.adl && order.adl !== 'N/A' && (
-                                  <Badge variant="default" className="text-xs">ADL: {order.adl}</Badge>
+                                {order.features?.adl && order.features.adl !== 'N/A' && (
+                                  <Badge variant="default" className="text-xs">ADL: {order.features.adl}</Badge>
                                 )}
-                                {order.lop > 0 && (
-                                  <Badge variant="secondary" className="text-xs">LOP: {order.lop}"</Badge>
+                                {order.features?.lop && order.features.lop > 0 && (
+                                  <Badge variant="secondary" className="text-xs">LOP: {order.features.lop}"</Badge>
                                 )}
-                                {order.heavyFill && (
+                                {order.features?.heavy_fill && (
                                   <Badge variant="destructive" className="text-xs">Heavy Fill</Badge>
                                 )}
                               </div>
                               <div className="text-xs text-gray-400 mt-1">{order.customerName}</div>
-                              {availableMolds.length > 0 && (
-                                <div className="mt-2 pt-2 border-t">
-                                  <div className="text-xs text-gray-600 mb-1">Molds:</div>
-                                  <div className="flex flex-wrap gap-1">
-                                    {availableMolds.slice(0, 4).map((mold: any) => (
-                                      <Badge key={mold.id} variant="outline" className="text-xs">
-                                        {mold.moldId}
-                                      </Badge>
-                                    ))}
-                                    {availableMolds.length > 4 && (
-                                      <span className="text-xs text-gray-500">+{availableMolds.length - 4}</span>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
                             </div>
                           </div>
                         );
@@ -506,55 +523,80 @@ export default function WeeklyLayupScheduler() {
                   <AccordionItem value="po">
                     <AccordionTrigger className="px-4 py-2 hover:no-underline">
                       <div className="flex justify-between w-full pr-4">
-                        <span className="font-medium">P1 PO Items</span>
-                        <Badge variant="secondary">{filteredPOProducts.length}</Badge>
+                        <span className="font-medium">P1 PO Orders</span>
+                        <Badge variant="secondary">{filteredPOGroups.length}</Badge>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4">
-                      {filteredPOProducts.slice(0, 100).map((po: POProduct) => {
-                        const availableMolds = getAvailableMolds(po.stockModel);
-                        return (
-                          <div
-                            key={po.id}
-                            onClick={() => togglePOProductSelection(po.id)}
-                            className={`p-3 mb-2 rounded border cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 ${
-                              selectedPOProducts.has(po.id)
-                                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500'
-                                : ''
-                            }`}
-                            data-testid={`po-${po.id}`}
-                          >
-                            <div className="flex justify-between items-start mb-2">
-                              <div className="font-medium text-base">PO: {po.poNumber}</div>
-                              {po.dueDate && (
-                                <div className="text-xs text-gray-500">Due: {format(new Date(po.dueDate), 'MMM dd')}</div>
-                              )}
-                            </div>
-                            <div className="text-sm space-y-1.5">
-                              <div className="font-semibold text-base">{po.stockModel}</div>
-                              <div className="font-medium text-sm text-gray-700 dark:text-gray-300">{po.material}</div>
-                              <div className="font-medium text-sm text-gray-700 dark:text-gray-300">Action: {po.actionLength}</div>
-                              <div className="text-xs text-gray-500">Qty: {po.quantity}</div>
-                              <div className="text-xs text-gray-400 mt-1">{po.customerName}</div>
-                              {availableMolds.length > 0 && (
-                                <div className="mt-2 pt-2 border-t">
-                                  <div className="text-xs text-gray-600 mb-1">Molds:</div>
-                                  <div className="flex flex-wrap gap-1">
-                                    {availableMolds.slice(0, 4).map((mold: any) => (
-                                      <Badge key={mold.id} variant="outline" className="text-xs">
-                                        {mold.moldId}
-                                      </Badge>
-                                    ))}
-                                    {availableMolds.length > 4 && (
-                                      <span className="text-xs text-gray-500">+{availableMolds.length - 4}</span>
-                                    )}
+                    <AccordionContent className="px-4 pb-4 space-y-2">
+                      {filteredPOGroups.slice(0, 100).map((group: POGroup) => (
+                        <div key={`${group.customer}-${group.poNumber}`} className="border rounded">
+                          <Accordion type="single" collapsible>
+                            <AccordionItem value={`${group.customer}-${group.poNumber}`} className="border-0">
+                              <AccordionTrigger className="px-3 py-2 hover:no-underline">
+                                <div className="flex justify-between w-full pr-4 text-left">
+                                  <div>
+                                    <div className="font-semibold text-base">{group.customer}</div>
+                                    <div className="text-xs text-gray-500">
+                                      {group.poNumber !== 'NO_PO' ? `PO: ${group.poNumber}` : 'No PO'} • {group.totalQuantity} item{group.totalQuantity !== 1 ? 's' : ''}
+                                    </div>
                                   </div>
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                              </AccordionTrigger>
+                              <AccordionContent className="px-3 pb-2 space-y-2">
+                                {/* Select All PO Button */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="w-full text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const allSelected = group.items.every(item => selectedPOProducts.has(item.id));
+                                    setSelectedPOProducts(prev => {
+                                      const newSet = new Set(prev);
+                                      if (allSelected) {
+                                        group.items.forEach(item => newSet.delete(item.id));
+                                      } else {
+                                        group.items.forEach(item => newSet.add(item.id));
+                                      }
+                                      return newSet;
+                                    });
+                                  }}
+                                  data-testid={`button-select-all-${group.customer}-${group.poNumber}`}
+                                >
+                                  {group.items.every(item => selectedPOProducts.has(item.id)) ? 'Deselect' : 'Select'} All PO
+                                </Button>
+                                
+                                {/* Individual Items */}
+                                {group.items.map((item: POProduct) => {
+                                  const materialDisplay = `${item.material === 'carbon_fiber' ? 'CF' : 'AG'} ${item.actionLength === 'long' ? 'LA' : 'SA'} ${item.stockModel.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}`;
+                                  return (
+                                    <div
+                                      key={item.id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        togglePOProductSelection(item.id);
+                                      }}
+                                      className={`p-2 rounded border cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
+                                        selectedPOProducts.has(item.id)
+                                          ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500'
+                                          : 'border-gray-200 dark:border-gray-700'
+                                      }`}
+                                      data-testid={`po-item-${item.id}`}
+                                    >
+                                      <div className="flex justify-between items-center">
+                                        <div className="flex-1">
+                                          <div className="font-medium text-sm">{materialDisplay}</div>
+                                          <div className="text-xs text-gray-500">Qty: {item.quantity}</div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
+                        </div>
+                      ))}
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>

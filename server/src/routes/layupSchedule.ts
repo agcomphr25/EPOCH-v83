@@ -70,19 +70,25 @@ router.post('/generate', async (req: Request, res: Response) => {
       regularOrders.push(...(ordersResult.rows || []));
     }
     
-    // Prepare PO items for scheduling
-    const poItems = selectedPOItems.map(item => ({
-      orderId: `PO-${item.poNumber}-${item.itemId}`,
-      fbOrderNumber: item.poNumber,
-      stockModel: item.stockModel,
-      customerId: null,
-      customerName: 'Purchase Order',
-      dueDate: null,
-      quantity: item.quantity,
-    }));
+    // Prepare PO items for scheduling - expand by quantity
+    const poItems: any[] = [];
+    selectedPOItems.forEach(item => {
+      // Create separate schedule entries for each unit in the quantity
+      for (let i = 0; i < item.quantity; i++) {
+        poItems.push({
+          orderId: `PO-${item.poNumber}-${item.itemId}-${i + 1}`,
+          fbOrderNumber: item.poNumber,
+          stockModel: item.stockModel,
+          customerId: null,
+          customerName: 'Purchase Order',
+          dueDate: null,
+          quantity: 1, // Each entry represents 1 unit
+        });
+      }
+    });
     
     const allItems = [...regularOrders, ...poItems];
-    console.log(`📦 Prepared ${allItems.length} items for scheduling`);
+    console.log(`📦 Prepared ${allItems.length} items for scheduling (${regularOrders.length} regular + ${poItems.length} PO units)`);
     
     // Calculate start date (next Monday)
     const today = new Date();

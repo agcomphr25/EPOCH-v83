@@ -661,13 +661,6 @@ export default function Navigation() {
 
   const productionSchedulingItems = [
     {
-      path: '/p1-po-queue',
-      label: 'P1 Purchase Order Queue',
-      icon: Package,
-      description:
-        'Manage P1 PO items, track molds, and schedule production',
-    },
-    {
       path: '/layup-scheduler',
       label: 'P1 Layup Scheduler (Legacy)',
       icon: Calendar,

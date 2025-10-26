@@ -207,31 +207,15 @@ export default function WeeklyLayupScheduler() {
     );
   };
 
-  // Get molds used on a specific day
-  const getMoldsUsedOnDay = (dayOfWeek: string) => {
-    const dayAssignments = weeklySchedule.filter((a: any) => a.dayOfWeek === dayOfWeek);
-    const usedMoldIds = new Set<string>();
-    
-    dayAssignments.forEach((assignment: any) => {
-      const details = assignment.orderDetails || assignment.poProductDetails;
-      if (details?.stockModel) {
-        const availableMolds = getAvailableMolds(details.stockModel);
-        const moldsToUse = Math.min(assignment.moldCount || 1, availableMolds.length);
-        availableMolds.slice(0, moldsToUse).forEach((mold: any) => {
-          usedMoldIds.add(mold.moldId);
-        });
-      }
-    });
-    
-    return usedMoldIds;
-  };
-
-  // Get available molds for a specific day
+  // Get available molds count for a specific day
   const getAvailableMoldsForDay = (dayOfWeek: string) => {
-    const usedMoldIds = getMoldsUsedOnDay(dayOfWeek);
-    return allMolds.filter((mold: any) => 
-      mold.enabled && !usedMoldIds.has(mold.moldId)
-    );
+    const dayAssignments = weeklySchedule.filter((a: any) => a.dayOfWeek === dayOfWeek);
+    const totalMoldsUsed = dayAssignments.reduce((sum: number, a: any) => sum + (a.moldCount || 0), 0);
+    const totalCapacity = moldAvailability?.totalCapacity || 74;
+    const availableCount = totalCapacity - totalMoldsUsed;
+    
+    // Return the first N available molds where N = available count
+    return allMolds.filter((mold: any) => mold.enabled).slice(0, Math.max(0, availableCount));
   };
 
   // Toggle selection handlers

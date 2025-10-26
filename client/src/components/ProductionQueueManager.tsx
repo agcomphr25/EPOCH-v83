@@ -625,6 +625,48 @@ export default function ProductionQueueManager() {
             </AccordionTrigger>
             <AccordionContent>
               <CardContent>
+                {/* Action bar for selected items */}
+                {(() => {
+                  const totalSelected = Array.from(selectedPOItems.values()).reduce(
+                    (sum, set) => sum + set.size,
+                    0
+                  );
+                  return totalSelected > 0 ? (
+                    <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-blue-600" />
+                        <span className="font-medium text-blue-900">
+                          {totalSelected} {totalSelected === 1 ? 'item' : 'items'} selected
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedPOItems(new Map())}
+                          data-testid="button-clear-selection"
+                        >
+                          Clear Selection
+                        </Button>
+                        <Button
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          size="sm"
+                          onClick={() => {
+                            toast({
+                              title: 'Action Pending',
+                              description: `Ready to process ${totalSelected} selected items`,
+                            });
+                          }}
+                          data-testid="button-process-selected"
+                        >
+                          <ArrowRight className="w-4 h-4 mr-2" />
+                          Process Selected Items
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
                 {p1PurchaseOrders.length > 0 && (
                   <div className="mb-4">
                     <label className="text-sm font-medium text-gray-700 mb-2 block">

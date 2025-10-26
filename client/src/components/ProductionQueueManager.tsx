@@ -121,6 +121,11 @@ export default function ProductionQueueManager() {
   // State for P1 Purchase Orders filter
   const [selectedPOFilter, setSelectedPOFilter] = useState<string>('all');
 
+  // State for P1 Purchase Order item selection (Map of PO number to Set of item IDs)
+  const [selectedPOItems, setSelectedPOItems] = useState<Map<string, Set<number>>>(
+    new Map()
+  );
+
   // Fetch prioritized production queue
   const {
     data: productionQueue = [],
@@ -260,6 +265,45 @@ export default function ProductionQueueManager() {
   const handleProgressSelectedToBarcode = () => {
     if (selectedQueueOrders.size === 0) return;
     progressToBarcodeMutation.mutate(Array.from(selectedQueueOrders));
+  };
+
+  // Handlers for P1 PO item selection
+  const handleTogglePOItem = (poNumber: string, itemId: number) => {
+    setSelectedPOItems((prev) => {
+      const newMap = new Map(prev);
+      const itemSet = newMap.get(poNumber) || new Set();
+      const newItemSet = new Set(itemSet);
+      
+      if (newItemSet.has(itemId)) {
+        newItemSet.delete(itemId);
+      } else {
+        newItemSet.add(itemId);
+      }
+      
+      if (newItemSet.size === 0) {
+        newMap.delete(poNumber);
+      } else {
+        newMap.set(poNumber, newItemSet);
+      }
+      
+      return newMap;
+    });
+  };
+
+  const handleSelectAllPOItems = (poNumber: string, items: any[]) => {
+    setSelectedPOItems((prev) => {
+      const newMap = new Map(prev);
+      const itemSet = newMap.get(poNumber) || new Set();
+      const allSelected = items.every((item) => itemSet.has(item.id));
+      
+      if (allSelected) {
+        newMap.delete(poNumber);
+      } else {
+        newMap.set(poNumber, new Set(items.map((item) => item.id)));
+      }
+      
+      return newMap;
+    });
   };
 
   const getUrgencyBadgeColor = (urgencyLevel: string) => {
@@ -669,9 +713,36 @@ export default function ProductionQueueManager() {
                             </CollapsibleTrigger>
                             
                             <CollapsibleContent className="p-4 pt-0">
+                              {/* Select All Checkbox */}
+                              <div className="mb-3 flex items-center gap-2">
+                                <Checkbox
+                                  id={`select-all-${po.poNumber}`}
+                                  checked={
+                                    po.items.length > 0 &&
+                                    po.items.every((item) => 
+                                      (selectedPOItems.get(po.poNumber) || new Set()).has(item.id)
+                                    )
+                                  }
+                                  onCheckedChange={() => handleSelectAllPOItems(po.poNumber, po.items)}
+                                  data-testid={`checkbox-select-all-${po.poNumber}`}
+                                />
+                                <label
+                                  htmlFor={`select-all-${po.poNumber}`}
+                                  className="text-sm font-medium text-gray-700 cursor-pointer"
+                                >
+                                  Select All Items
+                                  {(selectedPOItems.get(po.poNumber)?.size || 0) > 0 && (
+                                    <span className="ml-2 text-blue-600">
+                                      ({selectedPOItems.get(po.poNumber)?.size || 0} selected)
+                                    </span>
+                                  )}
+                                </label>
+                              </div>
+
                               <Table data-testid={`table-po-items-${po.poNumber}`}>
                                 <TableHeader>
                                   <TableRow>
+                                    <TableHead className="w-12">Select</TableHead>
                                     <TableHead>Product Name</TableHead>
                                     <TableHead>Stock Model</TableHead>
                                     <TableHead>Action Length</TableHead>
@@ -688,6 +759,13 @@ export default function ProductionQueueManager() {
                                       key={item.id}
                                       data-testid={`row-po-item-${item.id}`}
                                     >
+                                      <TableCell>
+                                        <Checkbox
+                                          checked={(selectedPOItems.get(po.poNumber) || new Set()).has(item.id)}
+                                          onCheckedChange={() => handleTogglePOItem(po.poNumber, item.id)}
+                                          data-testid={`checkbox-po-item-${item.id}`}
+                                        />
+                                      </TableCell>
                                       <TableCell className="font-medium">
                                         {item.productName}
                                       </TableCell>

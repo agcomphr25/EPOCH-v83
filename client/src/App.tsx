@@ -49,7 +49,6 @@ import P2PurchaseOrders from './pages/P2PurchaseOrders';
 import POProductsPage from './pages/POProductsPage';
 import ProductionTracking from './pages/ProductionTracking';
 import BarcodeScannerPage from './pages/BarcodeScannerPage';
-import LayupSchedulerPage from './pages/LayupSchedulerPage';
 import P2LayupSchedulerPage from './pages/P2LayupSchedulerPage';
 import AllOrdersPage from './pages/AllOrdersPage';
 import OrderReports from './pages/OrderReports';
@@ -579,10 +578,6 @@ function App() {
                   <Route path="/calendar" component={Calendar} />
 
                   {/* Queue Management Routes */}
-                  <Route
-                    path="/layup-scheduler"
-                    component={LayupSchedulerPage}
-                  />
                   <Route
                     path="/enhanced-layup-scheduler"
                     component={EnhancedLayupSchedulerPage}

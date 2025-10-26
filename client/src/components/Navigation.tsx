@@ -661,13 +661,6 @@ export default function Navigation() {
 
   const productionSchedulingItems = [
     {
-      path: '/layup-scheduler',
-      label: 'P1 Layup Scheduler (Legacy)',
-      icon: Calendar,
-      description:
-        'Schedule and manage layup production orders with drag-and-drop interface',
-    },
-    {
       path: '/p2-layup-scheduler',
       label: 'P2 Layup Scheduler',
       icon: Calendar,

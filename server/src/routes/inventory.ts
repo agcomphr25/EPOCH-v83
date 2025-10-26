@@ -262,17 +262,22 @@ function parseUtilizedColumn(value: string): {
 router.post('/enhanced/inventory/import/csv', async (req: Request, res: Response) => {
   try {
     const { csvData } = req.body;
+    console.log('📥 CSV Import started');
 
     if (!csvData) {
+      console.log('❌ No CSV data provided');
       return res.status(400).json({ error: 'CSV data is required' });
     }
 
     const lines = csvData.split('\n').filter((line: string) => line.trim());
+    console.log(`📄 CSV has ${lines.length} lines`);
+    
     if (lines.length === 0) {
       return res.status(400).json({ error: 'CSV file is empty' });
     }
 
     const headers = parseCSVLine(lines[0]);
+    console.log('📋 CSV Headers:', headers);
     const rows = lines.slice(1);
 
     let importedCount = 0;
@@ -387,13 +392,20 @@ router.post('/enhanced/inventory/import/csv', async (req: Request, res: Response
       }
     }
 
-    res.json({
+    console.log(`✅ Import complete: ${importedCount} items imported, ${errors.length} errors`);
+    if (errors.length > 0) {
+      console.log('⚠️ Import errors:', errors.slice(0, 5));
+    }
+
+    const response = {
       success: true,
       importedCount,
       errors: errors.length > 0 ? errors : undefined,
-    });
+    };
+    console.log('📤 Sending response:', response);
+    res.json(response);
   } catch (error) {
-    console.error('CSV import error:', error);
+    console.error('❌ CSV import error:', error);
     res.status(500).json({ error: 'Failed to import CSV' });
   }
 });

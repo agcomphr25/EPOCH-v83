@@ -108,7 +108,6 @@ import NonconformanceReport from './components/NonconformanceReport';
 import RFQRiskAssessment from './pages/RFQRiskAssessment';
 import ProductionQueueManager from './components/ProductionQueueManager';
 import P1POQueuePage from './pages/P1POQueuePage';
-import WeeklyLayupScheduler from './pages/WeeklyLayupScheduler';
 import EnhancedLayupSchedulerPage from './pages/EnhancedLayupSchedulerPage';
 import WorkDayAwareScheduler from './components/WorkDayAwareScheduler';
 import PurchaseReviewChecklist from './pages/PurchaseReviewChecklist';
@@ -608,10 +607,6 @@ function App() {
                   <Route
                     path="/p1-po-queue"
                     component={P1POQueuePage}
-                  />
-                  <Route
-                    path="/weekly-layup-scheduler"
-                    component={WeeklyLayupScheduler}
                   />
 
                   {/* Nonconformance Tracking Routes */}

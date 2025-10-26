@@ -661,13 +661,6 @@ export default function Navigation() {
 
   const productionSchedulingItems = [
     {
-      path: '/weekly-layup-scheduler',
-      label: 'Weekly Layup Scheduler',
-      icon: Calendar,
-      description:
-        'Plan and schedule weekly layup production for P1 PO and regular orders',
-    },
-    {
       path: '/p1-po-queue',
       label: 'P1 Purchase Order Queue',
       icon: Package,

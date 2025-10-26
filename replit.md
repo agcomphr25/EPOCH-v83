@@ -14,6 +14,7 @@ Default shipping charge: Should be 36.95 for new orders.
 Critical requirement: All completed functionality must be hard-coded to prevent loss of features and data.
 Search standardization: All department queue pages use unified OrderSearchBox component with "Search orders by Order ID or FishBowl Number..." placeholder for consistent user experience.
 Navigation dropdown behavior: All navbar dropdown menus close automatically after selection.
+Balance due access: Customer balance due tracking is restricted to username "glennj" only for security. Balance Due column appears in Customer Management only when glennj is logged in.
 
 ## System Architecture
 The application utilizes a monorepo structure with a full-stack TypeScript approach, emphasizing type safety and cross-platform deployment.
@@ -36,6 +37,7 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 -   **Linked Orders Management**: Functionality to link multiple orders for combined processing/shipping, including an approval code system for unlinking.
 -   **Urgency/Priority System**: Implemented for manually flagged urgent orders with visual badges, production queue sorting, and dedicated dashboard metrics.
 -   **Rush Fee System**: Redesigned to adjust due dates for "Expedite" and "Rush" orders, with corresponding visual badges and notifications.
+-   **P1 Purchase Orders Queue**: Production Queue Manager displays open purchase orders with stock items needing layup, grouped by customer with PO filtering and granular quantity selection. Items with stock model "no stock" are automatically excluded from both the display and layup scheduler.
 
 ### Technical Implementations
 -   **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

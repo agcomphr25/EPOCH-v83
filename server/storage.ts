@@ -5589,69 +5589,70 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOpenP1PurchaseOrders(): Promise<P1POQueueCustomer[]> {
-    // Get all PO products that are pending or in-progress (not completed)
-    const poProductsData = await db
+    // Get all open purchase orders with their items
+    const openPOs = await db
       .select()
-      .from(poProducts)
-      .where(
-        and(
-          isNotNull(poProducts.poNumber),
-          not(eq(poProducts.status, 'completed'))
-        )
-      )
-      .orderBy(asc(poProducts.customerName), asc(poProducts.poNumber));
+      .from(purchaseOrders)
+      .where(eq(purchaseOrders.status, 'OPEN'))
+      .orderBy(asc(purchaseOrders.customerName), asc(purchaseOrders.poNumber));
 
-    // Group by customer and PO
+    // Group by customer
     const customerMap = new Map<string, P1POQueueCustomer>();
 
-    for (const product of poProductsData) {
-      // Use customerName as customerId if no separate ID exists
-      const customerId = product.customerName;
+    for (const po of openPOs) {
+      const customerId = po.customerId?.toString() || po.customerName;
       
       let customer = customerMap.get(customerId);
       if (!customer) {
         customer = {
           customerId,
-          customerName: product.customerName,
+          customerName: po.customerName,
           purchaseOrders: [],
         };
         customerMap.set(customerId, customer);
       }
 
-      let po = customer.purchaseOrders.find((p) => p.poNumber === product.poNumber);
-      if (!po) {
-        po = {
-          poNumber: product.poNumber!,
-          poDate: product.dueDate?.toString() || null,
-          expectedDelivery: product.dueDate?.toString() || null,
-          totalItems: 0,
-          items: [],
-        };
-        customer.purchaseOrders.push(po);
-      }
+      // Get items for this PO
+      const items = await db
+        .select()
+        .from(purchaseOrderItems)
+        .where(eq(purchaseOrderItems.poId, po.id))
+        .orderBy(purchaseOrderItems.createdAt);
 
-      po.totalItems += product.quantity;
-      po.items.push({
-        id: product.id,
-        poNumber: product.poNumber!,
-        productName: product.productName,
-        stockModel: product.stockModel,
-        actionLength: product.actionLength,
-        material: product.material,
-        handedness: product.handedness,
-        actionInlet: product.actionInlet,
-        bottomMetal: product.bottomMetal,
-        barrelInlet: product.barrelInlet,
-        qds: product.qds,
-        swivelStuds: product.swivelStuds,
-        paintOptions: product.paintOptions,
-        texture: product.texture,
-        flatTop: product.flatTop,
-        quantity: product.quantity,
-        status: product.status,
-        notes: product.notes,
-        dueDate: product.dueDate?.toString() || null,
-        linkedOrderId: product.linkedOrderId,
+      const poItems: P1POQueueItem[] = items.map((item) => {
+        // Parse specifications JSON
+        const specs = item.specifications as any || {};
+        
+        return {
+          id: item.id,
+          poNumber: po.poNumber,
+          productName: item.itemName || '',
+          stockModel: specs.stockModel || null,
+          actionLength: specs.actionLength || null,
+          material: specs.material || null,
+          handedness: specs.handedness || null,
+          actionInlet: specs.actionInlet || null,
+          bottomMetal: specs.bottomMetal || null,
+          barrelInlet: specs.barrelInlet || null,
+          qds: specs.qds || null,
+          swivelStuds: specs.swivelStuds || null,
+          paintOptions: specs.paintOptions || null,
+          texture: specs.texture || null,
+          flatTop: specs.flatTop || null,
+          quantity: item.quantity,
+          status: item.stockStatus || 'pending',
+          notes: item.notes || item.productionNotes || null,
+          dueDate: item.dueDate?.toString() || null,
+          linkedOrderId: null,
+        };
+      });
+
+      customer.purchaseOrders.push({
+        poNumber: po.poNumber,
+        poDate: po.poDate?.toString() || null,
+        expectedDelivery: po.expectedDelivery?.toString() || null,
+        totalItems: poItems.reduce((sum, item) => sum + item.quantity, 0),
+        items: poItems,
       });
     }
 

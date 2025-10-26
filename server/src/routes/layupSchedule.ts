@@ -1,8 +1,216 @@
 import { Router, Request, Response } from 'express';
 
 import { pool } from '../../db';
+import { format, addDays, startOfWeek, getDay } from 'date-fns';
 
 const router = Router();
+
+interface GenerateScheduleRequest {
+  selectedOrderIds: string[]; // Regular production queue order IDs
+  selectedPOItems: {
+    poNumber: string;
+    itemId: number;
+    stockModel: string;
+    quantity: number;
+  }[];
+}
+
+// Generate layup schedule preview based on selected items
+router.post('/generate', async (req: Request, res: Response) => {
+  try {
+    console.log('🔄 GENERATE SCHEDULE: Starting schedule generation...');
+    
+    const { selectedOrderIds = [], selectedPOItems = [] }: GenerateScheduleRequest = req.body;
+    
+    const totalItems = selectedOrderIds.length + selectedPOItems.length;
+    console.log(`📊 Total items to schedule: ${totalItems} (${selectedOrderIds.length} regular orders, ${selectedPOItems.length} PO items)`);
+    
+    if (totalItems === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No items selected for scheduling',
+      });
+    }
+    
+    // Fetch molds with their capacities
+    const moldsResult = await pool.query(`
+      SELECT 
+        mold_id as "moldId",
+        model_name as "modelName",
+        stock_models as "stockModels",
+        multiplier as "capacity",
+        enabled,
+        is_active as "isActive"
+      FROM molds
+      WHERE enabled = true AND is_active = true
+      ORDER BY mold_id
+    `);
+    
+    const molds = moldsResult.rows || [];
+    console.log(`🏭 Found ${molds.length} active molds`);
+    
+    // Fetch regular orders details
+    const regularOrders = [];
+    if (selectedOrderIds.length > 0) {
+      const ordersResult = await pool.query(
+        `
+        SELECT 
+          pq.order_id as "orderId",
+          pq.fb_order_number as "fbOrderNumber",
+          pq.model_id as "stockModel",
+          pq.customer_id as "customerId",
+          c.customer_name as "customerName",
+          pq.due_date as "dueDate"
+        FROM production_queue pq
+        LEFT JOIN customers c ON pq.customer_id = c.id::text
+        WHERE pq.order_id = ANY($1)
+        `,
+        [selectedOrderIds]
+      );
+      regularOrders.push(...(ordersResult.rows || []));
+    }
+    
+    // Prepare PO items for scheduling
+    const poItems = selectedPOItems.map(item => ({
+      orderId: `PO-${item.poNumber}-${item.itemId}`,
+      fbOrderNumber: item.poNumber,
+      stockModel: item.stockModel,
+      customerId: null,
+      customerName: 'Purchase Order',
+      dueDate: null,
+      quantity: item.quantity,
+    }));
+    
+    const allItems = [...regularOrders, ...poItems];
+    console.log(`📦 Prepared ${allItems.length} items for scheduling`);
+    
+    // Calculate start date (next Monday)
+    const today = new Date();
+    const nextMonday = startOfWeek(addDays(today, 7), { weekStartsOn: 1 });
+    
+    // Initialize schedule by day (Monday = 1, Thursday = 4, Friday = 5)
+    const workDays = [1, 2, 3, 4]; // Monday through Thursday
+    const scheduledItems: any[] = [];
+    const overflowItems: any[] = [];
+    
+    // Track capacity usage per mold per day
+    const moldDayCapacity: { [key: string]: { [day: number]: number } } = {};
+    molds.forEach(mold => {
+      moldDayCapacity[mold.moldId] = {};
+      workDays.forEach(day => {
+        moldDayCapacity[mold.moldId][day] = 0;
+      });
+    });
+    
+    // Try to schedule each item
+    for (const item of allItems) {
+      let scheduled = false;
+      
+      // Find compatible molds for this stock model
+      const compatibleMolds = molds.filter(mold => 
+        mold.stockModels && mold.stockModels.includes(item.stockModel)
+      );
+      
+      if (compatibleMolds.length === 0) {
+        console.log(`⚠️ No compatible molds for ${item.orderId} (${item.stockModel})`);
+        overflowItems.push({
+          ...item,
+          reason: `No compatible molds for stock model: ${item.stockModel}`,
+        });
+        continue;
+      }
+      
+      // Try to find a slot (Monday through Thursday first)
+      for (const day of workDays) {
+        if (scheduled) break;
+        
+        for (const mold of compatibleMolds) {
+          const currentUsage = moldDayCapacity[mold.moldId][day] || 0;
+          
+          if (currentUsage < mold.capacity) {
+            // Found available capacity!
+            const scheduledDate = addDays(nextMonday, day - 1);
+            
+            scheduledItems.push({
+              orderId: item.orderId,
+              fbOrderNumber: item.fbOrderNumber,
+              stockModel: item.stockModel,
+              customerName: item.customerName,
+              scheduledDate: format(scheduledDate, 'yyyy-MM-dd'),
+              moldId: mold.moldId,
+              dayOfWeek: day,
+              dayName: ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'][day],
+            });
+            
+            moldDayCapacity[mold.moldId][day] = currentUsage + 1;
+            scheduled = true;
+            console.log(`✅ Scheduled ${item.orderId} → ${mold.moldId} on ${['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][day]}`);
+            break;
+          }
+        }
+      }
+      
+      // If not scheduled on Mon-Thu, try Friday (day 5)
+      if (!scheduled) {
+        for (const mold of compatibleMolds) {
+          if (!moldDayCapacity[mold.moldId][5]) {
+            moldDayCapacity[mold.moldId][5] = 0;
+          }
+          
+          const currentUsage = moldDayCapacity[mold.moldId][5] || 0;
+          
+          if (currentUsage < mold.capacity) {
+            const scheduledDate = addDays(nextMonday, 4); // Friday
+            
+            scheduledItems.push({
+              orderId: item.orderId,
+              fbOrderNumber: item.fbOrderNumber,
+              stockModel: item.stockModel,
+              customerName: item.customerName,
+              scheduledDate: format(scheduledDate, 'yyyy-MM-dd'),
+              moldId: mold.moldId,
+              dayOfWeek: 5,
+              dayName: 'Friday',
+            });
+            
+            moldDayCapacity[mold.moldId][5] = currentUsage + 1;
+            scheduled = true;
+            console.log(`⚠️ Scheduled ${item.orderId} → ${mold.moldId} on Friday (overflow)`);
+            break;
+          }
+        }
+      }
+      
+      // If still not scheduled, add to overflow
+      if (!scheduled) {
+        console.log(`❌ Cannot schedule ${item.orderId} - no capacity available`);
+        overflowItems.push({
+          ...item,
+          reason: 'No available mold capacity in the scheduling window (Mon-Fri)',
+        });
+      }
+    }
+    
+    console.log(`✅ Generated schedule: ${scheduledItems.length} scheduled, ${overflowItems.length} overflow`);
+    
+    res.json({
+      success: true,
+      scheduledItems,
+      overflowItems,
+      weekStart: format(nextMonday, 'yyyy-MM-dd'),
+      totalItems: allItems.length,
+      scheduledCount: scheduledItems.length,
+      overflowCount: overflowItems.length,
+    });
+  } catch (error) {
+    console.error('❌ GENERATE SCHEDULE: Error generating schedule:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate layup schedule',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
 
 // Save layup schedule and move orders to Layup/Plugging department
 router.post('/save', async (req: Request, res: Response) => {

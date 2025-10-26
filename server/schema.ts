@@ -2964,29 +2964,38 @@ export type P2PurchaseOrderItem = typeof p2PurchaseOrderItems.$inferSelect;
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;
 export type ProductionOrder = typeof productionOrders.$inferSelect;
 
-// P1 Purchase Order Queue Types
+// P1 Purchase Order Queue Types (from po_products table)
 export interface P1POQueueItem {
   id: number;
-  poId: number;
   poNumber: string;
-  itemType: string;
-  itemId: string;
-  itemName: string;
-  quantityOrdered: number;
-  quantityFulfilled: number;
-  remainingQuantity: number;
-  specifications?: any;
-  notes?: string;
+  productName: string;
+  stockModel: string | null;
+  actionLength: string | null;
+  material: string | null;
+  handedness: string | null;
+  actionInlet: string | null;
+  bottomMetal: string | null;
+  barrelInlet: string | null;
+  qds: string | null;
+  swivelStuds: string | null;
+  paintOptions: string | null;
+  texture: string | null;
+  flatTop: boolean | null;
+  quantity: number;
+  status: string | null;
+  notes: string | null;
+  dueDate: string | null;
+  linkedOrderId: string | null;
 }
 
 export interface P1POQueueCustomer {
   customerId: string;
   customerName: string;
   purchaseOrders: {
-    poId: number;
     poNumber: string;
-    poDate: string;
-    expectedDelivery: string;
+    poDate: string | null;
+    expectedDelivery: string | null;
+    totalItems: number;
     items: P1POQueueItem[];
   }[];
 }

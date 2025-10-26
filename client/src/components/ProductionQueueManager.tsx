@@ -34,6 +34,11 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 import {
   RefreshCw,
@@ -48,6 +53,7 @@ import {
   ArrowRight,
   Zap,
   ShoppingCart,
+  ChevronDown,
 } from 'lucide-react';
 import type { P1POQueueCustomer } from '@shared/schema';
 
@@ -300,11 +306,7 @@ export default function ProductionQueueManager() {
       total +
       customer.purchaseOrders.reduce(
         (customerTotal, po) =>
-          customerTotal +
-          po.items.reduce(
-            (poTotal, item) => poTotal + item.remainingQuantity,
-            0
-          ),
+          customerTotal + po.totalItems,
         0
       ),
     0
@@ -635,82 +637,99 @@ export default function ProductionQueueManager() {
                         </div>
 
                         {customer.purchaseOrders.map((po) => (
-                          <div
-                            key={po.poId}
-                            className="mb-4 last:mb-0 bg-white rounded-md p-4 shadow-sm"
+                          <Collapsible
+                            key={po.poNumber}
+                            className="mb-4 last:mb-0 bg-white rounded-md shadow-sm"
                             data-testid={`po-section-${po.poNumber}`}
                           >
-                            <div className="flex items-center justify-between mb-3">
+                            <CollapsibleTrigger className="w-full p-4 hover:bg-gray-50 flex items-center justify-between">
                               <div className="flex items-center gap-2">
+                                <ChevronDown className="w-4 h-4 text-gray-500" />
                                 <Badge 
                                   className="bg-blue-600 text-white font-medium"
                                   data-testid={`badge-po-number-${po.poNumber}`}
                                 >
                                   PO: {po.poNumber}
                                 </Badge>
-                                <span 
-                                  className="text-sm text-gray-500"
-                                  data-testid={`text-due-date-${po.poNumber}`}
-                                >
-                                  Due: {new Date(po.expectedDelivery).toLocaleDateString()}
-                                </span>
+                                {po.expectedDelivery && (
+                                  <span 
+                                    className="text-sm text-gray-500"
+                                    data-testid={`text-due-date-${po.poNumber}`}
+                                  >
+                                    Due: {new Date(po.expectedDelivery).toLocaleDateString()}
+                                  </span>
+                                )}
                               </div>
                               <Badge 
                                 variant="outline"
-                                data-testid={`badge-items-remaining-${po.poNumber}`}
+                                data-testid={`badge-items-total-${po.poNumber}`}
                               >
-                                {po.items.reduce(
-                                  (sum, item) => sum + item.remainingQuantity,
-                                  0
-                                )}{' '}
-                                items to layup
+                                {po.totalItems} {po.totalItems === 1 ? 'item' : 'items'}
                               </Badge>
-                            </div>
-
-                            <Table data-testid={`table-po-items-${po.poNumber}`}>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Item Name</TableHead>
-                                  <TableHead>Item ID</TableHead>
-                                  <TableHead>Type</TableHead>
-                                  <TableHead>Ordered</TableHead>
-                                  <TableHead>Fulfilled</TableHead>
-                                  <TableHead>Remaining</TableHead>
-                                  <TableHead>Notes</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {po.items.map((item) => (
-                                  <TableRow
-                                    key={item.id}
-                                    data-testid={`row-po-item-${item.id}`}
-                                  >
-                                    <TableCell className="font-medium">
-                                      {item.itemName}
-                                    </TableCell>
-                                    <TableCell>
-                                      <Badge variant="outline">{item.itemId}</Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                      <Badge variant="secondary">
-                                        {item.itemType.replace('_', ' ')}
-                                      </Badge>
-                                    </TableCell>
-                                    <TableCell>{item.quantityOrdered}</TableCell>
-                                    <TableCell>{item.quantityFulfilled}</TableCell>
-                                    <TableCell>
-                                      <Badge className="bg-orange-500 text-white">
-                                        {item.remainingQuantity}
-                                      </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-sm text-gray-600">
-                                      {item.notes || '-'}
-                                    </TableCell>
+                            </CollapsibleTrigger>
+                            
+                            <CollapsibleContent className="p-4 pt-0">
+                              <Table data-testid={`table-po-items-${po.poNumber}`}>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Product Name</TableHead>
+                                    <TableHead>Stock Model</TableHead>
+                                    <TableHead>Action Length</TableHead>
+                                    <TableHead>Material</TableHead>
+                                    <TableHead>Handedness</TableHead>
+                                    <TableHead>Qty</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Notes</TableHead>
                                   </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
+                                </TableHeader>
+                                <TableBody>
+                                  {po.items.map((item) => (
+                                    <TableRow
+                                      key={item.id}
+                                      data-testid={`row-po-item-${item.id}`}
+                                    >
+                                      <TableCell className="font-medium">
+                                        {item.productName}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Badge variant="outline">
+                                          {item.stockModel || '-'}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-sm">
+                                        {item.actionLength || '-'}
+                                      </TableCell>
+                                      <TableCell className="text-sm">
+                                        {item.material || '-'}
+                                      </TableCell>
+                                      <TableCell className="text-sm">
+                                        {item.handedness || '-'}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Badge className="bg-orange-500 text-white">
+                                          {item.quantity}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell>
+                                        <Badge 
+                                          variant={
+                                            item.status === 'completed' ? 'default' :
+                                            item.status === 'pending' ? 'secondary' :
+                                            'outline'
+                                          }
+                                        >
+                                          {item.status || 'pending'}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-sm text-gray-600 max-w-xs truncate">
+                                        {item.notes || '-'}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </CollapsibleContent>
+                          </Collapsible>
                         ))}
                       </div>
                     ))}

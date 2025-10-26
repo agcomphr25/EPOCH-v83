@@ -281,6 +281,8 @@ import {
   or,
   ilike,
   isNull,
+  isNotNull,
+  not,
   sql,
   ne,
   like,
@@ -5587,72 +5589,69 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOpenP1PurchaseOrders(): Promise<P1POQueueCustomer[]> {
-    // Get all open purchase orders with their items
-    const openPOs = await db
-      .select({
-        poId: purchaseOrders.id,
-        poNumber: purchaseOrders.poNumber,
-        customerId: purchaseOrders.customerId,
-        customerName: purchaseOrders.customerName,
-        poDate: purchaseOrders.poDate,
-        expectedDelivery: purchaseOrders.expectedDelivery,
-        itemId: purchaseOrderItems.id,
-        itemType: purchaseOrderItems.itemType,
-        stockItemId: purchaseOrderItems.itemId,
-        itemName: purchaseOrderItems.itemName,
-        quantity: purchaseOrderItems.quantity,
-        orderCount: purchaseOrderItems.orderCount,
-        specifications: purchaseOrderItems.specifications,
-        notes: purchaseOrderItems.notes,
-      })
-      .from(purchaseOrders)
-      .innerJoin(purchaseOrderItems, eq(purchaseOrders.id, purchaseOrderItems.poId))
-      .where(eq(purchaseOrders.status, 'OPEN'))
-      .orderBy(asc(purchaseOrders.customerName), asc(purchaseOrders.poNumber));
+    // Get all PO products that are pending or in-progress (not completed)
+    const poProductsData = await db
+      .select()
+      .from(poProducts)
+      .where(
+        and(
+          isNotNull(poProducts.poNumber),
+          not(eq(poProducts.status, 'completed'))
+        )
+      )
+      .orderBy(asc(poProducts.customerName), asc(poProducts.poNumber));
 
     // Group by customer and PO
     const customerMap = new Map<string, P1POQueueCustomer>();
 
-    for (const row of openPOs) {
-      const remainingQty = row.quantity - (row.orderCount || 0);
+    for (const product of poProductsData) {
+      // Use customerName as customerId if no separate ID exists
+      const customerId = product.customerName;
       
-      // Only include items that still need to be laid up
-      if (remainingQty <= 0) continue;
-
-      let customer = customerMap.get(row.customerId);
+      let customer = customerMap.get(customerId);
       if (!customer) {
         customer = {
-          customerId: row.customerId,
-          customerName: row.customerName,
+          customerId,
+          customerName: product.customerName,
           purchaseOrders: [],
         };
-        customerMap.set(row.customerId, customer);
+        customerMap.set(customerId, customer);
       }
 
-      let po = customer.purchaseOrders.find((p) => p.poId === row.poId);
+      let po = customer.purchaseOrders.find((p) => p.poNumber === product.poNumber);
       if (!po) {
         po = {
-          poId: row.poId,
-          poNumber: row.poNumber,
-          poDate: row.poDate?.toString() || '',
-          expectedDelivery: row.expectedDelivery?.toString() || '',
+          poNumber: product.poNumber!,
+          poDate: product.dueDate?.toString() || null,
+          expectedDelivery: product.dueDate?.toString() || null,
+          totalItems: 0,
           items: [],
         };
         customer.purchaseOrders.push(po);
       }
 
+      po.totalItems += product.quantity;
       po.items.push({
-        id: row.itemId,
-        poId: row.poId,
-        poNumber: row.poNumber,
-        itemType: row.itemType,
-        itemId: row.stockItemId,
-        itemName: row.itemName,
-        quantityOrdered: row.quantity,
-        quantityFulfilled: row.orderCount || 0,
-        remainingQuantity: remainingQty,
-        specifications: row.specifications,
-        notes: row.notes || undefined,
+        id: product.id,
+        poNumber: product.poNumber!,
+        productName: product.productName,
+        stockModel: product.stockModel,
+        actionLength: product.actionLength,
+        material: product.material,
+        handedness: product.handedness,
+        actionInlet: product.actionInlet,
+        bottomMetal: product.bottomMetal,
+        barrelInlet: product.barrelInlet,
+        qds: product.qds,
+        swivelStuds: product.swivelStuds,
+        paintOptions: product.paintOptions,
+        texture: product.texture,
+        flatTop: product.flatTop,
+        quantity: product.quantity,
+        status: product.status,
+        notes: product.notes,
+        dueDate: product.dueDate?.toString() || null,
+        linkedOrderId: product.linkedOrderId,
       });
     }
 

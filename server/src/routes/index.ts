@@ -2035,20 +2035,39 @@ export function registerRoutes(app: Express): Server {
 
       // Update orders to move them to the next department (layup/plugging phase)
       const updatedOrders = [];
+      const skippedOrders = [];
       for (const orderId of orderIds) {
         // Update production orders status to LAID_UP
         const productionOrder =
           await storage.getProductionOrderByOrderId(orderId);
         if (productionOrder) {
-          const updated = await storage.updateProductionOrder(
-            productionOrder.id,
-            {
-              productionStatus: 'LAID_UP',
-              laidUpAt: new Date(),
+          // Check if this production order has a stock model
+          let hasStockModel = true;
+          if (productionOrder.poItemId && productionOrder.poId) {
+            const poItems = await storage.getPurchaseOrderItems(productionOrder.poId);
+            const poItem = poItems.find(item => item.id === productionOrder.poItemId);
+            if (poItem && poItem.itemType !== 'stock_model') {
+              hasStockModel = false;
+              console.log(`⚠️ Production order ${orderId} skipped - no stock model (itemType: ${poItem.itemType})`);
+              skippedOrders.push({
+                orderId,
+                reason: 'No stock model associated with this PO product',
+                itemType: poItem.itemType
+              });
             }
-          );
-          updatedOrders.push(updated);
-          console.log(`✅ Production order ${orderId} moved to LAID_UP status`);
+          }
+
+          if (hasStockModel) {
+            const updated = await storage.updateProductionOrder(
+              productionOrder.id,
+              {
+                productionStatus: 'LAID_UP',
+                laidUpAt: new Date(),
+              }
+            );
+            updatedOrders.push(updated);
+            console.log(`✅ Production order ${orderId} moved to LAID_UP status`);
+          }
         }
 
         // Update regular order drafts to next department
@@ -2067,10 +2086,18 @@ export function registerRoutes(app: Express): Server {
       console.log(
         `🔄 Successfully pushed ${updatedOrders.length} orders to layup/plugging queue`
       );
+      
+      if (skippedOrders.length > 0) {
+        console.log(
+          `⚠️ Skipped ${skippedOrders.length} orders without stock models`
+        );
+      }
+      
       res.json({
         success: true,
-        message: `${updatedOrders.length} orders moved to layup/plugging phase`,
+        message: `${updatedOrders.length} orders moved to layup/plugging phase${skippedOrders.length > 0 ? `, ${skippedOrders.length} skipped (no stock model)` : ''}`,
         updatedOrders,
+        skippedOrders,
       });
     } catch (_error) {
       console.error('Push to layup/plugging _error:', _error);

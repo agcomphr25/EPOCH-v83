@@ -4,6 +4,13 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. Its purpose is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The project aims to be a leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. The system incorporates robust features like a Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System to provide a complete and efficient solution.
 
 ## Recent Changes
+**PO Product Stock Model Validation for Layup** (October 26, 2025)
+- Added business rule validation: PO products without stock models cannot be marked as "laid up"
+- Modified `/api/push-to-layup-plugging` endpoint to check item type before updating production status
+- System now skips production orders where the associated PO item is not a 'stock_model' type
+- Returns detailed information about skipped orders in the API response for user visibility
+- Prevents invalid state where custom models or feature items would incorrectly appear as laid up
+
 **Parts List Management System** (October 26, 2025)
 - Enhanced inventory items with comprehensive MRP/COGS fields:
   - SKU field for inventory tracking (informational)

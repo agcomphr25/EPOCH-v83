@@ -10,7 +10,7 @@ import { storage } from '../../storage';
 const router = Router();
 
 // Enhanced Inventory API - Get all items
-router.get('/enhanced/inventory/items', async (req: Request, res: Response) => {
+router.get('/inventory/items', async (req: Request, res: Response) => {
   try {
     const items = await storage.getAllInventoryItems();
     res.json(items);
@@ -259,7 +259,7 @@ function parseUtilizedColumn(value: string): {
 }
 
 // CSV Import endpoint - Enhanced for new fields
-router.post('/enhanced/inventory/import/csv', async (req: Request, res: Response) => {
+router.post('/inventory/import/csv', async (req: Request, res: Response) => {
   try {
     const { csvData } = req.body;
     console.log('📥 CSV Import started');
@@ -411,7 +411,7 @@ router.post('/enhanced/inventory/import/csv', async (req: Request, res: Response
 });
 
 // CSV Export endpoint
-router.get('/enhanced/inventory/export/csv', async (req: Request, res: Response) => {
+router.get('/inventory/export/csv', async (req: Request, res: Response) => {
   try {
     const items = await storage.getAllInventoryItems();
 

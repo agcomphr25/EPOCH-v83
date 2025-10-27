@@ -8,13 +8,22 @@ EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing com
 - Enhanced schedule preview with production-relevant data columns:
   - Added Action Length column (extracted from features.action_length with SA/LA fallback from action_inlet)
   - Added Material column (parsed from stock model name: "_fg" = Fiberglass, "_cf" = Carbon Fiber)
+  - PO items fetch action length from po_products table with fallback to action_inlet
   - Added Badges column displaying LOP (non-standard length_of_pull), ADL (bottom_metal contains 'adl'), and Heavy Fill (in other_options)
   - Removed FB Order # and Customer columns (not relevant for layup operations)
-- Implemented print functionality:
-  - Print button in schedule preview dialog
-  - Landscape orientation for optimal table viewing
-  - Color preservation for badges and status indicators
-  - Print-optimized styling with proper page breaks
+- Implemented dual-view system for schedule display:
+  - Screen preview: Table format with all order details for review
+  - Print layout: User-friendly checklist format optimized for production floor
+- Print checklist features:
+  - Large checkboxes for each item to mark completion as work progresses
+  - Clear labeled sections: ORDER ID, STOCK MODEL, MOLD, ACTION/MATERIAL
+  - Color-coded badge indicators (LOP, ADL, HEAVY FILL) for special requirements
+  - Signature lines at end of each day section ("Completed by" and "Date")
+  - Landscape orientation with proper page breaks between days
+- Schedule barcode system:
+  - Unique barcode generated for each schedule (format: LAYUP + YYYYMMDD)
+  - Barcode displays in header with "Scan to complete layup" instruction
+  - Enables bulk progression of all scheduled orders when scanned
 - Integrated schedule approval with department workflow:
   - "Approve & Move to Barcode" button saves schedule and progresses orders
   - Regular orders automatically move to Barcode department

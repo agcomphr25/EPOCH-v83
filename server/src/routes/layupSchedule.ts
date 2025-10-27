@@ -131,6 +131,9 @@ router.post('/generate', async (req: Request, res: Response) => {
       });
     });
     
+    // Round-robin day index for even distribution
+    let currentDayIndex = 0;
+    
     // Try to schedule each item
     for (const item of allItems) {
       let scheduled = false;
@@ -149,8 +152,15 @@ router.post('/generate', async (req: Request, res: Response) => {
         continue;
       }
       
-      // Try to find a slot (Monday through Thursday first)
-      for (const day of workDays) {
+      // Try to find a slot using round-robin distribution across all selected days
+      // Start from current day index and try all days in rotation
+      const attemptOrder = [...workDays];
+      const rotatedDays = [
+        ...attemptOrder.slice(currentDayIndex),
+        ...attemptOrder.slice(0, currentDayIndex)
+      ];
+      
+      for (const day of rotatedDays) {
         if (scheduled) break;
         
         for (const mold of compatibleMolds) {
@@ -177,40 +187,9 @@ router.post('/generate', async (req: Request, res: Response) => {
             moldDayCapacity[mold.moldId][day] = currentUsage + 1;
             scheduled = true;
             console.log(`✅ Scheduled ${item.orderId} → ${mold.moldId} on ${['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][day]}`);
-            break;
-          }
-        }
-      }
-      
-      // If not scheduled and Friday is selected, try Friday (day 5) as overflow
-      if (!scheduled && workDays.includes(5)) {
-        for (const mold of compatibleMolds) {
-          if (!moldDayCapacity[mold.moldId][5]) {
-            moldDayCapacity[mold.moldId][5] = 0;
-          }
-          
-          const currentUsage = moldDayCapacity[mold.moldId][5] || 0;
-          
-          if (currentUsage < mold.multiplier) {
-            const scheduledDate = addDays(nextMonday, 4); // Friday
             
-            scheduledItems.push({
-              orderId: item.orderId,
-              fbOrderNumber: item.fbOrderNumber,
-              stockModel: item.stockModel,
-              customerName: item.customerName,
-              scheduledDate: format(scheduledDate, 'yyyy-MM-dd'),
-              moldId: mold.moldId,
-              dayOfWeek: 5,
-              dayName: 'Friday',
-              // PO-specific fields
-              actionLength: item.actionLength || null,
-              material: item.material || null,
-            });
-            
-            moldDayCapacity[mold.moldId][5] = currentUsage + 1;
-            scheduled = true;
-            console.log(`⚠️ Scheduled ${item.orderId} → ${mold.moldId} on Friday (overflow)`);
+            // Move to next day in rotation for balanced distribution
+            currentDayIndex = (currentDayIndex + 1) % workDays.length;
             break;
           }
         }
@@ -221,7 +200,7 @@ router.post('/generate', async (req: Request, res: Response) => {
         console.log(`❌ Cannot schedule ${item.orderId} - no capacity available`);
         overflowItems.push({
           ...item,
-          reason: 'No available mold capacity in the scheduling window (Mon-Fri)',
+          reason: 'No available mold capacity in the scheduling window',
         });
       }
     }

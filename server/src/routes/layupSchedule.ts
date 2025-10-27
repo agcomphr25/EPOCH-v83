@@ -15,6 +15,7 @@ interface GenerateScheduleRequest {
     stockModel: string;
     quantity: number;
   }[];
+  workDays?: number[]; // Optional: Days to schedule (1=Mon, 2=Tue, etc). Defaults to [1,2,3,4]
 }
 
 // Generate layup schedule preview based on selected items
@@ -22,7 +23,7 @@ router.post('/generate', async (req: Request, res: Response) => {
   try {
     console.log('🔄 GENERATE SCHEDULE: Starting schedule generation...');
     
-    const { selectedOrderIds = [], selectedPOItems = [] }: GenerateScheduleRequest = req.body;
+    const { selectedOrderIds = [], selectedPOItems = [], workDays = [1, 2, 3, 4] }: GenerateScheduleRequest = req.body;
     
     const totalItems = selectedOrderIds.length + selectedPOItems.length;
     console.log(`📊 Total items to schedule: ${totalItems} (${selectedOrderIds.length} regular orders, ${selectedPOItems.length} PO items)`);
@@ -128,8 +129,7 @@ router.post('/generate', async (req: Request, res: Response) => {
     const today = new Date();
     const nextMonday = startOfWeek(addDays(today, 7), { weekStartsOn: 1 });
     
-    // Initialize schedule by day (Monday = 1, Thursday = 4, Friday = 5)
-    const workDays = [1, 2, 3, 4]; // Monday through Thursday
+    // Initialize schedule by day (using selected work days)
     const scheduledItems: any[] = [];
     const overflowItems: any[] = [];
     

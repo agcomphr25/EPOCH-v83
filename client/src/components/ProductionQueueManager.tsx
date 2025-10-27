@@ -131,6 +131,9 @@ export default function ProductionQueueManager() {
 
   // State for "Select Next N" feature
   const [selectNextCount, setSelectNextCount] = useState<string>('');
+  
+  // State for "Select Next N" for regular production queue
+  const [selectNextQueueCount, setSelectNextQueueCount] = useState<string>('');
 
   // State for layup schedule preview modal
   const [schedulePreviewOpen, setSchedulePreviewOpen] = useState(false);
@@ -371,6 +374,30 @@ export default function ProductionQueueManager() {
     } else {
       setSelectedQueueOrders(new Set(productionQueue.map((o) => o.orderId)));
     }
+  };
+
+  // Handler for "Select Next N" in regular production queue
+  const handleSelectNextQueueOrders = () => {
+    const count = parseInt(selectNextQueueCount);
+    if (isNaN(count) || count <= 0) {
+      toast({
+        title: 'Invalid Input',
+        description: 'Please enter a valid number greater than 0',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const ordersToSelect = productionQueue
+      .slice(0, Math.min(count, productionQueue.length))
+      .map((order) => order.orderId);
+
+    setSelectedQueueOrders(new Set(ordersToSelect));
+    
+    toast({
+      title: 'Orders Selected',
+      description: `Selected ${ordersToSelect.length} order${ordersToSelect.length !== 1 ? 's' : ''} from the queue`,
+    });
   };
 
   const handleProgressSelectedToBarcode = () => {
@@ -1183,29 +1210,66 @@ export default function ProductionQueueManager() {
             <AccordionContent>
               <CardContent>
                 {productionQueue.length > 0 && (
-                  <div className="flex items-center gap-2 mb-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleSelectAllQueueOrders}
-                      className="flex items-center gap-2"
-                    >
-                      {selectedQueueOrders.size === productionQueue.length
-                        ? 'Deselect All'
-                        : 'Select All'}
-                    </Button>
-                    {selectedQueueOrders.size > 0 && (
+                  <div className="space-y-4 mb-4">
+                    <div className="flex items-center gap-2">
                       <Button
-                        onClick={handleProgressSelectedToBarcode}
-                        disabled={progressToBarcodeMutation.isPending}
-                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                        variant="outline"
                         size="sm"
-                        data-testid="button-progress-barcode"
+                        onClick={handleSelectAllQueueOrders}
+                        className="flex items-center gap-2"
+                        data-testid="button-select-all-queue"
                       >
-                        <ArrowRight className="h-4 w-4" />
-                        Progress to Barcode ({selectedQueueOrders.size})
+                        {selectedQueueOrders.size === productionQueue.length
+                          ? 'Deselect All'
+                          : 'Select All'}
                       </Button>
-                    )}
+                      {selectedQueueOrders.size > 0 && (
+                        <Button
+                          onClick={handleProgressSelectedToBarcode}
+                          disabled={progressToBarcodeMutation.isPending}
+                          className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                          size="sm"
+                          data-testid="button-progress-barcode"
+                        >
+                          <ArrowRight className="h-4 w-4" />
+                          Progress to Barcode ({selectedQueueOrders.size})
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Select Next N feature for regular queue */}
+                    <div className="flex items-end gap-3 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                      <div className="flex-1">
+                        <label 
+                          htmlFor="select-next-queue-count" 
+                          className="text-sm font-medium text-gray-700 mb-2 block"
+                        >
+                          Select Next N Orders:
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="select-next-queue-count"
+                            type="number"
+                            min="1"
+                            value={selectNextQueueCount}
+                            onChange={(e) => setSelectNextQueueCount(e.target.value)}
+                            placeholder="Enter quantity (e.g., 30)"
+                            className="w-64"
+                            data-testid="input-select-next-queue-count"
+                          />
+                          <Button
+                            onClick={handleSelectNextQueueOrders}
+                            disabled={!selectNextQueueCount || parseInt(selectNextQueueCount) <= 0}
+                            data-testid="button-select-next-queue"
+                          >
+                            Select Next {selectNextQueueCount || 'N'}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Automatically selects the next orders from the queue in order
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 )}
                 {productionQueue.length === 0 ? (

@@ -303,9 +303,11 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
 
         headers.forEach((header: string, index: number) => {
           const value = values[index] || '';
+          const normalizedHeader = header.toLowerCase().trim();
 
-          switch (header.toLowerCase().trim()) {
+          switch (normalizedHeader) {
             case 'ag part#':
+            case 'ag part #':
             case 'agpartnumber':
               itemData.agPartNumber = value;
               break;
@@ -362,6 +364,15 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
               break;
           }
         });
+
+        // Log first few rows for debugging
+        if (i < 3) {
+          console.log(`🔍 Row ${i + 2} data:`, {
+            agPartNumber: itemData.agPartNumber,
+            name: itemData.name,
+            rawValues: values.slice(0, 5)
+          });
+        }
 
         // Skip rows without required fields
         if (!itemData.agPartNumber || !itemData.name) {

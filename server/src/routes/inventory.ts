@@ -278,6 +278,15 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
 
     const headers = parseCSVLine(lines[0]);
     console.log('📋 CSV Headers:', headers);
+    
+    // Check for problematic columns
+    const problematicHeaders = headers.filter(h => 
+      ['id', 'createdat', 'created_at', 'updatedat', 'updated_at'].includes(h.toLowerCase().trim())
+    );
+    if (problematicHeaders.length > 0) {
+      console.warn('⚠️ CSV contains auto-generated columns that will be ignored:', problematicHeaders);
+    }
+    
     const rows = lines.slice(1);
 
     let importedCount = 0;
@@ -306,6 +315,15 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
           const normalizedHeader = header.toLowerCase().trim();
 
           switch (normalizedHeader) {
+            case 'id':
+            case 'createdat':
+            case 'created_at':
+            case 'updatedat':
+            case 'updated_at':
+            case 'isactive':
+            case 'is_active':
+              // Ignore auto-generated fields from CSV
+              break;
             case 'ag part#':
             case 'ag part #':
             case 'agpartnumber':
@@ -430,6 +448,9 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
         }
 
         try {
+          // Ensure we never pass 'id' field - it should auto-generate
+          delete itemData.id;
+          
           const validatedData = insertInventoryItemSchema.parse(itemData);
           await storage.createInventoryItem(validatedData);
           importedCount++;

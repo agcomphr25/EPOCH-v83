@@ -29,7 +29,7 @@ async function getCredentials() {
     },
   })
     .then((res) => res.json())
-    .then((data) => {
+    .then((data: any) => {
       console.log('📥 SendGrid connection response:', data);
       return data.items?.[0];
     });

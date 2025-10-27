@@ -573,24 +573,39 @@ router.post('/:orderId/resend-email', async (req, res) => {
 
     // Get or create the follow-up order
     let followupOrder = await storage.getFollowupOrderByOrderId(orderId);
+    
+    // Always generate a FRESH signature token when resending to ensure the link works
+    const { randomBytes } = await import('crypto');
+    const newSignatureToken = randomBytes(32).toString('hex');
+    
     if (!followupOrder) {
       console.log(`⚠️ No followup_order found for ${orderId} - creating one automatically`);
       
-      // Generate new signature token
-      const { randomBytes } = await import('crypto');
-      const signatureToken = randomBytes(32).toString('hex');
-      
-      // Create followup order entry
+      // Create followup order entry with new token
       followupOrder = await storage.createFollowupOrder({
         orderId: order.orderId,
         customerId: order.customerId || '',
         customerEmail: customer.email,
-        signatureToken,
+        signatureToken: newSignatureToken,
         pdfGenerated: false, // Will be generated below
         emailSent: false,
       });
       
-      console.log(`✅ Created followup_order for ${orderId} with token ${signatureToken.substring(0, 8)}...`);
+      console.log(`✅ Created followup_order for ${orderId} with fresh token ${newSignatureToken.substring(0, 8)}...`);
+    } else {
+      // Update existing followup order with fresh token (allows resending even if already signed)
+      console.log(`🔄 Updating followup_order for ${orderId} with fresh signature token`);
+      
+      followupOrder = await storage.updateFollowupOrder(followupOrder.id, {
+        signatureToken: newSignatureToken,
+        // Reset signature status to allow re-signing if needed
+        signatureSigned: false,
+        signatureData: null,
+        signedAt: null,
+        signedPdfPath: null,
+      });
+      
+      console.log(`✅ Updated followup_order with fresh token ${newSignatureToken.substring(0, 8)}...`);
     }
 
     // Get customer address
@@ -664,7 +679,7 @@ router.post('/:orderId/resend-email', async (req, res) => {
       }
     }
 
-    // Generate signature link using existing token
+    // Generate signature link using the fresh token
     const baseUrl = process.env.REPLIT_DOMAINS 
       ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
       : 'http://localhost:5000';

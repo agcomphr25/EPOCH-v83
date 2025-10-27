@@ -131,9 +131,6 @@ export default function ProductionQueueManager() {
     new Map()
   );
 
-  // State for "Select Next N" feature
-  const [selectNextCount, setSelectNextCount] = useState<string>('');
-  
   // State for "Select Next N" for regular production queue
   const [selectNextQueueCount, setSelectNextQueueCount] = useState<string>('');
 
@@ -469,50 +466,6 @@ export default function ProductionQueueManager() {
     });
   };
 
-  // Handler for "Select Next N" feature
-  const handleSelectNextN = () => {
-    const count = parseInt(selectNextCount);
-    if (isNaN(count) || count <= 0) {
-      toast({
-        title: 'Invalid Input',
-        description: 'Please enter a valid number greater than 0',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    let remainingToSelect = count;
-    const newSelectionMap = new Map<string, Map<number, number>>();
-
-    // Iterate through customers, POs, and items in order
-    outerLoop: for (const customer of filteredPurchaseOrders) {
-      for (const po of customer.purchaseOrders) {
-        for (const item of po.items) {
-          // Skip "no stock" items
-          if (item.stockModel === "no stock") continue;
-          
-          if (remainingToSelect <= 0) break outerLoop;
-
-          const quantityToSelect = Math.min(item.quantity, remainingToSelect);
-          
-          if (!newSelectionMap.has(po.poNumber)) {
-            newSelectionMap.set(po.poNumber, new Map());
-          }
-          
-          newSelectionMap.get(po.poNumber)!.set(item.id, quantityToSelect);
-          remainingToSelect -= quantityToSelect;
-        }
-      }
-    }
-
-    setSelectedPOItems(newSelectionMap);
-    
-    const totalSelected = count - remainingToSelect;
-    toast({
-      title: 'Items Selected',
-      description: `Selected ${totalSelected} item${totalSelected !== 1 ? 's' : ''} from the queue`,
-    });
-  };
 
   const getUrgencyBadgeColor = (urgencyLevel: string) => {
     switch (urgencyLevel) {
@@ -961,40 +914,6 @@ export default function ProductionQueueManager() {
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
-
-                    {/* Select Next N feature */}
-                    <div className="flex items-end gap-3 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                      <div className="flex-1">
-                        <label 
-                          htmlFor="select-next-count" 
-                          className="text-sm font-medium text-gray-700 mb-2 block"
-                        >
-                          Select Next N Items:
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            id="select-next-count"
-                            type="number"
-                            min="1"
-                            value={selectNextCount}
-                            onChange={(e) => setSelectNextCount(e.target.value)}
-                            placeholder="Enter quantity (e.g., 30)"
-                            className="w-64"
-                            data-testid="input-select-next-count"
-                          />
-                          <Button
-                            onClick={handleSelectNextN}
-                            disabled={!selectNextCount || parseInt(selectNextCount) <= 0}
-                            data-testid="button-select-next"
-                          >
-                            Select Next {selectNextCount || 'N'}
-                          </Button>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Automatically selects the next items from the queue in order
-                        </p>
-                      </div>
                     </div>
                   </div>
                 )}

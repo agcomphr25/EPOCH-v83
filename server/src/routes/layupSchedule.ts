@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 
-import { pool } from '../../db';
+import { db } from '../../db';
+import { molds, productionQueue, allOrders } from '../../schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 
 const router = Router();
@@ -24,6 +26,8 @@ router.post('/generate', async (req: Request, res: Response) => {
     
     const totalItems = selectedOrderIds.length + selectedPOItems.length;
     console.log(`📊 Total items to schedule: ${totalItems} (${selectedOrderIds.length} regular orders, ${selectedPOItems.length} PO items)`);
+    console.log('📦 Selected PO Items received:', JSON.stringify(selectedPOItems.slice(0, 5), null, 2));
+    console.log('📦 PO Items total quantity:', selectedPOItems.reduce((sum, item) => sum + item.quantity, 0));
     
     if (totalItems === 0) {
       return res.status(400).json({
@@ -33,41 +37,38 @@ router.post('/generate', async (req: Request, res: Response) => {
     }
     
     // Fetch molds with their capacities
-    const moldsResult = await pool.query(`
-      SELECT 
-        mold_id as "moldId",
-        model_name as "modelName",
-        stock_models as "stockModels",
-        multiplier as "capacity",
-        enabled,
-        is_active as "isActive"
-      FROM molds
-      WHERE enabled = true AND is_active = true
-      ORDER BY mold_id
-    `);
+    const activeMolds = await db
+      .select()
+      .from(molds)
+      .where(and(eq(molds.enabled, true), eq(molds.isActive, true)));
     
-    const molds = moldsResult.rows || [];
-    console.log(`🏭 Found ${molds.length} active molds`);
+    console.log(`🏭 Found ${activeMolds.length} active molds`);
+    if (activeMolds.length > 0) {
+      console.log('🔍 Sample molds:', activeMolds.slice(0, 3).map(m => ({ 
+        moldId: m.moldId, 
+        modelName: m.modelName, 
+        stockModels: m.stockModels,
+        capacity: m.multiplier
+      })));
+    }
     
     // Fetch regular orders details
-    const regularOrders = [];
+    let regularOrders: any[] = [];
     if (selectedOrderIds.length > 0) {
-      const ordersResult = await pool.query(
-        `
-        SELECT 
-          pq.order_id as "orderId",
-          ao.fb_order_number as "fbOrderNumber",
-          ao.model_id as "stockModel",
-          pq.customer as "customerId",
-          pq.customer as "customerName",
-          pq.due_date as "dueDate"
-        FROM production_queue pq
-        LEFT JOIN all_orders ao ON pq.order_id = ao.order_id
-        WHERE pq.order_id = ANY($1)
-        `,
-        [selectedOrderIds]
-      );
-      regularOrders.push(...(ordersResult.rows || []));
+      const ordersResults = await db
+        .select({
+          orderId: productionQueue.orderId,
+          fbOrderNumber: allOrders.fbOrderNumber,
+          stockModel: allOrders.modelId,
+          customerId: productionQueue.customer,
+          customerName: productionQueue.customer,
+          dueDate: productionQueue.dueDate,
+        })
+        .from(productionQueue)
+        .leftJoin(allOrders, eq(productionQueue.orderId, allOrders.orderId))
+        .where(inArray(productionQueue.orderId, selectedOrderIds));
+      
+      regularOrders = ordersResults;
     }
     
     // Prepare PO items for scheduling - expand by quantity
@@ -101,7 +102,7 @@ router.post('/generate', async (req: Request, res: Response) => {
     
     // Track capacity usage per mold per day
     const moldDayCapacity: { [key: string]: { [day: number]: number } } = {};
-    molds.forEach(mold => {
+    activeMolds.forEach(mold => {
       moldDayCapacity[mold.moldId] = {};
       workDays.forEach(day => {
         moldDayCapacity[mold.moldId][day] = 0;
@@ -113,7 +114,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       let scheduled = false;
       
       // Find compatible molds for this stock model
-      const compatibleMolds = molds.filter(mold => 
+      const compatibleMolds = activeMolds.filter(mold => 
         mold.stockModels && mold.stockModels.includes(item.stockModel)
       );
       

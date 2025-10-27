@@ -454,17 +454,17 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
           delete itemData.updatedAt;
           delete itemData.isActive;
           
-          // Debug logging for first row
-          if (i === 0) {
-            console.log('🔎 itemData before validation:', JSON.stringify(itemData, null, 2));
+          // Debug logging for first few rows
+          if (importedCount < 2) {
+            console.log(`🔎 Row ${i + 2} itemData before validation:`, JSON.stringify(itemData, null, 2));
           }
           
           const validatedData = insertInventoryItemSchema.parse(itemData);
           
-          if (i === 0) {
-            console.log('🔎 validatedData after schema parsing:', JSON.stringify(validatedData, null, 2));
-            console.log('🔎 validatedData keys:', Object.keys(validatedData));
-            console.log('🔎 validatedData has id?:', 'id' in validatedData);
+          if (importedCount < 2) {
+            console.log(`🔎 Row ${i + 2} validatedData after schema parsing:`, JSON.stringify(validatedData, null, 2));
+            console.log(`🔎 Row ${i + 2} validatedData keys:`, Object.keys(validatedData));
+            console.log(`🔎 Row ${i + 2} validatedData has id?:`, 'id' in validatedData);
           }
           
           await storage.createInventoryItem(validatedData);

@@ -146,6 +146,7 @@ export default function ProductionQueueManager() {
 
   // State for day selection
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4]); // Default: Mon-Thu
+  const [daySelectionDialogOpen, setDaySelectionDialogOpen] = useState(false);
 
   // Fetch prioritized production queue
   const {
@@ -671,13 +672,13 @@ export default function ProductionQueueManager() {
                 Clear All
               </Button>
               <Button
-                onClick={() => generateScheduleMutation.mutate()}
+                onClick={() => setDaySelectionDialogOpen(true)}
                 disabled={generateScheduleMutation.isPending}
                 className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
                 data-testid="button-generate-schedule"
               >
                 <CalendarCheck className="w-4 h-4" />
-                {generateScheduleMutation.isPending ? 'Generating...' : 'Generate Layup Schedule'}
+                Generate Layup Schedule
               </Button>
             </div>
           </div>
@@ -1507,7 +1508,104 @@ export default function ProductionQueueManager() {
         </AccordionItem>
       </Accordion>
 
-      {/* Week Selection Dialog removed - P1 PO functionality now managed via OEM Priority Settings */}
+      {/* Day Selection Dialog for Layup Schedule */}
+      <Dialog open={daySelectionDialogOpen} onOpenChange={setDaySelectionDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select Week and Days for Layup Schedule</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {/* Week Display */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Week Starting:</label>
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm font-semibold text-blue-900">
+                  {(() => {
+                    const today = new Date();
+                    const nextMonday = new Date(today);
+                    nextMonday.setDate(today.getDate() + ((1 + 7 - today.getDay()) % 7 || 7));
+                    return nextMonday.toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    });
+                  })()}
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Schedule will be generated for the upcoming week
+                </p>
+              </div>
+            </div>
+
+            {/* Day Selection */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Days to Schedule:</label>
+              <div className="grid grid-cols-5 gap-2">
+                {[
+                  { day: 1, label: 'Monday' },
+                  { day: 2, label: 'Tuesday' },
+                  { day: 3, label: 'Wednesday' },
+                  { day: 4, label: 'Thursday' },
+                  { day: 5, label: 'Friday' },
+                ].map(({ day, label }) => (
+                  <label
+                    key={day}
+                    className={`flex flex-col items-center justify-center p-3 border-2 rounded-lg cursor-pointer transition-colors ${
+                      selectedDays.includes(day)
+                        ? 'bg-blue-50 border-blue-500 text-blue-900'
+                        : 'bg-white border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedDays.includes(day)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedDays([...selectedDays, day].sort());
+                        } else {
+                          setSelectedDays(selectedDays.filter(d => d !== day));
+                        }
+                      }}
+                      className="sr-only"
+                      data-testid={`checkbox-day-${day}`}
+                    />
+                    <span className="text-xs font-medium">{label.substring(0, 3)}</span>
+                    {selectedDays.includes(day) && (
+                      <CalendarCheck className="w-4 h-4 mt-1 text-blue-600" />
+                    )}
+                  </label>
+                ))}
+              </div>
+              {selectedDays.length === 0 && (
+                <p className="text-sm text-red-600">Please select at least one day</p>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDaySelectionDialogOpen(false)}
+              data-testid="button-cancel-day-selection"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                generateScheduleMutation.mutate();
+                setDaySelectionDialogOpen(false);
+              }}
+              disabled={selectedDays.length === 0 || generateScheduleMutation.isPending}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              data-testid="button-confirm-generate"
+            >
+              {generateScheduleMutation.isPending ? 'Generating...' : 'Generate Schedule'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Layup Schedule Preview Modal */}
       {generatedSchedule && (

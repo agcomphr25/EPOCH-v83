@@ -1269,7 +1269,7 @@ export default function OrdersList() {
                             </span>
                           </OrderSummaryTooltip>
                           {order.status && (
-                            <div className="relative group/status pr-28">
+                            <div className="relative group/status">
                               <Badge
                                 className={`${getStatusColor(order.status)} text-xs px-1 py-0`}
                                 title={`Order Status: ${order.status}`}
@@ -1278,7 +1278,7 @@ export default function OrdersList() {
                               </Badge>
                               {/* Resend Email Button - Show on hover for PENDING_SIGNATURE and FINALIZED */}
                               {(order.status?.toUpperCase() === 'PENDING_SIGNATURE' || order.status?.toUpperCase() === 'FINALIZED') && (
-                                <div className="absolute left-full top-0 ml-2 opacity-0 group-hover/status:opacity-100 transition-opacity z-20 pointer-events-auto">
+                                <div className="absolute left-full top-0 ml-2 hidden group-hover/status:block z-20">
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -1302,7 +1302,7 @@ export default function OrdersList() {
                               )}
                               {/* Resend Email Button - Show on hover for FINALIZED (admin only) */}
                               {order.status?.toUpperCase() === 'FINALIZED' && currentUser?.role === 'ADMIN' && (
-                                <div className="absolute left-full top-0 ml-2 opacity-0 group-hover/status:opacity-100 transition-opacity z-20 pointer-events-auto">
+                                <div className="absolute left-full top-0 ml-2 hidden group-hover/status:block z-20">
                                   <Button
                                     size="sm"
                                     variant="outline"

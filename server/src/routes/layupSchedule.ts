@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 
 import { db } from '../../db';
-import { molds, productionQueue, allOrders } from '../../schema';
+import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts } from '../../schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 
@@ -52,23 +52,22 @@ router.post('/generate', async (req: Request, res: Response) => {
       })));
     }
     
-    // Fetch regular orders details
+    // Fetch regular orders details from all_orders table
     let regularOrders: any[] = [];
     if (selectedOrderIds.length > 0) {
       console.log(`🔍 Fetching ${selectedOrderIds.length} regular orders:`, selectedOrderIds.slice(0, 5));
       
       const ordersResults = await db
         .select({
-          orderId: productionQueue.orderId,
+          orderId: allOrders.orderId,
           fbOrderNumber: allOrders.fbOrderNumber,
           stockModel: allOrders.modelId,
-          customerId: productionQueue.customer,
-          customerName: productionQueue.customer,
-          dueDate: productionQueue.dueDate,
+          customerId: allOrders.customerId,
+          customerName: allOrders.customerId, // Using customerId as customerName for now
+          dueDate: allOrders.dueDate,
         })
-        .from(productionQueue)
-        .leftJoin(allOrders, eq(productionQueue.orderId, allOrders.orderId))
-        .where(inArray(productionQueue.orderId, selectedOrderIds));
+        .from(allOrders)
+        .where(inArray(allOrders.orderId, selectedOrderIds));
       
       console.log(`📦 Found ${ordersResults.length} regular orders in database`);
       if (ordersResults.length > 0) {
@@ -78,22 +77,49 @@ router.post('/generate', async (req: Request, res: Response) => {
       regularOrders = ordersResults;
     }
     
-    // Prepare PO items for scheduling - expand by quantity
+    // Fetch PO item details (action_length, material) and prepare for scheduling
     const poItems: any[] = [];
-    selectedPOItems.forEach(item => {
-      // Create separate schedule entries for each unit in the quantity
-      for (let i = 0; i < item.quantity; i++) {
-        poItems.push({
-          orderId: `PO-${item.poNumber}-${item.itemId}-${i + 1}`,
-          fbOrderNumber: item.poNumber,
-          stockModel: item.stockModel,
-          customerId: null,
-          customerName: 'Purchase Order',
-          dueDate: null,
-          quantity: 1, // Each entry represents 1 unit
-        });
-      }
-    });
+    
+    if (selectedPOItems.length > 0) {
+      // Get unique item IDs to fetch their details
+      const itemIds = Array.from(new Set(selectedPOItems.map(item => item.itemId)));
+      
+      console.log(`🔍 Fetching details for ${itemIds.length} PO items`);
+      
+      const poItemDetails = await db
+        .select({
+          id: purchaseOrderItems.id,
+          actionLength: poProducts.actionLength,
+          material: poProducts.material,
+        })
+        .from(purchaseOrderItems)
+        .leftJoin(poProducts, eq(purchaseOrderItems.itemId, poProducts.id))
+        .where(inArray(purchaseOrderItems.id, itemIds));
+      
+      // Create a map for quick lookup
+      const itemDetailsMap = new Map(
+        poItemDetails.map(item => [item.id, { actionLength: item.actionLength, material: item.material }])
+      );
+      
+      // Expand by quantity with action_length and material
+      selectedPOItems.forEach(item => {
+        const details = itemDetailsMap.get(item.itemId);
+        
+        for (let i = 0; i < item.quantity; i++) {
+          poItems.push({
+            orderId: `PO-${item.poNumber}-${item.itemId}-${i + 1}`,
+            fbOrderNumber: item.poNumber,
+            stockModel: item.stockModel,
+            customerId: null,
+            customerName: 'Purchase Order',
+            dueDate: null,
+            quantity: 1,
+            actionLength: details?.actionLength || null,
+            material: details?.material || null,
+          });
+        }
+      });
+    }
     
     const allItems = [...regularOrders, ...poItems];
     console.log(`📦 Prepared ${allItems.length} items for scheduling (${regularOrders.length} regular + ${poItems.length} PO units)`);
@@ -154,6 +180,9 @@ router.post('/generate', async (req: Request, res: Response) => {
               moldId: mold.moldId,
               dayOfWeek: day,
               dayName: ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'][day],
+              // PO-specific fields
+              actionLength: item.actionLength || null,
+              material: item.material || null,
             });
             
             moldDayCapacity[mold.moldId][day] = currentUsage + 1;
@@ -185,6 +214,9 @@ router.post('/generate', async (req: Request, res: Response) => {
               moldId: mold.moldId,
               dayOfWeek: 5,
               dayName: 'Friday',
+              // PO-specific fields
+              actionLength: item.actionLength || null,
+              material: item.material || null,
             });
             
             moldDayCapacity[mold.moldId][5] = currentUsage + 1;

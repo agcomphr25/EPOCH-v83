@@ -4,6 +4,24 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. Its purpose is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The project aims to be a leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. The system incorporates robust features like a Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System to provide a complete and efficient solution.
 
 ## Recent Changes
+**Layup Schedule Week & Day Selection with Balanced Distribution** (October 27, 2025)
+- Implemented interactive week selection for layup schedule generation:
+  - Users can navigate up to 8 weeks ahead using arrow buttons
+  - Visual labels show "Next week", "Week after next", or "X weeks ahead"
+  - Selected week start date displays prominently (e.g., "Monday, October 28, 2025")
+- Added day selection feature with checkboxes for Monday through Friday:
+  - Default selection: Monday through Thursday
+  - Users can select any combination of work days
+  - Selected days show visual feedback with blue background and checkmark icon
+- Implemented balanced round-robin distribution algorithm:
+  - Orders are evenly distributed across all selected days
+  - Instead of filling Monday completely then Tuesday, etc., orders rotate through days
+  - Example: 30 orders across 4 days = ~7-8 orders per day instead of 20 on Monday, 10 on Tuesday
+- Backend respects user's day selection:
+  - Friday is only used if explicitly selected by the user
+  - Schedule generation uses selected week start date and work days
+- Fixed database join error that was causing schedule generation to crash
+
 **PO Product Stock Model Validation** (October 26, 2025)
 - Implemented business rule: PO products without stock models are excluded from the production queue
 - Modified `/api/pos/:id/generate-production-orders` endpoint to only create production orders for items with `itemType === 'stock_model'`

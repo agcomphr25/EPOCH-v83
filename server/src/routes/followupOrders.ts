@@ -549,13 +549,7 @@ router.post('/:orderId/resend-email', async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    // Get the follow-up order
-    const followupOrder = await storage.getFollowupOrderByOrderId(orderId);
-    if (!followupOrder) {
-      return res.status(404).json({ error: 'Follow-up order not found' });
-    }
-
-    // Verify order is still pending signature
+    // Verify order exists first
     const order = await storage.getOrderById(orderId);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
@@ -575,6 +569,28 @@ router.post('/:orderId/resend-email', async (req, res) => {
       return res.status(400).json({ 
         error: 'Customer email not found. Cannot resend email.' 
       });
+    }
+
+    // Get or create the follow-up order
+    let followupOrder = await storage.getFollowupOrderByOrderId(orderId);
+    if (!followupOrder) {
+      console.log(`⚠️ No followup_order found for ${orderId} - creating one automatically`);
+      
+      // Generate new signature token
+      const { randomBytes } = await import('crypto');
+      const signatureToken = randomBytes(32).toString('hex');
+      
+      // Create followup order entry
+      followupOrder = await storage.createFollowupOrder({
+        orderId: order.orderId,
+        customerId: order.customerId || '',
+        customerEmail: customer.email,
+        signatureToken,
+        pdfGenerated: false, // Will be generated below
+        emailSent: false,
+      });
+      
+      console.log(`✅ Created followup_order for ${orderId} with token ${signatureToken.substring(0, 8)}...`);
     }
 
     // Get customer address

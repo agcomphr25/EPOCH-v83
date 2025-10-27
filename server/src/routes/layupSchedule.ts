@@ -134,7 +134,7 @@ router.post('/generate', async (req: Request, res: Response) => {
         for (const mold of compatibleMolds) {
           const currentUsage = moldDayCapacity[mold.moldId][day] || 0;
           
-          if (currentUsage < mold.capacity) {
+          if (currentUsage < mold.multiplier) {
             // Found available capacity!
             const scheduledDate = addDays(nextMonday, day - 1);
             
@@ -166,7 +166,7 @@ router.post('/generate', async (req: Request, res: Response) => {
           
           const currentUsage = moldDayCapacity[mold.moldId][5] || 0;
           
-          if (currentUsage < mold.capacity) {
+          if (currentUsage < mold.multiplier) {
             const scheduledDate = addDays(nextMonday, 4); // Friday
             
             scheduledItems.push({

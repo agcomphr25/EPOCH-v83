@@ -1,0 +1,45 @@
+Layup Schedule Preview
+Week starting Nov 02, 2025
+
+Total Items
+30
+Scheduled
+0
+Overflow
+30
+Scheduled Items
+Items That Could Not Be Scheduled (30)
+The following items could not be scheduled due to capacity constraints or incompatible molds. These items will remain in the production queue.
+Order ID	FB Order #	Customer	Stock Model	Reason
+PO-0046-412-1	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-2	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-3	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-4	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-5	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-6	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-7	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-8	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-9	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-10	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-11	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-12	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-13	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-14	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-15	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-16	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-17	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-0046-412-18	0046	Purchase Order	mesa_universal	No available mold capacity in the scheduling window (Mon-Fri)
+PO-P18918-7-1	P18918	Purchase Order	cf_adj_alp_hunter	No available mold capacity in the scheduling window (Mon-Fri)
+PO-P18918-8-1	P18918	Purchase Order	cf_alpine_hunter	No available mold capacity in the scheduling window (Mon-Fri)
+PO-P18918-9-1	P18918	Purchase Order	cf_alpine_hunter	No available mold capacity in the scheduling window (Mon-Fri)
+PO-P18918-10-1	P18918	Purchase Order	cf_alpine_hunter	No available mold capacity in the scheduling window (Mon-Fri)
+PO-P18918-11-1	P18918	Purchase Order	cf_privateer	No available mold capacity in the scheduling window (Mon-Fri)
+PO-P18918-12-1	P18918	Purchase Order	cf_privateer	No available mold capacity in the scheduling window (Mon-Fri)
+PO-P18918-13-1	P18918	Purchase Order	cf_privateer	No available mold capacity in the scheduling window (Mon-Fri)
+PO-P18918-13-2	P18918	Purchase Order	cf_privateer	No available mold capacity in the scheduling window (Mon-Fri)
+PO-P18918-14-1	P18918	Purchase Order	fg_alpine_hunter	No available mold capacity in the scheduling window (Mon-Fri)
+PO-P18918-15-1	P18918	Purchase Order	fg_alpine_hunter	No available mold capacity in the scheduling window (Mon-Fri)
+PO-P18918-15-2	P18918	Purchase Order	fg_alpine_hunter	No available mold capacity in the scheduling window (Mon-Fri)
+PO-P18918-16-1	P18918	Purchase Order	fg_privateer	No available mold capacity in the scheduling window (Mon-Fri)
+Cancel
+Approve Schedule (

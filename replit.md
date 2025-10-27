@@ -69,8 +69,17 @@ EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing com
   - Evaluates fractional cost formats (e.g., "27/20" = $1.35 per unit)
   - Handles currency symbols and various cost formats
   - Exports data with "Utilized" column reconstructed from boolean flags
+  - Backend routes mounted at both `/api/inventory` and `/api/enhanced` for compatibility
+  - Frontend component uses InventoryItemsCard with import/export UI
+  - Handles duplicate AG Part# errors gracefully during import
 - Improved form organization with sectioned layout (Basic Info, Supplier Info, Cost & Quantity, Production Line Utilization, Additional Info)
 - Fixed critical session cleanup error (added missing `sql` import in auth.ts)
+
+**P1 Purchase Orders Display Fix** (October 27, 2025)
+- Resolved frontend display issue showing "0 items need layup" despite backend returning correct data
+- Added array safety check to prevent `.reduce() is not a function` errors
+- P1 PO queue now correctly displays 339 items needing layup from 17 open purchase orders
+- Backend properly filters out items with "no_stock" model, showing only items with valid stock models
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.

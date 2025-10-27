@@ -278,6 +278,15 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
 
     const headers = parseCSVLine(lines[0]);
     console.log('📋 CSV Headers:', headers);
+    
+    // Check for problematic columns
+    const problematicHeaders = headers.filter(h => 
+      ['id', 'createdat', 'created_at', 'updatedat', 'updated_at'].includes(h.toLowerCase().trim())
+    );
+    if (problematicHeaders.length > 0) {
+      console.warn('⚠️ CSV contains auto-generated columns that will be ignored:', problematicHeaders);
+    }
+    
     const rows = lines.slice(1);
 
     let importedCount = 0;
@@ -299,7 +308,6 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
           utilizedInAdmin: false,
           utilizedInServices: false,
           isStockItem: false,
-          // Note: 'type' field removed as it doesn't exist in the database schema
         };
 
         headers.forEach((header: string, index: number) => {
@@ -307,6 +315,15 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
           const normalizedHeader = header.toLowerCase().trim();
 
           switch (normalizedHeader) {
+            case 'id':
+            case 'createdat':
+            case 'created_at':
+            case 'updatedat':
+            case 'updated_at':
+            case 'isactive':
+            case 'is_active':
+              // Ignore auto-generated fields from CSV
+              break;
             case 'ag part#':
             case 'ag part #':
             case 'agpartnumber':
@@ -324,23 +341,56 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
             case 'name':
               itemData.name = value;
               break;
+            case 'type':
+              // Issue #1: Add Type column support (Purchased/Manufactured)
+              itemData.type = value || null;
+              break;
             case 'source':
               itemData.source = value || null;
               break;
             case 'supplier part #':
             case 'supplier part#':
             case 'supplierpartnumber':
-              // This is the primary supplier part number
-              if (!itemData.supplierPartNumber) {
-                itemData.supplierPartNumber = value || null;
-              } else {
-                // If we already have a supplier part number, this might be secondary
-                itemData.secondarySupplierPartNumber = value || null;
-              }
+              itemData.supplierPartNumber = value || null;
+              break;
+            case 'secondary supplier part #':
+            case 'secondary supplier part#':
+            case 'secondarysupplierpartnumber':
+              // Issue #2: Add explicit support for secondary supplier part number
+              itemData.secondarySupplierPartNumber = value || null;
               break;
             case 'cost per':
             case 'costper':
-              itemData.costPer = parseCostValue(value);
+              // Issue #4: Add detailed logging for cost per values
+              const costValue = parseCostValue(value);
+              if (i < 3) {
+                console.log(`💰 Row ${i + 2} Cost Per: raw="${value}" parsed=${costValue}`);
+              }
+              itemData.costPer = costValue;
+              break;
+            case 'purchase unit':
+            case 'purchaseunit':
+              // Issue #2: Add Purchase Unit support
+              itemData.purchaseUnit = value || null;
+              break;
+            case 'usage qty per unit':
+            case 'usage quantity per unit':
+            case 'usageqtyperunit':
+            case 'usagequantityperunit':
+              // Issue #2: Add Usage Quantity Per Unit support
+              const usageQty = parseFloat(value);
+              itemData.usageQuantityPerUnit = !isNaN(usageQty) ? usageQty : null;
+              break;
+            case 'usage unit':
+            case 'usageunit':
+              // Issue #2: Add Usage Unit support
+              itemData.usageUnit = value || null;
+              break;
+            case 'cogs per unit':
+            case 'cogsperunit':
+              // Issue #2: Add COGS Per Unit support
+              const cogsValue = parseCostValue(value);
+              itemData.cogsPerUnit = cogsValue;
               break;
             case 'order date':
             case 'orderdate':
@@ -350,7 +400,8 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
               itemData.notes = value || null;
               break;
             case 'utilized':
-              // Parse the "Utilized" column for production line flags
+            case 'utilized in':
+              // Issue #3: Fix to accept both "Utilized" and "Utilized In" as column names
               const utilized = parseUtilizedColumn(value);
               Object.assign(itemData, utilized);
               break;
@@ -363,15 +414,26 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
             case 'department':
               itemData.department = value || null;
               break;
+            case 'category':
+              // Note: Category column found in CSV but not in database schema
+              // Ignoring for now - can be added to schema if needed
+              break;
           }
         });
 
-        // Log first few rows for debugging
+        // Enhanced debugging for first few rows
         if (i < 3) {
-          console.log(`🔍 Row ${i + 2} data:`, {
+          console.log(`🔍 Row ${i + 2} parsed data:`, {
             agPartNumber: itemData.agPartNumber,
             name: itemData.name,
-            rawValues: values.slice(0, 5)
+            type: itemData.type,
+            costPer: itemData.costPer,
+            purchaseUnit: itemData.purchaseUnit,
+            utilized: {
+              PL1: itemData.utilizedInPL1,
+              PL2: itemData.utilizedInPL2
+            },
+            rawValuesPreview: values.slice(0, 7).map((v, idx) => `${headers[idx]}="${v}"`)
           });
         }
 
@@ -386,7 +448,25 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
         }
 
         try {
+          // Ensure we never pass auto-generated fields - they should auto-generate or have defaults
+          delete itemData.id;
+          delete itemData.createdAt;
+          delete itemData.updatedAt;
+          delete itemData.isActive;
+          
+          // Debug logging for first few rows
+          if (importedCount < 2) {
+            console.log(`🔎 Row ${i + 2} itemData before validation:`, JSON.stringify(itemData, null, 2));
+          }
+          
           const validatedData = insertInventoryItemSchema.parse(itemData);
+          
+          if (importedCount < 2) {
+            console.log(`🔎 Row ${i + 2} validatedData after schema parsing:`, JSON.stringify(validatedData, null, 2));
+            console.log(`🔎 Row ${i + 2} validatedData keys:`, Object.keys(validatedData));
+            console.log(`🔎 Row ${i + 2} validatedData has id?:`, 'id' in validatedData);
+          }
+          
           await storage.createInventoryItem(validatedData);
           importedCount++;
         } catch (error: any) {
@@ -446,7 +526,7 @@ router.get('/inventory/export/csv', async (req: Request, res: Response) => {
       'Secondary Source',
       'Notes',
       'Stock Item',
-      'Utilized',
+      'Utilized In',
     ];
 
     // Helper function to escape CSV values

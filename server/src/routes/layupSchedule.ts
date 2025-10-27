@@ -55,6 +55,8 @@ router.post('/generate', async (req: Request, res: Response) => {
     // Fetch regular orders details
     let regularOrders: any[] = [];
     if (selectedOrderIds.length > 0) {
+      console.log(`🔍 Fetching ${selectedOrderIds.length} regular orders:`, selectedOrderIds.slice(0, 5));
+      
       const ordersResults = await db
         .select({
           orderId: productionQueue.orderId,
@@ -67,6 +69,11 @@ router.post('/generate', async (req: Request, res: Response) => {
         .from(productionQueue)
         .leftJoin(allOrders, eq(productionQueue.orderId, allOrders.orderId))
         .where(inArray(productionQueue.orderId, selectedOrderIds));
+      
+      console.log(`📦 Found ${ordersResults.length} regular orders in database`);
+      if (ordersResults.length > 0) {
+        console.log('🔍 Sample order:', ordersResults[0]);
+      }
       
       regularOrders = ordersResults;
     }

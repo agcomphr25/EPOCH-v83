@@ -73,12 +73,12 @@ export function LayupSchedulePreview({
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto print:max-w-full print:max-h-full">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Calendar className="w-6 h-6" />
+        <DialogHeader className="print:block print:mb-4">
+          <DialogTitle className="flex items-center gap-2 print:text-2xl print:font-bold">
+            <Calendar className="w-6 h-6 print:hidden" />
             Layup Schedule Preview
           </DialogTitle>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 print:text-lg print:text-black">
             Week starting {weekStart ? format(new Date(weekStart), 'MMM dd, yyyy') : ''}
           </p>
         </DialogHeader>

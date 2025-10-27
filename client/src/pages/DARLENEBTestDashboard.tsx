@@ -16,6 +16,7 @@ import {
   Home,
   Star,
   GraduationCap,
+  CreditCard,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -194,6 +195,20 @@ export default function DARLENEBTestDashboard() {
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Complete training courses
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/finance/bulk-payment">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
+            <CardContent className="p-4 text-center">
+              <CreditCard className="w-8 h-8 text-blue-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                Bulk Payment
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Process bulk payments
               </p>
             </CardContent>
           </Card>

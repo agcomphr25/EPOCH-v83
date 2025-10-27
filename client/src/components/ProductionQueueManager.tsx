@@ -55,6 +55,8 @@ import {
   Zap,
   ShoppingCart,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CalendarCheck,
 } from 'lucide-react';
 import type { P1POQueueCustomer } from '@shared/schema';
@@ -147,6 +149,7 @@ export default function ProductionQueueManager() {
   // State for day selection
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4]); // Default: Mon-Thu
   const [daySelectionDialogOpen, setDaySelectionDialogOpen] = useState(false);
+  const [selectedWeekOffset, setSelectedWeekOffset] = useState<number>(0); // 0 = next week, 1 = week after, etc.
 
   // Fetch prioritized production queue
   const {
@@ -287,12 +290,19 @@ export default function ProductionQueueManager() {
         });
       });
 
+      // Calculate week start date based on selected week offset
+      const today = new Date();
+      const nextMonday = new Date(today);
+      nextMonday.setDate(today.getDate() + ((1 + 7 - today.getDay()) % 7 || 7));
+      nextMonday.setDate(nextMonday.getDate() + (selectedWeekOffset * 7));
+      
       return apiRequest('/api/layup-schedule/generate', {
         method: 'POST',
         body: {
           selectedOrderIds: Array.from(selectedQueueOrders),
           selectedPOItems: selectedPOItemsArray,
           workDays: selectedDays,
+          weekStart: nextMonday.toISOString(),
         },
       });
     },
@@ -1515,26 +1525,47 @@ export default function ProductionQueueManager() {
             <DialogTitle>Select Week and Days for Layup Schedule</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {/* Week Display */}
+            {/* Week Selection */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Week Starting:</label>
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm font-semibold text-blue-900">
-                  {(() => {
-                    const today = new Date();
-                    const nextMonday = new Date(today);
-                    nextMonday.setDate(today.getDate() + ((1 + 7 - today.getDay()) % 7 || 7));
-                    return nextMonday.toLocaleDateString('en-US', { 
-                      weekday: 'long', 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric' 
-                    });
-                  })()}
-                </p>
-                <p className="text-xs text-blue-600 mt-1">
-                  Schedule will be generated for the upcoming week
-                </p>
+              <label className="text-sm font-medium">Select Week:</label>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedWeekOffset(Math.max(0, selectedWeekOffset - 1))}
+                  disabled={selectedWeekOffset === 0}
+                  data-testid="button-prev-week"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <div className="flex-1 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-sm font-semibold text-blue-900">
+                    {(() => {
+                      const today = new Date();
+                      const nextMonday = new Date(today);
+                      nextMonday.setDate(today.getDate() + ((1 + 7 - today.getDay()) % 7 || 7));
+                      nextMonday.setDate(nextMonday.getDate() + (selectedWeekOffset * 7));
+                      return nextMonday.toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      });
+                    })()}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    {selectedWeekOffset === 0 ? 'Next week' : selectedWeekOffset === 1 ? 'Week after next' : `${selectedWeekOffset + 1} weeks ahead`}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedWeekOffset(selectedWeekOffset + 1)}
+                  disabled={selectedWeekOffset >= 8}
+                  data-testid="button-next-week"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
               </div>
             </div>
 

@@ -16,6 +16,7 @@ interface GenerateScheduleRequest {
     quantity: number;
   }[];
   workDays?: number[]; // Optional: Days to schedule (1=Mon, 2=Tue, etc). Defaults to [1,2,3,4]
+  weekStart?: string; // Optional: ISO date string for week start. Defaults to next Monday
 }
 
 // Generate layup schedule preview based on selected items
@@ -23,7 +24,7 @@ router.post('/generate', async (req: Request, res: Response) => {
   try {
     console.log('🔄 GENERATE SCHEDULE: Starting schedule generation...');
     
-    const { selectedOrderIds = [], selectedPOItems = [], workDays = [1, 2, 3, 4] }: GenerateScheduleRequest = req.body;
+    const { selectedOrderIds = [], selectedPOItems = [], workDays = [1, 2, 3, 4], weekStart }: GenerateScheduleRequest = req.body;
     
     const totalItems = selectedOrderIds.length + selectedPOItems.length;
     console.log(`📊 Total items to schedule: ${totalItems} (${selectedOrderIds.length} regular orders, ${selectedPOItems.length} PO items)`);
@@ -78,34 +79,14 @@ router.post('/generate', async (req: Request, res: Response) => {
       regularOrders = ordersResults;
     }
     
-    // Fetch PO item details (action_length, material) and prepare for scheduling
+    // Fetch PO item details and prepare for scheduling
     const poItems: any[] = [];
     
     if (selectedPOItems.length > 0) {
-      // Get unique item IDs to fetch their details
-      const itemIds = Array.from(new Set(selectedPOItems.map(item => item.itemId)));
+      console.log(`🔍 Preparing ${selectedPOItems.length} PO items for scheduling`);
       
-      console.log(`🔍 Fetching details for ${itemIds.length} PO items`);
-      
-      const poItemDetails = await db
-        .select({
-          id: purchaseOrderItems.id,
-          actionLength: poProducts.actionLength,
-          material: poProducts.material,
-        })
-        .from(purchaseOrderItems)
-        .leftJoin(poProducts, eq(purchaseOrderItems.itemId, poProducts.id))
-        .where(inArray(purchaseOrderItems.id, itemIds));
-      
-      // Create a map for quick lookup
-      const itemDetailsMap = new Map(
-        poItemDetails.map(item => [item.id, { actionLength: item.actionLength, material: item.material }])
-      );
-      
-      // Expand by quantity with action_length and material
+      // Expand by quantity for scheduling
       selectedPOItems.forEach(item => {
-        const details = itemDetailsMap.get(item.itemId);
-        
         for (let i = 0; i < item.quantity; i++) {
           poItems.push({
             orderId: `PO-${item.poNumber}-${item.itemId}-${i + 1}`,
@@ -115,8 +96,8 @@ router.post('/generate', async (req: Request, res: Response) => {
             customerName: 'Purchase Order',
             dueDate: null,
             quantity: 1,
-            actionLength: details?.actionLength || null,
-            material: details?.material || null,
+            actionLength: null, // TODO: Add action_length lookup
+            material: null, // TODO: Add material lookup
           });
         }
       });
@@ -125,9 +106,17 @@ router.post('/generate', async (req: Request, res: Response) => {
     const allItems = [...regularOrders, ...poItems];
     console.log(`📦 Prepared ${allItems.length} items for scheduling (${regularOrders.length} regular + ${poItems.length} PO units)`);
     
-    // Calculate start date (next Monday)
-    const today = new Date();
-    const nextMonday = startOfWeek(addDays(today, 7), { weekStartsOn: 1 });
+    // Use provided week start or calculate next Monday
+    let weekStartDate: Date;
+    if (weekStart) {
+      weekStartDate = new Date(weekStart);
+      console.log(`📅 Using provided week start: ${format(weekStartDate, 'yyyy-MM-dd')}`);
+    } else {
+      const today = new Date();
+      weekStartDate = startOfWeek(addDays(today, 7), { weekStartsOn: 1 });
+      console.log(`📅 Using calculated next Monday: ${format(weekStartDate, 'yyyy-MM-dd')}`);
+    }
+    const nextMonday = weekStartDate; // For backward compatibility with existing code
     
     // Initialize schedule by day (using selected work days)
     const scheduledItems: any[] = [];
@@ -193,8 +182,8 @@ router.post('/generate', async (req: Request, res: Response) => {
         }
       }
       
-      // If not scheduled on Mon-Thu, try Friday (day 5)
-      if (!scheduled) {
+      // If not scheduled and Friday is selected, try Friday (day 5) as overflow
+      if (!scheduled && workDays.includes(5)) {
         for (const mold of compatibleMolds) {
           if (!moldDayCapacity[mold.moldId][5]) {
             moldDayCapacity[mold.moldId][5] = 0;

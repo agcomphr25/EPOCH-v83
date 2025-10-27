@@ -56,12 +56,13 @@ router.post('/generate', async (req: Request, res: Response) => {
         `
         SELECT 
           pq.order_id as "orderId",
-          pq.fb_order_number as "fbOrderNumber",
-          pq.model_id as "stockModel",
+          ao.fb_order_number as "fbOrderNumber",
+          ao.model_id as "stockModel",
           pq.customer as "customerId",
           pq.customer as "customerName",
           pq.due_date as "dueDate"
         FROM production_queue pq
+        LEFT JOIN all_orders ao ON pq.order_id = ao.order_id
         WHERE pq.order_id = ANY($1)
         `,
         [selectedOrderIds]

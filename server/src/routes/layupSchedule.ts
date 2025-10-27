@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 
-import { db } from '../../db';
+import { db, pool } from '../../db';
 import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts } from '../../schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
@@ -67,6 +67,7 @@ router.post('/generate', async (req: Request, res: Response) => {
           customerId: allOrders.customerId,
           customerName: allOrders.customerId, // Using customerId as customerName for now
           dueDate: allOrders.dueDate,
+          features: allOrders.features,
         })
         .from(allOrders)
         .where(inArray(allOrders.orderId, selectedOrderIds));
@@ -76,7 +77,52 @@ router.post('/generate', async (req: Request, res: Response) => {
         console.log('🔍 Sample order:', ordersResults[0]);
       }
       
-      regularOrders = ordersResults;
+      // Process badge information
+      regularOrders = ordersResults.map(order => {
+        const features = order.features as any || {};
+        const otherOptions = Array.isArray(features.other_options) ? features.other_options : [];
+        
+        // Extract action length
+        let actionLength = features.action_length;
+        if (!actionLength || actionLength === 'none') {
+          // Try to derive from action_inlet
+          const actionInlet = features.action_inlet;
+          if (actionInlet) {
+            if (actionInlet.includes('short')) {
+              actionLength = 'SA';
+            } else if (actionInlet.includes('long')) {
+              actionLength = 'LA';
+            }
+          }
+        }
+        
+        // Extract material (usually in stock_color)
+        const material = features.stock_color || null;
+        
+        // Determine badges
+        const lop = features.length_of_pull;
+        // LOP badge: any non-empty, non-standard value (matching frontend logic)
+        const hasLOP = lop && 
+          lop !== 'none' && 
+          lop !== 'standard' && 
+          lop !== 'std' && 
+          lop !== 'no_lop_change' &&
+          lop.trim() !== '';
+        
+        const bottomMetal = features.bottom_metal;
+        const hasADL = bottomMetal && typeof bottomMetal === 'string' && bottomMetal.toLowerCase().includes('adl');
+        
+        const hasHeavyFill = otherOptions.includes('heavy_fill');
+        
+        return {
+          ...order,
+          actionLength,
+          material,
+          hasLOP,
+          hasADL,
+          hasHeavyFill,
+        };
+      });
     }
     
     // Fetch PO item details and prepare for scheduling
@@ -179,9 +225,13 @@ router.post('/generate', async (req: Request, res: Response) => {
               moldId: mold.moldId,
               dayOfWeek: day,
               dayName: ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'][day],
-              // PO-specific fields
+              // Additional fields
               actionLength: item.actionLength || null,
               material: item.material || null,
+              // Badge information
+              hasLOP: item.hasLOP || false,
+              hasADL: item.hasADL || false,
+              hasHeavyFill: item.hasHeavyFill || false,
             });
             
             moldDayCapacity[mold.moldId][day] = currentUsage + 1;
@@ -226,11 +276,11 @@ router.post('/generate', async (req: Request, res: Response) => {
   }
 });
 
-// Save layup schedule and move orders to Layup/Plugging department
+// Save layup schedule and move orders to Barcode department
 router.post('/save', async (req: Request, res: Response) => {
   try {
     console.log(
-      '💾 SCHEDULE SAVE: Starting layup schedule save and department progression...'
+      '💾 SCHEDULE SAVE: Starting layup schedule save and moving orders to Barcode...'
     );
 
     const { entries, workDays, weekStart } = req.body;
@@ -263,9 +313,10 @@ router.post('/save', async (req: Request, res: Response) => {
       );
 
       let savedCount = 0;
-      const progressedCount = 0;
+      let progressedCount = 0;
+      const orderIds: string[] = [];
 
-      // Save schedule entries and progress orders
+      // Save schedule entries
       for (const entry of entries) {
         const { orderId, scheduledDate, moldId, employeeAssignments } = entry;
 
@@ -301,22 +352,48 @@ router.post('/save', async (req: Request, res: Response) => {
         );
 
         savedCount++;
+        
+        // Track unique order IDs (skip PO items)
+        if (!orderId.startsWith('PO-')) {
+          orderIds.push(orderId);
+        }
+        
         console.log(
-          `✅ Order ${orderId} scheduled for ${scheduledDate} (schedule only, no department change)`
+          `✅ Order ${orderId} scheduled for ${scheduledDate}`
         );
+      }
+
+      // Move regular orders to Barcode department (not PO items)
+      if (orderIds.length > 0) {
+        const uniqueOrderIds = Array.from(new Set(orderIds));
+        
+        const updateResult = await pool.query(
+          `
+          UPDATE all_orders
+          SET current_department = 'Barcode',
+              updated_at = NOW()
+          WHERE order_id = ANY($1::text[])
+          AND current_department = 'Production Queue'
+        `,
+          [uniqueOrderIds]
+        );
+        
+        progressedCount = updateResult.rowCount || 0;
+        console.log(`📦 Moved ${progressedCount} orders to Barcode department`);
       }
 
       // Commit transaction
       await pool.query('COMMIT');
 
       console.log(
-        `✅ Successfully saved ${savedCount} schedule entries (no department changes)`
+        `✅ Successfully saved ${savedCount} schedule entries and moved ${progressedCount} orders to Barcode`
       );
 
       res.json({
         success: true,
-        message: `Weekly schedule saved successfully`,
+        message: `Schedule saved and ${progressedCount} orders moved to Barcode`,
         entriesSaved: savedCount,
+        ordersProgressed: progressedCount,
         weekStart: weekStart,
         workDays: workDays,
       });

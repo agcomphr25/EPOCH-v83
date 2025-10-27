@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, CheckCircle2, XCircle, AlertTriangle, Package } from 'lucide-react';
+import { Calendar, CheckCircle2, XCircle, AlertTriangle, Package, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ScheduledItem {
@@ -15,6 +15,11 @@ interface ScheduledItem {
   moldId: string;
   dayOfWeek: number;
   dayName: string;
+  actionLength?: string | null;
+  material?: string | null;
+  hasLOP?: boolean;
+  hasADL?: boolean;
+  hasHeavyFill?: boolean;
 }
 
 interface OverflowItem {
@@ -61,9 +66,13 @@ export function LayupSchedulePreview({
 
   const hasOverflow = overflowItems.length > 0;
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto print:max-w-full print:max-h-full">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="w-6 h-6" />
@@ -127,22 +136,49 @@ export function LayupSchedulePreview({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Order ID</TableHead>
-                    <TableHead>FB Order #</TableHead>
-                    <TableHead>Customer</TableHead>
                     <TableHead>Stock Model</TableHead>
                     <TableHead>Mold</TableHead>
+                    <TableHead>Action Length</TableHead>
+                    <TableHead>Material</TableHead>
+                    <TableHead>Badges</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {itemsByDay[day]?.map((item, idx) => (
                     <TableRow key={idx}>
                       <TableCell className="font-mono text-sm">{item.orderId}</TableCell>
-                      <TableCell>{item.fbOrderNumber || '-'}</TableCell>
-                      <TableCell>{item.customerName}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{item.stockModel}</Badge>
                       </TableCell>
                       <TableCell className="font-medium">{item.moldId}</TableCell>
+                      <TableCell className="text-sm">
+                        {item.actionLength ? `${item.actionLength}"` : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {item.material || '-'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {item.hasLOP && (
+                            <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
+                              LOP
+                            </Badge>
+                          )}
+                          {item.hasADL && (
+                            <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
+                              ADL
+                            </Badge>
+                          )}
+                          {item.hasHeavyFill && (
+                            <Badge className="bg-orange-100 text-orange-800 border-orange-200 text-xs">
+                              Heavy Fill
+                            </Badge>
+                          )}
+                          {!item.hasLOP && !item.hasADL && !item.hasHeavyFill && (
+                            <span className="text-gray-400 text-xs">-</span>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -172,8 +208,6 @@ export function LayupSchedulePreview({
               <TableHeader>
                 <TableRow>
                   <TableHead>Order ID</TableHead>
-                  <TableHead>FB Order #</TableHead>
-                  <TableHead>Customer</TableHead>
                   <TableHead>Stock Model</TableHead>
                   <TableHead>Reason</TableHead>
                 </TableRow>
@@ -182,8 +216,6 @@ export function LayupSchedulePreview({
                 {overflowItems.map((item, idx) => (
                   <TableRow key={idx}>
                     <TableCell className="font-mono text-sm">{item.orderId}</TableCell>
-                    <TableCell>{item.fbOrderNumber || '-'}</TableCell>
-                    <TableCell>{item.customerName}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{item.stockModel}</Badge>
                     </TableCell>
@@ -195,7 +227,15 @@ export function LayupSchedulePreview({
           </div>
         )}
 
-        <DialogFooter className="mt-6">
+        <DialogFooter className="mt-6 print:hidden">
+          <Button
+            variant="outline"
+            onClick={handlePrint}
+            data-testid="button-print-schedule"
+          >
+            <Printer className="w-4 h-4 mr-2" />
+            Print Schedule
+          </Button>
           <Button
             variant="outline"
             onClick={onClose}
@@ -210,7 +250,7 @@ export function LayupSchedulePreview({
             className="bg-green-600 hover:bg-green-700"
             data-testid="button-approve-schedule"
           >
-            {isApproving ? 'Approving...' : `Approve Schedule (${scheduledItems.length} items)`}
+            {isApproving ? 'Approving...' : `Approve & Move to Barcode (${scheduledItems.length} items)`}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -233,24 +233,8 @@ export async function sendFollowupOrderEmail(
     const pdfBuffer = fs.readFileSync(pdfPath);
     const pdfBase64 = pdfBuffer.toString('base64');
 
-    // Read and encode company logo
-    let logoBase64: string | undefined;
-    try {
-      // Simple path resolution - logo is always in server/assets
-      const logoPath = path.join(process.cwd(), 'server', 'assets', 'logo_updated.png');
-      console.log('📧 Logo path for email:', logoPath);
-      if (fs.existsSync(logoPath)) {
-        const logoBuffer = fs.readFileSync(logoPath);
-        logoBase64 = logoBuffer.toString('base64');
-        console.log('✅ Logo loaded successfully for email');
-      } else {
-        console.warn('❌ Logo file not found at:', logoPath);
-      }
-    } catch (error) {
-      console.warn('❌ Could not load company logo for email:', error);
-    }
-
-    const emailHTML = generateEmailHTML(orderData, logoBase64);
+    // Don't embed logo to avoid large HTML causing email rejection
+    const emailHTML = generateEmailHTML(orderData);
     const emailText = generateEmailText(orderData);
 
     // SendGrid email with attachment
@@ -271,6 +255,15 @@ export async function sendFollowupOrderEmail(
         },
       ],
     };
+
+    console.log('📧 Sending followup email:', {
+      to: orderData.customerEmail,
+      subject: msg.subject,
+      textLength: emailText?.length || 0,
+      htmlLength: emailHTML?.length || 0,
+      hasAttachment: true,
+      pdfSize: pdfBase64?.length || 0,
+    });
 
     const [response] = await client.send(msg);
 

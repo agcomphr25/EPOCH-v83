@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 
-import { pool } from '../../db';
+import { db, pool } from '../../db';
+import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts } from '../../schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 
 const router = Router();
@@ -13,6 +15,8 @@ interface GenerateScheduleRequest {
     stockModel: string;
     quantity: number;
   }[];
+  workDays?: number[]; // Optional: Days to schedule (1=Mon, 2=Tue, etc). Defaults to [1,2,3,4]
+  weekStart?: string; // Optional: ISO date string for week start. Defaults to next Monday
 }
 
 // Generate layup schedule preview based on selected items
@@ -20,10 +24,12 @@ router.post('/generate', async (req: Request, res: Response) => {
   try {
     console.log('🔄 GENERATE SCHEDULE: Starting schedule generation...');
     
-    const { selectedOrderIds = [], selectedPOItems = [] }: GenerateScheduleRequest = req.body;
+    const { selectedOrderIds = [], selectedPOItems = [], workDays = [1, 2, 3, 4], weekStart }: GenerateScheduleRequest = req.body;
     
     const totalItems = selectedOrderIds.length + selectedPOItems.length;
     console.log(`📊 Total items to schedule: ${totalItems} (${selectedOrderIds.length} regular orders, ${selectedPOItems.length} PO items)`);
+    console.log('📦 Selected PO Items received:', JSON.stringify(selectedPOItems.slice(0, 5), null, 2));
+    console.log('📦 PO Items total quantity:', selectedPOItems.reduce((sum, item) => sum + item.quantity, 0));
     
     if (totalItems === 0) {
       return res.status(400).json({
@@ -33,86 +39,204 @@ router.post('/generate', async (req: Request, res: Response) => {
     }
     
     // Fetch molds with their capacities
-    const moldsResult = await pool.query(`
-      SELECT 
-        mold_id as "moldId",
-        model_name as "modelName",
-        stock_models as "stockModels",
-        multiplier as "capacity",
-        enabled,
-        is_active as "isActive"
-      FROM molds
-      WHERE enabled = true AND is_active = true
-      ORDER BY mold_id
-    `);
+    const activeMolds = await db
+      .select()
+      .from(molds)
+      .where(and(eq(molds.enabled, true), eq(molds.isActive, true)));
     
-    const molds = moldsResult.rows || [];
-    console.log(`🏭 Found ${molds.length} active molds`);
-    
-    // Fetch regular orders details
-    const regularOrders = [];
-    if (selectedOrderIds.length > 0) {
-      const ordersResult = await pool.query(
-        `
-        SELECT 
-          pq.order_id as "orderId",
-          pq.fb_order_number as "fbOrderNumber",
-          pq.model_id as "stockModel",
-          pq.customer as "customerId",
-          pq.customer as "customerName",
-          pq.due_date as "dueDate"
-        FROM production_queue pq
-        WHERE pq.order_id = ANY($1)
-        `,
-        [selectedOrderIds]
-      );
-      regularOrders.push(...(ordersResult.rows || []));
+    console.log(`🏭 Found ${activeMolds.length} active molds`);
+    if (activeMolds.length > 0) {
+      console.log('🔍 Sample molds:', activeMolds.slice(0, 3).map(m => ({ 
+        moldId: m.moldId, 
+        modelName: m.modelName, 
+        stockModels: m.stockModels,
+        capacity: m.multiplier
+      })));
     }
     
-    // Prepare PO items for scheduling - expand by quantity
-    const poItems: any[] = [];
-    selectedPOItems.forEach(item => {
-      // Create separate schedule entries for each unit in the quantity
-      for (let i = 0; i < item.quantity; i++) {
-        poItems.push({
-          orderId: `PO-${item.poNumber}-${item.itemId}-${i + 1}`,
-          fbOrderNumber: item.poNumber,
-          stockModel: item.stockModel,
-          customerId: null,
-          customerName: 'Purchase Order',
-          dueDate: null,
-          quantity: 1, // Each entry represents 1 unit
-        });
+    // Fetch regular orders details from all_orders table
+    let regularOrders: any[] = [];
+    if (selectedOrderIds.length > 0) {
+      console.log(`🔍 Fetching ${selectedOrderIds.length} regular orders:`, selectedOrderIds.slice(0, 5));
+      
+      const ordersResults = await db
+        .select({
+          orderId: allOrders.orderId,
+          fbOrderNumber: allOrders.fbOrderNumber,
+          stockModel: allOrders.modelId,
+          customerId: allOrders.customerId,
+          customerName: allOrders.customerId, // Using customerId as customerName for now
+          dueDate: allOrders.dueDate,
+          features: allOrders.features,
+        })
+        .from(allOrders)
+        .where(inArray(allOrders.orderId, selectedOrderIds));
+      
+      console.log(`📦 Found ${ordersResults.length} regular orders in database`);
+      if (ordersResults.length > 0) {
+        console.log('🔍 Sample order:', ordersResults[0]);
       }
-    });
+      
+      // Process badge information
+      regularOrders = ordersResults.map(order => {
+        const features = order.features as any || {};
+        const otherOptions = Array.isArray(features.other_options) ? features.other_options : [];
+        
+        // Extract action length
+        let actionLength = features.action_length;
+        if (!actionLength || actionLength === 'none') {
+          // Try to derive from action_inlet
+          const actionInlet = features.action_inlet;
+          if (actionInlet) {
+            if (actionInlet.includes('short')) {
+              actionLength = 'SA';
+            } else if (actionInlet.includes('long')) {
+              actionLength = 'LA';
+            }
+          }
+        }
+        
+        // Extract material from stock model name (fg = Fiberglass, cf = Carbon Fiber)
+        let material = null;
+        const stockModelName = order.stockModel?.toLowerCase() || '';
+        if (stockModelName.includes('_fg_') || stockModelName.includes('_fg')) {
+          material = 'Fiberglass';
+        } else if (stockModelName.includes('_cf_') || stockModelName.includes('_cf')) {
+          material = 'Carbon Fiber';
+        }
+        
+        // Determine badges
+        const lop = features.length_of_pull;
+        // LOP badge: any non-empty, non-standard value (matching frontend logic)
+        const hasLOP = lop && 
+          lop !== 'none' && 
+          lop !== 'standard' && 
+          lop !== 'std' && 
+          lop !== 'no_lop_change' &&
+          lop.trim() !== '';
+        
+        const bottomMetal = features.bottom_metal;
+        const hasADL = bottomMetal && typeof bottomMetal === 'string' && bottomMetal.toLowerCase().includes('adl');
+        
+        const hasHeavyFill = otherOptions.includes('heavy_fill');
+        
+        return {
+          ...order,
+          actionLength,
+          material,
+          hasLOP,
+          hasADL,
+          hasHeavyFill,
+        };
+      });
+    }
+    
+    // Fetch PO item details and prepare for scheduling
+    const poItems: any[] = [];
+    
+    if (selectedPOItems.length > 0) {
+      console.log(`🔍 Preparing ${selectedPOItems.length} PO items for scheduling`);
+      
+      // Fetch action length from po_products table
+      const itemIds = selectedPOItems.map(item => item.itemId);
+      const poProductsData = await db
+        .select({
+          id: poProducts.id,
+          actionLength: poProducts.actionLength,
+          actionInlet: poProducts.actionInlet,
+          stockModel: poProducts.stockModel,
+        })
+        .from(poProducts)
+        .where(inArray(poProducts.id, itemIds));
+      
+      console.log(`📦 Fetched ${poProductsData.length} PO products with action length data`);
+      
+      // Create a map for quick lookup
+      const poProductMap = new Map(poProductsData.map(p => [p.id, p]));
+      
+      // Expand by quantity for scheduling
+      selectedPOItems.forEach(item => {
+        const poProductData = poProductMap.get(item.itemId);
+        
+        // Extract action length from po_products
+        let actionLength = poProductData?.actionLength || null;
+        if (!actionLength || actionLength === 'none') {
+          // Try to derive from action_inlet
+          const actionInlet = poProductData?.actionInlet;
+          if (actionInlet) {
+            if (actionInlet.includes('short')) {
+              actionLength = 'SA';
+            } else if (actionInlet.includes('long')) {
+              actionLength = 'LA';
+            }
+          }
+        }
+        
+        // Extract material from stock model name
+        let material = null;
+        const stockModelName = item.stockModel?.toLowerCase() || '';
+        if (stockModelName.includes('_fg_') || stockModelName.includes('_fg')) {
+          material = 'Fiberglass';
+        } else if (stockModelName.includes('_cf_') || stockModelName.includes('_cf')) {
+          material = 'Carbon Fiber';
+        }
+        
+        for (let i = 0; i < item.quantity; i++) {
+          poItems.push({
+            orderId: `PO-${item.poNumber}-${item.itemId}-${i + 1}`,
+            fbOrderNumber: item.poNumber,
+            stockModel: item.stockModel,
+            customerId: null,
+            customerName: 'Purchase Order',
+            dueDate: null,
+            quantity: 1,
+            actionLength,
+            material,
+            hasLOP: false,
+            hasADL: false,
+            hasHeavyFill: false,
+          });
+        }
+      });
+    }
     
     const allItems = [...regularOrders, ...poItems];
     console.log(`📦 Prepared ${allItems.length} items for scheduling (${regularOrders.length} regular + ${poItems.length} PO units)`);
     
-    // Calculate start date (next Monday)
-    const today = new Date();
-    const nextMonday = startOfWeek(addDays(today, 7), { weekStartsOn: 1 });
+    // Use provided week start or calculate next Monday
+    let weekStartDate: Date;
+    if (weekStart) {
+      weekStartDate = new Date(weekStart);
+      console.log(`📅 Using provided week start: ${format(weekStartDate, 'yyyy-MM-dd')}`);
+    } else {
+      const today = new Date();
+      weekStartDate = startOfWeek(addDays(today, 7), { weekStartsOn: 1 });
+      console.log(`📅 Using calculated next Monday: ${format(weekStartDate, 'yyyy-MM-dd')}`);
+    }
+    const nextMonday = weekStartDate; // For backward compatibility with existing code
     
-    // Initialize schedule by day (Monday = 1, Thursday = 4, Friday = 5)
-    const workDays = [1, 2, 3, 4]; // Monday through Thursday
+    // Initialize schedule by day (using selected work days)
     const scheduledItems: any[] = [];
     const overflowItems: any[] = [];
     
     // Track capacity usage per mold per day
     const moldDayCapacity: { [key: string]: { [day: number]: number } } = {};
-    molds.forEach(mold => {
+    activeMolds.forEach(mold => {
       moldDayCapacity[mold.moldId] = {};
       workDays.forEach(day => {
         moldDayCapacity[mold.moldId][day] = 0;
       });
     });
     
+    // Round-robin day index for even distribution
+    let currentDayIndex = 0;
+    
     // Try to schedule each item
     for (const item of allItems) {
       let scheduled = false;
       
       // Find compatible molds for this stock model
-      const compatibleMolds = molds.filter(mold => 
+      const compatibleMolds = activeMolds.filter(mold => 
         mold.stockModels && mold.stockModels.includes(item.stockModel)
       );
       
@@ -125,14 +249,21 @@ router.post('/generate', async (req: Request, res: Response) => {
         continue;
       }
       
-      // Try to find a slot (Monday through Thursday first)
-      for (const day of workDays) {
+      // Try to find a slot using round-robin distribution across all selected days
+      // Start from current day index and try all days in rotation
+      const attemptOrder = [...workDays];
+      const rotatedDays = [
+        ...attemptOrder.slice(currentDayIndex),
+        ...attemptOrder.slice(0, currentDayIndex)
+      ];
+      
+      for (const day of rotatedDays) {
         if (scheduled) break;
         
         for (const mold of compatibleMolds) {
           const currentUsage = moldDayCapacity[mold.moldId][day] || 0;
           
-          if (currentUsage < mold.capacity) {
+          if (currentUsage < mold.multiplier) {
             // Found available capacity!
             const scheduledDate = addDays(nextMonday, day - 1);
             
@@ -145,42 +276,21 @@ router.post('/generate', async (req: Request, res: Response) => {
               moldId: mold.moldId,
               dayOfWeek: day,
               dayName: ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'][day],
+              // Additional fields
+              actionLength: item.actionLength || null,
+              material: item.material || null,
+              // Badge information
+              hasLOP: item.hasLOP || false,
+              hasADL: item.hasADL || false,
+              hasHeavyFill: item.hasHeavyFill || false,
             });
             
             moldDayCapacity[mold.moldId][day] = currentUsage + 1;
             scheduled = true;
             console.log(`✅ Scheduled ${item.orderId} → ${mold.moldId} on ${['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'][day]}`);
-            break;
-          }
-        }
-      }
-      
-      // If not scheduled on Mon-Thu, try Friday (day 5)
-      if (!scheduled) {
-        for (const mold of compatibleMolds) {
-          if (!moldDayCapacity[mold.moldId][5]) {
-            moldDayCapacity[mold.moldId][5] = 0;
-          }
-          
-          const currentUsage = moldDayCapacity[mold.moldId][5] || 0;
-          
-          if (currentUsage < mold.capacity) {
-            const scheduledDate = addDays(nextMonday, 4); // Friday
             
-            scheduledItems.push({
-              orderId: item.orderId,
-              fbOrderNumber: item.fbOrderNumber,
-              stockModel: item.stockModel,
-              customerName: item.customerName,
-              scheduledDate: format(scheduledDate, 'yyyy-MM-dd'),
-              moldId: mold.moldId,
-              dayOfWeek: 5,
-              dayName: 'Friday',
-            });
-            
-            moldDayCapacity[mold.moldId][5] = currentUsage + 1;
-            scheduled = true;
-            console.log(`⚠️ Scheduled ${item.orderId} → ${mold.moldId} on Friday (overflow)`);
+            // Move to next day in rotation for balanced distribution
+            currentDayIndex = (currentDayIndex + 1) % workDays.length;
             break;
           }
         }
@@ -191,7 +301,7 @@ router.post('/generate', async (req: Request, res: Response) => {
         console.log(`❌ Cannot schedule ${item.orderId} - no capacity available`);
         overflowItems.push({
           ...item,
-          reason: 'No available mold capacity in the scheduling window (Mon-Fri)',
+          reason: 'No available mold capacity in the scheduling window',
         });
       }
     }
@@ -217,11 +327,11 @@ router.post('/generate', async (req: Request, res: Response) => {
   }
 });
 
-// Save layup schedule and move orders to Layup/Plugging department
+// Save layup schedule and move orders to Barcode department
 router.post('/save', async (req: Request, res: Response) => {
   try {
     console.log(
-      '💾 SCHEDULE SAVE: Starting layup schedule save and department progression...'
+      '💾 SCHEDULE SAVE: Starting layup schedule save and moving orders to Barcode...'
     );
 
     const { entries, workDays, weekStart } = req.body;
@@ -254,9 +364,10 @@ router.post('/save', async (req: Request, res: Response) => {
       );
 
       let savedCount = 0;
-      const progressedCount = 0;
+      let progressedCount = 0;
+      const orderIds: string[] = [];
 
-      // Save schedule entries and progress orders
+      // Save schedule entries
       for (const entry of entries) {
         const { orderId, scheduledDate, moldId, employeeAssignments } = entry;
 
@@ -292,22 +403,48 @@ router.post('/save', async (req: Request, res: Response) => {
         );
 
         savedCount++;
+        
+        // Track unique order IDs (skip PO items)
+        if (!orderId.startsWith('PO-')) {
+          orderIds.push(orderId);
+        }
+        
         console.log(
-          `✅ Order ${orderId} scheduled for ${scheduledDate} (schedule only, no department change)`
+          `✅ Order ${orderId} scheduled for ${scheduledDate}`
         );
+      }
+
+      // Move regular orders to Barcode department (not PO items)
+      if (orderIds.length > 0) {
+        const uniqueOrderIds = Array.from(new Set(orderIds));
+        
+        const updateResult = await pool.query(
+          `
+          UPDATE all_orders
+          SET current_department = 'Barcode',
+              updated_at = NOW()
+          WHERE order_id = ANY($1::text[])
+          AND current_department = 'Production Queue'
+        `,
+          [uniqueOrderIds]
+        );
+        
+        progressedCount = (updateResult as any).rowCount || 0;
+        console.log(`📦 Moved ${progressedCount} orders to Barcode department`);
       }
 
       // Commit transaction
       await pool.query('COMMIT');
 
       console.log(
-        `✅ Successfully saved ${savedCount} schedule entries (no department changes)`
+        `✅ Successfully saved ${savedCount} schedule entries and moved ${progressedCount} orders to Barcode`
       );
 
       res.json({
         success: true,
-        message: `Weekly schedule saved successfully`,
+        message: `Schedule saved and ${progressedCount} orders moved to Barcode`,
         entriesSaved: savedCount,
+        ordersProgressed: progressedCount,
         weekStart: weekStart,
         workDays: workDays,
       });

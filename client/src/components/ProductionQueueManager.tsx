@@ -55,6 +55,8 @@ import {
   Zap,
   ShoppingCart,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CalendarCheck,
 } from 'lucide-react';
 import type { P1POQueueCustomer } from '@shared/schema';
@@ -129,6 +131,9 @@ export default function ProductionQueueManager() {
     new Map()
   );
 
+  // State for "Select Next N" for regular production queue
+  const [selectNextQueueCount, setSelectNextQueueCount] = useState<string>('');
+
   // State for layup schedule preview modal
   const [schedulePreviewOpen, setSchedulePreviewOpen] = useState(false);
   const [generatedSchedule, setGeneratedSchedule] = useState<{
@@ -137,6 +142,11 @@ export default function ProductionQueueManager() {
     weekStart: string;
     totalItems: number;
   } | null>(null);
+
+  // State for day selection
+  const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4]); // Default: Mon-Thu
+  const [daySelectionDialogOpen, setDaySelectionDialogOpen] = useState(false);
+  const [selectedWeekOffset, setSelectedWeekOffset] = useState<number>(0); // 0 = next week, 1 = week after, etc.
 
   // Fetch prioritized production queue
   const {
@@ -277,11 +287,19 @@ export default function ProductionQueueManager() {
         });
       });
 
+      // Calculate week start date based on selected week offset
+      const today = new Date();
+      const nextMonday = new Date(today);
+      nextMonday.setDate(today.getDate() + ((1 + 7 - today.getDay()) % 7 || 7));
+      nextMonday.setDate(nextMonday.getDate() + (selectedWeekOffset * 7));
+      
       return apiRequest('/api/layup-schedule/generate', {
         method: 'POST',
         body: {
           selectedOrderIds: Array.from(selectedQueueOrders),
           selectedPOItems: selectedPOItemsArray,
+          workDays: selectedDays,
+          weekStart: nextMonday.toISOString(),
         },
       });
     },
@@ -370,6 +388,30 @@ export default function ProductionQueueManager() {
     }
   };
 
+  // Handler for "Select Next N" in regular production queue
+  const handleSelectNextQueueOrders = () => {
+    const count = parseInt(selectNextQueueCount);
+    if (isNaN(count) || count <= 0) {
+      toast({
+        title: 'Invalid Input',
+        description: 'Please enter a valid number greater than 0',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const ordersToSelect = productionQueue
+      .slice(0, Math.min(count, productionQueue.length))
+      .map((order) => order.orderId);
+
+    setSelectedQueueOrders(new Set(ordersToSelect));
+    
+    toast({
+      title: 'Orders Selected',
+      description: `Selected ${ordersToSelect.length} order${ordersToSelect.length !== 1 ? 's' : ''} from the queue`,
+    });
+  };
+
   const handleProgressSelectedToBarcode = () => {
     if (selectedQueueOrders.size === 0) return;
     progressToBarcodeMutation.mutate(Array.from(selectedQueueOrders));
@@ -423,6 +465,7 @@ export default function ProductionQueueManager() {
       return newMap;
     });
   };
+
 
   const getUrgencyBadgeColor = (urgencyLevel: string) => {
     switch (urgencyLevel) {
@@ -592,13 +635,13 @@ export default function ProductionQueueManager() {
                 Clear All
               </Button>
               <Button
-                onClick={() => generateScheduleMutation.mutate()}
+                onClick={() => setDaySelectionDialogOpen(true)}
                 disabled={generateScheduleMutation.isPending}
                 className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
                 data-testid="button-generate-schedule"
               >
                 <CalendarCheck className="w-4 h-4" />
-                {generateScheduleMutation.isPending ? 'Generating...' : 'Generate Layup Schedule'}
+                Generate Layup Schedule
               </Button>
             </div>
           </div>
@@ -850,26 +893,28 @@ export default function ProductionQueueManager() {
                 })()}
 
                 {p1PurchaseOrders.length > 0 && (
-                  <div className="mb-4">
-                    <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      Filter by PO Number:
-                    </label>
-                    <Select
-                      value={selectedPOFilter}
-                      onValueChange={setSelectedPOFilter}
-                    >
-                      <SelectTrigger className="w-64" data-testid="select-po-filter">
-                        <SelectValue placeholder="All Purchase Orders" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Purchase Orders</SelectItem>
-                        {allPONumbers.map((poNumber) => (
-                          <SelectItem key={poNumber} value={poNumber}>
-                            {poNumber}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="mb-4 space-y-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-2 block">
+                        Filter by PO Number:
+                      </label>
+                      <Select
+                        value={selectedPOFilter}
+                        onValueChange={setSelectedPOFilter}
+                      >
+                        <SelectTrigger className="w-64" data-testid="select-po-filter">
+                          <SelectValue placeholder="All Purchase Orders" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Purchase Orders</SelectItem>
+                          {allPONumbers.map((poNumber) => (
+                            <SelectItem key={poNumber} value={poNumber}>
+                              {poNumber}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 )}
 
@@ -1099,29 +1144,66 @@ export default function ProductionQueueManager() {
             <AccordionContent>
               <CardContent>
                 {productionQueue.length > 0 && (
-                  <div className="flex items-center gap-2 mb-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleSelectAllQueueOrders}
-                      className="flex items-center gap-2"
-                    >
-                      {selectedQueueOrders.size === productionQueue.length
-                        ? 'Deselect All'
-                        : 'Select All'}
-                    </Button>
-                    {selectedQueueOrders.size > 0 && (
+                  <div className="space-y-4 mb-4">
+                    <div className="flex items-center gap-2">
                       <Button
-                        onClick={handleProgressSelectedToBarcode}
-                        disabled={progressToBarcodeMutation.isPending}
-                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                        variant="outline"
                         size="sm"
-                        data-testid="button-progress-barcode"
+                        onClick={handleSelectAllQueueOrders}
+                        className="flex items-center gap-2"
+                        data-testid="button-select-all-queue"
                       >
-                        <ArrowRight className="h-4 w-4" />
-                        Progress to Barcode ({selectedQueueOrders.size})
+                        {selectedQueueOrders.size === productionQueue.length
+                          ? 'Deselect All'
+                          : 'Select All'}
                       </Button>
-                    )}
+                      {selectedQueueOrders.size > 0 && (
+                        <Button
+                          onClick={handleProgressSelectedToBarcode}
+                          disabled={progressToBarcodeMutation.isPending}
+                          className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                          size="sm"
+                          data-testid="button-progress-barcode"
+                        >
+                          <ArrowRight className="h-4 w-4" />
+                          Progress to Barcode ({selectedQueueOrders.size})
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Select Next N feature for regular queue */}
+                    <div className="flex items-end gap-3 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                      <div className="flex-1">
+                        <label 
+                          htmlFor="select-next-queue-count" 
+                          className="text-sm font-medium text-gray-700 mb-2 block"
+                        >
+                          Select Next N Orders:
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="select-next-queue-count"
+                            type="number"
+                            min="1"
+                            value={selectNextQueueCount}
+                            onChange={(e) => setSelectNextQueueCount(e.target.value)}
+                            placeholder="Enter quantity (e.g., 30)"
+                            className="w-64"
+                            data-testid="input-select-next-queue-count"
+                          />
+                          <Button
+                            onClick={handleSelectNextQueueOrders}
+                            disabled={!selectNextQueueCount || parseInt(selectNextQueueCount) <= 0}
+                            data-testid="button-select-next-queue"
+                          >
+                            Select Next {selectNextQueueCount || 'N'}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Automatically selects the next orders from the queue in order
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 )}
                 {productionQueue.length === 0 ? (
@@ -1355,7 +1437,125 @@ export default function ProductionQueueManager() {
         </AccordionItem>
       </Accordion>
 
-      {/* Week Selection Dialog removed - P1 PO functionality now managed via OEM Priority Settings */}
+      {/* Day Selection Dialog for Layup Schedule */}
+      <Dialog open={daySelectionDialogOpen} onOpenChange={setDaySelectionDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select Week and Days for Layup Schedule</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {/* Week Selection */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Week:</label>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedWeekOffset(Math.max(0, selectedWeekOffset - 1))}
+                  disabled={selectedWeekOffset === 0}
+                  data-testid="button-prev-week"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <div className="flex-1 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-sm font-semibold text-blue-900">
+                    {(() => {
+                      const today = new Date();
+                      const nextMonday = new Date(today);
+                      nextMonday.setDate(today.getDate() + ((1 + 7 - today.getDay()) % 7 || 7));
+                      nextMonday.setDate(nextMonday.getDate() + (selectedWeekOffset * 7));
+                      return nextMonday.toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      });
+                    })()}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    {selectedWeekOffset === 0 ? 'Next week' : selectedWeekOffset === 1 ? 'Week after next' : `${selectedWeekOffset + 1} weeks ahead`}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedWeekOffset(selectedWeekOffset + 1)}
+                  disabled={selectedWeekOffset >= 8}
+                  data-testid="button-next-week"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Day Selection */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Days to Schedule:</label>
+              <div className="grid grid-cols-5 gap-2">
+                {[
+                  { day: 1, label: 'Monday' },
+                  { day: 2, label: 'Tuesday' },
+                  { day: 3, label: 'Wednesday' },
+                  { day: 4, label: 'Thursday' },
+                  { day: 5, label: 'Friday' },
+                ].map(({ day, label }) => (
+                  <label
+                    key={day}
+                    className={`flex flex-col items-center justify-center p-3 border-2 rounded-lg cursor-pointer transition-colors ${
+                      selectedDays.includes(day)
+                        ? 'bg-blue-50 border-blue-500 text-blue-900'
+                        : 'bg-white border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedDays.includes(day)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedDays([...selectedDays, day].sort());
+                        } else {
+                          setSelectedDays(selectedDays.filter(d => d !== day));
+                        }
+                      }}
+                      className="sr-only"
+                      data-testid={`checkbox-day-${day}`}
+                    />
+                    <span className="text-xs font-medium">{label.substring(0, 3)}</span>
+                    {selectedDays.includes(day) && (
+                      <CalendarCheck className="w-4 h-4 mt-1 text-blue-600" />
+                    )}
+                  </label>
+                ))}
+              </div>
+              {selectedDays.length === 0 && (
+                <p className="text-sm text-red-600">Please select at least one day</p>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDaySelectionDialogOpen(false)}
+              data-testid="button-cancel-day-selection"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                generateScheduleMutation.mutate();
+                setDaySelectionDialogOpen(false);
+              }}
+              disabled={selectedDays.length === 0 || generateScheduleMutation.isPending}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              data-testid="button-confirm-generate"
+            >
+              {generateScheduleMutation.isPending ? 'Generating...' : 'Generate Schedule'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Layup Schedule Preview Modal */}
       {generatedSchedule && (

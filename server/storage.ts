@@ -3566,6 +3566,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInventoryItem(data: InsertInventoryItem): Promise<InventoryItem> {
+    console.log('🔧 Storage createInventoryItem received:', JSON.stringify(data, null, 2));
+    console.log('🔧 Storage data keys:', Object.keys(data));
+    console.log('🔧 Storage data has id?:', 'id' in data);
+    console.log('🔧 Storage data.id value:', (data as any).id);
+    
     const [item] = await db.insert(inventoryItems).values([data]).returning();
     return item;
   }

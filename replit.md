@@ -4,6 +4,23 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. Its purpose is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The project aims to be a leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. The system incorporates robust features like a Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System to provide a complete and efficient solution.
 
 ## Recent Changes
+**Inventory CSV Import Transactional Safety & Table Enhancements** (October 27, 2025)
+- Enhanced CSV import with transactional "Replace All" feature:
+  - Two-phase validation: All rows validated before any database changes
+  - Atomic transaction: Delete + insert wrapped in database transaction (all or nothing)
+  - Abort-early safety: Replace mode aborts with clear error if ANY validation errors exist
+  - Prevents all data loss scenarios - old data never touched unless ALL rows validate
+  - Batch inserts (100 rows at a time) handle large CSVs efficiently
+  - Append mode continues to handle duplicates gracefully
+- Enhanced inventory table display:
+  - Added missing columns: Supplier Part #, Secondary Supplier Part #, Secondary Source
+  - Implemented "Utilized In" dropdown filter (All, PL1, PL2, Facilities, Admin, Services)
+  - Filter combines with search to enable powerful multi-criteria queries
+- User-facing UI improvements:
+  - "Replace all items" checkbox with prominent yellow warning message
+  - Clear error messages distinguish validation errors from database errors
+  - Validation errors in replace mode prevent accidental data loss
+
 **Layup Schedule Display Enhancement with Print & Workflow Integration** (October 27, 2025)
 - Enhanced schedule preview with production-relevant data columns:
   - Added Action Length column (extracted from features.action_length with SA/LA fallback from action_inlet)

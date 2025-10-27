@@ -448,8 +448,11 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
         }
 
         try {
-          // Ensure we never pass 'id' field - it should auto-generate
+          // Ensure we never pass auto-generated fields - they should auto-generate or have defaults
           delete itemData.id;
+          delete itemData.createdAt;
+          delete itemData.updatedAt;
+          delete itemData.isActive;
           
           const validatedData = insertInventoryItemSchema.parse(itemData);
           await storage.createInventoryItem(validatedData);

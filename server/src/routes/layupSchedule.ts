@@ -137,8 +137,41 @@ router.post('/generate', async (req: Request, res: Response) => {
     if (selectedPOItems.length > 0) {
       console.log(`🔍 Preparing ${selectedPOItems.length} PO items for scheduling`);
       
+      // Fetch action length from po_products table
+      const itemIds = selectedPOItems.map(item => item.itemId);
+      const poProductsData = await db
+        .select({
+          id: poProducts.id,
+          actionLength: poProducts.actionLength,
+          actionInlet: poProducts.actionInlet,
+          stockModel: poProducts.stockModel,
+        })
+        .from(poProducts)
+        .where(inArray(poProducts.id, itemIds));
+      
+      console.log(`📦 Fetched ${poProductsData.length} PO products with action length data`);
+      
+      // Create a map for quick lookup
+      const poProductMap = new Map(poProductsData.map(p => [p.id, p]));
+      
       // Expand by quantity for scheduling
       selectedPOItems.forEach(item => {
+        const poProductData = poProductMap.get(item.itemId);
+        
+        // Extract action length from po_products
+        let actionLength = poProductData?.actionLength || null;
+        if (!actionLength || actionLength === 'none') {
+          // Try to derive from action_inlet
+          const actionInlet = poProductData?.actionInlet;
+          if (actionInlet) {
+            if (actionInlet.includes('short')) {
+              actionLength = 'SA';
+            } else if (actionInlet.includes('long')) {
+              actionLength = 'LA';
+            }
+          }
+        }
+        
         // Extract material from stock model name
         let material = null;
         const stockModelName = item.stockModel?.toLowerCase() || '';
@@ -157,7 +190,7 @@ router.post('/generate', async (req: Request, res: Response) => {
             customerName: 'Purchase Order',
             dueDate: null,
             quantity: 1,
-            actionLength: null,
+            actionLength,
             material,
             hasLOP: false,
             hasADL: false,
@@ -396,7 +429,7 @@ router.post('/save', async (req: Request, res: Response) => {
           [uniqueOrderIds]
         );
         
-        progressedCount = updateResult.rowCount || 0;
+        progressedCount = (updateResult as any).rowCount || 0;
         console.log(`📦 Moved ${progressedCount} orders to Barcode department`);
       }
 

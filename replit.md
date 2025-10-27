@@ -7,7 +7,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing com
 **Layup Schedule Display Enhancement with Print & Workflow Integration** (October 27, 2025)
 - Enhanced schedule preview with production-relevant data columns:
   - Added Action Length column (extracted from features.action_length with SA/LA fallback from action_inlet)
-  - Added Material column (extracted from features.stock_color)
+  - Added Material column (parsed from stock model name: "_fg" = Fiberglass, "_cf" = Carbon Fiber)
   - Added Badges column displaying LOP (non-standard length_of_pull), ADL (bottom_metal contains 'adl'), and Heavy Fill (in other_options)
   - Removed FB Order # and Customer columns (not relevant for layup operations)
 - Implemented print functionality:

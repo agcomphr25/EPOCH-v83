@@ -744,41 +744,23 @@ router.post('/:orderId/resend-email', async (req, res) => {
       pdfGeneratedAt: new Date(),
     });
 
-    // Send appropriate email based on order status
-    let emailResult;
-    
-    if (order.status?.toUpperCase() === 'FINALIZED') {
-      // For FINALIZED orders, send a confirmation email (order already signed)
-      const { sendOrderSignedConfirmation } = await import('../../utils/orderSignedConfirmation');
-      
-      const confirmationData = {
-        orderId: order.orderId,
-        customerName: customer.name,
-        customerEmail: customer.email,
-        orderDate: new Date(order.orderDate).toLocaleDateString(),
-        dueDate: new Date(order.dueDate).toLocaleDateString(),
-      };
-      
-      emailResult = await sendOrderSignedConfirmation(confirmationData);
-    } else {
-      // For PENDING_SIGNATURE orders, send the Review and Sign email
-      const emailData = {
-        orderId: order.orderId,
-        customerName: customer.name,
-        customerEmail: customer.email,
-        orderDate: new Date(order.orderDate).toLocaleDateString(),
-        dueDate: new Date(order.dueDate).toLocaleDateString(),
-        customerPO: order.customerPO || undefined,
-        modelId: order.modelId || undefined,
-        handedness: order.handedness || undefined,
-        features: order.features as Record<string, any> || undefined,
-        notes: order.notes || undefined,
-        shipping: order.shipping || 0,
-        signatureLink,
-      };
+    // Send the SAME email that was originally sent (Review and Sign with PDF)
+    const emailData = {
+      orderId: order.orderId,
+      customerName: customer.name,
+      customerEmail: customer.email,
+      orderDate: new Date(order.orderDate).toLocaleDateString(),
+      dueDate: new Date(order.dueDate).toLocaleDateString(),
+      customerPO: order.customerPO || undefined,
+      modelId: order.modelId || undefined,
+      handedness: order.handedness || undefined,
+      features: order.features as Record<string, any> || undefined,
+      notes: order.notes || undefined,
+      shipping: order.shipping || 0,
+      signatureLink,
+    };
 
-      emailResult = await sendFollowupOrderEmail(emailData, pdfPath);
-    }
+    const emailResult = await sendFollowupOrderEmail(emailData, pdfPath);
 
     if (emailResult.success) {
       // Update email sent timestamp
@@ -787,13 +769,9 @@ router.post('/:orderId/resend-email', async (req, res) => {
         emailSentAt: new Date(),
       });
 
-      const messageText = order.status?.toUpperCase() === 'FINALIZED'
-        ? 'Order confirmation email has been resent successfully.'
-        : 'Review and sign email has been resent successfully.';
-      
       res.json({
         success: true,
-        message: messageText,
+        message: 'Review and sign email has been resent successfully.',
         emailSent: true,
         messageId: emailResult.messageId,
       });

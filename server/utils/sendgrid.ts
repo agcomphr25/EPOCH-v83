@@ -88,17 +88,39 @@ export async function sendEmailViaSendGrid(options: {
   subject: string;
   text: string;
   html?: string;
+  attachments?: Array<{
+    content: string;
+    filename: string;
+    type?: string;
+    disposition?: string;
+  }>;
 }): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
     const { client, fromEmail } = await getUncachableSendGridClient();
 
-    const msg = {
+    const msg: any = {
       to: options.to,
       from: fromEmail,
       subject: options.subject,
       text: options.text,
       html: options.html || options.text,
     };
+
+    // Add attachments if provided
+    if (options.attachments && options.attachments.length > 0) {
+      msg.attachments = options.attachments;
+    }
+
+    console.log('📧 Sending email via SendGrid:', {
+      to: options.to,
+      subject: options.subject,
+      hasText: !!options.text,
+      textLength: options.text?.length || 0,
+      hasHTML: !!options.html,
+      htmlLength: options.html?.length || 0,
+      hasAttachments: !!options.attachments,
+      attachmentCount: options.attachments?.length || 0,
+    });
 
     const [response] = await client.send(msg);
 

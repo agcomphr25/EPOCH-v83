@@ -144,6 +144,9 @@ export default function ProductionQueueManager() {
     totalItems: number;
   } | null>(null);
 
+  // State for day selection
+  const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4]); // Default: Mon-Thu
+
   // Fetch prioritized production queue
   const {
     data: productionQueue = [],
@@ -288,6 +291,7 @@ export default function ProductionQueueManager() {
         body: {
           selectedOrderIds: Array.from(selectedQueueOrders),
           selectedPOItems: selectedPOItemsArray,
+          workDays: selectedDays,
         },
       });
     },

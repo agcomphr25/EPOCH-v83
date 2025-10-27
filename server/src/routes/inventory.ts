@@ -299,6 +299,7 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
           utilizedInAdmin: false,
           utilizedInServices: false,
           isStockItem: false,
+          // Note: 'type' field removed as it doesn't exist in the database schema
         };
 
         headers.forEach((header: string, index: number) => {

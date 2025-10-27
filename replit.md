@@ -4,6 +4,58 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. Its purpose is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The project aims to be a leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. The system incorporates robust features like a Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System to provide a complete and efficient solution.
 
 ## Recent Changes
+**Layup Schedule Display Enhancement with Print & Workflow Integration** (October 27, 2025)
+- Enhanced schedule preview with production-relevant data columns:
+  - Added Action Length column (extracted from features.action_length with SA/LA fallback from action_inlet)
+  - Added Material column (parsed from stock model name: "_fg" = Fiberglass, "_cf" = Carbon Fiber)
+  - PO items fetch action length from po_products table with fallback to action_inlet
+  - Added Badges column displaying LOP (non-standard length_of_pull), ADL (bottom_metal contains 'adl'), and Heavy Fill (in other_options)
+  - Removed FB Order # and Customer columns (not relevant for layup operations)
+- Implemented dual-view system for schedule display:
+  - Screen preview: Table format with all order details for review
+  - Print layout: User-friendly checklist format optimized for production floor
+- Print checklist features:
+  - Large checkboxes for each item to mark completion as work progresses
+  - Clear labeled sections: ORDER ID, STOCK MODEL, MOLD, ACTION/MATERIAL
+  - Color-coded badge indicators (LOP, ADL, HEAVY FILL) for special requirements
+  - Signature lines at end of each day section ("Completed by" and "Date")
+  - Landscape orientation with proper page breaks between days
+- Schedule barcode system:
+  - Unique barcode generated for each schedule (format: LAYUP + YYYYMMDD)
+  - Barcode displays in header with "Scan to complete layup" instruction
+  - Enables bulk progression of all scheduled orders when scanned
+- Integrated schedule approval with department workflow:
+  - "Approve & Move to Barcode" button saves schedule and progresses orders
+  - Regular orders automatically move to Barcode department
+  - PO items excluded from department progression (remain in schedule only)
+  - Transaction-based updates ensure data consistency
+
+**Layup Schedule Week & Day Selection with Balanced Distribution** (October 27, 2025)
+- Implemented interactive week selection for layup schedule generation:
+  - Users can navigate up to 8 weeks ahead using arrow buttons
+  - Visual labels show "Next week", "Week after next", or "X weeks ahead"
+  - Selected week start date displays prominently (e.g., "Monday, October 28, 2025")
+- Added day selection feature with checkboxes for Monday through Friday:
+  - Default selection: Monday through Thursday
+  - Users can select any combination of work days
+  - Selected days show visual feedback with blue background and checkmark icon
+- Implemented balanced round-robin distribution algorithm:
+  - Orders are evenly distributed across all selected days
+  - Instead of filling Monday completely then Tuesday, etc., orders rotate through days
+  - Example: 30 orders across 4 days = ~7-8 orders per day instead of 20 on Monday, 10 on Tuesday
+- Backend respects user's day selection:
+  - Friday is only used if explicitly selected by the user
+  - Schedule generation uses selected week start date and work days
+- Fixed database join error that was causing schedule generation to crash
+
+**PO Product Stock Model Validation** (October 26, 2025)
+- Implemented business rule: PO products without stock models are excluded from the production queue
+- Modified `/api/pos/:id/generate-production-orders` endpoint to only create production orders for items with `itemType === 'stock_model'`
+- Updated `storage.getOpenP1PurchaseOrders()` to filter out non-stock model items when fetching P1 PO queue
+- Modified `/api/push-to-layup-plugging` endpoint to validate item type before marking orders as "laid up"
+- System now prevents custom models and feature items from appearing in production queues or being marked as laid up
+- Returns detailed information about filtered/skipped items in API responses for user visibility
+
 **Parts List Management System** (October 26, 2025)
 - Enhanced inventory items with comprehensive MRP/COGS fields:
   - SKU field for inventory tracking (informational)

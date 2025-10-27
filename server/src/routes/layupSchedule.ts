@@ -96,8 +96,14 @@ router.post('/generate', async (req: Request, res: Response) => {
           }
         }
         
-        // Extract material (usually in stock_color)
-        const material = features.stock_color || null;
+        // Extract material from stock model name (fg = Fiberglass, cf = Carbon Fiber)
+        let material = null;
+        const stockModelName = order.stockModel?.toLowerCase() || '';
+        if (stockModelName.includes('_fg_') || stockModelName.includes('_fg')) {
+          material = 'Fiberglass';
+        } else if (stockModelName.includes('_cf_') || stockModelName.includes('_cf')) {
+          material = 'Carbon Fiber';
+        }
         
         // Determine badges
         const lop = features.length_of_pull;
@@ -133,6 +139,15 @@ router.post('/generate', async (req: Request, res: Response) => {
       
       // Expand by quantity for scheduling
       selectedPOItems.forEach(item => {
+        // Extract material from stock model name
+        let material = null;
+        const stockModelName = item.stockModel?.toLowerCase() || '';
+        if (stockModelName.includes('_fg_') || stockModelName.includes('_fg')) {
+          material = 'Fiberglass';
+        } else if (stockModelName.includes('_cf_') || stockModelName.includes('_cf')) {
+          material = 'Carbon Fiber';
+        }
+        
         for (let i = 0; i < item.quantity; i++) {
           poItems.push({
             orderId: `PO-${item.poNumber}-${item.itemId}-${i + 1}`,
@@ -142,8 +157,11 @@ router.post('/generate', async (req: Request, res: Response) => {
             customerName: 'Purchase Order',
             dueDate: null,
             quantity: 1,
-            actionLength: null, // TODO: Add action_length lookup
-            material: null, // TODO: Add material lookup
+            actionLength: null,
+            material,
+            hasLOP: false,
+            hasADL: false,
+            hasHeavyFill: false,
           });
         }
       });

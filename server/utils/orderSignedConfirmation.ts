@@ -159,23 +159,8 @@ export async function sendOrderSignedConfirmation(
   data: SignedOrderConfirmationData
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
-    // Read and encode company logo
-    let logoBase64: string | undefined;
-    try {
-      const logoPath = path.join(process.cwd(), 'server', 'assets', 'logo_updated.png');
-      console.log('📧 Logo path for confirmation email:', logoPath);
-      if (fs.existsSync(logoPath)) {
-        const logoBuffer = fs.readFileSync(logoPath);
-        logoBase64 = logoBuffer.toString('base64');
-        console.log('✅ Logo loaded successfully for confirmation email');
-      } else {
-        console.warn('❌ Logo file not found at:', logoPath);
-      }
-    } catch (error) {
-      console.warn('❌ Could not load company logo for confirmation email:', error);
-    }
-
-    const emailHTML = generateConfirmationEmailHTML(data, logoBase64);
+    // Don't embed logo for confirmation emails to avoid large HTML size issues
+    const emailHTML = generateConfirmationEmailHTML(data);
     const emailText = generateConfirmationEmailText(data);
 
     const result = await sendEmailViaSendGrid({

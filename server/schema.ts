@@ -2295,6 +2295,108 @@ export const vendorMonthlyEvaluations = pgTable('vendor_monthly_evaluations', {
   uniqueVendorMonthYear: unique().on(table.vendorId, table.month, table.year),
 }));
 
+// Enhanced Inventory MRP Tables
+
+// Inventory Balances - Real-time stock levels by location
+export const inventoryBalances = pgTable('inventory_balances', {
+  id: serial('id').primaryKey(),
+  agPartNumber: text('ag_part_number')
+    .references(() => inventoryItems.agPartNumber, { onDelete: 'cascade' })
+    .notNull(),
+  locationId: text('location_id').notNull(), // warehouse, production, etc.
+  quantityOnHand: integer('quantity_on_hand').notNull().default(0),
+  quantityAllocated: integer('quantity_allocated').notNull().default(0), // For progressive allocation
+  quantityAvailable: integer('quantity_available').notNull().default(0), // Computed: onHand - allocated
+  reorderPoint: integer('reorder_point').default(0),
+  lastCountedAt: timestamp('last_counted_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  uniquePartLocation: unique().on(table.agPartNumber, table.locationId),
+}));
+
+// Inventory Transactions - Movement audit trail
+export const inventoryTransactions = pgTable('inventory_transactions', {
+  id: serial('id').primaryKey(),
+  agPartNumber: text('ag_part_number')
+    .references(() => inventoryItems.agPartNumber, { onDelete: 'cascade' })
+    .notNull(),
+  transactionType: text('transaction_type').notNull(), // receipt, issue, transfer, adjustment, consumption
+  quantity: integer('quantity').notNull(), // Can be negative for issues
+  fromLocation: text('from_location'),
+  toLocation: text('to_location'),
+  referenceType: text('reference_type'), // PO, WorkOrder, Adjustment, etc.
+  referenceId: text('reference_id'),
+  notes: text('notes'),
+  performedBy: text('performed_by'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Vendor Parts - Links parts to vendors with pricing and lead times
+export const vendorParts = pgTable('vendor_parts', {
+  id: serial('id').primaryKey(),
+  agPartNumber: text('ag_part_number')
+    .references(() => inventoryItems.agPartNumber, { onDelete: 'cascade' })
+    .notNull(),
+  vendorId: integer('vendor_id')
+    .references(() => vendors.id, { onDelete: 'cascade' })
+    .notNull(),
+  vendorPartNumber: text('vendor_part_number'),
+  unitPrice: real('unit_price'),
+  leadTimeDays: integer('lead_time_days'),
+  minimumOrderQty: integer('minimum_order_qty').default(1),
+  isPreferred: boolean('is_preferred').default(false),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  uniquePartVendor: unique().on(table.agPartNumber, table.vendorId),
+}));
+
+// Vendor Purchase Orders
+export const vendorPOs = pgTable('vendor_pos', {
+  id: serial('id').primaryKey(),
+  poNumber: text('po_number').notNull().unique(),
+  vendorId: integer('vendor_id')
+    .references(() => vendors.id)
+    .notNull(),
+  status: text('status').notNull().default('Draft'), // Draft, Sent, Partially Received, Fully Received, Cancelled
+  orderDate: date('order_date'),
+  expectedDeliveryDate: date('expected_delivery_date'),
+  actualDeliveryDate: date('actual_delivery_date'),
+  barcode: text('barcode').unique(),
+  subtotal: real('subtotal').default(0),
+  tax: real('tax').default(0),
+  shippingCost: real('shipping_cost').default(0),
+  totalCost: real('total_cost').default(0),
+  notes: text('notes'),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Vendor PO Line Items
+export const vendorPOItems = pgTable('vendor_po_items', {
+  id: serial('id').primaryKey(),
+  vendorPoId: integer('vendor_po_id')
+    .references(() => vendorPOs.id, { onDelete: 'cascade' })
+    .notNull(),
+  lineNumber: integer('line_number').notNull(),
+  agPartNumber: text('ag_part_number')
+    .references(() => inventoryItems.agPartNumber), // Nullable for ad-hoc items
+  description: text('description'), // For ad-hoc items without agPartNumber
+  quantity: integer('quantity').notNull(),
+  unitPrice: real('unit_price').notNull(),
+  lineTotal: real('line_total').notNull(),
+  receivedQuantity: integer('received_quantity').default(0),
+  receivedDate: date('received_date'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  uniquePoLine: unique().on(table.vendorPoId, table.lineNumber),
+}));
+
 export const communicationLogs = pgTable('communication_logs', {
   id: serial('id').primaryKey(),
   orderId: text('order_id'), // Made nullable for general communications
@@ -2462,6 +2564,108 @@ export const insertVendorMonthlyEvaluationSchema = createInsertSchema(vendorMont
     responseScore: z.number().int().min(1).max(5).optional().nullable(),
     notes: z.string().optional(),
   });
+
+// Enhanced Inventory MRP Insert Schemas
+
+export const insertInventoryBalanceSchema = createInsertSchema(inventoryBalances)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    agPartNumber: z.string().min(1, 'Part number is required'),
+    locationId: z.string().min(1, 'Location is required'),
+    quantityOnHand: z.number().int().default(0),
+    quantityAllocated: z.number().int().default(0),
+    quantityAvailable: z.number().int().default(0),
+    reorderPoint: z.number().int().default(0).optional(),
+  });
+export type InsertInventoryBalance = z.infer<typeof insertInventoryBalanceSchema>;
+export type InventoryBalance = typeof inventoryBalances.$inferSelect;
+
+export const insertInventoryTransactionSchema = createInsertSchema(inventoryTransactions)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    agPartNumber: z.string().min(1, 'Part number is required'),
+    transactionType: z.enum(['receipt', 'issue', 'transfer', 'adjustment', 'consumption']),
+    quantity: z.number().int(),
+    fromLocation: z.string().optional().nullable(),
+    toLocation: z.string().optional().nullable(),
+    referenceType: z.string().optional().nullable(),
+    referenceId: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+    performedBy: z.string().optional().nullable(),
+  });
+export type InsertInventoryTransaction = z.infer<typeof insertInventoryTransactionSchema>;
+export type InventoryTransaction = typeof inventoryTransactions.$inferSelect;
+
+export const insertVendorPartSchema = createInsertSchema(vendorParts)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    agPartNumber: z.string().min(1, 'Part number is required'),
+    vendorId: z.number().int().positive('Vendor ID is required'),
+    vendorPartNumber: z.string().optional().nullable(),
+    unitPrice: z.number().optional().nullable(),
+    leadTimeDays: z.number().int().optional().nullable(),
+    minimumOrderQty: z.number().int().default(1),
+    isPreferred: z.boolean().default(false),
+    notes: z.string().optional().nullable(),
+  });
+export type InsertVendorPart = z.infer<typeof insertVendorPartSchema>;
+export type VendorPart = typeof vendorParts.$inferSelect;
+
+export const insertVendorPOSchema = createInsertSchema(vendorPOs)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    poNumber: z.string().min(1, 'PO number is required'),
+    vendorId: z.number().int().positive('Vendor ID is required'),
+    status: z.enum(['Draft', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled']).default('Draft'),
+    orderDate: z.string().optional().nullable(),
+    expectedDeliveryDate: z.string().optional().nullable(),
+    actualDeliveryDate: z.string().optional().nullable(),
+    barcode: z.string().optional().nullable(),
+    subtotal: z.number().default(0),
+    tax: z.number().default(0),
+    shippingCost: z.number().default(0),
+    totalCost: z.number().default(0),
+    notes: z.string().optional().nullable(),
+    createdBy: z.string().optional().nullable(),
+  });
+export type InsertVendorPO = z.infer<typeof insertVendorPOSchema>;
+export type VendorPO = typeof vendorPOs.$inferSelect;
+
+export const insertVendorPOItemSchema = createInsertSchema(vendorPOItems)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    vendorPoId: z.number().int().positive('Vendor PO ID is required'),
+    lineNumber: z.number().int().positive('Line number is required'),
+    agPartNumber: z.string().optional().nullable(),
+    description: z.string().optional().nullable(),
+    quantity: z.number().int().positive('Quantity must be greater than 0'),
+    unitPrice: z.number().positive('Unit price must be greater than 0'),
+    lineTotal: z.number(),
+    receivedQuantity: z.number().int().default(0),
+    receivedDate: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  });
+export type InsertVendorPOItem = z.infer<typeof insertVendorPOItemSchema>;
+export type VendorPOItem = typeof vendorPOItems.$inferSelect;
 
 // Order Attachments Table
 export const orderAttachments = pgTable('order_attachments', {

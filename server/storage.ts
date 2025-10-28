@@ -3597,6 +3597,35 @@ export class DatabaseStorage implements IStorage {
     await db.delete(inventoryItems).where(eq(inventoryItems.id, id));
   }
 
+  async deleteAllInventoryItems(): Promise<void> {
+    console.log('🗑️  Storage: Deleting all inventory items from database...');
+    await db.delete(inventoryItems);
+    console.log('✅ Storage: All inventory items deleted');
+  }
+
+  async replaceAllInventoryItems(newItems: InsertInventoryItem[]): Promise<void> {
+    console.log(`🔄 Storage: Replacing all inventory items with ${newItems.length} new items...`);
+    
+    // Note: Neon HTTP driver doesn't support transactions, so we do this sequentially
+    // Step 1: Delete all existing items
+    console.log('  🗑️  Step 1: Deleting all existing items...');
+    await db.delete(inventoryItems);
+    console.log('  ✅ Step 1 complete: All existing items deleted');
+    
+    // Step 2: Insert all new items
+    console.log(`  ➕ Step 2: Inserting ${newItems.length} new items...`);
+    if (newItems.length > 0) {
+      // Insert in batches of 100 to avoid query size limits
+      for (let i = 0; i < newItems.length; i += 100) {
+        const batch = newItems.slice(i, i + 100);
+        await db.insert(inventoryItems).values(batch);
+        console.log(`    ✓ Inserted batch ${Math.floor(i / 100) + 1} (${batch.length} items)`);
+      }
+    }
+    
+    console.log('✅ Storage: All inventory items replaced successfully');
+  }
+
   // Inventory Scans CRUD
   async getAllInventoryScans(): Promise<InventoryScan[]> {
     return await db

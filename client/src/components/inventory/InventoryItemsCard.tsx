@@ -155,10 +155,10 @@ const InventoryForm = ({
             onValueChange={(value) => onSelectChange('vendorId', value)}
           >
             <SelectTrigger data-testid="select-vendorId">
-              <SelectValue placeholder="Select vendor" />
+              <SelectValue placeholder="Select vendor (optional)" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None</SelectItem>
+              <SelectItem value="none">None</SelectItem>
               {Array.isArray(vendors) && vendors.map((vendor) => (
                 <SelectItem key={vendor.id} value={vendor.id.toString()}>
                   {vendor.name}
@@ -418,7 +418,7 @@ export default function InventoryItemsCard() {
     name: '',
     type: 'Purchased',
     source: '',
-    vendorId: '',
+    vendorId: 'none',
     supplierPartNumber: '',
     secondarySupplierPartNumber: '',
     costPer: '',
@@ -643,7 +643,7 @@ export default function InventoryItemsCard() {
       name: '',
       type: 'Purchased',
       source: '',
-      vendorId: '',
+      vendorId: 'none',
       supplierPartNumber: '',
       secondarySupplierPartNumber: '',
       costPer: '',
@@ -695,7 +695,7 @@ export default function InventoryItemsCard() {
         name: formData.name,
         type: formData.type || 'Purchased',
         source: formData.source || null,
-        vendorId: formData.vendorId ? parseInt(formData.vendorId) : null,
+        vendorId: formData.vendorId && formData.vendorId !== 'none' ? parseInt(formData.vendorId) : null,
         supplierPartNumber: formData.supplierPartNumber || null,
         secondarySupplierPartNumber: formData.secondarySupplierPartNumber || null,
         costPer: formData.costPer ? parseFloat(formData.costPer) : null,
@@ -732,7 +732,7 @@ export default function InventoryItemsCard() {
       name: item.name,
       type: item.type || 'Purchased',
       source: item.source || '',
-      vendorId: item.vendorId ? item.vendorId.toString() : '',
+      vendorId: item.vendorId ? item.vendorId.toString() : 'none',
       supplierPartNumber: item.supplierPartNumber || '',
       secondarySupplierPartNumber: item.secondarySupplierPartNumber || '',
       costPer: item.costPer ? item.costPer.toString() : '',

@@ -3604,27 +3604,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async replaceAllInventoryItems(newItems: InsertInventoryItem[]): Promise<void> {
-    console.log(`🔒 Storage: Replacing all inventory items with ${newItems.length} new items (transactional)...`);
+    console.log(`🔄 Storage: Replacing all inventory items with ${newItems.length} new items...`);
     
-    // Use database transaction to ensure atomicity
-    await db.transaction(async (tx) => {
-      // Step 1: Delete all existing items
-      console.log('  🗑️  Step 1: Deleting all existing items...');
-      await tx.delete(inventoryItems);
-      
-      // Step 2: Insert all new items
-      console.log(`  ➕ Step 2: Inserting ${newItems.length} new items...`);
-      if (newItems.length > 0) {
-        // Insert in batches of 100 to avoid query size limits
-        for (let i = 0; i < newItems.length; i += 100) {
-          const batch = newItems.slice(i, i + 100);
-          await tx.insert(inventoryItems).values(batch);
-          console.log(`    ✓ Inserted batch ${Math.floor(i / 100) + 1} (${batch.length} items)`);
-        }
+    // Note: Neon HTTP driver doesn't support transactions, so we do this sequentially
+    // Step 1: Delete all existing items
+    console.log('  🗑️  Step 1: Deleting all existing items...');
+    await db.delete(inventoryItems);
+    console.log('  ✅ Step 1 complete: All existing items deleted');
+    
+    // Step 2: Insert all new items
+    console.log(`  ➕ Step 2: Inserting ${newItems.length} new items...`);
+    if (newItems.length > 0) {
+      // Insert in batches of 100 to avoid query size limits
+      for (let i = 0; i < newItems.length; i += 100) {
+        const batch = newItems.slice(i, i + 100);
+        await db.insert(inventoryItems).values(batch);
+        console.log(`    ✓ Inserted batch ${Math.floor(i / 100) + 1} (${batch.length} items)`);
       }
-      
-      console.log('  ✅ Transaction ready to commit');
-    });
+    }
     
     console.log('✅ Storage: All inventory items replaced successfully');
   }

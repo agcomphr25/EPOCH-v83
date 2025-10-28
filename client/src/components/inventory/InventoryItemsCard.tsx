@@ -443,10 +443,12 @@ export default function InventoryItemsCard() {
     queryFn: () => apiRequest('/api/enhanced/inventory/items'),
   });
 
-  const { data: vendors = [] } = useQuery<any[]>({
+  const { data: vendorsResponse } = useQuery<{ data: any[] }>({
     queryKey: ['/api/vendors'],
     queryFn: () => apiRequest('/api/vendors'),
   });
+  
+  const vendors = vendorsResponse?.data || [];
 
   const items = Array.isArray(allItems)
     ? allItems.filter((item) => {

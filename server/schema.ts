@@ -1326,6 +1326,7 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     name: z.string().min(1, 'Name is required'),
     type: z.string().optional().nullable(),
     source: z.string().optional().nullable(),
+    vendorId: z.number().int().positive().optional().nullable(),
     supplierPartNumber: z.string().optional().nullable(),
     secondarySupplierPartNumber: z.string().optional().nullable(),
     costPer: z.number().min(0).optional().nullable(),

@@ -159,7 +159,7 @@ const InventoryForm = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="">None</SelectItem>
-              {vendors.map((vendor) => (
+              {Array.isArray(vendors) && vendors.map((vendor) => (
                 <SelectItem key={vendor.id} value={vendor.id.toString()}>
                   {vendor.name}
                 </SelectItem>

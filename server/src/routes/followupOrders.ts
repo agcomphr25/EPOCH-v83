@@ -744,7 +744,7 @@ router.post('/:orderId/resend-email', async (req, res) => {
       pdfGeneratedAt: new Date(),
     });
 
-    // Send email with regenerated PDF
+    // Send the SAME email that was originally sent (Review and Sign with PDF)
     const emailData = {
       orderId: order.orderId,
       customerName: customer.name,

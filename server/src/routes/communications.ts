@@ -10,7 +10,7 @@ import {
 } from '../../schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { sendEmailViaGraphAPI } from '../../utils/microsoftGraph';
-import { getUncachableSendGridClient } from '../../utils/sendgridClient';
+import { getUncachableSendGridClient } from '../../utils/sendgrid';
 
 const router = Router();
 

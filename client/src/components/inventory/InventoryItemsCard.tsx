@@ -386,7 +386,9 @@ export default function InventoryItemsCard() {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [replaceAllItems, setReplaceAllItems] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [utilizedFilter, setUtilizedFilter] = useState('all');
 
   const [formData, setFormData] = useState<InventoryFormData>({
     agPartNumber: '',
@@ -420,19 +422,42 @@ export default function InventoryItemsCard() {
 
   const items = Array.isArray(allItems)
     ? allItems.filter((item) => {
-        if (!searchTerm.trim()) return true;
-        const searchLower = searchTerm.toLowerCase();
-        return (
-          item.agPartNumber.toLowerCase().includes(searchLower) ||
-          item.name.toLowerCase().includes(searchLower) ||
-          (item.sku && item.sku.toLowerCase().includes(searchLower)) ||
-          (item.source && item.source.toLowerCase().includes(searchLower)) ||
-          (item.supplierPartNumber &&
-            item.supplierPartNumber.toLowerCase().includes(searchLower)) ||
-          (item.department &&
-            item.department.toLowerCase().includes(searchLower)) ||
-          (item.notes && item.notes.toLowerCase().includes(searchLower))
-        );
+        // Search filter
+        if (searchTerm.trim()) {
+          const searchLower = searchTerm.toLowerCase();
+          const matchesSearch = (
+            item.agPartNumber.toLowerCase().includes(searchLower) ||
+            item.name.toLowerCase().includes(searchLower) ||
+            (item.sku && item.sku.toLowerCase().includes(searchLower)) ||
+            (item.source && item.source.toLowerCase().includes(searchLower)) ||
+            (item.supplierPartNumber &&
+              item.supplierPartNumber.toLowerCase().includes(searchLower)) ||
+            (item.department &&
+              item.department.toLowerCase().includes(searchLower)) ||
+            (item.notes && item.notes.toLowerCase().includes(searchLower))
+          );
+          if (!matchesSearch) return false;
+        }
+        
+        // Utilized filter
+        if (utilizedFilter !== 'all') {
+          switch(utilizedFilter) {
+            case 'pl1':
+              return item.utilizedInPL1;
+            case 'pl2':
+              return item.utilizedInPL2;
+            case 'facilities':
+              return item.utilizedInFacilities;
+            case 'admin':
+              return item.utilizedInAdmin;
+            case 'services':
+              return item.utilizedInServices;
+            default:
+              return true;
+          }
+        }
+        
+        return true;
       })
     : [];
 
@@ -525,27 +550,33 @@ export default function InventoryItemsCard() {
     try {
       const csvData = await importFile.text();
 
-      const response = await apiRequest('/api/enhanced/inventory/import/csv', {
+      const response = await apiRequest('/api/enhanced/inventory/import/csv?replaceAll=' + replaceAllItems, {
         method: 'POST',
         body: { csvData },
       });
 
       if (response.success) {
-        const message = `Successfully imported ${response.importedCount} items`;
+        const message = `Successfully imported ${response.importedCount} items${response.skippedCount ? ` (${response.skippedCount} rows skipped)` : ''}`;
         toast.success(message);
 
         if (response.errors && response.errors.length > 0) {
           console.warn('Import errors:', response.errors);
           const errorMessage =
             response.errors.slice(0, 3).join(', ') +
-            (response.errors.length > 3 ? '...' : '');
+            (response.errors.length > 3 ? ` and ${response.errors.length - 3} more...` : '');
           toast.error(
-            `${response.errors.length} rows had errors: ${errorMessage}`
+            `${response.errors.length} rows had errors: ${errorMessage}`,
+            { duration: 6000 }
           );
+        }
+
+        if (response.skippedRows && response.skippedRows.length > 0) {
+          console.info('Skipped rows:', response.skippedRows);
         }
 
         setIsImportDialogOpen(false);
         setImportFile(null);
+        setReplaceAllItems(false);
         const fileInput = document.getElementById(
           'csvFile'
         ) as HTMLInputElement;
@@ -556,7 +587,18 @@ export default function InventoryItemsCard() {
           queryKey: ['/api/enhanced/inventory/items'],
         });
       } else {
-        toast.error('Import failed');
+        // Handle validation errors from backend
+        const errorMsg = response.error || 'Import failed';
+        toast.error(errorMsg, { duration: 8000 });
+        
+        if (response.validationErrors && response.validationErrors.length > 0) {
+          console.error('Validation errors:', response.validationErrors);
+          const details = response.validationErrors.slice(0, 5).join('\n');
+          toast.error(
+            `Validation errors found:\n${details}${response.validationErrors.length > 5 ? `\n...and ${response.validationErrors.length - 5} more` : ''}`,
+            { duration: 10000 }
+          );
+        }
       }
     } catch (error) {
       console.error('Import error:', error);
@@ -768,9 +810,27 @@ export default function InventoryItemsCard() {
                 Selected file: {importFile.name}
               </p>
             )}
+            
+            <div className="flex items-start space-x-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded">
+              <Checkbox
+                id="replaceAllItems"
+                checked={replaceAllItems}
+                onCheckedChange={(checked) => setReplaceAllItems(checked as boolean)}
+                data-testid="checkbox-replace-all"
+              />
+              <div className="flex-1">
+                <Label htmlFor="replaceAllItems" className="cursor-pointer font-semibold text-yellow-800 dark:text-yellow-200">
+                  Replace all existing items
+                </Label>
+                <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                  ⚠️ Warning: This will delete all current inventory items before importing. Use this to avoid duplicates.
+                </p>
+              </div>
+            </div>
+            
             <div className="text-sm text-gray-500 space-y-1">
               <p className="font-semibold">Expected columns:</p>
-              <p>AG Part#, SKU, Name, Source, Supplier Part #, Cost per, Order Date, Notes, Utilized, Secondary Source, Supplier Part #</p>
+              <p>AG Part#, SKU, Name, Source, Supplier Part #, Cost per, Order Date, Notes, Utilized, Secondary Source</p>
               <p className="text-xs italic mt-2">
                 The "Utilized" column will be parsed for PL1, PL2, Facilities, Admin, Services
               </p>
@@ -781,6 +841,7 @@ export default function InventoryItemsCard() {
                 onClick={() => {
                   setIsImportDialogOpen(false);
                   setImportFile(null);
+                  setReplaceAllItems(false);
                   const fileInput = document.getElementById(
                     'csvFile'
                   ) as HTMLInputElement;
@@ -801,8 +862,8 @@ export default function InventoryItemsCard() {
         </DialogContent>
       </Dialog>
 
-      <div className="mb-4">
-        <div className="relative max-w-sm">
+      <div className="mb-4 flex gap-4">
+        <div className="relative flex-1 max-w-md">
           <Input
             placeholder="Search by AG Part #, SKU, Name..."
             value={searchTerm}
@@ -811,6 +872,22 @@ export default function InventoryItemsCard() {
             data-testid="input-search"
           />
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+        </div>
+        
+        <div className="w-48">
+          <Select value={utilizedFilter} onValueChange={setUtilizedFilter}>
+            <SelectTrigger data-testid="select-utilized-filter">
+              <SelectValue placeholder="Filter by utilization" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Items</SelectItem>
+              <SelectItem value="pl1">PL1 Only</SelectItem>
+              <SelectItem value="pl2">PL2 Only</SelectItem>
+              <SelectItem value="facilities">Facilities Only</SelectItem>
+              <SelectItem value="admin">Admin Only</SelectItem>
+              <SelectItem value="services">Services Only</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -836,6 +913,12 @@ export default function InventoryItemsCard() {
                 </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Source
+                </th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
+                  Supplier Part #
+                </th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
+                  Secondary Source
                 </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Cost per
@@ -866,6 +949,12 @@ export default function InventoryItemsCard() {
                   </td>
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                     {item.source || '-'}
+                  </td>
+                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                    {item.supplierPartNumber || '-'}
+                  </td>
+                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                    {item.secondarySource || '-'}
                   </td>
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                     {item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}

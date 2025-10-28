@@ -262,7 +262,9 @@ function parseUtilizedColumn(value: string): {
 router.post('/inventory/import/csv', async (req: Request, res: Response) => {
   try {
     const { csvData } = req.body;
-    console.log('📥 CSV Import started');
+    const replaceAll = req.query.replaceAll === 'true';
+    
+    console.log('📥 CSV Import started', replaceAll ? '(REPLACE MODE - TRANSACTIONAL)' : '(APPEND MODE)');
 
     if (!csvData) {
       console.log('❌ No CSV data provided');
@@ -289,9 +291,12 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
     
     const rows = lines.slice(1);
 
-    let importedCount = 0;
+    // Parse and validate all rows first before making any database changes
+    const validatedItems: any[] = [];
     const errors: string[] = [];
+    const skippedRows: string[] = [];
 
+    console.log('🔍 Phase 1: Validating all CSV rows...');
     for (let i = 0; i < rows.length; i++) {
       try {
         const values = parseCSVLine(rows[i]);
@@ -394,7 +399,22 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
               break;
             case 'order date':
             case 'orderdate':
-              itemData.orderDate = value || null;
+              // Parse and validate date - convert invalid dates to null
+              if (value) {
+                try {
+                  const parsedDate = new Date(value);
+                  // Check if date is valid
+                  if (!isNaN(parsedDate.getTime())) {
+                    itemData.orderDate = value;
+                  } else {
+                    itemData.orderDate = null;
+                  }
+                } catch {
+                  itemData.orderDate = null;
+                }
+              } else {
+                itemData.orderDate = null;
+              }
               break;
             case 'notes':
               itemData.notes = value || null;
@@ -440,8 +460,9 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
         // Skip rows without required fields
         if (!itemData.agPartNumber || !itemData.name) {
           if (itemData.agPartNumber || itemData.name) {
-            errors.push(
-              `Row ${i + 2}: Missing required fields (AG Part# and Name)`
+            // Track as skipped rather than error since we're intentionally skipping it
+            skippedRows.push(
+              `Row ${i + 2}: Missing required fields - AG Part# or Name is empty`
             );
           }
           continue;
@@ -454,28 +475,12 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
           delete itemData.updatedAt;
           delete itemData.isActive;
           
-          // Debug logging for first few rows
-          if (importedCount < 2) {
-            console.log(`🔎 Row ${i + 2} itemData before validation:`, JSON.stringify(itemData, null, 2));
-          }
-          
           const validatedData = insertInventoryItemSchema.parse(itemData);
-          
-          if (importedCount < 2) {
-            console.log(`🔎 Row ${i + 2} validatedData after schema parsing:`, JSON.stringify(validatedData, null, 2));
-            console.log(`🔎 Row ${i + 2} validatedData keys:`, Object.keys(validatedData));
-            console.log(`🔎 Row ${i + 2} validatedData has id?:`, 'id' in validatedData);
-          }
-          
-          await storage.createInventoryItem(validatedData);
-          importedCount++;
+          validatedItems.push({ rowNum: i + 2, data: validatedData });
         } catch (error: any) {
-          // Handle duplicate AG Part# errors
-          if (error.message && error.message.includes('unique') || error.message && error.message.includes('duplicate')) {
-            errors.push(`Row ${i + 2}: AG Part# ${itemData.agPartNumber} already exists`);
-          } else {
-            throw error;
-          }
+          errors.push(
+            `Row ${i + 2}: ${error instanceof Error ? error.message : JSON.stringify(error)}`
+          );
         }
       } catch (error) {
         errors.push(
@@ -484,15 +489,68 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
       }
     }
 
-    console.log(`✅ Import complete: ${importedCount} items imported, ${errors.length} errors`);
+    console.log(`✅ Phase 1 complete: ${validatedItems.length} rows validated successfully, ${errors.length} validation errors, ${skippedRows.length} rows skipped`);
     if (errors.length > 0) {
-      console.log('⚠️ Import errors:', errors.slice(0, 5));
+      console.log('⚠️ Validation errors:', errors.slice(0, 5));
+    }
+    if (skippedRows.length > 0) {
+      console.log('ℹ️ Skipped rows:', skippedRows.slice(0, 5));
     }
 
+    // In replace mode, abort if ANY validation errors exist to prevent data loss
+    // Note: Skipped rows (missing required fields) don't count as errors
+    if (replaceAll && errors.length > 0) {
+      console.log('❌ ABORT: Cannot replace all items when validation errors exist');
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot replace all items with validation errors. Please fix errors and try again.',
+        validationErrors: errors,
+        skippedRows: skippedRows,
+        validatedCount: validatedItems.length,
+      });
+    }
+
+    // Phase 2: Database operations (transactional if replace mode)
+    console.log(`📝 Phase 2: Writing ${validatedItems.length} items to database...`);
+    let importedCount = 0;
+    const importErrors: string[] = [];
+    
+    if (replaceAll) {
+      // TRANSACTION: Delete all + insert all atomically
+      console.log('🔒 Starting transactional replace (delete + insert)...');
+      try {
+        await storage.replaceAllInventoryItems(validatedItems.map(item => item.data));
+        importedCount = validatedItems.length;
+        console.log(`✅ Transaction committed: ${importedCount} items replaced`);
+      } catch (error) {
+        console.error('❌ Transaction failed - rolling back:', error);
+        throw new Error(`Failed to replace items: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    } else {
+      // APPEND MODE: Insert one by one
+      for (const item of validatedItems) {
+        try {
+          await storage.createInventoryItem(item.data);
+          importedCount++;
+        } catch (error: any) {
+          if (error.message && (error.message.includes('unique') || error.message.includes('duplicate'))) {
+            importErrors.push(`Row ${item.rowNum}: AG Part# ${item.data.agPartNumber} already exists`);
+          } else {
+            importErrors.push(`Row ${item.rowNum}: ${error.message || 'Unknown error'}`);
+          }
+        }
+      }
+    }
+
+    const allErrors = [...errors, ...importErrors];
+    console.log(`✅ Import complete: ${importedCount} items imported, ${allErrors.length} total errors, ${skippedRows.length} rows skipped`);
+    
     const response = {
       success: true,
       importedCount,
-      errors: errors.length > 0 ? errors : undefined,
+      skippedCount: skippedRows.length,
+      errors: allErrors.length > 0 ? allErrors : undefined,
+      skippedRows: skippedRows.length > 0 ? skippedRows : undefined,
     };
     console.log('📤 Sending response:', response);
     res.json(response);

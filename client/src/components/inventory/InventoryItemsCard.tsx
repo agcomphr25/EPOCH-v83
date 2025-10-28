@@ -556,21 +556,27 @@ export default function InventoryItemsCard() {
       });
 
       if (response.success) {
-        const message = `Successfully imported ${response.importedCount} items`;
+        const message = `Successfully imported ${response.importedCount} items${response.skippedCount ? ` (${response.skippedCount} rows skipped)` : ''}`;
         toast.success(message);
 
         if (response.errors && response.errors.length > 0) {
           console.warn('Import errors:', response.errors);
           const errorMessage =
             response.errors.slice(0, 3).join(', ') +
-            (response.errors.length > 3 ? '...' : '');
+            (response.errors.length > 3 ? ` and ${response.errors.length - 3} more...` : '');
           toast.error(
-            `${response.errors.length} rows had errors: ${errorMessage}`
+            `${response.errors.length} rows had errors: ${errorMessage}`,
+            { duration: 6000 }
           );
+        }
+
+        if (response.skippedRows && response.skippedRows.length > 0) {
+          console.info('Skipped rows:', response.skippedRows);
         }
 
         setIsImportDialogOpen(false);
         setImportFile(null);
+        setReplaceAllItems(false);
         const fileInput = document.getElementById(
           'csvFile'
         ) as HTMLInputElement;
@@ -581,7 +587,18 @@ export default function InventoryItemsCard() {
           queryKey: ['/api/enhanced/inventory/items'],
         });
       } else {
-        toast.error('Import failed');
+        // Handle validation errors from backend
+        const errorMsg = response.error || 'Import failed';
+        toast.error(errorMsg, { duration: 8000 });
+        
+        if (response.validationErrors && response.validationErrors.length > 0) {
+          console.error('Validation errors:', response.validationErrors);
+          const details = response.validationErrors.slice(0, 5).join('\n');
+          toast.error(
+            `Validation errors found:\n${details}${response.validationErrors.length > 5 ? `\n...and ${response.validationErrors.length - 5} more` : ''}`,
+            { duration: 10000 }
+          );
+        }
       }
     } catch (error) {
       console.error('Import error:', error);

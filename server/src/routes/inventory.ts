@@ -294,6 +294,7 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
     // Parse and validate all rows first before making any database changes
     const validatedItems: any[] = [];
     const errors: string[] = [];
+    const skippedRows: string[] = [];
 
     console.log('🔍 Phase 1: Validating all CSV rows...');
     for (let i = 0; i < rows.length; i++) {
@@ -398,7 +399,22 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
               break;
             case 'order date':
             case 'orderdate':
-              itemData.orderDate = value || null;
+              // Parse and validate date - convert invalid dates to null
+              if (value) {
+                try {
+                  const parsedDate = new Date(value);
+                  // Check if date is valid
+                  if (!isNaN(parsedDate.getTime())) {
+                    itemData.orderDate = value;
+                  } else {
+                    itemData.orderDate = null;
+                  }
+                } catch {
+                  itemData.orderDate = null;
+                }
+              } else {
+                itemData.orderDate = null;
+              }
               break;
             case 'notes':
               itemData.notes = value || null;
@@ -444,8 +460,9 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
         // Skip rows without required fields
         if (!itemData.agPartNumber || !itemData.name) {
           if (itemData.agPartNumber || itemData.name) {
-            errors.push(
-              `Row ${i + 2}: Missing required fields (AG Part# and Name)`
+            // Track as skipped rather than error since we're intentionally skipping it
+            skippedRows.push(
+              `Row ${i + 2}: Missing required fields - AG Part# or Name is empty`
             );
           }
           continue;
@@ -472,18 +489,23 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
       }
     }
 
-    console.log(`✅ Phase 1 complete: ${validatedItems.length} rows validated successfully, ${errors.length} validation errors`);
+    console.log(`✅ Phase 1 complete: ${validatedItems.length} rows validated successfully, ${errors.length} validation errors, ${skippedRows.length} rows skipped`);
     if (errors.length > 0) {
       console.log('⚠️ Validation errors:', errors.slice(0, 5));
     }
+    if (skippedRows.length > 0) {
+      console.log('ℹ️ Skipped rows:', skippedRows.slice(0, 5));
+    }
 
     // In replace mode, abort if ANY validation errors exist to prevent data loss
+    // Note: Skipped rows (missing required fields) don't count as errors
     if (replaceAll && errors.length > 0) {
       console.log('❌ ABORT: Cannot replace all items when validation errors exist');
       return res.status(400).json({
         success: false,
         error: 'Cannot replace all items with validation errors. Please fix errors and try again.',
         validationErrors: errors,
+        skippedRows: skippedRows,
         validatedCount: validatedItems.length,
       });
     }
@@ -521,12 +543,14 @@ router.post('/inventory/import/csv', async (req: Request, res: Response) => {
     }
 
     const allErrors = [...errors, ...importErrors];
-    console.log(`✅ Import complete: ${importedCount} items imported, ${allErrors.length} total errors`);
+    console.log(`✅ Import complete: ${importedCount} items imported, ${allErrors.length} total errors, ${skippedRows.length} rows skipped`);
     
     const response = {
       success: true,
       importedCount,
+      skippedCount: skippedRows.length,
       errors: allErrors.length > 0 ? allErrors : undefined,
+      skippedRows: skippedRows.length > 0 ? skippedRows : undefined,
     };
     console.log('📤 Sending response:', response);
     res.json(response);

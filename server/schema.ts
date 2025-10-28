@@ -2330,11 +2330,11 @@ export const inventoryTransactions = pgTable('inventory_transactions', {
   toLocation: text('to_location'),
   referenceType: text('reference_type'), // PO, WorkOrder, Adjustment, Manual, etc.
   referenceId: text('reference_id'), // ID of the related record (PO number, work order, etc.)
-  costPerUnit: real('cost_per_unit'), // Cost at time of transaction (for COGS tracking)
-  totalCost: real('total_cost'), // quantity * costPerUnit
+  costPerUnit: numeric('cost_per_unit', { precision: 12, scale: 2, mode: 'number' }), // Cost at time of transaction (exact money math)
+  totalCost: numeric('total_cost', { precision: 12, scale: 2, mode: 'number' }), // quantity * costPerUnit (exact money math)
   notes: text('notes'),
   performedBy: text('performed_by').notNull(), // Username of person who performed transaction
-  metadata: jsonb('metadata'), // Flexible field for future expansion (JSON data)
+  metadata: jsonb('metadata').$type<Record<string, unknown>>(), // Flexible field for future expansion (JSON data)
   transactionDate: timestamp('transaction_date').defaultNow().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -2606,11 +2606,11 @@ export const insertInventoryTransactionSchema = createInsertSchema(inventoryTran
     toLocation: z.string().optional().nullable(),
     referenceType: z.string().optional().nullable(),
     referenceId: z.string().optional().nullable(),
-    costPerUnit: z.number().optional().nullable(),
-    totalCost: z.number().optional().nullable(),
+    costPerUnit: z.coerce.number().optional().nullable(), // Coerce string to number for exact money math
+    totalCost: z.coerce.number().optional().nullable(), // Coerce string to number for exact money math
     notes: z.string().optional().nullable(),
     performedBy: z.string().min(1, 'Performed by is required'), // Required field
-    metadata: z.any().optional().nullable(), // JSONB - flexible for future expansion
+    metadata: z.record(z.unknown()).optional().nullable(), // JSONB - typed as Record<string, unknown>
   });
 export type InsertInventoryTransaction = z.infer<typeof insertInventoryTransactionSchema>;
 export type InventoryTransaction = typeof inventoryTransactions.$inferSelect;

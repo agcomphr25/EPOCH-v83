@@ -51,6 +51,48 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 -   **Database**: PostgreSQL (Neon serverless), Drizzle ORM, Drizzle-kit.
 -   **Key Features**: Order Management (dynamic configuration, linked orders, rush fees, urgency), Layup Scheduler, Production Queue Manager, Department Manager, Customer Management (CRM, CSV import, address autocomplete), Inventory Management (BOM integration), Metal Accessories Tracker, Barcode System, Employee Management (CRUD, portal, time clock), Quality Control (digital signature, checklists), Reporting, Payment Tracking, Shipping Integration, Communications System (inbox, email, SMS), Personalized Dashboards, Training Management System, AI-Powered Smart Sorting, Calendar Integration, Magic Link Authentication, and Global Search.
 
+## Database Schema Standards
+
+### Primary Key Pattern (CRITICAL)
+**NEVER use `serial` data type for new tables.** PostgreSQL's `serial` is a creation-time macro that cannot be used in ALTER statements, causing migration failures with "type 'serial' does not exist" errors.
+
+**Standard for ALL new tables:**
+```typescript
+// ✅ CORRECT - Use UUID for all new tables
+import { uuid } from 'drizzle-orm/pg-core';
+
+export const newTable = pgTable('new_table', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  // ... other columns
+});
+```
+
+**❌ FORBIDDEN - Never use serial for new tables:**
+```typescript
+// ❌ DO NOT DO THIS
+import { serial } from 'drizzle-orm/pg-core';
+id: serial('id').primaryKey()  // This will cause migration issues
+```
+
+**Legacy Tables (DO NOT MODIFY):**
+Many existing tables use `serial` IDs and should remain unchanged to avoid data loss:
+- `allOrders`, `orders`, `orderStatusTypes`, `orderDepartmentTypes`
+- `inventoryItems`, `employees`, `certifications`, `vendors`
+- `payments`, `customers`, `linked_order_groups`, `followup_orders`
+- All other tables with integer IDs
+
+**Migration Safety:**
+- Never retroactively change existing `serial` columns to UUID
+- Never change existing UUID columns to `serial`
+- Use `npm run db:push` to sync schema changes (or `npm run db:push --force` if needed)
+- Never manually write SQL migrations for ID column type changes
+
+**Why UUID over serial:**
+- Works reliably with Drizzle migrations (no ALTER TYPE issues)
+- Safe for distributed writes and data imports
+- No sequence drift or collision issues
+- Future-proof for scaling
+
 ## External Dependencies
 
 ### Database

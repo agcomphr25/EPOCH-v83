@@ -868,6 +868,8 @@ router.post('/create-label', async (req: Request, res: Response) => {
       // Extract detailed error information
       const faultDetails = error.response.data.Fault?.detail;
       let errorMessage = 'UPS API error';
+      let errorCode = null;
+      let errorSeverity = null;
 
       if (faultDetails?.Errors) {
         const errors = Array.isArray(faultDetails.Errors)
@@ -877,14 +879,27 @@ router.post('/create-label', async (req: Request, res: Response) => {
 
         if (errors[0]) {
           errorMessage =
-            errors[0].ErrorDescription || errors[0].Description || errorMessage;
+            errors[0].ErrorDescription || 
+            errors[0].Description || 
+            errors[0].PrimaryErrorCode?.Description ||
+            errorMessage;
+          errorCode = errors[0].ErrorCode || errors[0].PrimaryErrorCode?.Code;
+          errorSeverity = errors[0].ErrorSeverity || errors[0].PrimaryErrorCode?.Severity;
         }
+      }
+
+      // Include fault string if available
+      const faultString = error.response.data.Fault?.faultstring;
+      if (faultString && !errorMessage.includes(faultString)) {
+        errorMessage = `${errorMessage} (${faultString})`;
       }
 
       res.status(500).json({
         error: errorMessage,
+        errorCode,
+        errorSeverity,
         details: error.response.data,
-        faultString: error.response.data.Fault?.faultstring,
+        faultString,
       });
     } else {
       res.status(500).json({

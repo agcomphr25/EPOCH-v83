@@ -275,18 +275,38 @@ export default function ShippingLabelPage() {
       } else {
         const error = await response.json();
         let errorMessage = 'Failed to create shipping label';
+        let errorTitle = 'Error generating label';
 
         if (error.error?.includes('Invalid Access License')) {
           errorMessage =
             'UPS API credentials need to be updated. Please contact system administrator.';
         } else if (error.error) {
           errorMessage = error.error;
+          
+          // Add error code if available
+          if (error.errorCode) {
+            errorTitle = `Error generating label (Code: ${error.errorCode})`;
+          }
+          
+          // Add severity if available
+          if (error.errorSeverity) {
+            errorMessage = `[${error.errorSeverity}] ${errorMessage}`;
+          }
         }
 
+        console.error('UPS API Error Details:', {
+          error: error.error,
+          errorCode: error.errorCode,
+          errorSeverity: error.errorSeverity,
+          faultString: error.faultString,
+          fullDetails: error.details,
+        });
+
         toast({
-          title: 'Error generating label',
+          title: errorTitle,
           description: errorMessage,
           variant: 'destructive',
+          duration: 10000, // Show for 10 seconds so user can read full error
         });
       }
     } catch (error: any) {

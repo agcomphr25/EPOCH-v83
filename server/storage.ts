@@ -88,6 +88,8 @@ import {
   vendors,
   vendorContacts,
   vendorMonthlyEvaluations,
+  vendorPOs,
+  vendorPOItems,
   // Follow-up orders table
   followupOrders,
 
@@ -5387,6 +5389,153 @@ export class DatabaseStorage implements IStorage {
   async bulkCreateVendorMonthlyEvaluations(data: InsertVendorMonthlyEvaluation[]): Promise<VendorMonthlyEvaluation[]> {
     if (data.length === 0) return [];
     return await db.insert(vendorMonthlyEvaluations).values(data).returning();
+  }
+
+  // Vendor PO CRUD
+  async getAllVendorPOs(params: {
+    page: number;
+    pageSize: number;
+    search?: string;
+    status?: string;
+    vendorId?: number;
+    sort?: string;
+  }): Promise<{ data: any[]; meta: { page: number; pageSize: number; total: number; pageCount: number } }> {
+    const { page, pageSize, search, status, vendorId, sort = 'createdAt:desc' } = params;
+
+    const [sortField, sortDir] = sort.split(':');
+    const sortCol = (vendorPOs as any)[sortField] || vendorPOs.createdAt;
+
+    const conditions = [];
+    
+    if (search) {
+      conditions.push(ilike(vendorPOs.poNumber, `%${search}%`));
+    }
+    
+    if (status && status !== 'any') {
+      conditions.push(eq(vendorPOs.status, status));
+    }
+    
+    if (vendorId) {
+      conditions.push(eq(vendorPOs.vendorId, vendorId));
+    }
+
+    const whereExpr = conditions.length > 0 ? and(...conditions) : undefined;
+    const orderBy = sortDir === 'asc' ? asc(sortCol) : desc(sortCol);
+    const offset = (page - 1) * pageSize;
+
+    const [data, [countResult]] = await Promise.all([
+      db
+        .select({
+          id: vendorPOs.id,
+          poNumber: vendorPOs.poNumber,
+          vendorId: vendorPOs.vendorId,
+          vendorName: vendors.name,
+          status: vendorPOs.status,
+          orderDate: vendorPOs.orderDate,
+          expectedDeliveryDate: vendorPOs.expectedDeliveryDate,
+          actualDeliveryDate: vendorPOs.actualDeliveryDate,
+          barcode: vendorPOs.barcode,
+          subtotal: vendorPOs.subtotal,
+          tax: vendorPOs.tax,
+          shippingCost: vendorPOs.shippingCost,
+          totalCost: vendorPOs.totalCost,
+          notes: vendorPOs.notes,
+          createdBy: vendorPOs.createdBy,
+          createdAt: vendorPOs.createdAt,
+          updatedAt: vendorPOs.updatedAt,
+        })
+        .from(vendorPOs)
+        .leftJoin(vendors, eq(vendorPOs.vendorId, vendors.id))
+        .where(whereExpr)
+        .orderBy(orderBy)
+        .limit(pageSize)
+        .offset(offset),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(vendorPOs)
+        .where(whereExpr),
+    ]);
+
+    const total = Number(countResult.count);
+    const pageCount = Math.ceil(total / pageSize) || 1;
+
+    return {
+      data,
+      meta: { page, pageSize, total, pageCount },
+    };
+  }
+
+  async getVendorPO(id: number): Promise<any | undefined> {
+    const [vendorPO] = await db
+      .select({
+        id: vendorPOs.id,
+        poNumber: vendorPOs.poNumber,
+        vendorId: vendorPOs.vendorId,
+        vendorName: vendors.name,
+        status: vendorPOs.status,
+        orderDate: vendorPOs.orderDate,
+        expectedDeliveryDate: vendorPOs.expectedDeliveryDate,
+        actualDeliveryDate: vendorPOs.actualDeliveryDate,
+        barcode: vendorPOs.barcode,
+        subtotal: vendorPOs.subtotal,
+        tax: vendorPOs.tax,
+        shippingCost: vendorPOs.shippingCost,
+        totalCost: vendorPOs.totalCost,
+        notes: vendorPOs.notes,
+        createdBy: vendorPOs.createdBy,
+        createdAt: vendorPOs.createdAt,
+        updatedAt: vendorPOs.updatedAt,
+      })
+      .from(vendorPOs)
+      .leftJoin(vendors, eq(vendorPOs.vendorId, vendors.id))
+      .where(eq(vendorPOs.id, id))
+      .limit(1);
+    return vendorPO;
+  }
+
+  async createVendorPO(data: any): Promise<any> {
+    const [vendorPO] = await db.insert(vendorPOs).values(data).returning();
+    return vendorPO;
+  }
+
+  async updateVendorPO(id: number, data: any): Promise<any> {
+    const [vendorPO] = await db
+      .update(vendorPOs)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(vendorPOs.id, id))
+      .returning();
+    return vendorPO;
+  }
+
+  async deleteVendorPO(id: number): Promise<void> {
+    await db.delete(vendorPOs).where(eq(vendorPOs.id, id));
+  }
+
+  // Vendor PO Items CRUD
+  async getVendorPOItems(vendorPoId: number): Promise<any[]> {
+    return await db
+      .select()
+      .from(vendorPOItems)
+      .where(eq(vendorPOItems.vendorPoId, vendorPoId))
+      .orderBy(vendorPOItems.lineNumber);
+  }
+
+  async createVendorPOItem(data: any): Promise<any> {
+    const [item] = await db.insert(vendorPOItems).values(data).returning();
+    return item;
+  }
+
+  async updateVendorPOItem(id: number, data: any): Promise<any> {
+    const [item] = await db
+      .update(vendorPOItems)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(vendorPOItems.id, id))
+      .returning();
+    return item;
+  }
+
+  async deleteVendorPOItem(id: number): Promise<void> {
+    await db.delete(vendorPOItems).where(eq(vendorPOItems.id, id));
   }
 
   // Follow-up order methods

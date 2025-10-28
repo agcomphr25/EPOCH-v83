@@ -42,24 +42,23 @@ import {
 import { toast } from 'react-hot-toast';
 
 interface InventoryBalance {
-  partId: string;
+  id: number;
+  agPartNumber: string;
   locationId: string;
-  onHandQty: number;
-  allocatedQty: number;
-  availableQty: number;
-  committedQty: number;
+  quantityOnHand: number;
+  quantityAllocated: number;
+  quantityAvailable: number;
   reorderPoint: number | null;
-  maxStockLevel: number | null;
-  lastUpdated: Date;
+  lastCountedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
   partName?: string;
-  locationName?: string;
 }
 
 interface UpdateBalanceData {
-  onHandQty?: number;
-  allocatedQty?: number;
-  reorderPoint?: number;
-  maxStockLevel?: number;
+  quantityOnHand?: number;
+  quantityAllocated?: number;
+  reorderPoint?: number | null;
 }
 
 export default function InventoryBalancesCard() {
@@ -78,41 +77,20 @@ export default function InventoryBalancesCard() {
     isLoading,
     refetch,
   } = useQuery<InventoryBalance[]>({
-    queryKey: [
-      '/api/enhanced/inventory/balances',
-      {
-        partId: searchQuery,
-        locationId: selectedLocationFilter,
-        lowStock: showLowStockOnly,
-      },
-    ],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (searchQuery) params.append('partId', searchQuery);
-      if (selectedLocationFilter)
-        params.append('locationId', selectedLocationFilter);
-      if (showLowStockOnly) params.append('lowStock', 'true');
-
-      const response = await apiRequest(
-        `/api/enhanced/inventory/balances?${params.toString()}`
-      );
-      return response;
-    },
+    queryKey: ['/api/enhanced/inventory/balances'],
   });
 
   // Update balance mutation
   const updateBalanceMutation = useMutation({
     mutationFn: async ({
-      partId,
-      locationId,
+      id,
       data,
     }: {
-      partId: string;
-      locationId: string;
+      id: number;
       data: UpdateBalanceData;
     }) => {
       return await apiRequest(
-        `/api/enhanced/inventory/balances/${partId}/${locationId}`,
+        `/api/enhanced/inventory/balances/${id}`,
         {
           method: 'PUT',
           body: JSON.stringify(data),
@@ -147,14 +125,12 @@ export default function InventoryBalancesCard() {
 
       const formData = new FormData(e.currentTarget);
       const updateData: UpdateBalanceData = {
-        onHandQty: Number(formData.get('onHandQty')),
-        reorderPoint: Number(formData.get('reorderPoint')) || null,
-        maxStockLevel: Number(formData.get('maxStockLevel')) || null,
+        quantityOnHand: Number(formData.get('quantityOnHand')),
+        reorderPoint: formData.get('reorderPoint') ? Number(formData.get('reorderPoint')) : null,
       };
 
       updateBalanceMutation.mutate({
-        partId: editingBalance.partId,
-        locationId: editingBalance.locationId,
+        id: editingBalance.id,
         data: updateData,
       });
     },
@@ -162,14 +138,14 @@ export default function InventoryBalancesCard() {
   );
 
   const getStockStatus = (balance: InventoryBalance) => {
-    if (balance.availableQty <= 0) {
+    if (balance.quantityAvailable <= 0) {
       return {
         status: 'Out of Stock',
         color: 'bg-red-100 text-red-800',
         icon: AlertTriangle,
       };
     }
-    if (balance.reorderPoint && balance.availableQty <= balance.reorderPoint) {
+    if (balance.reorderPoint && balance.quantityAvailable <= balance.reorderPoint) {
       return {
         status: 'Low Stock',
         color: 'bg-yellow-100 text-yellow-800',
@@ -186,7 +162,7 @@ export default function InventoryBalancesCard() {
   const filteredBalances = balances.filter((balance) => {
     const matchesSearch =
       !searchQuery ||
-      balance.partId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      balance.agPartNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       balance.partName?.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesLocation =
@@ -194,8 +170,8 @@ export default function InventoryBalancesCard() {
 
     const matchesLowStock =
       !showLowStockOnly ||
-      (balance.reorderPoint && balance.availableQty <= balance.reorderPoint) ||
-      balance.availableQty <= 0;
+      (balance.reorderPoint && balance.quantityAvailable <= balance.reorderPoint) ||
+      balance.quantityAvailable <= 0;
 
     return matchesSearch && matchesLocation && matchesLowStock;
   });
@@ -316,8 +292,8 @@ export default function InventoryBalancesCard() {
                   {
                     filteredBalances.filter(
                       (b) =>
-                        (b.reorderPoint && b.availableQty <= b.reorderPoint) ||
-                        b.availableQty <= 0
+                        (b.reorderPoint && b.quantityAvailable <= b.reorderPoint) ||
+                        b.quantityAvailable <= 0
                     ).length
                   }
                 </p>
@@ -335,7 +311,7 @@ export default function InventoryBalancesCard() {
                   Out of Stock
                 </p>
                 <p className="text-2xl font-bold text-red-600">
-                  {filteredBalances.filter((b) => b.availableQty <= 0).length}
+                  {filteredBalances.filter((b) => b.quantityAvailable <= 0).length}
                 </p>
               </div>
               <AlertTriangle className="h-8 w-8 text-red-500" />
@@ -378,13 +354,12 @@ export default function InventoryBalancesCard() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Part ID</TableHead>
+                  <TableHead>Part Number</TableHead>
                   <TableHead>Part Name</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead className="text-right">On Hand</TableHead>
                   <TableHead className="text-right">Allocated</TableHead>
                   <TableHead className="text-right">Available</TableHead>
-                  <TableHead className="text-right">Committed</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-center">Actions</TableHead>
                 </TableRow>
@@ -396,10 +371,10 @@ export default function InventoryBalancesCard() {
 
                   return (
                     <TableRow
-                      key={`${balance.partId}-${balance.locationId}-${index}`}
+                      key={`${balance.agPartNumber}-${balance.locationId}-${index}`}
                     >
                       <TableCell className="font-medium">
-                        {balance.partId}
+                        {balance.agPartNumber}
                       </TableCell>
                       <TableCell>{balance.partName || 'Unknown'}</TableCell>
                       <TableCell>
@@ -409,16 +384,13 @@ export default function InventoryBalancesCard() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        {balance.onHandQty.toLocaleString()}
+                        {balance.quantityOnHand.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right font-mono text-orange-600">
-                        {balance.allocatedQty.toLocaleString()}
+                        {balance.quantityAllocated.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right font-mono font-semibold">
-                        {balance.availableQty.toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-purple-600">
-                        {balance.committedQty.toLocaleString()}
+                        {balance.quantityAvailable.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge className={stockStatus.color}>
@@ -431,7 +403,7 @@ export default function InventoryBalancesCard() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEditBalance(balance)}
-                          data-testid={`button-edit-balance-${balance.partId}`}
+                          data-testid={`button-edit-balance-${balance.agPartNumber}`}
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -461,8 +433,8 @@ export default function InventoryBalancesCard() {
             <form onSubmit={handleUpdateBalance} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Part ID</Label>
-                  <Input value={editingBalance.partId} disabled />
+                  <Label>Part Number</Label>
+                  <Input value={editingBalance.agPartNumber} disabled />
                 </div>
                 <div>
                   <Label>Location</Label>
@@ -472,43 +444,31 @@ export default function InventoryBalancesCard() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="onHandQty">On Hand Quantity *</Label>
+                  <Label htmlFor="quantityOnHand">On Hand Quantity *</Label>
                   <Input
-                    id="onHandQty"
-                    name="onHandQty"
+                    id="quantityOnHand"
+                    name="quantityOnHand"
                     type="number"
                     min="0"
-                    defaultValue={editingBalance.onHandQty}
+                    defaultValue={editingBalance.quantityOnHand}
                     required
                   />
                 </div>
                 <div>
                   <Label>Current Allocated</Label>
-                  <Input value={editingBalance.allocatedQty} disabled />
+                  <Input value={editingBalance.quantityAllocated} disabled />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="reorderPoint">Reorder Point</Label>
-                  <Input
-                    id="reorderPoint"
-                    name="reorderPoint"
-                    type="number"
-                    min="0"
-                    defaultValue={editingBalance.reorderPoint || ''}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="maxStockLevel">Max Stock Level</Label>
-                  <Input
-                    id="maxStockLevel"
-                    name="maxStockLevel"
-                    type="number"
-                    min="0"
-                    defaultValue={editingBalance.maxStockLevel || ''}
-                  />
-                </div>
+              <div>
+                <Label htmlFor="reorderPoint">Reorder Point</Label>
+                <Input
+                  id="reorderPoint"
+                  name="reorderPoint"
+                  type="number"
+                  min="0"
+                  defaultValue={editingBalance.reorderPoint || ''}
+                />
               </div>
 
               <div className="flex justify-end gap-2 pt-4">

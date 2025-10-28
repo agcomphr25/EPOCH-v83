@@ -273,6 +273,16 @@ import {
   magicLinkTokens,
   type MagicLinkToken,
   type InsertMagicLinkToken,
+  // Enhanced Inventory MRP types
+  inventoryBalances,
+  type InventoryBalance,
+  type InsertInventoryBalance,
+  inventoryTransactions,
+  type InventoryTransaction,
+  type InsertInventoryTransaction,
+  vendorParts,
+  type VendorPart,
+  type InsertVendorPart,
 } from './schema';
 import { db } from './db';
 import {
@@ -1268,6 +1278,51 @@ export interface IStorage {
   getMagicLinkToken(token: string): Promise<MagicLinkToken | undefined>;
   markMagicLinkTokenAsUsed(token: string): Promise<void>;
   deleteExpiredMagicLinkTokens(): Promise<number>;
+
+  // Enhanced Inventory MRP - Inventory Balances CRUD
+  getAllInventoryBalances(): Promise<InventoryBalance[]>;
+  getInventoryBalance(id: number): Promise<InventoryBalance | undefined>;
+  getInventoryBalanceByPartAndLocation(agPartNumber: string, locationId: string): Promise<InventoryBalance | undefined>;
+  getInventoryBalancesByPart(agPartNumber: string): Promise<InventoryBalance[]>;
+  createInventoryBalance(data: InsertInventoryBalance): Promise<InventoryBalance>;
+  updateInventoryBalance(id: number, data: Partial<InsertInventoryBalance>): Promise<InventoryBalance>;
+  deleteInventoryBalance(id: number): Promise<void>;
+
+  // Enhanced Inventory MRP - Inventory Transactions CRUD
+  getAllInventoryTransactions(): Promise<InventoryTransaction[]>;
+  getInventoryTransaction(id: number): Promise<InventoryTransaction | undefined>;
+  getInventoryTransactionsByPart(agPartNumber: string): Promise<InventoryTransaction[]>;
+  createInventoryTransaction(data: InsertInventoryTransaction): Promise<InventoryTransaction>;
+
+  // Enhanced Inventory MRP - Vendor Parts CRUD
+  getAllVendorParts(): Promise<VendorPart[]>;
+  getVendorPart(id: number): Promise<VendorPart | undefined>;
+  getVendorPartsByVendor(vendorId: number): Promise<VendorPart[]>;
+  getVendorPartsByPart(agPartNumber: string): Promise<VendorPart[]>;
+  createVendorPart(data: InsertVendorPart): Promise<VendorPart>;
+  updateVendorPart(id: number, data: Partial<InsertVendorPart>): Promise<VendorPart>;
+  deleteVendorPart(id: number): Promise<void>;
+
+  // Vendor PO CRUD (methods were missing from interface)
+  getAllVendorPOs(params: {
+    page: number;
+    pageSize: number;
+    search?: string;
+    status?: string;
+    vendorId?: number;
+    sort?: string;
+  }): Promise<{
+    data: any[];
+    meta: { page: number; pageSize: number; total: number; pageCount: number };
+  }>;
+  getVendorPO(id: number): Promise<any | undefined>;
+  createVendorPO(data: any): Promise<any>;
+  updateVendorPO(id: number, data: any): Promise<any>;
+  deleteVendorPO(id: number): Promise<void>;
+  getVendorPOItems(vendorPoId: number): Promise<any[]>;
+  createVendorPOItem(data: any): Promise<any>;
+  updateVendorPOItem(id: number, data: any): Promise<any>;
+  deleteVendorPOItem(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5536,6 +5591,150 @@ export class DatabaseStorage implements IStorage {
 
   async deleteVendorPOItem(id: number): Promise<void> {
     await db.delete(vendorPOItems).where(eq(vendorPOItems.id, id));
+  }
+
+  // Enhanced Inventory MRP - Inventory Balances CRUD
+  async getAllInventoryBalances(): Promise<InventoryBalance[]> {
+    return await db
+      .select()
+      .from(inventoryBalances)
+      .orderBy(inventoryBalances.agPartNumber, inventoryBalances.locationId);
+  }
+
+  async getInventoryBalance(id: number): Promise<InventoryBalance | undefined> {
+    const [balance] = await db
+      .select()
+      .from(inventoryBalances)
+      .where(eq(inventoryBalances.id, id))
+      .limit(1);
+    return balance;
+  }
+
+  async getInventoryBalanceByPartAndLocation(
+    agPartNumber: string,
+    locationId: string
+  ): Promise<InventoryBalance | undefined> {
+    const [balance] = await db
+      .select()
+      .from(inventoryBalances)
+      .where(
+        and(
+          eq(inventoryBalances.agPartNumber, agPartNumber),
+          eq(inventoryBalances.locationId, locationId)
+        )
+      )
+      .limit(1);
+    return balance;
+  }
+
+  async getInventoryBalancesByPart(agPartNumber: string): Promise<InventoryBalance[]> {
+    return await db
+      .select()
+      .from(inventoryBalances)
+      .where(eq(inventoryBalances.agPartNumber, agPartNumber))
+      .orderBy(inventoryBalances.locationId);
+  }
+
+  async createInventoryBalance(data: InsertInventoryBalance): Promise<InventoryBalance> {
+    const [balance] = await db.insert(inventoryBalances).values(data).returning();
+    return balance;
+  }
+
+  async updateInventoryBalance(
+    id: number,
+    data: Partial<InsertInventoryBalance>
+  ): Promise<InventoryBalance> {
+    const [balance] = await db
+      .update(inventoryBalances)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(inventoryBalances.id, id))
+      .returning();
+    return balance;
+  }
+
+  async deleteInventoryBalance(id: number): Promise<void> {
+    await db.delete(inventoryBalances).where(eq(inventoryBalances.id, id));
+  }
+
+  // Enhanced Inventory MRP - Inventory Transactions CRUD
+  async getAllInventoryTransactions(): Promise<InventoryTransaction[]> {
+    return await db
+      .select()
+      .from(inventoryTransactions)
+      .orderBy(desc(inventoryTransactions.createdAt));
+  }
+
+  async getInventoryTransaction(id: number): Promise<InventoryTransaction | undefined> {
+    const [transaction] = await db
+      .select()
+      .from(inventoryTransactions)
+      .where(eq(inventoryTransactions.id, id))
+      .limit(1);
+    return transaction;
+  }
+
+  async getInventoryTransactionsByPart(agPartNumber: string): Promise<InventoryTransaction[]> {
+    return await db
+      .select()
+      .from(inventoryTransactions)
+      .where(eq(inventoryTransactions.agPartNumber, agPartNumber))
+      .orderBy(desc(inventoryTransactions.createdAt));
+  }
+
+  async createInventoryTransaction(data: InsertInventoryTransaction): Promise<InventoryTransaction> {
+    const [transaction] = await db.insert(inventoryTransactions).values(data).returning();
+    return transaction;
+  }
+
+  // Enhanced Inventory MRP - Vendor Parts CRUD
+  async getAllVendorParts(): Promise<VendorPart[]> {
+    return await db
+      .select()
+      .from(vendorParts)
+      .orderBy(vendorParts.agPartNumber, vendorParts.vendorId);
+  }
+
+  async getVendorPart(id: number): Promise<VendorPart | undefined> {
+    const [vendorPart] = await db
+      .select()
+      .from(vendorParts)
+      .where(eq(vendorParts.id, id))
+      .limit(1);
+    return vendorPart;
+  }
+
+  async getVendorPartsByVendor(vendorId: number): Promise<VendorPart[]> {
+    return await db
+      .select()
+      .from(vendorParts)
+      .where(eq(vendorParts.vendorId, vendorId))
+      .orderBy(vendorParts.agPartNumber);
+  }
+
+  async getVendorPartsByPart(agPartNumber: string): Promise<VendorPart[]> {
+    return await db
+      .select()
+      .from(vendorParts)
+      .where(eq(vendorParts.agPartNumber, agPartNumber))
+      .orderBy(desc(vendorParts.isPreferred), vendorParts.unitPrice);
+  }
+
+  async createVendorPart(data: InsertVendorPart): Promise<VendorPart> {
+    const [vendorPart] = await db.insert(vendorParts).values(data).returning();
+    return vendorPart;
+  }
+
+  async updateVendorPart(id: number, data: Partial<InsertVendorPart>): Promise<VendorPart> {
+    const [vendorPart] = await db
+      .update(vendorParts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(vendorParts.id, id))
+      .returning();
+    return vendorPart;
+  }
+
+  async deleteVendorPart(id: number): Promise<void> {
+    await db.delete(vendorParts).where(eq(vendorParts.id, id));
   }
 
   // Follow-up order methods

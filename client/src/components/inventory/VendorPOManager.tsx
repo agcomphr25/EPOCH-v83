@@ -743,7 +743,7 @@ export default function VendorPOManager() {
             <VendorPOItemSelector
               vendorPoId={selectedVendorPO.id}
               poNumber={selectedVendorPO.poNumber}
-              onTotalChange={(total) => {
+              onTotalChange={(total: number) => {
                 queryClient.invalidateQueries({
                   queryKey: ['/api/vendor-pos'],
                 });

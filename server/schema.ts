@@ -474,6 +474,7 @@ export const inventoryItems = pgTable('inventory_items', {
   name: text('name').notNull(), // Name
   type: text('type'), // Type: Purchased or Manufactured
   source: text('source'), // Source
+  vendorId: integer('vendor_id').references(() => vendors.id), // Primary vendor for this part
   supplierPartNumber: text('supplier_part_number'), // Supplier Part #
   secondarySupplierPartNumber: text('secondary_supplier_part_number'), // Secondary Supplier Part #
   costPer: real('cost_per'), // Purchase cost from vendor (e.g., $491.20 for 80lb box)

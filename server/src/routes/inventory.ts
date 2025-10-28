@@ -3,6 +3,9 @@ import {
   insertInventoryItemSchema,
   insertInventoryScanSchema,
   insertPartsRequestSchema,
+  insertInventoryBalanceSchema,
+  insertInventoryTransactionSchema,
+  insertVendorPartSchema,
 } from '@shared/schema';
 
 import { storage } from '../../storage';
@@ -640,6 +643,251 @@ router.get('/inventory/export/csv', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('CSV export error:', error);
     res.status(500).json({ error: 'Failed to export CSV' });
+  }
+});
+
+// ========================================
+// Enhanced Inventory MRP - Inventory Balances Routes
+// ========================================
+
+// GET /api/enhanced/inventory/balances - Get all inventory balances
+router.get('/inventory/balances', async (req: Request, res: Response) => {
+  try {
+    const balances = await storage.getAllInventoryBalances();
+    res.json(balances);
+  } catch (error) {
+    console.error('Get inventory balances error:', error);
+    res.status(500).json({ error: 'Failed to fetch inventory balances' });
+  }
+});
+
+// GET /api/enhanced/inventory/balances/part/:agPartNumber - Get balances for a specific part
+router.get('/inventory/balances/part/:agPartNumber', async (req: Request, res: Response) => {
+  try {
+    const { agPartNumber } = req.params;
+    const balances = await storage.getInventoryBalancesByPart(agPartNumber);
+    res.json(balances);
+  } catch (error) {
+    console.error('Get inventory balances by part error:', error);
+    res.status(500).json({ error: 'Failed to fetch inventory balances' });
+  }
+});
+
+// GET /api/enhanced/inventory/balances/:id - Get a specific inventory balance
+router.get('/inventory/balances/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const balance = await storage.getInventoryBalance(id);
+    
+    if (!balance) {
+      return res.status(404).json({ error: 'Inventory balance not found' });
+    }
+    
+    res.json(balance);
+  } catch (error) {
+    console.error('Get inventory balance error:', error);
+    res.status(500).json({ error: 'Failed to fetch inventory balance' });
+  }
+});
+
+// POST /api/enhanced/inventory/balances - Create a new inventory balance
+router.post('/inventory/balances', async (req: Request, res: Response) => {
+  try {
+    const data = insertInventoryBalanceSchema.parse(req.body);
+    const balance = await storage.createInventoryBalance(data);
+    res.status(201).json(balance);
+  } catch (error) {
+    console.error('Create inventory balance error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to create inventory balance' });
+  }
+});
+
+// PUT /api/enhanced/inventory/balances/:id - Update an inventory balance
+router.put('/inventory/balances/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const data = insertInventoryBalanceSchema.partial().parse(req.body);
+    const balance = await storage.updateInventoryBalance(id, data);
+    res.json(balance);
+  } catch (error) {
+    console.error('Update inventory balance error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to update inventory balance' });
+  }
+});
+
+// DELETE /api/enhanced/inventory/balances/:id - Delete an inventory balance
+router.delete('/inventory/balances/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    await storage.deleteInventoryBalance(id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete inventory balance error:', error);
+    res.status(500).json({ error: 'Failed to delete inventory balance' });
+  }
+});
+
+// ========================================
+// Enhanced Inventory MRP - Inventory Transactions Routes
+// ========================================
+
+// GET /api/enhanced/inventory/transactions - Get all inventory transactions
+router.get('/inventory/transactions', async (req: Request, res: Response) => {
+  try {
+    const transactions = await storage.getAllInventoryTransactions();
+    res.json(transactions);
+  } catch (error) {
+    console.error('Get inventory transactions error:', error);
+    res.status(500).json({ error: 'Failed to fetch inventory transactions' });
+  }
+});
+
+// GET /api/enhanced/inventory/transactions/part/:agPartNumber - Get transactions for a specific part
+router.get('/inventory/transactions/part/:agPartNumber', async (req: Request, res: Response) => {
+  try {
+    const { agPartNumber } = req.params;
+    const transactions = await storage.getInventoryTransactionsByPart(agPartNumber);
+    res.json(transactions);
+  } catch (error) {
+    console.error('Get inventory transactions by part error:', error);
+    res.status(500).json({ error: 'Failed to fetch inventory transactions' });
+  }
+});
+
+// GET /api/enhanced/inventory/transactions/:id - Get a specific inventory transaction
+router.get('/inventory/transactions/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const transaction = await storage.getInventoryTransaction(id);
+    
+    if (!transaction) {
+      return res.status(404).json({ error: 'Inventory transaction not found' });
+    }
+    
+    res.json(transaction);
+  } catch (error) {
+    console.error('Get inventory transaction error:', error);
+    res.status(500).json({ error: 'Failed to fetch inventory transaction' });
+  }
+});
+
+// POST /api/enhanced/inventory/transactions - Create a new inventory transaction
+router.post('/inventory/transactions', async (req: Request, res: Response) => {
+  try {
+    const data = insertInventoryTransactionSchema.parse(req.body);
+    const transaction = await storage.createInventoryTransaction(data);
+    res.status(201).json(transaction);
+  } catch (error) {
+    console.error('Create inventory transaction error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to create inventory transaction' });
+  }
+});
+
+// ========================================
+// Vendor Parts Routes
+// ========================================
+
+// GET /api/inventory/vendor-parts - Get all vendor parts
+router.get('/vendor-parts', async (req: Request, res: Response) => {
+  try {
+    const vendorParts = await storage.getAllVendorParts();
+    res.json(vendorParts);
+  } catch (error) {
+    console.error('Get vendor parts error:', error);
+    res.status(500).json({ error: 'Failed to fetch vendor parts' });
+  }
+});
+
+// GET /api/inventory/vendor-parts/vendor/:vendorId - Get vendor parts for a specific vendor
+router.get('/vendor-parts/vendor/:vendorId', async (req: Request, res: Response) => {
+  try {
+    const vendorId = parseInt(req.params.vendorId);
+    const vendorParts = await storage.getVendorPartsByVendor(vendorId);
+    res.json(vendorParts);
+  } catch (error) {
+    console.error('Get vendor parts by vendor error:', error);
+    res.status(500).json({ error: 'Failed to fetch vendor parts' });
+  }
+});
+
+// GET /api/inventory/vendor-parts/part/:agPartNumber - Get vendor parts for a specific part
+router.get('/vendor-parts/part/:agPartNumber', async (req: Request, res: Response) => {
+  try {
+    const { agPartNumber } = req.params;
+    const vendorParts = await storage.getVendorPartsByPart(agPartNumber);
+    res.json(vendorParts);
+  } catch (error) {
+    console.error('Get vendor parts by part error:', error);
+    res.status(500).json({ error: 'Failed to fetch vendor parts' });
+  }
+});
+
+// GET /api/inventory/vendor-parts/:id - Get a specific vendor part
+router.get('/vendor-parts/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const vendorPart = await storage.getVendorPart(id);
+    
+    if (!vendorPart) {
+      return res.status(404).json({ error: 'Vendor part not found' });
+    }
+    
+    res.json(vendorPart);
+  } catch (error) {
+    console.error('Get vendor part error:', error);
+    res.status(500).json({ error: 'Failed to fetch vendor part' });
+  }
+});
+
+// POST /api/inventory/vendor-parts - Create a new vendor part
+router.post('/vendor-parts', async (req: Request, res: Response) => {
+  try {
+    const data = insertVendorPartSchema.parse(req.body);
+    const vendorPart = await storage.createVendorPart(data);
+    res.status(201).json(vendorPart);
+  } catch (error) {
+    console.error('Create vendor part error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to create vendor part' });
+  }
+});
+
+// PUT /api/inventory/vendor-parts/:id - Update a vendor part
+router.put('/vendor-parts/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const data = insertVendorPartSchema.partial().parse(req.body);
+    const vendorPart = await storage.updateVendorPart(id, data);
+    res.json(vendorPart);
+  } catch (error) {
+    console.error('Update vendor part error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to update vendor part' });
+  }
+});
+
+// DELETE /api/inventory/vendor-parts/:id - Delete a vendor part
+router.delete('/vendor-parts/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    await storage.deleteVendorPart(id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete vendor part error:', error);
+    res.status(500).json({ error: 'Failed to delete vendor part' });
   }
 });
 

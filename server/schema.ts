@@ -468,7 +468,7 @@ export const formSubmissions = pgTable('form_submissions', {
 
 // Inventory Management Tables
 export const inventoryItems = pgTable('inventory_items', {
-  id: serial('id').primaryKey(),
+  id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
   agPartNumber: text('ag_part_number').notNull().unique(), // AG Part#
   sku: text('sku'), // SKU - Links to stock models (informational)
   name: text('name').notNull(), // Name

@@ -468,12 +468,13 @@ export const formSubmissions = pgTable('form_submissions', {
 
 // Inventory Management Tables
 export const inventoryItems = pgTable('inventory_items', {
-  id: serial('id').primaryKey(),
+  id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
   agPartNumber: text('ag_part_number').notNull().unique(), // AG Part#
   sku: text('sku'), // SKU - Links to stock models (informational)
   name: text('name').notNull(), // Name
   type: text('type'), // Type: Purchased or Manufactured
   source: text('source'), // Source
+  vendorId: integer('vendor_id').references(() => vendors.id), // Primary vendor for this part
   supplierPartNumber: text('supplier_part_number'), // Supplier Part #
   secondarySupplierPartNumber: text('secondary_supplier_part_number'), // Secondary Supplier Part #
   costPer: real('cost_per'), // Purchase cost from vendor (e.g., $491.20 for 80lb box)
@@ -1325,6 +1326,7 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     name: z.string().min(1, 'Name is required'),
     type: z.string().optional().nullable(),
     source: z.string().optional().nullable(),
+    vendorId: z.number().int().positive().optional().nullable(),
     supplierPartNumber: z.string().optional().nullable(),
     secondarySupplierPartNumber: z.string().optional().nullable(),
     costPer: z.number().min(0).optional().nullable(),
@@ -2321,14 +2323,19 @@ export const inventoryTransactions = pgTable('inventory_transactions', {
   agPartNumber: text('ag_part_number')
     .references(() => inventoryItems.agPartNumber, { onDelete: 'cascade' })
     .notNull(),
-  transactionType: text('transaction_type').notNull(), // receipt, issue, transfer, adjustment, consumption
-  quantity: integer('quantity').notNull(), // Can be negative for issues
+  transactionType: text('transaction_type').notNull(), // receipt, consumption, adjustment, transfer, return, issue
+  quantity: real('quantity').notNull(), // Can be negative for issues/consumption
+  unitOfMeasure: text('unit_of_measure'), // lbs, each, box, etc.
   fromLocation: text('from_location'),
   toLocation: text('to_location'),
-  referenceType: text('reference_type'), // PO, WorkOrder, Adjustment, etc.
-  referenceId: text('reference_id'),
+  referenceType: text('reference_type'), // PO, WorkOrder, Adjustment, Manual, etc.
+  referenceId: text('reference_id'), // ID of the related record (PO number, work order, etc.)
+  costPerUnit: numeric('cost_per_unit', { precision: 12, scale: 2, mode: 'number' }), // Cost at time of transaction (exact money math)
+  totalCost: numeric('total_cost', { precision: 12, scale: 2, mode: 'number' }), // quantity * costPerUnit (exact money math)
   notes: text('notes'),
-  performedBy: text('performed_by'),
+  performedBy: text('performed_by').notNull(), // Username of person who performed transaction
+  metadata: jsonb('metadata').$type<Record<string, unknown>>(), // Flexible field for future expansion (JSON data)
+  transactionDate: timestamp('transaction_date').defaultNow().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -2588,17 +2595,22 @@ export const insertInventoryTransactionSchema = createInsertSchema(inventoryTran
   .omit({
     id: true,
     createdAt: true,
+    transactionDate: true, // Auto-generated
   })
   .extend({
     agPartNumber: z.string().min(1, 'Part number is required'),
-    transactionType: z.enum(['receipt', 'issue', 'transfer', 'adjustment', 'consumption']),
-    quantity: z.number().int(),
+    transactionType: z.enum(['receipt', 'consumption', 'adjustment', 'transfer', 'return', 'issue']),
+    quantity: z.number(), // Real number, can be positive or negative
+    unitOfMeasure: z.string().optional().nullable(),
     fromLocation: z.string().optional().nullable(),
     toLocation: z.string().optional().nullable(),
     referenceType: z.string().optional().nullable(),
     referenceId: z.string().optional().nullable(),
+    costPerUnit: z.coerce.number().optional().nullable(), // Coerce string to number for exact money math
+    totalCost: z.coerce.number().optional().nullable(), // Coerce string to number for exact money math
     notes: z.string().optional().nullable(),
-    performedBy: z.string().optional().nullable(),
+    performedBy: z.string().min(1, 'Performed by is required'), // Required field
+    metadata: z.record(z.unknown()).optional().nullable(), // JSONB - typed as Record<string, unknown>
   });
 export type InsertInventoryTransaction = z.infer<typeof insertInventoryTransactionSchema>;
 export type InventoryTransaction = typeof inventoryTransactions.$inferSelect;

@@ -39,8 +39,8 @@ import ProgressiveAllocationCard from '../components/inventory/ProgressiveAlloca
 import MRPCalculationCard from '../components/inventory/MRPCalculationCard';
 import MRPShortagesCard from '../components/inventory/MRPShortagesCard';
 import OutsideProcessingCard from '../components/inventory/OutsideProcessingCard';
-import VendorPartsCard from '../components/inventory/VendorPartsCard';
 import POSuggestionsCard from '../components/inventory/POSuggestionsCard';
+import VendorPOManager from '../components/inventory/VendorPOManager';
 
 export default function EnhancedInventoryMRPPage() {
   const [activeCard, setActiveCard] = useState<string | null>(null);
@@ -291,11 +291,36 @@ export default function EnhancedInventoryMRPPage() {
       {/* Vendor & Processing Section */}
       <div className="space-y-4">
         <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
-          <Users className="h-5 w-5 text-cyan-600" />
-          Vendor & Processing Management
+          <Truck className="h-5 w-5 text-cyan-600" />
+          Vendor & Procurement
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Vendor Purchase Orders Card */}
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-teal-500"
+            onClick={() => handleCardClick('vendor-po')}
+            data-testid="card-vendor-po"
+          >
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <ShoppingCart className="h-5 w-5 text-teal-600" />
+                Vendor Purchase Orders
+              </CardTitle>
+              <CardDescription>
+                Create and manage purchase orders to vendors
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="text-2xl font-bold text-teal-600">
+                  Vendor POs
+                </div>
+                <ShoppingCart className="h-4 w-4 text-gray-400" />
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Outside Processing Card */}
           <Card
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-cyan-500"
@@ -320,30 +345,10 @@ export default function EnhancedInventoryMRPPage() {
               </div>
             </CardContent>
           </Card>
-
-          {/* Vendor Parts Card */}
-          <Card
-            className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-pink-500"
-            onClick={() => handleCardClick('vendor-parts')}
-            data-testid="card-vendor-parts"
-          >
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Users className="h-5 w-5 text-pink-600" />
-                Vendor Parts
-              </CardTitle>
-              <CardDescription>
-                Vendor relationships and parts mapping
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold text-pink-600">Vendors</div>
-                <Users className="h-4 w-4 text-gray-400" />
-              </div>
-            </CardContent>
-          </Card>
         </div>
+        <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+          Note: Vendor selection for parts is now integrated directly into the Inventory Items form
+        </p>
       </div>
 
       {/* Inventory Items Modal */}
@@ -411,10 +416,10 @@ export default function EnhancedInventoryMRPPage() {
                       Outside Processing
                     </>
                   )}
-                  {activeCard === 'vendor-parts' && (
+                  {activeCard === 'vendor-po' && (
                     <>
-                      <Users className="h-5 w-5" />
-                      Vendor Parts Management
+                      <ShoppingCart className="h-5 w-5" />
+                      Vendor Purchase Orders
                     </>
                   )}
                 </CardTitle>
@@ -440,7 +445,7 @@ export default function EnhancedInventoryMRPPage() {
               {activeCard === 'mrp-shortages' && <MRPShortagesCard />}
               {activeCard === 'po-suggestions' && <POSuggestionsCard />}
               {activeCard === 'outside-processing' && <OutsideProcessingCard />}
-              {activeCard === 'vendor-parts' && <VendorPartsCard />}
+              {activeCard === 'vendor-po' && <VendorPOManager />}
             </CardContent>
           </Card>
         </div>

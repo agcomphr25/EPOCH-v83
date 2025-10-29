@@ -30,6 +30,7 @@ interface InventoryFormData {
   name: string;
   type: string;
   source: string;
+  vendorId: string;
   supplierPartNumber: string;
   secondarySupplierPartNumber: string;
   costPer: string;
@@ -59,6 +60,7 @@ const InventoryForm = ({
   isCreatePending,
   isUpdatePending,
   onCancel,
+  vendors,
 }: {
   formData: InventoryFormData;
   onSubmit: (e: React.FormEvent) => void;
@@ -71,6 +73,7 @@ const InventoryForm = ({
   isCreatePending: boolean;
   isUpdatePending: boolean;
   onCancel: () => void;
+  vendors: any[];
 }) => (
   <form onSubmit={onSubmit} className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
     {/* Basic Information Section */}
@@ -146,13 +149,32 @@ const InventoryForm = ({
       <h4 className="text-md font-semibold border-b pb-2">Supplier Information</h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
+          <Label htmlFor="vendorId">Vendor</Label>
+          <Select
+            value={formData.vendorId}
+            onValueChange={(value) => onSelectChange('vendorId', value)}
+          >
+            <SelectTrigger data-testid="select-vendorId">
+              <SelectValue placeholder="Select vendor (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              {Array.isArray(vendors) && vendors.map((vendor) => (
+                <SelectItem key={vendor.id} value={vendor.id.toString()}>
+                  {vendor.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
           <Label htmlFor="source">Source</Label>
           <Input
             id="source"
             name="source"
             value={formData.source}
             onChange={onChange}
-            placeholder="Enter source"
+            placeholder="Enter source (text field)"
             data-testid="input-source"
           />
         </div>
@@ -396,6 +418,7 @@ export default function InventoryItemsCard() {
     name: '',
     type: 'Purchased',
     source: '',
+    vendorId: 'none',
     supplierPartNumber: '',
     secondarySupplierPartNumber: '',
     costPer: '',
@@ -419,6 +442,13 @@ export default function InventoryItemsCard() {
     queryKey: ['/api/enhanced/inventory/items'],
     queryFn: () => apiRequest('/api/enhanced/inventory/items'),
   });
+
+  const { data: vendorsResponse } = useQuery<{ data: any[] }>({
+    queryKey: ['/api/vendors'],
+    queryFn: () => apiRequest('/api/vendors'),
+  });
+  
+  const vendors = vendorsResponse?.data || [];
 
   const items = Array.isArray(allItems)
     ? allItems.filter((item) => {
@@ -615,6 +645,7 @@ export default function InventoryItemsCard() {
       name: '',
       type: 'Purchased',
       source: '',
+      vendorId: 'none',
       supplierPartNumber: '',
       secondarySupplierPartNumber: '',
       costPer: '',
@@ -666,6 +697,7 @@ export default function InventoryItemsCard() {
         name: formData.name,
         type: formData.type || 'Purchased',
         source: formData.source || null,
+        vendorId: formData.vendorId && formData.vendorId !== 'none' ? parseInt(formData.vendorId) : null,
         supplierPartNumber: formData.supplierPartNumber || null,
         secondarySupplierPartNumber: formData.secondarySupplierPartNumber || null,
         costPer: formData.costPer ? parseFloat(formData.costPer) : null,
@@ -702,6 +734,7 @@ export default function InventoryItemsCard() {
       name: item.name,
       type: item.type || 'Purchased',
       source: item.source || '',
+      vendorId: item.vendorId ? item.vendorId.toString() : 'none',
       supplierPartNumber: item.supplierPartNumber || '',
       secondarySupplierPartNumber: item.secondarySupplierPartNumber || '',
       costPer: item.costPer ? item.costPer.toString() : '',
@@ -782,6 +815,7 @@ export default function InventoryItemsCard() {
                   setIsCreateOpen(false);
                   resetForm();
                 }}
+                vendors={vendors}
               />
             </DialogContent>
           </Dialog>
@@ -1047,6 +1081,7 @@ export default function InventoryItemsCard() {
               setEditingItem(null);
               resetForm();
             }}
+            vendors={vendors}
           />
         </DialogContent>
       </Dialog>

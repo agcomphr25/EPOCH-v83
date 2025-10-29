@@ -271,18 +271,6 @@ export default function Navigation() {
       description: 'Scan inventory items',
     },
     {
-      path: '/inventory/dashboard',
-      label: 'Inventory Dashboard',
-      icon: Warehouse,
-      description: 'View inventory overview',
-    },
-    {
-      path: '/inventory/manager',
-      label: 'Inventory Manager',
-      icon: Package,
-      description: 'Manage inventory items',
-    },
-    {
       path: '/inventory/receiving',
       label: 'Receiving',
       icon: Receipt,

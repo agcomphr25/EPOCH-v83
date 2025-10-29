@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/toaster';
 // import { CSVProvider } from "./contexts/CSVContext"; // Temporarily disabled
 import Navigation from './components/Navigation';
 import OfflineIndicator from './components/OfflineIndicator';
+import MessageNotificationPopup from './components/MessageNotificationPopup';
 import NotFound from './pages/not-found';
 import Dashboard from './pages/Dashboard';
 import OrderManagement from './pages/OrderManagement';
@@ -677,6 +678,7 @@ function App() {
             </div>
             <Toaster />
             <HotToaster />
+            <MessageNotificationPopup />
           </Router>
         </DeploymentAuthWrapper>
       </QueryClientProvider>

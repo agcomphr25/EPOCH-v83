@@ -1322,9 +1322,21 @@ export default function ShippingQueuePage() {
                       if (newWindow) {
                         newWindow.document.write(`
                           <html>
-                            <head><title>UPS Shipping Label</title></head>
-                            <body style="margin:0; padding:20px; text-align:center;">
-                              <img src="data:image/gif;base64,${labelData.graphicImage}" style="max-width:100%;" />
+                            <head>
+                              <title>UPS Shipping Label</title>
+                              <style>
+                                body { margin:0; padding:20px; text-align:center; }
+                                img { width: 4in; height: 6in; object-fit: contain; }
+                                @media print {
+                                  @page { size: 4in 6in; margin: 0; }
+                                  body { padding: 0; margin: 0; }
+                                  img { width: 4in; height: 6in; display: block; }
+                                  button { display: none; }
+                                }
+                              </style>
+                            </head>
+                            <body>
+                              <img src="data:image/gif;base64,${labelData.graphicImage}" />
                               <br><br>
                               <button onclick="window.print()">Print Label</button>
                             </body>
@@ -1337,11 +1349,11 @@ export default function ShippingQueuePage() {
                   >
                     Print Label
                   </Button>
-                  <div className="border rounded-lg p-4 bg-white">
+                  <div className="border rounded-lg p-4 bg-white flex justify-center">
                     <img 
                       src={`data:image/gif;base64,${labelData.graphicImage}`}
                       alt="Shipping Label"
-                      className="mx-auto max-w-full h-auto"
+                      style={{ width: '4in', height: '6in', objectFit: 'contain' }}
                     />
                   </div>
                 </div>

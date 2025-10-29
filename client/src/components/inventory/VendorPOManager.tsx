@@ -513,13 +513,15 @@ export default function VendorPOManager() {
 
   // Fetch vendor POs
   const {
-    data: vendorPOs = [],
+    data: vendorPOsResponse,
     isLoading,
     error,
-  } = useQuery<VendorPO[]>({
+  } = useQuery<{ data: VendorPO[]; meta?: any }>({
     queryKey: ['/api/vendor-pos'],
     queryFn: () => apiRequest('/api/vendor-pos'),
   });
+
+  const vendorPOs = vendorPOsResponse?.data || [];
 
   // Create mutation
   const createMutation = useMutation({

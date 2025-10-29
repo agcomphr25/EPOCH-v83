@@ -228,11 +228,12 @@ export default function ShippingLabelPage() {
                       background: #f5f5f5;
                     }
                     img { 
-                      max-width: 100%; 
-                      height: auto; 
+                      width: 4in;
+                      height: 6in;
                       border: 1px solid #ddd;
                       background: white;
                       padding: 10px;
+                      object-fit: contain;
                     }
                     .print-button {
                       position: fixed;
@@ -247,9 +248,23 @@ export default function ShippingLabelPage() {
                       font-size: 16px;
                     }
                     @media print {
+                      @page {
+                        size: 4in 6in;
+                        margin: 0;
+                      }
                       .print-button { display: none; }
-                      body { background: white; padding: 0; }
-                      img { border: none; padding: 0; }
+                      body { 
+                        background: white; 
+                        padding: 0;
+                        margin: 0;
+                      }
+                      img { 
+                        border: none; 
+                        padding: 0;
+                        width: 4in;
+                        height: 6in;
+                        display: block;
+                      }
                     }
                   </style>
                 </head>

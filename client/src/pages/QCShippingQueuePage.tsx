@@ -1153,11 +1153,11 @@ export default function QCShippingQueuePage() {
                   >
                     Download Label
                   </Button>
-                  <div className="border rounded-lg p-4 bg-white">
+                  <div className="border rounded-lg p-4 bg-white flex justify-center">
                     <img
                       src={`data:image/gif;base64,${labelData.graphicImage}`}
                       alt="Shipping Label"
-                      className="mx-auto max-w-full h-auto"
+                      style={{ width: '4in', height: '6in', objectFit: 'contain' }}
                     />
                   </div>
                 </div>

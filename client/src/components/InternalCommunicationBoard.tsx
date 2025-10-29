@@ -615,12 +615,16 @@ export default function InternalCommunicationBoard() {
                       <SelectValue placeholder="Select an order" />
                     </SelectTrigger>
                     <SelectContent>
-                      {orders.slice(0, 50).map((order: any) => (
-                        <SelectItem key={order.id} value={order.id}>
-                          {order.id} -{' '}
-                          {order.customer_name || 'Unknown Customer'}
-                        </SelectItem>
-                      ))}
+                      {orders.slice(0, 50).map((order: any) => {
+                        const orderValue = order.orderId || order.order_id || order.id?.toString() || '';
+                        const orderDisplay = order.orderId || order.order_id || order.id;
+                        const customerName = order.customer || order.customer_name || 'Unknown Customer';
+                        return (
+                          <SelectItem key={order.id} value={orderValue}>
+                            {orderDisplay} - {customerName}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
 

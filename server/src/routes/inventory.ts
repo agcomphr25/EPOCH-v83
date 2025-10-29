@@ -23,6 +23,31 @@ router.get('/inventory/items', async (req: Request, res: Response) => {
   }
 });
 
+// Enhanced Inventory API - Update item
+router.put('/inventory/items/:id', async (req: Request, res: Response) => {
+  try {
+    const itemId = parseInt(req.params.id);
+    const updates = req.body;
+    const updatedItem = await storage.updateInventoryItem(itemId, updates);
+    res.json(updatedItem);
+  } catch (error) {
+    console.error('Update enhanced inventory item error:', error);
+    res.status(500).json({ error: 'Failed to update inventory item' });
+  }
+});
+
+// Enhanced Inventory API - Delete item
+router.delete('/inventory/items/:id', async (req: Request, res: Response) => {
+  try {
+    const itemId = parseInt(req.params.id);
+    await storage.deleteInventoryItem(itemId);
+    res.status(204).end();
+  } catch (error) {
+    console.error('Delete enhanced inventory item error:', error);
+    res.status(500).json({ error: 'Failed to delete inventory item' });
+  }
+});
+
 // Inventory Items Management - Direct access route
 router.get('/', async (req: Request, res: Response) => {
   try {

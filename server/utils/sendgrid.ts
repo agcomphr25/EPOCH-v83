@@ -3,20 +3,35 @@ import sgMail from '@sendgrid/mail';
 let connectionSettings: any;
 
 async function getCredentials() {
-  // Try Replit connector first
+  // Always use environment variables for consistent behavior
+  // This ensures dev and production work the same way
+  console.log('🔍 SendGrid credentials check:', {
+    hasEnvApiKey: !!process.env.SENDGRID_API_KEY,
+    hasEnvFromEmail: !!process.env.SENDGRID_FROM_EMAIL,
+    nodeEnv: process.env.NODE_ENV,
+  });
+
+  // Fallback to environment variables
+  const apiKey = process.env.SENDGRID_API_KEY;
+  const email = process.env.SENDGRID_FROM_EMAIL;
+
+  if (!apiKey || !email) {
+    console.error('❌ SendGrid not configured - missing SENDGRID_API_KEY or SENDGRID_FROM_EMAIL');
+    throw new Error('SendGrid not configured. Please set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL environment variables.');
+  }
+
+  console.log('✅ Using SendGrid credentials from environment variables');
+  return { apiKey, email };
+}
+
+// Legacy connector code (disabled for reliability)
+async function getCredentialsViaConnector() {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY
     ? 'repl ' + process.env.REPL_IDENTITY
     : process.env.WEB_REPL_RENEWAL
       ? 'depl ' + process.env.WEB_REPL_RENEWAL
       : null;
-
-  console.log('🔍 SendGrid credentials check:', {
-    hostname: hostname ? 'set' : 'missing',
-    hasToken: !!xReplitToken,
-    hasEnvApiKey: !!process.env.SENDGRID_API_KEY,
-    hasEnvFromEmail: !!process.env.SENDGRID_FROM_EMAIL,
-  });
 
   // Try Replit connector if available
   if (xReplitToken && hostname) {
@@ -54,21 +69,11 @@ async function getCredentials() {
         };
       }
     } catch (error) {
-      console.warn('⚠️ Failed to fetch from Replit connector, falling back to environment variables:', error);
+      console.warn('⚠️ Failed to fetch from Replit connector:', error);
     }
   }
-
-  // Fallback to environment variables
-  const apiKey = process.env.SENDGRID_API_KEY;
-  const email = process.env.SENDGRID_FROM_EMAIL;
-
-  if (!apiKey || !email) {
-    console.error('❌ SendGrid not configured - neither connector nor environment variables are available');
-    throw new Error('SendGrid not configured. Please set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL environment variables or configure the Replit connector.');
-  }
-
-  console.log('✅ Using SendGrid credentials from environment variables');
-  return { apiKey, email };
+  
+  throw new Error('Connector not configured');
 }
 
 // WARNING: Never cache this client.

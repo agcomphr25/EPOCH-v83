@@ -962,4 +962,172 @@ router.post('/import-from-sheets', async (req, res) => {
   }
 });
 
+// Sync quiz completions to training matrix (admin tool)
+router.post('/sync-quiz-data', async (req, res) => {
+  try {
+    console.log('🔄 Starting sync of quiz completion data to training matrix...\n');
+
+    // Get all quiz attempts with employee and module info
+    const quizAttempts = await db
+      .select({
+        attemptId: employeeQuizAttempts.id,
+        employeeId: employeeQuizAttempts.employeeId,
+        moduleId: employeeQuizAttempts.moduleId,
+        score: employeeQuizAttempts.score,
+        passed: employeeQuizAttempts.passed,
+        completedAt: employeeQuizAttempts.completedAt,
+      })
+      .from(employeeQuizAttempts)
+      .orderBy(desc(employeeQuizAttempts.completedAt));
+
+    console.log(`📊 Found ${quizAttempts.length} total quiz attempts`);
+
+    if (quizAttempts.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No quiz attempts found to sync',
+        synced: 0,
+        skipped: 0,
+        errors: 0,
+        total: 0,
+      });
+    }
+
+    let syncedCount = 0;
+    let skippedCount = 0;
+    let errorCount = 0;
+    const details: any[] = [];
+
+    for (const attempt of quizAttempts) {
+      try {
+        // Get employee details
+        const [employee] = await db
+          .select()
+          .from(employees)
+          .where(eq(employees.id, attempt.employeeId))
+          .limit(1);
+
+        if (!employee) {
+          details.push({
+            status: 'skipped',
+            reason: `Employee ${attempt.employeeId} not found`,
+          });
+          skippedCount++;
+          continue;
+        }
+
+        // Get module details
+        const [module] = await db
+          .select()
+          .from(trainingModules)
+          .where(eq(trainingModules.id, attempt.moduleId))
+          .limit(1);
+
+        if (!module) {
+          details.push({
+            status: 'skipped',
+            reason: `Module ${attempt.moduleId} not found`,
+          });
+          skippedCount++;
+          continue;
+        }
+
+        // Check if training matrix entry already exists
+        const existingEntry = await db
+          .select()
+          .from(trainingMatrix)
+          .where(
+            and(
+              eq(trainingMatrix.employeeId, employee.id),
+              eq(trainingMatrix.trainingName, module.title)
+            )
+          )
+          .limit(1);
+
+        if (existingEntry && existingEntry.length > 0) {
+          // Update if the new score is better or more recent
+          const existing = existingEntry[0];
+          const shouldUpdate =
+            !existing.lastCompleted ||
+            (attempt.completedAt &&
+              new Date(attempt.completedAt) >
+                new Date(existing.lastCompleted)) ||
+            (attempt.score &&
+              (!existing.lastScore || attempt.score > existing.lastScore));
+
+          if (shouldUpdate && attempt.passed) {
+            await db
+              .update(trainingMatrix)
+              .set({
+                lastCompleted: attempt.completedAt,
+                lastScore: attempt.score,
+                status: 'COMPLETED',
+                updatedAt: new Date(),
+              })
+              .where(eq(trainingMatrix.id, existing.id));
+
+            details.push({
+              status: 'updated',
+              employee: employee.name,
+              training: module.title,
+              score: attempt.score,
+            });
+            syncedCount++;
+          } else {
+            details.push({
+              status: 'skipped',
+              employee: employee.name,
+              training: module.title,
+              reason: 'Already has better/recent data',
+            });
+            skippedCount++;
+          }
+        } else {
+          // Create new training matrix entry
+          await db.insert(trainingMatrix).values({
+            employeeId: employee.id,
+            employeeName: employee.name,
+            jobTitle: employee.jobTitle,
+            department: employee.department,
+            trainingName: module.title,
+            lastCompleted: attempt.passed ? attempt.completedAt : null,
+            lastScore: attempt.score,
+            status: attempt.passed ? 'COMPLETED' : 'IN_PROGRESS',
+          });
+
+          details.push({
+            status: 'created',
+            employee: employee.name,
+            training: module.title,
+            score: attempt.score,
+            passed: attempt.passed,
+          });
+          syncedCount++;
+        }
+      } catch (error: any) {
+        console.error(`❌ Error processing attempt ${attempt.attemptId}:`, error);
+        details.push({
+          status: 'error',
+          attemptId: attempt.attemptId,
+          error: error.message,
+        });
+        errorCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Quiz data sync completed',
+      synced: syncedCount,
+      skipped: skippedCount,
+      errors: errorCount,
+      total: quizAttempts.length,
+      details,
+    });
+  } catch (error: any) {
+    console.error('Error syncing quiz data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

@@ -1,102 +1,7 @@
 # EPOCH v8 - Manufacturing ERP System
 
 ## Overview
-EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. Its purpose is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The project aims to be a leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. The system incorporates robust features like a Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System to provide a complete and efficient solution.
-
-## Recent Changes
-**Inventory CSV Import Transactional Safety & Table Enhancements** (October 27, 2025)
-- Enhanced CSV import with transactional "Replace All" feature:
-  - Two-phase validation: All rows validated before any database changes
-  - Atomic transaction: Delete + insert wrapped in database transaction (all or nothing)
-  - Abort-early safety: Replace mode aborts with clear error if ANY validation errors exist
-  - Prevents all data loss scenarios - old data never touched unless ALL rows validate
-  - Batch inserts (100 rows at a time) handle large CSVs efficiently
-  - Append mode continues to handle duplicates gracefully
-- Enhanced inventory table display:
-  - Added missing columns: Supplier Part #, Secondary Supplier Part #, Secondary Source
-  - Implemented "Utilized In" dropdown filter (All, PL1, PL2, Facilities, Admin, Services)
-  - Filter combines with search to enable powerful multi-criteria queries
-- User-facing UI improvements:
-  - "Replace all items" checkbox with prominent yellow warning message
-  - Clear error messages distinguish validation errors from database errors
-  - Validation errors in replace mode prevent accidental data loss
-
-**Layup Schedule Display Enhancement with Print & Workflow Integration** (October 27, 2025)
-- Enhanced schedule preview with production-relevant data columns:
-  - Added Action Length column (extracted from features.action_length with SA/LA fallback from action_inlet)
-  - Added Material column (parsed from stock model name: "_fg" = Fiberglass, "_cf" = Carbon Fiber)
-  - PO items fetch action length from po_products table with fallback to action_inlet
-  - Added Badges column displaying LOP (non-standard length_of_pull), ADL (bottom_metal contains 'adl'), and Heavy Fill (in other_options)
-  - Removed FB Order # and Customer columns (not relevant for layup operations)
-- Implemented dual-view system for schedule display:
-  - Screen preview: Table format with all order details for review
-  - Print layout: User-friendly checklist format optimized for production floor
-- Print checklist features:
-  - Large checkboxes for each item to mark completion as work progresses
-  - Clear labeled sections: ORDER ID, STOCK MODEL, MOLD, ACTION/MATERIAL
-  - Color-coded badge indicators (LOP, ADL, HEAVY FILL) for special requirements
-  - Signature lines at end of each day section ("Completed by" and "Date")
-  - Landscape orientation with proper page breaks between days
-- Schedule barcode system:
-  - Unique barcode generated for each schedule (format: LAYUP + YYYYMMDD)
-  - Barcode displays in header with "Scan to complete layup" instruction
-  - Enables bulk progression of all scheduled orders when scanned
-- Integrated schedule approval with department workflow:
-  - "Approve & Move to Barcode" button saves schedule and progresses orders
-  - Regular orders automatically move to Barcode department
-  - PO items excluded from department progression (remain in schedule only)
-  - Transaction-based updates ensure data consistency
-
-**Layup Schedule Week & Day Selection with Balanced Distribution** (October 27, 2025)
-- Implemented interactive week selection for layup schedule generation:
-  - Users can navigate up to 8 weeks ahead using arrow buttons
-  - Visual labels show "Next week", "Week after next", or "X weeks ahead"
-  - Selected week start date displays prominently (e.g., "Monday, October 28, 2025")
-- Added day selection feature with checkboxes for Monday through Friday:
-  - Default selection: Monday through Thursday
-  - Users can select any combination of work days
-  - Selected days show visual feedback with blue background and checkmark icon
-- Implemented balanced round-robin distribution algorithm:
-  - Orders are evenly distributed across all selected days
-  - Instead of filling Monday completely then Tuesday, etc., orders rotate through days
-  - Example: 30 orders across 4 days = ~7-8 orders per day instead of 20 on Monday, 10 on Tuesday
-- Backend respects user's day selection:
-  - Friday is only used if explicitly selected by the user
-  - Schedule generation uses selected week start date and work days
-- Fixed database join error that was causing schedule generation to crash
-
-**PO Product Stock Model Validation** (October 26, 2025)
-- Implemented business rule: PO products without stock models are excluded from the production queue
-- Modified `/api/pos/:id/generate-production-orders` endpoint to only create production orders for items with `itemType === 'stock_model'`
-- Updated `storage.getOpenP1PurchaseOrders()` to filter out non-stock model items when fetching P1 PO queue
-- Modified `/api/push-to-layup-plugging` endpoint to validate item type before marking orders as "laid up"
-- System now prevents custom models and feature items from appearing in production queues or being marked as laid up
-- Returns detailed information about filtered/skipped items in API responses for user visibility
-
-**Parts List Management System** (October 26, 2025)
-- Enhanced inventory items with comprehensive MRP/COGS fields:
-  - SKU field for inventory tracking (informational)
-  - Purchase information: cost per, purchase unit (e.g., "80 lb box")
-  - Usage information: usage quantity per unit, usage unit, COGS per unit (for BOM calculations)
-  - Secondary supplier part number tracking
-  - Stock item flag (automatically set when SKU contains "Stock")
-  - Production line utilization flags: PL1, PL2, Facilities, Admin, Services
-- CSV Import/Export functionality with intelligent parsing:
-  - Splits "Utilized" column into separate boolean flags (PL1, PL2, Facilities, Admin, Services)
-  - Evaluates fractional cost formats (e.g., "27/20" = $1.35 per unit)
-  - Handles currency symbols and various cost formats
-  - Exports data with "Utilized" column reconstructed from boolean flags
-  - Backend routes mounted at both `/api/inventory` and `/api/enhanced` for compatibility
-  - Frontend component uses InventoryItemsCard with import/export UI
-  - Handles duplicate AG Part# errors gracefully during import
-- Improved form organization with sectioned layout (Basic Info, Supplier Info, Cost & Quantity, Production Line Utilization, Additional Info)
-- Fixed critical session cleanup error (added missing `sql` import in auth.ts)
-
-**P1 Purchase Orders Display Fix** (October 27, 2025)
-- Resolved frontend display issue showing "0 items need layup" despite backend returning correct data
-- Added array safety check to prevent `.reduce() is not a function` errors
-- P1 PO queue now correctly displays 339 items needing layup from 17 open purchase orders
-- Backend properly filters out items with "no_stock" model, showing only items with valid stock models
+EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. Its purpose is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The project aims to be a leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. The system incorporates robust features like a Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System to provide a complete and efficient solution. The business vision is to be the leading ERP solution for small-to-medium customizable product manufacturers.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -133,12 +38,60 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 -   **Urgency/Priority System**: Implemented for manually flagged urgent orders with visual badges, production queue sorting, and dedicated dashboard metrics.
 -   **Rush Fee System**: Redesigned to adjust due dates for "Expedite" and "Rush" orders, with corresponding visual badges and notifications.
 -   **P1 Purchase Orders Queue**: Production Queue Manager displays open purchase orders with stock items needing layup, grouped by customer with PO filtering and granular quantity selection. Items with stock model "no stock" are automatically excluded from both the display and layup scheduler.
+-   **Vendor Purchase Order Management**: Full CRUD operations for vendor POs and line items with Zod validation, integrated into existing architecture.
+-   **Inventory CSV Import**: Transactional "Replace All" with two-phase validation and atomic database operations, ensuring data integrity. Includes batch inserts for large CSVs.
+-   **Layup Schedule Enhancement**: Dual-view system (screen/print), production-relevant data columns (Action Length, Material, Badges), print-friendly checklist format, schedule barcode system, and integration with department workflow for approval and progression.
+-   **Layup Schedule Week & Day Selection**: Interactive week navigation and day selection with a balanced round-robin distribution algorithm for orders.
+-   **PO Product Stock Model Validation**: Exclusion of non-stock model PO products from production queues and layup processes.
+-   **Parts List Management**: Enhanced inventory items with comprehensive MRP/COGS fields, SKU, purchase/usage information, and production line utilization flags. CSV import/export with intelligent parsing.
 
 ### Technical Implementations
 -   **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.
 -   **Backend**: Express.js, TypeScript, TanStack Query, Zod, Axios.
 -   **Database**: PostgreSQL (Neon serverless), Drizzle ORM, Drizzle-kit.
 -   **Key Features**: Order Management (dynamic configuration, linked orders, rush fees, urgency), Layup Scheduler, Production Queue Manager, Department Manager, Customer Management (CRM, CSV import, address autocomplete), Inventory Management (BOM integration), Metal Accessories Tracker, Barcode System, Employee Management (CRUD, portal, time clock), Quality Control (digital signature, checklists), Reporting, Payment Tracking, Shipping Integration, Communications System (inbox, email, SMS), Personalized Dashboards, Training Management System, AI-Powered Smart Sorting, Calendar Integration, Magic Link Authentication, and Global Search.
+
+## Database Schema Standards
+
+### Primary Key Pattern (CRITICAL)
+**NEVER use `serial` data type for new tables.** PostgreSQL's `serial` is a creation-time macro that cannot be used in ALTER statements, causing migration failures with "type 'serial' does not exist" errors.
+
+**Standard for ALL new tables:**
+```typescript
+// ✅ CORRECT - Use UUID for all new tables
+import { uuid } from 'drizzle-orm/pg-core';
+
+export const newTable = pgTable('new_table', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  // ... other columns
+});
+```
+
+**❌ FORBIDDEN - Never use serial for new tables:**
+```typescript
+// ❌ DO NOT DO THIS
+import { serial } from 'drizzle-orm/pg-core';
+id: serial('id').primaryKey()  // This will cause migration issues
+```
+
+**Legacy Tables (DO NOT MODIFY):**
+Many existing tables use `serial` IDs and should remain unchanged to avoid data loss:
+- `allOrders`, `orders`, `orderStatusTypes`, `orderDepartmentTypes`
+- `inventoryItems`, `employees`, `certifications`, `vendors`
+- `payments`, `customers`, `linked_order_groups`, `followup_orders`
+- All other tables with integer IDs
+
+**Migration Safety:**
+- Never retroactively change existing `serial` columns to UUID
+- Never change existing UUID columns to `serial`
+- Use `npm run db:push` to sync schema changes (or `npm run db:push --force` if needed)
+- Never manually write SQL migrations for ID column type changes
+
+**Why UUID over serial:**
+- Works reliably with Drizzle migrations (no ALTER TYPE issues)
+- Safe for distributed writes and data imports
+- No sequence drift or collision issues
+- Future-proof for scaling
 
 ## External Dependencies
 

@@ -25,14 +25,8 @@ export default function VendorPartsCard() {
     enabled: !!searchPartId,
   });
 
-  const { data: preferredVendor } = useQuery({
-    queryKey: ['/api/inventory/vendor-parts/preferred', searchPartId],
-    queryFn: () =>
-      searchPartId
-        ? apiRequest(`/api/inventory/vendor-parts/preferred/${searchPartId}`)
-        : null,
-    enabled: !!searchPartId,
-  });
+  // The API returns vendors sorted by isPreferred (desc), so the first one is preferred if any
+  const preferredVendor = vendorParts.find((vp: any) => vp.isPreferred);
 
   return (
     <div className="space-y-6">

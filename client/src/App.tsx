@@ -341,14 +341,14 @@ function App() {
                     path="/inventory/scanner"
                     component={InventoryScannerPage}
                   />
-                  <Route
+                  {/* <Route
                     path="/inventory/dashboard"
                     component={InventoryDashboardPage}
-                  />
-                  <Route
+                  /> */}
+                  {/* <Route
                     path="/inventory/manager"
                     component={InventoryManagerPage}
-                  />
+                  /> */}
                   <Route
                     path="/inventory/receiving"
                     component={InventoryReceivingPage}
@@ -359,10 +359,6 @@ function App() {
                   />
 
                   {/* Enhanced System Routes (Independent) */}
-                  <Route
-                    path="/enhanced-inventory"
-                    component={EnhancedInventoryMRPPage}
-                  />
                   <Route
                     path="/metal-accessories"
                     component={MetalAccessoriesTracker}

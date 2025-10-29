@@ -258,6 +258,7 @@ export async function sendFollowupOrderEmail(
 
     console.log('📧 Sending followup email:', {
       to: orderData.customerEmail,
+      from: fromEmail,
       subject: msg.subject,
       textLength: emailText?.length || 0,
       htmlLength: emailHTML?.length || 0,
@@ -266,6 +267,13 @@ export async function sendFollowupOrderEmail(
     });
 
     const [response] = await client.send(msg);
+
+    console.log('✅ SendGrid response:', {
+      statusCode: response.statusCode,
+      messageId: response.headers['x-message-id'],
+      body: response.body,
+      headers: response.headers,
+    });
 
     return {
       success: true,

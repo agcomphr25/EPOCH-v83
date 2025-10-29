@@ -1,0 +1,166 @@
+Search
+
+
+Errors only
+
+Date
+Time
+Deployment
+Source
+Log
+2025-10-29 09:55:32.60
+c42f8868
+User
+customerPO: 'Palmer',
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG445: CRITICAL - Over dept time AND cannot meet due date (98 > 7 days in Fulfilled, needs 7 days, has -113)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG383: -106 days until due, needs 7 days remaining, 99 days in Fulfilled (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG383: CRITICAL - Over dept time AND cannot meet due date (99 > 7 days in Fulfilled, needs 7 days, has -106)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG427: -113 days until due, needs 7 days remaining, 98 days in Fulfilled (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG427: CRITICAL - Over dept time AND cannot meet due date (98 > 7 days in Fulfilled, needs 7 days, has -113)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG437: -113 days until due, needs 7 days remaining, 98 days in Fulfilled (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG437: CRITICAL - Over dept time AND cannot meet due date (98 > 7 days in Fulfilled, needs 7 days, has -113)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG804: -176 days until due, needs 7 days remaining, 90 days in Shipping Management (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG804: CRITICAL - Over dept time AND cannot meet due date (90 > 7 days in Shipping Management, needs 7 days, has -176)
+2025-10-29 10:00:06.06
+c42f8868
+User
+Order EI332: No valid entry date found, using current time
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order EI332: 65 days until due, needs 49 days remaining, 0 days in CNC (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🟢 Order EI332: ON-SCHEDULE - Good timing (0 ≤ 7 days in dept, can meet due date)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG446: -113 days until due, needs 7 days remaining, 98 days in Fulfilled (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG446: CRITICAL - Over dept time AND cannot meet due date (98 > 7 days in Fulfilled, needs 7 days, has -113)
+2025-10-29 10:00:06.06
+c42f8868
+User
+Order EI334: No valid entry date found, using current time
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order EI334: 65 days until due, needs 70 days remaining, 0 days in P1 Production Queue (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🟠 Order EI334: CANNOT-MEET-DUE - Cannot meet due date (needs 70 days, has 65)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG462: -120 days until due, needs 7 days remaining, 92 days in Shipping Management (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG462: CRITICAL - Over dept time AND cannot meet due date (92 > 7 days in Shipping Management, needs 7 days, has -120)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG469: -127 days until due, needs 7 days remaining, 92 days in Fulfilled (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG469: CRITICAL - Over dept time AND cannot meet due date (92 > 7 days in Fulfilled, needs 7 days, has -127)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG459: -120 days until due, needs 7 days remaining, 92 days in Fulfilled (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG459: CRITICAL - Over dept time AND cannot meet due date (92 > 7 days in Fulfilled, needs 7 days, has -120)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG458: -120 days until due, needs 7 days remaining, 92 days in Fulfilled (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG458: CRITICAL - Over dept time AND cannot meet due date (92 > 7 days in Fulfilled, needs 7 days, has -120)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG461: -127 days until due, needs 7 days remaining, 92 days in Fulfilled (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG461: CRITICAL - Over dept time AND cannot meet due date (92 > 7 days in Fulfilled, needs 7 days, has -127)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG456: -113 days until due, needs 7 days remaining, 92 days in Fulfilled (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG456: CRITICAL - Over dept time AND cannot meet due date (92 > 7 days in Fulfilled, needs 7 days, has -113)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG429: -113 days until due, needs 7 days remaining, 98 days in Shipping Management (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG429: CRITICAL - Over dept time AND cannot meet due date (98 > 7 days in Shipping Management, needs 7 days, has -113)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG440: -113 days until due, needs 7 days remaining, 98 days in Shipping Management (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG440: CRITICAL - Over dept time AND cannot meet due date (98 > 7 days in Shipping Management, needs 7 days, has -113)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG468: -127 days until due, needs 7 days remaining, 92 days in Fulfilled (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG468: CRITICAL - Over dept time AND cannot meet due date (92 > 7 days in Fulfilled, needs 7 days, has -127)
+2025-10-29 10:00:06.06
+c42f8868
+User
+📊 Order AG178: -148 days until due, needs 7 days remaining, 103 days in Shipping Management (limit: 7), isAdj: false
+2025-10-29 10:00:06.06
+c42f8868
+User
+🔴 Order AG178: CRITICAL - Over dept time AND cannot meet due date (103 > 7 days in Shipping Management, needs 7 days, has -148)
+2025-10-29 10:00:06.06
+c42f8868
+User
+Order EJ234: No valid entry date found, using current time

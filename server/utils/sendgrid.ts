@@ -118,6 +118,7 @@ export async function sendEmailViaSendGrid(options: {
 
     console.log('📧 Sending email via SendGrid:', {
       to: options.to,
+      from: fromEmail,
       subject: options.subject,
       hasText: !!options.text,
       textLength: options.text?.length || 0,
@@ -128,6 +129,11 @@ export async function sendEmailViaSendGrid(options: {
     });
 
     const [response] = await client.send(msg);
+
+    console.log('✅ SendGrid response:', {
+      statusCode: response.statusCode,
+      messageId: response.headers['x-message-id'],
+    });
 
     return {
       success: true,

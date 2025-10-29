@@ -64,7 +64,7 @@ export default function MessageNotificationPopup() {
 
   const handleViewMessages = () => {
     setIsOpen(false);
-    navigate('/communication');
+    navigate('/communications/inbox');
   };
 
   const handleDismiss = () => {

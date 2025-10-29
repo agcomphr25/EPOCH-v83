@@ -2330,8 +2330,8 @@ export const inventoryTransactions = pgTable('inventory_transactions', {
   toLocation: text('to_location'),
   referenceType: text('reference_type'), // PO, WorkOrder, Adjustment, Manual, etc.
   referenceId: text('reference_id'), // ID of the related record (PO number, work order, etc.)
-  costPerUnit: numeric('cost_per_unit', { precision: 12, scale: 2, mode: 'number' }), // Cost at time of transaction (exact money math)
-  totalCost: numeric('total_cost', { precision: 12, scale: 2, mode: 'number' }), // quantity * costPerUnit (exact money math)
+  costPerUnit: numeric('cost_per_unit', { precision: 12, scale: 2 }), // Cost at time of transaction (exact money math)
+  totalCost: numeric('total_cost', { precision: 12, scale: 2 }), // quantity * costPerUnit (exact money math)
   notes: text('notes'),
   performedBy: text('performed_by').notNull(), // Username of person who performed transaction
   metadata: jsonb('metadata').$type<Record<string, unknown>>(), // Flexible field for future expansion (JSON data)

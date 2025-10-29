@@ -5994,45 +5994,48 @@ export class DatabaseStorage implements IStorage {
         customerMap.set(customerId, customer);
       }
 
-      // Get items for this PO - only stock models
+      // Get all items for this PO (we'll filter by stockModel after)
       const items = await db
         .select()
         .from(purchaseOrderItems)
-        .where(
-          and(
-            eq(purchaseOrderItems.poId, po.id),
-            eq(purchaseOrderItems.itemType, 'stock_model')
-          )
-        )
+        .where(eq(purchaseOrderItems.poId, po.id))
         .orderBy(purchaseOrderItems.createdAt);
 
-      const poItems: P1POQueueItem[] = items.map((item) => {
-        // Parse specifications JSON
-        const specs = item.specifications as any || {};
-        
-        return {
-          id: item.id,
-          poNumber: po.poNumber,
-          productName: item.itemName || '',
-          stockModel: specs.stockModel || null,
-          actionLength: specs.actionLength || null,
-          material: specs.material || null,
-          handedness: specs.handedness || null,
-          actionInlet: specs.actionInlet || null,
-          bottomMetal: specs.bottomMetal || null,
-          barrelInlet: specs.barrelInlet || null,
-          qds: specs.qds || null,
-          swivelStuds: specs.swivelStuds || null,
-          paintOptions: specs.paintOptions || null,
-          texture: specs.texture || null,
-          flatTop: specs.flatTop || null,
-          quantity: item.quantity,
-          status: item.stockStatus || 'pending',
-          notes: item.notes || item.productionNotes || null,
-          dueDate: item.dueDate?.toString() || null,
-          linkedOrderId: null,
-        };
-      });
+      const poItems: P1POQueueItem[] = items
+        .map((item) => {
+          // Parse specifications JSON
+          const specs = item.specifications as any || {};
+          
+          // Check both camelCase and snake_case for stockModel
+          const stockModel = specs.stockModel || specs.stock_model || null;
+          
+          return {
+            id: item.id,
+            poNumber: po.poNumber,
+            productName: item.itemName || '',
+            stockModel: stockModel,
+            actionLength: specs.actionLength || specs.action_length || null,
+            material: specs.material || null,
+            handedness: specs.handedness || null,
+            actionInlet: specs.actionInlet || specs.action_inlet || null,
+            bottomMetal: specs.bottomMetal || specs.bottom_metal || null,
+            barrelInlet: specs.barrelInlet || specs.barrel_inlet || null,
+            qds: specs.qds || null,
+            swivelStuds: specs.swivelStuds || specs.swivel_studs || null,
+            paintOptions: specs.paintOptions || specs.paint_options || null,
+            texture: specs.texture || null,
+            flatTop: specs.flatTop || specs.flat_top || null,
+            quantity: item.quantity,
+            status: item.stockStatus || 'pending',
+            notes: item.notes || item.productionNotes || null,
+            dueDate: item.dueDate?.toString() || null,
+            linkedOrderId: null,
+          };
+        })
+        .filter((item) => {
+          // Only include items with a valid stockModel (exclude "no stock" or null/empty)
+          return item.stockModel && item.stockModel !== 'no stock' && item.stockModel.trim() !== '';
+        });
 
       customer.purchaseOrders.push({
         poNumber: po.poNumber,

@@ -40,6 +40,7 @@ import MRPCalculationCard from '../components/inventory/MRPCalculationCard';
 import MRPShortagesCard from '../components/inventory/MRPShortagesCard';
 import OutsideProcessingCard from '../components/inventory/OutsideProcessingCard';
 import POSuggestionsCard from '../components/inventory/POSuggestionsCard';
+import VendorPOManager from '../components/inventory/VendorPOManager';
 
 export default function EnhancedInventoryMRPPage() {
   const [activeCard, setActiveCard] = useState<string | null>(null);
@@ -291,10 +292,35 @@ export default function EnhancedInventoryMRPPage() {
       <div className="space-y-4">
         <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
           <Truck className="h-5 w-5 text-cyan-600" />
-          Processing Management
+          Vendor & Procurement
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Vendor Purchase Orders Card */}
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-teal-500"
+            onClick={() => handleCardClick('vendor-po')}
+            data-testid="card-vendor-po"
+          >
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <ShoppingCart className="h-5 w-5 text-teal-600" />
+                Vendor Purchase Orders
+              </CardTitle>
+              <CardDescription>
+                Create and manage purchase orders to vendors
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="text-2xl font-bold text-teal-600">
+                  Vendor POs
+                </div>
+                <ShoppingCart className="h-4 w-4 text-gray-400" />
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Outside Processing Card */}
           <Card
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-cyan-500"
@@ -390,6 +416,12 @@ export default function EnhancedInventoryMRPPage() {
                       Outside Processing
                     </>
                   )}
+                  {activeCard === 'vendor-po' && (
+                    <>
+                      <ShoppingCart className="h-5 w-5" />
+                      Vendor Purchase Orders
+                    </>
+                  )}
                 </CardTitle>
                 <Button
                   variant="outline"
@@ -413,6 +445,7 @@ export default function EnhancedInventoryMRPPage() {
               {activeCard === 'mrp-shortages' && <MRPShortagesCard />}
               {activeCard === 'po-suggestions' && <POSuggestionsCard />}
               {activeCard === 'outside-processing' && <OutsideProcessingCard />}
+              {activeCard === 'vendor-po' && <VendorPOManager />}
             </CardContent>
           </Card>
         </div>

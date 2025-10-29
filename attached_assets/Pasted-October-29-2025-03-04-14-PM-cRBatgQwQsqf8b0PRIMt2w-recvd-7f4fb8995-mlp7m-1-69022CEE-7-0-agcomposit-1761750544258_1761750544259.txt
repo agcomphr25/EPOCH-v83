@@ -1,0 +1,55 @@
+October 29, 2025 03:04:14 PM
+cRBatgQwQsqf8b0PRIMt2w.recvd-7f4fb8995-mlp7m-1-69022CEE-7.0	agcompositeshr@gmail.com	Order Confirmation - EJ293 - Signature Required	
+Dropped
+Bounced Address
+October 29, 2025 03:03:13 PM
+9MpX0Oz4SiqruSQDVmssEQ.recvd-canary-75b76f449d-zv89v-1-69022CB1-C7.0	agcompositeshr@gmail.com	Order Confirmation - EJ293 - Signature Required	
+Dropped
+Bounced Address
+October 29, 2025 02:59:44 PM
+kJWCJtlbTx-vg7MGTXO4pw.recvd-769f975875-qs2lb-1-69022BE0-39.0	agcompositeshr@gmail.com	Order Confirmation - EJ293 - Signature Required	
+Dropped
+Bounced Address
+October 29, 2025 02:58:38 PM
+gOGTEXh1TvyeKEavyzJn8Q.recvd-7748d67658-xmp7t-1-69022B9E-F.0	sales@agcomposites.com	Order Confirmation - EJ292 - Signature Required	
+Delivered
+250
+OK id=1vE7dH-00000007WDt-1Y6g
+October 29, 2025 02:54:01 PM
+euai_c2GR6OIRkFufBmymw.recvd-769f975875-qs2lb-1-69022A89-15.0	agcompositeshr@gmail.com	Order Confirmation - EJ293 - Signature Required	
+Dropped
+Bounced Address
+October 29, 2025 02:49:09 PM
+Ckx8RnazTheX7qCRWR5gmw.recvd-769f975875-7m6jw-1-69022965-A.0	sales@agcomposites.com	Order Confirmation - EJ292 - Signature Required	
+Blocked
+550
+"JunkMail rejected - s.wrqvtzvf.outbound-mail.sendgrid.net [149.72.126.143]:51790 is in an RBL: Blocked - see https://www.spamcop.net/bl.shtml?149.72.126.143"
+October 29, 2025 02:47:45 PM
+fYSCfsHAS_CWCkCEnHtvGA.recvd-canary-69567886cb-bkz4f-1-69022911-69.0	agcompositeshr@gmail.com	Order Confirmation - EJ293 - Signature Required	
+Dropped
+Bounced Address
+October 29, 2025 02:47:37 PM
+GMd-6gzySDaznYAhsDyPGA.recvd-686fbc5d8-5nfb8-1-69022909-21.0	sales@agcomposites.com	Order Confirmation - EJ292 - Signature Required	
+Delivered
+250
+OK id=1vE7Sc-000000079Um-1cD4
+October 29, 2025 02:46:53 PM
+b0Gt6sMyQACpCAbyi_QTBg.recvd-686fbc5d8-vzqg4-1-690228DD-13.0	agcompositeshr@gmail.com	Order Confirmation - EJ293 - Signature Required	
+Dropped
+Bounced Address
+October 29, 2025 02:42:56 PM
+9mKC9vx8Te2H_AchYuIL-w.recvd-769f975875-7m6jw-1-690227F0-3.0	agcompositeshr@gmail.com	Order Confirmation - EJ293 - Signature Required	
+Dropped
+Bounced Address
+October 29, 2025 02:42:18 PM
+WJ3hF2zhSEaqszSrtiUcjA.recvd-65696df74f-sr99c-1-690227CA-10.0	agcompositeshr@gmail.com	Order Confirmation - EJ293 - Signature Required	
+Dropped
+Bounced Address
+October 29, 2025 02:41:58 PM
+dRFQRCvbRi2Dyk_viWaOQA.recvd-7748d67658-xmp7t-1-690227B6-C.0	agcompositeshr@gmail.com	Order Confirmation - EJ293 - Signature Required	
+Dropped
+Bounced Address
+October 29, 2025 02:27:59 PM
+VBss0V1JRYu9rsBQ_pRwlQ.recvd-686fbc5d8-jp6gw-1-6902246F-5A.0	agcompositeshr@gmail.com	Order Confirmation - EJ293 - Signature Required	
+Dropped
+Bounced Address

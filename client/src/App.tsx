@@ -360,10 +360,6 @@ function App() {
 
                   {/* Enhanced System Routes (Independent) */}
                   <Route
-                    path="/enhanced-inventory"
-                    component={EnhancedInventoryMRPPage}
-                  />
-                  <Route
                     path="/metal-accessories"
                     component={MetalAccessoriesTracker}
                   />

@@ -344,7 +344,7 @@ export function registerRoutes(app: Express): Server {
       // Note: Full cleanup is now handled in productionQueue.ts endpoint
       console.log('🧹 CLEANUP: Basic cleanup for layup scheduler...');
 
-      // Get all orders that haven't entered production yet (P1 Production Queue)
+      // Get all orders in P1 Production Queue or Layup/Plugging department
       // Include both finalized orders and active production orders
       // EXCLUDE orders with no stock model or stock model "None" - they should be handled elsewhere
       const allOrders = await storage.getAllOrders();
@@ -353,8 +353,8 @@ export function registerRoutes(app: Express): Server {
         const stockModel =
           (order as any).stockModelId || (order as any).modelId;
 
-        // Only include orders in P1 Production Queue
-        if (currentDept !== 'P1 Production Queue') {
+        // Only include orders in P1 Production Queue OR Layup/Plugging
+        if (currentDept !== 'P1 Production Queue' && currentDept !== 'Layup/Plugging') {
           return false;
         }
 
@@ -404,7 +404,7 @@ export function registerRoutes(app: Express): Server {
           current_department as "currentDepartment",
           status
         FROM orders 
-        WHERE current_department = 'P1 Production Queue'
+        WHERE current_department IN ('P1 Production Queue', 'Layup/Plugging')
       `);
 
       const activeOrders = activeOrdersResult || [];

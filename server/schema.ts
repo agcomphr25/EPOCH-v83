@@ -64,6 +64,7 @@ export const allOrders = pgTable('all_orders', {
   customDiscountValue: real('custom_discount_value').default(0),
   showCustomDiscount: boolean('show_custom_discount').default(false),
   priceOverride: real('price_override'), // Manual price override for stock model
+  flattopPriceOverride: real('flattop_price_override'), // Manual price override for flattop stocks
   shipping: real('shipping').default(0),
   tikkaOption: text('tikka_option'),
   status: text('status').default('FINALIZED'), // Legacy - will be removed after migration

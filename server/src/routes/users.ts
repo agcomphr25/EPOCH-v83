@@ -66,24 +66,26 @@ router.get('/', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
-        id,
-        username,
-        first_name as "firstName",
-        last_name as "lastName",
-        role,
-        employee_id as "employeeId",
-        can_override_prices as "canOverridePrices",
-        is_active as "isActive",
-        created_at as "createdAt",
-        updated_at as "updatedAt",
-        last_login as "lastLoginAt",
-        failed_login_attempts as "failedLoginAttempts",
-        account_locked_until as "accountLockedUntil",
-        password_changed_at as "passwordChangedAt",
-        locked_until as "lockedUntil",
-        can_create_vendor_pos as "canCreateVendorPOs"
-      FROM users
-      ORDER BY username
+        u.id,
+        u.username,
+        u.first_name as "firstName",
+        u.last_name as "lastName",
+        u.role,
+        u.employee_id as "employeeId",
+        u.can_override_prices as "canOverridePrices",
+        u.is_active as "isActive",
+        u.created_at as "createdAt",
+        u.updated_at as "updatedAt",
+        u.last_login as "lastLoginAt",
+        u.failed_login_attempts as "failedLoginAttempts",
+        u.account_locked_until as "accountLockedUntil",
+        u.password_changed_at as "passwordChangedAt",
+        u.locked_until as "lockedUntil",
+        u.can_create_vendor_pos as "canCreateVendorPOs",
+        e.is_finish_technician as "isFinishTechnician"
+      FROM users u
+      LEFT JOIN employees e ON u.employee_id = e.id
+      ORDER BY u.username
     `);
 
     res.json(result);
@@ -178,6 +180,7 @@ router.put('/:id', async (req, res) => {
       employeeId,
       canOverridePrices,
       isActive,
+      isFinishTechnician,
     } = req.body;
 
     const updates: string[] = [];
@@ -246,7 +249,27 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(result[0]);
+    const updatedUser = result[0];
+
+    // If the user has an employeeId and isFinishTechnician was provided, update the employee record
+    if (updatedUser.employeeId && isFinishTechnician !== undefined) {
+      await pool.query(
+        `UPDATE employees SET is_finish_technician = $1 WHERE id = $2`,
+        [isFinishTechnician, updatedUser.employeeId]
+      );
+      updatedUser.isFinishTechnician = isFinishTechnician;
+    } else if (updatedUser.employeeId) {
+      // Fetch current isFinishTechnician status if not updated
+      const empResult = await pool.query(
+        `SELECT is_finish_technician as "isFinishTechnician" FROM employees WHERE id = $1`,
+        [updatedUser.employeeId]
+      );
+      if (empResult && empResult.length > 0) {
+        updatedUser.isFinishTechnician = empResult[0].isFinishTechnician;
+      }
+    }
+
+    res.json(updatedUser);
   } catch (error) {
     console.error('Error updating user:', error);
     res.status(500).json({ error: 'Failed to update user' });

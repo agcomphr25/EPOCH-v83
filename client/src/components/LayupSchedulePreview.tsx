@@ -97,7 +97,159 @@ export function LayupSchedulePreview({
   }, [scheduleBarcode, open]);
 
   const handlePrint = () => {
-    window.print();
+    // Open a new window with just the schedule content
+    const printWindow = window.open('', '_blank', 'width=1200,height=800');
+    if (!printWindow) {
+      alert('Please allow popups to print the schedule');
+      return;
+    }
+
+    // Convert SVG barcode to data URL
+    let barcodeDataURL = '';
+    if (barcodeRef.current) {
+      try {
+        const svgElement = barcodeRef.current;
+        const serializer = new XMLSerializer();
+        const svgString = serializer.serializeToString(svgElement);
+        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        barcodeDataURL = 'data:image/svg+xml;base64,' + btoa(svgString);
+      } catch (error) {
+        console.error('Error converting barcode to data URL:', error);
+      }
+    }
+    
+    // Generate the HTML content
+    const printHTML = generatePrintHTML(barcodeDataURL);
+    
+    printWindow.document.write(printHTML);
+    printWindow.document.close();
+    
+    // Wait for content to load, then print
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.print();
+        // Don't auto-close so user can save as PDF
+      }, 250);
+    };
+  };
+
+  const generatePrintHTML = (barcodeDataURL: string) => {
+    const dayNames = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const scheduledDays = [1, 2, 3, 4, 5].filter(day => itemsByDay[day]?.length > 0);
+    
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Layup Schedule - ${weekStart ? format(new Date(weekStart), 'MMM dd, yyyy') : ''}</title>
+  <style>
+    @page { size: letter landscape; margin: 0.5in; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; padding: 20px; color: #000; background: white; }
+    .header { display: flex; justify-content: space-between; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 4px solid #000; }
+    .header h1 { font-size: 32px; font-weight: bold; margin-bottom: 8px; }
+    .header p { font-size: 18px; font-weight: 600; }
+    .barcode-box { text-align: center; border: 3px solid #000; padding: 10px; border-radius: 8px; }
+    .barcode-box p { font-size: 12px; font-weight: bold; margin-bottom: 8px; }
+    .barcode-box img { width: 250px; height: auto; }
+    .summary { display: flex; gap: 20px; margin-bottom: 30px; padding: 15px; border: 3px solid #000; border-radius: 8px; }
+    .summary-item { flex: 1; text-align: center; padding: 15px; border: 2px solid #666; border-radius: 6px; }
+    .summary-item .label { font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 8px; }
+    .summary-item .value { font-size: 32px; font-weight: bold; }
+    .day-section { page-break-inside: avoid; margin-bottom: 40px; border: 4px solid #000; padding: 20px; border-radius: 8px; }
+    .day-header { font-size: 24px; font-weight: bold; padding: 12px 20px; background: #000; color: white; margin: -20px -20px 20px -20px; border-radius: 4px 4px 0 0; }
+    .order-item { display: flex; gap: 15px; padding: 15px; border: 3px solid #333; border-radius: 6px; margin-bottom: 15px; }
+    .checkbox { width: 32px; height: 32px; border: 3px solid #000; border-radius: 4px; flex-shrink: 0; margin-top: 5px; }
+    .order-details { flex-grow: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+    .field-label { font-size: 10px; font-weight: bold; text-transform: uppercase; color: #666; margin-bottom: 4px; }
+    .field-value { font-size: 16px; font-weight: bold; font-family: "Courier New", monospace; }
+    .badges { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+    .badge { padding: 6px 12px; border: 2px solid #000; border-radius: 4px; font-size: 12px; font-weight: bold; text-align: center; min-width: 80px; }
+    .badge-lop { background: #dcfce7; border-color: #166534; color: #166534; }
+    .badge-adl { background: #dbeafe; border-color: #1e40af; color: #1e40af; }
+    .badge-heavy { background: #ffedd5; border-color: #9a3412; color: #9a3412; }
+    .signature { display: flex; justify-content: space-between; margin-top: 30px; padding-top: 20px; border-top: 3px solid #000; }
+    .sig-field { flex: 1; }
+    .sig-label { font-size: 14px; font-weight: bold; margin-bottom: 8px; }
+    .sig-line { border-bottom: 3px solid #000; height: 40px; }
+    .sig-date { flex: 0 0 200px; margin-left: 40px; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>Layup Schedule</h1>
+      <p>Week starting ${weekStart ? format(new Date(weekStart), 'MMMM dd, yyyy') : ''}</p>
+    </div>
+    <div class="barcode-box">
+      <p>Scan to Complete Layup</p>
+      <img src="${barcodeDataURL}" alt="Barcode" />
+    </div>
+  </div>
+  
+  <div class="summary">
+    <div class="summary-item">
+      <div class="label">Total Items</div>
+      <div class="value">${totalItems}</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">Scheduled</div>
+      <div class="value">${scheduledItems.length}</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">Overflow</div>
+      <div class="value">${overflowItems.length}</div>
+    </div>
+  </div>
+  
+  ${scheduledDays.map(day => `
+    <div class="day-section">
+      <div class="day-header">${dayNames[day]} (${itemsByDay[day]?.length || 0} items)</div>
+      ${itemsByDay[day]?.map(item => `
+        <div class="order-item">
+          <div class="checkbox"></div>
+          <div class="order-details">
+            <div>
+              <div class="field-label">Order ID</div>
+              <div class="field-value">${item.orderId}</div>
+            </div>
+            <div>
+              <div class="field-label">Stock Model</div>
+              <div class="field-value">${item.stockModel}</div>
+            </div>
+            <div>
+              <div class="field-label">Mold</div>
+              <div class="field-value">${item.moldId}</div>
+            </div>
+            <div>
+              <div class="field-label">Action / Material</div>
+              <div class="field-value">${item.actionLength || '-'} / ${item.material || '-'}</div>
+            </div>
+          </div>
+          ${item.hasLOP || item.hasADL || item.hasHeavyFill ? `
+            <div class="badges">
+              ${item.hasLOP ? '<div class="badge badge-lop">LOP</div>' : ''}
+              ${item.hasADL ? '<div class="badge badge-adl">ADL</div>' : ''}
+              ${item.hasHeavyFill ? '<div class="badge badge-heavy">HEAVY</div>' : ''}
+            </div>
+          ` : ''}
+        </div>
+      `).join('')}
+      <div class="signature">
+        <div class="sig-field">
+          <div class="sig-label">Completed by:</div>
+          <div class="sig-line"></div>
+        </div>
+        <div class="sig-field sig-date">
+          <div class="sig-label">Date:</div>
+          <div class="sig-line"></div>
+        </div>
+      </div>
+    </div>
+  `).join('')}
+</body>
+</html>`;
   };
 
   return (

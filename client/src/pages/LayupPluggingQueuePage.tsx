@@ -601,7 +601,7 @@ export default function LayupPluggingQueuePage() {
     };
   }, [currentWeekOffset]);
 
-  // Get layup schedule assignments filtered by selected week - ONLY LOCKED WEEKS
+  // Get layup schedule assignments filtered by selected week - SHOW ALL SCHEDULED ORDERS
   const { data: currentSchedule = [], isLoading: scheduleLoading } = useQuery({
     queryKey: ['layup-schedule', currentWeekOffset],
     queryFn: async () => {
@@ -613,12 +613,10 @@ export default function LayupPluggingQueuePage() {
       }
       const allSchedule = await response.json();
       
-      // FILTER: Only show locked schedule entries
-      const lockedSchedule = allSchedule.filter((entry: any) => entry.weekLocked === true);
+      // Show ALL scheduled orders for current week (not just locked ones)
+      console.log(`📅 Layup/Plugging Department Manager: Found ${allSchedule.length} scheduled entries for this week`);
       
-      console.log(`🔒 Layup/Plugging Department Manager: Filtered ${allSchedule.length} total entries → ${lockedSchedule.length} locked entries`);
-      
-      return lockedSchedule;
+      return allSchedule;
     },
     refetchInterval: 30000, // Refresh every 30 seconds
   });
@@ -885,6 +883,26 @@ export default function LayupPluggingQueuePage() {
     return Object.values(currentWeekOrdersByDate).flat();
   }, [currentWeekOrdersByDate]);
 
+  // Get unscheduled orders in Layup/Plugging department
+  const unscheduledLayupOrders = useMemo(() => {
+    if (!availableOrders || availableOrders.length === 0) return [];
+    
+    // Get scheduled order IDs
+    const scheduledOrderIds = new Set(
+      currentSchedule.map((entry: any) => entry.orderId)
+    );
+    
+    // Filter for orders in Layup/Plugging that aren't scheduled
+    const unscheduled = availableOrders.filter((order: any) => {
+      const isInLayupDept = order.currentDepartment === 'Layup/Plugging';
+      const isNotScheduled = !scheduledOrderIds.has(order.orderId);
+      return isInLayupDept && isNotScheduled;
+    });
+    
+    console.log(`📦 Unscheduled Layup/Plugging Orders: ${unscheduled.length} orders found`);
+    return unscheduled;
+  }, [availableOrders, currentSchedule]);
+
   // Enhanced debugging
   React.useEffect(() => {
     console.log('🔍 LAYUP QUEUE TRANSFER DEBUG:');
@@ -1100,9 +1118,11 @@ export default function LayupPluggingQueuePage() {
         <h1 className="text-3xl font-bold">
           Layup/Plugging Department Manager
         </h1>
-        <Badge variant="secondary" className="ml-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
-          🔒 Locked Weeks Only
-        </Badge>
+        {unscheduledLayupOrders.length > 0 && (
+          <Badge variant="secondary" className="ml-2 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300">
+            {unscheduledLayupOrders.length} Unscheduled
+          </Badge>
+        )}
       </div>
 
       {/* Barcode Scanner at top */}
@@ -1129,9 +1149,11 @@ export default function LayupPluggingQueuePage() {
             <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
               Orders scheduled for {weekInfo.dateRange}
             </p>
-            <div className="text-xs text-blue-500 mt-2">
-              🔒 Showing only locked weeks from Layup Scheduler
-            </div>
+            {unscheduledLayupOrders.length > 0 && (
+              <div className="text-xs text-orange-600 dark:text-orange-400 mt-2">
+                📦 {unscheduledLayupOrders.length} unscheduled orders ready for scheduling
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1277,29 +1299,76 @@ export default function LayupPluggingQueuePage() {
             </div>
           )}
           {currentWeekOrders.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <Package className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-              <h3 className="text-xl font-medium mb-2">No Orders in Queue</h3>
-              <p className="text-sm">
-                Orders from the Layup Scheduler will appear here automatically
-              </p>
-              <p className="text-xs text-gray-400 mt-2">
-                Go to Production Scheduling → Layup Scheduler to assign orders
-              </p>
-              {(scheduleLoading || ordersLoading) && (
-                <p className="text-xs text-blue-500 mt-2">
-                  Loading schedule data...
+            <div className="space-y-6">
+              <div className="text-center py-12 text-gray-500">
+                <Calendar className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                <h3 className="text-xl font-medium mb-2">No Scheduled Orders This Week</h3>
+                <p className="text-sm">
+                  Go to Production Scheduling → Layup Scheduler to schedule orders for this week
                 </p>
-              )}
-              <div className="text-xs text-gray-400 mt-4 space-y-1">
-                <p>Debug Info:</p>
-                <p>Schedule entries: {(currentSchedule as any[]).length}</p>
-                <p>Available orders: {availableOrders.length}</p>
-                <p>Processed orders: {processedOrders.length}</p>
-                <p>Current week orders: {currentWeekOrders.length}</p>
-                <p>Schedule loading: {scheduleLoading ? 'Yes' : 'No'}</p>
-                <p>Orders loading: {ordersLoading ? 'Yes' : 'No'}</p>
+                {(scheduleLoading || ordersLoading) && (
+                  <p className="text-xs text-blue-500 mt-2">
+                    Loading schedule data...
+                  </p>
+                )}
               </div>
+
+              {/* Show unscheduled orders from Layup/Plugging department */}
+              {unscheduledLayupOrders.length > 0 && (
+                <div className="border-t pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold flex items-center gap-2">
+                        <Package className="h-5 w-5 text-orange-500" />
+                        Unscheduled Orders in Layup/Plugging Department
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        These orders are ready for layup but haven't been scheduled to specific days yet
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="text-lg px-3 py-1">
+                      {unscheduledLayupOrders.length} orders
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {unscheduledLayupOrders.map((order: any) => (
+                      <Card
+                        key={order.orderId}
+                        className="relative border-l-4 border-l-orange-500 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                      >
+                        <CardContent className="p-0">
+                          <QueueOrderItem
+                            order={order}
+                            getModelDisplayName={getModelDisplayName}
+                            processedOrders={processedOrders}
+                            hasKickbacks={hasKickbacks}
+                            getKickbackStatus={getKickbackStatus}
+                            handleKickbackClick={handleKickbackClick}
+                            handleSalesOrderDownload={handleSalesOrderDownload}
+                          />
+
+                          <div className="px-3 pb-3 pt-0">
+                            <div className="space-y-1 text-xs text-gray-500">
+                              {order.customer && (
+                                <div>Customer: {order.customer}</div>
+                              )}
+                              {order.dueDate && (
+                                <div>
+                                  Due: {format(new Date(order.dueDate), 'MMM d, yyyy')}
+                                </div>
+                              )}
+                              <Badge variant="outline" className="text-xs mt-1">
+                                Not Scheduled
+                              </Badge>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-6">

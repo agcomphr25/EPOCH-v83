@@ -185,23 +185,91 @@ export default function LayupPluggingQueuePage() {
     moveToDepartmentMutation.mutate(selectedOrders);
   };
 
-  // Auto-select order when scanned
-  const handleOrderScanned = (orderId: string) => {
-    const orderExists = filteredOrders.some(
-      (order: any) => order.orderId === orderId
-    );
-    if (orderExists) {
-      setSelectedOrders((prev) => [...prev, orderId]);
-      toast({
-        title: 'Order Selected',
-        description: `Order ${orderId} selected automatically`,
-      });
+  // Auto-select order when scanned OR fetch schedule orders when schedule barcode scanned
+  const handleOrderScanned = async (barcode: string) => {
+    console.log('🔍 Barcode scanned:', barcode);
+    
+    // Check if this is a schedule barcode (format: LAYUP-YYYY-MM-DD or YYYY-MM-DD)
+    const schedulePattern = /^(LAYUP-)?(\d{4}-\d{2}-\d{2})$/i;
+    const scheduleMatch = barcode.match(schedulePattern);
+    
+    if (scheduleMatch) {
+      // Extract the date (with or without LAYUP- prefix)
+      const scheduleDate = scheduleMatch[2]; // YYYY-MM-DD
+      console.log('📅 Schedule barcode detected:', scheduleDate);
+      
+      try {
+        toast({
+          title: 'Loading Schedule',
+          description: `Fetching orders for schedule ${scheduleDate}...`,
+        });
+        
+        // Fetch orders for this schedule date
+        const response = await apiRequest(`/api/layup-schedule/by-schedule-date/${scheduleDate}`);
+        
+        if (response.success && Array.isArray(response.orderIds)) {
+          const scheduleOrderIds = response.orderIds;
+          console.log('📦 Found schedule orders:', scheduleOrderIds);
+          
+          // Filter to only orders that exist in current layup/plugging queue
+          const validOrderIds = scheduleOrderIds.filter((orderId: string) =>
+            layupPluggingOrders.some((order: any) => order.orderId === orderId)
+          );
+          
+          if (validOrderIds.length > 0) {
+            setSelectedOrders((prev) => {
+              // Combine existing selection with new orders (avoid duplicates)
+              const combined = [...new Set([...prev, ...validOrderIds])];
+              return combined;
+            });
+            
+            toast({
+              title: 'Schedule Orders Selected',
+              description: `Selected ${validOrderIds.length} orders from schedule ${scheduleDate}`,
+            });
+          } else {
+            toast({
+              title: 'No Matching Orders',
+              description: `No orders from schedule ${scheduleDate} are in the Layup/Plugging queue`,
+              variant: 'destructive',
+            });
+          }
+        } else {
+          toast({
+            title: 'No Orders Found',
+            description: `No orders found for schedule ${scheduleDate}`,
+            variant: 'destructive',
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching schedule orders:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to fetch schedule orders',
+          variant: 'destructive',
+        });
+      }
     } else {
-      toast({
-        title: 'Order Not Found',
-        description: `Order ${orderId} is not in the Layup/Plugging department`,
-        variant: 'destructive',
-      });
+      // Regular order barcode - select single order
+      const orderExists = filteredOrders.some(
+        (order: any) => order.orderId === barcode
+      );
+      if (orderExists) {
+        setSelectedOrders((prev) => {
+          if (prev.includes(barcode)) return prev; // Already selected
+          return [...prev, barcode];
+        });
+        toast({
+          title: 'Order Selected',
+          description: `Order ${barcode} selected automatically`,
+        });
+      } else {
+        toast({
+          title: 'Order Not Found',
+          description: `Order ${barcode} is not in the Layup/Plugging department`,
+          variant: 'destructive',
+        });
+      }
     }
   };
 
@@ -215,8 +283,22 @@ export default function LayupPluggingQueuePage() {
         </Badge>
       </div>
 
-      {/* Barcode Scanner */}
-      <BarcodeScanner onOrderScanned={handleOrderScanned} />
+      {/* Barcode Scanner - accepts both order barcodes and schedule barcodes */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Package className="h-5 w-5" />
+            Barcode Scanner
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+            Scan an <strong>order barcode</strong> (e.g., AG1234, P1-P18918-7-1) to select a single order,
+            or scan a <strong>schedule barcode</strong> (e.g., LAYUP-2025-11-04 or 2025-11-04) to select all orders from that layup schedule.
+          </p>
+          <BarcodeScanner onOrderScanned={handleOrderScanned} />
+        </CardContent>
+      </Card>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -20,7 +20,9 @@ import {
   RefreshCw,
   Save,
   ArrowRight,
+  History,
 } from 'lucide-react';
+import { ScheduleHistoryDialog } from './ScheduleHistoryDialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   DndContext,
@@ -206,6 +208,7 @@ export default function EnhancedLayupScheduler() {
     [date: string]: ProductionOrder[];
   }>({});
   const [isScheduleSaved, setIsScheduleSaved] = useState(false);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
 
   // Get production queue data
   const { data: productionQueue = [], isLoading: queueLoading } = useQuery<
@@ -411,6 +414,14 @@ export default function EnhancedLayupScheduler() {
         </div>
         <div className="flex items-center gap-3">
           <Button
+            variant="outline"
+            onClick={() => setShowHistoryDialog(true)}
+            data-testid="button-schedule-history"
+          >
+            <History className="w-4 h-4 mr-2" />
+            Schedule History
+          </Button>
+          <Button
             onClick={() => generateScheduleMutation.mutate()}
             disabled={generateScheduleMutation.isPending}
             className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -428,6 +439,12 @@ export default function EnhancedLayupScheduler() {
           </Button>
         </div>
       </div>
+
+      {/* Schedule History Dialog */}
+      <ScheduleHistoryDialog
+        open={showHistoryDialog}
+        onClose={() => setShowHistoryDialog(false)}
+      />
 
       {/* Schedule Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

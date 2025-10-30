@@ -12,7 +12,7 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
     const { storage } = await import('../../storage');
 
     // Get all the data we need for the comprehensive report
-    const orders = await storage.getAllOrderDrafts();
+    const orders = await storage.getAllOrders();
     const molds = await storage.getAllMolds();
     const employees = await storage.getAllEmployeeLayupSettings();
     const features = await storage.getAllFeatures();

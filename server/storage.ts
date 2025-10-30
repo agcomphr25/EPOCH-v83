@@ -5994,7 +5994,7 @@ export class DatabaseStorage implements IStorage {
         customerMap.set(customerId, customer);
       }
 
-      // Get all items for this PO (we'll filter by stockModel after)
+      // Get all items for this PO (we'll filter by stockModel and scheduled quantity after)
       const items = await db
         .select()
         .from(purchaseOrderItems)
@@ -6008,6 +6008,10 @@ export class DatabaseStorage implements IStorage {
           
           // Check both camelCase and snake_case for stockModel
           const stockModel = specs.stockModel || specs.stock_model || null;
+          
+          // Calculate remaining quantity (not yet scheduled)
+          const orderCount = item.orderCount || 0;
+          const remainingQuantity = item.quantity - orderCount;
           
           return {
             id: item.id,
@@ -6025,7 +6029,7 @@ export class DatabaseStorage implements IStorage {
             paintOptions: specs.paintOptions || specs.paint_options || null,
             texture: specs.texture || null,
             flatTop: specs.flatTop || specs.flat_top || null,
-            quantity: item.quantity,
+            quantity: remainingQuantity, // Show only remaining quantity
             status: item.stockStatus || 'pending',
             notes: item.notes || item.productionNotes || null,
             dueDate: item.dueDate?.toString() || null,
@@ -6033,14 +6037,18 @@ export class DatabaseStorage implements IStorage {
           };
         })
         .filter((item) => {
-          // Only include items with a valid stockModel (exclude "no stock", "no_stock", "None", or null/empty)
+          // Only include items with:
+          // 1. Valid stockModel (exclude "no stock", "no_stock", "None", or null/empty)
+          // 2. Remaining quantity > 0 (not fully scheduled)
           if (!item.stockModel || item.stockModel.trim() === '') {
             return false;
           }
           const lowerStockModel = item.stockModel.toLowerCase().trim();
-          return lowerStockModel !== 'no stock' && 
+          const hasValidStockModel = lowerStockModel !== 'no stock' && 
                  lowerStockModel !== 'no_stock' && 
                  lowerStockModel !== 'none';
+          
+          return hasValidStockModel && item.quantity > 0;
         });
 
       customer.purchaseOrders.push({

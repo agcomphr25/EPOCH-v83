@@ -469,7 +469,8 @@ router.post('/save', async (req: Request, res: Response) => {
         );
       }
 
-      // Update PO item order counts
+      // Update PO item order counts and track production order numbers
+      const productionOrderNumbers = new Set<string>();
       if (poItemCounts.size > 0) {
         const newPOItemEntries = Array.from(poItemCounts.entries());
         for (const [key, count] of newPOItemEntries) {
@@ -484,6 +485,9 @@ router.post('/save', async (req: Request, res: Response) => {
             [count, parseInt(itemId)]
           );
           console.log(`📦 Updated PO item ${itemId}: added ${count} to order_count`);
+          
+          // Track the production order number for progression
+          productionOrderNumbers.add(poNumber);
         }
       }
 
@@ -504,6 +508,26 @@ router.post('/save', async (req: Request, res: Response) => {
         
         progressedCount = (updateResult as any).rowCount || 0;
         console.log(`📦 Moved ${progressedCount} orders to Layup/Plugging department`);
+      }
+
+      // Move production orders to Layup/Plugging department
+      if (productionOrderNumbers.size > 0) {
+        const poNumbersArray = Array.from(productionOrderNumbers);
+        
+        const poUpdateResult = await pool.query(
+          `
+          UPDATE production_orders
+          SET current_department = 'Layup/Plugging',
+              updated_at = NOW()
+          WHERE po_number = ANY($1::text[])
+          AND current_department = 'P1 Production Queue'
+        `,
+          [poNumbersArray]
+        );
+        
+        const poProgressedCount = (poUpdateResult as any).rowCount || 0;
+        progressedCount += poProgressedCount;
+        console.log(`📦 Moved ${poProgressedCount} production orders to Layup/Plugging department`);
       }
 
       // Commit transaction

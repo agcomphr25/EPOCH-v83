@@ -379,7 +379,7 @@ export default function OrderEntry() {
 
   // Unified price calculation function
   const calculateTotalPrice = useCallback(() => {
-    // If price override is set, use that as the subtotal (APR Price Override behavior)
+    // If price override is set (Alamo), use that as the subtotal (complete override)
     if (priceOverride !== null) {
       console.log(
         '💰 Price calculation - Using APR Price Override as subtotal:',
@@ -390,12 +390,18 @@ export default function OrderEntry() {
 
     let total = 0;
 
-    // Add stock model price (normal calculation when no override)
-    const selectedModel = modelOptions.find((model) => model.id === modelId);
-    if (selectedModel) {
-      const basePrice = selectedModel.price || 0;
-      total += basePrice;
-      console.log('💰 Price calculation - Base price:', basePrice);
+    // Add base price: Flattop override takes priority over stock model price
+    if (isFlattop && flattopPriceOverride !== null) {
+      total = flattopPriceOverride;
+      console.log('💰 Price calculation - Using Flattop Price Override as base:', flattopPriceOverride);
+    } else {
+      // Use stock model price
+      const selectedModel = modelOptions.find((model) => model.id === modelId);
+      if (selectedModel) {
+        const basePrice = selectedModel.price || 0;
+        total += basePrice;
+        console.log('💰 Price calculation - Base price:', basePrice);
+      }
     }
 
     // Add feature prices from features object (but NOT bottom_metal, paint_options, rail_accessory, other_options as they are handled separately)
@@ -618,6 +624,8 @@ export default function OrderEntry() {
     modelOptions,
     modelId,
     priceOverride,
+    isFlattop,
+    flattopPriceOverride,
     featureDefs,
     features,
     miscItems,
@@ -4178,8 +4186,10 @@ export default function OrderEntry() {
                       $
                       {priceOverride !== null
                         ? priceOverride.toFixed(2)
+                        : isFlattop && flattopPriceOverride !== null
+                        ? flattopPriceOverride.toFixed(2)
                         : selectedModel?.price?.toFixed(2) || '0.00'}
-                      {priceOverride !== null && (
+                      {(priceOverride !== null || (isFlattop && flattopPriceOverride !== null)) && (
                         <span className="text-xs text-green-600 ml-1">
                           (Override)
                         </span>

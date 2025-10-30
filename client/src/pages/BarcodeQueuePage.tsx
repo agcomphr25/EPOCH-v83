@@ -376,31 +376,53 @@ export default function BarcodeQueuePage() {
     },
   });
 
-  // Smart routing: Flat Tops → Finish, Others → CNC
+  // Smart routing: PO items → smart-progress, Flat Tops → Finish, Others → CNC
   const progressToNextDepartment = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      // Separate orders by routing: flat tops go to Finish, others go to CNC
+      // Separate orders by type: PO items vs regular orders
+      const poOrderIds: string[] = [];
       const flatTopOrderIds: string[] = [];
       const cncOrderIds: string[] = [];
       
       for (const orderId of orderIds) {
         const order = barcodeOrders.find((o: any) => o.orderId === orderId);
         if (order) {
-          // Check flatTop field (PO items) or isFlattop field (regular orders)
-          const isFlatTop = (order as any).flatTop === true || (order as any).isFlattop === true;
-          if (isFlatTop) {
-            flatTopOrderIds.push(orderId);
+          // Check if this is a PO item (production order format: PO-P18261-18-1)
+          const isPOItem = orderId.startsWith('PO-');
+          
+          if (isPOItem) {
+            poOrderIds.push(orderId);
           } else {
-            cncOrderIds.push(orderId);
+            // Regular orders: check if flat top
+            const isFlatTop = (order as any).isFlattop === true;
+            if (isFlatTop) {
+              flatTopOrderIds.push(orderId);
+            } else {
+              cncOrderIds.push(orderId);
+            }
           }
         }
       }
       
       console.log('🔀 Smart Routing:', {
+        poItems: poOrderIds.length,
         flatTops: flatTopOrderIds.length,
         cnc: cncOrderIds.length,
         totalOrders: orderIds.length
       });
+      
+      let poToShippingQC = 0;
+      let poToCNC = 0;
+      
+      // Smart progression for PO items (routes based on stock model)
+      if (poOrderIds.length > 0) {
+        const poResult = await apiRequest('/api/po-orders/smart-progress', {
+          method: 'POST',
+          body: { orderIds: poOrderIds },
+        });
+        poToShippingQC = poResult.toShippingQC?.length || 0;
+        poToCNC = poResult.toCNC?.length || 0;
+      }
       
       // Progress flat tops to Finish department
       if (flatTopOrderIds.length > 0) {
@@ -424,10 +446,21 @@ export default function BarcodeQueuePage() {
         });
       }
       
-      return { flatTopCount: flatTopOrderIds.length, cncCount: cncOrderIds.length };
+      return { 
+        flatTopCount: flatTopOrderIds.length, 
+        cncCount: cncOrderIds.length,
+        poToShippingQC,
+        poToCNC
+      };
     },
     onSuccess: (data) => {
       const messages = [];
+      if (data.poToShippingQC > 0) {
+        messages.push(`${data.poToShippingQC} PO item${data.poToShippingQC > 1 ? 's' : ''} → Shipping QC (no stock)`);
+      }
+      if (data.poToCNC > 0) {
+        messages.push(`${data.poToCNC} PO item${data.poToCNC > 1 ? 's' : ''} → CNC`);
+      }
       if (data.flatTopCount > 0) {
         messages.push(`${data.flatTopCount} Flat Top${data.flatTopCount > 1 ? 's' : ''} → Finish`);
       }

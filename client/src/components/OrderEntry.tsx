@@ -142,6 +142,10 @@ export default function OrderEntry() {
   // Price Override state
   const [priceOverride, setPriceOverride] = useState<number | null>(null);
   const [showPriceOverride, setShowPriceOverride] = useState(false);
+  
+  // Flattop Price Override state
+  const [flattopPriceOverride, setFlattopPriceOverride] = useState<number | null>(null);
+  const [showFlattopPriceOverride, setShowFlattopPriceOverride] = useState(false);
 
   // Discount and pricing
   const [discountCode, setDiscountCode] = useState('');
@@ -1111,6 +1115,7 @@ export default function OrderEntry() {
         setAgrOrderDetails(order.agrOrderDetails || '');
         setHasAGROrder(!!order.agrOrderDetails);
         setIsFlattop(order.isFlattop || false);
+        setFlattopPriceOverride(order.flattopPriceOverride || null);
         setShipping(order.shipping || 0);
         setIsCustomOrder(order.isCustomOrder === 'yes');
         // Load notes from either the dedicated notes column or features.specialInstructions for backward compatibility
@@ -1761,6 +1766,7 @@ export default function OrderEntry() {
         fbOrderNumber,
         agrOrderDetails: hasAGROrder ? agrOrderDetails : '',
         isFlattop,
+        flattopPriceOverride,
         shipping,
         status: saveAsDraft ? 'DRAFT' : 'FINALIZED',
         isCustomOrder: isCustomOrder ? 'yes' : 'no',
@@ -1885,6 +1891,8 @@ export default function OrderEntry() {
     setHasAGROrder(false);
     setAgrOrderDetails('');
     setIsFlattop(false);
+    setFlattopPriceOverride(null);
+    setShowFlattopPriceOverride(false);
     setDiscountCode('');
     setCustomDiscountType('percent');
     setCustomDiscountValue(0);
@@ -2458,6 +2466,10 @@ export default function OrderEntry() {
                           bottom_metal: undefined,
                           barrel_inlet: undefined,
                         }));
+                      } else {
+                        // Clear flattop price override when unchecking
+                        setFlattopPriceOverride(null);
+                        setShowFlattopPriceOverride(false);
                       }
                     }}
                   />
@@ -2472,6 +2484,89 @@ export default function OrderEntry() {
                     Metal, or Barrel Inlet)
                   </span>
                 </div>
+
+                {/* Flattop Price Override */}
+                {isFlattop && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 pl-[16px] pr-[16px] pt-[0px] pb-[0px]">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-blue-600">💰</span>
+                        <span className="font-medium text-gray-900">
+                          Flattop Price Override
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setShowFlattopPriceOverride(!showFlattopPriceOverride)
+                        }
+                        className="flex items-center gap-2"
+                        data-testid="button-flattop-price-override"
+                      >
+                        <span>✏️</span>
+                        Override Price
+                      </Button>
+                    </div>
+
+                    {showFlattopPriceOverride && (
+                      <div className="mt-3 space-y-3">
+                        <div>
+                          <Label htmlFor="flattop-price-override">
+                            Custom Price
+                          </Label>
+                          <Input
+                            id="flattop-price-override"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="Enter custom price"
+                            value={flattopPriceOverride || ''}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setFlattopPriceOverride(
+                                value ? parseFloat(value) : null
+                              );
+                            }}
+                            data-testid="input-flattop-price-override"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setFlattopPriceOverride(null);
+                              setShowFlattopPriceOverride(false);
+                            }}
+                            data-testid="button-cancel-flattop-override"
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => setShowFlattopPriceOverride(false)}
+                            data-testid="button-apply-flattop-override"
+                          >
+                            Apply Override
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {flattopPriceOverride !== null && !showFlattopPriceOverride && (
+                      <div className="mt-2 text-sm text-green-700">
+                        Price overridden to:{' '}
+                        <span className="font-semibold">
+                          ${flattopPriceOverride.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Stock Model Selection and Price Override Row */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -104,7 +104,17 @@ export default function BulkPaymentPage() {
 
   const handleAmountChange = (orderId: string, amount: string, orderTotal: number) => {
     const newSelected = new Map(selectedOrders);
+    
+    // Allow empty string or valid numbers (including partial entries like "8.")
+    if (amount === '') {
+      const existing = newSelected.get(orderId);
+      newSelected.set(orderId, { amount: 0, total: existing?.total || orderTotal });
+      setSelectedOrders(newSelected);
+      return;
+    }
+    
     const parsedAmount = parseFloat(amount);
+    // Allow any non-negative number, including values greater than the order total
     if (!isNaN(parsedAmount) && parsedAmount >= 0) {
       const existing = newSelected.get(orderId);
       newSelected.set(orderId, { amount: parsedAmount, total: existing?.total || orderTotal });
@@ -273,18 +283,25 @@ export default function BulkPaymentPage() {
                               </td>
                               <td className="p-3">
                                 {isSelected ? (
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-
-                                    value={paymentAmount.toFixed(2)}
-                                    onChange={(e) =>
-                                      handleAmountChange(order.orderId, e.target.value, order.totalAmount)
-                                    }
-                                    className="w-32 ml-auto"
-                                    data-testid={`input-amount-${order.orderId}`}
-                                  />
+                                  <div className="flex flex-col items-end gap-1">
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={paymentAmount === 0 ? '' : paymentAmount}
+                                      onChange={(e) =>
+                                        handleAmountChange(order.orderId, e.target.value, order.totalAmount)
+                                      }
+                                      className="w-32"
+                                      data-testid={`input-amount-${order.orderId}`}
+                                      placeholder="0.00"
+                                    />
+                                    {paymentAmount > order.balanceDue && (
+                                      <span className="text-xs text-blue-600 dark:text-blue-400">
+                                        Credit: {formatCurrency(paymentAmount - order.balanceDue)}
+                                      </span>
+                                    )}
+                                  </div>
                                 ) : (
                                   <span className="text-muted-foreground">-</span>
                                 )}

@@ -1,555 +1,52 @@
-import React, { useMemo, useState } from 'react';
+import { useState, useMemo } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import {
   Factory,
-  Calendar,
   ArrowRight,
   Package,
   CheckCircle,
   AlertTriangle,
-  FileText,
-  Eye,
-  Zap,
+  Search,
+  X,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  format,
-  addDays,
-  startOfWeek,
-  eachDayOfInterval,
-  isToday,
-  isPast,
-} from 'date-fns';
+import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
-import {
-  identifyLOPOrders,
-  scheduleLOPAdjustments,
-  getLOPStatus,
-} from '@/utils/lopScheduler';
-
-// Props interface for QueueOrderItem component
-interface QueueOrderItemProps {
-  order: any;
-  getModelDisplayName?: (modelId: string) => string;
-  processedOrders?: any[];
-  hasKickbacks?: (orderId: string) => boolean;
-  getKickbackStatus?: (orderId: string) => string | null;
-  handleKickbackClick?: (orderId: string) => void;
-  handleSalesOrderDownload?: (orderId: string) => void;
-}
-
-// Queue Order Item Component - EXACT MATCH to DraggableOrderItem from LayupScheduler
-function QueueOrderItem({
-  order,
-  getModelDisplayName,
-  processedOrders,
-  hasKickbacks,
-  getKickbackStatus,
-  handleKickbackClick,
-  handleSalesOrderDownload,
-}: QueueOrderItemProps) {
-  // Determine material type for styling - EXACTLY SAME AS LayupScheduler
-  const getMaterialType = (modelId: string) => {
-    // Direct CF prefixes
-    if (modelId.startsWith('cf_')) return 'CF';
-    // Direct FG prefixes
-    if (modelId.startsWith('fg_')) return 'FG';
-    // Exact FG match
-    if (modelId === 'fg') return 'FG';
-    // Material keywords
-    if (modelId.includes('carbon')) return 'CF';
-    if (modelId.includes('fiberglass')) return 'FG';
-    // FG suffix patterns
-    if (modelId.endsWith('_fg')) return 'FG';
-    // Default patterns for common models
-    if (modelId.includes('alpine_hunter_tikka') && !modelId.endsWith('_fg'))
-      return 'CF';
-    if (modelId.includes('privateer-tikka') && !modelId.endsWith('_fg'))
-      return 'CF';
-    if (modelId.includes('apr_hunter')) return 'CF';
-    return null;
-  };
-
-  const modelId = order.stockModelId || order.modelId;
-  const materialType = getMaterialType(modelId || '');
-
-  // Determine card styling based on material type - EXACTLY SAME AS LayupScheduler
-  const getCardStyling = () => {
-    const isPurchaseOrder = !!(order.poId || order.productionOrderId);
-
-    if (materialType === 'CF') {
-      // CF cards: Light orange background with green border for POs
-      return {
-        bg: `bg-orange-200 dark:bg-orange-800/50 hover:bg-orange-300 dark:hover:bg-orange-800/70 border-2 ${isPurchaseOrder ? 'border-green-500 dark:border-green-400' : 'border-orange-300 dark:border-orange-600'}`,
-        text: 'text-orange-800 dark:text-orange-200',
-      };
-    } else if (materialType === 'FG') {
-      // FG cards: Dark orange background with green border for POs
-      return {
-        bg: `bg-orange-600 dark:bg-orange-700/80 hover:bg-orange-700 dark:hover:bg-orange-800/90 border-2 ${isPurchaseOrder ? 'border-green-500 dark:border-green-400' : 'border-orange-700 dark:border-orange-800'}`,
-        text: 'text-white dark:text-orange-100',
-      };
-    } else {
-      // Unknown material - RED for attention/needs review with green border for POs
-      return {
-        bg: `bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-900/70 border-2 ${isPurchaseOrder ? 'border-green-500 dark:border-green-400' : 'border-red-400 dark:border-red-600'}`,
-        text: 'text-red-800 dark:text-red-200',
-      };
-    }
-  };
-
-  const cardStyling = getCardStyling();
-
-  // Responsive sizing based on number of orders - EXACTLY SAME AS LayupScheduler
-  const getCardSizing = (orderCount: number) => {
-    if (orderCount <= 2) {
-      return {
-        padding: 'p-3',
-        margin: 'mb-2',
-        textSize: 'text-base font-bold',
-        height: 'min-h-[3rem]',
-      };
-    } else if (orderCount <= 5) {
-      return {
-        padding: 'p-2',
-        margin: 'mb-1.5',
-        textSize: 'text-sm font-bold',
-        height: 'min-h-[2.5rem]',
-      };
-    } else if (orderCount <= 8) {
-      return {
-        padding: 'p-2',
-        margin: 'mb-1',
-        textSize: 'text-sm font-semibold',
-        height: 'min-h-[2rem]',
-      };
-    } else {
-      // Many orders - ultra compact
-      return {
-        padding: 'p-1.5',
-        margin: 'mb-0.5',
-        textSize: 'text-xs font-semibold',
-        height: 'min-h-[1.5rem]',
-      };
-    }
-  };
-
-  const sizing = getCardSizing(1); // Default to 1 order per cell in queue view
-  
-  // These are locked orders (finalized production schedules), so show locked state
-  const isLocked = true;
-
-  return (
-    <div
-      className={`group relative ${sizing.padding} ${sizing.margin} ${sizing.height} ${cardStyling.bg} rounded-lg shadow-md transition-all duration-200 touch-manipulation select-none ${
-        isLocked
-          ? 'cursor-default opacity-75 border-dashed'
-          : 'cursor-grab active:cursor-grabbing'
-      }`}
-    >
-      <div
-        className={`${cardStyling.text} ${sizing.textSize} text-center flex flex-col items-center justify-center h-full`}
-      >
-        <div className="flex items-center gap-1.5 font-bold flex-wrap justify-center">
-          {getDisplayOrderId(order) || 'No ID'}
-
-          {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
-            <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-1.5 py-0.5 font-bold text-xs">
-              <Zap className="w-2.5 h-2.5" />
-              URGENT
-            </Badge>
-          )}
-
-          {(order.poId || order.productionOrderId) && (
-            <span className="text-xs ml-1 bg-green-200 dark:bg-green-700 px-1 rounded font-semibold">
-              PO
-            </span>
-          )}
-        </div>
-
-        {/* Show stock model display name with material type */}
-        {(() => {
-          if (!getModelDisplayName || !modelId) return null;
-
-          const displayName = getModelDisplayName(modelId);
-
-          return (
-            <div className="text-xs opacity-80 mt-0.5 font-medium">
-              {materialType && (
-                <span className="bg-gray-200 dark:bg-gray-600 px-1 rounded mr-1 text-xs font-bold">
-                  {materialType}
-                </span>
-              )}
-              {displayName}
-            </div>
-          );
-        })()}
-
-        {/* Show Action Length Display */}
-        {(() => {
-          const modelId = order.stockModelId || order.modelId;
-          const isAPR = modelId && modelId.toLowerCase().includes('apr');
-
-          // For APR orders, show both action type AND action length
-          if (isAPR) {
-            const getAPRActionDisplay = (orderFeatures: any) => {
-              if (!orderFeatures) return null;
-
-              let actionType = orderFeatures.action_inlet;
-              if (!actionType) {
-                actionType = orderFeatures.action;
-              }
-
-              let actionLength = orderFeatures.action_length;
-              if (!actionLength || actionLength === 'none') {
-                if (actionType && actionType.includes('short'))
-                  actionLength = 'SA';
-                else if (actionType && actionType.includes('long'))
-                  actionLength = 'LA';
-                else actionLength = 'SA';
-              }
-
-              const lengthMap: { [key: string]: string } = {
-                Long: 'LA',
-                Medium: 'MA',
-                Short: 'SA',
-                long: 'LA',
-                medium: 'MA',
-                short: 'SA',
-                LA: 'LA',
-                MA: 'MA',
-                SA: 'SA',
-              };
-
-              const actionLengthAbbr = lengthMap[actionLength] || actionLength;
-
-              if (!actionType || actionType === 'none') {
-                return actionLengthAbbr;
-              }
-
-              const actionMap: { [key: string]: string } = {
-                anti_ten_hunter_def: 'Anti-X Hunter',
-                apr: 'APR',
-                rem_700: 'Rem 700',
-                tikka: 'Tikka',
-                savage: 'Savage',
-              };
-
-              const actionDisplay =
-                actionMap[actionType] ||
-                actionType.replace(/_/g, ' ').toUpperCase();
-
-              return `${actionLengthAbbr} ${actionDisplay}`;
-            };
-
-            const aprActionDisplay = getAPRActionDisplay(order.features);
-
-            return aprActionDisplay ? (
-              <div className="text-xs opacity-80 mt-0.5 font-medium">
-                {aprActionDisplay}
-              </div>
-            ) : null;
-          }
-
-          // For non-APR orders, show action length
-          const getActionInletDisplayNonAPR = (orderFeatures: any) => {
-            if (!orderFeatures) return null;
-
-            let actionLengthValue = orderFeatures.action_length;
-
-            if (
-              (!actionLengthValue || actionLengthValue === 'none') &&
-              orderFeatures.action_inlet
-            ) {
-              const actionInlet = orderFeatures.action_inlet;
-
-              const inletToLengthMap: { [key: string]: string } = {
-                anti_ten_hunter_def: 'SA',
-                remington_700: 'SA',
-                remington_700_long: 'LA',
-                rem_700: 'SA',
-                rem_700_short: 'SA',
-                rem_700_long: 'LA',
-                tikka_t3: 'SA',
-                tikka_short: 'SA',
-                tikka_long: 'LA',
-                savage_short: 'SA',
-                savage_long: 'LA',
-                savage_110: 'LA',
-                winchester_70: 'LA',
-                howa_1500: 'SA',
-                bergara_b14: 'SA',
-                carbon_six_medium: 'MA',
-              };
-
-              actionLengthValue = inletToLengthMap[actionInlet] || 'SA';
-            }
-
-            if (!actionLengthValue || actionLengthValue === 'none') return null;
-
-            const displayMap: { [key: string]: string } = {
-              Long: 'LA',
-              Medium: 'MA',
-              Short: 'SA',
-              long: 'LA',
-              medium: 'MA',
-              short: 'SA',
-              LA: 'LA',
-              MA: 'MA',
-              SA: 'SA',
-            };
-
-            return displayMap[actionLengthValue] || actionLengthValue;
-          };
-
-          const actionInletDisplayNonAPR = getActionInletDisplayNonAPR(
-            order.features
-          );
-
-          return actionInletDisplayNonAPR ? (
-            <div className="text-xs opacity-80 mt-0.5 font-medium">
-              {actionInletDisplayNonAPR}
-            </div>
-          ) : null;
-        })()}
-
-        {/* Show Mold Name with Action Length prefix - ADDED TO MATCH LayupScheduler */}
-        {order.moldId && (
-          <div className="text-xs font-semibold opacity-80 mt-0.5">
-            {(() => {
-              // Get action length prefix
-              const getActionPrefix = (orderFeatures: any) => {
-                if (!orderFeatures) return '';
-
-                const actionLengthValue = orderFeatures.action_length;
-                if (!actionLengthValue || actionLengthValue === 'none')
-                  return '';
-
-                // Fallback to abbreviations
-                const displayMap: { [key: string]: string } = {
-                  Long: 'LA',
-                  Medium: 'MA',
-                  Short: 'SA',
-                  long: 'LA',
-                  medium: 'MA',
-                  short: 'SA',
-                };
-                return displayMap[actionLengthValue] || actionLengthValue;
-              };
-
-              const actionPrefix = getActionPrefix(order.features);
-              const moldName = order.moldId;
-
-              return actionPrefix
-                ? `${actionPrefix} ${moldName}`
-                : `${moldName}`;
-            })()}
-          </div>
-        )}
-
-        {/* Show LOP (Length of Pull) only if there's an extra length specified - ADDED TO MATCH LayupScheduler */}
-        {(() => {
-          const getLOPDisplay = (orderFeatures: any) => {
-            if (!orderFeatures) return null;
-
-            // Look for length_of_pull field (NOT action_length)
-            const lopValue = orderFeatures.length_of_pull;
-
-            // Don't show if empty, none, standard, std, or any variation indicating no extra length
-            if (
-              !lopValue ||
-              lopValue === 'none' ||
-              lopValue === 'standard' ||
-              lopValue === 'std' ||
-              lopValue === 'std_length' ||
-              lopValue === 'standard_length' ||
-              lopValue === 'no_extra_length' ||
-              lopValue === 'std_no_extra_length' ||
-              lopValue === 'no_lop_change' ||
-              lopValue === '' ||
-              lopValue === '0' ||
-              lopValue === 'normal' ||
-              lopValue.toLowerCase().includes('std') ||
-              lopValue.toLowerCase().includes('standard') ||
-              lopValue.toLowerCase().includes('no extra')
-            ) {
-              return null;
-            }
-
-            // Return raw value as fallback only if it indicates extra length
-            return lopValue;
-          };
-
-          const lopDisplay = getLOPDisplay(order.features);
-
-          return lopDisplay ? (
-            <div className="text-xs opacity-80 mt-0.5 font-medium">
-              LOP: {lopDisplay}
-            </div>
-          ) : null;
-        })()}
-
-        {/* Show LOP Adjustment Status - FIXED COLORS TO MATCH LayupScheduler */}
-        {(() => {
-          const lopOrder =
-            processedOrders?.find((o) => o.orderId === order.orderId) ||
-            identifyLOPOrders([order])[0];
-          const lopStatus = getLOPStatus(lopOrder);
-
-          if (lopStatus.status === 'none') return null;
-
-          return (
-            <div className="text-xs mt-1">
-              <span
-                className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                  lopStatus.status === 'scheduled'
-                    ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800'
-                    : lopStatus.status === 'deferred'
-                      ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800'
-                      : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
-                }`}
-              >
-                {lopStatus.status === 'scheduled' && '📅 '}
-                {lopStatus.status === 'deferred' && '⏰ '}
-                LOP {lopStatus.status.toUpperCase()}
-              </span>
-            </div>
-          );
-        })()}
-
-        {/* Show Bottom Metal if ADL - ADDED TO MATCH LayupScheduler */}
-        {(() => {
-          const getBottomMetalDisplay = (orderFeatures: any) => {
-            if (!orderFeatures) return null;
-
-            const bottomMetal = orderFeatures.bottom_metal;
-
-            // Show bottom metal if it contains "adl" (case insensitive)
-            if (bottomMetal && bottomMetal.toLowerCase().includes('adl')) {
-              // Format the display value - convert underscores to spaces and capitalize
-              const displayValue = bottomMetal
-                .replace(/_/g, ' ')
-                .toUpperCase();
-              return displayValue;
-            }
-
-            return null;
-          };
-
-          const bottomMetalDisplay = getBottomMetalDisplay(order.features);
-
-          return bottomMetalDisplay ? (
-            <div className="text-xs opacity-90 mt-0.5 font-bold bg-blue-100 dark:bg-blue-900/50 px-1.5 py-0.5 rounded">
-              {bottomMetalDisplay}
-            </div>
-          ) : null;
-        })()}
-
-        {/* Show Heavy Fill if selected */}
-        {(() => {
-          const getHeavyFillDisplay = (orderFeatures: any) => {
-            if (!orderFeatures) return null;
-
-            const otherOptions = orderFeatures.other_options;
-            if (
-              Array.isArray(otherOptions) &&
-              otherOptions.includes('heavy_fill')
-            ) {
-              return 'Heavy Fill';
-            }
-
-            const heavyFillValue =
-              orderFeatures.heavy_fill ||
-              orderFeatures.heavyFill ||
-              orderFeatures.heavy_fill_option ||
-              orderFeatures['heavy-fill'];
-
-            if (
-              heavyFillValue === 'true' ||
-              heavyFillValue === true ||
-              heavyFillValue === 'yes' ||
-              heavyFillValue === 'heavy_fill'
-            ) {
-              return 'Heavy Fill';
-            }
-
-            return null;
-          };
-
-          const heavyFillDisplay = getHeavyFillDisplay(order.features);
-
-          return heavyFillDisplay ? (
-            <div className="text-xs mt-0.5">
-              <span className="bg-orange-200 dark:bg-orange-700 px-1 rounded text-xs font-bold">
-                {heavyFillDisplay}
-              </span>
-            </div>
-          ) : null;
-        })()}
-
-        {/* Show Kickback Badge */}
-        <div className="text-xs mt-0.5 flex gap-1 flex-wrap">
-          {hasKickbacks &&
-            getKickbackStatus &&
-            handleKickbackClick &&
-            hasKickbacks(order.orderId) && (
-              <Badge
-                variant="destructive"
-                className={`cursor-pointer hover:opacity-80 transition-opacity text-xs ${
-                  getKickbackStatus(order.orderId) === 'CRITICAL'
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : getKickbackStatus(order.orderId) === 'HIGH'
-                      ? 'bg-orange-600 hover:bg-orange-700'
-                      : getKickbackStatus(order.orderId) === 'MEDIUM'
-                        ? 'bg-yellow-600 hover:bg-yellow-700'
-                        : 'bg-gray-600 hover:bg-gray-700'
-                }`}
-                onClick={() => handleKickbackClick(order.orderId)}
-              >
-                <AlertTriangle className="w-3 h-3 mr-1" />
-                Kickback
-              </Badge>
-            )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function LayupPluggingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
 
-  // Fetch all kickbacks to determine which orders have kickbacks
+  // Fetch all kickbacks
   const { data: allKickbacks = [] } = useQuery({
     queryKey: ['/api/kickbacks'],
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   });
 
-  // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
     return (allKickbacks as any[]).some(
       (kickback: any) => kickback.orderId === orderId
     );
   };
 
-  // Helper function to get the most severe kickback status for an order
   const getKickbackStatus = (orderId: string) => {
     const orderKickbacks = (allKickbacks as any[]).filter(
       (kickback: any) => kickback.orderId === orderId
     );
     if (orderKickbacks.length === 0) return null;
 
-    // Priority order: CRITICAL > HIGH > MEDIUM > LOW
     const priorities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
     const highestPriority = orderKickbacks.reduce(
       (highest: string, kickback: any) => {
@@ -559,70 +56,51 @@ export default function LayupPluggingQueuePage() {
       },
       'LOW'
     );
-
     return highestPriority;
   };
 
-  // Function to handle kickback badge click
   const handleKickbackClick = (orderId: string) => {
     setLocation('/kickback-tracking');
   };
 
-  // Function to handle sales order download
-  const { toast } = useToast();
-  const handleSalesOrderDownload = (orderId: string) => {
-    window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
-    toast({
-      title: 'Sales order opened',
-      description: `Sales order for ${orderId} opened in new tab for viewing`,
-    });
-  };
-
-  // Get ALL orders in Layup/Plugging department (no scheduling needed)
+  // Get ALL orders in Layup/Plugging department
   const { orders: availableOrders, loading: ordersLoading } =
     useUnifiedLayupOrders();
 
   // Filter to show only orders in Layup/Plugging department
   const layupPluggingOrders = useMemo(() => {
     if (!availableOrders || availableOrders.length === 0) {
-      console.log('📦 No orders available');
       return [];
     }
-    
+
     const filtered = availableOrders.filter((order: any) => {
       return order.currentDepartment === 'Layup/Plugging';
     });
-    
-    console.log(`📦 Layup/Plugging Department: ${filtered.length} orders found`);
+
     return filtered;
   }, [availableOrders]);
 
-  // Get orders queued for barcode department (next department after layup)
-  const { data: allOrders = [] } = useQuery({
-    queryKey: ['/api/orders/all'],
-    queryFn: async () => {
-      return await apiRequest('/api/orders/all');
-    },
-  });
-
-  // Calculate barcode queue count (orders that completed layup/plugging)
-  const barcodeQueueCount = useMemo(() => {
-    if (!Array.isArray(allOrders)) {
-      return 0;
+  // Apply search filter
+  const filteredOrders = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return layupPluggingOrders;
     }
-    try {
-      return allOrders.filter(
-        (order: any) =>
-          order?.currentDepartment === 'Barcode' ||
-          (order?.department === 'Barcode' && order?.status === 'IN_PROGRESS')
-      ).length;
-    } catch (error) {
-      console.error('🔍 Error calculating barcode queue count:', error);
-      return 0;
-    }
-  }, [allOrders]);
 
-  // Get stock models for display names
+    const query = searchQuery.toLowerCase();
+    return layupPluggingOrders.filter((order: any) => {
+      const orderId = order.orderId?.toLowerCase() || '';
+      const customer = order.customer?.toLowerCase() || '';
+      const fbOrderNumber = order.fbOrderNumber?.toLowerCase() || '';
+
+      return (
+        orderId.includes(query) ||
+        customer.includes(query) ||
+        fbOrderNumber.includes(query)
+      );
+    });
+  }, [layupPluggingOrders, searchQuery]);
+
+  // Get stock models for display
   const { data: stockModels = [] } = useQuery({
     queryKey: ['/api/stock-models'],
     queryFn: async () => {
@@ -636,6 +114,25 @@ export default function LayupPluggingQueuePage() {
     return model?.displayName || model?.name || modelId;
   };
 
+  // Get barcode queue count
+  const { data: allOrders = [] } = useQuery({
+    queryKey: ['/api/orders/all'],
+    queryFn: async () => {
+      return await apiRequest('/api/orders/all');
+    },
+  });
+
+  const barcodeQueueCount = useMemo(() => {
+    if (!Array.isArray(allOrders)) {
+      return 0;
+    }
+    return allOrders.filter(
+      (order: any) =>
+        order?.currentDepartment === 'Barcode' ||
+        (order?.department === 'Barcode' && order?.status === 'IN_PROGRESS')
+    ).length;
+  }, [allOrders]);
+
   // Handle order selection
   const handleOrderSelect = (orderId: string, checked: boolean) => {
     if (checked) {
@@ -645,7 +142,7 @@ export default function LayupPluggingQueuePage() {
     }
   };
 
-  // Handle moving orders to next department
+  // Move orders to Barcode department
   const moveToDepartmentMutation = useMutation({
     mutationFn: async (orderIds: string[]) => {
       return await apiRequest('/api/orders/update-department', {
@@ -658,22 +155,31 @@ export default function LayupPluggingQueuePage() {
       });
     },
     onSuccess: () => {
-      toast.success(
-        `Successfully moved ${selectedOrders.length} orders to Barcode Department`
-      );
+      toast({
+        title: 'Success',
+        description: `Successfully moved ${selectedOrders.length} orders to Barcode Department`,
+      });
       setSelectedOrders([]);
-      queryClient.invalidateQueries({ queryKey: ['layup-schedule'] });
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p1-layup-queue'] });
     },
     onError: (error) => {
       console.error('Error moving orders:', error);
-      toast.error('Failed to move orders to next department');
+      toast({
+        title: 'Error',
+        description: 'Failed to move orders to next department',
+        variant: 'destructive',
+      });
     },
   });
 
   const handleMoveToNextDepartment = () => {
     if (selectedOrders.length === 0) {
-      toast.error('Please select orders to move');
+      toast({
+        title: 'No Selection',
+        description: 'Please select orders to move',
+        variant: 'destructive',
+      });
       return;
     }
     moveToDepartmentMutation.mutate(selectedOrders);
@@ -681,15 +187,21 @@ export default function LayupPluggingQueuePage() {
 
   // Auto-select order when scanned
   const handleOrderScanned = (orderId: string) => {
-    // Check if the order exists in the current queue
-    const orderExists = currentWeekOrders.some(
+    const orderExists = filteredOrders.some(
       (order: any) => order.orderId === orderId
     );
     if (orderExists) {
       setSelectedOrders((prev) => [...prev, orderId]);
-      toast.success(`Order ${orderId} selected automatically`);
+      toast({
+        title: 'Order Selected',
+        description: `Order ${orderId} selected automatically`,
+      });
     } else {
-      toast.error(`Order ${orderId} is not in the Layup/Plugging department`);
+      toast({
+        title: 'Order Not Found',
+        description: `Order ${orderId} is not in the Layup/Plugging department`,
+        variant: 'destructive',
+      });
     }
   };
 
@@ -697,49 +209,34 @@ export default function LayupPluggingQueuePage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-2 mb-6">
         <Factory className="h-6 w-6" />
-        <h1 className="text-3xl font-bold">
-          Layup/Plugging Department Manager
-        </h1>
-        {unscheduledLayupOrders.length > 0 && (
-          <Badge variant="secondary" className="ml-2 bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300">
-            {unscheduledLayupOrders.length} Unscheduled
-          </Badge>
-        )}
+        <h1 className="text-3xl font-bold">Layup/Plugging Department</h1>
+        <Badge variant="secondary" className="ml-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+          {layupPluggingOrders.length} Orders
+        </Badge>
       </div>
 
-      {/* Barcode Scanner at top */}
+      {/* Barcode Scanner */}
       <BarcodeScanner onOrderScanned={handleOrderScanned} />
 
-      {/* Summary Cards Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {/* Current View Summary */}
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-blue-700 dark:text-blue-300 flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              {currentWeekOffset === 0
-                ? 'Current Week Schedule'
-                : currentWeekOffset === 1
-                  ? 'Next Week Schedule'
-                  : `Week ${currentWeekOffset > 0 ? '+' : ''}${currentWeekOffset}`}
+              <Package className="h-5 w-5" />
+              Layup/Plugging Queue
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-              {currentWeekOrders.length}
+              {layupPluggingOrders.length}
             </div>
             <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
-              Orders scheduled for {weekInfo.dateRange}
+              Orders ready for layup and plugging work
             </p>
-            {unscheduledLayupOrders.length > 0 && (
-              <div className="text-xs text-orange-600 dark:text-orange-400 mt-2">
-                📦 {unscheduledLayupOrders.length} unscheduled orders ready for scheduling
-              </div>
-            )}
           </CardContent>
         </Card>
 
-        {/* Barcode Queue Count */}
         <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-green-700 dark:text-green-300 flex items-center gap-2">
@@ -758,7 +255,7 @@ export default function LayupPluggingQueuePage() {
         </Card>
       </div>
 
-      {/* Multi-select Actions - Sticky at bottom when items selected */}
+      {/* Multi-select Actions */}
       {selectedOrders.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
           <div className="container mx-auto p-4">
@@ -768,9 +265,7 @@ export default function LayupPluggingQueuePage() {
                   <div className="flex items-center gap-2">
                     <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                     <span className="font-medium text-blue-800 dark:text-blue-200">
-                      {selectedOrders.length} order
-                      {selectedOrders.length > 1 ? 's' : ''} selected for
-                      progression
+                      {selectedOrders.length} order{selectedOrders.length > 1 ? 's' : ''} selected
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -779,6 +274,7 @@ export default function LayupPluggingQueuePage() {
                       size="sm"
                       onClick={() => setSelectedOrders([])}
                       disabled={moveToDepartmentMutation.isPending}
+                      data-testid="button-clear-selection"
                     >
                       Clear Selection
                     </Button>
@@ -787,6 +283,7 @@ export default function LayupPluggingQueuePage() {
                       onClick={handleMoveToNextDepartment}
                       disabled={moveToDepartmentMutation.isPending}
                       className="bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600"
+                      data-testid="button-move-to-barcode"
                     >
                       {moveToDepartmentMutation.isPending
                         ? 'Moving...'
@@ -803,315 +300,162 @@ export default function LayupPluggingQueuePage() {
       {/* Spacer for sticky bottom bar */}
       {selectedOrders.length > 0 && <div className="h-24"></div>}
 
-      {/* Week Layup Queue - Day by Day View */}
+      {/* Orders Queue */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-3">
-              <span>Layup/Plugging Manager</span>
-              <Badge variant="secondary" className="text-sm">
-                {weekInfo.label}
-              </Badge>
-            </div>
-
-            {/* Week Navigation Controls */}
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentWeekOffset(currentWeekOffset - 1)}
-                disabled={scheduleLoading}
-              >
-                ← Previous Week
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentWeekOffset(0)}
-                disabled={currentWeekOffset === 0 || scheduleLoading}
-              >
-                Current Week
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentWeekOffset(currentWeekOffset + 1)}
-                disabled={scheduleLoading}
-              >
-                Next Week →
-              </Button>
-            </div>
+            <span>Layup/Plugging Orders</span>
+            <Badge variant="secondary" className="text-sm">
+              {filteredOrders.length} {searchQuery ? 'filtered' : 'total'}
+            </Badge>
           </CardTitle>
-          <p className="text-sm text-muted-foreground mt-2">
-            {weekInfo.dateRange} • Generated from Layup Scheduler
-          </p>
+          
+          {/* Search Bar */}
+          <div className="relative mt-4">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              type="text"
+              placeholder="Search by Order ID, FB Order, or Customer..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-10"
+              data-testid="input-search"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                data-testid="button-clear-search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </CardHeader>
+        
         <CardContent>
           {/* Selection Controls */}
-          {currentWeekOrders.length > 0 && (
+          {filteredOrders.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-              <div className="flex items-center gap-2 mr-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setSelectedOrders(currentWeekOrders.map((o) => o.orderId))
-                  }
-                  disabled={selectedOrders.length === currentWeekOrders.length}
-                >
-                  Select All ({currentWeekOrders.length})
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedOrders([])}
-                  disabled={selectedOrders.length === 0}
-                >
-                  Clear ({selectedOrders.length})
-                </Button>
-              </div>
-              {selectedOrders.length > 0 && (
-                <Badge
-                  variant="secondary"
-                  className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
-                >
-                  {selectedOrders.length} Selected
-                </Badge>
-              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedOrders(filteredOrders.map((o: any) => o.orderId))}
+                disabled={selectedOrders.length === filteredOrders.length}
+                data-testid="button-select-all"
+              >
+                Select All ({filteredOrders.length})
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedOrders([])}
+                disabled={selectedOrders.length === 0}
+                data-testid="button-clear-all"
+              >
+                Clear ({selectedOrders.length})
+              </Button>
             </div>
           )}
-          {currentWeekOrders.length === 0 ? (
-            <div className="space-y-6">
-              <div className="text-center py-12 text-gray-500">
-                <Calendar className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-                <h3 className="text-xl font-medium mb-2">No Scheduled Orders This Week</h3>
-                <p className="text-sm">
-                  Go to Production Scheduling → Layup Scheduler to schedule orders for this week
-                </p>
-                {(scheduleLoading || ordersLoading) && (
-                  <p className="text-xs text-blue-500 mt-2">
-                    Loading schedule data...
-                  </p>
-                )}
-              </div>
 
-              {/* Show unscheduled orders from Layup/Plugging department */}
-              {unscheduledLayupOrders.length > 0 && (
-                <div className="border-t pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-lg font-semibold flex items-center gap-2">
-                        <Package className="h-5 w-5 text-orange-500" />
-                        Unscheduled Orders in Layup/Plugging Department
-                      </h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        These orders are ready for layup but haven't been scheduled to specific days yet
-                      </p>
-                    </div>
-                    <Badge variant="secondary" className="text-lg px-3 py-1">
-                      {unscheduledLayupOrders.length} orders
-                    </Badge>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                    {unscheduledLayupOrders.map((order: any) => (
-                      <Card
-                        key={order.orderId}
-                        className="relative border-l-4 border-l-orange-500 hover:bg-gray-50 dark:hover:bg-gray-800/50"
-                      >
-                        <CardContent className="p-0">
-                          <QueueOrderItem
-                            order={order}
-                            getModelDisplayName={getModelDisplayName}
-                            processedOrders={processedOrders}
-                            hasKickbacks={hasKickbacks}
-                            getKickbackStatus={getKickbackStatus}
-                            handleKickbackClick={handleKickbackClick}
-                            handleSalesOrderDownload={handleSalesOrderDownload}
-                          />
-
-                          <div className="px-3 pb-3 pt-0">
-                            <div className="space-y-1 text-xs text-gray-500">
-                              {order.customer && (
-                                <div>Customer: {order.customer}</div>
-                              )}
-                              {order.dueDate && (
-                                <div>
-                                  Due: {format(new Date(order.dueDate), 'MMM d, yyyy')}
-                                </div>
-                              )}
-                              <Badge variant="outline" className="text-xs mt-1">
-                                Not Scheduled
-                              </Badge>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              )}
+          {ordersLoading ? (
+            <div className="text-center py-12 text-gray-500">
+              <Package className="h-16 w-16 mx-auto mb-4 text-gray-300 animate-pulse" />
+              <p>Loading orders...</p>
+            </div>
+          ) : filteredOrders.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <Package className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+              <h3 className="text-xl font-medium mb-2">
+                {searchQuery ? 'No Matching Orders' : 'No Orders in Queue'}
+              </h3>
+              <p className="text-sm">
+                {searchQuery
+                  ? 'Try adjusting your search terms'
+                  : 'Orders will appear here when moved from Production Queue'}
+              </p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {currentWeekDates.map((date) => {
-                const dateStr = date.toISOString().split('T')[0];
-                const dayOrders = currentWeekOrdersByDate[dateStr] || [];
-                const dayName = format(date, 'EEEE');
-                const dateDisplay = format(date, 'MMM d');
-                const isCurrentDay = isToday(date);
-                const isPastDay = isPast(date) && !isToday(date);
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {filteredOrders.map((order: any) => {
+                const isSelected = selectedOrders.includes(order.orderId);
+                const modelId = order.stockModelId || order.modelId;
+                const materialType = modelId?.startsWith('cf_') ? 'CF' : modelId?.startsWith('fg_') ? 'FG' : null;
+                const isPO = !!(order.poId || order.productionOrderId);
 
                 return (
-                  <div
-                    key={dateStr}
-                    className={`border rounded-lg p-4 ${
-                      isCurrentDay
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200'
-                        : isPastDay
-                          ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-200'
-                          : 'bg-white dark:bg-gray-900 border-gray-200'
-                    }`}
+                  <Card
+                    key={order.orderId}
+                    className={`relative border-l-4 transition-all cursor-pointer ${
+                      isPO ? 'border-l-green-500' : 'border-l-blue-500'
+                    } ${isSelected ? 'ring-2 ring-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
+                    onClick={() => handleOrderSelect(order.orderId, !isSelected)}
+                    data-testid={`card-order-${order.orderId}`}
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <h3
-                        className={`font-semibold text-lg ${
-                          isCurrentDay
-                            ? 'text-blue-700'
-                            : isPastDay
-                              ? 'text-gray-500'
-                              : 'text-gray-900'
-                        }`}
-                      >
-                        {dayName}, {dateDisplay}
-                        {isCurrentDay && (
-                          <span className="ml-2 text-sm font-normal">
-                            (Today)
-                          </span>
-                        )}
-                      </h3>
-                      <div className="flex items-center gap-2">
-                        {dayOrders.length > 0 && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              const dayOrderIds = dayOrders.map(
-                                (o) => o.orderId
-                              );
-                              const allSelected = dayOrderIds.every((id) =>
-                                selectedOrders.includes(id)
-                              );
-                              if (allSelected) {
-                                setSelectedOrders((prev) =>
-                                  prev.filter((id) => !dayOrderIds.includes(id))
-                                );
-                              } else {
-                                setSelectedOrders((prev) => [
-                                  ...Array.from(
-                                    new Set([...prev, ...dayOrderIds])
-                                  ),
-                                ]);
-                              }
-                            }}
-                            className="text-xs h-6"
-                          >
-                            {dayOrders.every((o) =>
-                              selectedOrders.includes(o.orderId)
-                            )
-                              ? 'Deselect Day'
-                              : 'Select Day'}
-                          </Button>
-                        )}
-                        <Badge
-                          variant={
-                            dayOrders.length > 0 ? 'default' : 'secondary'
-                          }
-                        >
-                          {dayOrders.length} orders
-                        </Badge>
-                      </div>
+                    <div className="absolute top-2 right-2 z-10">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => handleOrderSelect(order.orderId, !!checked)}
+                        className="bg-white dark:bg-gray-800 border-2 shadow-sm"
+                        onClick={(e) => e.stopPropagation()}
+                        data-testid={`checkbox-order-${order.orderId}`}
+                      />
                     </div>
 
-                    {dayOrders.length === 0 ? (
-                      <div className="text-center py-4 text-gray-400">
-                        No orders scheduled for this day
+                    <CardContent className="p-4 pr-10">
+                      <div className="space-y-2">
+                        <div className="font-bold text-lg flex items-center gap-2">
+                          <span data-testid={`text-order-id-${order.orderId}`}>
+                            {getDisplayOrderId(order)}
+                          </span>
+                          {isPO && (
+                            <Badge className="bg-green-500 text-white text-xs">PO</Badge>
+                          )}
+                          {materialType && (
+                            <Badge variant="outline" className="text-xs">{materialType}</Badge>
+                          )}
+                        </div>
+
+                        {modelId && (
+                          <div className="text-sm text-gray-600 dark:text-gray-400">
+                            {getModelDisplayName(modelId)}
+                          </div>
+                        )}
+
+                        {order.customer && (
+                          <div className="text-xs text-gray-500">
+                            Customer: {order.customer}
+                          </div>
+                        )}
+
+                        {order.dueDate && (
+                          <div className="text-xs text-gray-500">
+                            Due: {format(new Date(order.dueDate), 'MMM d, yyyy')}
+                          </div>
+                        )}
+
+                        {hasKickbacks(order.orderId) && (
+                          <Badge
+                            variant="destructive"
+                            className={`cursor-pointer text-xs ${
+                              getKickbackStatus(order.orderId) === 'CRITICAL'
+                                ? 'bg-red-600'
+                                : getKickbackStatus(order.orderId) === 'HIGH'
+                                  ? 'bg-orange-600'
+                                  : 'bg-yellow-600'
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleKickbackClick(order.orderId);
+                            }}
+                          >
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                            Kickback
+                          </Badge>
+                        )}
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                        {dayOrders.map((order: any) => {
-                          const isSelected = selectedOrders.includes(
-                            order.orderId
-                          );
-
-                          return (
-                            <Card
-                              key={order.orderId}
-                              className={`relative border-l-4 transition-all cursor-pointer ${
-                                order.source === 'p1_purchase_order'
-                                  ? 'border-l-green-500'
-                                  : order.source === 'production_order'
-                                    ? 'border-l-orange-500'
-                                    : 'border-l-blue-500'
-                              } ${isSelected ? 'ring-2 ring-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
-                              onClick={() =>
-                                handleOrderSelect(order.orderId, !isSelected)
-                              }
-                            >
-                              {/* Checkbox in top-right corner */}
-                              <div className="absolute top-2 right-2 z-10">
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={(checked) =>
-                                    handleOrderSelect(order.orderId, !!checked)
-                                  }
-                                  className="bg-white dark:bg-gray-800 border-2 shadow-sm"
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              </div>
-
-                              <CardContent className="p-0 pr-8">
-                                <QueueOrderItem
-                                  order={order}
-                                  getModelDisplayName={getModelDisplayName}
-                                  processedOrders={processedOrders}
-                                  hasKickbacks={hasKickbacks}
-                                  getKickbackStatus={getKickbackStatus}
-                                  handleKickbackClick={handleKickbackClick}
-                                  handleSalesOrderDownload={
-                                    handleSalesOrderDownload
-                                  }
-                                />
-
-                                {/* Additional queue-specific info */}
-                                <div className="px-3 pb-3 pt-0">
-                                  <div className="space-y-1 text-xs text-gray-500">
-                                    {order.moldId && (
-                                      <div>Mold: {order.moldId}</div>
-                                    )}
-
-                                    {order.customer && (
-                                      <div>Customer: {order.customer}</div>
-                                    )}
-
-                                    {order.dueDate && (
-                                      <div>
-                                        Due:{' '}
-                                        {format(
-                                          new Date(order.dueDate),
-                                          'MMM d, yyyy'
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>

@@ -143,54 +143,224 @@ export function LayupSchedulePreview({
   <meta charset="UTF-8">
   <title>Layup Schedule - ${weekStart ? format(new Date(weekStart), 'MMM dd, yyyy') : ''}</title>
   <style>
-    @page { size: letter landscape; margin: 0.5in; }
+    @page { size: letter landscape; margin: 0.4in; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; padding: 20px; color: #000; background: white; }
-    .header { display: flex; justify-content: space-between; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 4px solid #000; }
-    .header h1 { font-size: 32px; font-weight: bold; margin-bottom: 8px; }
-    .header p { font-size: 18px; font-weight: 600; }
-    .barcode-box { text-align: center; border: 3px solid #000; padding: 10px; border-radius: 8px; }
-    .barcode-box p { font-size: 12px; font-weight: bold; margin-bottom: 8px; }
-    .barcode-box img { width: 250px; height: auto; }
-    .summary { display: flex; gap: 20px; margin-bottom: 30px; padding: 15px; border: 3px solid #000; border-radius: 8px; }
-    .summary-item { flex: 1; text-align: center; padding: 15px; border: 2px solid #666; border-radius: 6px; }
-    .summary-item .label { font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 8px; }
-    .summary-item .value { font-size: 32px; font-weight: bold; }
-    .day-section { page-break-inside: avoid; margin-bottom: 40px; border: 4px solid #000; padding: 20px; border-radius: 8px; }
-    .day-header { font-size: 24px; font-weight: bold; padding: 12px 20px; background: #000; color: white; margin: -20px -20px 20px -20px; border-radius: 4px 4px 0 0; }
-    .order-item { display: flex; gap: 15px; padding: 15px; border: 3px solid #333; border-radius: 6px; margin-bottom: 15px; }
-    .checkbox { width: 32px; height: 32px; border: 3px solid #000; border-radius: 4px; flex-shrink: 0; margin-top: 5px; }
-    .order-details { flex-grow: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
-    .field-label { font-size: 10px; font-weight: bold; text-transform: uppercase; color: #666; margin-bottom: 4px; }
-    .field-value { font-size: 16px; font-weight: bold; font-family: "Courier New", monospace; }
-    .badges { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
-    .badge { padding: 6px 12px; border: 2px solid #000; border-radius: 4px; font-size: 12px; font-weight: bold; text-align: center; min-width: 80px; }
-    .badge-lop { background: #dcfce7; border-color: #166534; color: #166534; }
-    .badge-adl { background: #dbeafe; border-color: #1e40af; color: #1e40af; }
-    .badge-heavy { background: #ffedd5; border-color: #9a3412; color: #9a3412; }
-    .signature { display: flex; justify-content: space-between; margin-top: 30px; padding-top: 20px; border-top: 3px solid #000; }
-    .sig-field { flex: 1; }
-    .sig-label { font-size: 14px; font-weight: bold; margin-bottom: 8px; }
-    .sig-line { border-bottom: 3px solid #000; height: 40px; }
-    .sig-date { flex: 0 0 200px; margin-left: 40px; }
-    @media print { body { padding: 0; } }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; 
+      padding: 12px; 
+      color: #1a1a1a; 
+      background: white;
+      font-size: 11px;
+      line-height: 1.3;
+    }
+    .header { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center;
+      margin-bottom: 16px; 
+      padding-bottom: 10px; 
+      border-bottom: 2px solid #2c3e50;
+    }
+    .header h1 { 
+      font-size: 22px; 
+      font-weight: 700; 
+      color: #2c3e50;
+      margin-bottom: 3px;
+    }
+    .header p { 
+      font-size: 13px; 
+      font-weight: 500;
+      color: #555;
+    }
+    .barcode-box { 
+      text-align: center; 
+      border: 1.5px solid #ddd; 
+      padding: 6px 8px; 
+      border-radius: 4px;
+      background: #f8f9fa;
+    }
+    .barcode-box p { 
+      font-size: 9px; 
+      font-weight: 600; 
+      margin-bottom: 4px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .barcode-box img { width: 180px; height: auto; }
+    .summary { 
+      display: flex; 
+      gap: 10px; 
+      margin-bottom: 16px;
+    }
+    .summary-item { 
+      flex: 1; 
+      text-align: center; 
+      padding: 8px; 
+      border: 1.5px solid #e0e0e0; 
+      border-radius: 4px;
+      background: linear-gradient(to bottom, #ffffff, #f8f9fa);
+    }
+    .summary-item .label { 
+      font-size: 9px; 
+      font-weight: 600; 
+      text-transform: uppercase; 
+      color: #666;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .summary-item .value { 
+      font-size: 20px; 
+      font-weight: 700;
+      color: #2c3e50;
+    }
+    .day-section { 
+      page-break-inside: avoid; 
+      margin-bottom: 20px;
+      border: 1.5px solid #dee2e6; 
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .day-header { 
+      font-size: 14px; 
+      font-weight: 700; 
+      padding: 8px 12px; 
+      background: linear-gradient(to right, #2c3e50, #34495e);
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .day-header .count {
+      font-size: 11px;
+      font-weight: 500;
+      opacity: 0.9;
+    }
+    .day-content {
+      padding: 10px;
+      background: white;
+    }
+    .order-item { 
+      display: flex; 
+      gap: 10px; 
+      padding: 8px 10px; 
+      border: 1px solid #e0e0e0; 
+      border-radius: 4px; 
+      margin-bottom: 6px;
+      background: #ffffff;
+      transition: all 0.2s;
+    }
+    .order-item:hover {
+      background: #f8f9fa;
+    }
+    .checkbox { 
+      width: 20px; 
+      height: 20px; 
+      border: 2px solid #2c3e50; 
+      border-radius: 3px; 
+      flex-shrink: 0; 
+      margin-top: 2px;
+      background: white;
+    }
+    .order-details { 
+      flex-grow: 1; 
+      display: grid; 
+      grid-template-columns: 1.2fr 1.5fr 1fr 1.3fr; 
+      gap: 10px;
+      align-items: start;
+    }
+    .field-label { 
+      font-size: 8px; 
+      font-weight: 600; 
+      text-transform: uppercase; 
+      color: #888;
+      letter-spacing: 0.3px;
+      margin-bottom: 2px;
+    }
+    .field-value { 
+      font-size: 11px; 
+      font-weight: 600;
+      color: #2c3e50;
+      font-family: "Courier New", Consolas, monospace;
+    }
+    .badges { 
+      display: flex; 
+      gap: 4px; 
+      flex-shrink: 0;
+      align-items: flex-start;
+    }
+    .badge { 
+      padding: 3px 8px; 
+      border: 1.5px solid; 
+      border-radius: 3px; 
+      font-size: 9px; 
+      font-weight: 700; 
+      text-align: center;
+      white-space: nowrap;
+    }
+    .badge-lop { 
+      background: linear-gradient(to bottom, #d1fae5, #a7f3d0);
+      border-color: #059669; 
+      color: #065f46;
+    }
+    .badge-adl { 
+      background: linear-gradient(to bottom, #dbeafe, #bfdbfe);
+      border-color: #2563eb; 
+      color: #1e40af;
+    }
+    .badge-heavy { 
+      background: linear-gradient(to bottom, #fed7aa, #fdba74);
+      border-color: #ea580c; 
+      color: #9a3412;
+    }
+    .signature { 
+      display: flex; 
+      gap: 20px; 
+      margin-top: 12px; 
+      padding-top: 10px; 
+      border-top: 1.5px solid #dee2e6;
+    }
+    .sig-field { 
+      flex: 1;
+      min-width: 0;
+    }
+    .sig-label { 
+      font-size: 9px; 
+      font-weight: 600; 
+      margin-bottom: 4px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .sig-line { 
+      border-bottom: 1.5px solid #2c3e50; 
+      height: 28px;
+    }
+    .sig-date { 
+      flex: 0 0 140px;
+    }
+    @media print { 
+      body { padding: 0; }
+      .order-item { break-inside: avoid; }
+    }
   </style>
 </head>
 <body>
   <div class="header">
     <div>
       <h1>Layup Schedule</h1>
-      <p>Week starting ${weekStart ? format(new Date(weekStart), 'MMMM dd, yyyy') : ''}</p>
+      <p>Week of ${weekStart ? format(new Date(weekStart), 'MMM dd, yyyy') : ''}</p>
     </div>
     <div class="barcode-box">
-      <p>Scan to Complete Layup</p>
+      <p>Scan to Complete</p>
       <img src="${barcodeDataURL}" alt="Barcode" />
     </div>
   </div>
   
   <div class="summary">
     <div class="summary-item">
-      <div class="label">Total Items</div>
+      <div class="label">Total</div>
       <div class="value">${totalItems}</div>
     </div>
     <div class="summary-item">
@@ -205,45 +375,50 @@ export function LayupSchedulePreview({
   
   ${scheduledDays.map(day => `
     <div class="day-section">
-      <div class="day-header">${dayNames[day]} (${itemsByDay[day]?.length || 0} items)</div>
-      ${itemsByDay[day]?.map(item => `
-        <div class="order-item">
-          <div class="checkbox"></div>
-          <div class="order-details">
-            <div>
-              <div class="field-label">Order ID</div>
-              <div class="field-value">${item.orderId}</div>
+      <div class="day-header">
+        <span>${dayNames[day]}</span>
+        <span class="count">${itemsByDay[day]?.length || 0} items</span>
+      </div>
+      <div class="day-content">
+        ${itemsByDay[day]?.map(item => `
+          <div class="order-item">
+            <div class="checkbox"></div>
+            <div class="order-details">
+              <div>
+                <div class="field-label">Order ID</div>
+                <div class="field-value">${item.orderId}</div>
+              </div>
+              <div>
+                <div class="field-label">Stock Model</div>
+                <div class="field-value">${item.stockModel}</div>
+              </div>
+              <div>
+                <div class="field-label">Mold</div>
+                <div class="field-value">${item.moldId}</div>
+              </div>
+              <div>
+                <div class="field-label">Action / Material</div>
+                <div class="field-value">${item.actionLength || '-'} / ${item.material || '-'}</div>
+              </div>
             </div>
-            <div>
-              <div class="field-label">Stock Model</div>
-              <div class="field-value">${item.stockModel}</div>
-            </div>
-            <div>
-              <div class="field-label">Mold</div>
-              <div class="field-value">${item.moldId}</div>
-            </div>
-            <div>
-              <div class="field-label">Action / Material</div>
-              <div class="field-value">${item.actionLength || '-'} / ${item.material || '-'}</div>
-            </div>
+            ${item.hasLOP || item.hasADL || item.hasHeavyFill ? `
+              <div class="badges">
+                ${item.hasLOP ? '<div class="badge badge-lop">LOP</div>' : ''}
+                ${item.hasADL ? '<div class="badge badge-adl">ADL</div>' : ''}
+                ${item.hasHeavyFill ? '<div class="badge badge-heavy">HEAVY</div>' : ''}
+              </div>
+            ` : ''}
           </div>
-          ${item.hasLOP || item.hasADL || item.hasHeavyFill ? `
-            <div class="badges">
-              ${item.hasLOP ? '<div class="badge badge-lop">LOP</div>' : ''}
-              ${item.hasADL ? '<div class="badge badge-adl">ADL</div>' : ''}
-              ${item.hasHeavyFill ? '<div class="badge badge-heavy">HEAVY</div>' : ''}
-            </div>
-          ` : ''}
-        </div>
-      `).join('')}
-      <div class="signature">
-        <div class="sig-field">
-          <div class="sig-label">Completed by:</div>
-          <div class="sig-line"></div>
-        </div>
-        <div class="sig-field sig-date">
-          <div class="sig-label">Date:</div>
-          <div class="sig-line"></div>
+        `).join('')}
+        <div class="signature">
+          <div class="sig-field">
+            <div class="sig-label">Completed By</div>
+            <div class="sig-line"></div>
+          </div>
+          <div class="sig-field sig-date">
+            <div class="sig-label">Date</div>
+            <div class="sig-line"></div>
+          </div>
         </div>
       </div>
     </div>

@@ -101,6 +101,7 @@ import FinishQCCompletedReport from './pages/FinishQCCompletedReport';
 import GunsimthQueuePage from './pages/GunsimthQueuePage';
 import PaintQueuePage from './pages/PaintQueuePage';
 import QCShippingQueuePage from './pages/QCShippingQueuePage';
+import OEMShipmentsPage from './pages/OEMShipmentsPage';
 import ShippingQueuePage from './pages/ShippingQueuePage';
 import ShippingLabelPage from './pages/ShippingLabelPage';
 import NonconformanceDashboard from './components/NonconformanceDashboard';
@@ -653,6 +654,10 @@ function App() {
                   <Route
                     path="/department-queue/qc-shipping"
                     component={QCShippingQueuePage}
+                  />
+                  <Route
+                    path="/oem-shipments"
+                    component={OEMShipmentsPage}
                   />
                   <Route
                     path="/department-queue/shipping"

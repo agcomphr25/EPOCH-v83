@@ -729,6 +729,12 @@ export default function Navigation() {
       icon: Package,
       description: 'Shipping department manager',
     },
+    {
+      path: '/oem-shipments',
+      label: 'OEM Shipments',
+      icon: Package,
+      description: 'View shipped PO orders grouped as OEM shipments',
+    },
   ];
 
   // Helper function to filter navigation items based on user permissions

@@ -510,24 +510,59 @@ router.post('/save', async (req: Request, res: Response) => {
         console.log(`📦 Moved ${progressedCount} orders to Layup/Plugging department`);
       }
 
-      // Move production orders to Layup/Plugging department
+      // Move production orders to Layup/Plugging department ONLY if ALL items are fully scheduled
       if (productionOrderNumbers.size > 0) {
         const poNumbersArray = Array.from(productionOrderNumbers);
         
-        const poUpdateResult = await pool.query(
-          `
-          UPDATE production_orders
-          SET current_department = 'Layup/Plugging',
-              updated_at = NOW()
-          WHERE po_number = ANY($1::text[])
-          AND current_department = 'P1 Production Queue'
-        `,
-          [poNumbersArray]
-        );
+        // Check which POs have all items fully scheduled
+        const fullyScheduledPOs = [];
+        for (const poNumber of poNumbersArray) {
+          const checkResult = await pool.query(
+            `
+            SELECT COUNT(*) as total_items,
+                   COUNT(*) FILTER (WHERE quantity - COALESCE(order_count, 0) = 0) as completed_items
+            FROM purchase_order_items poi
+            JOIN purchase_orders po ON poi.po_id = po.id
+            WHERE po.po_number = $1
+              AND (poi.stock_status IS NULL OR poi.stock_status != 'no stock')
+              AND (poi.item_type = 'stock_model' OR poi.item_type = 'custom_model')
+          `,
+            [poNumber]
+          );
+          
+          const checkRows = checkResult.rows as Array<{ total_items: string; completed_items: string }>;
+          if (checkRows.length > 0) {
+            const totalItems = parseInt(checkRows[0].total_items);
+            const completedItems = parseInt(checkRows[0].completed_items);
+            
+            console.log(`📊 PO ${poNumber}: ${completedItems}/${totalItems} items fully scheduled`);
+            
+            // Only move if ALL items are completed
+            if (totalItems > 0 && totalItems === completedItems) {
+              fullyScheduledPOs.push(poNumber);
+            }
+          }
+        }
         
-        const poProgressedCount = (poUpdateResult as any).rowCount || 0;
-        progressedCount += poProgressedCount;
-        console.log(`📦 Moved ${poProgressedCount} production orders to Layup/Plugging department`);
+        // Move only fully completed production orders
+        if (fullyScheduledPOs.length > 0) {
+          const poUpdateResult = await pool.query(
+            `
+            UPDATE production_orders
+            SET current_department = 'Layup/Plugging',
+                updated_at = NOW()
+            WHERE po_number = ANY($1::text[])
+            AND current_department = 'P1 Production Queue'
+          `,
+            [fullyScheduledPOs]
+          );
+          
+          const poProgressedCount = (poUpdateResult as any).rowCount || 0;
+          progressedCount += poProgressedCount;
+          console.log(`📦 Moved ${poProgressedCount} production orders to Layup/Plugging (all items complete): ${fullyScheduledPOs.join(', ')}`);
+        } else {
+          console.log(`📦 No production orders ready to move (items still pending)`);
+        }
       }
 
       // Commit transaction

@@ -4352,12 +4352,38 @@ export function registerRoutes(app: Express): Server {
         return res.status(500).json({ error: 'Database connection not available' });
       }
       
-      // Calculate date range (last week)
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 7);
+      // Get date range from query params or default to last week
+      let startDate: Date;
+      let endDate: Date;
+      
+      if (req.query.startDate && req.query.endDate) {
+        startDate = new Date(req.query.startDate as string);
+        endDate = new Date(req.query.endDate as string);
+      } else {
+        // Default to last week
+        endDate = new Date();
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - 7);
+      }
       
       console.log('📊 Querying Finish QC report from', startDate, 'to', endDate);
+      
+      // Get all unique technicians who have ever completed Finish QC work
+      const finishTechnicians = await pool.query(
+        `SELECT DISTINCT assigned_technician
+        FROM all_orders
+        WHERE assigned_technician IS NOT NULL
+          AND department_history IS NOT NULL
+          AND jsonb_array_length(department_history) > 0
+          AND EXISTS (
+            SELECT 1 
+            FROM jsonb_array_elements(department_history) AS history
+            WHERE history->>'fromDepartment' = 'Finish QC'
+          )
+        ORDER BY assigned_technician`
+      );
+      
+      console.log('📊 Found', finishTechnicians?.length || 0, 'Finish QC technicians from history');
       
       // Query orders that have department_history with a Finish QC exit
       // Note: Neon serverless returns array directly, not { rows: [...] }
@@ -4380,7 +4406,7 @@ export function registerRoutes(app: Express): Server {
       
       console.log('📊 Query returned', allOrders?.length || 0, 'orders with department history');
       
-      // Filter to only include orders that were progressed OUT of Finish QC in the last week
+      // Filter to only include orders that were progressed OUT of Finish QC in the date range
       const filteredOrders = allOrders.filter((order: any) => {
         if (!order.department_history || !Array.isArray(order.department_history)) {
           return false;
@@ -4395,14 +4421,19 @@ export function registerRoutes(app: Express): Server {
           return false;
         }
         
-        // Check if the exit happened in the last week
+        // Check if the exit happened in the date range
         const exitDate = new Date(finishQCExit.timestamp);
         return exitDate >= startDate && exitDate <= endDate;
       });
       
-      // Group by technician and extract progression data
+      // Initialize grouped object with all Finish QC technicians (even with zero orders for this week)
       const grouped: Record<string, any[]> = {};
       
+      for (const tech of finishTechnicians) {
+        grouped[tech.assigned_technician] = [];
+      }
+      
+      // Add filtered orders to the grouped object
       for (const order of filteredOrders) {
         const technician = order.assigned_technician || 'Unassigned';
         
@@ -4447,6 +4478,7 @@ export function registerRoutes(app: Express): Server {
         endDate,
         totalOrders: filteredOrders.length,
         byTechnician: grouped,
+        allTechnicians: finishTechnicians.map((t: any) => t.assigned_technician),
       });
     } catch (_error) {
       console.error('📊 Finish QC report _error:', _error);

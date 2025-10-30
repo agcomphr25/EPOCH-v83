@@ -167,11 +167,31 @@ router.get('/orders/bulk', async (req: Request, res: Response) => {
 
     const ids = orderIds.split(',').map((id) => id.trim());
 
-    // Get orders from allOrders table
-    const orders = await db
+    // Get from both finalized and draft orders
+    const finalizedOrders = await db
       .select()
       .from(allOrders)
       .where(inArray(allOrders.orderId, ids));
+
+    const draftOrders = await db
+      .select()
+      .from(orderDrafts)
+      .where(inArray(orderDrafts.orderId, ids));
+
+    // Combine and deduplicate (prioritize finalized over draft)
+    const orderMap = new Map();
+
+    // Add draft orders first
+    draftOrders.forEach((order) => {
+      orderMap.set(order.orderId, { ...order, isFinalized: false });
+    });
+
+    // Add finalized orders (will overwrite drafts if same ID)
+    finalizedOrders.forEach((order) => {
+      orderMap.set(order.orderId, { ...order, isFinalized: true });
+    });
+
+    const orders = Array.from(orderMap.values());
 
     res.json(orders);
   } catch (error) {
@@ -1371,19 +1391,35 @@ router.post('/add-tracking/:orderId', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Tracking number is required' });
     }
 
-    // Update order with tracking number
-    await db
-      .update(allOrders)
-      .set({
-        trackingNumber: trackingNumber.trim(),
-        shippingCarrier: shippingCarrier || 'UPS',
-        updatedAt: new Date(),
-      })
-      .where(eq(allOrders.orderId, orderId));
+    // Try to update finalized order first
+    try {
+      const result = await db
+        .update(allOrders)
+        .set({
+          trackingNumber: trackingNumber.trim(),
+          shippingCarrier: shippingCarrier || 'UPS',
+          updatedAt: new Date(),
+        })
+        .where(eq(allOrders.orderId, orderId));
 
-    console.log(
-      `Updated order ${orderId} with tracking number ${trackingNumber}`
-    );
+      console.log(
+        `Updated finalized order ${orderId} with tracking number ${trackingNumber}`
+      );
+    } catch (finalizedError) {
+      // If finalized update fails, try draft orders table
+      await db
+        .update(orderDrafts)
+        .set({
+          trackingNumber: trackingNumber.trim(),
+          shippingCarrier: shippingCarrier || 'UPS',
+          updatedAt: new Date(),
+        })
+        .where(eq(orderDrafts.orderId, orderId));
+
+      console.log(
+        `Updated draft order ${orderId} with tracking number ${trackingNumber}`
+      );
+    }
 
     res.json({
       success: true,

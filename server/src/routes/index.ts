@@ -2135,9 +2135,71 @@ export function registerRoutes(app: Express): Server {
             !(order as any).currentDepartment)
       );
 
+      // Get P1 Purchase Orders with stock model items
+      // Only include items that are actually still in P1 Production Queue
+      const { pool } = await import('../../db');
+      const pos = await storage.getAllPurchaseOrders();
+      const activePos = pos.filter((po) => po.status === 'OPEN');
+
+      const p1LayupOrders = [];
+      for (const po of activePos) {
+        const items = await storage.getPurchaseOrderItems(po.id);
+        const stockModelItems = items.filter(
+          (item) => item.itemType === 'stock_model' && item.itemId && item.itemId.trim()
+        );
+
+        // Check which items actually have production orders in P1 Production Queue
+        const prodOrdersResult = await pool.query(`
+          SELECT po_item_id, COUNT(*) as count
+          FROM production_orders
+          WHERE po_id = $1
+            AND current_department = 'P1 Production Queue'
+            AND production_status IN ('PENDING', 'ACTIVE')
+          GROUP BY po_item_id
+        `, [po.id]);
+
+        const itemsInP1Queue = new Set(
+          prodOrdersResult.map((row: any) => row.po_item_id)
+        );
+
+        for (const item of stockModelItems) {
+          // Only include if this item has production orders in P1 Production Queue
+          if (!itemsInP1Queue.has(item.id)) {
+            continue;
+          }
+
+          // Calculate priority score based on due date urgency
+          const dueDate = new Date(po.expectedDelivery || po.poDate);
+          const today = new Date();
+          const daysUntilDue = Math.ceil(
+            (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          const priorityScore = Math.max(20, Math.min(35, 20 + daysUntilDue)); // 20-35 range
+
+          p1LayupOrders.push({
+            id: `p1-${po.id}-${item.id}`,
+            orderId: `P1-${po.poNumber}-${item.id}`,
+            orderDate: po.poDate,
+            customer: po.customerName,
+            product: item.itemId,
+            quantity: item.quantity,
+            status: 'PENDING',
+            department: 'Layup',
+            currentDepartment: 'Layup',
+            priorityScore: priorityScore,
+            dueDate: po.expectedDelivery,
+            source: 'production_order' as const,
+            poId: po.id,
+            poItemId: item.id,
+            stockModelId: item.itemId, // Use item ID as stock model
+            specifications: item.specifications,
+            createdAt: po.createdAt,
+            updatedAt: po.updatedAt,
+          });
+        }
+      }
+
       // Convert regular orders to unified format
-      // NOTE: PO items from production_orders table are NOT included here
-      // They are managed separately in the dedicated P1 PO Queue endpoint
       const regularLayupOrders = layupOrders.map((order) => ({
         id: order.id?.toString() || order.orderId,
         orderId: order.orderId,
@@ -2148,7 +2210,7 @@ export function registerRoutes(app: Express): Server {
         status: (order as any).status,
         department: 'Layup',
         currentDepartment: 'Layup',
-        priorityScore: 50,
+        priorityScore: 50, // Regular orders have lower priority
         dueDate: order.dueDate,
         source: 'main_orders' as const,
         stockModelId: (order as any).modelId,
@@ -2158,8 +2220,8 @@ export function registerRoutes(app: Express): Server {
         updatedAt: order.updatedAt || order.orderDate,
       }));
 
-      // Use only regular orders (PO items excluded per business rules)
-      const combinedOrders = [...regularLayupOrders].sort(
+      // Combine only P1 order types (no P2 production orders)
+      const combinedOrders = [...regularLayupOrders, ...p1LayupOrders].sort(
         (a, b) =>
           ((a as any).priorityScore || 50) - ((b as any).priorityScore || 50)
       );

@@ -169,8 +169,6 @@ export default function ProductionQueueManager() {
   } = useQuery<P1POQueueCustomer[]>({
     queryKey: ['/api/p1-po-queue/purchase-orders/open'],
     queryFn: () => apiRequest('/api/p1-po-queue/purchase-orders/open'),
-    retry: 1,
-    staleTime: 30000,
   });
 
   // P1 Purchase Order items query removed - now managed via OEM Priority Settings
@@ -571,7 +569,7 @@ export default function ProductionQueueManager() {
            customerName.includes(searchLower);
   });
 
-  if (isLoading || isLoadingAttention) {
+  if (isLoading || isLoadingAttention || isLoadingPOs) {
     return (
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
         <Card>

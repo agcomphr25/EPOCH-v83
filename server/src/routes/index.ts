@@ -2931,33 +2931,6 @@ export function registerRoutes(app: Express): Server {
             await storage.createProductionOrder(productionOrderData);
           createdOrders.push(_createdOrder);
 
-          // Also create entry in main orders table for layup scheduler
-          const { pool } = await import('../../db');
-          try {
-            await pool.query(
-              `INSERT INTO orders (order_id, customer, product, quantity, status, date, current_department, due_date)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-              [
-                _createdOrder.orderId,
-                purchaseOrder.customerName,
-                item.itemId,
-                1,
-                'Active',
-                new Date(),
-                'P1 Production Queue',
-                _createdOrder.dueDate,
-              ]
-            );
-          } catch (err) {
-            // Ignore duplicate key errors (order already exists in orders table)
-            if (!(err as any).message?.includes('duplicate key')) {
-              throw err;
-            }
-          }
-          console.log(
-            `🏭 Created main order entry: ${productionOrderData.orderId} for layup scheduler`
-          );
-
           console.log(
             `🏭 Created production order: ${productionOrderData.orderId} for ${item.itemId}`
           );

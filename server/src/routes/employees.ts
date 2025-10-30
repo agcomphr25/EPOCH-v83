@@ -783,7 +783,8 @@ router.post('/:id/capabilities', async (req: Request, res: Response) => {
     const assignmentData = {
       employeeId,
       capabilityId,
-      useHardcoded: useHardcoded ?? true,
+      isHardcoded: useHardcoded ?? true,
+      useHardcodedValue: useHardcoded ?? true,
     };
     const newAssignment = await storage.grantCapability(assignmentData);
     res.status(201).json(newAssignment);
@@ -1048,7 +1049,7 @@ router.post(
             AND certification_id = ${certificationId}
           `;
 
-          if (existingCert.rows.length > 0) {
+          if (existingCert.length > 0) {
             // Update existing certification
             await pool.query`
               UPDATE employee_certifications 

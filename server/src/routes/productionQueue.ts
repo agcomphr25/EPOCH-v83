@@ -338,10 +338,35 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         AND LOWER(o.model_id) != 'no stock'
         AND LOWER(o.model_id) != 'no_stock'
         AND (o.features->>'action_length' IS NOT NULL AND o.features->>'action_length' != '' AND o.features->>'action_length' != 'null')
+      
+      UNION ALL
+      
+      SELECT 
+        p.order_id as orderId,
+        NULL as fbOrderNumber,
+        p.item_id as modelId,
+        p.item_id as stockModelId,
+        p.due_date as dueDate,
+        p.order_date as orderDate,
+        p.current_department as currentDepartment,
+        p.production_status as status,
+        p.customer_id as customerId,
+        p.specifications as features,
+        9999 as priorityScore,
+        NULL as urgency,
+        false as isManualUrgency,
+        0 as queuePosition,
+        p.created_at as createdAt,
+        c.name as customerName
+      FROM production_orders p
+      LEFT JOIN customers c ON CAST(p.customer_id AS INTEGER) = c.id
+      WHERE p.current_department = 'P1 Production Queue'
+        AND p.production_status IN ('PENDING', 'ACTIVE')
+      
       ORDER BY 
-        COALESCE(o.priority_score, 9999) ASC,
-        o.due_date ASC,
-        o.created_at ASC
+        priorityScore ASC,
+        dueDate ASC,
+        createdAt ASC
     `;
 
     const queueResult = await pool.query(queueQuery);

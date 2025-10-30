@@ -96,12 +96,23 @@ export function LayupSchedulePreview({
   }, [scheduleBarcode, open]);
 
   const handlePrint = () => {
-    window.print();
+    // Add print class to body to trigger print styles
+    document.body.classList.add('printing-schedule');
+    
+    // Trigger print
+    setTimeout(() => {
+      window.print();
+      
+      // Remove print class after printing
+      setTimeout(() => {
+        document.body.classList.remove('printing-schedule');
+      }, 100);
+    }, 100);
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto print:max-w-full print:max-h-full">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto print:fixed print:inset-0 print:max-w-none print:max-h-none print:overflow-visible print:p-8 print:bg-white">
         <DialogHeader className="print:block print:mb-6">
           <div className="flex items-center justify-between print:relative">
             <div>

@@ -61,29 +61,63 @@
 /* Print Styles for Layup Schedule */
 @media print {
   @page {
-    size: landscape;
+    size: letter landscape;
     margin: 0.5in;
   }
   
+  /* Reset body and force clean print */
   body {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
   
-  /* Hide dialog overlay and show content */
+  /* Hide all dialogs overlays and backgrounds */
+  [data-radix-dialog-overlay],
+  [role="presentation"] {
+    display: none !important;
+  }
+  
+  /* Show dialog content as full page */
   [role="dialog"] {
     position: static !important;
+    inset: auto !important;
     max-width: 100% !important;
     max-height: 100% !important;
+    width: 100% !important;
+    height: auto !important;
     overflow: visible !important;
     border: none !important;
     box-shadow: none !important;
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    transform: none !important;
   }
   
-  /* Hide buttons and non-essential elements during print */
-  .print\:hidden,
-  button {
+  /* Hide dialog close button */
+  [role="dialog"] > button,
+  [aria-label="Close"] {
     display: none !important;
+  }
+  
+  /* Hide ALL buttons, navigation, and interactive elements */
+  button,
+  .print\:hidden,
+  nav,
+  aside,
+  footer:not(.print\:block) {
+    display: none !important;
+  }
+  
+  /* Force content to be visible */
+  main,
+  article,
+  section {
+    display: block !important;
+    page-break-inside: avoid;
   }
   
   /* Optimize table printing */
@@ -103,23 +137,33 @@
   }
   
   th, td {
-    border: 1px solid #ddd !important;
+    border: 1px solid #000 !important;
     padding: 8px !important;
   }
   
   /* Keep badges and colors visible */
-  .badge, [class*="bg-"] {
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
+  .badge, 
+  [class*="bg-"],
+  [class*="border-"] {
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
   }
   
-  /* Preserve background colors for badges */
+  /* Preserve background colors for badges and borders */
   .bg-green-100 {
     background-color: #dcfce7 !important;
   }
   
+  .border-green-800 {
+    border-color: #166534 !important;
+  }
+  
   .bg-blue-100 {
     background-color: #dbeafe !important;
+  }
+  
+  .border-blue-800 {
+    border-color: #1e40af !important;
   }
   
   .bg-orange-100 {

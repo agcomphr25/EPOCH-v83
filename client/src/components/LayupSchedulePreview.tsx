@@ -470,7 +470,10 @@ export function LayupSchedulePreview({
             {/* Schedule Barcode */}
             <div className="flex flex-col items-center border rounded-lg p-3 bg-white">
               <p className="text-xs text-gray-600 mb-1 font-semibold">Scan to Complete Layup</p>
-              <svg ref={barcodeRef} className="w-48"></svg>
+              <svg ref={barcodeRef} className="w-64 h-24"></svg>
+              {scheduleBarcode && (
+                <p className="text-xs text-gray-400 mt-1">{scheduleBarcode}</p>
+              )}
             </div>
           </div>
         </DialogHeader>

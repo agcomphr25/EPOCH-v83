@@ -807,48 +807,51 @@ export async function generateSalesOrderPDF(
     page2Y -= 13;
   }
 
-  // Customer Approval Section
-  page2Y -= 40;
-  page2.drawText('CUSTOMER APPROVAL', {
-    x: margin,
-    y: page2Y,
-    size: 12,
-    font: boldFont,
-  });
+  // Customer Approval Section - only show if signature is required
+  if (includeSignatureBox) {
+    page2Y -= 40;
+    page2.drawText('CUSTOMER APPROVAL', {
+      x: margin,
+      y: page2Y,
+      size: 12,
+      font: boldFont,
+    });
 
-  page2Y -= 30;
-  page2.drawText('Customer Signature:', {
-    x: margin,
-    y: page2Y,
-    size: 10,
-    font: boldFont,
-  });
+    page2Y -= 30;
+    page2.drawText('Customer Signature:', {
+      x: margin,
+      y: page2Y,
+      size: 10,
+      font: boldFont,
+    });
 
-  // Signature line
-  page2.drawLine({
-    start: { x: margin + 120, y: page2Y - 5 },
-    end: { x: margin + 300, y: page2Y - 5 },
-    thickness: 1,
-    color: rgb(0, 0, 0),
-  });
+    // Signature line
+    page2.drawLine({
+      start: { x: margin + 120, y: page2Y - 5 },
+      end: { x: margin + 300, y: page2Y - 5 },
+      thickness: 1,
+      color: rgb(0, 0, 0),
+    });
 
-  page2.drawText('Date:', {
-    x: margin + 320,
-    y: page2Y,
-    size: 10,
-    font: boldFont,
-  });
+    page2.drawText('Date:', {
+      x: margin + 320,
+      y: page2Y,
+      size: 10,
+      font: boldFont,
+    });
 
-  // Date line
-  page2.drawLine({
-    start: { x: margin + 350, y: page2Y - 5 },
-    end: { x: margin + 450, y: page2Y - 5 },
-    thickness: 1,
-    color: rgb(0, 0, 0),
-  });
+    // Date line
+    page2.drawLine({
+      start: { x: margin + 350, y: page2Y - 5 },
+      end: { x: margin + 450, y: page2Y - 5 },
+      thickness: 1,
+      color: rgb(0, 0, 0),
+    });
+
+    page2Y -= 50;
+  }
 
   // Footer
-  page2Y -= 50;
   page2.drawText('Thank you for your business!', {
     x: margin,
     y: page2Y,

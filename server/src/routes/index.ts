@@ -371,13 +371,22 @@ export function registerRoutes(app: Express): Server {
           return false;
         }
 
-        // EXCLUDE orders without action_length - UNLESS they're from P1 Purchase Orders (which don't need action_length)
+        // EXCLUDE orders without action_length - UNLESS they're from Purchase Orders (which may not need action_length)
         const features = (order as any).features || {};
         const orderId = (order as any).orderId || '';
-        const isP1POOrder = orderId.startsWith('PO-'); // P1 PO orders have format: PO-0046-5-1
+        
+        // Detect PO orders by multiple patterns:
+        // - Format: PO-0046-5-1 (starts with 'PO-')
+        // - Format: PO0046-W1-001 (starts with 'PO' followed by digits)
+        // - Has po_number or po_item_id in features
+        const isPOOrder = 
+          orderId.startsWith('PO-') || 
+          orderId.startsWith('PO') && /^PO\d+/.test(orderId) ||
+          features.po_number || 
+          features.po_item_id;
 
         if (
-          !isP1POOrder &&
+          !isPOOrder &&
           (!features.action_length || features.action_length === '')
         ) {
           console.log(

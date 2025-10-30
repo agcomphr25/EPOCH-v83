@@ -558,6 +558,7 @@ export const employees = pgTable('employees', {
   employmentType: text('employment_type').default('FULL_TIME'), // FULL_TIME, PART_TIME, CONTRACT
   portalToken: text('portal_token').unique(), // UUID for employee portal access
   portalTokenExpiry: timestamp('portal_token_expiry'),
+  isFinishTechnician: boolean('is_finish_technician').default(false), // Mark employee as Finish technician for department assignments
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

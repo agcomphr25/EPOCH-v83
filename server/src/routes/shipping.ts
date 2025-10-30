@@ -2075,11 +2075,8 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
   try {
     const { orderId } = req.params;
 
-    // Get order data
-    let order = await storage.getFinalizedOrderById(orderId) as any;
-    if (!order) {
-      order = await storage.getOrderDraft(orderId);
-    }
+    // Get order data from allOrders table
+    const order = await storage.getOrderById(orderId) as any;
 
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
@@ -2131,11 +2128,10 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
         notificationSentAt: new Date(),
       };
 
-      try {
-        await storage.updateFinalizedOrder(orderId, updateData);
-      } catch {
-        await storage.updateOrderDraft(orderId, updateData);
-      }
+      await db
+        .update(allOrders)
+        .set(updateData)
+        .where(eq(allOrders.orderId, orderId));
 
       // Return success with warnings if some methods failed
       const responseMessage = (notificationResult.errors && notificationResult.errors.length > 0)

@@ -76,8 +76,15 @@ export function LayupSchedulePreview({
 
   // Generate barcode when component opens or week changes
   useEffect(() => {
+    console.log('🔍 Barcode Effect Running:', { 
+      hasRef: !!barcodeRef.current, 
+      barcode: scheduleBarcode, 
+      open 
+    });
+    
     if (barcodeRef.current && scheduleBarcode && open) {
       try {
+        console.log('📊 Generating barcode:', scheduleBarcode);
         JsBarcode(barcodeRef.current, scheduleBarcode, {
           format: 'CODE39',
           width: 3,
@@ -90,9 +97,16 @@ export function LayupSchedulePreview({
           background: '#ffffff',
           lineColor: '#000000',
         });
+        console.log('✅ Barcode generated successfully');
       } catch (error) {
-        console.error('Error generating schedule barcode:', error);
+        console.error('❌ Error generating schedule barcode:', error);
       }
+    } else {
+      console.warn('⚠️ Barcode not ready:', {
+        hasRef: !!barcodeRef.current,
+        hasBarcode: !!scheduleBarcode,
+        isOpen: open
+      });
     }
   }, [scheduleBarcode, open]);
 

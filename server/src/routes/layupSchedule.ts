@@ -327,11 +327,11 @@ router.post('/generate', async (req: Request, res: Response) => {
   }
 });
 
-// Save layup schedule and move orders to Barcode department
+// Save layup schedule and progress orders to Layup/Plugging department
 router.post('/save', async (req: Request, res: Response) => {
   try {
     console.log(
-      '💾 SCHEDULE SAVE: Starting layup schedule save and moving orders to Barcode...'
+      '💾 SCHEDULE SAVE: Starting layup schedule save and progressing orders to Layup/Plugging...'
     );
 
     const { entries, workDays, weekStart } = req.body;
@@ -354,6 +354,50 @@ router.post('/save', async (req: Request, res: Response) => {
     await pool.query('BEGIN');
 
     try {
+      // Get existing schedule for this week to decrement PO item counts
+      const existingScheduleResult = await pool.query(
+        `
+        SELECT order_id 
+        FROM layup_schedule 
+        WHERE scheduled_date >= $1 AND scheduled_date < $1::date + INTERVAL '7 days'
+      `,
+        [weekStart]
+      );
+      
+      // Decrement PO item counts for items being removed
+      const existingPOCounts = new Map<string, number>();
+      const existingRows = existingScheduleResult.rows as Array<{ order_id: string }>;
+      for (const row of existingRows) {
+        const orderId = row.order_id;
+        if (orderId.startsWith('PO-')) {
+          const parts = orderId.split('-');
+          if (parts.length >= 3) {
+            const poNumber = parts[1];
+            const itemId = parts[2];
+            const key = `${poNumber}-${itemId}`;
+            existingPOCounts.set(key, (existingPOCounts.get(key) || 0) + 1);
+          }
+        }
+      }
+      
+      // Decrement counts before clearing
+      if (existingPOCounts.size > 0) {
+        const poItemEntries = Array.from(existingPOCounts.entries());
+        for (const [key, count] of poItemEntries) {
+          const [poNumber, itemId] = key.split('-');
+          await pool.query(
+            `
+            UPDATE purchase_order_items
+            SET order_count = GREATEST(COALESCE(order_count, 0) - $1, 0),
+                updated_at = NOW()
+            WHERE id = $2
+          `,
+            [count, parseInt(itemId)]
+          );
+          console.log(`📦 Decremented PO item ${itemId}: removed ${count} from order_count`);
+        }
+      }
+      
       // Clear existing schedule for this week
       await pool.query(
         `
@@ -366,6 +410,7 @@ router.post('/save', async (req: Request, res: Response) => {
       let savedCount = 0;
       let progressedCount = 0;
       const orderIds: string[] = [];
+      const poItemCounts = new Map<string, number>(); // Track PO item counts: "poNumber-itemId" -> count
 
       // Save schedule entries
       for (const entry of entries) {
@@ -404,8 +449,18 @@ router.post('/save', async (req: Request, res: Response) => {
 
         savedCount++;
         
-        // Track unique order IDs (skip PO items)
-        if (!orderId.startsWith('PO-')) {
+        // Track PO items to update their order counts
+        if (orderId.startsWith('PO-')) {
+          // Parse PO item ID: PO-{poNumber}-{itemId}-{unitNumber}
+          const parts = orderId.split('-');
+          if (parts.length >= 3) {
+            const poNumber = parts[1];
+            const itemId = parts[2];
+            const key = `${poNumber}-${itemId}`;
+            poItemCounts.set(key, (poItemCounts.get(key) || 0) + 1);
+          }
+        } else {
+          // Track regular order IDs
           orderIds.push(orderId);
         }
         
@@ -414,35 +469,112 @@ router.post('/save', async (req: Request, res: Response) => {
         );
       }
 
-      // Move regular orders to Barcode department (not PO items)
+      // Update PO item order counts and track production order numbers
+      const productionOrderNumbers = new Set<string>();
+      if (poItemCounts.size > 0) {
+        const newPOItemEntries = Array.from(poItemCounts.entries());
+        for (const [key, count] of newPOItemEntries) {
+          const [poNumber, itemId] = key.split('-');
+          await pool.query(
+            `
+            UPDATE purchase_order_items
+            SET order_count = COALESCE(order_count, 0) + $1,
+                updated_at = NOW()
+            WHERE id = $2
+          `,
+            [count, parseInt(itemId)]
+          );
+          console.log(`📦 Updated PO item ${itemId}: added ${count} to order_count`);
+          
+          // Track the production order number for progression
+          productionOrderNumbers.add(poNumber);
+        }
+      }
+
+      // Move regular orders to Layup/Plugging department (not PO items)
       if (orderIds.length > 0) {
         const uniqueOrderIds = Array.from(new Set(orderIds));
         
         const updateResult = await pool.query(
           `
           UPDATE all_orders
-          SET current_department = 'Barcode',
+          SET current_department = 'Layup/Plugging',
               updated_at = NOW()
           WHERE order_id = ANY($1::text[])
-          AND current_department = 'Production Queue'
+          AND current_department IN ('P1 Production Queue', 'Production Queue')
         `,
           [uniqueOrderIds]
         );
         
         progressedCount = (updateResult as any).rowCount || 0;
-        console.log(`📦 Moved ${progressedCount} orders to Barcode department`);
+        console.log(`📦 Moved ${progressedCount} orders to Layup/Plugging department`);
+      }
+
+      // Move production orders to Layup/Plugging department ONLY if ALL items are fully scheduled
+      if (productionOrderNumbers.size > 0) {
+        const poNumbersArray = Array.from(productionOrderNumbers);
+        
+        // Check which POs have all items fully scheduled
+        const fullyScheduledPOs = [];
+        for (const poNumber of poNumbersArray) {
+          const checkResult = await pool.query(
+            `
+            SELECT COUNT(*) as total_items,
+                   COUNT(*) FILTER (WHERE quantity - COALESCE(order_count, 0) = 0) as completed_items
+            FROM purchase_order_items poi
+            JOIN purchase_orders po ON poi.po_id = po.id
+            WHERE po.po_number = $1
+              AND (poi.stock_status IS NULL OR poi.stock_status != 'no stock')
+              AND (poi.item_type = 'stock_model' OR poi.item_type = 'custom_model')
+          `,
+            [poNumber]
+          );
+          
+          const checkRows = checkResult.rows as Array<{ total_items: string; completed_items: string }>;
+          if (checkRows.length > 0) {
+            const totalItems = parseInt(checkRows[0].total_items);
+            const completedItems = parseInt(checkRows[0].completed_items);
+            
+            console.log(`📊 PO ${poNumber}: ${completedItems}/${totalItems} items fully scheduled`);
+            
+            // Only move if ALL items are completed
+            if (totalItems > 0 && totalItems === completedItems) {
+              fullyScheduledPOs.push(poNumber);
+            }
+          }
+        }
+        
+        // Move only fully completed production orders
+        if (fullyScheduledPOs.length > 0) {
+          const poUpdateResult = await pool.query(
+            `
+            UPDATE production_orders
+            SET current_department = 'Layup/Plugging',
+                updated_at = NOW()
+            WHERE po_number = ANY($1::text[])
+            AND current_department = 'P1 Production Queue'
+          `,
+            [fullyScheduledPOs]
+          );
+          
+          const poProgressedCount = (poUpdateResult as any).rowCount || 0;
+          progressedCount += poProgressedCount;
+          console.log(`📦 Moved ${poProgressedCount} production orders to Layup/Plugging (all items complete): ${fullyScheduledPOs.join(', ')}`);
+        } else {
+          console.log(`📦 No production orders ready to move (items still pending)`);
+        }
       }
 
       // Commit transaction
       await pool.query('COMMIT');
 
       console.log(
-        `✅ Successfully saved ${savedCount} schedule entries and moved ${progressedCount} orders to Barcode`
+        `✅ Successfully saved ${savedCount} schedule entries and progressed ${progressedCount} orders to Layup/Plugging`
       );
 
       res.json({
         success: true,
-        message: `Schedule saved and ${progressedCount} orders moved to Barcode`,
+        message: `Schedule saved and ${progressedCount} orders progressed to Layup/Plugging`,
         entriesSaved: savedCount,
         ordersProgressed: progressedCount,
         weekStart: weekStart,

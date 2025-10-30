@@ -3092,7 +3092,7 @@ router.post(
       // Get order, customer, and address data directly from database
       const { db } = await import('../../db');
       const { eq } = await import('drizzle-orm');
-      const { customers, customerAddresses } = await import(
+      const { customers, customerAddresses, allOrders } = await import(
         '../../schema'
       );
 

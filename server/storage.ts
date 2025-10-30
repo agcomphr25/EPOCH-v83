@@ -8,6 +8,7 @@ import {
   features,
   stockModels,
   orders,
+  allOrders as orderDrafts,
   payments,
   forms,
   formSubmissions,
@@ -1827,8 +1828,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllOrderDrafts(): Promise<OrderDraft[]> {
-    // First get all orders
-    const orders = await db
+    // First get all orders from all_orders table (which is the draft orders table)
+    const ordersList = await db
       .select()
       .from(orderDrafts)
       .orderBy(desc(orderDrafts.updatedAt));
@@ -1854,7 +1855,7 @@ export class DatabaseStorage implements IStorage {
     );
 
     // Enrich orders with customer names
-    return orders.map((order) => ({
+    return ordersList.map((order) => ({
       ...order,
       customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
     })) as OrderDraft[];

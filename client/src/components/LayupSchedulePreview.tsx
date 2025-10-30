@@ -143,89 +143,89 @@ export function LayupSchedulePreview({
   <meta charset="UTF-8">
   <title>Layup Schedule - ${weekStart ? format(new Date(weekStart), 'MMM dd, yyyy') : ''}</title>
   <style>
-    @page { size: letter landscape; margin: 0.4in; }
+    @page { size: letter landscape; margin: 0.3in; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { 
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; 
-      padding: 12px; 
+      padding: 8px; 
       color: #1a1a1a; 
       background: white;
-      font-size: 11px;
-      line-height: 1.3;
+      font-size: 9px;
+      line-height: 1.2;
     }
     .header { 
       display: flex; 
       justify-content: space-between; 
       align-items: center;
-      margin-bottom: 16px; 
-      padding-bottom: 10px; 
-      border-bottom: 2px solid #2c3e50;
+      margin-bottom: 8px; 
+      padding-bottom: 6px; 
+      border-bottom: 1.5px solid #2c3e50;
     }
     .header h1 { 
-      font-size: 22px; 
+      font-size: 18px; 
       font-weight: 700; 
       color: #2c3e50;
-      margin-bottom: 3px;
+      margin-bottom: 2px;
     }
     .header p { 
-      font-size: 13px; 
+      font-size: 11px; 
       font-weight: 500;
       color: #555;
     }
     .barcode-box { 
       text-align: center; 
-      border: 1.5px solid #ddd; 
-      padding: 6px 8px; 
-      border-radius: 4px;
+      border: 1px solid #ddd; 
+      padding: 4px 6px; 
+      border-radius: 3px;
       background: #f8f9fa;
     }
     .barcode-box p { 
-      font-size: 9px; 
+      font-size: 7px; 
       font-weight: 600; 
-      margin-bottom: 4px;
+      margin-bottom: 2px;
       color: #666;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.3px;
     }
-    .barcode-box img { width: 180px; height: auto; }
+    .barcode-box img { width: 140px; height: auto; }
     .summary { 
       display: flex; 
-      gap: 10px; 
-      margin-bottom: 16px;
+      gap: 6px; 
+      margin-bottom: 8px;
     }
     .summary-item { 
       flex: 1; 
       text-align: center; 
-      padding: 8px; 
-      border: 1.5px solid #e0e0e0; 
-      border-radius: 4px;
+      padding: 4px 6px; 
+      border: 1px solid #e0e0e0; 
+      border-radius: 3px;
       background: linear-gradient(to bottom, #ffffff, #f8f9fa);
     }
     .summary-item .label { 
-      font-size: 9px; 
+      font-size: 7px; 
       font-weight: 600; 
       text-transform: uppercase; 
       color: #666;
-      letter-spacing: 0.5px;
-      margin-bottom: 4px;
+      letter-spacing: 0.3px;
+      margin-bottom: 2px;
     }
     .summary-item .value { 
-      font-size: 20px; 
+      font-size: 16px; 
       font-weight: 700;
       color: #2c3e50;
     }
     .day-section { 
       page-break-inside: avoid; 
-      margin-bottom: 20px;
-      border: 1.5px solid #dee2e6; 
-      border-radius: 6px;
+      margin-bottom: 10px;
+      border: 1px solid #dee2e6; 
+      border-radius: 4px;
       overflow: hidden;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
     .day-header { 
-      font-size: 14px; 
+      font-size: 11px; 
       font-weight: 700; 
-      padding: 8px 12px; 
+      padding: 4px 8px; 
       background: linear-gradient(to right, #2c3e50, #34495e);
       color: white;
       display: flex;
@@ -233,71 +233,72 @@ export function LayupSchedulePreview({
       align-items: center;
     }
     .day-header .count {
-      font-size: 11px;
+      font-size: 9px;
       font-weight: 500;
       opacity: 0.9;
     }
     .day-content {
-      padding: 10px;
+      padding: 6px;
       background: white;
     }
     .order-item { 
       display: flex; 
-      gap: 10px; 
-      padding: 8px 10px; 
-      border: 1px solid #e0e0e0; 
-      border-radius: 4px; 
-      margin-bottom: 6px;
+      gap: 6px; 
+      padding: 4px 6px; 
+      border: 1px solid #e8e8e8; 
+      border-radius: 2px; 
+      margin-bottom: 3px;
       background: #ffffff;
-      transition: all 0.2s;
     }
-    .order-item:hover {
-      background: #f8f9fa;
+    .order-item:last-of-type {
+      margin-bottom: 0;
     }
     .checkbox { 
-      width: 20px; 
-      height: 20px; 
-      border: 2px solid #2c3e50; 
-      border-radius: 3px; 
+      width: 16px; 
+      height: 16px; 
+      border: 1.5px solid #2c3e50; 
+      border-radius: 2px; 
       flex-shrink: 0; 
-      margin-top: 2px;
+      margin-top: 1px;
       background: white;
     }
     .order-details { 
       flex-grow: 1; 
       display: grid; 
-      grid-template-columns: 1.2fr 1.5fr 1fr 1.3fr; 
-      gap: 10px;
+      grid-template-columns: 1fr 1.3fr 0.9fr 1.1fr; 
+      gap: 6px;
       align-items: start;
     }
     .field-label { 
-      font-size: 8px; 
+      font-size: 7px; 
       font-weight: 600; 
       text-transform: uppercase; 
       color: #888;
-      letter-spacing: 0.3px;
-      margin-bottom: 2px;
+      letter-spacing: 0.2px;
+      margin-bottom: 1px;
     }
     .field-value { 
-      font-size: 11px; 
+      font-size: 9px; 
       font-weight: 600;
       color: #2c3e50;
       font-family: "Courier New", Consolas, monospace;
+      line-height: 1.3;
     }
     .badges { 
       display: flex; 
-      gap: 4px; 
+      gap: 3px; 
       flex-shrink: 0;
       align-items: flex-start;
     }
     .badge { 
-      padding: 3px 8px; 
-      border: 1.5px solid; 
-      border-radius: 3px; 
-      font-size: 9px; 
+      padding: 2px 6px; 
+      border: 1px solid; 
+      border-radius: 2px; 
+      font-size: 7px; 
       font-weight: 700; 
       text-align: center;
       white-space: nowrap;
+      line-height: 1.3;
     }
     .badge-lop { 
       background: linear-gradient(to bottom, #d1fae5, #a7f3d0);
@@ -316,29 +317,29 @@ export function LayupSchedulePreview({
     }
     .signature { 
       display: flex; 
-      gap: 20px; 
-      margin-top: 12px; 
-      padding-top: 10px; 
-      border-top: 1.5px solid #dee2e6;
+      gap: 12px; 
+      margin-top: 6px; 
+      padding-top: 6px; 
+      border-top: 1px solid #dee2e6;
     }
     .sig-field { 
       flex: 1;
       min-width: 0;
     }
     .sig-label { 
-      font-size: 9px; 
+      font-size: 7px; 
       font-weight: 600; 
-      margin-bottom: 4px;
+      margin-bottom: 2px;
       color: #666;
       text-transform: uppercase;
-      letter-spacing: 0.3px;
+      letter-spacing: 0.2px;
     }
     .sig-line { 
-      border-bottom: 1.5px solid #2c3e50; 
-      height: 28px;
+      border-bottom: 1px solid #2c3e50; 
+      height: 20px;
     }
     .sig-date { 
-      flex: 0 0 140px;
+      flex: 0 0 100px;
     }
     @media print { 
       body { padding: 0; }

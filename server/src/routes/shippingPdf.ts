@@ -325,10 +325,6 @@ function buildUPSShipmentRequest(
             Code: 'GIF',
           },
           HTTPUserAgent: 'Mozilla/4.5',
-          LabelStockSize: {
-            Height: '6',
-            Width: '4',
-          },
         },
       },
     },
@@ -3096,15 +3092,15 @@ router.post(
       // Get order, customer, and address data directly from database
       const { db } = await import('../../db');
       const { eq } = await import('drizzle-orm');
-      const { customers, customerAddresses, allOrders } = await import(
+      const { customers, customerAddresses } = await import(
         '../../schema'
       );
 
       // First get the order
       const orders = await db
         .select()
-        .from(allOrders)
-        .where(eq(allOrders.orderId, orderId));
+        .from(orderDrafts)
+        .where(eq(orderDrafts.orderId, orderId));
 
       if (!orders || orders.length === 0) {
         return res.status(404).json({ error: 'Order not found' });
@@ -3246,23 +3242,43 @@ router.post(
           const { eq } = await import('drizzle-orm');
           const { allOrders } = await import('../../schema');
 
-          await db
-            .update(allOrders)
-            .set({
-              trackingNumber: trackingNumber,
-              shippingCarrier: 'UPS',
-              shippingMethod: 'UPS Ground',
-              currentDepartment: 'Fulfilled',
-              shippedDate: new Date(),
-              shippingLabelGenerated: true,
-              status: 'COMPLETED',
-              updatedAt: new Date(),
-            })
-            .where(eq(allOrders.orderId, orderId));
+          try {
+            // Try updating finalized orders table first
+            await db
+              .update(allOrders)
+              .set({
+                trackingNumber: trackingNumber,
+                shippingCarrier: 'UPS',
+                shippingMethod: 'UPS Ground',
+                currentDepartment: 'Fulfilled',
+                shippedDate: new Date(),
+                shippingLabelGenerated: true,
+                status: 'COMPLETED',
+                updatedAt: new Date(),
+              })
+              .where(eq(allOrders.orderId, orderId));
 
-          console.log(
-            `Updated order ${orderId} status to Fulfilled`
-          );
+            console.log(
+              `Updated finalized order ${orderId} status to Fulfilled`
+            );
+          } catch (finalizedError) {
+            // If finalized update fails, try draft orders table
+            await db
+              .update(orderDrafts)
+              .set({
+                trackingNumber: trackingNumber,
+                shippingCarrier: 'UPS',
+                shippingMethod: 'UPS Ground',
+                currentDepartment: 'Fulfilled',
+                shippedDate: new Date(),
+                shippingLabelGenerated: true,
+                status: 'COMPLETED',
+                updatedAt: new Date(),
+              })
+              .where(eq(orderDrafts.orderId, orderId));
+
+            console.log(`Updated draft order ${orderId} status to Fulfilled`);
+          }
         } catch (updateError) {
           console.error(
             `Failed to update order ${orderId} status:`,
@@ -3389,23 +3405,43 @@ router.post(
           const { eq } = await import('drizzle-orm');
           const { allOrders } = await import('../../schema');
 
-          await db
-            .update(allOrders)
-            .set({
-              trackingNumber: placeholderTrackingNumber,
-              shippingCarrier: 'UPS (Placeholder)',
-              shippingMethod: 'UPS Ground',
-              currentDepartment: 'Fulfilled',
-              shippedDate: new Date(),
-              shippingLabelGenerated: true,
-              status: 'COMPLETED',
-              updatedAt: new Date(),
-            })
-            .where(eq(allOrders.orderId, orderId));
+          try {
+            // Try updating finalized orders table first
+            await db
+              .update(allOrders)
+              .set({
+                trackingNumber: placeholderTrackingNumber,
+                shippingCarrier: 'UPS (Placeholder)',
+                shippingMethod: 'UPS Ground',
+                currentDepartment: 'Fulfilled',
+                shippedDate: new Date(),
+                shippingLabelGenerated: true,
+                status: 'COMPLETED',
+                updatedAt: new Date(),
+              })
+              .where(eq(allOrders.orderId, orderId));
 
-          console.log(
-            `Updated order ${orderId} status to Fulfilled`
-          );
+            console.log(
+              `Updated finalized order ${orderId} status to Fulfilled`
+            );
+          } catch (finalizedError) {
+            // If finalized update fails, try draft orders table
+            await db
+              .update(orderDrafts)
+              .set({
+                trackingNumber: placeholderTrackingNumber,
+                shippingCarrier: 'UPS (Placeholder)',
+                shippingMethod: 'UPS Ground',
+                currentDepartment: 'Fulfilled',
+                shippedDate: new Date(),
+                shippingLabelGenerated: true,
+                status: 'COMPLETED',
+                updatedAt: new Date(),
+              })
+              .where(eq(orderDrafts.orderId, orderId));
+
+            console.log(`Updated draft order ${orderId} status to Fulfilled`);
+          }
         } catch (updateError) {
           console.error(
             `Failed to update order ${orderId} status:`,
@@ -3812,20 +3848,39 @@ router.post('/bulk-shipping-labels', async (req: Request, res: Response) => {
             const { eq } = await import('drizzle-orm');
             const { allOrders } = await import('../../schema');
 
-            await db
-              .update(allOrders)
-              .set({
-                trackingNumber: trackingNumber,
-                shippingCarrier: 'UPS',
-                currentDepartment: 'Fulfilled',
-                shippedDate: new Date(),
-                updatedAt: new Date(),
-              })
-              .where(eq(allOrders.orderId, order.orderId));
+            try {
+              // Try updating finalized orders table first
+              await db
+                .update(allOrders)
+                .set({
+                  trackingNumber: trackingNumber,
+                  shippingCarrier: 'UPS',
+                  currentDepartment: 'Fulfilled',
+                  shippedDate: new Date(),
+                  updatedAt: new Date(),
+                })
+                .where(eq(allOrders.orderId, order.orderId));
 
-            console.log(
-              `Updated order ${order.orderId} with tracking info`
-            );
+              console.log(
+                `Updated finalized order ${order.orderId} with tracking info`
+              );
+            } catch (finalizedError) {
+              // If finalized update fails, try draft orders table
+              await db
+                .update(orderDrafts)
+                .set({
+                  trackingNumber: trackingNumber,
+                  shippingCarrier: 'UPS',
+                  currentDepartment: 'Fulfilled',
+                  shippedDate: new Date(),
+                  updatedAt: new Date(),
+                })
+                .where(eq(orderDrafts.orderId, order.orderId));
+
+              console.log(
+                `Updated draft order ${order.orderId} with tracking info`
+              );
+            }
           } catch (updateError) {
             console.error(
               `Failed to update order ${order.orderId} status:`,

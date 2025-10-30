@@ -504,12 +504,14 @@ const CustomerFormFields = ({
             onChange={(e) =>
               handleCustomerAddressChange(
                 'state',
-                e.target.value.toUpperCase().slice(0, 2)
+                formData.country === 'United States'
+                  ? e.target.value.toUpperCase().slice(0, 2)
+                  : e.target.value
               )
             }
             className={formErrors.state ? 'border-red-500' : ''}
-            placeholder="SC"
-            maxLength={2}
+            placeholder={formData.country === 'United States' ? 'SC' : 'State/Province'}
+            maxLength={formData.country === 'United States' ? 2 : undefined}
           />
           {formErrors.state && (
             <p className="text-sm text-red-500">{formErrors.state}</p>
@@ -758,7 +760,7 @@ export default function CustomerManagement() {
       city: suggestion.city || '',
       state: suggestion.state || '',
       zipCode: suggestion.zipCode || suggestion.zipcode || '',
-      country: 'USA', // Default country
+      country: 'United States', // Default country
     };
 
     console.log('🔧 New address data being set:', newAddressData);
@@ -2400,10 +2402,16 @@ export default function CustomerManagement() {
                 id="state"
                 value={addressFormData.state}
                 onChange={(e) =>
-                  handleAddressFieldChange('state', e.target.value)
+                  handleAddressFieldChange(
+                    'state',
+                    addressFormData.country === 'United States'
+                      ? e.target.value.toUpperCase().slice(0, 2)
+                      : e.target.value
+                  )
                 }
                 className="col-span-3"
-                placeholder="CA"
+                placeholder={addressFormData.country === 'United States' ? 'CA' : 'State/Province'}
+                maxLength={addressFormData.country === 'United States' ? 2 : undefined}
               />
             </div>
 
@@ -2558,10 +2566,16 @@ export default function CustomerManagement() {
                 id="editState"
                 value={addressFormData.state}
                 onChange={(e) =>
-                  handleAddressFieldChange('state', e.target.value)
+                  handleAddressFieldChange(
+                    'state',
+                    addressFormData.country === 'United States'
+                      ? e.target.value.toUpperCase().slice(0, 2)
+                      : e.target.value
+                  )
                 }
                 className="col-span-3"
-                placeholder="CA"
+                placeholder={addressFormData.country === 'United States' ? 'CA' : 'State/Province'}
+                maxLength={addressFormData.country === 'United States' ? 2 : undefined}
               />
             </div>
 

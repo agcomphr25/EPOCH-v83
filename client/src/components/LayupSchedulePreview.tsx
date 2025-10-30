@@ -111,11 +111,18 @@ export function LayupSchedulePreview({
         const svgElement = barcodeRef.current;
         const serializer = new XMLSerializer();
         const svgString = serializer.serializeToString(svgElement);
-        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-        barcodeDataURL = 'data:image/svg+xml;base64,' + btoa(svgString);
+        
+        // Properly encode for data URL
+        const encodedSvg = btoa(unescape(encodeURIComponent(svgString)));
+        barcodeDataURL = 'data:image/svg+xml;base64,' + encodedSvg;
+        
+        console.log('📊 Barcode generated for print:', scheduleBarcode);
+        console.log('📊 Barcode data URL length:', barcodeDataURL.length);
       } catch (error) {
         console.error('Error converting barcode to data URL:', error);
       }
+    } else {
+      console.warn('⚠️ Barcode ref not available for printing');
     }
     
     // Generate the HTML content

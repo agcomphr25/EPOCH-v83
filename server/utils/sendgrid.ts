@@ -93,6 +93,7 @@ export async function sendEmailViaSendGrid(options: {
   subject: string;
   text: string;
   html?: string;
+  replyTo?: string;
   attachments?: Array<{
     content: string;
     filename: string;
@@ -106,6 +107,7 @@ export async function sendEmailViaSendGrid(options: {
     const msg: any = {
       to: options.to,
       from: fromEmail,
+      replyTo: options.replyTo || 'sales@agcomposites.com',
       subject: options.subject,
       text: options.text,
       html: options.html || options.text,
@@ -119,6 +121,7 @@ export async function sendEmailViaSendGrid(options: {
     console.log('📧 Sending email via SendGrid:', {
       to: options.to,
       from: fromEmail,
+      replyTo: msg.replyTo,
       subject: options.subject,
       hasText: !!options.text,
       textLength: options.text?.length || 0,

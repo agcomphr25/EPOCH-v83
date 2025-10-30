@@ -327,7 +327,8 @@ router.get('/by-token/:token', async (req, res) => {
     if (enrichedOrderSummary.features) {
       for (const [featureKey, featureValue] of Object.entries(enrichedOrderSummary.features)) {
         if (featureValue && featureValue !== false && featureValue !== '') {
-          const featureDetail = allFeatures.find((f: any) => f.id === featureKey);
+          // Search for feature by both id and name to handle feature key mismatches
+          const featureDetail = allFeatures.find((f: any) => f.id === featureKey || f.name === featureKey);
           if (featureDetail) {
             featureDisplayInfo[featureKey] = {
               displayName: featureDetail.displayName || featureDetail.name,

@@ -528,6 +528,23 @@ router.delete('/certifications/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Get Finish Technicians (MUST be before /:id to avoid route collision)
+router.get('/finish-technicians', async (req: Request, res: Response) => {
+  try {
+    const finishTechnicians = await pool.query`
+      SELECT id, name, employee_code as "employeeCode"
+      FROM employees
+      WHERE is_finish_technician = true 
+        AND is_active = true
+      ORDER BY name
+    `;
+    res.json(finishTechnicians || []);
+  } catch (error) {
+    console.error('Get Finish technicians error:', error);
+    res.status(500).json({ error: 'Failed to fetch Finish technicians' });
+  }
+});
+
 // Parametric routes MUST come after all specific routes
 router.get('/:id', async (req: Request, res: Response) => {
   try {

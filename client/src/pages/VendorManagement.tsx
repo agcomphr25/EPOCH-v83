@@ -2266,7 +2266,14 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
 
   // Fetch monthly evaluations
   const { data: evaluations = [], isLoading, refetch } = useQuery<any[]>({
-    queryKey: ['/api/vendors', vendorId, 'evaluations', { year: selectedYear }],
+    queryKey: ['/api/vendors', vendorId, 'evaluations', selectedYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/vendors/${vendorId}/evaluations?year=${selectedYear}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to fetch evaluations');
+      return res.json();
+    },
   });
 
   // Save evaluation mutation
@@ -2274,8 +2281,7 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
     mutationFn: async (data: any) => {
       return await apiRequest(`/api/vendors/${vendorId}/evaluations`, {
         method: 'POST',
-        body: JSON.stringify(data),
-        headers: { 'Content-Type': 'application/json' },
+        body: data,
       });
     },
     onSuccess: () => {

@@ -47,8 +47,14 @@ export default function FinishQueuePage() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
-  // Finish technicians list
-  const finishTechnicians = ['Tomas', 'AG', 'Timmy'];
+  // Fetch Finish technicians from database
+  const { data: finishTechniciansData = [] } = useQuery({
+    queryKey: ['/api/employees/finish-technicians'],
+  });
+
+  const finishTechnicians = Array.isArray(finishTechniciansData)
+    ? finishTechniciansData.map((tech: any) => tech.name)
+    : [];
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({

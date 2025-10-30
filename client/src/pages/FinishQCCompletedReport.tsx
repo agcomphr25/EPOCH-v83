@@ -18,8 +18,10 @@ import {
   CheckCircle,
   Calendar,
   TrendingUp,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, addDays, subDays, startOfWeek, endOfWeek } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { toast } from 'react-hot-toast';
 
@@ -41,14 +43,62 @@ interface ReportData {
   endDate: string;
   totalOrders: number;
   byTechnician: Record<string, ReportOrder[]>;
+  allTechnicians: string[];
 }
+
+// Helper to get start of week (Monday)
+const getWeekStart = (date: Date) => {
+  const start = startOfWeek(date, { weekStartsOn: 1 }); // 1 = Monday
+  return start;
+};
+
+// Helper to get end of week (Sunday)
+const getWeekEnd = (date: Date) => {
+  const end = endOfWeek(date, { weekStartsOn: 1 }); // 1 = Monday
+  return end;
+};
 
 export default function FinishQCCompletedReport() {
   const [expandedTechnicians, setExpandedTechnicians] = useState<Set<string>>(new Set());
+  
+  // Initialize with last week's dates
+  const initialWeekStart = getWeekStart(subDays(new Date(), 7));
+  const initialWeekEnd = getWeekEnd(subDays(new Date(), 7));
+  
+  const [weekStart, setWeekStart] = useState(initialWeekStart);
+  const [weekEnd, setWeekEnd] = useState(initialWeekEnd);
 
   const { data, isLoading, error, refetch } = useQuery<ReportData>({
-    queryKey: ['/api/reports/finish-qc-completed'],
+    queryKey: ['/api/reports/finish-qc-completed', weekStart.toISOString(), weekEnd.toISOString()],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/reports/finish-qc-completed?startDate=${weekStart.toISOString()}&endDate=${weekEnd.toISOString()}`,
+        { credentials: 'include' }
+      );
+      if (!res.ok) throw new Error('Failed to fetch report');
+      return res.json();
+    },
   });
+
+  const goToPreviousWeek = () => {
+    const newStart = subDays(weekStart, 7);
+    const newEnd = subDays(weekEnd, 7);
+    setWeekStart(newStart);
+    setWeekEnd(newEnd);
+  };
+
+  const goToNextWeek = () => {
+    const newStart = addDays(weekStart, 7);
+    const newEnd = addDays(weekEnd, 7);
+    setWeekStart(newStart);
+    setWeekEnd(newEnd);
+  };
+
+  const goToCurrentWeek = () => {
+    const now = new Date();
+    setWeekStart(getWeekStart(now));
+    setWeekEnd(getWeekEnd(now));
+  };
 
   const toggleTechnician = (technician: string) => {
     const newExpanded = new Set(expandedTechnicians);
@@ -98,7 +148,8 @@ export default function FinishQCCompletedReport() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `finish-qc-completed-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    const weekLabel = `${format(weekStart, 'yyyy-MM-dd')}_to_${format(weekEnd, 'yyyy-MM-dd')}`;
+    a.download = `finish-qc-completed-${weekLabel}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success('Report exported to CSV');
@@ -142,8 +193,8 @@ export default function FinishQCCompletedReport() {
             <FileBarChart className="h-8 w-8 text-blue-600" />
             Finish QC Completed Orders Report
           </h1>
-          <p className="text-gray-600 mt-2">
-            Orders completed in Finish QC from {format(new Date(data.startDate), 'MMM dd, yyyy')} to {format(new Date(data.endDate), 'MMM dd, yyyy')}
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
+            Orders completed in Finish QC from {format(weekStart, 'MMM dd, yyyy')} to {format(weekEnd, 'MMM dd, yyyy')}
           </p>
         </div>
         <div className="flex gap-2">
@@ -165,6 +216,51 @@ export default function FinishQCCompletedReport() {
           </Button>
         </div>
       </div>
+
+      {/* Week Navigation */}
+      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <Button
+              onClick={goToPreviousWeek}
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+              data-testid="button-previous-week"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous Week
+            </Button>
+            
+            <div className="flex flex-col items-center">
+              <div className="flex items-center gap-2 text-lg font-semibold text-blue-900 dark:text-blue-100">
+                <Calendar className="h-5 w-5" />
+                Week of {format(weekStart, 'MMM dd, yyyy')}
+              </div>
+              <Button
+                onClick={goToCurrentWeek}
+                variant="link"
+                size="sm"
+                className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                data-testid="button-current-week"
+              >
+                Go to Current Week
+              </Button>
+            </div>
+            
+            <Button
+              onClick={goToNextWeek}
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+              data-testid="button-next-week"
+            >
+              Next Week
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

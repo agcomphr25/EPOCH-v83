@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 
 import { db, pool } from '../../db';
-import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts } from '../../schema';
+import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layupSchedule } from '../../schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 
@@ -787,19 +787,22 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
     const { scheduleDate } = req.params;
     console.log(`📅 Fetching orders for schedule date: ${scheduleDate}`);
     
-    // Query all orders scheduled for this date
-    const scheduleEntries = await pool.query(`
-      SELECT DISTINCT
-        ls.order_id as "orderId"
-      FROM layup_schedule ls
-      WHERE DATE(ls.scheduled_date) = $1
-         OR ls.layup_day = $1
-      ORDER BY ls.order_id
-    `, [scheduleDate]);
+    // Use Neon's raw SQL for efficient server-side filtering
+    const { neon } = await import('@neondatabase/serverless');
+    const sql = neon(process.env.DATABASE_URL!);
     
-    const orderIds = scheduleEntries.rows?.map((row: any) => row.orderId) || [];
+    // Query with server-side filtering using parameterized query
+    const result = await sql`
+      SELECT DISTINCT order_id
+      FROM layup_schedule
+      WHERE scheduled_date::date = ${scheduleDate}::date
+         OR layup_day = ${scheduleDate}::date
+      ORDER BY order_id
+    `;
     
-    console.log(`✅ Found ${orderIds.length} orders for schedule date ${scheduleDate}`);
+    const orderIds = result.map((row: any) => row.order_id);
+    
+    console.log(`✅ Found ${orderIds.length} orders for schedule date ${scheduleDate}:`, orderIds.slice(0, 5));
     
     res.json({
       success: true,

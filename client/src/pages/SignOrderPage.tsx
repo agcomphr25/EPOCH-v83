@@ -243,16 +243,29 @@ export default function SignOrderPage() {
                 {orderSummary.features && Object.entries(orderSummary.features).map(([key, value]) => {
                   if (!value || value === false || value === '' || (Array.isArray(value) && value.length === 0)) return null;
                   
+                  // Skip miscItems as it's typically an object/array that needs special handling
+                  if (key === 'miscItems' && typeof value === 'object') return null;
+                  
                   // Get display names from featureDisplayInfo if available
                   const featureInfo = followupOrder.featureDisplayInfo?.[key];
                   const displayKey = featureInfo?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                   
                   let displayValue: string;
                   if (Array.isArray(value)) {
-                    // For arrays, join display names
-                    displayValue = value.map(val => featureInfo?.selections?.[val] || val).join(', ');
+                    // For arrays, map each value to its display name
+                    displayValue = value.map(val => {
+                      if (typeof val === 'string') {
+                        return featureInfo?.selections?.[val] || val;
+                      }
+                      return String(val);
+                    }).join(', ');
+                  } else if (typeof value === 'object') {
+                    // Skip complex objects that can't be displayed as simple strings
+                    return null;
                   } else {
-                    displayValue = featureInfo?.selections?.[value] || String(value);
+                    // For single values, use the display name from selections
+                    const valueStr = String(value);
+                    displayValue = featureInfo?.selections?.[valueStr] || valueStr;
                   }
                   
                   return (
@@ -269,7 +282,7 @@ export default function SignOrderPage() {
               <>
                 <Separator />
                 <div>
-                  <h3 className="text-lg font-semibold mb-2">Special Instructions</h3>
+                  <h3 className="text-lg font-semibold mb-2">Notes</h3>
                   <p className="text-gray-700 dark:text-gray-300" data-testid="text-notes">
                     {orderSummary.notes}
                   </p>

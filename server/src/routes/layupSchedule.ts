@@ -327,11 +327,11 @@ router.post('/generate', async (req: Request, res: Response) => {
   }
 });
 
-// Save layup schedule and move orders to Barcode department
+// Save layup schedule and progress orders to Layup/Plugging department
 router.post('/save', async (req: Request, res: Response) => {
   try {
     console.log(
-      '💾 SCHEDULE SAVE: Starting layup schedule save and moving orders to Barcode...'
+      '💾 SCHEDULE SAVE: Starting layup schedule save and progressing orders to Layup/Plugging...'
     );
 
     const { entries, workDays, weekStart } = req.body;
@@ -414,35 +414,35 @@ router.post('/save', async (req: Request, res: Response) => {
         );
       }
 
-      // Move regular orders to Barcode department (not PO items)
+      // Move regular orders to Layup/Plugging department (not PO items)
       if (orderIds.length > 0) {
         const uniqueOrderIds = Array.from(new Set(orderIds));
         
         const updateResult = await pool.query(
           `
           UPDATE all_orders
-          SET current_department = 'Barcode',
+          SET current_department = 'Layup/Plugging',
               updated_at = NOW()
           WHERE order_id = ANY($1::text[])
-          AND current_department = 'Production Queue'
+          AND current_department IN ('P1 Production Queue', 'Production Queue')
         `,
           [uniqueOrderIds]
         );
         
         progressedCount = (updateResult as any).rowCount || 0;
-        console.log(`📦 Moved ${progressedCount} orders to Barcode department`);
+        console.log(`📦 Moved ${progressedCount} orders to Layup/Plugging department`);
       }
 
       // Commit transaction
       await pool.query('COMMIT');
 
       console.log(
-        `✅ Successfully saved ${savedCount} schedule entries and moved ${progressedCount} orders to Barcode`
+        `✅ Successfully saved ${savedCount} schedule entries and progressed ${progressedCount} orders to Layup/Plugging`
       );
 
       res.json({
         success: true,
-        message: `Schedule saved and ${progressedCount} orders moved to Barcode`,
+        message: `Schedule saved and ${progressedCount} orders progressed to Layup/Plugging`,
         entriesSaved: savedCount,
         ordersProgressed: progressedCount,
         weekStart: weekStart,

@@ -342,10 +342,10 @@ export default function ProductionQueueManager() {
         },
       });
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       toast({
         title: 'Schedule Approved',
-        description: `Successfully scheduled ${generatedSchedule?.scheduledItems.length} items`,
+        description: `Successfully scheduled ${generatedSchedule?.scheduledItems.length} items and progressed ${result.ordersProgressed || 0} orders to Layup/Plugging`,
       });
       
       // Clear selections

@@ -325,6 +325,10 @@ function buildUPSShipmentRequest(
             Code: 'GIF',
           },
           HTTPUserAgent: 'Mozilla/4.5',
+          LabelStockSize: {
+            Height: '6',
+            Width: '4',
+          },
         },
       },
     },

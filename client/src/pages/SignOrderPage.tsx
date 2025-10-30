@@ -243,8 +243,8 @@ export default function SignOrderPage() {
                 {orderSummary.features && Object.entries(orderSummary.features).map(([key, value]) => {
                   if (!value || value === false || value === '' || (Array.isArray(value) && value.length === 0)) return null;
                   
-                  // Skip miscItems as it's typically an object/array that needs special handling
-                  if (key === 'miscItems' && typeof value === 'object') return null;
+                  // Skip miscItems as it needs special handling below
+                  if (key === 'miscItems') return null;
                   
                   // Get display names from featureDisplayInfo if available
                   const featureInfo = followupOrder.featureDisplayInfo?.[key];
@@ -277,6 +277,35 @@ export default function SignOrderPage() {
                 })}
               </div>
             </div>
+
+            {/* Miscellaneous Items */}
+            {orderSummary.features?.miscItems && Array.isArray(orderSummary.features.miscItems) && orderSummary.features.miscItems.length > 0 && (
+              <>
+                <Separator />
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Miscellaneous Items</h3>
+                  <div className="space-y-3">
+                    {orderSummary.features.miscItems.map((item: any, index: number) => (
+                      <div key={item.id || index} className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900 dark:text-gray-100" data-testid={`text-misc-item-description-${index}`}>
+                            {item.description}
+                          </p>
+                          {item.quantity > 1 && (
+                            <p className="text-sm text-gray-500 dark:text-gray-400" data-testid={`text-misc-item-quantity-${index}`}>
+                              Quantity: {item.quantity} @ ${item.unitPrice.toFixed(2)} each
+                            </p>
+                          )}
+                        </div>
+                        <span className="font-medium ml-4" data-testid={`text-misc-item-total-${index}`}>
+                          ${item.total.toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
 
             {orderSummary.notes && (
               <>

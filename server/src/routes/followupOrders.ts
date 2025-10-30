@@ -18,6 +18,208 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+// Helper function to calculate order pricing - mirrors OrderEntry pricing logic
+async function calculateOrderPricing(
+  orderSummary: any,
+  stockModel: any,
+  allFeatures: any[],
+  orderId: string
+) {
+  // Get full order record for price overrides and discount settings
+  const order = await storage.getOrderById(orderId);
+  if (!order) {
+    throw new Error('Order not found');
+  }
+  
+  let subtotal = 0;
+  let basePrice = 0;
+  
+  // Step 1: Determine base price (following OrderEntry logic exactly)
+  // Priority: priceOverride > flattopPriceOverride > stock model price
+  if (order.priceOverride !== null && order.priceOverride !== undefined) {
+    // APR complete price override - use as entire subtotal
+    basePrice = parseFloat(String(order.priceOverride)) || 0;
+    subtotal = basePrice;
+    
+    // Add shipping
+    const shipping = parseFloat(String(orderSummary.shipping)) || 0;
+    
+    // Get payments
+    const payments = await storage.getPaymentsByOrderId(orderId);
+    const paidAmount = payments.reduce((sum, payment) => sum + (parseFloat(String(payment.paymentAmount)) || 0), 0);
+    
+    // Calculate discount (custom discount only applies to base price when priceOverride is set)
+    let discountAmount = 0;
+    if (order.showCustomDiscount && order.customDiscountValue) {
+      if (order.customDiscountType === 'percent') {
+        discountAmount = (subtotal * (parseFloat(String(order.customDiscountValue)) || 0)) / 100;
+      } else {
+        discountAmount = parseFloat(String(order.customDiscountValue)) || 0;
+      }
+    }
+    
+    const total = subtotal - discountAmount + shipping;
+    const balanceDue = total - paidAmount;
+    
+    return { basePrice, subtotal, discountAmount, shipping, total, paidAmount, balanceDue };
+  }
+  
+  // Step 2: Check for flattop price override
+  if (order.isFlattop && order.flattopPriceOverride !== null && order.flattopPriceOverride !== undefined) {
+    basePrice = parseFloat(String(order.flattopPriceOverride)) || 0;
+    subtotal = basePrice;
+  } else {
+    // Use stock model price
+    basePrice = parseFloat(String(stockModel?.price)) || 0;
+    subtotal = basePrice;
+  }
+  
+  // Step 3: Add feature prices
+  if (orderSummary.features) {
+    for (const [featureKey, featureValue] of Object.entries(orderSummary.features)) {
+      if (!featureValue || featureValue === false || featureValue === '' || featureKey === 'miscItems') {
+        continue;
+      }
+      
+      // Find the feature definition
+      let featureDetail = allFeatures.find((f: any) => f.id === featureKey || f.name === featureKey);
+      
+      // Special handling for paint_options - search across all paint-related features
+      if (!featureDetail && featureKey === 'paint_options') {
+        const paintFeatures = allFeatures.filter((f: any) => 
+          f.id === 'special_effects' || 
+          f.id === 'custom_graphics' || 
+          f.id === 'camo_patterns' ||
+          f.id === 'premium_patterns' ||
+          f.id === 'base_colors'
+        );
+        
+        for (const pf of paintFeatures) {
+          const pfOptions = (pf as any).options || [];
+          const option = pfOptions.find((opt: any) => opt.value === featureValue);
+          if (option) {
+            featureDetail = pf;
+            break;
+          }
+        }
+      }
+      
+      if (featureDetail) {
+        const featureOptions = (featureDetail as any).options || [];
+        
+        if (Array.isArray(featureValue)) {
+          // Handle multi-select features
+          for (const val of featureValue) {
+            const option = featureOptions.find((opt: any) => opt.value === val);
+            if (option?.price) {
+              subtotal += parseFloat(String(option.price)) || 0;
+            }
+          }
+        } else {
+          // Handle single-select features
+          const option = featureOptions.find((opt: any) => opt.value === featureValue);
+          if (option?.price) {
+            subtotal += parseFloat(String(option.price)) || 0;
+          }
+        }
+      }
+    }
+    
+    // Add miscellaneous items total
+    if (Array.isArray(orderSummary.features.miscItems)) {
+      const miscTotal = orderSummary.features.miscItems.reduce(
+        (sum: number, item: any) => sum + (parseFloat(String(item.total)) || 0),
+        0
+      );
+      subtotal += miscTotal;
+    }
+  }
+  
+  // Step 4: Calculate discount amount
+  let discountAmount = 0;
+  
+  // Handle custom discount
+  if (order.showCustomDiscount && order.customDiscountValue) {
+    if (order.customDiscountType === 'percent') {
+      discountAmount = (subtotal * (parseFloat(String(order.customDiscountValue)) || 0)) / 100;
+    } else {
+      discountAmount = parseFloat(String(order.customDiscountValue)) || 0;
+    }
+  }
+  // Handle discount codes
+  else if (order.discountCode && order.discountCode !== 'none') {
+    // Get all persistent discounts and short-term sales
+    const persistentDiscounts = await storage.getAllPersistentDiscounts();
+    const shortTermSales = await storage.getAllShortTermSales();
+    
+    // Check if it's a persistent discount
+    if (order.discountCode.startsWith('persistent_')) {
+      const discountId = parseInt(order.discountCode.replace('persistent_', ''));
+      const discount = persistentDiscounts.find(d => d.id === discountId);
+      
+      if (discount) {
+        const baseAmount = basePrice; // For stock_model discounts
+        
+        if (discount.appliesTo === 'stock_model') {
+          // Apply discount only to base model price
+          if (discount.percent) {
+            discountAmount = (baseAmount * discount.percent) / 100;
+          } else if (discount.fixedAmount) {
+            discountAmount = discount.fixedAmount / 100; // Convert from cents to dollars
+          }
+        } else {
+          // Apply discount to total order
+          if (discount.percent) {
+            discountAmount = (subtotal * discount.percent) / 100;
+          } else if (discount.fixedAmount) {
+            discountAmount = discount.fixedAmount / 100;
+          }
+        }
+      }
+    }
+    // Check if it's a short-term sale
+    else if (order.discountCode.startsWith('short_term_')) {
+      const saleId = parseInt(order.discountCode.replace('short_term_', ''));
+      const sale = shortTermSales.find(s => s.id === saleId);
+      
+      if (sale && sale.percent) {
+        const baseAmount = basePrice; // For stock_model sales
+        
+        if (sale.appliesTo === 'stock_model') {
+          // Apply discount only to base model price
+          discountAmount = (baseAmount * sale.percent) / 100;
+        } else {
+          // Apply discount to total order
+          discountAmount = (subtotal * sale.percent) / 100;
+        }
+      }
+    }
+  }
+  
+  // Step 5: Get shipping charge
+  const shipping = parseFloat(String(orderSummary.shipping)) || 0;
+  
+  // Step 6: Calculate total
+  const total = subtotal - discountAmount + shipping;
+  
+  // Step 7: Get payments
+  const payments = await storage.getPaymentsByOrderId(orderId);
+  const paidAmount = payments.reduce((sum, payment) => sum + (parseFloat(String(payment.paymentAmount)) || 0), 0);
+  
+  // Step 8: Calculate balance due
+  const balanceDue = total - paidAmount;
+  
+  return {
+    basePrice,
+    subtotal,
+    discountAmount,
+    shipping,
+    total,
+    paidAmount,
+    balanceDue,
+  };
+}
+
 // POST /api/followup-orders - Create and send a follow-up order
 router.post('/', async (req, res) => {
   try {
@@ -387,6 +589,14 @@ router.get('/by-token/:token', async (req, res) => {
       }
     }
 
+    // Calculate pricing information
+    const pricingInfo = await calculateOrderPricing(
+      enrichedOrderSummary,
+      stockModel,
+      allFeatures,
+      followupOrder.orderId || ''
+    );
+
     // Return order data with enriched information but do NOT expose the signature token
     const { signatureToken, ...safeOrderData } = followupOrder;
     res.json({
@@ -394,6 +604,7 @@ router.get('/by-token/:token', async (req, res) => {
       orderSummary: enrichedOrderSummary,
       modelDisplayName: stockModel?.displayName || stockModel?.name,
       featureDisplayInfo,
+      pricing: pricingInfo,
     });
   } catch (error) {
     console.error('Error fetching followup order by token:', error);

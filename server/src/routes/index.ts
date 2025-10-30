@@ -4368,22 +4368,16 @@ export function registerRoutes(app: Express): Server {
       
       console.log('📊 Querying Finish QC report from', startDate, 'to', endDate);
       
-      // Get all unique technicians who have ever completed Finish QC work
+      // Get all Finish Technicians from employees table (regardless of whether they've completed orders)
       const finishTechnicians = await pool.query(
-        `SELECT DISTINCT assigned_technician
-        FROM all_orders
-        WHERE assigned_technician IS NOT NULL
-          AND department_history IS NOT NULL
-          AND jsonb_array_length(department_history) > 0
-          AND EXISTS (
-            SELECT 1 
-            FROM jsonb_array_elements(department_history) AS history
-            WHERE history->>'fromDepartment' = 'Finish QC'
-          )
-        ORDER BY assigned_technician`
+        `SELECT id, name, employee_code
+        FROM employees
+        WHERE is_finish_technician = true
+          AND is_active = true
+        ORDER BY name`
       );
       
-      console.log('📊 Found', finishTechnicians?.length || 0, 'Finish QC technicians from history');
+      console.log('📊 Found', finishTechnicians?.length || 0, 'active Finish QC technicians from employees table');
       
       // Query orders that have department_history with a Finish QC exit
       // Note: Neon serverless returns array directly, not { rows: [...] }
@@ -4430,7 +4424,7 @@ export function registerRoutes(app: Express): Server {
       const grouped: Record<string, any[]> = {};
       
       for (const tech of finishTechnicians) {
-        grouped[tech.assigned_technician] = [];
+        grouped[tech.name] = [];
       }
       
       // Add filtered orders to the grouped object
@@ -4478,7 +4472,7 @@ export function registerRoutes(app: Express): Server {
         endDate,
         totalOrders: filteredOrders.length,
         byTechnician: grouped,
-        allTechnicians: finishTechnicians.map((t: any) => t.assigned_technician),
+        allTechnicians: finishTechnicians.map((t: any) => t.name),
       });
     } catch (_error) {
       console.error('📊 Finish QC report _error:', _error);

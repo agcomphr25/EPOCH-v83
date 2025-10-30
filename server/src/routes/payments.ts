@@ -89,8 +89,13 @@ router.post('/credit-card', async (req, res) => {
       .from(allOrders)
       .where(eq(allOrders.orderId, paymentData.orderId))
       .limit(1);
+    const draftOrder = await db
+      .select()
+      .from(orderDrafts)
+      .where(eq(orderDrafts.orderId, paymentData.orderId))
+      .limit(1);
 
-    if (order.length === 0) {
+    if (order.length === 0 && draftOrder.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }
 
@@ -385,6 +390,18 @@ async function processTransactionResult(data: {
         paymentTimestamp: new Date(),
       })
       .where(eq(allOrders.orderId, data.orderId));
+
+    // Also try to update draft order if it exists
+    await db
+      .update(orderDrafts)
+      .set({
+        isPaid: true,
+        paymentType: 'credit_card',
+        paymentAmount: data.amount,
+        paymentDate: new Date(),
+        paymentTimestamp: new Date(),
+      })
+      .where(eq(orderDrafts.orderId, data.orderId));
   }
 
   return {

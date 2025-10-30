@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 
 import { db, pool } from '../../db';
-import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts } from '../../schema';
+import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layupSchedule } from '../../schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 
@@ -780,5 +780,340 @@ router.delete('/by-order/:orderId', async (req: Request, res: Response) => {
     });
   }
 });
+
+// Get all orders for a specific layup schedule date (for barcode scanning)
+router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response) => {
+  try {
+    const { scheduleDate } = req.params;
+    console.log(`📅 Fetching orders for schedule date: ${scheduleDate}`);
+    
+    // Get all schedule entries for this date
+    const scheduleResult = await pool.query(
+      `
+      SELECT DISTINCT order_id
+      FROM layup_schedule
+      WHERE scheduled_date::date = $1::date
+         OR layup_day = $1::date
+      ORDER BY order_id
+      `,
+      [scheduleDate]
+    );
+    
+    const scheduleOrderIds = scheduleResult.rows.map((row: any) => row.order_id);
+    console.log(`📋 Found ${scheduleOrderIds.length} schedule entries for ${scheduleDate}`);
+    
+    // Separate regular orders from PO units
+    const regularOrderIds: string[] = [];
+    const poUnitIds: string[] = [];
+    
+    for (const orderId of scheduleOrderIds) {
+      if (orderId.startsWith('PO-')) {
+        poUnitIds.push(orderId);
+      } else {
+        regularOrderIds.push(orderId);
+      }
+    }
+    
+    console.log(`📦 Regular orders: ${regularOrderIds.length}, PO units: ${poUnitIds.length}`);
+    
+    // Map PO units to their production_order IDs
+    const productionOrderIds = new Set<string>();
+    
+    if (poUnitIds.length > 0) {
+      // Parse PO unit IDs to extract poNumber and poItemId
+      // Format: PO-{poNumber}-{itemId}-{unitNumber}
+      const poMappings: Array<{ poNumber: string; poItemId: number }> = [];
+      
+      for (const poUnitId of poUnitIds) {
+        const parts = poUnitId.split('-');
+        if (parts.length >= 3) {
+          const poNumber = parts[1];
+          const poItemId = parseInt(parts[2]);
+          if (!isNaN(poItemId)) {
+            poMappings.push({ poNumber, poItemId });
+          }
+        }
+      }
+      
+      // Look up production_orders that match these PO numbers and item IDs
+      if (poMappings.length > 0) {
+        const uniqueMappings = Array.from(
+          new Map(poMappings.map(m => [`${m.poNumber}-${m.poItemId}`, m])).values()
+        );
+        
+        for (const mapping of uniqueMappings) {
+          const productionOrderResult = await pool.query(
+            `
+            SELECT DISTINCT order_id
+            FROM production_orders
+            WHERE po_number = $1 AND po_item_id = $2
+            `,
+            [mapping.poNumber, mapping.poItemId]
+          );
+          
+          for (const row of productionOrderResult.rows) {
+            productionOrderIds.add(row.order_id);
+          }
+        }
+        
+        console.log(`🔗 Mapped ${poUnitIds.length} PO units to ${productionOrderIds.size} production orders`);
+      }
+    }
+    
+    // Combine regular order IDs with production order IDs
+    const allOrderIds = [...regularOrderIds, ...Array.from(productionOrderIds)];
+    
+    console.log(`✅ Total orders for barcode scan: ${allOrderIds.length} (${regularOrderIds.length} regular + ${productionOrderIds.size} production orders)`);
+    
+    res.json({
+      success: true,
+      scheduleDate,
+      orderIds: allOrderIds,
+      count: allOrderIds.length
+    });
+  } catch (error) {
+    console.error('❌ Error fetching orders by schedule date:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch orders for schedule date',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get list of weeks that have schedules (for reprint functionality)
+router.get('/weeks', async (req: Request, res: Response) => {
+  try {
+    console.log('📅 SCHEDULE WEEKS: Fetching list of weeks with schedules...');
+    
+    const result = await pool.query(`
+      SELECT 
+        DATE_TRUNC('week', scheduled_date)::date AS week_start,
+        MIN(scheduled_date)::date AS first_day,
+        MAX(scheduled_date)::date AS last_day,
+        COUNT(DISTINCT order_id) AS order_count,
+        COUNT(DISTINCT CASE WHEN order_id LIKE 'PO-%' THEN order_id END) AS po_order_count,
+        COUNT(DISTINCT CASE WHEN order_id NOT LIKE 'PO-%' THEN order_id END) AS regular_order_count
+      FROM layup_schedule
+      GROUP BY DATE_TRUNC('week', scheduled_date)
+      ORDER BY DATE_TRUNC('week', scheduled_date) DESC
+      LIMIT 52
+    `);
+    
+    console.log(`✅ Found ${result.rows.length} weeks with schedules`);
+    
+    res.json({
+      success: true,
+      weeks: result.rows,
+    });
+  } catch (error) {
+    console.error('❌ Error fetching schedule weeks:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch schedule weeks',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// Get full schedule data for a specific week (for reprint functionality)
+router.get('/week/:weekStart', async (req: Request, res: Response) => {
+  try {
+    const { weekStart } = req.params;
+    console.log(`📋 SCHEDULE REPRINT: Fetching schedule for week starting ${weekStart}...`);
+    
+    // Calculate week end date
+    const weekEnd = format(addDays(new Date(weekStart), 7), 'yyyy-MM-dd');
+    
+    // Get all schedule entries for this week
+    const scheduleResult = await pool.query(
+      `
+      SELECT 
+        ls.id,
+        ls.order_id,
+        ls.scheduled_date,
+        ls.mold_id,
+        ls.employee_assignments,
+        ls.is_override,
+        ls.created_at
+      FROM layup_schedule ls
+      WHERE ls.scheduled_date >= $1::date 
+        AND ls.scheduled_date < $2::date
+      ORDER BY ls.scheduled_date, ls.order_id
+    `,
+      [weekStart, weekEnd]
+    );
+    
+    const scheduleEntries = scheduleResult.rows;
+    console.log(`📦 Found ${scheduleEntries.length} schedule entries`);
+    
+    // Separate PO items and regular orders
+    const poOrderIds = scheduleEntries
+      .filter((entry: any) => entry.order_id.startsWith('PO-'))
+      .map((entry: any) => entry.order_id);
+    
+    const regularOrderIds = scheduleEntries
+      .filter((entry: any) => !entry.order_id.startsWith('PO-'))
+      .map((entry: any) => entry.order_id);
+    
+    console.log(`Regular orders: ${regularOrderIds.length}, PO orders: ${poOrderIds.length}`);
+    
+    // Fetch regular order details
+    let regularOrders = [];
+    if (regularOrderIds.length > 0) {
+      const ordersResult = await pool.query(
+        `
+        SELECT 
+          ao.order_id,
+          ao.fb_order_number,
+          ao.model_id AS stock_model,
+          ao.customer_id AS customer_name,
+          ao.features
+        FROM all_orders ao
+        WHERE ao.order_id = ANY($1::text[])
+      `,
+        [regularOrderIds]
+      );
+      regularOrders = ordersResult.rows;
+    }
+    
+    // Fetch PO order details
+    let poOrders = [];
+    if (poOrderIds.length > 0) {
+      const poResult = await pool.query(
+        `
+        SELECT 
+          po_orders.order_id,
+          po_orders.item_id,
+          po.po_number,
+          po.customer_name,
+          poi.item_id AS stock_model,
+          poi.item_name,
+          poi.specifications AS features
+        FROM production_orders po_orders
+        JOIN purchase_orders po ON po_orders.po_id = po.id
+        JOIN purchase_order_items poi ON po_orders.po_item_id = poi.id
+        WHERE po_orders.order_id = ANY($1::text[])
+      `,
+        [poOrderIds]
+      );
+      poOrders = poResult.rows;
+    }
+    
+    // Build unified schedule items with details
+    const scheduledItems = scheduleEntries.map((entry: any) => {
+      const dayOfWeek = getDay(new Date(entry.scheduled_date));
+      const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+      
+      if (entry.order_id.startsWith('PO-')) {
+        // Find PO order details
+        const poOrder = poOrders.find((po: any) => po.order_id === entry.order_id);
+        
+        if (!poOrder) {
+          return {
+            orderId: entry.order_id,
+            fbOrderNumber: '',
+            stockModel: 'Unknown',
+            customerName: 'Unknown',
+            scheduledDate: entry.scheduled_date,
+            moldId: entry.mold_id,
+            dayOfWeek,
+            dayName,
+          };
+        }
+        
+        const features = poOrder.features || {};
+        return {
+          orderId: entry.order_id,
+          fbOrderNumber: poOrder.po_number || '',
+          stockModel: poOrder.stock_model || poOrder.item_name || 'Unknown',
+          customerName: poOrder.customer_name || 'Unknown',
+          scheduledDate: entry.scheduled_date,
+          moldId: entry.mold_id,
+          dayOfWeek,
+          dayName,
+          actionLength: features.action_length || null,
+          material: extractMaterial(poOrder.stock_model),
+          hasLOP: checkHasLOP(features),
+          hasADL: checkHasADL(features),
+          hasHeavyFill: checkHasHeavyFill(features),
+        };
+      } else {
+        // Regular order
+        const order = regularOrders.find((o: any) => o.order_id === entry.order_id);
+        
+        if (!order) {
+          return {
+            orderId: entry.order_id,
+            fbOrderNumber: '',
+            stockModel: 'Unknown',
+            customerName: 'Unknown',
+            scheduledDate: entry.scheduled_date,
+            moldId: entry.mold_id,
+            dayOfWeek,
+            dayName,
+          };
+        }
+        
+        const features = order.features || {};
+        return {
+          orderId: entry.order_id,
+          fbOrderNumber: order.fb_order_number || '',
+          stockModel: order.stock_model || 'Unknown',
+          customerName: order.customer_name || 'Unknown',
+          scheduledDate: entry.scheduled_date,
+          moldId: entry.mold_id,
+          dayOfWeek,
+          dayName,
+          actionLength: features.action_length || null,
+          material: extractMaterial(order.stock_model),
+          hasLOP: checkHasLOP(features),
+          hasADL: checkHasADL(features),
+          hasHeavyFill: checkHasHeavyFill(features),
+        };
+      }
+    });
+    
+    console.log(`✅ Built ${scheduledItems.length} scheduled items with details`);
+    
+    res.json({
+      success: true,
+      weekStart,
+      scheduledItems,
+      totalItems: scheduledItems.length,
+    });
+  } catch (error) {
+    console.error('❌ Error fetching week schedule:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch week schedule',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// Helper functions for badge extraction
+function extractMaterial(stockModel: string | null): string | null {
+  if (!stockModel) return null;
+  const model = stockModel.toLowerCase();
+  if (model.includes('_fg_') || model.includes('_fg')) return 'Fiberglass';
+  if (model.includes('_cf_') || model.includes('_cf')) return 'Carbon Fiber';
+  return null;
+}
+
+function checkHasLOP(features: any): boolean {
+  const lop = features?.length_of_pull;
+  return lop && lop !== 'none' && lop !== 'standard' && lop !== 'std' && lop !== 'no_lop_change' && lop.trim() !== '';
+}
+
+function checkHasADL(features: any): boolean {
+  const bottomMetal = features?.bottom_metal;
+  return bottomMetal && typeof bottomMetal === 'string' && bottomMetal.toLowerCase().includes('adl');
+}
+
+function checkHasHeavyFill(features: any): boolean {
+  const otherOptions = features?.other_options;
+  return Array.isArray(otherOptions) && otherOptions.includes('heavy_fill');
+}
 
 export default router;

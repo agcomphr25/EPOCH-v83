@@ -31,6 +31,7 @@ import layupScheduleRoutes from './layupSchedule';
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import p1POQueueRoutes from './p1POQueue';
+import poShippingQCRoutes from './poShippingQC';
 import weeklyScheduleRoutes from './weeklySchedule';
 import refundRoutes from './refunds';
 import moldSyncRoutes from './moldSync';
@@ -177,6 +178,9 @@ export function registerRoutes(app: Express): Server {
 
   // P1 PO Queue routes
   app.use('/api/p1-po-queue', p1POQueueRoutes);
+
+  // PO Shipping QC routes
+  app.use('/api/po-orders', poShippingQCRoutes);
 
   // Weekly Schedule routes
   app.use('/api/weekly-schedule', weeklyScheduleRoutes);
@@ -371,13 +375,22 @@ export function registerRoutes(app: Express): Server {
           return false;
         }
 
-        // EXCLUDE orders without action_length - UNLESS they're from P1 Purchase Orders (which don't need action_length)
+        // EXCLUDE orders without action_length - UNLESS they're from Purchase Orders (which may not need action_length)
         const features = (order as any).features || {};
         const orderId = (order as any).orderId || '';
-        const isP1POOrder = orderId.startsWith('PO-'); // P1 PO orders have format: PO-0046-5-1
+        
+        // Detect PO orders by multiple patterns:
+        // - Format: PO-0046-5-1 (starts with 'PO-')
+        // - Format: PO0046-W1-001 (starts with 'PO' followed by digits)
+        // - Has po_number or po_item_id in features
+        const isPOOrder = 
+          orderId.startsWith('PO-') || 
+          orderId.startsWith('PO') && /^PO\d+/.test(orderId) ||
+          features.po_number || 
+          features.po_item_id;
 
         if (
-          !isP1POOrder &&
+          !isPOOrder &&
           (!features.action_length || features.action_length === '')
         ) {
           console.log(
@@ -430,31 +443,29 @@ export function registerRoutes(app: Express): Server {
         ...formattedActiveOrders,
       ];
 
-      // Fetch production orders from production_orders table (OEM orders)
-      // IMPORTANT: Only fetch production orders that match ACTIVE OEM priority settings
+      // Fetch production orders from production_orders table
+      // Include ALL production orders in P1 Production Queue and Layup/Plugging departments
       console.log(
-        '🔍 Fetching production orders from production_orders table (filtering by active OEM settings)...'
+        '🔍 Fetching production orders from production_orders table...'
       );
       const productionOrdersResult = await pool.query(`
         SELECT DISTINCT
           po.order_id as "orderId",
           po.customer_id as "customerId",
-          CASE 
-            WHEN po.item_id = '10' THEN 'cf_alpine_hunter'
-            WHEN po.item_id = '11' THEN 'cf_privateer' 
-            WHEN po.item_id = '12' THEN 'fg_privateer'
-            ELSE 'mesa_universal'
-          END as "stockModelId",
+          po.item_id as "stockModelId",
           po.due_date as "dueDate",
           po.current_department as "currentDepartment",
           po.production_status as "status",
-          '{}' as features,
+          COALESCE(po.specifications, '{}') as features,
           po.created_at as "createdAt",
           'production_order' as source
         FROM production_orders po
-        INNER JOIN oem_priority_settings ops ON po.po_id = ops.po_id
-        WHERE po.production_status = 'PENDING' 
-          AND ops.is_active = true
+        WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
+          AND po.production_status IN ('PENDING', 'ACTIVE')
+          AND po.item_type = 'stock_model'
+          AND po.item_id IS NOT NULL
+          AND po.item_id != ''
+          AND LOWER(po.item_id) NOT IN ('none', 'no stock', 'no_stock')
         ORDER BY po.due_date ASC
       `);
 
@@ -2129,6 +2140,8 @@ export function registerRoutes(app: Express): Server {
       );
 
       // Get P1 Purchase Orders with stock model items
+      // Only include items that are actually still in P1 Production Queue
+      const { pool } = await import('../../db');
       const pos = await storage.getAllPurchaseOrders();
       const activePos = pos.filter((po) => po.status === 'OPEN');
 
@@ -2136,10 +2149,29 @@ export function registerRoutes(app: Express): Server {
       for (const po of activePos) {
         const items = await storage.getPurchaseOrderItems(po.id);
         const stockModelItems = items.filter(
-          (item) => item.itemId && item.itemId.trim()
+          (item) => item.itemType === 'stock_model' && item.itemId && item.itemId.trim()
+        );
+
+        // Check which items actually have production orders in P1 Production Queue
+        const prodOrdersResult = await pool.query(`
+          SELECT po_item_id, COUNT(*) as count
+          FROM production_orders
+          WHERE po_id = $1
+            AND current_department = 'P1 Production Queue'
+            AND production_status IN ('PENDING', 'ACTIVE')
+          GROUP BY po_item_id
+        `, [po.id]);
+
+        const itemsInP1Queue = new Set(
+          prodOrdersResult.map((row: any) => row.po_item_id)
         );
 
         for (const item of stockModelItems) {
+          // Only include if this item has production orders in P1 Production Queue
+          if (!itemsInP1Queue.has(item.id)) {
+            continue;
+          }
+
           // Calculate priority score based on due date urgency
           const dueDate = new Date(po.expectedDelivery || po.poDate);
           const today = new Date();
@@ -2904,6 +2936,7 @@ export function registerRoutes(app: Express): Server {
               return expectedDue > today ? expectedDue : today;
             })(),
             productionStatus: 'PENDING' as const,
+            currentDepartment: 'P1 Production Queue',
             poId: poId,
             poItemId: item.id,
             specifications: {
@@ -2921,33 +2954,6 @@ export function registerRoutes(app: Express): Server {
           const _createdOrder =
             await storage.createProductionOrder(productionOrderData);
           createdOrders.push(_createdOrder);
-
-          // Also create entry in main orders table for layup scheduler
-          const { pool } = await import('../../db');
-          try {
-            await pool.query(
-              `INSERT INTO orders (order_id, customer, product, quantity, status, date, current_department, due_date)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-              [
-                _createdOrder.orderId,
-                purchaseOrder.customerName,
-                item.itemId,
-                1,
-                'Active',
-                new Date(),
-                'P1 Production Queue',
-                _createdOrder.dueDate,
-              ]
-            );
-          } catch (err) {
-            // Ignore duplicate key errors (order already exists in orders table)
-            if (!(err as any).message?.includes('duplicate key')) {
-              throw err;
-            }
-          }
-          console.log(
-            `🏭 Created main order entry: ${productionOrderData.orderId} for layup scheduler`
-          );
 
           console.log(
             `🏭 Created production order: ${productionOrderData.orderId} for ${item.itemId}`
@@ -3746,10 +3752,12 @@ export function registerRoutes(app: Express): Server {
       });
 
       // Get order details for label generation
+      const { pool } = await import('../../db');
       const orderDetails = [];
+      
       for (const orderId of orderIds) {
         // Try to get order from finalized orders first, then drafts
-        let order = null;
+        let order: any = null;
         try {
           order = await storage.getFinalizedOrderById(orderId);
           if (!order) {
@@ -3760,6 +3768,41 @@ export function registerRoutes(app: Express): Server {
         }
 
         if (order) {
+          // Check if this is a production order (PO item)
+          // Production orders don't have poNumber field in all_orders, so check production_orders table
+          try {
+            const poResult = await pool.query(
+              `
+              SELECT 
+                po.customer_name,
+                po.po_number,
+                po.po_item_id,
+                poi.quantity as total_quantity
+              FROM production_orders po
+              JOIN purchase_order_items poi ON po.po_item_id = poi.id
+              WHERE po.order_id = $1
+              `,
+              [orderId]
+            );
+            
+            if (poResult.rows.length > 0) {
+              const poData = poResult.rows[0];
+              // Extract unit number from orderId (e.g., ABC00199-0003 → unit #3)
+              const unitMatch = orderId.match(/-(\d+)$/);
+              const unitNumber = unitMatch ? parseInt(unitMatch[1]) : 1;
+              
+              order.isPOItem = true;
+              order.poCustomerName = poData.customer_name;
+              order.poNumber = poData.po_number;
+              order.poUnitNumber = unitNumber;
+              order.poTotalQuantity = poData.total_quantity;
+              
+              console.log(`📦 PO Item detected: ${orderId} → ${poData.customer_name}, PO#${poData.po_number}, ${unitNumber} of ${poData.total_quantity}`);
+            }
+          } catch (poError) {
+            console.warn(`Could not fetch PO details for ${orderId}:`, poError);
+          }
+          
           orderDetails.push(order);
           console.log(`✅ Found order for barcode: ${orderId}`);
         } else {
@@ -3930,10 +3973,21 @@ export function registerRoutes(app: Express): Server {
             'Unknown';
 
           // Add order information at top
-          page.drawText(`${order.orderId}`, {
+          // For PO items, show "Customer, PO#, X of Y" format
+          // For regular orders, show order ID
+          let labelText = order.orderId;
+          if ((order as any).isPOItem) {
+            const customerName = (order as any).poCustomerName || 'Customer';
+            const poNumber = (order as any).poNumber || 'N/A';
+            const unitNum = (order as any).poUnitNumber || 1;
+            const totalQty = (order as any).poTotalQuantity || 1;
+            labelText = `${customerName}, PO#${poNumber}, ${unitNum} of ${totalQty}`;
+          }
+          
+          page.drawText(labelText, {
             x: x + 8,
             y: y + 50,
-            size: 11,
+            size: (order as any).isPOItem ? 9 : 11, // Smaller font for longer PO text
             color: rgb(0, 0, 0),
           });
 

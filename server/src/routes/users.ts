@@ -107,6 +107,7 @@ router.post('/', async (req, res) => {
       employeeId,
       canOverridePrices,
       isActive,
+      isFinishTechnician,
     } = req.body;
 
     // Check if username already exists
@@ -160,7 +161,27 @@ router.post('/', async (req, res) => {
       ]
     );
 
-    res.status(201).json(result[0]);
+    const newUser = result[0];
+
+    // If the user has an employeeId and isFinishTechnician was provided, update the employee record
+    if (newUser.employeeId && isFinishTechnician !== undefined) {
+      await pool.query(
+        `UPDATE employees SET is_finish_technician = $1 WHERE id = $2`,
+        [isFinishTechnician, newUser.employeeId]
+      );
+      newUser.isFinishTechnician = isFinishTechnician;
+    } else if (newUser.employeeId) {
+      // Fetch current isFinishTechnician status
+      const empResult = await pool.query(
+        `SELECT is_finish_technician as "isFinishTechnician" FROM employees WHERE id = $1`,
+        [newUser.employeeId]
+      );
+      if (empResult && empResult.length > 0) {
+        newUser.isFinishTechnician = empResult[0].isFinishTechnician;
+      }
+    }
+
+    res.status(201).json(newUser);
   } catch (error) {
     console.error('Error creating user:', error);
     res.status(500).json({ error: 'Failed to create user' });

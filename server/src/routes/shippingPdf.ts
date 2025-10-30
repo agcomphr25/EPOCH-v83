@@ -3435,7 +3435,7 @@ router.post(
 
         // Create a placeholder shipping label PDF with error information
         const placeholderPdfDoc = await PDFDocument.create();
-        const placeholderPage = placeholderPdfDoc.addPage([432, 648]); // 6x9 inch shipping label
+        const placeholderPage = placeholderPdfDoc.addPage([288, 432]); // 4x6 inch shipping label
         const { width: placeholderWidth, height: placeholderHeight } =
           placeholderPage.getSize();
 

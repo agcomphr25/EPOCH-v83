@@ -102,69 +102,69 @@ export function LayupSchedulePreview({
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto print:max-w-full print:max-h-full">
-        <DialogHeader className="print:block print:mb-4">
-          <div className="flex items-center justify-between">
+        <DialogHeader className="print:block print:mb-6">
+          <div className="flex items-center justify-between print:relative">
             <div>
-              <DialogTitle className="flex items-center gap-2 print:text-2xl print:font-bold">
+              <DialogTitle className="flex items-center gap-2 print:text-3xl print:font-bold print:mb-2">
                 <Calendar className="w-6 h-6 print:hidden" />
-                Layup Schedule Preview
+                Layup Schedule
               </DialogTitle>
-              <p className="text-sm text-gray-500 print:text-lg print:text-black">
+              <p className="text-sm text-gray-500 print:text-xl print:text-black print:font-semibold">
                 Week starting {weekStart ? format(new Date(weekStart), 'MMM dd, yyyy') : ''}
               </p>
             </div>
-            {/* Schedule Barcode */}
-            <div className="flex flex-col items-center border rounded-lg p-3 bg-white">
-              <p className="text-xs text-gray-600 mb-1">Scan to complete layup</p>
-              <svg ref={barcodeRef} className="w-48"></svg>
+            {/* Schedule Barcode - appears in top right corner when printed */}
+            <div className="flex flex-col items-center border rounded-lg p-3 bg-white print:absolute print:top-0 print:right-0 print:border-2 print:border-black print:rounded print:p-2">
+              <p className="text-xs text-gray-600 mb-1 print:text-sm print:text-black print:font-semibold print:mb-2">Scan to Complete Layup</p>
+              <svg ref={barcodeRef} className="w-48 print:w-56"></svg>
             </div>
           </div>
         </DialogHeader>
 
         {/* Summary Statistics */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-blue-50 p-4 rounded-lg">
+        <div className="grid grid-cols-3 gap-4 mb-6 print:grid-cols-3 print:gap-6 print:mb-8 print:border-2 print:border-black print:p-4 print:rounded">
+          <div className="bg-blue-50 p-4 rounded-lg print:bg-white print:border-2 print:border-blue-700 print:p-3">
             <div className="flex items-center gap-2 mb-2">
-              <Package className="w-5 h-5 text-blue-600" />
-              <span className="text-sm font-medium text-gray-700">Total Items</span>
+              <Package className="w-5 h-5 text-blue-600 print:w-6 print:h-6" />
+              <span className="text-sm font-medium text-gray-700 print:text-base print:text-black print:font-bold">Total Items</span>
             </div>
-            <div className="text-2xl font-bold text-blue-700">{totalItems}</div>
+            <div className="text-2xl font-bold text-blue-700 print:text-3xl print:text-black">{totalItems}</div>
           </div>
 
-          <div className="bg-green-50 p-4 rounded-lg">
+          <div className="bg-green-50 p-4 rounded-lg print:bg-white print:border-2 print:border-green-700 print:p-3">
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle2 className="w-5 h-5 text-green-600" />
-              <span className="text-sm font-medium text-gray-700">Scheduled</span>
+              <CheckCircle2 className="w-5 h-5 text-green-600 print:w-6 print:h-6" />
+              <span className="text-sm font-medium text-gray-700 print:text-base print:text-black print:font-bold">Scheduled</span>
             </div>
-            <div className="text-2xl font-bold text-green-700">{scheduledItems.length}</div>
+            <div className="text-2xl font-bold text-green-700 print:text-3xl print:text-black">{scheduledItems.length}</div>
           </div>
 
-          <div className={`${hasOverflow ? 'bg-yellow-50' : 'bg-gray-50'} p-4 rounded-lg`}>
+          <div className={`${hasOverflow ? 'bg-yellow-50' : 'bg-gray-50'} p-4 rounded-lg print:bg-white print:border-2 ${hasOverflow ? 'print:border-yellow-700' : 'print:border-gray-400'} print:p-3`}>
             <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle className={`w-5 h-5 ${hasOverflow ? 'text-yellow-600' : 'text-gray-400'}`} />
-              <span className="text-sm font-medium text-gray-700">Overflow</span>
+              <AlertTriangle className={`w-5 h-5 ${hasOverflow ? 'text-yellow-600' : 'text-gray-400'} print:w-6 print:h-6`} />
+              <span className="text-sm font-medium text-gray-700 print:text-base print:text-black print:font-bold">Overflow</span>
             </div>
-            <div className={`text-2xl font-bold ${hasOverflow ? 'text-yellow-700' : 'text-gray-400'}`}>
+            <div className={`text-2xl font-bold ${hasOverflow ? 'text-yellow-700' : 'text-gray-400'} print:text-3xl print:text-black`}>
               {overflowItems.length}
             </div>
           </div>
         </div>
 
         {/* Scheduled Items by Day */}
-        <div className="space-y-6">
-          <h3 className="text-lg font-semibold print:text-xl print:font-bold print:mb-4">Scheduled Items</h3>
+        <div className="space-y-6 print:space-y-8">
+          <h3 className="text-lg font-semibold print:text-2xl print:font-bold print:mb-6 print:border-b-4 print:border-black print:pb-2">Scheduled Items</h3>
           
           {scheduledDays.map(day => (
-            <div key={day} className="border rounded-lg p-4 print:border-2 print:border-black print:page-break-inside-avoid">
-              <div className="flex items-center gap-2 mb-3 print:mb-4 print:pb-2 print:border-b-2 print:border-black">
-                <Badge variant={day === 5 ? 'secondary' : 'default'} className="text-sm print:text-lg print:font-bold print:bg-black print:text-white">
+            <div key={day} className="border rounded-lg p-4 print:border-4 print:border-black print:rounded-lg print:p-6 print:page-break-inside-avoid print:mb-8">
+              <div className="flex items-center gap-2 mb-3 print:mb-6 print:pb-3 print:border-b-4 print:border-black">
+                <Badge variant={day === 5 ? 'secondary' : 'default'} className="text-sm print:text-2xl print:font-bold print:bg-black print:text-white print:px-4 print:py-2">
                   {dayNames[day]}
                 </Badge>
-                <span className="text-sm text-gray-500 print:text-base print:text-black print:font-semibold">
-                  {itemsByDay[day]?.length || 0} items
+                <span className="text-sm text-gray-500 print:text-xl print:text-black print:font-bold">
+                  ({itemsByDay[day]?.length || 0} items)
                 </span>
                 {day === 5 && (
-                  <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+                  <Badge variant="outline" className="text-yellow-600 border-yellow-600 print:hidden">
                     Overflow Day
                   </Badge>
                 )}
@@ -226,31 +226,31 @@ export function LayupSchedulePreview({
               </div>
 
               {/* Print-Only Checklist View */}
-              <div className="hidden print:block space-y-3">
+              <div className="hidden print:block space-y-4">
                 {itemsByDay[day]?.map((item, idx) => (
-                  <div key={idx} className="border-2 border-gray-300 rounded p-3 bg-white flex items-start gap-3">
+                  <div key={idx} className="border-3 border-black rounded-lg p-4 bg-white flex items-start gap-4">
                     {/* Large Checkbox */}
                     <div className="flex-shrink-0 mt-1">
-                      <div className="w-6 h-6 border-2 border-black rounded"></div>
+                      <div className="w-8 h-8 border-3 border-black rounded-md"></div>
                     </div>
                     
                     {/* Order Details */}
-                    <div className="flex-grow grid grid-cols-4 gap-2 text-sm">
+                    <div className="flex-grow grid grid-cols-4 gap-3 text-sm">
                       <div>
-                        <div className="font-semibold text-xs text-gray-600">ORDER ID</div>
-                        <div className="font-mono font-bold text-base">{item.orderId}</div>
+                        <div className="font-bold text-xs text-gray-700 uppercase">Order ID</div>
+                        <div className="font-mono font-bold text-lg mt-1">{item.orderId}</div>
                       </div>
                       <div>
-                        <div className="font-semibold text-xs text-gray-600">STOCK MODEL</div>
-                        <div className="font-semibold">{item.stockModel}</div>
+                        <div className="font-bold text-xs text-gray-700 uppercase">Stock Model</div>
+                        <div className="font-bold text-base mt-1">{item.stockModel}</div>
                       </div>
                       <div>
-                        <div className="font-semibold text-xs text-gray-600">MOLD</div>
-                        <div className="font-bold text-base">{item.moldId}</div>
+                        <div className="font-bold text-xs text-gray-700 uppercase">Mold</div>
+                        <div className="font-bold text-lg mt-1">{item.moldId}</div>
                       </div>
                       <div>
-                        <div className="font-semibold text-xs text-gray-600">ACTION / MATERIAL</div>
-                        <div className="font-semibold">
+                        <div className="font-bold text-xs text-gray-700 uppercase">Action / Material</div>
+                        <div className="font-bold text-base mt-1">
                           {item.actionLength || '-'} / {item.material || '-'}
                         </div>
                       </div>
@@ -258,15 +258,15 @@ export function LayupSchedulePreview({
                     
                     {/* Badges */}
                     {(item.hasLOP || item.hasADL || item.hasHeavyFill) && (
-                      <div className="flex-shrink-0 flex flex-col gap-1 text-xs font-bold">
+                      <div className="flex-shrink-0 flex flex-col gap-2 text-xs font-bold">
                         {item.hasLOP && (
-                          <span className="px-2 py-1 bg-green-100 border border-green-800 rounded">LOP</span>
+                          <span className="px-3 py-2 bg-green-100 border-2 border-green-800 rounded text-sm">LOP</span>
                         )}
                         {item.hasADL && (
-                          <span className="px-2 py-1 bg-blue-100 border border-blue-800 rounded">ADL</span>
+                          <span className="px-3 py-2 bg-blue-100 border-2 border-blue-800 rounded text-sm">ADL</span>
                         )}
                         {item.hasHeavyFill && (
-                          <span className="px-2 py-1 bg-orange-100 border border-orange-800 rounded">HEAVY</span>
+                          <span className="px-3 py-2 bg-orange-100 border-2 border-orange-800 rounded text-sm">HEAVY</span>
                         )}
                       </div>
                     )}
@@ -274,14 +274,14 @@ export function LayupSchedulePreview({
                 ))}
                 
                 {/* Signature Line for Each Day */}
-                <div className="mt-6 pt-4 border-t-2 border-black flex justify-between items-end">
+                <div className="mt-8 pt-6 border-t-4 border-black flex justify-between items-end">
                   <div>
-                    <div className="text-sm font-semibold mb-1">Completed by:</div>
-                    <div className="border-b-2 border-black w-64 h-8"></div>
+                    <div className="text-base font-bold mb-2">Completed by:</div>
+                    <div className="border-b-3 border-black w-80 h-10"></div>
                   </div>
                   <div>
-                    <div className="text-sm font-semibold mb-1">Date:</div>
-                    <div className="border-b-2 border-black w-32 h-8"></div>
+                    <div className="text-base font-bold mb-2">Date:</div>
+                    <div className="border-b-3 border-black w-40 h-10"></div>
                   </div>
                 </div>
               </div>
@@ -352,7 +352,7 @@ export function LayupSchedulePreview({
             className="bg-green-600 hover:bg-green-700"
             data-testid="button-approve-schedule"
           >
-            {isApproving ? 'Approving...' : `Approve & Move to Barcode (${scheduledItems.length} items)`}
+            {isApproving ? 'Approving...' : `Approve & Progress to Layup (${scheduledItems.length} items)`}
           </Button>
         </DialogFooter>
       </DialogContent>

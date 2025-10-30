@@ -1155,6 +1155,11 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
         const roundedTotalPaid = Math.round(totalPaid * 100) / 100;
         const roundedOrderTotal = Math.round(orderTotal * 100) / 100;
         const isPaidInFull = roundedTotalPaid >= roundedOrderTotal;
+        
+        // Calculate credit if overpaid
+        const creditAmount = isPaidInFull && roundedTotalPaid > roundedOrderTotal 
+          ? roundedTotalPaid - roundedOrderTotal 
+          : 0;
 
         console.log(`📊 Payment summary for ${orderId}:`, {
           orderTotal,
@@ -1162,8 +1167,14 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
           totalPaid,
           roundedTotalPaid,
           isPaidInFull,
+          creditAmount,
           newPaymentAmount: paymentAmount,
         });
+
+        // Log overpayment/credit
+        if (creditAmount > 0) {
+          console.log(`💰 OVERPAYMENT: Order ${orderId} has a credit of $${creditAmount.toFixed(2)}`);
+        }
 
         await db
           .update(allOrders)
@@ -1182,9 +1193,10 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
           paymentId: newPayment.id,
           isPaidInFull,
           totalPaid,
+          creditAmount,
         });
 
-        console.log(`✅ Payment recorded for order ${orderId} (Paid in full: ${isPaidInFull})`);
+        console.log(`✅ Payment recorded for order ${orderId} (Paid in full: ${isPaidInFull}${creditAmount > 0 ? `, Credit: $${creditAmount.toFixed(2)}` : ''})`);
       } catch (error) {
         console.error(`❌ Error processing payment for order ${item.orderId}:`, error);
         errors.push({

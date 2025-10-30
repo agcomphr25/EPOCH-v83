@@ -787,28 +787,89 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
     const { scheduleDate } = req.params;
     console.log(`📅 Fetching orders for schedule date: ${scheduleDate}`);
     
-    // Use Neon's raw SQL for efficient server-side filtering
-    const { neon } = await import('@neondatabase/serverless');
-    const sql = neon(process.env.DATABASE_URL!);
-    
-    // Query with server-side filtering using parameterized query
-    const result = await sql`
+    // Get all schedule entries for this date
+    const scheduleResult = await pool.query(
+      `
       SELECT DISTINCT order_id
       FROM layup_schedule
-      WHERE scheduled_date::date = ${scheduleDate}::date
-         OR layup_day = ${scheduleDate}::date
+      WHERE scheduled_date::date = $1::date
+         OR layup_day = $1::date
       ORDER BY order_id
-    `;
+      `,
+      [scheduleDate]
+    );
     
-    const orderIds = result.map((row: any) => row.order_id);
+    const scheduleOrderIds = scheduleResult.rows.map((row: any) => row.order_id);
+    console.log(`📋 Found ${scheduleOrderIds.length} schedule entries for ${scheduleDate}`);
     
-    console.log(`✅ Found ${orderIds.length} orders for schedule date ${scheduleDate}:`, orderIds.slice(0, 5));
+    // Separate regular orders from PO units
+    const regularOrderIds: string[] = [];
+    const poUnitIds: string[] = [];
+    
+    for (const orderId of scheduleOrderIds) {
+      if (orderId.startsWith('PO-')) {
+        poUnitIds.push(orderId);
+      } else {
+        regularOrderIds.push(orderId);
+      }
+    }
+    
+    console.log(`📦 Regular orders: ${regularOrderIds.length}, PO units: ${poUnitIds.length}`);
+    
+    // Map PO units to their production_order IDs
+    const productionOrderIds = new Set<string>();
+    
+    if (poUnitIds.length > 0) {
+      // Parse PO unit IDs to extract poNumber and poItemId
+      // Format: PO-{poNumber}-{itemId}-{unitNumber}
+      const poMappings: Array<{ poNumber: string; poItemId: number }> = [];
+      
+      for (const poUnitId of poUnitIds) {
+        const parts = poUnitId.split('-');
+        if (parts.length >= 3) {
+          const poNumber = parts[1];
+          const poItemId = parseInt(parts[2]);
+          if (!isNaN(poItemId)) {
+            poMappings.push({ poNumber, poItemId });
+          }
+        }
+      }
+      
+      // Look up production_orders that match these PO numbers and item IDs
+      if (poMappings.length > 0) {
+        const uniqueMappings = Array.from(
+          new Map(poMappings.map(m => [`${m.poNumber}-${m.poItemId}`, m])).values()
+        );
+        
+        for (const mapping of uniqueMappings) {
+          const productionOrderResult = await pool.query(
+            `
+            SELECT DISTINCT order_id
+            FROM production_orders
+            WHERE po_number = $1 AND po_item_id = $2
+            `,
+            [mapping.poNumber, mapping.poItemId]
+          );
+          
+          for (const row of productionOrderResult.rows) {
+            productionOrderIds.add(row.order_id);
+          }
+        }
+        
+        console.log(`🔗 Mapped ${poUnitIds.length} PO units to ${productionOrderIds.size} production orders`);
+      }
+    }
+    
+    // Combine regular order IDs with production order IDs
+    const allOrderIds = [...regularOrderIds, ...Array.from(productionOrderIds)];
+    
+    console.log(`✅ Total orders for barcode scan: ${allOrderIds.length} (${regularOrderIds.length} regular + ${productionOrderIds.size} production orders)`);
     
     res.json({
       success: true,
       scheduleDate,
-      orderIds,
-      count: orderIds.length
+      orderIds: allOrderIds,
+      count: allOrderIds.length
     });
   } catch (error) {
     console.error('❌ Error fetching orders by schedule date:', error);

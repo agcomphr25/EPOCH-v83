@@ -781,4 +781,40 @@ router.delete('/by-order/:orderId', async (req: Request, res: Response) => {
   }
 });
 
+// Get all orders for a specific layup schedule date (for barcode scanning)
+router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response) => {
+  try {
+    const { scheduleDate } = req.params;
+    console.log(`📅 Fetching orders for schedule date: ${scheduleDate}`);
+    
+    // Query all orders scheduled for this date
+    const scheduleEntries = await pool.query(`
+      SELECT DISTINCT
+        ls.order_id as "orderId"
+      FROM layup_schedule ls
+      WHERE DATE(ls.scheduled_date) = $1
+         OR ls.layup_day = $1
+      ORDER BY ls.order_id
+    `, [scheduleDate]);
+    
+    const orderIds = scheduleEntries.rows?.map((row: any) => row.orderId) || [];
+    
+    console.log(`✅ Found ${orderIds.length} orders for schedule date ${scheduleDate}`);
+    
+    res.json({
+      success: true,
+      scheduleDate,
+      orderIds,
+      count: orderIds.length
+    });
+  } catch (error) {
+    console.error('❌ Error fetching orders by schedule date:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch orders for schedule date',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

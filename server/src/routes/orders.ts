@@ -1790,8 +1790,25 @@ router.patch('/:orderId/department', async (req: Request, res: Response) => {
         orderType = 'draft';
         console.log(`✅ Updated draft order ${orderId} to ${department}`);
       } catch (draftError) {
-        console.error(`❌ Order ${orderId} not found in either table`);
-        return res.status(404).json({ error: `Order ${orderId} not found` });
+        // Try production_orders table
+        try {
+          const productionOrder = await storage.getProductionOrderByOrderId(orderId);
+          if (productionOrder) {
+            const { pool } = await import('../../db');
+            await pool.query(
+              'UPDATE production_orders SET current_department = $1 WHERE order_id = $2',
+              [department, orderId]
+            );
+            updatedOrder = { ...productionOrder, currentDepartment: department };
+            orderType = 'production';
+            console.log(`✅ Updated production order ${orderId} to ${department}`);
+          } else {
+            throw new Error('Order not found');
+          }
+        } catch (productionError) {
+          console.error(`❌ Order ${orderId} not found in any table`);
+          return res.status(404).json({ error: `Order ${orderId} not found` });
+        }
       }
     }
 

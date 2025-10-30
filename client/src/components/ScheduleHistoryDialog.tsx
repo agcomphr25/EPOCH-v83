@@ -1,0 +1,166 @@
+import { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Calendar, Printer, Package, FileText } from 'lucide-react';
+import { format } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
+import { LayupSchedulePreview } from './LayupSchedulePreview';
+
+interface Week {
+  week_start: string;
+  first_day: string;
+  last_day: string;
+  order_count: number;
+  po_order_count: number;
+  regular_order_count: number;
+}
+
+interface ScheduleHistoryDialogProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+export function ScheduleHistoryDialog({ open, onClose }: ScheduleHistoryDialogProps) {
+  const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
+  const [showReprintDialog, setShowReprintDialog] = useState(false);
+
+  // Fetch list of weeks with schedules
+  const { data: weeksData, isLoading: weeksLoading } = useQuery({
+    queryKey: ['/api/layup-schedule/weeks'],
+    enabled: open,
+  });
+
+  // Fetch schedule data for selected week
+  const { data: scheduleData, isLoading: scheduleLoading } = useQuery({
+    queryKey: ['/api/layup-schedule/week', selectedWeek],
+    enabled: !!selectedWeek && showReprintDialog,
+  });
+
+  const weeks: Week[] = weeksData?.weeks || [];
+
+  const handleReprint = (weekStart: string) => {
+    setSelectedWeek(weekStart);
+    setShowReprintDialog(true);
+  };
+
+  const handleCloseReprint = () => {
+    setShowReprintDialog(false);
+    setSelectedWeek(null);
+  };
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="w-6 h-6" />
+              Schedule History & Reprint
+            </DialogTitle>
+            <p className="text-sm text-gray-500 mt-1">
+              View and reprint past layup schedules
+            </p>
+          </DialogHeader>
+
+          {weeksLoading ? (
+            <div className="flex items-center justify-center p-12">
+              <div className="flex flex-col items-center gap-3">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="text-sm text-gray-500">Loading schedule history...</p>
+              </div>
+            </div>
+          ) : weeks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-12">
+              <FileText className="w-16 h-16 text-gray-300 mb-4" />
+              <p className="text-gray-500">No schedules found</p>
+              <p className="text-sm text-gray-400 mt-1">
+                Approved schedules will appear here
+              </p>
+            </div>
+          ) : (
+            <div>
+              <div className="mb-4 flex items-center gap-2 text-sm text-gray-600">
+                <Package className="w-4 h-4" />
+                <span>Showing {weeks.length} week{weeks.length !== 1 ? 's' : ''} with schedules</span>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Week Starting</TableHead>
+                    <TableHead>Date Range</TableHead>
+                    <TableHead className="text-right">Total Orders</TableHead>
+                    <TableHead className="text-right">Regular</TableHead>
+                    <TableHead className="text-right">PO Items</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {weeks.map((week) => (
+                    <TableRow key={week.week_start}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-gray-400" />
+                          {format(new Date(week.week_start), 'MMM dd, yyyy')}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600">
+                        {format(new Date(week.week_start), 'MMM dd')} -{' '}
+                        {format(new Date(week.last_day), 'MMM dd, yyyy')}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="secondary" className="font-mono">
+                          {week.order_count}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline" className="font-mono">
+                          {week.regular_order_count}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline" className="font-mono text-green-700 border-green-300">
+                          {week.po_order_count}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleReprint(week.week_start)}
+                          data-testid={`button-reprint-${week.week_start}`}
+                        >
+                          <Printer className="w-4 h-4 mr-2" />
+                          Reprint
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Reprint Dialog - reuses existing LayupSchedulePreview component */}
+      {selectedWeek && scheduleData && (
+        <LayupSchedulePreview
+          open={showReprintDialog}
+          onClose={handleCloseReprint}
+          scheduledItems={scheduleData.scheduledItems || []}
+          overflowItems={[]}
+          weekStart={selectedWeek}
+          totalItems={scheduleData.totalItems || 0}
+          onApprove={() => {
+            // No approval action for reprints
+            handleCloseReprint();
+          }}
+          isApproving={false}
+        />
+      )}
+    </>
+  );
+}

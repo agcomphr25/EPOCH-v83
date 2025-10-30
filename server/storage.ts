@@ -831,6 +831,28 @@ export interface IStorage {
   ): Promise<PurchaseOrder>;
   deletePurchaseOrder(id: number): Promise<void>;
   getOpenP1PurchaseOrders(): Promise<P1POQueueCustomer[]>;
+  
+  // PO Orders in Shipping QC (grouped by customer → PO → items)
+  getPOOrdersInShippingQC(): Promise<{
+    customerName: string;
+    pos: {
+      poNumber: string;
+      items: {
+        orderId: string;
+        unitNumber: number;
+        poItemId: number;
+        currentDepartment: string;
+        flatTop: boolean | null;
+        description: string | null;
+        totalQuantity: number;
+        actionLength: number | null;
+        material: string | null;
+        finishType: string | null;
+        stockModel: string | null;
+        caliber: string | null;
+      }[];
+    }[];
+  }[]>;
 
   // P2 Customers CRUD
   getAllP2Customers(): Promise<P2Customer[]>;
@@ -6062,6 +6084,115 @@ export class DatabaseStorage implements IStorage {
     }
 
     return Array.from(customerMap.values());
+  }
+
+  async getPOOrdersInShippingQC(): Promise<{
+    customerName: string;
+    pos: {
+      poNumber: string;
+      items: {
+        orderId: string;
+        unitNumber: number;
+        poItemId: number;
+        currentDepartment: string;
+        flatTop: boolean | null;
+        description: string | null;
+        totalQuantity: number;
+        actionLength: number | null;
+        material: string | null;
+        finishType: string | null;
+        stockModel: string | null;
+        caliber: string | null;
+      }[];
+    }[];
+  }[]> {
+    // Get all production orders in Shipping QC department
+    const rows = await db
+      .select({
+        orderId: productionOrders.orderId,
+        customerName: productionOrders.customerName,
+        poNumber: productionOrders.poNumber,
+        poItemId: productionOrders.poItemId,
+        currentDepartment: productionOrders.currentDepartment,
+        flatTop: productionOrders.flatTop,
+        description: purchaseOrderItems.description,
+        quantity: purchaseOrderItems.quantity,
+        actionLength: purchaseOrderItems.actionLength,
+        material: purchaseOrderItems.material,
+        finishType: purchaseOrderItems.finishType,
+        stockModel: purchaseOrderItems.stockModel,
+        caliber: purchaseOrderItems.caliber,
+      })
+      .from(productionOrders)
+      .innerJoin(
+        purchaseOrderItems,
+        eq(productionOrders.poItemId, purchaseOrderItems.id)
+      )
+      .where(eq(productionOrders.currentDepartment, 'Shipping QC'))
+      .orderBy(
+        asc(productionOrders.customerName),
+        asc(productionOrders.poNumber),
+        asc(productionOrders.orderId)
+      );
+
+    // Group by customer → PO → items
+    const customerMap = new Map<string, any>();
+
+    for (const row of rows) {
+      const customerId = row.customerName;
+      const poNumber = row.poNumber;
+
+      // Get or create customer group
+      if (!customerMap.has(customerId)) {
+        customerMap.set(customerId, {
+          customerName: customerId,
+          pos: new Map<string, any>(),
+        });
+      }
+
+      const customer = customerMap.get(customerId);
+
+      // Get or create PO group
+      if (!customer.pos.has(poNumber)) {
+        customer.pos.set(poNumber, {
+          poNumber,
+          items: [],
+        });
+      }
+
+      const po = customer.pos.get(poNumber);
+
+      // Extract unit number from order_id (e.g., ABC00199-0003 → 3)
+      const unitMatch = row.orderId.match(/-(\d+)$/);
+      const unitNumber = unitMatch ? parseInt(unitMatch[1]) : 1;
+
+      // Add item to PO
+      po.items.push({
+        orderId: row.orderId,
+        unitNumber,
+        poItemId: row.poItemId,
+        currentDepartment: row.currentDepartment,
+        flatTop: row.flatTop,
+        description: row.description,
+        totalQuantity: row.quantity,
+        actionLength: row.actionLength,
+        material: row.material,
+        finishType: row.finishType,
+        stockModel: row.stockModel,
+        caliber: row.caliber,
+      });
+    }
+
+    // Convert maps to arrays
+    const customers = Array.from(customerMap.values()).map((customer) => ({
+      customerName: customer.customerName,
+      pos: Array.from(customer.pos.values()).map((po) => ({
+        poNumber: po.poNumber,
+        items: po.items.sort((a: any, b: any) => a.unitNumber - b.unitNumber), // Sort by unit number
+      })),
+    }));
+
+    return customers;
   }
 
   // Purchase Order Items CRUD

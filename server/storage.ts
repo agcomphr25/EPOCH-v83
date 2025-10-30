@@ -908,6 +908,7 @@ export interface IStorage {
 
   // Purchase Order Items CRUD
   getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]>;
+  getPurchaseOrderItem(id: number): Promise<PurchaseOrderItem | undefined>;
   createPurchaseOrderItem(
     data: InsertPurchaseOrderItem
   ): Promise<PurchaseOrderItem>;
@@ -6203,6 +6204,15 @@ export class DatabaseStorage implements IStorage {
       .from(purchaseOrderItems)
       .where(eq(purchaseOrderItems.poId, poId))
       .orderBy(purchaseOrderItems.createdAt);
+  }
+
+  async getPurchaseOrderItem(id: number): Promise<PurchaseOrderItem | undefined> {
+    const items = await db
+      .select()
+      .from(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.id, id))
+      .limit(1);
+    return items[0];
   }
 
   async createPurchaseOrderItem(

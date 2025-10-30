@@ -354,6 +354,50 @@ router.post('/save', async (req: Request, res: Response) => {
     await pool.query('BEGIN');
 
     try {
+      // Get existing schedule for this week to decrement PO item counts
+      const existingScheduleResult = await pool.query(
+        `
+        SELECT order_id 
+        FROM layup_schedule 
+        WHERE scheduled_date >= $1 AND scheduled_date < $1::date + INTERVAL '7 days'
+      `,
+        [weekStart]
+      );
+      
+      // Decrement PO item counts for items being removed
+      const existingPOCounts = new Map<string, number>();
+      const existingRows = existingScheduleResult.rows as Array<{ order_id: string }>;
+      for (const row of existingRows) {
+        const orderId = row.order_id;
+        if (orderId.startsWith('PO-')) {
+          const parts = orderId.split('-');
+          if (parts.length >= 3) {
+            const poNumber = parts[1];
+            const itemId = parts[2];
+            const key = `${poNumber}-${itemId}`;
+            existingPOCounts.set(key, (existingPOCounts.get(key) || 0) + 1);
+          }
+        }
+      }
+      
+      // Decrement counts before clearing
+      if (existingPOCounts.size > 0) {
+        const poItemEntries = Array.from(existingPOCounts.entries());
+        for (const [key, count] of poItemEntries) {
+          const [poNumber, itemId] = key.split('-');
+          await pool.query(
+            `
+            UPDATE purchase_order_items
+            SET order_count = GREATEST(COALESCE(order_count, 0) - $1, 0),
+                updated_at = NOW()
+            WHERE id = $2
+          `,
+            [count, parseInt(itemId)]
+          );
+          console.log(`📦 Decremented PO item ${itemId}: removed ${count} from order_count`);
+        }
+      }
+      
       // Clear existing schedule for this week
       await pool.query(
         `
@@ -366,6 +410,7 @@ router.post('/save', async (req: Request, res: Response) => {
       let savedCount = 0;
       let progressedCount = 0;
       const orderIds: string[] = [];
+      const poItemCounts = new Map<string, number>(); // Track PO item counts: "poNumber-itemId" -> count
 
       // Save schedule entries
       for (const entry of entries) {
@@ -404,14 +449,42 @@ router.post('/save', async (req: Request, res: Response) => {
 
         savedCount++;
         
-        // Track unique order IDs (skip PO items)
-        if (!orderId.startsWith('PO-')) {
+        // Track PO items to update their order counts
+        if (orderId.startsWith('PO-')) {
+          // Parse PO item ID: PO-{poNumber}-{itemId}-{unitNumber}
+          const parts = orderId.split('-');
+          if (parts.length >= 3) {
+            const poNumber = parts[1];
+            const itemId = parts[2];
+            const key = `${poNumber}-${itemId}`;
+            poItemCounts.set(key, (poItemCounts.get(key) || 0) + 1);
+          }
+        } else {
+          // Track regular order IDs
           orderIds.push(orderId);
         }
         
         console.log(
           `✅ Order ${orderId} scheduled for ${scheduledDate}`
         );
+      }
+
+      // Update PO item order counts
+      if (poItemCounts.size > 0) {
+        const newPOItemEntries = Array.from(poItemCounts.entries());
+        for (const [key, count] of newPOItemEntries) {
+          const [poNumber, itemId] = key.split('-');
+          await pool.query(
+            `
+            UPDATE purchase_order_items
+            SET order_count = COALESCE(order_count, 0) + $1,
+                updated_at = NOW()
+            WHERE id = $2
+          `,
+            [count, parseInt(itemId)]
+          );
+          console.log(`📦 Updated PO item ${itemId}: added ${count} to order_count`);
+        }
       }
 
       // Move regular orders to Layup/Plugging department (not PO items)

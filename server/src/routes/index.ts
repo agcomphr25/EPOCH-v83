@@ -458,6 +458,10 @@ export function registerRoutes(app: Express): Server {
         FROM production_orders po
         WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
           AND po.production_status IN ('PENDING', 'ACTIVE')
+          AND po.item_type = 'stock_model'
+          AND po.item_id IS NOT NULL
+          AND po.item_id != ''
+          AND LOWER(po.item_id) NOT IN ('none', 'no stock', 'no_stock')
         ORDER BY po.due_date ASC
       `);
 

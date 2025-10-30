@@ -54,6 +54,7 @@ export function LayupSchedulePreview({
   isApproving,
 }: LayupSchedulePreviewProps) {
   const barcodeRef = useRef<SVGSVGElement>(null);
+  const printContentRef = useRef<HTMLDivElement>(null);
   
   // Generate barcode ID from week start date
   const scheduleBarcode = weekStart ? `LAYUP${format(new Date(weekStart), 'yyyyMMdd')}` : '';
@@ -96,93 +97,82 @@ export function LayupSchedulePreview({
   }, [scheduleBarcode, open]);
 
   const handlePrint = () => {
-    // Add print class to body to trigger print styles
-    document.body.classList.add('printing-schedule');
-    
-    // Trigger print
-    setTimeout(() => {
-      window.print();
-      
-      // Remove print class after printing
-      setTimeout(() => {
-        document.body.classList.remove('printing-schedule');
-      }, 100);
-    }, 100);
+    window.print();
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto print:fixed print:inset-0 print:max-w-none print:max-h-none print:overflow-visible print:p-8 print:bg-white">
-        <DialogHeader className="print:block print:mb-6">
-          <div className="flex items-center justify-between print:relative">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto" id="layup-schedule-content">
+        <DialogHeader>
+          <div className="flex items-center justify-between">
             <div>
-              <DialogTitle className="flex items-center gap-2 print:text-3xl print:font-bold print:mb-2">
-                <Calendar className="w-6 h-6 print:hidden" />
+              <DialogTitle className="flex items-center gap-2">
+                <Calendar className="w-6 h-6" />
                 Layup Schedule
               </DialogTitle>
-              <p className="text-sm text-gray-500 print:text-xl print:text-black print:font-semibold">
+              <p className="text-sm text-gray-500 mt-1">
                 Week starting {weekStart ? format(new Date(weekStart), 'MMM dd, yyyy') : ''}
               </p>
             </div>
-            {/* Schedule Barcode - appears in top right corner when printed */}
-            <div className="flex flex-col items-center border rounded-lg p-3 bg-white print:absolute print:top-0 print:right-0 print:border-2 print:border-black print:rounded print:p-2">
-              <p className="text-xs text-gray-600 mb-1 print:text-sm print:text-black print:font-semibold print:mb-2">Scan to Complete Layup</p>
-              <svg ref={barcodeRef} className="w-48 print:w-56"></svg>
+            {/* Schedule Barcode */}
+            <div className="flex flex-col items-center border rounded-lg p-3 bg-white">
+              <p className="text-xs text-gray-600 mb-1 font-semibold">Scan to Complete Layup</p>
+              <svg ref={barcodeRef} className="w-48"></svg>
             </div>
           </div>
         </DialogHeader>
 
         {/* Summary Statistics */}
-        <div className="grid grid-cols-3 gap-4 mb-6 print:grid-cols-3 print:gap-6 print:mb-8 print:border-2 print:border-black print:p-4 print:rounded">
-          <div className="bg-blue-50 p-4 rounded-lg print:bg-white print:border-2 print:border-blue-700 print:p-3">
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="bg-blue-50 p-4 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
-              <Package className="w-5 h-5 text-blue-600 print:w-6 print:h-6" />
-              <span className="text-sm font-medium text-gray-700 print:text-base print:text-black print:font-bold">Total Items</span>
+              <Package className="w-5 h-5 text-blue-600" />
+              <span className="text-sm font-medium text-gray-700">Total Items</span>
             </div>
-            <div className="text-2xl font-bold text-blue-700 print:text-3xl print:text-black">{totalItems}</div>
+            <div className="text-2xl font-bold text-blue-700">{totalItems}</div>
           </div>
 
-          <div className="bg-green-50 p-4 rounded-lg print:bg-white print:border-2 print:border-green-700 print:p-3">
+          <div className="bg-green-50 p-4 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle2 className="w-5 h-5 text-green-600 print:w-6 print:h-6" />
-              <span className="text-sm font-medium text-gray-700 print:text-base print:text-black print:font-bold">Scheduled</span>
+              <CheckCircle2 className="w-5 h-5 text-green-600" />
+              <span className="text-sm font-medium text-gray-700">Scheduled</span>
             </div>
-            <div className="text-2xl font-bold text-green-700 print:text-3xl print:text-black">{scheduledItems.length}</div>
+            <div className="text-2xl font-bold text-green-700">{scheduledItems.length}</div>
           </div>
 
-          <div className={`${hasOverflow ? 'bg-yellow-50' : 'bg-gray-50'} p-4 rounded-lg print:bg-white print:border-2 ${hasOverflow ? 'print:border-yellow-700' : 'print:border-gray-400'} print:p-3`}>
+          <div className={hasOverflow ? 'bg-yellow-50 p-4 rounded-lg' : 'bg-gray-50 p-4 rounded-lg'}>
             <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle className={`w-5 h-5 ${hasOverflow ? 'text-yellow-600' : 'text-gray-400'} print:w-6 print:h-6`} />
-              <span className="text-sm font-medium text-gray-700 print:text-base print:text-black print:font-bold">Overflow</span>
+              <AlertTriangle className={`w-5 h-5 ${hasOverflow ? 'text-yellow-600' : 'text-gray-400'}`} />
+              <span className="text-sm font-medium text-gray-700">Overflow</span>
             </div>
-            <div className={`text-2xl font-bold ${hasOverflow ? 'text-yellow-700' : 'text-gray-400'} print:text-3xl print:text-black`}>
+            <div className={`text-2xl font-bold ${hasOverflow ? 'text-yellow-700' : 'text-gray-400'}`}>
               {overflowItems.length}
             </div>
           </div>
         </div>
 
         {/* Scheduled Items by Day */}
-        <div className="space-y-6 print:space-y-8">
-          <h3 className="text-lg font-semibold print:text-2xl print:font-bold print:mb-6 print:border-b-4 print:border-black print:pb-2">Scheduled Items</h3>
+        <div className="space-y-6" ref={printContentRef}>
+          <h3 className="text-lg font-semibold">Scheduled Items</h3>
           
           {scheduledDays.map(day => (
-            <div key={day} className="border rounded-lg p-4 print:border-4 print:border-black print:rounded-lg print:p-6 print:page-break-inside-avoid print:mb-8">
-              <div className="flex items-center gap-2 mb-3 print:mb-6 print:pb-3 print:border-b-4 print:border-black">
-                <Badge variant={day === 5 ? 'secondary' : 'default'} className="text-sm print:text-2xl print:font-bold print:bg-black print:text-white print:px-4 print:py-2">
+            <div key={day} className="border rounded-lg p-4 layup-day-section">
+              <div className="flex items-center gap-2 mb-3 layup-day-header">
+                <Badge variant={day === 5 ? 'secondary' : 'default'} className="text-sm">
                   {dayNames[day]}
                 </Badge>
-                <span className="text-sm text-gray-500 print:text-xl print:text-black print:font-bold">
+                <span className="text-sm text-gray-500">
                   ({itemsByDay[day]?.length || 0} items)
                 </span>
                 {day === 5 && (
-                  <Badge variant="outline" className="text-yellow-600 border-yellow-600 print:hidden">
+                  <Badge variant="outline" className="text-yellow-600 border-yellow-600 no-print">
                     Overflow Day
                   </Badge>
                 )}
               </div>
 
               {/* Desktop/Preview Table View */}
-              <div className="print:hidden">
+              <div className="desktop-only">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -237,62 +227,51 @@ export function LayupSchedulePreview({
               </div>
 
               {/* Print-Only Checklist View */}
-              <div className="hidden print:block space-y-4">
+              <div className="print-only">
                 {itemsByDay[day]?.map((item, idx) => (
-                  <div key={idx} className="border-3 border-black rounded-lg p-4 bg-white flex items-start gap-4">
-                    {/* Large Checkbox */}
-                    <div className="flex-shrink-0 mt-1">
-                      <div className="w-8 h-8 border-3 border-black rounded-md"></div>
-                    </div>
+                  <div key={idx} className="layup-order-item">
+                    <div className="layup-checkbox"></div>
                     
-                    {/* Order Details */}
-                    <div className="flex-grow grid grid-cols-4 gap-3 text-sm">
+                    <div className="layup-order-details">
                       <div>
-                        <div className="font-bold text-xs text-gray-700 uppercase">Order ID</div>
-                        <div className="font-mono font-bold text-lg mt-1">{item.orderId}</div>
+                        <div className="layup-field-label">Order ID</div>
+                        <div className="layup-field-value">{item.orderId}</div>
                       </div>
                       <div>
-                        <div className="font-bold text-xs text-gray-700 uppercase">Stock Model</div>
-                        <div className="font-bold text-base mt-1">{item.stockModel}</div>
+                        <div className="layup-field-label">Stock Model</div>
+                        <div className="layup-field-value">{item.stockModel}</div>
                       </div>
                       <div>
-                        <div className="font-bold text-xs text-gray-700 uppercase">Mold</div>
-                        <div className="font-bold text-lg mt-1">{item.moldId}</div>
+                        <div className="layup-field-label">Mold</div>
+                        <div className="layup-field-value">{item.moldId}</div>
                       </div>
                       <div>
-                        <div className="font-bold text-xs text-gray-700 uppercase">Action / Material</div>
-                        <div className="font-bold text-base mt-1">
+                        <div className="layup-field-label">Action / Material</div>
+                        <div className="layup-field-value">
                           {item.actionLength || '-'} / {item.material || '-'}
                         </div>
                       </div>
                     </div>
                     
-                    {/* Badges */}
                     {(item.hasLOP || item.hasADL || item.hasHeavyFill) && (
-                      <div className="flex-shrink-0 flex flex-col gap-2 text-xs font-bold">
-                        {item.hasLOP && (
-                          <span className="px-3 py-2 bg-green-100 border-2 border-green-800 rounded text-sm">LOP</span>
-                        )}
-                        {item.hasADL && (
-                          <span className="px-3 py-2 bg-blue-100 border-2 border-blue-800 rounded text-sm">ADL</span>
-                        )}
-                        {item.hasHeavyFill && (
-                          <span className="px-3 py-2 bg-orange-100 border-2 border-orange-800 rounded text-sm">HEAVY</span>
-                        )}
+                      <div className="layup-badges">
+                        {item.hasLOP && <span className="layup-badge layup-badge-lop">LOP</span>}
+                        {item.hasADL && <span className="layup-badge layup-badge-adl">ADL</span>}
+                        {item.hasHeavyFill && <span className="layup-badge layup-badge-heavy">HEAVY</span>}
                       </div>
                     )}
                   </div>
                 ))}
                 
-                {/* Signature Line for Each Day */}
-                <div className="mt-8 pt-6 border-t-4 border-black flex justify-between items-end">
-                  <div>
-                    <div className="text-base font-bold mb-2">Completed by:</div>
-                    <div className="border-b-3 border-black w-80 h-10"></div>
+                {/* Signature Line */}
+                <div className="layup-signature">
+                  <div className="layup-signature-field">
+                    <div className="layup-signature-label">Completed by:</div>
+                    <div className="layup-signature-line"></div>
                   </div>
-                  <div>
-                    <div className="text-base font-bold mb-2">Date:</div>
-                    <div className="border-b-3 border-black w-40 h-10"></div>
+                  <div className="layup-signature-field layup-signature-date">
+                    <div className="layup-signature-label">Date:</div>
+                    <div className="layup-signature-line"></div>
                   </div>
                 </div>
               </div>
@@ -302,7 +281,7 @@ export function LayupSchedulePreview({
 
         {/* Overflow Items */}
         {hasOverflow && (
-          <div className="mt-6 border border-yellow-300 rounded-lg p-4 bg-yellow-50">
+          <div className="mt-6 border border-yellow-300 rounded-lg p-4 bg-yellow-50 no-print">
             <div className="flex items-center gap-2 mb-3">
               <XCircle className="w-5 h-5 text-yellow-600" />
               <h3 className="text-lg font-semibold text-yellow-900">
@@ -322,6 +301,7 @@ export function LayupSchedulePreview({
                 <TableRow>
                   <TableHead>Order ID</TableHead>
                   <TableHead>Stock Model</TableHead>
+                  <TableHead>Customer</TableHead>
                   <TableHead>Reason</TableHead>
                 </TableRow>
               </TableHeader>
@@ -332,6 +312,7 @@ export function LayupSchedulePreview({
                     <TableCell>
                       <Badge variant="outline">{item.stockModel}</Badge>
                     </TableCell>
+                    <TableCell className="text-sm">{item.customerName}</TableCell>
                     <TableCell className="text-sm text-yellow-700">{item.reason}</TableCell>
                   </TableRow>
                 ))}
@@ -340,7 +321,7 @@ export function LayupSchedulePreview({
           </div>
         )}
 
-        <DialogFooter className="mt-6 print:hidden">
+        <DialogFooter className="gap-2 mt-6 no-print">
           <Button
             variant="outline"
             onClick={handlePrint}
@@ -352,18 +333,16 @@ export function LayupSchedulePreview({
           <Button
             variant="outline"
             onClick={onClose}
-            disabled={isApproving}
-            data-testid="button-cancel-schedule"
+            data-testid="button-close-preview"
           >
             Cancel
           </Button>
           <Button
             onClick={onApprove}
-            disabled={isApproving || scheduledItems.length === 0}
-            className="bg-green-600 hover:bg-green-700"
+            disabled={isApproving}
             data-testid="button-approve-schedule"
           >
-            {isApproving ? 'Approving...' : `Approve & Progress to Layup (${scheduledItems.length} items)`}
+            {isApproving ? 'Approving...' : 'Approve & Progress Orders'}
           </Button>
         </DialogFooter>
       </DialogContent>

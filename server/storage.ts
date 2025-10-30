@@ -6002,6 +6002,22 @@ export class DatabaseStorage implements IStorage {
         .where(eq(purchaseOrderItems.poId, po.id))
         .orderBy(purchaseOrderItems.createdAt);
 
+      // Get all production orders for this PO and count those in P1 Production Queue
+      const allProductionOrders = await db
+        .select()
+        .from(productionOrders)
+        .where(eq(productionOrders.poId, po.id));
+
+      // Count production orders still in P1 Production Queue per item
+      const itemsInP1Map = new Map<number, number>();
+      allProductionOrders.forEach(order => {
+        if (order.currentDepartment === 'P1 Production Queue' && 
+            (order.productionStatus === 'PENDING' || order.productionStatus === 'ACTIVE')) {
+          const count = itemsInP1Map.get(order.poItemId) || 0;
+          itemsInP1Map.set(order.poItemId, count + 1);
+        }
+      });
+
       const poItems: P1POQueueItem[] = items
         .map((item) => {
           // Parse specifications JSON
@@ -6010,9 +6026,8 @@ export class DatabaseStorage implements IStorage {
           // Check both camelCase and snake_case for stockModel
           const stockModel = specs.stockModel || specs.stock_model || null;
           
-          // Calculate remaining quantity (not yet scheduled)
-          const orderCount = item.orderCount || 0;
-          const remainingQuantity = item.quantity - orderCount;
+          // Calculate quantity still in P1 Production Queue (not moved to later departments)
+          const quantityInP1 = itemsInP1Map.get(item.id) || 0;
           
           return {
             id: item.id,
@@ -6030,7 +6045,7 @@ export class DatabaseStorage implements IStorage {
             paintOptions: specs.paintOptions || specs.paint_options || null,
             texture: specs.texture || null,
             flatTop: specs.flatTop || specs.flat_top || null,
-            quantity: remainingQuantity, // Show only remaining quantity
+            quantity: quantityInP1, // Show only items still in P1 Production Queue
             status: item.stockStatus || 'pending',
             notes: item.notes || item.productionNotes || null,
             dueDate: item.dueDate?.toString() || null,
@@ -6052,16 +6067,23 @@ export class DatabaseStorage implements IStorage {
           return hasValidStockModel && item.quantity > 0;
         });
 
-      customer.purchaseOrders.push({
-        poNumber: po.poNumber,
-        poDate: po.poDate?.toString() || null,
-        expectedDelivery: po.expectedDelivery?.toString() || null,
-        totalItems: poItems.reduce((sum, item) => sum + item.quantity, 0),
-        items: poItems,
-      });
+      // Only add PO if it has items in P1 Production Queue
+      const totalItems = poItems.reduce((sum, item) => sum + item.quantity, 0);
+      if (totalItems > 0) {
+        customer.purchaseOrders.push({
+          poNumber: po.poNumber,
+          poDate: po.poDate?.toString() || null,
+          expectedDelivery: po.expectedDelivery?.toString() || null,
+          totalItems,
+          items: poItems,
+        });
+      }
     }
 
-    return Array.from(customerMap.values());
+    // Filter out customers with no purchase orders
+    return Array.from(customerMap.values()).filter(
+      customer => customer.purchaseOrders.length > 0
+    );
   }
 
   // Purchase Order Items CRUD

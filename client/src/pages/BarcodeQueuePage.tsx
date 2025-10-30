@@ -376,21 +376,68 @@ export default function BarcodeQueuePage() {
     },
   });
 
-  // Progress to CNC mutation
-  const progressToCNC = useMutation({
+  // Smart routing: Flat Tops → Finish, Others → CNC
+  const progressToNextDepartment = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      return await apiRequest('/api/orders/progress-department', {
-        method: 'POST',
-        body: {
-          orderIds,
-          toDepartment: 'CNC',
-        },
+      // Separate orders by routing: flat tops go to Finish, others go to CNC
+      const flatTopOrderIds: string[] = [];
+      const cncOrderIds: string[] = [];
+      
+      for (const orderId of orderIds) {
+        const order = barcodeOrders.find((o: any) => o.orderId === orderId);
+        if (order) {
+          // Check flatTop field (PO items) or isFlattop field (regular orders)
+          const isFlatTop = (order as any).flatTop === true || (order as any).isFlattop === true;
+          if (isFlatTop) {
+            flatTopOrderIds.push(orderId);
+          } else {
+            cncOrderIds.push(orderId);
+          }
+        }
+      }
+      
+      console.log('🔀 Smart Routing:', {
+        flatTops: flatTopOrderIds.length,
+        cnc: cncOrderIds.length,
+        totalOrders: orderIds.length
       });
+      
+      // Progress flat tops to Finish department
+      if (flatTopOrderIds.length > 0) {
+        await apiRequest('/api/orders/progress-department', {
+          method: 'POST',
+          body: {
+            orderIds: flatTopOrderIds,
+            toDepartment: 'Finish',
+          },
+        });
+      }
+      
+      // Progress others to CNC department
+      if (cncOrderIds.length > 0) {
+        await apiRequest('/api/orders/progress-department', {
+          method: 'POST',
+          body: {
+            orderIds: cncOrderIds,
+            toDepartment: 'CNC',
+          },
+        });
+      }
+      
+      return { flatTopCount: flatTopOrderIds.length, cncCount: cncOrderIds.length };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      const messages = [];
+      if (data.flatTopCount > 0) {
+        messages.push(`${data.flatTopCount} Flat Top${data.flatTopCount > 1 ? 's' : ''} → Finish`);
+      }
+      if (data.cncCount > 0) {
+        messages.push(`${data.cncCount} order${data.cncCount > 1 ? 's' : ''} → CNC`);
+      }
+      
       toast({
         title: 'Orders progressed',
-        description: `Progressed ${selectedOrders.size} orders to CNC`,
+        description: messages.join(', '),
       });
       setSelectedOrders(new Set());
       setSelectAll(false);
@@ -422,7 +469,7 @@ export default function BarcodeQueuePage() {
     createBarcodeLabels.mutate(orderIds);
   };
 
-  const handleProgressToCNC = () => {
+  const handleProgressToNextDepartment = () => {
     if (selectedOrders.size === 0) {
       toast({
         title: 'No orders selected',
@@ -431,7 +478,7 @@ export default function BarcodeQueuePage() {
       });
       return;
     }
-    progressToCNC.mutate(Array.from(selectedOrders));
+    progressToNextDepartment.mutate(Array.from(selectedOrders));
   };
 
   // Auto-select order when scanned
@@ -521,13 +568,13 @@ export default function BarcodeQueuePage() {
                 Create Avery Labels ({selectedOrders.size})
               </Button>
               <Button
-                onClick={handleProgressToCNC}
-                disabled={progressToCNC.isPending}
+                onClick={handleProgressToNextDepartment}
+                disabled={progressToNextDepartment.isPending}
                 variant="outline"
                 className="border-green-500 text-green-700 hover:bg-green-50"
               >
                 <ArrowRight className="h-4 w-4 mr-2" />
-                Progress to CNC ({selectedOrders.size})
+                Progress to Next Dept ({selectedOrders.size})
               </Button>
             </div>
           )}
@@ -1126,16 +1173,16 @@ export default function BarcodeQueuePage() {
                   Create Labels ({selectedOrders.size})
                 </Button>
                 <Button
-                  onClick={handleProgressToCNC}
+                  onClick={handleProgressToNextDepartment}
                   disabled={
-                    selectedOrders.size === 0 || progressToCNC.isPending
+                    selectedOrders.size === 0 || progressToNextDepartment.isPending
                   }
                   className="bg-orange-600 hover:bg-orange-700 text-white"
                 >
                   <ArrowRight className="h-4 w-4 mr-2" />
-                  {progressToCNC.isPending
+                  {progressToNextDepartment.isPending
                     ? 'Progressing...'
-                    : `Progress to CNC (${selectedOrders.size})`}
+                    : `Progress to Next Dept (${selectedOrders.size})`}
                 </Button>
               </div>
             </div>

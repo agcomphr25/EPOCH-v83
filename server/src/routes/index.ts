@@ -3748,10 +3748,12 @@ export function registerRoutes(app: Express): Server {
       });
 
       // Get order details for label generation
+      const { pool } = await import('../../db');
       const orderDetails = [];
+      
       for (const orderId of orderIds) {
         // Try to get order from finalized orders first, then drafts
-        let order = null;
+        let order: any = null;
         try {
           order = await storage.getFinalizedOrderById(orderId);
           if (!order) {
@@ -3762,6 +3764,41 @@ export function registerRoutes(app: Express): Server {
         }
 
         if (order) {
+          // Check if this is a production order (PO item)
+          // Production orders don't have poNumber field in all_orders, so check production_orders table
+          try {
+            const poResult = await pool.query(
+              `
+              SELECT 
+                po.customer_name,
+                po.po_number,
+                po.po_item_id,
+                poi.quantity as total_quantity
+              FROM production_orders po
+              JOIN purchase_order_items poi ON po.po_item_id = poi.id
+              WHERE po.order_id = $1
+              `,
+              [orderId]
+            );
+            
+            if (poResult.rows.length > 0) {
+              const poData = poResult.rows[0];
+              // Extract unit number from orderId (e.g., ABC00199-0003 → unit #3)
+              const unitMatch = orderId.match(/-(\d+)$/);
+              const unitNumber = unitMatch ? parseInt(unitMatch[1]) : 1;
+              
+              order.isPOItem = true;
+              order.poCustomerName = poData.customer_name;
+              order.poNumber = poData.po_number;
+              order.poUnitNumber = unitNumber;
+              order.poTotalQuantity = poData.total_quantity;
+              
+              console.log(`📦 PO Item detected: ${orderId} → ${poData.customer_name}, PO#${poData.po_number}, ${unitNumber} of ${poData.total_quantity}`);
+            }
+          } catch (poError) {
+            console.warn(`Could not fetch PO details for ${orderId}:`, poError);
+          }
+          
           orderDetails.push(order);
           console.log(`✅ Found order for barcode: ${orderId}`);
         } else {
@@ -3932,10 +3969,21 @@ export function registerRoutes(app: Express): Server {
             'Unknown';
 
           // Add order information at top
-          page.drawText(`${order.orderId}`, {
+          // For PO items, show "Customer, PO#, X of Y" format
+          // For regular orders, show order ID
+          let labelText = order.orderId;
+          if ((order as any).isPOItem) {
+            const customerName = (order as any).poCustomerName || 'Customer';
+            const poNumber = (order as any).poNumber || 'N/A';
+            const unitNum = (order as any).poUnitNumber || 1;
+            const totalQty = (order as any).poTotalQuantity || 1;
+            labelText = `${customerName}, PO#${poNumber}, ${unitNum} of ${totalQty}`;
+          }
+          
+          page.drawText(labelText, {
             x: x + 8,
             y: y + 50,
-            size: 11,
+            size: (order as any).isPOItem ? 9 : 11, // Smaller font for longer PO text
             color: rgb(0, 0, 0),
           });
 

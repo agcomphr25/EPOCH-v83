@@ -448,6 +448,127 @@ export default function QCShippingQueuePage() {
     progressOrderMutation.mutate(orderIds);
   };
 
+  // Mutation for generating PO packing slips
+  const generatePOPackingSlipsMutation = useMutation({
+    mutationFn: async (orderIds: string[]) => {
+      const response = await apiRequest('/api/po-orders/packing-slips', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds }),
+      });
+      return response;
+    },
+    onSuccess: (data) => {
+      if (data.pdfs && Array.isArray(data.pdfs)) {
+        // Always an array - download each PDF
+        data.pdfs.forEach((pdf: any, index: number) => {
+          // Create blob from base64
+          const byteCharacters = atob(pdf.data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'application/pdf' });
+          
+          // Create download link
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = pdf.filename;
+          
+          // Trigger download with small delay between files
+          setTimeout(() => {
+            link.click();
+            URL.revokeObjectURL(url);
+          }, index * 100);
+        });
+        
+        toast({
+          title: 'Packing Slips Generated',
+          description: `Generated ${data.pdfs.length} packing slip(s)`,
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Invalid response format from server',
+          variant: 'destructive',
+        });
+      }
+    },
+    onError: (error: any) => {
+      console.error('Error generating packing slips:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to generate packing slips',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Mutation for progressing PO items to shipping
+  const progressPOToShippingMutation = useMutation({
+    mutationFn: async (orderIds: string[]) => {
+      const response = await apiRequest('/api/po-orders/progress-to-shipping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds }),
+      });
+      return response;
+    },
+    onSuccess: (data) => {
+      const { success, failed, message } = data;
+      
+      if (failed && failed.length > 0) {
+        // Show detailed error messages
+        const errorDetails = failed.map((f: any) => `${f.orderId}: ${f.reason}`).join('\n');
+        console.warn('Failed items:', errorDetails);
+        
+        toast({
+          title: success.length > 0 ? 'Partial Success' : 'Validation Failed',
+          description: success.length > 0
+            ? `${success.length} items progressed. ${failed.length} items failed - check console for details.`
+            : `${failed.length} item(s) failed validation. Cannot progress. Check: ${failed[0].reason}`,
+          variant: success.length > 0 ? 'default' : 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Orders Progressed',
+          description: message || `${success.length} items moved to Shipping`,
+        });
+      }
+      
+      // Clear selection and invalidate cache only if all succeeded
+      if (!failed || failed.length === 0) {
+        setSelectedPOItems(new Set());
+        setSelectedCustomer(null);
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/shipping-qc'] });
+    },
+    onError: (error: any) => {
+      console.error('Error progressing PO orders:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to progress PO orders to shipping',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Handle PO packing slip generation
+  const handlePOPackingSlips = () => {
+    if (selectedPOItems.size === 0) return;
+    const orderIds = Array.from(selectedPOItems);
+    generatePOPackingSlipsMutation.mutate(orderIds);
+  };
+
+  // Handle PO progression to shipping
+  const handlePOProgressToShipping = () => {
+    if (selectedPOItems.size === 0) return;
+    const orderIds = Array.from(selectedPOItems);
+    progressPOToShippingMutation.mutate(orderIds);
+  };
+
   // Handle QC checklist download
   const handleQCChecklistDownload = (orderId: string) => {
     try {
@@ -1244,20 +1365,26 @@ export default function QCShippingQueuePage() {
                   variant="outline"
                   size="sm"
                   className="border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-600 dark:text-purple-300 dark:hover:bg-purple-900/20"
-                  disabled={selectedPOItems.size === 0}
+                  disabled={selectedPOItems.size === 0 || generatePOPackingSlipsMutation.isPending}
+                  onClick={handlePOPackingSlips}
                   data-testid="button-generate-po-packing-slips"
                 >
                   <FileText className="h-4 w-4 mr-2" />
-                  Generate Packing Slips ({selectedPOItems.size})
+                  {generatePOPackingSlipsMutation.isPending
+                    ? 'Generating...'
+                    : `Generate Packing Slips (${selectedPOItems.size})`}
                 </Button>
                 <Button
                   size="sm"
                   className="bg-green-600 hover:bg-green-700 text-white"
-                  disabled={selectedPOItems.size === 0}
+                  disabled={selectedPOItems.size === 0 || progressPOToShippingMutation.isPending}
+                  onClick={handlePOProgressToShipping}
                   data-testid="button-progress-po-to-shipping"
                 >
                   <ArrowRight className="h-4 w-4 mr-2" />
-                  Progress to Shipping ({selectedPOItems.size})
+                  {progressPOToShippingMutation.isPending
+                    ? 'Progressing...'
+                    : `Progress to Shipping (${selectedPOItems.size})`}
                 </Button>
               </div>
             </div>

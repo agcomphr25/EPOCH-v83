@@ -59,102 +59,184 @@
 }
 
 /* Print Styles for Layup Schedule */
+.desktop-only {
+  display: block;
+}
+
+.print-only {
+  display: none;
+}
+
 @media print {
   @page {
-    size: landscape;
+    size: letter landscape;
     margin: 0.5in;
   }
   
   body {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+    background: white !important;
   }
   
-  /* Hide dialog overlay and show content */
-  [role="dialog"] {
-    position: static !important;
-    max-width: 100% !important;
-    max-height: 100% !important;
-    overflow: visible !important;
-    border: none !important;
-    box-shadow: none !important;
-  }
-  
-  /* Hide buttons and non-essential elements during print */
-  .print\:hidden,
-  button {
+  /* Hide dialog overlay */
+  [data-radix-dialog-overlay] {
     display: none !important;
   }
   
-  /* Optimize table printing */
-  table {
-    page-break-inside: auto;
-    width: 100%;
-    border-collapse: collapse;
+  /* Make dialog full page */
+  [role="dialog"] {
+    position: static !important;
+    max-width: none !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 20px !important;
   }
   
-  tr {
+  /* Hide elements not needed in print */
+  .no-print,
+  button,
+  [aria-label="Close"] {
+    display: none !important;
+  }
+  
+  /* Show print-only content */
+  .desktop-only {
+    display: none !important;
+  }
+  
+  .print-only {
+    display: block !important;
+  }
+  
+  /* Day sections */
+  .layup-day-section {
     page-break-inside: avoid;
-    page-break-after: auto;
+    margin-bottom: 40px;
+    border: 4px solid #000;
+    padding: 20px;
+    border-radius: 8px;
   }
   
-  thead {
-    display: table-header-group;
+  .layup-day-header {
+    font-size: 24px;
+    font-weight: bold;
+    padding: 12px 20px;
+    background: #000;
+    color: white;
+    margin: -20px -20px 20px -20px;
+    border-radius: 4px 4px 0 0;
   }
   
-  th, td {
-    border: 1px solid #ddd !important;
-    padding: 8px !important;
+  /* Order items */
+  .layup-order-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
+    padding: 15px;
+    border: 3px solid #333;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    background: white;
   }
   
-  /* Keep badges and colors visible */
-  .badge, [class*="bg-"] {
+  .layup-checkbox {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #000;
+    border-radius: 4px;
+    flex-shrink: 0;
+    margin-top: 5px;
+  }
+  
+  .layup-order-details {
+    flex-grow: 1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+  }
+  
+  .layup-field-label {
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #666;
+    margin-bottom: 4px;
+  }
+  
+  .layup-field-value {
+    font-size: 16px;
+    font-weight: bold;
+    font-family: monospace;
+  }
+  
+  /* Badges */
+  .layup-badges {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  
+  .layup-badge {
+    padding: 6px 12px;
+    border: 2px solid #000;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    min-width: 80px;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
   
-  /* Preserve background colors for badges */
-  .bg-green-100 {
-    background-color: #dcfce7 !important;
+  .layup-badge-lop {
+    background: #dcfce7;
+    border-color: #166534;
+    color: #166534;
   }
   
-  .bg-blue-100 {
-    background-color: #dbeafe !important;
+  .layup-badge-adl {
+    background: #dbeafe;
+    border-color: #1e40af;
+    color: #1e40af;
   }
   
-  .bg-orange-100 {
-    background-color: #ffedd5 !important;
+  .layup-badge-heavy {
+    background: #ffedd5;
+    border-color: #9a3412;
+    color: #9a3412;
   }
   
-  .bg-green-50 {
-    background-color: #f0fdf4 !important;
+  /* Signature section */
+  .layup-signature {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 3px solid #000;
   }
   
-  .bg-blue-50 {
-    background-color: #eff6ff !important;
+  .layup-signature-field {
+    flex: 1;
   }
   
-  .bg-yellow-50 {
-    background-color: #fefce8 !important;
+  .layup-signature-label {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 8px;
   }
   
-  /* Preserve text colors */
-  .text-green-800 {
-    color: #166534 !important;
+  .layup-signature-line {
+    border-bottom: 3px solid #000;
+    height: 40px;
   }
   
-  .text-blue-800 {
-    color: #1e40af !important;
-  }
-  
-  .text-orange-800 {
-    color: #9a3412 !important;
-  }
-  
-  /* Keep day sections together */
-  .border.rounded-lg {
-    page-break-inside: avoid;
-    break-inside: avoid;
-    margin-bottom: 1rem;
+  .layup-signature-date {
+    flex: 0 0 200px;
+    margin-left: 40px;
   }
 }

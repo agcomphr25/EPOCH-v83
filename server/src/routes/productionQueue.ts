@@ -21,10 +21,11 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
         continue;
       }
 
-      // Orders with "no_stock" or "None" go directly to Shipping QC
+      // Orders with "no_stock", "no stock", or "None" go directly to Shipping QC
       if (
         stockModel &&
         (stockModel.toLowerCase() === 'no_stock' ||
+          stockModel.toLowerCase() === 'no stock' ||
           stockModel.toLowerCase() === 'none')
       ) {
         ordersToMoveToShipping.push(order);
@@ -104,7 +105,7 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
       '🏭 AUTO-POPULATE: Starting production queue auto-population...'
     );
 
-    // Get all finalized orders with stock models (excluding "None")
+    // Get all finalized orders with stock models (excluding "None" and "no stock" variants)
     const ordersQuery = `
       SELECT 
         o.order_id as orderId,
@@ -117,13 +118,14 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
         o.features,
         o.created_at as createdAt,
         CASE 
-          WHEN o.model_id IS NULL OR o.model_id = '' OR o.model_id = 'None' THEN false
+          WHEN o.model_id IS NULL OR o.model_id = '' OR o.model_id = 'None' OR LOWER(o.model_id) = 'no stock' OR LOWER(o.model_id) = 'no_stock' THEN false
           ELSE true
         END as hasValidStock
       FROM all_orders o
       WHERE o.status = 'FINALIZED' 
         AND o.current_department NOT IN ('Shipping', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC')
-        AND (o.model_id IS NOT NULL AND o.model_id != '' AND o.model_id != 'None')
+        AND (o.model_id IS NOT NULL AND o.model_id != '' AND o.model_id != 'None' 
+             AND LOWER(o.model_id) != 'no stock' AND LOWER(o.model_id) != 'no_stock')
       ORDER BY o.due_date ASC, o.created_at ASC
     `;
 
@@ -333,7 +335,8 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         AND o.model_id IS NOT NULL 
         AND o.model_id != '' 
         AND o.model_id != 'None'
-        AND o.model_id != 'no_stock'
+        AND LOWER(o.model_id) != 'no stock'
+        AND LOWER(o.model_id) != 'no_stock'
         AND (o.features->>'action_length' IS NOT NULL AND o.features->>'action_length' != '' AND o.features->>'action_length' != 'null')
       ORDER BY 
         COALESCE(o.priority_score, 9999) ASC,

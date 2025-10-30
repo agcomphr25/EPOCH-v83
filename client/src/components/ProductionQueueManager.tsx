@@ -134,6 +134,9 @@ export default function ProductionQueueManager() {
   // State for "Select Next N" for regular production queue
   const [selectNextQueueCount, setSelectNextQueueCount] = useState<string>('');
 
+  // State for regular production queue search
+  const [queueSearchQuery, setQueueSearchQuery] = useState<string>('');
+
   // State for layup schedule preview modal
   const [schedulePreviewOpen, setSchedulePreviewOpen] = useState(false);
   const [generatedSchedule, setGeneratedSchedule] = useState<{
@@ -342,10 +345,10 @@ export default function ProductionQueueManager() {
         },
       });
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       toast({
         title: 'Schedule Approved',
-        description: `Successfully scheduled ${generatedSchedule?.scheduledItems.length} items`,
+        description: `Successfully scheduled ${generatedSchedule?.scheduledItems.length} items and progressed ${result.ordersProgressed || 0} orders to Layup/Plugging`,
       });
       
       // Clear selections
@@ -381,10 +384,10 @@ export default function ProductionQueueManager() {
   };
 
   const handleSelectAllQueueOrders = () => {
-    if (selectedQueueOrders.size === productionQueue.length) {
+    if (selectedQueueOrders.size === filteredProductionQueue.length) {
       setSelectedQueueOrders(new Set());
     } else {
-      setSelectedQueueOrders(new Set(productionQueue.map((o) => o.orderId)));
+      setSelectedQueueOrders(new Set(filteredProductionQueue.map((o) => o.orderId)));
     }
   };
 
@@ -400,15 +403,15 @@ export default function ProductionQueueManager() {
       return;
     }
 
-    const ordersToSelect = productionQueue
-      .slice(0, Math.min(count, productionQueue.length))
+    const ordersToSelect = filteredProductionQueue
+      .slice(0, Math.min(count, filteredProductionQueue.length))
       .map((order) => order.orderId);
 
     setSelectedQueueOrders(new Set(ordersToSelect));
     
     toast({
       title: 'Orders Selected',
-      description: `Selected ${ordersToSelect.length} order${ordersToSelect.length !== 1 ? 's' : ''} from the queue`,
+      description: `Selected ${ordersToSelect.length} order${ordersToSelect.length !== 1 ? 's' : ''} from the ${queueSearchQuery ? 'filtered ' : ''}queue`,
     });
   };
 
@@ -551,6 +554,20 @@ export default function ProductionQueueManager() {
       )
     )
   ).sort();
+
+  // Filter regular production queue by search query (order ID or customer name)
+  const filteredProductionQueue = productionQueue.filter((order) => {
+    if (!queueSearchQuery.trim()) return true;
+    
+    const searchLower = queueSearchQuery.toLowerCase().trim();
+    const orderId = (order.orderId || '').toLowerCase();
+    const fbOrderNumber = (order.fbOrderNumber || '').toLowerCase();
+    const customerName = (order.customerName || '').toLowerCase();
+    
+    return orderId.includes(searchLower) || 
+           fbOrderNumber.includes(searchLower) || 
+           customerName.includes(searchLower);
+  });
 
   if (isLoading || isLoadingAttention || isLoadingPOs) {
     return (
@@ -1134,7 +1151,8 @@ export default function ProductionQueueManager() {
               <CardHeader className="p-0">
                 <CardTitle className="flex items-center gap-2">
                   <Package className="w-5 h-5" />
-                  Regular Production Queue ({productionQueue.length})
+                  Regular Production Queue ({filteredProductionQueue.length}
+                  {queueSearchQuery && ` of ${productionQueue.length}`})
                 </CardTitle>
                 <p className="text-sm text-gray-500 text-left">
                   Inventory items ready to progress to Barcode
@@ -1145,6 +1163,28 @@ export default function ProductionQueueManager() {
               <CardContent>
                 {productionQueue.length > 0 && (
                   <div className="space-y-4 mb-4">
+                    {/* Search box */}
+                    <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <Input
+                        type="text"
+                        placeholder="Search by Order ID or Customer Name..."
+                        value={queueSearchQuery}
+                        onChange={(e) => setQueueSearchQuery(e.target.value)}
+                        className="flex-1"
+                        data-testid="input-queue-search"
+                      />
+                      {queueSearchQuery && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setQueueSearchQuery('')}
+                          data-testid="button-clear-search"
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
@@ -1153,7 +1193,7 @@ export default function ProductionQueueManager() {
                         className="flex items-center gap-2"
                         data-testid="button-select-all-queue"
                       >
-                        {selectedQueueOrders.size === productionQueue.length
+                        {selectedQueueOrders.size === filteredProductionQueue.length
                           ? 'Deselect All'
                           : 'Select All'}
                       </Button>
@@ -1222,8 +1262,8 @@ export default function ProductionQueueManager() {
                           <Checkbox
                             checked={
                               selectedQueueOrders.size ===
-                                productionQueue.length &&
-                              productionQueue.length > 0
+                                filteredProductionQueue.length &&
+                              filteredProductionQueue.length > 0
                             }
                             onCheckedChange={handleSelectAllQueueOrders}
                           />
@@ -1244,7 +1284,7 @@ export default function ProductionQueueManager() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {productionQueue.map((order, index) => {
+                      {filteredProductionQueue.map((order, index) => {
                         // Get action length
                         let actionLength = order.features?.action_length;
                         if (!actionLength || actionLength === 'none') {

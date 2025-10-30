@@ -6033,8 +6033,14 @@ export class DatabaseStorage implements IStorage {
           };
         })
         .filter((item) => {
-          // Only include items with a valid stockModel (exclude "no stock" or null/empty)
-          return item.stockModel && item.stockModel !== 'no stock' && item.stockModel.trim() !== '';
+          // Only include items with a valid stockModel (exclude "no stock", "no_stock", "None", or null/empty)
+          if (!item.stockModel || item.stockModel.trim() === '') {
+            return false;
+          }
+          const lowerStockModel = item.stockModel.toLowerCase().trim();
+          return lowerStockModel !== 'no stock' && 
+                 lowerStockModel !== 'no_stock' && 
+                 lowerStockModel !== 'none';
         });
 
       customer.purchaseOrders.push({

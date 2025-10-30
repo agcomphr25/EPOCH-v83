@@ -305,31 +305,31 @@ export default function Navigation() {
       description:
         'Comprehensive orders management with filtering and CSV export',
     },
-    {
-      path: '/enhanced-forms',
-      label: 'Enhanced Forms',
-      icon: FormInput,
-      description: 'Advanced form builder with drag-and-drop',
-    },
-    {
-      path: '/enhanced-reports',
-      label: 'Enhanced Reports',
-      icon: PieChart,
-      description: 'Advanced reporting with PDF/CSV export',
-    },
+    // {
+    //   path: '/enhanced-forms',
+    //   label: 'Enhanced Forms',
+    //   icon: FormInput,
+    //   description: 'Advanced form builder with drag-and-drop',
+    // },
+    // {
+    //   path: '/enhanced-reports',
+    //   label: 'Enhanced Reports',
+    //   icon: PieChart,
+    //   description: 'Advanced reporting with PDF/CSV export',
+    // },
     {
       path: '/finish-qc-completed-report',
       label: 'Finish QC Completed Report',
       icon: CheckSquare,
       description: 'Orders completed in Finish QC by technician and progression user',
     },
-    {
-      path: '/ag-bottom-metal-report',
-      label: 'AG Bottom Metal Report',
-      icon: DollarSign,
-      description:
-        'Comprehensive pricing analysis for AG bottom metal orders by price tiers',
-    },
+    // {
+    //   path: '/ag-bottom-metal-report',
+    //   label: 'AG Bottom Metal Report',
+    //   icon: DollarSign,
+    //   description:
+    //     'Comprehensive pricing analysis for AG bottom metal orders by price tiers',
+    // },
     {
       path: '/p2-forms',
       label: 'P2 Forms',
@@ -342,13 +342,13 @@ export default function Navigation() {
       icon: FileText,
       description: 'Waste Management Discovery Form for client assessment',
     },
-    {
-      path: '/task-tracker',
-      label: 'Task Tracker',
-      icon: CheckSquare,
-      description:
-        'Collaborative task management with GJ, TM, and Finished checkboxes',
-    },
+    // {
+    //   path: '/task-tracker',
+    //   label: 'Task Tracker',
+    //   icon: CheckSquare,
+    //   description:
+    //     'Collaborative task management with GJ, TM, and Finished checkboxes',
+    // },
     {
       path: '/kickback-tracking',
       label: 'Kickback Tracking',
@@ -626,6 +626,12 @@ export default function Navigation() {
       label: 'Stock Models',
       icon: Package,
       description: 'Manage stock models and pricing',
+    },
+    {
+      path: '/order-reports',
+      label: 'Order Reports',
+      icon: Search,
+      description: 'Advanced search with AND/OR logic for filtering orders',
     },
     {
       path: '/module8-test',

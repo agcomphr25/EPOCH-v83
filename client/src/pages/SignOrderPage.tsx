@@ -243,16 +243,29 @@ export default function SignOrderPage() {
                 {orderSummary.features && Object.entries(orderSummary.features).map(([key, value]) => {
                   if (!value || value === false || value === '' || (Array.isArray(value) && value.length === 0)) return null;
                   
+                  // Skip miscItems as it needs special handling below
+                  if (key === 'miscItems') return null;
+                  
                   // Get display names from featureDisplayInfo if available
                   const featureInfo = followupOrder.featureDisplayInfo?.[key];
                   const displayKey = featureInfo?.displayName || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                   
                   let displayValue: string;
                   if (Array.isArray(value)) {
-                    // For arrays, join display names
-                    displayValue = value.map(val => featureInfo?.selections?.[val] || val).join(', ');
+                    // For arrays, map each value to its display name
+                    displayValue = value.map(val => {
+                      if (typeof val === 'string') {
+                        return featureInfo?.selections?.[val] || val;
+                      }
+                      return String(val);
+                    }).join(', ');
+                  } else if (typeof value === 'object') {
+                    // Skip complex objects that can't be displayed as simple strings
+                    return null;
                   } else {
-                    displayValue = featureInfo?.selections?.[value] || String(value);
+                    // For single values, use the display name from selections
+                    const valueStr = String(value);
+                    displayValue = featureInfo?.selections?.[valueStr] || valueStr;
                   }
                   
                   return (
@@ -265,11 +278,40 @@ export default function SignOrderPage() {
               </div>
             </div>
 
+            {/* Miscellaneous Items */}
+            {orderSummary.features?.miscItems && Array.isArray(orderSummary.features.miscItems) && orderSummary.features.miscItems.length > 0 && (
+              <>
+                <Separator />
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Miscellaneous Items</h3>
+                  <div className="space-y-3">
+                    {orderSummary.features.miscItems.map((item: any, index: number) => (
+                      <div key={item.id || index} className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900 dark:text-gray-100" data-testid={`text-misc-item-description-${index}`}>
+                            {item.description}
+                          </p>
+                          {item.quantity > 1 && (
+                            <p className="text-sm text-gray-500 dark:text-gray-400" data-testid={`text-misc-item-quantity-${index}`}>
+                              Quantity: {item.quantity} @ ${item.unitPrice.toFixed(2)} each
+                            </p>
+                          )}
+                        </div>
+                        <span className="font-medium ml-4" data-testid={`text-misc-item-total-${index}`}>
+                          ${item.total.toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
             {orderSummary.notes && (
               <>
                 <Separator />
                 <div>
-                  <h3 className="text-lg font-semibold mb-2">Special Instructions</h3>
+                  <h3 className="text-lg font-semibold mb-2">Notes</h3>
                   <p className="text-gray-700 dark:text-gray-300" data-testid="text-notes">
                     {orderSummary.notes}
                   </p>

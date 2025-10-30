@@ -456,7 +456,7 @@ export function registerRoutes(app: Express): Server {
           po.created_at as "createdAt",
           'production_order' as source
         FROM production_orders po
-        WHERE po.current_department IN ('P1 Production Queue', 'P2 Layup/Plugging')
+        WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
           AND po.production_status IN ('PENDING', 'ACTIVE')
         ORDER BY po.due_date ASC
       `);

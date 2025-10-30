@@ -2913,6 +2913,7 @@ export function registerRoutes(app: Express): Server {
               return expectedDue > today ? expectedDue : today;
             })(),
             productionStatus: 'PENDING' as const,
+            currentDepartment: 'P1 Production Queue',
             poId: poId,
             poItemId: item.id,
             specifications: {

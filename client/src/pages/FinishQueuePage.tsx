@@ -110,7 +110,7 @@ export default function FinishQueuePage() {
   const finishOrders = useMemo(() => {
     console.log(
       '🔍 FINISH QUEUE DEBUG: Total orders from API:',
-      allOrders?.length || 0
+      (allOrders as any[]).length || 0
     );
 
     const filtered = (allOrders as any[]).filter((order: any) => {
@@ -381,7 +381,7 @@ export default function FinishQueuePage() {
       (order: any) => order.orderId === orderId
     );
     if (orderExists) {
-      setSelectedOrders((prev) => new Set([...prev, orderId]));
+      setSelectedOrders((prev) => new Set([...Array.from(prev), orderId]));
       toast.success(`Order ${orderId} selected automatically`);
     } else {
       toast.error(`Order ${orderId} is not in the Finish department`);

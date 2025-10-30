@@ -439,31 +439,25 @@ export function registerRoutes(app: Express): Server {
         ...formattedActiveOrders,
       ];
 
-      // Fetch production orders from production_orders table (OEM orders)
-      // IMPORTANT: Only fetch production orders that match ACTIVE OEM priority settings
+      // Fetch production orders from production_orders table
+      // Include ALL production orders in P1 Production Queue and Layup/Plugging departments
       console.log(
-        '🔍 Fetching production orders from production_orders table (filtering by active OEM settings)...'
+        '🔍 Fetching production orders from production_orders table...'
       );
       const productionOrdersResult = await pool.query(`
         SELECT DISTINCT
           po.order_id as "orderId",
           po.customer_id as "customerId",
-          CASE 
-            WHEN po.item_id = '10' THEN 'cf_alpine_hunter'
-            WHEN po.item_id = '11' THEN 'cf_privateer' 
-            WHEN po.item_id = '12' THEN 'fg_privateer'
-            ELSE 'mesa_universal'
-          END as "stockModelId",
+          po.item_id as "stockModelId",
           po.due_date as "dueDate",
           po.current_department as "currentDepartment",
           po.production_status as "status",
-          '{}' as features,
+          COALESCE(po.specifications, '{}') as features,
           po.created_at as "createdAt",
           'production_order' as source
         FROM production_orders po
-        INNER JOIN oem_priority_settings ops ON po.po_id = ops.po_id
-        WHERE po.production_status = 'PENDING' 
-          AND ops.is_active = true
+        WHERE po.current_department IN ('P1 Production Queue', 'P2 Layup/Plugging')
+          AND po.production_status IN ('PENDING', 'ACTIVE')
         ORDER BY po.due_date ASC
       `);
 

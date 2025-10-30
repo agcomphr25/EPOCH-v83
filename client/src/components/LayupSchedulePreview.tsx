@@ -80,10 +80,10 @@ export function LayupSchedulePreview({
       try {
         JsBarcode(barcodeRef.current, scheduleBarcode, {
           format: 'CODE39',
-          width: 2,
-          height: 60,
+          width: 3,
+          height: 100,
           displayValue: true,
-          fontSize: 14,
+          fontSize: 16,
           textAlign: 'center',
           textPosition: 'bottom',
           margin: 10,
@@ -187,7 +187,7 @@ export function LayupSchedulePreview({
       text-transform: uppercase;
       letter-spacing: 0.3px;
     }
-    .barcode-box img { width: 140px; height: auto; }
+    .barcode-box img { width: 220px; height: auto; }
     .summary { 
       display: flex; 
       gap: 6px; 

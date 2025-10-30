@@ -130,6 +130,9 @@ router.post('/', async (req, res) => {
       : 'http://localhost:5000';
     const signatureLink = `${baseUrl}/sign-order/${signatureToken}`;
 
+    // Extract miscellaneous items from features object
+    const miscItems = (order.features as any)?.miscItems || [];
+
     // Prepare order data for PDF
     const orderData = {
       orderId: order.orderId,
@@ -159,6 +162,7 @@ router.post('/', async (req, res) => {
       featureDisplayNames,
       featureSelectionDisplayNames,
       featureSelectionPrices,
+      miscItems: miscItems.length > 0 ? miscItems : undefined,
       notes: order.notes || undefined,
       shipping: order.shipping || 0,
       paymentStatus: 'PENDING' as const, // New orders are always pending
@@ -685,6 +689,9 @@ router.post('/:orderId/resend-email', async (req, res) => {
       : 'http://localhost:5000';
     const signatureLink = `${baseUrl}/sign-order/${followupOrder.signatureToken}`;
 
+    // Extract miscellaneous items from features object
+    const miscItems = (order.features as any)?.miscItems || [];
+
     // Prepare order data for PDF with LATEST discount information
     const orderData = {
       orderId: order.orderId,
@@ -714,6 +721,7 @@ router.post('/:orderId/resend-email', async (req, res) => {
       featureDisplayNames,
       featureSelectionDisplayNames,
       featureSelectionPrices,
+      miscItems: miscItems.length > 0 ? miscItems : undefined,
       notes: order.notes || undefined,
       shipping: order.shipping || 0,
       paymentStatus: 'PENDING' as const,

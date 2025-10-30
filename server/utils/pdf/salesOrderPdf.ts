@@ -7,6 +7,14 @@ import { resolveAssetPath } from '../../src/utils/assetPaths';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+interface MiscItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
 interface OrderData {
   orderId: string;
   orderDate: Date;
@@ -35,6 +43,7 @@ interface OrderData {
   featureDisplayNames?: Record<string, string>;
   featureSelectionDisplayNames?: Record<string, string>;
   featureSelectionPrices?: Record<string, number>;
+  miscItems?: MiscItem[];
   notes?: string;
   shipping?: number;
   subtotal?: number;
@@ -345,6 +354,12 @@ export async function generateSalesOrderPDF(
     }
   }
   
+  // Add miscellaneous items to count
+  const miscItemsCount = orderData.miscItems?.length || 0;
+  if (miscItemsCount > 0) {
+    featureCount += miscItemsCount + 1; // +1 for "Miscellaneous Items" header
+  }
+  
   // Calculate height: header (20) + model line (15) + features (15 each) + separator (20) + subtotal (25) + [discount (25)] + shipping (25) + total (30) + padding (20)
   const hasDiscount = orderData.showCustomDiscount && orderData.customDiscountValue;
   const discountLineHeight = hasDiscount ? 25 : 0;
@@ -482,6 +497,44 @@ export async function generateSalesOrderPDF(
 
         summaryLineY -= 15;
       }
+    }
+  }
+
+  // Add miscellaneous items section
+  if (orderData.miscItems && orderData.miscItems.length > 0) {
+    // Add "Miscellaneous Items" header
+    page.drawText('Miscellaneous Items:', {
+      x: margin + 8,
+      y: summaryLineY,
+      size: 8,
+      font: boldFont,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+    summaryLineY -= 15;
+
+    // Add each misc item
+    for (const item of orderData.miscItems) {
+      calculatedSubtotal += item.total;
+
+      const itemLabel = item.quantity > 1 
+        ? `${item.description} (${item.quantity} @ $${item.unitPrice.toFixed(2)})`
+        : item.description;
+
+      page.drawText(itemLabel, {
+        x: margin + 8,
+        y: summaryLineY,
+        size: 8,
+        font: font,
+      });
+
+      page.drawText(`$${item.total.toFixed(2)}`, {
+        x: margin + printableWidth - 70,
+        y: summaryLineY,
+        size: 8,
+        font: font,
+      });
+
+      summaryLineY -= 15;
     }
   }
 
@@ -670,8 +723,50 @@ export async function generateSalesOrderPDF(
     font: font,
   });
 
+  // Notes Section (if present)
+  page2Y -= 100;
+  if (orderData.notes && orderData.notes.trim()) {
+    page2.drawText('CUSTOMER NOTES / SPECIAL INSTRUCTIONS', {
+      x: margin,
+      y: page2Y,
+      size: 12,
+      font: boldFont,
+    });
+
+    page2Y -= 20;
+
+    // Wrap notes text to fit within page width
+    const maxNotesWidth = printableWidth - 20;
+    const notesLines = wrapText(orderData.notes.trim(), maxNotesWidth, 9, font);
+
+    // Draw notes with a light background box
+    const notesBoxHeight = (notesLines.length * 12) + 20;
+    page2.drawRectangle({
+      x: margin,
+      y: page2Y - notesBoxHeight + 10,
+      width: printableWidth,
+      height: notesBoxHeight,
+      color: rgb(0.98, 0.98, 0.98),
+      borderColor: rgb(0.8, 0.8, 0.8),
+      borderWidth: 1,
+    });
+
+    let notesY = page2Y - 5;
+    for (const line of notesLines) {
+      page2.drawText(line, {
+        x: margin + 10,
+        y: notesY,
+        size: 9,
+        font: font,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+      notesY -= 12;
+    }
+
+    page2Y -= notesBoxHeight + 20;
+  }
+
   // Terms and Conditions Section
-  page2Y -= 120;
   page2.drawText('Initial Terms and Conditions', {
     x: margin,
     y: page2Y,

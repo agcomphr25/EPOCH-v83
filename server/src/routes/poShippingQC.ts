@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { pool } from '../../db';
 
 const router = Router();
 
@@ -334,6 +335,141 @@ router.post('/progress-to-shipping', async (req, res) => {
   } catch (error: any) {
     console.error('❌ Error progressing PO orders:', error);
     res.status(500).json({ _error: 'Failed to progress orders', details: error.message });
+  }
+});
+
+// POST /api/po-orders/smart-progress
+// Smart progression for PO items from Barcode department
+// Routes 'no stock' items directly to Shipping QC, others to CNC/Finish
+router.post('/smart-progress', async (req, res) => {
+  try {
+    const { orderIds } = req.body;
+
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ _error: 'orderIds array is required' });
+    }
+
+    console.log(`🔄 Smart progressing ${orderIds.length} PO items from Barcode...`);
+    const { storage } = await import('../../storage');
+
+    const results = {
+      toShippingQC: [] as string[],
+      toCNC: [] as string[],
+      failed: [] as { orderId: string; reason: string }[],
+    };
+
+    for (const orderId of orderIds) {
+      try {
+        const order = await storage.getProductionOrderByOrderId(orderId);
+
+        // Validate order exists
+        if (!order) {
+          results.failed.push({ orderId, reason: 'Order not found' });
+          console.warn(`⚠️ ${orderId}: Order not found`);
+          continue;
+        }
+
+        // Validate order is in Barcode department
+        if (order.currentDepartment !== 'Barcode') {
+          results.failed.push({
+            orderId,
+            reason: `Order is in ${order.currentDepartment}, not Barcode`,
+          });
+          console.warn(`⚠️ ${orderId}: Wrong department (${order.currentDepartment})`);
+          continue;
+        }
+
+        // Check if item has 'no stock' or empty stock model
+        const itemId = (order.itemId || '').trim().toLowerCase();
+        const isNoStock =
+          !itemId ||
+          itemId === '' ||
+          itemId === 'none' ||
+          itemId === 'no stock' ||
+          itemId === 'no_stock';
+
+        if (isNoStock) {
+          // Route directly to Shipping QC (skip CNC/Finish)
+          await storage.updateProductionOrder(order.id, {
+            currentDepartment: 'Shipping QC',
+          });
+          results.toShippingQC.push(orderId);
+          console.log(`✅ ${orderId} → Shipping QC (no stock item)`);
+        } else {
+          // Route to CNC department (normal flow)
+          await storage.updateProductionOrder(order.id, {
+            currentDepartment: 'CNC',
+          });
+          results.toCNC.push(orderId);
+          console.log(`✅ ${orderId} → CNC (stock item: ${order.itemId})`);
+        }
+      } catch (error: any) {
+        console.error(`❌ Failed to progress ${orderId}:`, error);
+        results.failed.push({ orderId, reason: error.message });
+      }
+    }
+
+    console.log(
+      `✅ Smart progression complete: ${results.toShippingQC.length} to Shipping QC, ${results.toCNC.length} to CNC`
+    );
+    if (results.failed.length > 0) {
+      console.warn(`⚠️ Failed to progress ${results.failed.length} items:`, results.failed);
+    }
+
+    // Always return 200 with success/failed arrays
+    res.json({
+      toShippingQC: results.toShippingQC,
+      toCNC: results.toCNC,
+      failed: results.failed,
+      message: `Progressed ${results.toShippingQC.length + results.toCNC.length}/${orderIds.length} items`,
+    });
+  } catch (error: any) {
+    console.error('❌ Error in smart progression:', error);
+    res.status(500).json({ _error: 'Failed to progress orders', details: error.message });
+  }
+});
+
+// GET /api/po-orders/oem-shipments
+// Get shipped PO orders grouped as OEM shipments by customer
+router.get('/oem-shipments', async (req, res) => {
+  try {
+    console.log('📦 Fetching OEM shipments (shipped PO orders)...');
+
+    // Query shipped production orders grouped by customer
+    const query = `
+      SELECT 
+        p.customer_id as customerId,
+        p.customer_name as customerName,
+        COUNT(DISTINCT p.po_number) as poCount,
+        COUNT(p.id) as itemCount,
+        MIN(p.shipped_at) as firstShipDate,
+        MAX(p.shipped_at) as lastShipDate,
+        json_agg(
+          json_build_object(
+            'orderId', p.order_id,
+            'poNumber', p.po_number,
+            'itemId', p.item_id,
+            'itemName', p.item_name,
+            'shippedAt', p.shipped_at,
+            'specifications', p.specifications
+          ) ORDER BY p.shipped_at DESC
+        ) as items
+      FROM production_orders p
+      WHERE p.current_department = 'Shipping'
+        AND p.production_status = 'SHIPPED'
+      GROUP BY p.customer_id, p.customer_name
+      ORDER BY MAX(p.shipped_at) DESC
+    `;
+
+    const result = await pool.query(query);
+    const shipments = Array.isArray(result) ? result : result.rows || [];
+
+    console.log(`📊 Found ${shipments.length} OEM shipments`);
+
+    res.json(shipments);
+  } catch (error: any) {
+    console.error('❌ Error fetching OEM shipments:', error);
+    res.status(500).json({ _error: 'Failed to fetch OEM shipments', details: error.message });
   }
 });
 

@@ -327,8 +327,41 @@ router.get('/by-token/:token', async (req, res) => {
     if (enrichedOrderSummary.features) {
       for (const [featureKey, featureValue] of Object.entries(enrichedOrderSummary.features)) {
         if (featureValue && featureValue !== false && featureValue !== '') {
+          // Special handling for handedness (not in features table)
+          if (featureKey === 'handedness') {
+            featureDisplayInfo[featureKey] = {
+              displayName: 'Handedness',
+              selections: {
+                [String(featureValue)]: String(featureValue).charAt(0).toUpperCase() + String(featureValue).slice(1)
+              }
+            };
+            continue;
+          }
+          
           // Search for feature by both id and name to handle feature key mismatches
-          const featureDetail = allFeatures.find((f: any) => f.id === featureKey || f.name === featureKey);
+          let featureDetail = allFeatures.find((f: any) => f.id === featureKey || f.name === featureKey);
+          
+          // Special handling for paint_options - search across all paint-related features
+          if (!featureDetail && featureKey === 'paint_options') {
+            const paintFeatures = allFeatures.filter((f: any) => 
+              f.id === 'special_effects' || 
+              f.id === 'custom_graphics' || 
+              f.id === 'camo_patterns' ||
+              f.id === 'premium_patterns' ||
+              f.id === 'base_colors'
+            );
+            
+            // Search for the value across all paint features
+            for (const pf of paintFeatures) {
+              const pfOptions = (pf as any).options || [];
+              const option = pfOptions.find((opt: any) => opt.value === featureValue);
+              if (option) {
+                featureDetail = pf;
+                break;
+              }
+            }
+          }
+          
           if (featureDetail) {
             featureDisplayInfo[featureKey] = {
               displayName: featureDetail.displayName || featureDetail.name,

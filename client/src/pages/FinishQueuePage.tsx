@@ -50,6 +50,8 @@ export default function FinishQueuePage() {
   // Fetch Finish technicians from database
   const { data: finishTechniciansData = [] } = useQuery({
     queryKey: ['/api/employees/finish-technicians'],
+    staleTime: 0,
+    refetchOnMount: true,
   });
 
   const finishTechnicians = Array.isArray(finishTechniciansData)

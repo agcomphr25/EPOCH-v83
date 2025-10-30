@@ -52,9 +52,9 @@ export default function FinishQueuePage() {
     queryKey: ['/api/employees/finish-technicians'],
   });
 
-  const finishTechnicians = (finishTechniciansData as any[]).map(
-    (tech: any) => tech.name
-  );
+  const finishTechnicians = Array.isArray(finishTechniciansData)
+    ? finishTechniciansData.map((tech: any) => tech.name)
+    : [];
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({

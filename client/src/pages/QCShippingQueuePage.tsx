@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   TrendingUp,
   ArrowLeft,
@@ -37,12 +38,19 @@ import { useLocation } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 
 export default function QCShippingQueuePage() {
+  // State for tab selection
+  const [activeTab, setActiveTab] = useState<string>('regular');
+  
   // State for selected orders and shipping functionality
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [showLabelCreator, setShowLabelCreator] = useState(false);
   const [labelData, setLabelData] = useState<any>(null);
   const [showLabelViewer, setShowLabelViewer] = useState(false);
+  
+  // State for PO order selection (customer-level selection)
+  const [selectedPOItems, setSelectedPOItems] = useState<Set<string>>(new Set());
+  const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
 
   // State for bulk printing modal
   const [showBulkPrintModal, setShowBulkPrintModal] = useState(false);
@@ -60,6 +68,12 @@ export default function QCShippingQueuePage() {
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
     queryKey: ['/api/orders/all'],
+  });
+
+  // Get PO orders in Shipping QC (customer → PO → items grouped)
+  const { data: poOrders = [] } = useQuery({
+    queryKey: ['/api/po-orders/shipping-qc'],
+    enabled: activeTab === 'po', // Only fetch when PO tab is active
   });
 
   // Get features for order customization display
@@ -844,30 +858,43 @@ export default function QCShippingQueuePage() {
         </Card>
       </div>
 
-      {/* Current Department Queue */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Shipping QC Department Manager</span>
-            <div className="flex items-center gap-2">
-              {qcShippingOrders.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSelectAll}
-                  className="text-xs"
-                >
-                  {selectedOrders.size === qcShippingOrders.length
-                    ? 'Deselect All'
-                    : 'Select All'}
-                </Button>
-              )}
-              <Badge variant="outline" className="ml-2">
-                {qcShippingOrders.length} Orders
-              </Badge>
-            </div>
-          </CardTitle>
-        </CardHeader>
+      {/* Tabs for Regular Orders and PO Orders */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 mb-4">
+          <TabsTrigger value="regular" data-testid="tab-regular-orders">
+            Regular Orders ({qcShippingOrders.length + noStockModelOrders.length})
+          </TabsTrigger>
+          <TabsTrigger value="po" data-testid="tab-po-orders">
+            PO Orders ({(poOrders as any[]).reduce((total, customer) => total + customer.pos.reduce((sum: number, po: any) => sum + po.items.length, 0), 0)})
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Regular Orders Tab */}
+        <TabsContent value="regular" className="space-y-6">
+          {/* Current Department Queue */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>Shipping QC Department Manager</span>
+                <div className="flex items-center gap-2">
+                  {qcShippingOrders.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectAll}
+                      className="text-xs"
+                    >
+                      {selectedOrders.size === qcShippingOrders.length
+                        ? 'Deselect All'
+                        : 'Select All'}
+                    </Button>
+                  )}
+                  <Badge variant="outline" className="ml-2">
+                    {qcShippingOrders.length} Orders
+                  </Badge>
+                </div>
+              </CardTitle>
+            </CardHeader>
         <CardContent>
           {qcShippingOrders.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
@@ -1050,9 +1077,196 @@ export default function QCShippingQueuePage() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
 
-      {/* Floating Progression Button */}
-      {selectedOrders.size > 0 && (
+        {/* PO Orders Tab */}
+        <TabsContent value="po" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>PO Orders in Shipping QC</span>
+                <div className="flex items-center gap-2">
+                  {selectedPOItems.size > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedPOItems(new Set());
+                        setSelectedCustomer(null);
+                      }}
+                      className="text-xs"
+                    >
+                      Clear Selection ({selectedPOItems.size})
+                    </Button>
+                  )}
+                  <Badge variant="outline">
+                    {(poOrders as any[]).reduce((total, customer) => total + customer.pos.reduce((sum: number, po: any) => sum + po.items.length, 0), 0)} Items
+                  </Badge>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(poOrders as any[]).length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No PO orders in Shipping QC queue
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    PO Orders grouped by customer. Select items from the same customer to generate packing slips and progress to shipping.
+                  </p>
+                  
+                  {/* Customer Groups */}
+                  {(poOrders as any[]).map((customer: any) => (
+                    <Card key={customer.customerName} className="border-2">
+                      <CardHeader className="pb-3 bg-blue-50 dark:bg-blue-900/20">
+                        <CardTitle className="text-lg flex items-center justify-between">
+                          <span className="text-blue-700 dark:text-blue-300">
+                            {customer.customerName}
+                          </span>
+                          <Badge variant="outline" className="border-blue-300 text-blue-700 dark:text-blue-300">
+                            {customer.pos.reduce((sum: number, po: any) => sum + po.items.length, 0)} Items
+                          </Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-4 space-y-4">
+                        {/* PO Sections */}
+                        {customer.pos.map((po: any) => (
+                          <div key={po.poNumber} className="border rounded-lg p-4 space-y-3 bg-gray-50 dark:bg-gray-800/50">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-semibold text-gray-700 dark:text-gray-300">
+                                PO #{po.poNumber}
+                              </h4>
+                              <Badge variant="secondary">
+                                {po.items.length} Units
+                              </Badge>
+                            </div>
+                            
+                            {/* Item Rows */}
+                            <div className="space-y-2">
+                              {po.items.map((item: any) => {
+                                const isSelected = selectedPOItems.has(item.orderId);
+                                const isDisabled = selectedCustomer && selectedCustomer !== customer.customerName;
+                                
+                                return (
+                                  <div
+                                    key={item.orderId}
+                                    className={`
+                                      flex items-center gap-3 p-3 rounded border
+                                      ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-400' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700'}
+                                      ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800'}
+                                    `}
+                                    data-testid={`po-item-${item.orderId}`}
+                                  >
+                                    <Checkbox
+                                      checked={isSelected}
+                                      disabled={isDisabled}
+                                      onCheckedChange={(checked) => {
+                                        const newSelected = new Set(selectedPOItems);
+                                        if (checked) {
+                                          newSelected.add(item.orderId);
+                                          setSelectedCustomer(customer.customerName);
+                                        } else {
+                                          newSelected.delete(item.orderId);
+                                          if (newSelected.size === 0) {
+                                            setSelectedCustomer(null);
+                                          }
+                                        }
+                                        setSelectedPOItems(newSelected);
+                                      }}
+                                      data-testid={`checkbox-po-item-${item.orderId}`}
+                                    />
+                                    <div className="flex-1 grid grid-cols-4 gap-2 text-sm">
+                                      <div>
+                                        <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                          {item.orderId}
+                                        </span>
+                                        <span className="text-gray-500 ml-2">
+                                          Unit {item.unitNumber} of {item.totalQuantity}
+                                        </span>
+                                      </div>
+                                      <div className="text-gray-600 dark:text-gray-400">
+                                        {item.description || 'No description'}
+                                      </div>
+                                      <div className="text-gray-600 dark:text-gray-400">
+                                        {item.actionLength ? `${item.actionLength}"` : '—'} | {item.caliber || '—'}
+                                      </div>
+                                      <div className="text-gray-600 dark:text-gray-400">
+                                        {item.material || '—'} | {item.finishType || '—'}
+                                      </div>
+                                    </div>
+                                    {item.flatTop && (
+                                      <Badge variant="outline" className="border-purple-300 text-purple-700 dark:text-purple-300">
+                                        Flat Top
+                                      </Badge>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Floating Progression Button for PO Orders */}
+      {selectedPOItems.size > 0 && activeTab === 'po' && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+          <div className="container mx-auto p-4">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <span className="font-medium text-blue-800 dark:text-blue-200">
+                  {selectedPOItems.size} PO item{selectedPOItems.size > 1 ? 's' : ''} selected
+                  {selectedCustomer && ` from ${selectedCustomer}`}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedPOItems(new Set());
+                    setSelectedCustomer(null);
+                  }}
+                  size="sm"
+                  data-testid="button-clear-po-selection"
+                >
+                  Clear Selection
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-600 dark:text-purple-300 dark:hover:bg-purple-900/20"
+                  disabled={selectedPOItems.size === 0}
+                  data-testid="button-generate-po-packing-slips"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Generate Packing Slips ({selectedPOItems.size})
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  disabled={selectedPOItems.size === 0}
+                  data-testid="button-progress-po-to-shipping"
+                >
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                  Progress to Shipping ({selectedPOItems.size})
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Progression Button for Regular Orders */}
+      {selectedOrders.size > 0 && activeTab === 'regular' && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
           <div className="container mx-auto p-4">
             <div className="flex items-center justify-between flex-wrap gap-4">

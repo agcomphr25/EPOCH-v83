@@ -628,6 +628,12 @@ export default function Navigation() {
       description: 'Manage stock models and pricing',
     },
     {
+      path: '/order-reports',
+      label: 'Order Reports',
+      icon: Search,
+      description: 'Advanced search with AND/OR logic for filtering orders',
+    },
+    {
       path: '/module8-test',
       label: 'Module 8 Test',
       icon: TestTube,

@@ -76,27 +76,51 @@ export function LayupSchedulePreview({
 
   // Generate barcode when component opens or week changes
   useEffect(() => {
+    console.log('🔍 Barcode Effect Running:', { 
+      hasRef: !!barcodeRef.current, 
+      barcode: scheduleBarcode, 
+      open 
+    });
+    
     if (barcodeRef.current && scheduleBarcode && open) {
       try {
+        console.log('📊 Generating barcode:', scheduleBarcode);
         JsBarcode(barcodeRef.current, scheduleBarcode, {
           format: 'CODE39',
-          width: 2,
-          height: 60,
+          width: 3,
+          height: 100,
           displayValue: true,
-          fontSize: 14,
+          fontSize: 16,
           textAlign: 'center',
           textPosition: 'bottom',
           margin: 10,
           background: '#ffffff',
           lineColor: '#000000',
         });
+        console.log('✅ Barcode generated successfully');
       } catch (error) {
-        console.error('Error generating schedule barcode:', error);
+        console.error('❌ Error generating schedule barcode:', error);
       }
+    } else {
+      console.warn('⚠️ Barcode not ready:', {
+        hasRef: !!barcodeRef.current,
+        hasBarcode: !!scheduleBarcode,
+        isOpen: open
+      });
     }
   }, [scheduleBarcode, open]);
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    // Ensure barcode is fully rendered before printing
+    if (!barcodeRef.current) {
+      console.warn('⚠️ Barcode not ready for printing');
+      alert('Please wait a moment for the barcode to load, then try again.');
+      return;
+    }
+
+    // Wait a bit to ensure SVG is fully rendered
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     // Open a new window with just the schedule content
     const printWindow = window.open('', '_blank', 'width=1200,height=800');
     if (!printWindow) {
@@ -106,16 +130,31 @@ export function LayupSchedulePreview({
 
     // Convert SVG barcode to data URL
     let barcodeDataURL = '';
-    if (barcodeRef.current) {
-      try {
-        const svgElement = barcodeRef.current;
-        const serializer = new XMLSerializer();
-        const svgString = serializer.serializeToString(svgElement);
-        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-        barcodeDataURL = 'data:image/svg+xml;base64,' + btoa(svgString);
-      } catch (error) {
-        console.error('Error converting barcode to data URL:', error);
+    try {
+      const svgElement = barcodeRef.current;
+      
+      // Check if the SVG has content
+      if (!svgElement.hasChildNodes()) {
+        console.error('❌ Barcode SVG is empty!');
+        throw new Error('Barcode not generated');
       }
+      
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(svgElement);
+      
+      console.log('📊 SVG String length:', svgString.length);
+      console.log('📊 Barcode ID:', scheduleBarcode);
+      
+      // Properly encode for data URL
+      const encodedSvg = btoa(unescape(encodeURIComponent(svgString)));
+      barcodeDataURL = 'data:image/svg+xml;base64,' + encodedSvg;
+      
+      console.log('📊 Barcode data URL length:', barcodeDataURL.length);
+    } catch (error) {
+      console.error('❌ Error converting barcode:', error);
+      alert('Error generating barcode for printing. Please try again.');
+      printWindow.close();
+      return;
     }
     
     // Generate the HTML content
@@ -187,7 +226,7 @@ export function LayupSchedulePreview({
       text-transform: uppercase;
       letter-spacing: 0.3px;
     }
-    .barcode-box img { width: 140px; height: auto; }
+    .barcode-box img { width: 220px; height: auto; }
     .summary { 
       display: flex; 
       gap: 6px; 
@@ -445,7 +484,10 @@ export function LayupSchedulePreview({
             {/* Schedule Barcode */}
             <div className="flex flex-col items-center border rounded-lg p-3 bg-white">
               <p className="text-xs text-gray-600 mb-1 font-semibold">Scan to Complete Layup</p>
-              <svg ref={barcodeRef} className="w-48"></svg>
+              <svg ref={barcodeRef} className="w-64 h-24"></svg>
+              {scheduleBarcode && (
+                <p className="text-xs text-gray-400 mt-1">{scheduleBarcode}</p>
+              )}
             </div>
           </div>
         </DialogHeader>

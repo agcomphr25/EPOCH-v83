@@ -96,7 +96,17 @@ export function LayupSchedulePreview({
     }
   }, [scheduleBarcode, open]);
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    // Ensure barcode is fully rendered before printing
+    if (!barcodeRef.current) {
+      console.warn('⚠️ Barcode not ready for printing');
+      alert('Please wait a moment for the barcode to load, then try again.');
+      return;
+    }
+
+    // Wait a bit to ensure SVG is fully rendered
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     // Open a new window with just the schedule content
     const printWindow = window.open('', '_blank', 'width=1200,height=800');
     if (!printWindow) {
@@ -106,23 +116,31 @@ export function LayupSchedulePreview({
 
     // Convert SVG barcode to data URL
     let barcodeDataURL = '';
-    if (barcodeRef.current) {
-      try {
-        const svgElement = barcodeRef.current;
-        const serializer = new XMLSerializer();
-        const svgString = serializer.serializeToString(svgElement);
-        
-        // Properly encode for data URL
-        const encodedSvg = btoa(unescape(encodeURIComponent(svgString)));
-        barcodeDataURL = 'data:image/svg+xml;base64,' + encodedSvg;
-        
-        console.log('📊 Barcode generated for print:', scheduleBarcode);
-        console.log('📊 Barcode data URL length:', barcodeDataURL.length);
-      } catch (error) {
-        console.error('Error converting barcode to data URL:', error);
+    try {
+      const svgElement = barcodeRef.current;
+      
+      // Check if the SVG has content
+      if (!svgElement.hasChildNodes()) {
+        console.error('❌ Barcode SVG is empty!');
+        throw new Error('Barcode not generated');
       }
-    } else {
-      console.warn('⚠️ Barcode ref not available for printing');
+      
+      const serializer = new XMLSerializer();
+      const svgString = serializer.serializeToString(svgElement);
+      
+      console.log('📊 SVG String length:', svgString.length);
+      console.log('📊 Barcode ID:', scheduleBarcode);
+      
+      // Properly encode for data URL
+      const encodedSvg = btoa(unescape(encodeURIComponent(svgString)));
+      barcodeDataURL = 'data:image/svg+xml;base64,' + encodedSvg;
+      
+      console.log('📊 Barcode data URL length:', barcodeDataURL.length);
+    } catch (error) {
+      console.error('❌ Error converting barcode:', error);
+      alert('Error generating barcode for printing. Please try again.');
+      printWindow.close();
+      return;
     }
     
     // Generate the HTML content

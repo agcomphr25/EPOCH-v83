@@ -219,7 +219,7 @@ export default function LayupPluggingQueuePage() {
           if (validOrderIds.length > 0) {
             setSelectedOrders((prev) => {
               // Combine existing selection with new orders (avoid duplicates)
-              const combined = [...new Set([...prev, ...validOrderIds])];
+              const combined = Array.from(new Set([...prev, ...validOrderIds]));
               return combined;
             });
             

@@ -99,9 +99,9 @@ router.post('/generate', async (req: Request, res: Response) => {
         // Extract material from stock model name (fg = Fiberglass, cf = Carbon Fiber)
         let material = null;
         const stockModelName = order.stockModel?.toLowerCase() || '';
-        if (stockModelName.includes('_fg_') || stockModelName.includes('_fg')) {
+        if (stockModelName.startsWith('fg_')) {
           material = 'Fiberglass';
-        } else if (stockModelName.includes('_cf_') || stockModelName.includes('_cf')) {
+        } else if (stockModelName.startsWith('cf_')) {
           material = 'Carbon Fiber';
         }
         
@@ -175,9 +175,9 @@ router.post('/generate', async (req: Request, res: Response) => {
         // Extract material from stock model name
         let material = null;
         const stockModelName = item.stockModel?.toLowerCase() || '';
-        if (stockModelName.includes('_fg_') || stockModelName.includes('_fg')) {
+        if (stockModelName.startsWith('fg_')) {
           material = 'Fiberglass';
-        } else if (stockModelName.includes('_cf_') || stockModelName.includes('_cf')) {
+        } else if (stockModelName.startsWith('cf_')) {
           material = 'Carbon Fiber';
         }
         
@@ -1096,8 +1096,8 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
 function extractMaterial(stockModel: string | null): string | null {
   if (!stockModel) return null;
   const model = stockModel.toLowerCase();
-  if (model.includes('_fg_') || model.includes('_fg')) return 'Fiberglass';
-  if (model.includes('_cf_') || model.includes('_cf')) return 'Carbon Fiber';
+  if (model.startsWith('fg_')) return 'Fiberglass';
+  if (model.startsWith('cf_')) return 'Carbon Fiber';
   return null;
 }
 

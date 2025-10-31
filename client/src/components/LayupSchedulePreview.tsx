@@ -82,32 +82,37 @@ export function LayupSchedulePreview({
       open 
     });
     
-    if (barcodeRef.current && scheduleBarcode && open) {
-      try {
-        console.log('📊 Generating barcode:', scheduleBarcode);
-        JsBarcode(barcodeRef.current, scheduleBarcode, {
-          format: 'CODE39',
-          width: 3,
-          height: 100,
-          displayValue: true,
-          fontSize: 16,
-          textAlign: 'center',
-          textPosition: 'bottom',
-          margin: 10,
-          background: '#ffffff',
-          lineColor: '#000000',
-        });
-        console.log('✅ Barcode generated successfully');
-      } catch (error) {
-        console.error('❌ Error generating schedule barcode:', error);
-      }
-    } else {
-      console.warn('⚠️ Barcode not ready:', {
-        hasRef: !!barcodeRef.current,
-        hasBarcode: !!scheduleBarcode,
-        isOpen: open
-      });
+    if (!open || !scheduleBarcode) {
+      return;
     }
+
+    // Add a small delay to ensure the dialog and SVG element are fully rendered
+    const timer = setTimeout(() => {
+      if (barcodeRef.current) {
+        try {
+          console.log('📊 Generating barcode:', scheduleBarcode);
+          JsBarcode(barcodeRef.current, scheduleBarcode, {
+            format: 'CODE39',
+            width: 3,
+            height: 100,
+            displayValue: true,
+            fontSize: 16,
+            textAlign: 'center',
+            textPosition: 'bottom',
+            margin: 10,
+            background: '#ffffff',
+            lineColor: '#000000',
+          });
+          console.log('✅ Barcode generated successfully');
+        } catch (error) {
+          console.error('❌ Error generating schedule barcode:', error);
+        }
+      } else {
+        console.warn('⚠️ Barcode ref still not ready after delay');
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, [scheduleBarcode, open]);
 
   const handlePrint = async () => {

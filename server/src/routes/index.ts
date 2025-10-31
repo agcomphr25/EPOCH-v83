@@ -789,14 +789,15 @@ export function registerRoutes(app: Express): Server {
     try {
       const { db } = await import('../../db');
 
-      // Use raw SQL for reliable cleanup - remove entries where orders have progressed beyond P1/Layup
+      // Use raw SQL for reliable cleanup - remove entries where orders have progressed beyond P1/Layup departments
       const result = await db.execute(`
         DELETE FROM layup_schedule 
         WHERE order_id IN (
           SELECT ls.order_id 
           FROM layup_schedule ls 
           LEFT JOIN all_orders ao ON ls.order_id = ao.order_id 
-          WHERE ao.current_department NOT IN ('P1 Production Queue', 'Layup')
+          WHERE ao.current_department NOT IN ('P1 Production Queue', 'Layup', 'Layup/Plugging')
+            OR ao.order_id IS NULL
         )
       `);
 

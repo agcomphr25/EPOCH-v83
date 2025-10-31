@@ -93,11 +93,11 @@ export function LayupSchedulePreview({
         try {
           console.log('📊 Generating barcode:', scheduleBarcode);
           JsBarcode(barcodeRef.current, scheduleBarcode, {
-            format: 'CODE39',
-            width: 3,
-            height: 100,
+            format: 'CODE128',
+            width: 2,
+            height: 80,
             displayValue: true,
-            fontSize: 16,
+            fontSize: 14,
             textAlign: 'center',
             textPosition: 'bottom',
             margin: 10,

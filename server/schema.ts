@@ -2407,6 +2407,16 @@ export const vendorPOItems = pgTable('vendor_po_items', {
   uniquePoLine: unique().on(table.vendorPoId, table.lineNumber),
 }));
 
+// Vendor PO Settings (singleton table for global PO settings)
+export const vendorPOSettings = pgTable('vendor_po_settings', {
+  id: serial('id').primaryKey(),
+  termsAndConditions: text('terms_and_conditions'),
+  paymentTerms: text('payment_terms'),
+  shippingInstructions: text('shipping_instructions'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 export const communicationLogs = pgTable('communication_logs', {
   id: serial('id').primaryKey(),
   orderId: text('order_id'), // Made nullable for general communications
@@ -2682,6 +2692,20 @@ export const insertVendorPOItemSchema = createInsertSchema(vendorPOItems)
   });
 export type InsertVendorPOItem = z.infer<typeof insertVendorPOItemSchema>;
 export type VendorPOItem = typeof vendorPOItems.$inferSelect;
+
+export const insertVendorPOSettingsSchema = createInsertSchema(vendorPOSettings)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    termsAndConditions: z.string().optional().nullable(),
+    paymentTerms: z.string().optional().nullable(),
+    shippingInstructions: z.string().optional().nullable(),
+  });
+export type InsertVendorPOSettings = z.infer<typeof insertVendorPOSettingsSchema>;
+export type VendorPOSettings = typeof vendorPOSettings.$inferSelect;
 
 // Order Attachments Table
 export const orderAttachments = pgTable('order_attachments', {

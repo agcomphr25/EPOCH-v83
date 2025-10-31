@@ -688,6 +688,9 @@ export default function VendorPOManager() {
       // Fetch line items for this PO
       const items: VendorPOItem[] = await apiRequest(`/api/vendor-pos/${selectedVendorPO.id}/items`);
       
+      // Fetch PO settings for terms and conditions
+      const settings: any = await apiRequest('/api/vendor-pos/settings');
+      
       // Create a simple HTML structure for PDF conversion
       const printWindow = window.open('', '', 'height=600,width=800');
       if (!printWindow) {
@@ -781,6 +784,31 @@ export default function VendorPOManager() {
               <div style="margin-top: 30px;">
                 <div style="font-weight: bold;">Notes:</div>
                 <div>${selectedVendorPO.notes}</div>
+              </div>
+            ` : ''}
+            
+            ${settings?.termsAndConditions || settings?.paymentTerms || settings?.shippingInstructions ? `
+              <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #ddd;">
+                ${settings?.paymentTerms ? `
+                  <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; font-size: 14px;">Payment Terms:</div>
+                    <div style="white-space: pre-wrap; margin-top: 5px;">${settings.paymentTerms}</div>
+                  </div>
+                ` : ''}
+                
+                ${settings?.shippingInstructions ? `
+                  <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; font-size: 14px;">Shipping Instructions:</div>
+                    <div style="white-space: pre-wrap; margin-top: 5px;">${settings.shippingInstructions}</div>
+                  </div>
+                ` : ''}
+                
+                ${settings?.termsAndConditions ? `
+                  <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; font-size: 14px;">Terms and Conditions:</div>
+                    <div style="white-space: pre-wrap; margin-top: 5px;">${settings.termsAndConditions}</div>
+                  </div>
+                ` : ''}
               </div>
             ` : ''}
           </body>

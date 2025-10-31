@@ -284,6 +284,9 @@ import {
   vendorParts,
   type VendorPart,
   type InsertVendorPart,
+  vendorPOSettings,
+  type VendorPOSettings,
+  type InsertVendorPOSettings,
 } from './schema';
 import { db } from './db';
 import {
@@ -1347,6 +1350,10 @@ export interface IStorage {
   createVendorPOItem(data: any): Promise<any>;
   updateVendorPOItem(id: number, data: any): Promise<any>;
   deleteVendorPOItem(id: number): Promise<void>;
+
+  // Vendor PO Settings
+  getVendorPOSettings(): Promise<any | undefined>;
+  updateVendorPOSettings(data: any): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5642,6 +5649,40 @@ export class DatabaseStorage implements IStorage {
 
   async deleteVendorPOItem(id: number): Promise<void> {
     await db.delete(vendorPOItems).where(eq(vendorPOItems.id, id));
+  }
+
+  // Vendor PO Settings
+  async getVendorPOSettings(): Promise<VendorPOSettings | undefined> {
+    const [settings] = await db
+      .select()
+      .from(vendorPOSettings)
+      .limit(1);
+    return settings;
+  }
+
+  async updateVendorPOSettings(data: Partial<InsertVendorPOSettings>): Promise<VendorPOSettings> {
+    // Get the first (and should be only) settings record
+    const [existingSettings] = await db
+      .select()
+      .from(vendorPOSettings)
+      .limit(1);
+    
+    if (existingSettings) {
+      // Update existing settings
+      const [updatedSettings] = await db
+        .update(vendorPOSettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(vendorPOSettings.id, existingSettings.id))
+        .returning();
+      return updatedSettings;
+    } else {
+      // Create new settings if none exist
+      const [newSettings] = await db
+        .insert(vendorPOSettings)
+        .values(data)
+        .returning();
+      return newSettings;
+    }
   }
 
   // Enhanced Inventory MRP - Inventory Balances CRUD

@@ -22,6 +22,15 @@ interface FollowupOrder {
     displayName: string;
     selections: Record<string, string>;
   }>;
+  pricing?: {
+    basePrice: number;
+    subtotal: number;
+    discountAmount: number;
+    shipping: number;
+    total: number;
+    paidAmount: number;
+    balanceDue: number;
+  };
   orderSummary: {
     orderId: string;
     orderDate: string;
@@ -320,6 +329,61 @@ export default function SignOrderPage() {
             )}
 
             <Separator />
+
+            {/* Pricing Section */}
+            {followupOrder.pricing && (
+              <>
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Order Pricing</h3>
+                  <div className="space-y-2 bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Subtotal:</span>
+                      <span className="font-medium" data-testid="text-subtotal">
+                        ${followupOrder.pricing.subtotal.toFixed(2)}
+                      </span>
+                    </div>
+                    {followupOrder.pricing.discountAmount > 0 && (
+                      <div className="flex justify-between text-green-600 dark:text-green-400">
+                        <span>Discount:</span>
+                        <span className="font-medium" data-testid="text-discount">
+                          -${followupOrder.pricing.discountAmount.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Shipping:</span>
+                      <span className="font-medium" data-testid="text-shipping">
+                        ${followupOrder.pricing.shipping.toFixed(2)}
+                      </span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between text-lg">
+                      <span className="font-semibold">Total:</span>
+                      <span className="font-bold" data-testid="text-total">
+                        ${followupOrder.pricing.total.toFixed(2)}
+                      </span>
+                    </div>
+                    {followupOrder.pricing.paidAmount > 0 && (
+                      <>
+                        <div className="flex justify-between text-blue-600 dark:text-blue-400">
+                          <span>Amount Paid:</span>
+                          <span className="font-medium" data-testid="text-paid">
+                            ${followupOrder.pricing.paidAmount.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-lg font-semibold text-red-600 dark:text-red-400">
+                          <span>Balance Due:</span>
+                          <span data-testid="text-balance-due">
+                            ${followupOrder.pricing.balanceDue.toFixed(2)}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <Separator />
+              </>
+            )}
 
             {/* Signature Section */}
             <div>

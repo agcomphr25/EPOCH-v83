@@ -317,7 +317,25 @@ router.get('/:vendorId/evaluations', async (req: Request, res: Response) => {
     }
 
     const evaluations = await storage.getVendorMonthlyEvaluations(vendorId, year);
-    res.json(evaluations);
+    
+    // Calculate totalScore for each evaluation
+    const evaluationsWithTotal = evaluations.map(ev => {
+      const scores = [
+        ev.qualityScore,
+        ev.costScore,
+        ev.deliveryScore,
+        ev.responseScore
+      ].filter(score => score !== null && score !== undefined);
+      
+      const totalScore = scores.length > 0 ? scores.reduce((sum, score) => sum + score, 0) : 0;
+      
+      return {
+        ...ev,
+        totalScore
+      };
+    });
+    
+    res.json(evaluationsWithTotal);
   } catch (error) {
     console.error('Get vendor monthly evaluations error:', error);
     res.status(500).json({ error: 'Failed to fetch vendor monthly evaluations' });
@@ -366,7 +384,20 @@ router.post('/:vendorId/evaluations', async (req: Request, res: Response) => {
       });
     }
 
-    res.json(evaluation);
+    // Calculate totalScore for the response
+    const scores = [
+      evaluation.qualityScore,
+      evaluation.costScore,
+      evaluation.deliveryScore,
+      evaluation.responseScore
+    ].filter(score => score !== null && score !== undefined);
+    
+    const totalScore = scores.length > 0 ? scores.reduce((sum, score) => sum + score, 0) : 0;
+
+    res.json({
+      ...evaluation,
+      totalScore
+    });
   } catch (error) {
     console.error('Create/update vendor monthly evaluation error:', error);
     res.status(500).json({ error: 'Failed to save vendor monthly evaluation' });

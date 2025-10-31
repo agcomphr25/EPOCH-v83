@@ -903,11 +903,12 @@ router.get('/weeks', async (req: Request, res: Response) => {
       LIMIT 52
     `);
     
-    console.log(`✅ Found ${result.rows.length} weeks with schedules`);
+    const weeks = result.rows || [];
+    console.log(`✅ Found ${weeks.length} weeks with schedules`);
     
     res.json({
       success: true,
-      weeks: result.rows,
+      weeks: weeks,
     });
   } catch (error) {
     console.error('❌ Error fetching schedule weeks:', error);

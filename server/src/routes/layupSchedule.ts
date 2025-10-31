@@ -906,9 +906,11 @@ router.get('/weeks', async (req: Request, res: Response) => {
         DATE_TRUNC('week', layup_day)::date AS week_start,
         MIN(layup_day)::date AS first_day,
         MAX(layup_day)::date AS last_day,
+        MIN(created_at) AS created_at,
         COUNT(DISTINCT order_id) AS order_count,
         COUNT(DISTINCT CASE WHEN order_id LIKE 'PO-%' THEN order_id END) AS po_order_count,
-        COUNT(DISTINCT CASE WHEN order_id NOT LIKE 'PO-%' THEN order_id END) AS regular_order_count
+        COUNT(DISTINCT CASE WHEN order_id NOT LIKE 'PO-%' THEN order_id END) AS regular_order_count,
+        ARRAY_AGG(DISTINCT order_id ORDER BY order_id) AS order_ids
       FROM layup_schedule
       WHERE layup_day IS NOT NULL
       GROUP BY DATE_TRUNC('week', layup_day)

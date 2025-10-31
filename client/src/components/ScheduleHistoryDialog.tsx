@@ -12,9 +12,11 @@ interface Week {
   week_start: string;
   first_day: string;
   last_day: string;
+  created_at: string;
   order_count: number;
   po_order_count: number;
   regular_order_count: number;
+  order_ids: string[];
 }
 
 interface ScheduleHistoryDialogProps {
@@ -38,7 +40,7 @@ export function ScheduleHistoryDialog({ open, onClose }: ScheduleHistoryDialogPr
     enabled: !!selectedWeek && showReprintDialog,
   });
 
-  const weeks: Week[] = weeksData?.weeks || [];
+  const weeks: Week[] = (weeksData as any)?.weeks || [];
 
   const handleReprint = (weekStart: string) => {
     setSelectedWeek(weekStart);
@@ -90,10 +92,9 @@ export function ScheduleHistoryDialog({ open, onClose }: ScheduleHistoryDialogPr
                 <TableHeader>
                   <TableRow>
                     <TableHead>Week Starting</TableHead>
-                    <TableHead>Date Range</TableHead>
-                    <TableHead className="text-right">Total Orders</TableHead>
-                    <TableHead className="text-right">Regular</TableHead>
-                    <TableHead className="text-right">PO Items</TableHead>
+                    <TableHead>Created Date</TableHead>
+                    <TableHead>Orders</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -103,27 +104,56 @@ export function ScheduleHistoryDialog({ open, onClose }: ScheduleHistoryDialogPr
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-gray-400" />
-                          {format(new Date(week.week_start), 'MMM dd, yyyy')}
+                          <div>
+                            <div>{format(new Date(week.week_start), 'MMM dd, yyyy')}</div>
+                            <div className="text-xs text-gray-500">
+                              {format(new Date(week.week_start), 'MMM dd')} - {format(new Date(week.last_day), 'MMM dd')}
+                            </div>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="text-sm text-gray-600">
-                        {format(new Date(week.week_start), 'MMM dd')} -{' '}
-                        {format(new Date(week.last_day), 'MMM dd, yyyy')}
+                        <div className="flex flex-col">
+                          <span className="font-medium">
+                            {format(new Date(week.created_at), 'MMM dd, yyyy')}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {format(new Date(week.created_at), 'h:mm a')}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1 max-w-md">
+                          {week.order_ids.slice(0, 8).map((orderId) => (
+                            <Badge 
+                              key={orderId} 
+                              variant="outline" 
+                              className="text-xs font-mono"
+                            >
+                              {orderId}
+                            </Badge>
+                          ))}
+                          {week.order_ids.length > 8 && (
+                            <Badge variant="secondary" className="text-xs">
+                              +{week.order_ids.length - 8} more
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Badge variant="secondary" className="font-mono">
-                          {week.order_count}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant="outline" className="font-mono">
-                          {week.regular_order_count}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant="outline" className="font-mono text-green-700 border-green-300">
-                          {week.po_order_count}
-                        </Badge>
+                        <div className="flex flex-col gap-1 items-end">
+                          <Badge variant="secondary" className="font-mono">
+                            {week.order_count} total
+                          </Badge>
+                          <div className="flex gap-1">
+                            <Badge variant="outline" className="text-xs font-mono">
+                              {week.regular_order_count} reg
+                            </Badge>
+                            <Badge variant="outline" className="text-xs font-mono text-green-700 border-green-300">
+                              {week.po_order_count} PO
+                            </Badge>
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -150,10 +180,10 @@ export function ScheduleHistoryDialog({ open, onClose }: ScheduleHistoryDialogPr
         <LayupSchedulePreview
           open={showReprintDialog}
           onClose={handleCloseReprint}
-          scheduledItems={scheduleData.scheduledItems || []}
+          scheduledItems={(scheduleData as any).scheduledItems || []}
           overflowItems={[]}
           weekStart={selectedWeek}
-          totalItems={scheduleData.totalItems || 0}
+          totalItems={(scheduleData as any).totalItems || 0}
           onApprove={() => {
             // No approval action for reprints
             handleCloseReprint();

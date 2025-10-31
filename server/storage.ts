@@ -5513,6 +5513,7 @@ export class DatabaseStorage implements IStorage {
           orderDate: vendorPOs.orderDate,
           expectedDeliveryDate: vendorPOs.expectedDeliveryDate,
           actualDeliveryDate: vendorPOs.actualDeliveryDate,
+          shipVia: vendorPOs.shipVia,
           barcode: vendorPOs.barcode,
           subtotal: vendorPOs.subtotal,
           tax: vendorPOs.tax,
@@ -5555,6 +5556,7 @@ export class DatabaseStorage implements IStorage {
         orderDate: vendorPOs.orderDate,
         expectedDeliveryDate: vendorPOs.expectedDeliveryDate,
         actualDeliveryDate: vendorPOs.actualDeliveryDate,
+        shipVia: vendorPOs.shipVia,
         barcode: vendorPOs.barcode,
         subtotal: vendorPOs.subtotal,
         tax: vendorPOs.tax,
@@ -5573,6 +5575,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createVendorPO(data: any): Promise<any> {
+    // Auto-generate PO number if not provided
+    if (!data.poNumber) {
+      // Get the latest vendor PO to generate next number
+      const latestPO = await db
+        .select({ poNumber: vendorPOs.poNumber })
+        .from(vendorPOs)
+        .where(sql`${vendorPOs.poNumber} LIKE 'VPO-%'`)
+        .orderBy(desc(vendorPOs.id))
+        .limit(1);
+      
+      let nextNumber = 1;
+      if (latestPO.length > 0 && latestPO[0].poNumber) {
+        const match = latestPO[0].poNumber.match(/VPO-(\d+)/);
+        if (match) {
+          nextNumber = parseInt(match[1]) + 1;
+        }
+      }
+      data.poNumber = `VPO-${String(nextNumber).padStart(6, '0')}`;
+    }
+    
+    // Auto-generate barcode if not provided
+    if (!data.barcode) {
+      data.barcode = nanoid(12);
+    }
+    
     const [vendorPO] = await db.insert(vendorPOs).values(data).returning();
     return vendorPO;
   }

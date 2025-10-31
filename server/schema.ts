@@ -2373,6 +2373,7 @@ export const vendorPOs = pgTable('vendor_pos', {
   orderDate: date('order_date'),
   expectedDeliveryDate: date('expected_delivery_date'),
   actualDeliveryDate: date('actual_delivery_date'),
+  shipVia: text('ship_via'),
   barcode: text('barcode').unique(),
   subtotal: real('subtotal').default(0),
   tax: real('tax').default(0),
@@ -2643,12 +2644,13 @@ export const insertVendorPOSchema = createInsertSchema(vendorPOs)
     updatedAt: true,
   })
   .extend({
-    poNumber: z.string().min(1, 'PO number is required'),
+    poNumber: z.string().min(1, 'PO number is required').optional(),
     vendorId: z.number().int().positive('Vendor ID is required'),
     status: z.enum(['Draft', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled']).default('Draft'),
     orderDate: z.string().optional().nullable(),
     expectedDeliveryDate: z.string().optional().nullable(),
     actualDeliveryDate: z.string().optional().nullable(),
+    shipVia: z.string().optional().nullable(),
     barcode: z.string().optional().nullable(),
     subtotal: z.number().default(0),
     tax: z.number().default(0),

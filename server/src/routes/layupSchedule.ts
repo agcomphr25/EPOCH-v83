@@ -284,6 +284,7 @@ router.post('/generate', async (req: Request, res: Response) => {
               material: item.material || null,
               // Badge information
               hasLOP: item.hasLOP || false,
+              lopValue: item.lopValue || null,
               hasADL: item.hasADL || false,
               hasHeavyFill: item.hasHeavyFill || false,
             });
@@ -1028,6 +1029,7 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
           actionLength: features.action_length || null,
           material: extractMaterial(poOrder.stock_model),
           hasLOP: checkHasLOP(features),
+          lopValue: checkHasLOP(features) ? features.length_of_pull : null,
           hasADL: checkHasADL(features),
           hasHeavyFill: checkHasHeavyFill(features),
         };
@@ -1061,6 +1063,7 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
           actionLength: features.action_length || null,
           material: extractMaterial(order.stock_model),
           hasLOP: checkHasLOP(features),
+          lopValue: checkHasLOP(features) ? features.length_of_pull : null,
           hasADL: checkHasADL(features),
           hasHeavyFill: checkHasHeavyFill(features),
         };

@@ -32,6 +32,42 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/vendor-pos/settings - Get vendor PO settings
+router.get('/settings', async (req: Request, res: Response) => {
+  try {
+    const settings = await storage.getVendorPOSettings();
+    if (!settings) {
+      // Return default settings if none exist
+      return res.json({
+        termsAndConditions: '',
+        paymentTerms: '',
+        shippingInstructions: '',
+      });
+    }
+    res.json(settings);
+  } catch (error) {
+    console.error('Get vendor PO settings error:', error);
+    res.status(500).json({ error: 'Failed to retrieve vendor PO settings' });
+  }
+});
+
+// PUT /api/vendor-pos/settings - Update vendor PO settings
+router.put('/settings', async (req: Request, res: Response) => {
+  try {
+    const data = insertVendorPOSettingsSchema.partial().parse(req.body);
+    const settings = await storage.updateVendorPOSettings(data);
+    res.json(settings);
+  } catch (error) {
+    console.error('Update vendor PO settings error:', error);
+    if (error instanceof z.ZodError) {
+      return res
+        .status(400)
+        .json({ error: 'Invalid vendor PO settings data', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to update vendor PO settings' });
+  }
+});
+
 // GET /api/vendor-pos/:id - Get a single vendor PO
 router.get('/:id', async (req: Request, res: Response) => {
   try {
@@ -194,42 +230,6 @@ router.delete('/items/:itemId', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Delete vendor PO item error:', error);
     res.status(500).json({ error: 'Failed to delete vendor PO item' });
-  }
-});
-
-// GET /api/vendor-pos/settings - Get vendor PO settings
-router.get('/settings', async (req: Request, res: Response) => {
-  try {
-    const settings = await storage.getVendorPOSettings();
-    if (!settings) {
-      // Return default settings if none exist
-      return res.json({
-        termsAndConditions: '',
-        paymentTerms: '',
-        shippingInstructions: '',
-      });
-    }
-    res.json(settings);
-  } catch (error) {
-    console.error('Get vendor PO settings error:', error);
-    res.status(500).json({ error: 'Failed to retrieve vendor PO settings' });
-  }
-});
-
-// PUT /api/vendor-pos/settings - Update vendor PO settings
-router.put('/settings', async (req: Request, res: Response) => {
-  try {
-    const data = insertVendorPOSettingsSchema.partial().parse(req.body);
-    const settings = await storage.updateVendorPOSettings(data);
-    res.json(settings);
-  } catch (error) {
-    console.error('Update vendor PO settings error:', error);
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid vendor PO settings data', details: error.errors });
-    }
-    res.status(500).json({ error: 'Failed to update vendor PO settings' });
   }
 });
 

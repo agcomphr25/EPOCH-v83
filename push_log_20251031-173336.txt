@@ -1,3 +1,36 @@
 Your branch is ahead of 'origin/main' by 18 commits.
   (use "git push" to publish your local commits)
 Already up to date.
+[feature-20251031-1733-my-change 864c0065] feat: my-change
+ 1 file changed, 3 insertions(+)
+ create mode 100644 push_log_20251031-173336.txt
+> 864c0065 (HEAD -> feature-20251031-1733-my-change) feat: my-change
+> 713c4c78 (gitsafe-backup/main, gitsafe-backup/HEAD, main) Add functionality to save and reprint schedules from history
+> 76a7659b Add schedule history to allow reprinting of past schedules
+> c892a466 Display the specific days included in each scheduled week
+> b0e81bea Show schedule creation date and all orders for the week
+> 5f2feda5 Refine address input to automatically complete and validate
+> 4a0cd07b Update layup schedule to use layup day for accurate tracking
+> 2bc02b6b Filter orders to show only customer-related items
+> ba20b882 Improve barcode scanning for schedule dates in layup/plugging queue
+> 81f61aae Improve layup schedule data retrieval and processing logic
+> 23765b4e Update address autocomplete and validation features for improved data accuracy
+> da582f98 Improve material detection for production queue items
+> 3d0ff127 Improve address input accuracy with autocomplete and validation
+> bfa8d252 Ensure barcode appears on the layout schedule preview
+> 1ba45990 Improve barcode visibility on the lay schedule page
+> 49b9cd47 Improve barcode visibility and material identification for layup schedules
+> 02a0bcd1 Improve order display and data accuracy on the all orders page
+> 5d9e16bc Add ability to reprint layup schedules and view schedule history
+> 1553eecb (repl-0ce1429f-ab65-4d48-bef3-611aab96e0df/main, repl-0ce1429f-ab65-4d48-bef3-611aab96e0df/HEAD) Update UPS label printing to use correct 4x6 size
+ ...invalid-source--1761929567424_1761929567425.txt |  216 ++
+ ...invalid-source--1761930434730_1761930434733.txt | 2277 ++++++++++++++++++++
+ client/src/components/LayupSchedulePreview.tsx     |   78 +-
+ client/src/components/ProductionQueueManager.tsx   |   19 +
+ client/src/components/ScheduleHistoryDialog.tsx    |   86 +-
+ client/src/pages/LayupPluggingQueuePage.tsx        |   36 +-
+ push_log_20251031-173336.txt                       |    3 +
+ server/src/routes/layupSchedule.ts                 |  114 +-
+ server/src/routes/shippingPdf.ts                   |    4 +
+ 9 files changed, 2722 insertions(+), 111 deletions(-)
+Open PR: https://github.com/agcomphr25/EPOCH-v83/compare/feature-20251031-1733-my-change?expand=1

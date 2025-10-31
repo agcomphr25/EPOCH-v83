@@ -790,17 +790,21 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
     const { scheduleDate } = req.params;
     console.log(`📅 Fetching orders for schedule date: ${scheduleDate}`);
     
-    // Get all schedule entries for this date
+    // Calculate the week end date (7 days after the start date)
+    const weekEnd = format(addDays(new Date(scheduleDate), 7), 'yyyy-MM-dd');
+    console.log(`📅 Fetching orders for entire week: ${scheduleDate} to ${weekEnd}`);
+    
+    // Get all schedule entries for the entire week (not just one day)
     const scheduleResult = await db.execute(sql`
       SELECT DISTINCT order_id
       FROM layup_schedule
-      WHERE scheduled_date::date = ${scheduleDate}::date
-         OR layup_day = ${scheduleDate}::date
+      WHERE scheduled_date::date >= ${scheduleDate}::date
+        AND scheduled_date::date < ${weekEnd}::date
       ORDER BY order_id
     `);
     
     const scheduleOrderIds = (scheduleResult.rows || []).map((row: any) => row.order_id);
-    console.log(`📋 Found ${scheduleOrderIds.length} schedule entries for ${scheduleDate}`);
+    console.log(`📋 Found ${scheduleOrderIds.length} schedule entries for week ${scheduleDate} - ${weekEnd}`);
     
     // Separate regular orders from PO units
     const regularOrderIds: string[] = [];

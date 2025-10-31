@@ -115,6 +115,8 @@ router.post('/generate', async (req: Request, res: Response) => {
           lop !== 'no_lop_change' &&
           lop.trim() !== '';
         
+        const lopValue = hasLOP ? lop : null;
+        
         const bottomMetal = features.bottom_metal;
         const hasADL = bottomMetal && typeof bottomMetal === 'string' && bottomMetal.toLowerCase().includes('adl');
         
@@ -125,6 +127,7 @@ router.post('/generate', async (req: Request, res: Response) => {
           actionLength,
           material,
           hasLOP,
+          lopValue,
           hasADL,
           hasHeavyFill,
         };
@@ -281,6 +284,7 @@ router.post('/generate', async (req: Request, res: Response) => {
               material: item.material || null,
               // Badge information
               hasLOP: item.hasLOP || false,
+              lopValue: item.lopValue || null,
               hasADL: item.hasADL || false,
               hasHeavyFill: item.hasHeavyFill || false,
             });

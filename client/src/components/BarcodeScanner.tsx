@@ -151,13 +151,17 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
     queryKey: ['/api/features'],
   });
 
+  // Detect if scanned barcode is a schedule barcode (LAYUP-YYYY-MM-DD or YYYY-MM-DD)
+  const schedulePattern = /^(LAYUP-)?(\d{4}-\d{2}-\d{2})$/i;
+  const isScheduleBarcode = scannedBarcode ? schedulePattern.test(scannedBarcode) : false;
+
   const {
     data: orderSummary,
     isLoading,
     error,
   } = useQuery<OrderSummary>({
     queryKey: ['/api/barcode/scan', scannedBarcode],
-    enabled: !!scannedBarcode,
+    enabled: !!scannedBarcode && !isScheduleBarcode, // Don't query API for schedule barcodes
     retry: false,
   });
 
@@ -180,6 +184,24 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
       }, 200);
     }
   }, [orderSummary?.orderId, onOrderScanned]);
+
+  // Handle schedule barcodes by passing directly to onOrderScanned
+  useEffect(() => {
+    if (scannedBarcode && isScheduleBarcode && onOrderScanned) {
+      // Pass the full barcode to the callback (it will handle the parsing)
+      if (!processedOrdersRef.current.has(scannedBarcode)) {
+        processedOrdersRef.current.add(scannedBarcode);
+        onOrderScanned(scannedBarcode);
+      }
+      // Auto-select input for next scan
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.select();
+          inputRef.current.focus();
+        }
+      }, 200);
+    }
+  }, [scannedBarcode, isScheduleBarcode, onOrderScanned]);
 
   const handleInputKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {

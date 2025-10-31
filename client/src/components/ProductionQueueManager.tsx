@@ -58,9 +58,11 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarCheck,
+  History,
 } from 'lucide-react';
 import type { P1POQueueCustomer } from '@shared/schema';
 import { LayupSchedulePreview } from './LayupSchedulePreview';
+import { ScheduleHistoryDialog } from './ScheduleHistoryDialog';
 
 interface ProductionQueueOrder {
   orderId: string;
@@ -150,6 +152,9 @@ export default function ProductionQueueManager() {
   const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4]); // Default: Mon-Thu
   const [daySelectionDialogOpen, setDaySelectionDialogOpen] = useState(false);
   const [selectedWeekOffset, setSelectedWeekOffset] = useState<number>(0); // 0 = next week, 1 = week after, etc.
+  
+  // State for schedule history dialog
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
 
   // Fetch prioritized production queue
   const {
@@ -593,6 +598,14 @@ export default function ProductionQueueManager() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setShowHistoryDialog(true)}
+            data-testid="button-schedule-history"
+          >
+            <History className="w-4 h-4 mr-2" />
+            Schedule History
+          </Button>
           <Button
             onClick={() => {
               refetch();
@@ -1610,6 +1623,12 @@ export default function ProductionQueueManager() {
           isApproving={approveScheduleMutation.isPending}
         />
       )}
+
+      {/* Schedule History Dialog */}
+      <ScheduleHistoryDialog
+        open={showHistoryDialog}
+        onClose={() => setShowHistoryDialog(false)}
+      />
     </div>
   );
 }

@@ -57,8 +57,8 @@ export function LayupSchedulePreview({
   const barcodeRef = useRef<SVGSVGElement>(null);
   const printContentRef = useRef<HTMLDivElement>(null);
   
-  // Generate barcode ID from week start date
-  const scheduleBarcode = weekStart ? `LAYUP${format(new Date(weekStart), 'yyyyMMdd')}` : '';
+  // Generate barcode ID from week start date - format must match scanner pattern (LAYUP-YYYY-MM-DD)
+  const scheduleBarcode = weekStart ? `LAYUP-${format(new Date(weekStart), 'yyyy-MM-dd')}` : '';
   
   // Group scheduled items by day
   const itemsByDay = scheduledItems.reduce((acc, item) => {

@@ -125,7 +125,22 @@ router.put('/:id', async (req: Request, res: Response) => {
 
     const data = insertVendorSchema.partial().parse(req.body);
     
-    // Auto-update evaluation status if notes contain evaluation data
+    // Auto-update evaluation status if evaluation scores are present
+    const hasAnyScore = 
+      data.qualityScore !== undefined && data.qualityScore !== null ||
+      data.costScore !== undefined && data.costScore !== null ||
+      data.deliveryScore !== undefined && data.deliveryScore !== null ||
+      data.responseScore !== undefined && data.responseScore !== null;
+    
+    if (hasAnyScore) {
+      data.evaluated = true;
+      // Set evaluation date to today if not already set
+      if (!data.evaluationDate) {
+        data.evaluationDate = new Date().toISOString().split('T')[0];
+      }
+    }
+    
+    // Also check notes for evaluation data (legacy support)
     if (data.notes && typeof data.notes === 'string') {
       const hasQuality = data.notes.includes('Quality:');
       const hasDelivery = data.notes.includes('Delivery Rating:');

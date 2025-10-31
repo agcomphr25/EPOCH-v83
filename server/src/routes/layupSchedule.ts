@@ -99,9 +99,10 @@ router.post('/generate', async (req: Request, res: Response) => {
         // Extract material from stock model name (fg = Fiberglass, cf = Carbon Fiber)
         let material = null;
         const stockModelName = order.stockModel?.toLowerCase() || '';
-        if (stockModelName.startsWith('fg_')) {
+        // Check for Fiberglass (prefix or suffix)
+        if (stockModelName.startsWith('fg_') || stockModelName.endsWith('_fg')) {
           material = 'Fiberglass';
-        } else if (stockModelName.startsWith('cf_') || stockModelName.startsWith('mesa_') || stockModelName.startsWith('mesa-') || stockModelName.startsWith('apr_') || stockModelName.startsWith('apr-')) {
+        } else if (stockModelName.startsWith('cf_') || stockModelName.endsWith('_cf') || stockModelName.startsWith('mesa_') || stockModelName.startsWith('mesa-') || stockModelName.startsWith('apr_') || stockModelName.startsWith('apr-')) {
           material = 'Carbon Fiber';
         }
         
@@ -175,9 +176,10 @@ router.post('/generate', async (req: Request, res: Response) => {
         // Extract material from stock model name
         let material = null;
         const stockModelName = item.stockModel?.toLowerCase() || '';
-        if (stockModelName.startsWith('fg_')) {
+        // Check for Fiberglass (prefix or suffix)
+        if (stockModelName.startsWith('fg_') || stockModelName.endsWith('_fg')) {
           material = 'Fiberglass';
-        } else if (stockModelName.startsWith('cf_') || stockModelName.startsWith('mesa_') || stockModelName.startsWith('mesa-') || stockModelName.startsWith('apr_') || stockModelName.startsWith('apr-')) {
+        } else if (stockModelName.startsWith('cf_') || stockModelName.endsWith('_cf') || stockModelName.startsWith('mesa_') || stockModelName.startsWith('mesa-') || stockModelName.startsWith('apr_') || stockModelName.startsWith('apr-')) {
           material = 'Carbon Fiber';
         }
         
@@ -1096,8 +1098,10 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
 function extractMaterial(stockModel: string | null): string | null {
   if (!stockModel) return null;
   const model = stockModel.toLowerCase();
-  if (model.startsWith('fg_')) return 'Fiberglass';
-  if (model.startsWith('cf_') || model.startsWith('mesa_') || model.startsWith('mesa-') || model.startsWith('apr_') || model.startsWith('apr-')) return 'Carbon Fiber';
+  // Check for Fiberglass (prefix or suffix)
+  if (model.startsWith('fg_') || model.endsWith('_fg')) return 'Fiberglass';
+  // Check for Carbon Fiber (prefix or suffix)
+  if (model.startsWith('cf_') || model.endsWith('_cf') || model.startsWith('mesa_') || model.startsWith('mesa-') || model.startsWith('apr_') || model.startsWith('apr-')) return 'Carbon Fiber';
   return null;
 }
 

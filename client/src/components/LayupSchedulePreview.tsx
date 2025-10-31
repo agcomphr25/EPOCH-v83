@@ -20,6 +20,7 @@ interface ScheduledItem {
   actionLength?: string | null;
   material?: string | null;
   hasLOP?: boolean;
+  lopValue?: string | null;
   hasADL?: boolean;
   hasHeavyFill?: boolean;
 }
@@ -76,38 +77,37 @@ export function LayupSchedulePreview({
 
   // Generate barcode when component opens or week changes
   useEffect(() => {
-    console.log('🔍 Barcode Effect Running:', { 
-      hasRef: !!barcodeRef.current, 
-      barcode: scheduleBarcode, 
-      open 
-    });
-    
-    if (barcodeRef.current && scheduleBarcode && open) {
-      try {
-        console.log('📊 Generating barcode:', scheduleBarcode);
-        JsBarcode(barcodeRef.current, scheduleBarcode, {
-          format: 'CODE39',
-          width: 3,
-          height: 100,
-          displayValue: true,
-          fontSize: 16,
-          textAlign: 'center',
-          textPosition: 'bottom',
-          margin: 10,
-          background: '#ffffff',
-          lineColor: '#000000',
-        });
-        console.log('✅ Barcode generated successfully');
-      } catch (error) {
-        console.error('❌ Error generating schedule barcode:', error);
-      }
-    } else {
-      console.warn('⚠️ Barcode not ready:', {
-        hasRef: !!barcodeRef.current,
-        hasBarcode: !!scheduleBarcode,
-        isOpen: open
-      });
+    if (!open || !scheduleBarcode) {
+      return;
     }
+
+    // Wait for DOM to be ready
+    const timer = setTimeout(() => {
+      if (barcodeRef.current) {
+        try {
+          console.log('📊 Generating barcode:', scheduleBarcode);
+          JsBarcode(barcodeRef.current, scheduleBarcode, {
+            format: 'CODE128',
+            width: 2,
+            height: 60,
+            displayValue: true,
+            fontSize: 14,
+            textAlign: 'center',
+            textPosition: 'bottom',
+            margin: 5,
+            background: '#ffffff',
+            lineColor: '#000000',
+          });
+          console.log('✅ Barcode generated successfully');
+        } catch (error) {
+          console.error('❌ Error generating schedule barcode:', error);
+        }
+      } else {
+        console.warn('⚠️ Barcode ref still not available after timeout');
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, [scheduleBarcode, open]);
 
   const handlePrint = async () => {
@@ -443,7 +443,7 @@ export function LayupSchedulePreview({
             </div>
             ${item.hasLOP || item.hasADL || item.hasHeavyFill ? `
               <div class="badges">
-                ${item.hasLOP ? '<div class="badge badge-lop">LOP</div>' : ''}
+                ${item.hasLOP ? `<div class="badge badge-lop">LOP ${item.lopValue || ''}</div>` : ''}
                 ${item.hasADL ? '<div class="badge badge-adl">ADL</div>' : ''}
                 ${item.hasHeavyFill ? '<div class="badge badge-heavy">HEAVY</div>' : ''}
               </div>
@@ -482,11 +482,13 @@ export function LayupSchedulePreview({
               </p>
             </div>
             {/* Schedule Barcode */}
-            <div className="flex flex-col items-center border rounded-lg p-3 bg-white">
-              <p className="text-xs text-gray-600 mb-1 font-semibold">Scan to Complete Layup</p>
-              <svg ref={barcodeRef} className="w-64 h-24"></svg>
+            <div className="flex flex-col items-center border rounded-lg p-3 bg-gray-50">
+              <p className="text-xs text-gray-600 mb-2 font-semibold">Scan to Complete Layup</p>
+              <div className="bg-white p-2 rounded">
+                <svg ref={barcodeRef} style={{ width: '240px', height: '80px' }}></svg>
+              </div>
               {scheduleBarcode && (
-                <p className="text-xs text-gray-400 mt-1">{scheduleBarcode}</p>
+                <p className="text-xs text-gray-500 mt-2 font-mono">{scheduleBarcode}</p>
               )}
             </div>
           </div>
@@ -572,7 +574,7 @@ export function LayupSchedulePreview({
                           <div className="flex flex-wrap gap-1">
                             {item.hasLOP && (
                               <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
-                                LOP
+                                LOP {item.lopValue || ''}
                               </Badge>
                             )}
                             {item.hasADL && (
@@ -625,7 +627,7 @@ export function LayupSchedulePreview({
                     
                     {(item.hasLOP || item.hasADL || item.hasHeavyFill) && (
                       <div className="layup-badges">
-                        {item.hasLOP && <span className="layup-badge layup-badge-lop">LOP</span>}
+                        {item.hasLOP && <span className="layup-badge layup-badge-lop">LOP {item.lopValue || ''}</span>}
                         {item.hasADL && <span className="layup-badge layup-badge-adl">ADL</span>}
                         {item.hasHeavyFill && <span className="layup-badge layup-badge-heavy">HEAVY</span>}
                       </div>

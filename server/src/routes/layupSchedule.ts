@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 
 import { db, pool } from '../../db';
-import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layupSchedule } from '../../schema';
+import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layupSchedule, stockModels } from '../../schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 
@@ -37,6 +37,19 @@ router.post('/generate', async (req: Request, res: Response) => {
         error: 'No items selected for scheduling',
       });
     }
+    
+    // Fetch stock models with display names for material detection
+    const stockModelsList = await db.select({
+      name: stockModels.name,
+      displayName: stockModels.displayName,
+    }).from(stockModels);
+    
+    // Create a map of model name -> display name for quick lookup
+    const stockModelDisplayMap = new Map(
+      stockModelsList.map(m => [m.name, m.displayName || ''])
+    );
+    
+    console.log(`📦 Loaded ${stockModelDisplayMap.size} stock models for material detection`);
     
     // Fetch molds with their capacities
     const activeMolds = await db
@@ -96,13 +109,13 @@ router.post('/generate', async (req: Request, res: Response) => {
           }
         }
         
-        // Extract material from stock model name (fg = Fiberglass, cf = Carbon Fiber)
+        // Extract material from stock model display name
         let material = null;
-        const stockModelName = order.stockModel?.toLowerCase() || '';
-        if (stockModelName.includes('_fg_') || stockModelName.includes('_fg')) {
-          material = 'Fiberglass';
-        } else if (stockModelName.includes('_cf_') || stockModelName.includes('_cf')) {
+        const displayName = stockModelDisplayMap.get(order.stockModel) || '';
+        if (displayName.startsWith('CF ') || displayName.includes(' CF ') || displayName.toLowerCase().includes('carbon')) {
           material = 'Carbon Fiber';
+        } else if (displayName.startsWith('FG ') || displayName.includes(' FG ') || displayName.toLowerCase().includes('fiberglass')) {
+          material = 'Fiberglass';
         }
         
         // Determine badges
@@ -115,6 +128,8 @@ router.post('/generate', async (req: Request, res: Response) => {
           lop !== 'no_lop_change' &&
           lop.trim() !== '';
         
+        const lopValue = hasLOP ? lop : null;
+        
         const bottomMetal = features.bottom_metal;
         const hasADL = bottomMetal && typeof bottomMetal === 'string' && bottomMetal.toLowerCase().includes('adl');
         
@@ -125,6 +140,7 @@ router.post('/generate', async (req: Request, res: Response) => {
           actionLength,
           material,
           hasLOP,
+          lopValue,
           hasADL,
           hasHeavyFill,
         };
@@ -172,13 +188,13 @@ router.post('/generate', async (req: Request, res: Response) => {
           }
         }
         
-        // Extract material from stock model name
+        // Extract material from stock model display name
         let material = null;
-        const stockModelName = item.stockModel?.toLowerCase() || '';
-        if (stockModelName.includes('_fg_') || stockModelName.includes('_fg')) {
-          material = 'Fiberglass';
-        } else if (stockModelName.includes('_cf_') || stockModelName.includes('_cf')) {
+        const displayName = stockModelDisplayMap.get(item.stockModel) || '';
+        if (displayName.startsWith('CF ') || displayName.includes(' CF ') || displayName.toLowerCase().includes('carbon')) {
           material = 'Carbon Fiber';
+        } else if (displayName.startsWith('FG ') || displayName.includes(' FG ') || displayName.toLowerCase().includes('fiberglass')) {
+          material = 'Fiberglass';
         }
         
         for (let i = 0; i < item.quantity; i++) {
@@ -281,6 +297,7 @@ router.post('/generate', async (req: Request, res: Response) => {
               material: item.material || null,
               // Badge information
               hasLOP: item.hasLOP || false,
+              lopValue: item.lopValue || null,
               hasADL: item.hasADL || false,
               hasHeavyFill: item.hasHeavyFill || false,
             });
@@ -355,7 +372,7 @@ router.post('/save', async (req: Request, res: Response) => {
 
     try {
       // Get existing schedule for this week to decrement PO item counts
-      const existingScheduleResult = await pool.query(
+      const existingRows = await pool.query<{ order_id: string }>(
         `
         SELECT order_id 
         FROM layup_schedule 
@@ -366,7 +383,6 @@ router.post('/save', async (req: Request, res: Response) => {
       
       // Decrement PO item counts for items being removed
       const existingPOCounts = new Map<string, number>();
-      const existingRows = existingScheduleResult.rows as Array<{ order_id: string }>;
       for (const row of existingRows) {
         const orderId = row.order_id;
         if (orderId.startsWith('PO-')) {
@@ -428,17 +444,22 @@ router.post('/save', async (req: Request, res: Response) => {
             ? new Date(scheduledDate)
             : scheduledDate;
 
-        // Insert schedule entry
+        // Insert schedule entry with layup_day for schedule history
+        const layupDay = processedScheduledDate instanceof Date 
+          ? processedScheduledDate.toISOString().split('T')[0]
+          : new Date(processedScheduledDate).toISOString().split('T')[0];
+        
         await pool.query(
           `
           INSERT INTO layup_schedule (
-            order_id, scheduled_date, mold_id, employee_assignments,
+            order_id, scheduled_date, layup_day, mold_id, employee_assignments,
             is_override, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `,
           [
             orderId,
             processedScheduledDate,
+            layupDay,
             moldId || 'auto',
             JSON.stringify(employeeAssignments || []),
             true, // This is a manual schedule save
@@ -517,7 +538,7 @@ router.post('/save', async (req: Request, res: Response) => {
         // Check which POs have all items fully scheduled
         const fullyScheduledPOs = [];
         for (const poNumber of poNumbersArray) {
-          const checkResult = await pool.query(
+          const checkRows = await pool.query<{ total_items: string; completed_items: string }>(
             `
             SELECT COUNT(*) as total_items,
                    COUNT(*) FILTER (WHERE quantity - COALESCE(order_count, 0) = 0) as completed_items
@@ -530,7 +551,6 @@ router.post('/save', async (req: Request, res: Response) => {
             [poNumber]
           );
           
-          const checkRows = checkResult.rows as Array<{ total_items: string; completed_items: string }>;
           if (checkRows.length > 0) {
             const totalItems = parseInt(checkRows[0].total_items);
             const completedItems = parseInt(checkRows[0].completed_items);
@@ -700,17 +720,23 @@ router.post('/', async (req: Request, res: Response) => {
         ? new Date(scheduledDate)
         : scheduledDate;
 
+    // Extract layup_day for schedule history
+    const layupDay = processedScheduledDate instanceof Date 
+      ? processedScheduledDate.toISOString().split('T')[0]
+      : new Date(processedScheduledDate).toISOString().split('T')[0];
+
     // Insert schedule entry
     await pool.query(
       `
       INSERT INTO layup_schedule (
-        order_id, scheduled_date, mold_id, employee_assignments,
+        order_id, scheduled_date, layup_day, mold_id, employee_assignments,
         is_override, overridden_by, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `,
       [
         orderId,
         processedScheduledDate,
+        layupDay,
         moldId,
         JSON.stringify(employeeAssignments || []),
         isOverride || true,
@@ -788,7 +814,7 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
     console.log(`📅 Fetching orders for schedule date: ${scheduleDate}`);
     
     // Get all schedule entries for this date
-    const scheduleResult = await pool.query(
+    const scheduleRows = await pool.query<{ order_id: string }>(
       `
       SELECT DISTINCT order_id
       FROM layup_schedule
@@ -799,7 +825,7 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
       [scheduleDate]
     );
     
-    const scheduleOrderIds = scheduleResult.rows.map((row: any) => row.order_id);
+    const scheduleOrderIds = scheduleRows.map((row) => row.order_id);
     console.log(`📋 Found ${scheduleOrderIds.length} schedule entries for ${scheduleDate}`);
     
     // Separate regular orders from PO units
@@ -842,7 +868,7 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
         );
         
         for (const mapping of uniqueMappings) {
-          const productionOrderResult = await pool.query(
+          const productionOrderRows = await pool.query<{ order_id: string }>(
             `
             SELECT DISTINCT order_id
             FROM production_orders
@@ -851,7 +877,7 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
             [mapping.poNumber, mapping.poItemId]
           );
           
-          for (const row of productionOrderResult.rows) {
+          for (const row of productionOrderRows) {
             productionOrderIds.add(row.order_id);
           }
         }
@@ -886,25 +912,29 @@ router.get('/weeks', async (req: Request, res: Response) => {
   try {
     console.log('📅 SCHEDULE WEEKS: Fetching list of weeks with schedules...');
     
-    const result = await pool.query(`
+    const weeks = await pool.query(`
       SELECT 
-        DATE_TRUNC('week', scheduled_date)::date AS week_start,
-        MIN(scheduled_date)::date AS first_day,
-        MAX(scheduled_date)::date AS last_day,
+        DATE_TRUNC('week', layup_day)::date AS week_start,
+        MIN(layup_day)::date AS first_day,
+        MAX(layup_day)::date AS last_day,
+        MIN(created_at) AS created_at,
         COUNT(DISTINCT order_id) AS order_count,
         COUNT(DISTINCT CASE WHEN order_id LIKE 'PO-%' THEN order_id END) AS po_order_count,
-        COUNT(DISTINCT CASE WHEN order_id NOT LIKE 'PO-%' THEN order_id END) AS regular_order_count
+        COUNT(DISTINCT CASE WHEN order_id NOT LIKE 'PO-%' THEN order_id END) AS regular_order_count,
+        ARRAY_AGG(DISTINCT order_id ORDER BY order_id) AS order_ids,
+        ARRAY_AGG(DISTINCT layup_day ORDER BY layup_day) AS schedule_days
       FROM layup_schedule
-      GROUP BY DATE_TRUNC('week', scheduled_date)
-      ORDER BY DATE_TRUNC('week', scheduled_date) DESC
+      WHERE layup_day IS NOT NULL
+      GROUP BY DATE_TRUNC('week', layup_day)
+      ORDER BY DATE_TRUNC('week', layup_day) DESC
       LIMIT 52
     `);
     
-    console.log(`✅ Found ${result.rows.length} weeks with schedules`);
+    console.log(`✅ Found ${weeks.length} weeks with schedules`);
     
     res.json({
       success: true,
-      weeks: result.rows,
+      weeks,
     });
   } catch (error) {
     console.error('❌ Error fetching schedule weeks:', error);
@@ -926,25 +956,23 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
     const weekEnd = format(addDays(new Date(weekStart), 7), 'yyyy-MM-dd');
     
     // Get all schedule entries for this week
-    const scheduleResult = await pool.query(
+    const scheduleEntries = await pool.query(
       `
       SELECT 
         ls.id,
         ls.order_id,
-        ls.scheduled_date,
+        ls.layup_day AS scheduled_date,
         ls.mold_id,
         ls.employee_assignments,
         ls.is_override,
         ls.created_at
       FROM layup_schedule ls
-      WHERE ls.scheduled_date >= $1::date 
-        AND ls.scheduled_date < $2::date
-      ORDER BY ls.scheduled_date, ls.order_id
+      WHERE ls.layup_day >= $1::date 
+        AND ls.layup_day < $2::date
+      ORDER BY ls.layup_day, ls.order_id
     `,
       [weekStart, weekEnd]
     );
-    
-    const scheduleEntries = scheduleResult.rows;
     console.log(`📦 Found ${scheduleEntries.length} schedule entries`);
     
     // Separate PO items and regular orders
@@ -961,7 +989,7 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
     // Fetch regular order details
     let regularOrders = [];
     if (regularOrderIds.length > 0) {
-      const ordersResult = await pool.query(
+      regularOrders = await pool.query(
         `
         SELECT 
           ao.order_id,
@@ -974,13 +1002,12 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
       `,
         [regularOrderIds]
       );
-      regularOrders = ordersResult.rows;
     }
     
     // Fetch PO order details
     let poOrders = [];
     if (poOrderIds.length > 0) {
-      const poResult = await pool.query(
+      poOrders = await pool.query(
         `
         SELECT 
           po_orders.order_id,
@@ -997,7 +1024,6 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
       `,
         [poOrderIds]
       );
-      poOrders = poResult.rows;
     }
     
     // Build unified schedule items with details

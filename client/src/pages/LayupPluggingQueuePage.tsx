@@ -189,14 +189,36 @@ export default function LayupPluggingQueuePage() {
   const handleOrderScanned = async (barcode: string) => {
     console.log('🔍 Barcode scanned:', barcode);
     
-    // Check if this is a schedule barcode (format: LAYUP-YYYY-MM-DD or YYYY-MM-DD)
-    const schedulePattern = /^(LAYUP-)?(\d{4}-\d{2}-\d{2})$/i;
-    const scheduleMatch = barcode.match(schedulePattern);
+    // Check if this is a schedule barcode
+    // Format 1: LAYUP20251102 (LAYUP + YYYYMMDD)
+    // Format 2: LAYUP-2025-11-02 (LAYUP- + YYYY-MM-DD)
+    // Format 3: 2025-11-02 (YYYY-MM-DD only)
+    let scheduleDate: string | null = null;
     
-    if (scheduleMatch) {
-      // Extract the date (with or without LAYUP- prefix)
-      const scheduleDate = scheduleMatch[2]; // YYYY-MM-DD
-      console.log('📅 Schedule barcode detected:', scheduleDate);
+    // Check for LAYUP + 8 digits (LAYUPYYYYMMDD)
+    const compactPattern = /^LAYUP(\d{8})$/i;
+    const compactMatch = barcode.match(compactPattern);
+    
+    if (compactMatch) {
+      // Parse YYYYMMDD to YYYY-MM-DD
+      const dateStr = compactMatch[1];
+      const year = dateStr.substring(0, 4);
+      const month = dateStr.substring(4, 6);
+      const day = dateStr.substring(6, 8);
+      scheduleDate = `${year}-${month}-${day}`;
+      console.log('📅 Schedule barcode detected (compact):', scheduleDate);
+    } else {
+      // Check for standard format with dashes
+      const standardPattern = /^(LAYUP-)?(\d{4}-\d{2}-\d{2})$/i;
+      const standardMatch = barcode.match(standardPattern);
+      
+      if (standardMatch) {
+        scheduleDate = standardMatch[2]; // YYYY-MM-DD
+        console.log('📅 Schedule barcode detected (standard):', scheduleDate);
+      }
+    }
+    
+    if (scheduleDate) {
       
       try {
         toast({

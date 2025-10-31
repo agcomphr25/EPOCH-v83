@@ -77,38 +77,37 @@ export function LayupSchedulePreview({
 
   // Generate barcode when component opens or week changes
   useEffect(() => {
-    console.log('🔍 Barcode Effect Running:', { 
-      hasRef: !!barcodeRef.current, 
-      barcode: scheduleBarcode, 
-      open 
-    });
-    
-    if (barcodeRef.current && scheduleBarcode && open) {
-      try {
-        console.log('📊 Generating barcode:', scheduleBarcode);
-        JsBarcode(barcodeRef.current, scheduleBarcode, {
-          format: 'CODE128',
-          width: 2,
-          height: 60,
-          displayValue: true,
-          fontSize: 14,
-          textAlign: 'center',
-          textPosition: 'bottom',
-          margin: 5,
-          background: '#ffffff',
-          lineColor: '#000000',
-        });
-        console.log('✅ Barcode generated successfully');
-      } catch (error) {
-        console.error('❌ Error generating schedule barcode:', error);
-      }
-    } else {
-      console.warn('⚠️ Barcode not ready:', {
-        hasRef: !!barcodeRef.current,
-        hasBarcode: !!scheduleBarcode,
-        isOpen: open
-      });
+    if (!open || !scheduleBarcode) {
+      return;
     }
+
+    // Wait for DOM to be ready
+    const timer = setTimeout(() => {
+      if (barcodeRef.current) {
+        try {
+          console.log('📊 Generating barcode:', scheduleBarcode);
+          JsBarcode(barcodeRef.current, scheduleBarcode, {
+            format: 'CODE128',
+            width: 2,
+            height: 60,
+            displayValue: true,
+            fontSize: 14,
+            textAlign: 'center',
+            textPosition: 'bottom',
+            margin: 5,
+            background: '#ffffff',
+            lineColor: '#000000',
+          });
+          console.log('✅ Barcode generated successfully');
+        } catch (error) {
+          console.error('❌ Error generating schedule barcode:', error);
+        }
+      } else {
+        console.warn('⚠️ Barcode ref still not available after timeout');
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, [scheduleBarcode, open]);
 
   const handlePrint = async () => {

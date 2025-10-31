@@ -142,13 +142,15 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
             key={item.id}
             className="text-xs bg-gray-50 dark:bg-gray-800 rounded p-2"
           >
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-start gap-2">
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
                   {item.agPartNumber && (
                     <span className="text-blue-600">#{item.agPartNumber}</span>
                   )}{' '}
-                  {item.description}
+                  <span className="truncate inline-block max-w-[90%] align-bottom">
+                    {item.description}
+                  </span>
                 </div>
                 {item.vendorPartNumber && (
                   <div className="text-gray-500 text-xs truncate">

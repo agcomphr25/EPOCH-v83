@@ -41,6 +41,7 @@ import MRPShortagesCard from '../components/inventory/MRPShortagesCard';
 import OutsideProcessingCard from '../components/inventory/OutsideProcessingCard';
 import POSuggestionsCard from '../components/inventory/POSuggestionsCard';
 import VendorPOManager from '../components/inventory/VendorPOManager';
+import VendorPOSettings from '../components/inventory/VendorPOSettings';
 
 export default function EnhancedInventoryMRPPage() {
   const [activeCard, setActiveCard] = useState<string | null>(null);
@@ -321,6 +322,31 @@ export default function EnhancedInventoryMRPPage() {
             </CardContent>
           </Card>
 
+          {/* PO Settings Card */}
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-purple-500"
+            onClick={() => handleCardClick('po-settings')}
+            data-testid="card-po-settings"
+          >
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Settings className="h-5 w-5 text-purple-600" />
+                PO Settings
+              </CardTitle>
+              <CardDescription>
+                Configure default terms and conditions for POs
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="text-2xl font-bold text-purple-600">
+                  Settings
+                </div>
+                <Settings className="h-4 w-4 text-gray-400" />
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Outside Processing Card */}
           <Card
             className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-cyan-500"
@@ -422,6 +448,12 @@ export default function EnhancedInventoryMRPPage() {
                       Vendor Purchase Orders
                     </>
                   )}
+                  {activeCard === 'po-settings' && (
+                    <>
+                      <Settings className="h-5 w-5" />
+                      PO Settings
+                    </>
+                  )}
                 </CardTitle>
                 <Button
                   variant="outline"
@@ -446,6 +478,7 @@ export default function EnhancedInventoryMRPPage() {
               {activeCard === 'po-suggestions' && <POSuggestionsCard />}
               {activeCard === 'outside-processing' && <OutsideProcessingCard />}
               {activeCard === 'vendor-po' && <VendorPOManager />}
+              {activeCard === 'po-settings' && <VendorPOSettings />}
             </CardContent>
           </Card>
         </div>

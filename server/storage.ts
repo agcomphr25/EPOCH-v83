@@ -284,6 +284,9 @@ import {
   vendorParts,
   type VendorPart,
   type InsertVendorPart,
+  vendorPOSettings,
+  type VendorPOSettings,
+  type InsertVendorPOSettings,
 } from './schema';
 import { db } from './db';
 import {
@@ -1347,6 +1350,10 @@ export interface IStorage {
   createVendorPOItem(data: any): Promise<any>;
   updateVendorPOItem(id: number, data: any): Promise<any>;
   deleteVendorPOItem(id: number): Promise<void>;
+
+  // Vendor PO Settings
+  getVendorPOSettings(): Promise<any | undefined>;
+  updateVendorPOSettings(data: any): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -5513,6 +5520,7 @@ export class DatabaseStorage implements IStorage {
           orderDate: vendorPOs.orderDate,
           expectedDeliveryDate: vendorPOs.expectedDeliveryDate,
           actualDeliveryDate: vendorPOs.actualDeliveryDate,
+          shipVia: vendorPOs.shipVia,
           barcode: vendorPOs.barcode,
           subtotal: vendorPOs.subtotal,
           tax: vendorPOs.tax,
@@ -5555,6 +5563,7 @@ export class DatabaseStorage implements IStorage {
         orderDate: vendorPOs.orderDate,
         expectedDeliveryDate: vendorPOs.expectedDeliveryDate,
         actualDeliveryDate: vendorPOs.actualDeliveryDate,
+        shipVia: vendorPOs.shipVia,
         barcode: vendorPOs.barcode,
         subtotal: vendorPOs.subtotal,
         tax: vendorPOs.tax,
@@ -5573,6 +5582,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createVendorPO(data: any): Promise<any> {
+    // Auto-generate PO number if not provided
+    if (!data.poNumber) {
+      // Get the latest vendor PO to generate next number
+      const latestPO = await db
+        .select({ poNumber: vendorPOs.poNumber })
+        .from(vendorPOs)
+        .where(sql`${vendorPOs.poNumber} LIKE 'VPO-%'`)
+        .orderBy(desc(vendorPOs.id))
+        .limit(1);
+      
+      let nextNumber = 1;
+      if (latestPO.length > 0 && latestPO[0].poNumber) {
+        const match = latestPO[0].poNumber.match(/VPO-(\d+)/);
+        if (match) {
+          nextNumber = parseInt(match[1]) + 1;
+        }
+      }
+      data.poNumber = `VPO-${String(nextNumber).padStart(6, '0')}`;
+    }
+    
+    // Auto-generate barcode if not provided
+    if (!data.barcode) {
+      data.barcode = nanoid(12);
+    }
+    
     const [vendorPO] = await db.insert(vendorPOs).values(data).returning();
     return vendorPO;
   }
@@ -5615,6 +5649,40 @@ export class DatabaseStorage implements IStorage {
 
   async deleteVendorPOItem(id: number): Promise<void> {
     await db.delete(vendorPOItems).where(eq(vendorPOItems.id, id));
+  }
+
+  // Vendor PO Settings
+  async getVendorPOSettings(): Promise<VendorPOSettings | undefined> {
+    const [settings] = await db
+      .select()
+      .from(vendorPOSettings)
+      .limit(1);
+    return settings;
+  }
+
+  async updateVendorPOSettings(data: Partial<InsertVendorPOSettings>): Promise<VendorPOSettings> {
+    // Get the first (and should be only) settings record
+    const [existingSettings] = await db
+      .select()
+      .from(vendorPOSettings)
+      .limit(1);
+    
+    if (existingSettings) {
+      // Update existing settings
+      const [updatedSettings] = await db
+        .update(vendorPOSettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(vendorPOSettings.id, existingSettings.id))
+        .returning();
+      return updatedSettings;
+    } else {
+      // Create new settings if none exist
+      const [newSettings] = await db
+        .insert(vendorPOSettings)
+        .values(data)
+        .returning();
+      return newSettings;
+    }
   }
 
   // Enhanced Inventory MRP - Inventory Balances CRUD
@@ -5728,11 +5796,45 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getVendorPartsByVendor(vendorId: number): Promise<VendorPart[]> {
-    return await db
+    // First get the vendor name to search in the source field
+    const [vendor] = await db
       .select()
-      .from(vendorParts)
-      .where(eq(vendorParts.vendorId, vendorId))
-      .orderBy(vendorParts.agPartNumber);
+      .from(vendors)
+      .where(eq(vendors.id, vendorId))
+      .limit(1);
+    
+    if (!vendor) {
+      return [];
+    }
+    
+    // Query inventory_items filtered by BOTH vendorId AND source field (text match)
+    // This handles both cases: vendor_id foreign key and legacy source text field
+    const items = await db
+      .select()
+      .from(inventoryItems)
+      .where(
+        or(
+          eq(inventoryItems.vendorId, vendorId),
+          eq(inventoryItems.source, vendor.name)
+        )
+      )
+      .orderBy(inventoryItems.agPartNumber);
+    
+    // Map inventory items to VendorPart format for the frontend
+    return items.map(item => ({
+      id: item.id,
+      agPartNumber: item.agPartNumber,
+      vendorId: vendorId, // Use the vendorId from the parameter
+      vendorPartNumber: item.supplierPartNumber || null,
+      unitPrice: item.costPer || null,
+      leadTimeDays: null,
+      minimumOrderQty: 1,
+      isPreferred: true,
+      notes: item.notes || null,
+      itemDescription: item.name || null,
+      createdAt: item.createdAt || new Date(),
+      updatedAt: item.updatedAt || new Date(),
+    }));
   }
 
   async getVendorPartsByPart(agPartNumber: string): Promise<VendorPart[]> {

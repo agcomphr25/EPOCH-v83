@@ -47,9 +47,23 @@ import {
   ShoppingCart,
   Calendar as CalendarIcon,
   Building2,
+  FileDown,
+  Send,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import VendorPOItemSelector from './VendorPOItemSelector';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // Types based on our schema
 type VendorPO = {
@@ -128,13 +142,15 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
             key={item.id}
             className="text-xs bg-gray-50 dark:bg-gray-800 rounded p-2"
           >
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-start gap-2">
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
                   {item.agPartNumber && (
                     <span className="text-blue-600">#{item.agPartNumber}</span>
                   )}{' '}
-                  {item.description}
+                  <span className="truncate inline-block max-w-[90%] align-bottom">
+                    {item.description}
+                  </span>
                 </div>
                 {item.vendorPartNumber && (
                   <div className="text-gray-500 text-xs truncate">
@@ -508,6 +524,8 @@ export default function VendorPOManager() {
   const [activeTab, setActiveTab] = useState('details');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showStatusChangeDialog, setShowStatusChangeDialog] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<string>('');
 
   const queryClient = useQueryClient();
 
@@ -579,6 +597,28 @@ export default function VendorPOManager() {
     },
   });
 
+  // Status change mutation
+  const changeStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      apiRequest(`/api/vendor-pos/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      toast.success('Status updated successfully');
+      setShowStatusChangeDialog(false);
+      setPendingStatus('');
+      // Update the selected PO status
+      if (selectedVendorPO) {
+        setSelectedVendorPO({ ...selectedVendorPO, status: pendingStatus as any });
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to update status');
+    },
+  });
+
   // Filter vendor POs
   const filteredVendorPOs = (vendorPOs || []).filter((vendorPo) => {
     const matchesSearch =
@@ -630,6 +670,179 @@ export default function VendorPOManager() {
     }
   };
 
+  const handleStatusChange = (newStatus: string) => {
+    setPendingStatus(newStatus);
+    setShowStatusChangeDialog(true);
+  };
+
+  const confirmStatusChange = () => {
+    if (selectedVendorPO) {
+      changeStatusMutation.mutate({ id: selectedVendorPO.id, status: pendingStatus });
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!selectedVendorPO) return;
+    
+    try {
+      // Fetch line items for this PO
+      const items: VendorPOItem[] = await apiRequest(`/api/vendor-pos/${selectedVendorPO.id}/items`);
+      
+      // Fetch PO settings for terms and conditions
+      const settings: any = await apiRequest('/api/vendor-pos/settings');
+      
+      // Create a simple HTML structure for PDF conversion
+      const printWindow = window.open('', '', 'height=600,width=800');
+      if (!printWindow) {
+        toast.error('Please allow popups for PDF generation');
+        return;
+      }
+      
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Purchase Order - ${selectedVendorPO.poNumber}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 40px; }
+              .header { text-align: center; margin-bottom: 30px; }
+              .header h1 { margin: 0; font-size: 24px; }
+              .info-section { margin-bottom: 20px; }
+              .info-row { display: flex; margin-bottom: 8px; }
+              .info-label { font-weight: bold; width: 200px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+              th { background-color: #f2f2f2; font-weight: bold; }
+              .totals { text-align: right; margin-top: 20px; }
+              .total-line { font-size: 18px; font-weight: bold; }
+              @media print {
+                body { padding: 20px; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>PURCHASE ORDER</h1>
+              <p>PO Number: ${selectedVendorPO.poNumber}</p>
+            </div>
+            
+            <div class="info-section">
+              <div class="info-row">
+                <div class="info-label">Vendor:</div>
+                <div>${selectedVendorPO.vendorName || `ID: ${selectedVendorPO.vendorId}`}</div>
+              </div>
+              <div class="info-row">
+                <div class="info-label">Status:</div>
+                <div>${selectedVendorPO.status}</div>
+              </div>
+              <div class="info-row">
+                <div class="info-label">Expected Delivery:</div>
+                <div>${selectedVendorPO.expectedDeliveryDate || 'N/A'}</div>
+              </div>
+              <div class="info-row">
+                <div class="info-label">Ship Via:</div>
+                <div>${selectedVendorPO.shipVia || 'N/A'}</div>
+              </div>
+              <div class="info-row">
+                <div class="info-label">Barcode:</div>
+                <div>${selectedVendorPO.barcode}</div>
+              </div>
+            </div>
+            
+            <table>
+              <thead>
+                <tr>
+                  <th>Line</th>
+                  <th>AG Part#</th>
+                  <th>Description</th>
+                  <th>Quantity</th>
+                  <th>Unit Price</th>
+                  <th>Line Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.map(item => `
+                  <tr>
+                    <td>${item.lineNumber}</td>
+                    <td>${item.agPartNumber || '-'}</td>
+                    <td>${item.description || '-'}</td>
+                    <td>${item.quantity}</td>
+                    <td>$${item.unitPrice.toFixed(2)}</td>
+                    <td>$${item.lineTotal.toFixed(2)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            
+            <div class="totals">
+              <div class="total-line">
+                Total: $${selectedVendorPO.totalCost.toFixed(2)}
+              </div>
+            </div>
+            
+            ${selectedVendorPO.notes ? `
+              <div style="margin-top: 30px;">
+                <div style="font-weight: bold;">Notes:</div>
+                <div>${selectedVendorPO.notes}</div>
+              </div>
+            ` : ''}
+            
+            ${settings?.termsAndConditions || settings?.paymentTerms || settings?.shippingInstructions ? `
+              <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #ddd;">
+                ${settings?.paymentTerms ? `
+                  <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; font-size: 14px;">Payment Terms:</div>
+                    <div style="white-space: pre-wrap; margin-top: 5px;">${settings.paymentTerms}</div>
+                  </div>
+                ` : ''}
+                
+                ${settings?.shippingInstructions ? `
+                  <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; font-size: 14px;">Shipping Instructions:</div>
+                    <div style="white-space: pre-wrap; margin-top: 5px;">${settings.shippingInstructions}</div>
+                  </div>
+                ` : ''}
+                
+                ${settings?.termsAndConditions ? `
+                  <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; font-size: 14px;">Terms and Conditions:</div>
+                    <div style="white-space: pre-wrap; margin-top: 5px;">${settings.termsAndConditions}</div>
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
+          </body>
+        </html>
+      `;
+      
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      
+      // Wait a bit for content to load, then trigger print
+      setTimeout(() => {
+        printWindow.print();
+        toast.success('PDF ready for download');
+      }, 250);
+      
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      toast.error('Failed to generate PDF');
+    }
+  };
+
+  const getNextStatus = (currentStatus: string): string | null => {
+    switch (currentStatus) {
+      case 'Draft':
+        return 'Sent';
+      case 'Sent':
+        return 'Partially Received';
+      case 'Partially Received':
+        return 'Fully Received';
+      default:
+        return null;
+    }
+  };
+
   if (isLoading) {
     return (
       <div
@@ -671,6 +884,8 @@ export default function VendorPOManager() {
 
   // Show detail view if a PO is selected
   if (showDetailView && selectedVendorPO) {
+    const nextStatus = getNextStatus(selectedVendorPO.status);
+    
     return (
       <div className="space-y-6">
         {/* Detail Header */}
@@ -698,13 +913,73 @@ export default function VendorPOManager() {
               </div>
             </div>
           </div>
-          <Badge
-            className={getStatusColor(selectedVendorPO.status)}
-            data-testid="detail-status"
-          >
-            {selectedVendorPO.status}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge
+              className={getStatusColor(selectedVendorPO.status)}
+              data-testid="detail-status"
+            >
+              {selectedVendorPO.status}
+            </Badge>
+            
+            {/* Status Workflow Buttons */}
+            {nextStatus && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleStatusChange(nextStatus)}
+                data-testid="button-change-status"
+              >
+                {nextStatus === 'Sent' && <Send className="w-4 h-4 mr-2" />}
+                {nextStatus === 'Partially Received' && <Package className="w-4 h-4 mr-2" />}
+                {nextStatus === 'Fully Received' && <CheckCircle className="w-4 h-4 mr-2" />}
+                Mark as {nextStatus}
+              </Button>
+            )}
+            
+            {/* Cancel Button (only for Draft or Sent) */}
+            {(selectedVendorPO.status === 'Draft' || selectedVendorPO.status === 'Sent') && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleStatusChange('Cancelled')}
+                data-testid="button-cancel-po"
+              >
+                <XCircle className="w-4 h-4 mr-2" />
+                Cancel PO
+              </Button>
+            )}
+            
+            {/* PDF Download Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadPDF}
+              data-testid="button-download-pdf"
+            >
+              <FileDown className="w-4 h-4 mr-2" />
+              Download PDF
+            </Button>
+          </div>
         </div>
+
+        {/* Status Change Confirmation Dialog */}
+        <AlertDialog open={showStatusChangeDialog} onOpenChange={setShowStatusChangeDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Status Change</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to change the status of this purchase order from{' '}
+                <strong>{selectedVendorPO.status}</strong> to <strong>{pendingStatus}</strong>?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmStatusChange} data-testid="button-confirm-status-change">
+                Confirm
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Tabbed Interface */}
         <Tabs
@@ -744,6 +1019,7 @@ export default function VendorPOManager() {
           <TabsContent value="items" className="space-y-4">
             <VendorPOItemSelector
               vendorPoId={selectedVendorPO.id}
+              vendorId={selectedVendorPO.vendorId}
               poNumber={selectedVendorPO.poNumber}
               onTotalChange={(total: number) => {
                 queryClient.invalidateQueries({

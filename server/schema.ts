@@ -2373,6 +2373,7 @@ export const vendorPOs = pgTable('vendor_pos', {
   orderDate: date('order_date'),
   expectedDeliveryDate: date('expected_delivery_date'),
   actualDeliveryDate: date('actual_delivery_date'),
+  shipVia: text('ship_via'),
   barcode: text('barcode').unique(),
   subtotal: real('subtotal').default(0),
   tax: real('tax').default(0),
@@ -2405,6 +2406,16 @@ export const vendorPOItems = pgTable('vendor_po_items', {
 }, (table) => ({
   uniquePoLine: unique().on(table.vendorPoId, table.lineNumber),
 }));
+
+// Vendor PO Settings (singleton table for global PO settings)
+export const vendorPOSettings = pgTable('vendor_po_settings', {
+  id: serial('id').primaryKey(),
+  termsAndConditions: text('terms_and_conditions'),
+  paymentTerms: text('payment_terms'),
+  shippingInstructions: text('shipping_instructions'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
 
 export const communicationLogs = pgTable('communication_logs', {
   id: serial('id').primaryKey(),
@@ -2643,12 +2654,13 @@ export const insertVendorPOSchema = createInsertSchema(vendorPOs)
     updatedAt: true,
   })
   .extend({
-    poNumber: z.string().min(1, 'PO number is required'),
+    poNumber: z.string().min(1, 'PO number is required').optional(),
     vendorId: z.number().int().positive('Vendor ID is required'),
     status: z.enum(['Draft', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled']).default('Draft'),
     orderDate: z.string().optional().nullable(),
     expectedDeliveryDate: z.string().optional().nullable(),
     actualDeliveryDate: z.string().optional().nullable(),
+    shipVia: z.string().optional().nullable(),
     barcode: z.string().optional().nullable(),
     subtotal: z.number().default(0),
     tax: z.number().default(0),
@@ -2680,6 +2692,20 @@ export const insertVendorPOItemSchema = createInsertSchema(vendorPOItems)
   });
 export type InsertVendorPOItem = z.infer<typeof insertVendorPOItemSchema>;
 export type VendorPOItem = typeof vendorPOItems.$inferSelect;
+
+export const insertVendorPOSettingsSchema = createInsertSchema(vendorPOSettings)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    termsAndConditions: z.string().optional().nullable(),
+    paymentTerms: z.string().optional().nullable(),
+    shippingInstructions: z.string().optional().nullable(),
+  });
+export type InsertVendorPOSettings = z.infer<typeof insertVendorPOSettingsSchema>;
+export type VendorPOSettings = typeof vendorPOSettings.$inferSelect;
 
 // Order Attachments Table
 export const orderAttachments = pgTable('order_attachments', {

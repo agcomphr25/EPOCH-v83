@@ -99,9 +99,9 @@ router.post('/generate', async (req: Request, res: Response) => {
         // Extract material from stock model name (fg = Fiberglass, cf = Carbon Fiber)
         let material = null;
         const stockModelName = order.stockModel?.toLowerCase() || '';
-        if (stockModelName.includes('_fg_') || stockModelName.includes('_fg')) {
+        if (stockModelName.includes('_fg_') || stockModelName.includes('_fg') || stockModelName.startsWith('fg_')) {
           material = 'Fiberglass';
-        } else if (stockModelName.includes('_cf_') || stockModelName.includes('_cf')) {
+        } else if (stockModelName.includes('_cf_') || stockModelName.includes('_cf') || stockModelName.startsWith('cf_')) {
           material = 'Carbon Fiber';
         }
         
@@ -178,9 +178,9 @@ router.post('/generate', async (req: Request, res: Response) => {
         // Extract material from stock model name
         let material = null;
         const stockModelName = item.stockModel?.toLowerCase() || '';
-        if (stockModelName.includes('_fg_') || stockModelName.includes('_fg')) {
+        if (stockModelName.includes('_fg_') || stockModelName.includes('_fg') || stockModelName.startsWith('fg_')) {
           material = 'Fiberglass';
-        } else if (stockModelName.includes('_cf_') || stockModelName.includes('_cf')) {
+        } else if (stockModelName.includes('_cf_') || stockModelName.includes('_cf') || stockModelName.startsWith('cf_')) {
           material = 'Carbon Fiber';
         }
         

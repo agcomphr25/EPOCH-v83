@@ -87,14 +87,14 @@ export function LayupSchedulePreview({
       try {
         console.log('📊 Generating barcode:', scheduleBarcode);
         JsBarcode(barcodeRef.current, scheduleBarcode, {
-          format: 'CODE39',
-          width: 3,
-          height: 100,
+          format: 'CODE128',
+          width: 2,
+          height: 60,
           displayValue: true,
-          fontSize: 16,
+          fontSize: 14,
           textAlign: 'center',
           textPosition: 'bottom',
-          margin: 10,
+          margin: 5,
           background: '#ffffff',
           lineColor: '#000000',
         });
@@ -483,11 +483,13 @@ export function LayupSchedulePreview({
               </p>
             </div>
             {/* Schedule Barcode */}
-            <div className="flex flex-col items-center border rounded-lg p-3 bg-white">
-              <p className="text-xs text-gray-600 mb-1 font-semibold">Scan to Complete Layup</p>
-              <svg ref={barcodeRef} className="w-64 h-24"></svg>
+            <div className="flex flex-col items-center border rounded-lg p-3 bg-gray-50">
+              <p className="text-xs text-gray-600 mb-2 font-semibold">Scan to Complete Layup</p>
+              <div className="bg-white p-2 rounded">
+                <svg ref={barcodeRef} style={{ width: '240px', height: '80px' }}></svg>
+              </div>
               {scheduleBarcode && (
-                <p className="text-xs text-gray-400 mt-1">{scheduleBarcode}</p>
+                <p className="text-xs text-gray-500 mt-2 font-mono">{scheduleBarcode}</p>
               )}
             </div>
           </div>

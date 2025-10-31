@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 
 import { db, pool } from '../../db';
-import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layupSchedule } from '../../schema';
+import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layupSchedule, stockModels } from '../../schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 
@@ -37,6 +37,19 @@ router.post('/generate', async (req: Request, res: Response) => {
         error: 'No items selected for scheduling',
       });
     }
+    
+    // Fetch stock models with display names for material detection
+    const stockModelsList = await db.select({
+      name: stockModels.name,
+      displayName: stockModels.displayName,
+    }).from(stockModels);
+    
+    // Create a map of model name -> display name for quick lookup
+    const stockModelDisplayMap = new Map(
+      stockModelsList.map(m => [m.name, m.displayName || ''])
+    );
+    
+    console.log(`📦 Loaded ${stockModelDisplayMap.size} stock models for material detection`);
     
     // Fetch molds with their capacities
     const activeMolds = await db
@@ -96,13 +109,13 @@ router.post('/generate', async (req: Request, res: Response) => {
           }
         }
         
-        // Extract material from stock model name (fg = Fiberglass, cf = Carbon Fiber)
+        // Extract material from stock model display name
         let material = null;
-        const stockModelName = order.stockModel?.toLowerCase() || '';
-        if (stockModelName.includes('_fg_') || stockModelName.includes('_fg') || stockModelName.startsWith('fg_')) {
-          material = 'Fiberglass';
-        } else if (stockModelName.includes('_cf_') || stockModelName.includes('_cf') || stockModelName.startsWith('cf_')) {
+        const displayName = stockModelDisplayMap.get(order.stockModel) || '';
+        if (displayName.startsWith('CF ') || displayName.includes(' CF ') || displayName.toLowerCase().includes('carbon')) {
           material = 'Carbon Fiber';
+        } else if (displayName.startsWith('FG ') || displayName.includes(' FG ') || displayName.toLowerCase().includes('fiberglass')) {
+          material = 'Fiberglass';
         }
         
         // Determine badges
@@ -175,13 +188,13 @@ router.post('/generate', async (req: Request, res: Response) => {
           }
         }
         
-        // Extract material from stock model name
+        // Extract material from stock model display name
         let material = null;
-        const stockModelName = item.stockModel?.toLowerCase() || '';
-        if (stockModelName.includes('_fg_') || stockModelName.includes('_fg') || stockModelName.startsWith('fg_')) {
-          material = 'Fiberglass';
-        } else if (stockModelName.includes('_cf_') || stockModelName.includes('_cf') || stockModelName.startsWith('cf_')) {
+        const displayName = stockModelDisplayMap.get(item.stockModel) || '';
+        if (displayName.startsWith('CF ') || displayName.includes(' CF ') || displayName.toLowerCase().includes('carbon')) {
           material = 'Carbon Fiber';
+        } else if (displayName.startsWith('FG ') || displayName.includes(' FG ') || displayName.toLowerCase().includes('fiberglass')) {
+          material = 'Fiberglass';
         }
         
         for (let i = 0; i < item.quantity; i++) {

@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 
 import { db, pool } from '../../db';
 import { molds, productionQueue, allOrders, purchaseOrderItems, poProducts, layupSchedule } from '../../schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { format, addDays, startOfWeek, getDay } from 'date-fns';
 
 const router = Router();
@@ -889,7 +889,7 @@ router.get('/weeks', async (req: Request, res: Response) => {
   try {
     console.log('📅 SCHEDULE WEEKS: Fetching list of weeks with schedules...');
     
-    const result = await pool.query(`
+    const result = await db.execute(sql`
       SELECT 
         DATE_TRUNC('week', scheduled_date)::date AS week_start,
         MIN(scheduled_date)::date AS first_day,
@@ -903,15 +903,8 @@ router.get('/weeks', async (req: Request, res: Response) => {
       LIMIT 52
     `);
     
-    console.log('🔍 DEBUG weeks result:', { 
-      hasResult: !!result, 
-      hasRows: !!result?.rows, 
-      rowCount: result?.rowCount,
-      rowsLength: result?.rows?.length 
-    });
-    
-    const weeks = result?.rows || [];
-    console.log(`✅ Found ${weeks.length} weeks with schedules`, weeks.slice(0, 2));
+    const weeks = result.rows || [];
+    console.log(`✅ Found ${weeks.length} weeks with schedules`);
     
     res.json({
       success: true,

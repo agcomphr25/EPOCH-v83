@@ -744,6 +744,7 @@ export default function VendorPOManager() {
           <TabsContent value="items" className="space-y-4">
             <VendorPOItemSelector
               vendorPoId={selectedVendorPO.id}
+              vendorId={selectedVendorPO.vendorId}
               poNumber={selectedVendorPO.poNumber}
               onTotalChange={(total: number) => {
                 queryClient.invalidateQueries({

@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 type VendorPOItemSelectorProps = {
@@ -59,6 +59,8 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
     quantity: 1,
     unitPrice: 0,
   });
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const [editedItem, setEditedItem] = useState<Partial<VendorPOItem>>({});
 
   const { data: items = [], isLoading } = useQuery<VendorPOItem[]>({
     queryKey: ['/api/vendor-pos', vendorPoId, 'items'],
@@ -126,6 +128,29 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
     },
   });
 
+  const updateItemMutation = useMutation({
+    mutationFn: ({ itemId, data }: { itemId: number; data: Partial<VendorPOItem> }) => {
+      const lineTotal = (data.quantity || 0) * (data.unitPrice || 0);
+      return apiRequest(`/api/vendor-pos/items/${itemId}`, {
+        method: 'PUT',
+        body: { ...data, lineTotal },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      toast.success('Item updated successfully');
+      setEditingItemId(null);
+      setEditedItem({});
+      if (onTotalChange) {
+        onTotalChange(calculateTotal());
+      }
+    },
+    onError: () => {
+      toast.error('Failed to update item');
+    },
+  });
+
   const calculateTotal = () => {
     return items.reduce((sum, item) => sum + item.lineTotal, 0);
   };
@@ -137,6 +162,39 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
     }
     createItemMutation.mutate(newItem);
     setSelectedPartId('');
+  };
+
+  const handleEditItem = (item: VendorPOItem) => {
+    setEditingItemId(item.id);
+    setEditedItem({
+      agPartNumber: item.agPartNumber,
+      description: item.description,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      notes: item.notes,
+    });
+  };
+
+  const handleSaveEdit = (itemId: number) => {
+    // Find the original item to preserve unchanged values
+    const originalItem = items.find(item => item.id === itemId);
+    if (!originalItem) return;
+    
+    // Merge edited fields with original values
+    const updatedData = {
+      agPartNumber: editedItem.agPartNumber ?? originalItem.agPartNumber,
+      description: editedItem.description ?? originalItem.description,
+      quantity: editedItem.quantity ?? originalItem.quantity,
+      unitPrice: editedItem.unitPrice ?? originalItem.unitPrice,
+      notes: editedItem.notes ?? originalItem.notes,
+    };
+    
+    updateItemMutation.mutate({ itemId, data: updatedData });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingItemId(null);
+    setEditedItem({});
   };
 
   if (isLoading) {
@@ -253,26 +311,115 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map((item) => (
-              <TableRow key={item.id} data-testid={`row-item-${item.id}`}>
-                <TableCell>{item.lineNumber}</TableCell>
-                <TableCell>{item.agPartNumber || '-'}</TableCell>
-                <TableCell>{item.description || '-'}</TableCell>
-                <TableCell>{item.quantity}</TableCell>
-                <TableCell>${item.unitPrice.toFixed(2)}</TableCell>
-                <TableCell>${item.lineTotal.toFixed(2)}</TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteItemMutation.mutate(item.id)}
-                    data-testid={`button-delete-item-${item.id}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            {items.map((item) => {
+              const isEditing = editingItemId === item.id;
+              return (
+                <TableRow key={item.id} data-testid={`row-item-${item.id}`}>
+                  <TableCell>{item.lineNumber}</TableCell>
+                  <TableCell>
+                    {isEditing ? (
+                      <Input
+                        value={editedItem.agPartNumber || ''}
+                        onChange={(e) => setEditedItem({ ...editedItem, agPartNumber: e.target.value })}
+                        className="w-32"
+                        data-testid={`input-edit-ag-part-${item.id}`}
+                      />
+                    ) : (
+                      item.agPartNumber || '-'
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {isEditing ? (
+                      <Input
+                        value={editedItem.description || ''}
+                        onChange={(e) => setEditedItem({ ...editedItem, description: e.target.value })}
+                        className="w-48"
+                        data-testid={`input-edit-description-${item.id}`}
+                      />
+                    ) : (
+                      item.description || '-'
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {isEditing ? (
+                      <Input
+                        type="number"
+                        value={editedItem.quantity || 0}
+                        onChange={(e) => setEditedItem({ ...editedItem, quantity: parseInt(e.target.value) || 0 })}
+                        className="w-20"
+                        data-testid={`input-edit-quantity-${item.id}`}
+                      />
+                    ) : (
+                      item.quantity
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {isEditing ? (
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={editedItem.unitPrice || 0}
+                        onChange={(e) => setEditedItem({ ...editedItem, unitPrice: parseFloat(e.target.value) || 0 })}
+                        className="w-24"
+                        data-testid={`input-edit-unit-price-${item.id}`}
+                      />
+                    ) : (
+                      `$${item.unitPrice.toFixed(2)}`
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    ${isEditing 
+                      ? ((editedItem.quantity || 0) * (editedItem.unitPrice || 0)).toFixed(2)
+                      : item.lineTotal.toFixed(2)
+                    }
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      {isEditing ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleSaveEdit(item.id)}
+                            disabled={updateItemMutation.isPending}
+                            data-testid={`button-save-edit-${item.id}`}
+                          >
+                            <Check className="w-4 h-4 text-green-600" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleCancelEdit}
+                            data-testid={`button-cancel-edit-${item.id}`}
+                          >
+                            <X className="w-4 h-4 text-red-600" />
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditItem(item)}
+                            data-testid={`button-edit-item-${item.id}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteItemMutation.mutate(item.id)}
+                            data-testid={`button-delete-item-${item.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
 

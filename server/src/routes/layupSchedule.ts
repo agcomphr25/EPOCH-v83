@@ -444,17 +444,22 @@ router.post('/save', async (req: Request, res: Response) => {
             ? new Date(scheduledDate)
             : scheduledDate;
 
-        // Insert schedule entry
+        // Insert schedule entry with layup_day for schedule history
+        const layupDay = processedScheduledDate instanceof Date 
+          ? processedScheduledDate.toISOString().split('T')[0]
+          : new Date(processedScheduledDate).toISOString().split('T')[0];
+        
         await pool.query(
           `
           INSERT INTO layup_schedule (
-            order_id, scheduled_date, mold_id, employee_assignments,
+            order_id, scheduled_date, layup_day, mold_id, employee_assignments,
             is_override, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `,
           [
             orderId,
             processedScheduledDate,
+            layupDay,
             moldId || 'auto',
             JSON.stringify(employeeAssignments || []),
             true, // This is a manual schedule save
@@ -715,17 +720,23 @@ router.post('/', async (req: Request, res: Response) => {
         ? new Date(scheduledDate)
         : scheduledDate;
 
+    // Extract layup_day for schedule history
+    const layupDay = processedScheduledDate instanceof Date 
+      ? processedScheduledDate.toISOString().split('T')[0]
+      : new Date(processedScheduledDate).toISOString().split('T')[0];
+
     // Insert schedule entry
     await pool.query(
       `
       INSERT INTO layup_schedule (
-        order_id, scheduled_date, mold_id, employee_assignments,
+        order_id, scheduled_date, layup_day, mold_id, employee_assignments,
         is_override, overridden_by, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `,
       [
         orderId,
         processedScheduledDate,
+        layupDay,
         moldId,
         JSON.stringify(employeeAssignments || []),
         isOverride || true,

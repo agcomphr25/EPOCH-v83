@@ -5755,11 +5755,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getVendorPartsByVendor(vendorId: number): Promise<VendorPart[]> {
-    return await db
+    // Query inventory_items filtered by vendorId
+    const items = await db
       .select()
-      .from(vendorParts)
-      .where(eq(vendorParts.vendorId, vendorId))
-      .orderBy(vendorParts.agPartNumber);
+      .from(inventoryItems)
+      .where(eq(inventoryItems.vendorId, vendorId))
+      .orderBy(inventoryItems.agPartNumber);
+    
+    // Map inventory items to VendorPart format for the frontend
+    return items.map(item => ({
+      id: item.id,
+      agPartNumber: item.agPartNumber,
+      vendorId: item.vendorId!,
+      vendorPartNumber: item.supplierPartNumber || null,
+      unitPrice: item.costPer || null,
+      leadTimeDays: null,
+      minimumOrderQty: 1,
+      isPreferred: true,
+      notes: item.notes || null,
+      itemDescription: item.name || null,
+      createdAt: item.createdAt || new Date(),
+      updatedAt: item.updatedAt || new Date(),
+    }));
   }
 
   async getVendorPartsByPart(agPartNumber: string): Promise<VendorPart[]> {

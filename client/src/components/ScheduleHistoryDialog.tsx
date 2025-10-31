@@ -17,6 +17,7 @@ interface Week {
   po_order_count: number;
   regular_order_count: number;
   order_ids: string[];
+  schedule_days: string[];
 }
 
 interface ScheduleHistoryDialogProps {
@@ -105,9 +106,20 @@ export function ScheduleHistoryDialog({ open, onClose }: ScheduleHistoryDialogPr
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-gray-400" />
                           <div>
-                            <div>{format(new Date(week.week_start), 'MMM dd, yyyy')}</div>
-                            <div className="text-xs text-gray-500">
-                              {format(new Date(week.week_start), 'MMM dd')} - {format(new Date(week.last_day), 'MMM dd')}
+                            <div className="font-semibold">{format(new Date(week.week_start), 'MMM dd, yyyy')}</div>
+                            <div className="text-xs text-gray-600 mt-1">
+                              <span className="font-medium">Schedule Days:</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {week.schedule_days.map((day) => (
+                                <Badge 
+                                  key={day} 
+                                  variant="outline" 
+                                  className="text-xs px-1.5 py-0"
+                                >
+                                  {format(new Date(day), 'MMM dd')}
+                                </Badge>
+                              ))}
                             </div>
                           </div>
                         </div>

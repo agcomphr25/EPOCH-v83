@@ -791,18 +791,15 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
     console.log(`📅 Fetching orders for schedule date: ${scheduleDate}`);
     
     // Get all schedule entries for this date
-    const scheduleResult = await pool.query(
-      `
+    const scheduleResult = await db.execute(sql`
       SELECT DISTINCT order_id
       FROM layup_schedule
-      WHERE scheduled_date::date = $1::date
-         OR layup_day = $1::date
+      WHERE scheduled_date::date = ${scheduleDate}::date
+         OR layup_day = ${scheduleDate}::date
       ORDER BY order_id
-      `,
-      [scheduleDate]
-    );
+    `);
     
-    const scheduleOrderIds = scheduleResult.rows.map((row: any) => row.order_id);
+    const scheduleOrderIds = (scheduleResult.rows || []).map((row: any) => row.order_id);
     console.log(`📋 Found ${scheduleOrderIds.length} schedule entries for ${scheduleDate}`);
     
     // Separate regular orders from PO units
@@ -845,16 +842,13 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
         );
         
         for (const mapping of uniqueMappings) {
-          const productionOrderResult = await pool.query(
-            `
+          const productionOrderResult = await db.execute(sql`
             SELECT DISTINCT order_id
             FROM production_orders
-            WHERE po_number = $1 AND po_item_id = $2
-            `,
-            [mapping.poNumber, mapping.poItemId]
-          );
+            WHERE po_number = ${mapping.poNumber} AND po_item_id = ${mapping.poItemId}
+          `);
           
-          for (const row of productionOrderResult.rows) {
+          for (const row of (productionOrderResult.rows || [])) {
             productionOrderIds.add(row.order_id);
           }
         }

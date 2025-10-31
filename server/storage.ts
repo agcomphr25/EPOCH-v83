@@ -5755,18 +5755,35 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getVendorPartsByVendor(vendorId: number): Promise<VendorPart[]> {
-    // Query inventory_items filtered by vendorId
+    // First get the vendor name to search in the source field
+    const [vendor] = await db
+      .select()
+      .from(vendors)
+      .where(eq(vendors.id, vendorId))
+      .limit(1);
+    
+    if (!vendor) {
+      return [];
+    }
+    
+    // Query inventory_items filtered by BOTH vendorId AND source field (text match)
+    // This handles both cases: vendor_id foreign key and legacy source text field
     const items = await db
       .select()
       .from(inventoryItems)
-      .where(eq(inventoryItems.vendorId, vendorId))
+      .where(
+        or(
+          eq(inventoryItems.vendorId, vendorId),
+          eq(inventoryItems.source, vendor.name)
+        )
+      )
       .orderBy(inventoryItems.agPartNumber);
     
     // Map inventory items to VendorPart format for the frontend
     return items.map(item => ({
       id: item.id,
       agPartNumber: item.agPartNumber,
-      vendorId: item.vendorId!,
+      vendorId: vendorId, // Use the vendorId from the parameter
       vendorPartNumber: item.supplierPartNumber || null,
       unitPrice: item.costPer || null,
       leadTimeDays: null,

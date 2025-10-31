@@ -20,6 +20,7 @@ interface ScheduledItem {
   actionLength?: string | null;
   material?: string | null;
   hasLOP?: boolean;
+  lopValue?: string | null;
   hasADL?: boolean;
   hasHeavyFill?: boolean;
 }
@@ -444,7 +445,7 @@ export function LayupSchedulePreview({
             </div>
             ${item.hasLOP || item.hasADL || item.hasHeavyFill ? `
               <div class="badges">
-                ${item.hasLOP ? '<div class="badge badge-lop">LOP</div>' : ''}
+                ${item.hasLOP ? `<div class="badge badge-lop">LOP: ${item.lopValue || 'Custom'}</div>` : ''}
                 ${item.hasADL ? '<div class="badge badge-adl">ADL</div>' : ''}
                 ${item.hasHeavyFill ? '<div class="badge badge-heavy">HEAVY</div>' : ''}
               </div>
@@ -573,7 +574,7 @@ export function LayupSchedulePreview({
                           <div className="flex flex-wrap gap-1">
                             {item.hasLOP && (
                               <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
-                                LOP
+                                LOP: {item.lopValue || 'Custom'}
                               </Badge>
                             )}
                             {item.hasADL && (
@@ -626,7 +627,7 @@ export function LayupSchedulePreview({
                     
                     {(item.hasLOP || item.hasADL || item.hasHeavyFill) && (
                       <div className="layup-badges">
-                        {item.hasLOP && <span className="layup-badge layup-badge-lop">LOP</span>}
+                        {item.hasLOP && <span className="layup-badge layup-badge-lop">LOP: {item.lopValue || 'Custom'}</span>}
                         {item.hasADL && <span className="layup-badge layup-badge-adl">ADL</span>}
                         {item.hasHeavyFill && <span className="layup-badge layup-badge-heavy">HEAVY</span>}
                       </div>

@@ -126,6 +126,7 @@ router.post('/generate', async (req: Request, res: Response) => {
           actionLength,
           material,
           hasLOP,
+          lopValue: hasLOP ? lop : null,
           hasADL,
           hasHeavyFill,
         };
@@ -532,7 +533,7 @@ router.post('/save', async (req: Request, res: Response) => {
             [poNumber]
           );
           
-          const checkRows = checkResult.rows as Array<{ total_items: string; completed_items: string }>;
+          const checkRows = checkResult.rows || [];
           if (checkRows.length > 0) {
             const totalItems = parseInt(checkRows[0].total_items);
             const completedItems = parseInt(checkRows[0].completed_items);

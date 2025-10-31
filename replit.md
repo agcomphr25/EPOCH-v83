@@ -45,6 +45,7 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 -   **PO Product Stock Model Validation**: Exclusion of non-stock model PO products from production queues and layup processes.
 -   **Parts List Management**: Enhanced inventory items with comprehensive MRP/COGS fields, SKU, purchase/usage information, and production line utilization flags. CSV import/export with intelligent parsing.
 -   **Department Technician Assignment**: Employee profiles include department-specific assignment flags (e.g., `isFinishTechnician`) to control which technicians appear in department queue dropdowns, ensuring accurate technician selection for order progression.
+-   **Follow-Up Order Signature Workflow**: Complete pricing calculation system for sign-order pages (`/sign-order/:token`) that mirrors OrderEntry logic exactly, including price overrides (APR/flattop), custom discounts (percent/flat), discount codes (persistent/short-term with appliesTo settings), feature pricing, misc items, payments, and balance due. Feature display names correctly handle special cases for handedness capitalization and paint options across all paint-related features.
 
 ### Technical Implementations
 -   **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

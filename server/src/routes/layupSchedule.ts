@@ -903,8 +903,15 @@ router.get('/weeks', async (req: Request, res: Response) => {
       LIMIT 52
     `);
     
-    const weeks = result.rows || [];
-    console.log(`✅ Found ${weeks.length} weeks with schedules`);
+    console.log('🔍 DEBUG weeks result:', { 
+      hasResult: !!result, 
+      hasRows: !!result?.rows, 
+      rowCount: result?.rowCount,
+      rowsLength: result?.rows?.length 
+    });
+    
+    const weeks = result?.rows || [];
+    console.log(`✅ Found ${weeks.length} weeks with schedules`, weeks.slice(0, 2));
     
     res.json({
       success: true,

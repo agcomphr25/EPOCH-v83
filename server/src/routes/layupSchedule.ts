@@ -368,10 +368,10 @@ router.post('/save', async (req: Request, res: Response) => {
       
       // Decrement PO item counts for items being removed
       const existingPOCounts = new Map<string, number>();
-      const existingRows = existingScheduleResult.rows as Array<{ order_id: string }>;
+      const existingRows = existingScheduleResult.rows || [];
       for (const row of existingRows) {
         const orderId = row.order_id;
-        if (orderId.startsWith('PO-')) {
+        if (orderId && orderId.startsWith('PO-')) {
           const parts = orderId.split('-');
           if (parts.length >= 3) {
             const poNumber = parts[1];

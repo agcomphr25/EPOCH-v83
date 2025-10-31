@@ -101,7 +101,7 @@ router.post('/generate', async (req: Request, res: Response) => {
         const stockModelName = order.stockModel?.toLowerCase() || '';
         if (stockModelName.startsWith('fg_')) {
           material = 'Fiberglass';
-        } else if (stockModelName.startsWith('cf_')) {
+        } else if (stockModelName.startsWith('cf_') || stockModelName.startsWith('mesa_') || stockModelName.startsWith('mesa-') || stockModelName.startsWith('apr_') || stockModelName.startsWith('apr-')) {
           material = 'Carbon Fiber';
         }
         
@@ -177,7 +177,7 @@ router.post('/generate', async (req: Request, res: Response) => {
         const stockModelName = item.stockModel?.toLowerCase() || '';
         if (stockModelName.startsWith('fg_')) {
           material = 'Fiberglass';
-        } else if (stockModelName.startsWith('cf_')) {
+        } else if (stockModelName.startsWith('cf_') || stockModelName.startsWith('mesa_') || stockModelName.startsWith('mesa-') || stockModelName.startsWith('apr_') || stockModelName.startsWith('apr-')) {
           material = 'Carbon Fiber';
         }
         
@@ -1097,7 +1097,7 @@ function extractMaterial(stockModel: string | null): string | null {
   if (!stockModel) return null;
   const model = stockModel.toLowerCase();
   if (model.startsWith('fg_')) return 'Fiberglass';
-  if (model.startsWith('cf_')) return 'Carbon Fiber';
+  if (model.startsWith('cf_') || model.startsWith('mesa_') || model.startsWith('mesa-') || model.startsWith('apr_') || model.startsWith('apr-')) return 'Carbon Fiber';
   return null;
 }
 

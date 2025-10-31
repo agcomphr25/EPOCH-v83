@@ -187,121 +187,118 @@ export function LayupSchedulePreview({
   <meta charset="UTF-8">
   <title>Layup Schedule - ${weekStart ? format(new Date(weekStart), 'MMM dd, yyyy') : ''}</title>
   <style>
-    @page { size: letter landscape; margin: 0.3in; }
+    @page { size: letter landscape; margin: 0.2in; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { 
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; 
-      padding: 8px; 
+      font-family: Arial, sans-serif; 
+      padding: 4px; 
       color: #1a1a1a; 
       background: white;
-      font-size: 9px;
-      line-height: 1.2;
+      font-size: 8px;
+      line-height: 1.1;
     }
     .header { 
       display: flex; 
       justify-content: space-between; 
       align-items: center;
-      margin-bottom: 8px; 
-      padding-bottom: 6px; 
-      border-bottom: 1.5px solid #2c3e50;
+      margin-bottom: 4px; 
+      padding-bottom: 3px; 
+      border-bottom: 1px solid #2c3e50;
     }
     .header h1 { 
-      font-size: 18px; 
+      font-size: 14px; 
       font-weight: 700; 
       color: #2c3e50;
-      margin-bottom: 2px;
+      margin-bottom: 1px;
     }
     .header p { 
-      font-size: 11px; 
+      font-size: 9px; 
       font-weight: 500;
       color: #555;
     }
     .barcode-box { 
       text-align: center; 
       border: 1px solid #ddd; 
-      padding: 4px 6px; 
-      border-radius: 3px;
+      padding: 2px 4px; 
+      border-radius: 2px;
       background: #f8f9fa;
     }
     .barcode-box p { 
-      font-size: 7px; 
+      font-size: 6px; 
       font-weight: 600; 
-      margin-bottom: 2px;
+      margin-bottom: 1px;
       color: #666;
       text-transform: uppercase;
-      letter-spacing: 0.3px;
     }
-    .barcode-box img { width: 220px; height: auto; }
+    .barcode-box img { width: 160px; height: auto; }
     .summary { 
       display: flex; 
-      gap: 6px; 
-      margin-bottom: 8px;
+      gap: 4px; 
+      margin-bottom: 4px;
     }
     .summary-item { 
       flex: 1; 
       text-align: center; 
-      padding: 4px 6px; 
+      padding: 2px 4px; 
       border: 1px solid #e0e0e0; 
-      border-radius: 3px;
-      background: linear-gradient(to bottom, #ffffff, #f8f9fa);
+      border-radius: 2px;
+      background: #f8f9fa;
     }
     .summary-item .label { 
-      font-size: 7px; 
+      font-size: 6px; 
       font-weight: 600; 
       text-transform: uppercase; 
       color: #666;
-      letter-spacing: 0.3px;
-      margin-bottom: 2px;
+      margin-bottom: 1px;
     }
     .summary-item .value { 
-      font-size: 16px; 
+      font-size: 12px; 
       font-weight: 700;
       color: #2c3e50;
     }
     .day-section { 
       page-break-inside: avoid; 
-      margin-bottom: 10px;
-      border: 1px solid #dee2e6; 
-      border-radius: 4px;
+      margin-bottom: 5px;
+      border: 1px solid #ccc; 
+      border-radius: 2px;
       overflow: hidden;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
     .day-header { 
-      font-size: 11px; 
+      font-size: 9px; 
       font-weight: 700; 
-      padding: 4px 8px; 
-      background: linear-gradient(to right, #2c3e50, #34495e);
+      padding: 2px 6px; 
+      background: #2c3e50;
       color: white;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
     .day-header .count {
-      font-size: 9px;
+      font-size: 8px;
       font-weight: 500;
       opacity: 0.9;
     }
     .day-content {
-      padding: 6px;
+      padding: 3px;
       background: white;
     }
     .order-item { 
       display: flex; 
-      gap: 6px; 
-      padding: 4px 6px; 
-      border: 1px solid #e8e8e8; 
-      border-radius: 2px; 
-      margin-bottom: 3px;
+      gap: 4px; 
+      padding: 2px 4px; 
+      border: 1px solid #e0e0e0; 
+      border-radius: 1px; 
+      margin-bottom: 2px;
       background: #ffffff;
     }
     .order-item:last-of-type {
       margin-bottom: 0;
     }
     .checkbox { 
-      width: 16px; 
-      height: 16px; 
-      border: 1.5px solid #2c3e50; 
-      border-radius: 2px; 
+      width: 12px; 
+      height: 12px; 
+      border: 1px solid #2c3e50; 
+      border-radius: 1px; 
       flex-shrink: 0; 
       margin-top: 1px;
       background: white;
@@ -309,12 +306,12 @@ export function LayupSchedulePreview({
     .order-details { 
       flex-grow: 1; 
       display: grid; 
-      grid-template-columns: 1fr 1.3fr 0.9fr 1.1fr; 
-      gap: 6px;
+      grid-template-columns: 0.9fr 1.2fr 0.8fr 1fr; 
+      gap: 4px;
       align-items: start;
     }
     .field-label { 
-      font-size: 7px; 
+      font-size: 6px; 
       font-weight: 600; 
       text-transform: uppercase; 
       color: #888;
@@ -322,68 +319,67 @@ export function LayupSchedulePreview({
       margin-bottom: 1px;
     }
     .field-value { 
-      font-size: 9px; 
+      font-size: 8px; 
       font-weight: 600;
       color: #2c3e50;
-      font-family: "Courier New", Consolas, monospace;
-      line-height: 1.3;
+      font-family: "Courier New", monospace;
+      line-height: 1.2;
     }
     .badges { 
       display: flex; 
-      gap: 3px; 
+      gap: 2px; 
       flex-shrink: 0;
       align-items: flex-start;
     }
     .badge { 
-      padding: 2px 6px; 
+      padding: 1px 4px; 
       border: 1px solid; 
-      border-radius: 2px; 
-      font-size: 7px; 
+      border-radius: 1px; 
+      font-size: 6px; 
       font-weight: 700; 
       text-align: center;
       white-space: nowrap;
-      line-height: 1.3;
+      line-height: 1.2;
     }
     .badge-lop { 
-      background: linear-gradient(to bottom, #d1fae5, #a7f3d0);
+      background: #a7f3d0;
       border-color: #059669; 
       color: #065f46;
     }
     .badge-adl { 
-      background: linear-gradient(to bottom, #dbeafe, #bfdbfe);
+      background: #bfdbfe;
       border-color: #2563eb; 
       color: #1e40af;
     }
     .badge-heavy { 
-      background: linear-gradient(to bottom, #fed7aa, #fdba74);
+      background: #fdba74;
       border-color: #ea580c; 
       color: #9a3412;
     }
     .signature { 
       display: flex; 
-      gap: 12px; 
-      margin-top: 6px; 
-      padding-top: 6px; 
-      border-top: 1px solid #dee2e6;
+      gap: 8px; 
+      margin-top: 3px; 
+      padding-top: 3px; 
+      border-top: 1px solid #ccc;
     }
     .sig-field { 
       flex: 1;
       min-width: 0;
     }
     .sig-label { 
-      font-size: 7px; 
+      font-size: 6px; 
       font-weight: 600; 
-      margin-bottom: 2px;
+      margin-bottom: 1px;
       color: #666;
       text-transform: uppercase;
-      letter-spacing: 0.2px;
     }
     .sig-line { 
       border-bottom: 1px solid #2c3e50; 
-      height: 20px;
+      height: 16px;
     }
     .sig-date { 
-      flex: 0 0 100px;
+      flex: 0 0 80px;
     }
     @media print { 
       body { padding: 0; }

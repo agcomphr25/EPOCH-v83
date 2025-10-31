@@ -930,8 +930,7 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
     const weekEnd = format(addDays(new Date(weekStart), 7), 'yyyy-MM-dd');
     
     // Get all schedule entries for this week
-    const scheduleResult = await pool.query(
-      `
+    const scheduleResult = await db.execute(sql`
       SELECT 
         ls.id,
         ls.order_id,
@@ -941,14 +940,12 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
         ls.is_override,
         ls.created_at
       FROM layup_schedule ls
-      WHERE ls.scheduled_date >= $1::date 
-        AND ls.scheduled_date < $2::date
+      WHERE ls.scheduled_date >= ${weekStart}::date 
+        AND ls.scheduled_date < ${weekEnd}::date
       ORDER BY ls.scheduled_date, ls.order_id
-    `,
-      [weekStart, weekEnd]
-    );
+    `);
     
-    const scheduleEntries = scheduleResult.rows;
+    const scheduleEntries = scheduleResult.rows || [];
     console.log(`📦 Found ${scheduleEntries.length} schedule entries`);
     
     // Separate PO items and regular orders
@@ -965,8 +962,7 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
     // Fetch regular order details
     let regularOrders = [];
     if (regularOrderIds.length > 0) {
-      const ordersResult = await pool.query(
-        `
+      const ordersResult = await db.execute(sql.raw(`
         SELECT 
           ao.order_id,
           ao.fb_order_number,
@@ -974,18 +970,15 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
           ao.customer_id AS customer_name,
           ao.features
         FROM all_orders ao
-        WHERE ao.order_id = ANY($1::text[])
-      `,
-        [regularOrderIds]
-      );
-      regularOrders = ordersResult.rows;
+        WHERE ao.order_id = ANY(ARRAY[${regularOrderIds.map((id: string) => `'${id}'`).join(',')}]::text[])
+      `));
+      regularOrders = ordersResult.rows || [];
     }
     
     // Fetch PO order details
     let poOrders = [];
     if (poOrderIds.length > 0) {
-      const poResult = await pool.query(
-        `
+      const poResult = await db.execute(sql.raw(`
         SELECT 
           po_orders.order_id,
           po_orders.item_id,
@@ -997,11 +990,9 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
         FROM production_orders po_orders
         JOIN purchase_orders po ON po_orders.po_id = po.id
         JOIN purchase_order_items poi ON po_orders.po_item_id = poi.id
-        WHERE po_orders.order_id = ANY($1::text[])
-      `,
-        [poOrderIds]
-      );
-      poOrders = poResult.rows;
+        WHERE po_orders.order_id = ANY(ARRAY[${poOrderIds.map((id: string) => `'${id}'`).join(',')}]::text[])
+      `));
+      poOrders = poResult.rows || [];
     }
     
     // Build unified schedule items with details

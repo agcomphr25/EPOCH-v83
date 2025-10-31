@@ -903,15 +903,16 @@ router.get('/weeks', async (req: Request, res: Response) => {
     
     const weeks = await pool.query(`
       SELECT 
-        DATE_TRUNC('week', scheduled_date)::date AS week_start,
-        MIN(scheduled_date)::date AS first_day,
-        MAX(scheduled_date)::date AS last_day,
+        DATE_TRUNC('week', layup_day)::date AS week_start,
+        MIN(layup_day)::date AS first_day,
+        MAX(layup_day)::date AS last_day,
         COUNT(DISTINCT order_id) AS order_count,
         COUNT(DISTINCT CASE WHEN order_id LIKE 'PO-%' THEN order_id END) AS po_order_count,
         COUNT(DISTINCT CASE WHEN order_id NOT LIKE 'PO-%' THEN order_id END) AS regular_order_count
       FROM layup_schedule
-      GROUP BY DATE_TRUNC('week', scheduled_date)
-      ORDER BY DATE_TRUNC('week', scheduled_date) DESC
+      WHERE layup_day IS NOT NULL
+      GROUP BY DATE_TRUNC('week', layup_day)
+      ORDER BY DATE_TRUNC('week', layup_day) DESC
       LIMIT 52
     `);
     
@@ -946,15 +947,15 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
       SELECT 
         ls.id,
         ls.order_id,
-        ls.scheduled_date,
+        ls.layup_day AS scheduled_date,
         ls.mold_id,
         ls.employee_assignments,
         ls.is_override,
         ls.created_at
       FROM layup_schedule ls
-      WHERE ls.scheduled_date >= $1::date 
-        AND ls.scheduled_date < $2::date
-      ORDER BY ls.scheduled_date, ls.order_id
+      WHERE ls.layup_day >= $1::date 
+        AND ls.layup_day < $2::date
+      ORDER BY ls.layup_day, ls.order_id
     `,
       [weekStart, weekEnd]
     );

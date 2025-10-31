@@ -1,0 +1,2277 @@
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+agcomphr-10-31?replId=96223e0f-e513-4ce3-92fd-2bd9615fff1f&projectPane=true:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+agcomphr-10-31?replId=96223e0f-e513-4ce3-92fd-2bd9615fff1f&projectPane=true:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+agcomphr-10-31?replId=96223e0f-e513-4ce3-92fd-2bd9615fff1f&projectPane=true:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+b62f936bb28418c2.js:2 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+b62f936bb28418c2.js:2 Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+b62f936bb28418c2.js:2 [LaunchDarkly] LaunchDarkly client initialized
+b62f936bb28418c2.js:2 Cache data may be lost when replacing the dealContext field of a Org object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgDealContext have an ID or a custom merge function, or define a custom merge function for the Org.dealContext field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgDealContext","dealType":"default","salesContactEmail":null}
+  incoming: {"__typename":"OrgDealContext","dealType":"default"}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ b62f936bb28418c2.js:2
+b62f936bb28418c2.js:2 Cache data may be lost when replacing the gitHubInfoV2 field of a CurrentUser object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type GitHubInfoV2 have an ID or a custom merge function, or define a custom merge function for the CurrentUser.gitHubInfoV2 field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"GitHubInfoV2","accessToken":"ghu_M5lRQ20d1AnqMrsr30i23A0TRKHKpr14Ihno","userInfo":{"__typename":"GitHubUserInfo","name":null,"username":"agcomphr25","email":"agcomphr@gmail.com","avatarUrl":"https://avatars.githubusercontent.com/u/220091014?v=4"}}
+  incoming: {"__typename":"GitHubInfoV2","accessToken":"ghu_M5lRQ20d1AnqMrsr30i23A0TRKHKpr14Ihno"}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ b62f936bb28418c2.js:2
+[Report Only] Refused to frame 'https://www.google.com/' because an ancestor violates the following Content Security Policy directive: "frame-ancestors 'self'".
+
+agcomphr-10-31?replId=96223e0f-e513-4ce3-92fd-2bd9615fff1f&projectPane=true:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+b62f936bb28418c2.js:2 Cache data may be lost when replacing the orgReplPresenceSessionEvents field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgPresenceSessionInitEvent and OrgPresenceSessionPingEvent have an ID or a custom merge function, or define a custom merge function for the Subscription.orgReplPresenceSessionEvents field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgPresenceSessionInitEvent","sessions":[{"__ref":"OrgPresenceSession:89a682e2-424d-4317-a9e6-c4f4281b9d3f"},{"__ref":"OrgPresenceSession:68a0df16-242a-44f9-b555-f61cdc263811"},{"__ref":"OrgPresenceSession:66ac4823-74ad-436d-b4a9-21db8e9f48ce"}]}
+  incoming: {"__typename":"OrgPresenceSessionPingEvent","session":{"__ref":"OrgPresenceSession:66ac4823-74ad-436d-b4a9-21db8e9f48ce"}}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ b62f936bb28418c2.js:2
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'ambient-light-sensor'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'battery'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-not-rendered'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'execution-while-out-of-viewport'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'layout-animations'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'legacy-image-formats'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'navigation-override'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'oversized-images'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'publickey-credentials'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'speaker-selection'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unoptimized-images'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+Unrecognized feature: 'unsized-media'.
+ed1e693c96a75807.js:2 Unrecognized feature: 'pointer-lock'.
+z @ ed1e693c96a75807.js:2
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowfullscreen'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+Allow attribute will take precedence over 'allowpaymentrequest'.
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404:1  Failed to load resource: the server responded with a status of 404 ()
+injected.js:27 [vite] connecting...
+injected.js:27 [vite] connected.
+injected.js:27 React initialized: Object
+injected.js:27 React hooks: Object
+injected.js:27 App component is rendering...
+injected.js:27 Environment: development
+injected.js:27 Base URL: /
+injected.js:27 App component is rendering...
+injected.js:27 Environment: development
+injected.js:27 Base URL: /
+injected.js:27 Redirecting tasham to /admin-dashboard
+injected.js:27 Redirecting tasham to /admin-dashboard
+injected.js:27 🌐 API Request to /api/production-queue/prioritized (timeout: 120000ms, deployment: false)
+injected.js:27 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 120000ms, deployment: false)
+injected.js:27 🌐 API Request to /api/production-queue/attention (timeout: 120000ms, deployment: false)
+injected.js:27 ✅ API Response from /api/production-queue/attention: 200
+injected.js:27 ✅ API Response from /api/production-queue/prioritized: 200
+injected.js:27 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+injected.js:27 🌐 API Request to /api/layup-schedule/generate (timeout: 120000ms, deployment: false)
+injected.js:27 ✅ API Response from /api/layup-schedule/generate: 200
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+injected.js:27 📊 Generating barcode: LAYUP20251102
+injected.js:27 ✅ Barcode generated successfully
+injected.js:27 📊 SVG String length: 2179
+injected.js:27 📊 Barcode ID: LAYUP20251102
+injected.js:27 📊 Barcode data URL length: 2934
+injected.js:27 🌐 API Request to /api/layup-schedule/save (timeout: 120000ms, deployment: false)
+96223e0f-e513-4ce3-92fd-2bd9615fff1f-00-m8o4v1fb1hb1.riker.replit.dev/api/layup-schedule/save:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+96223e0f-e513-4ce3-92fd-2bd9615fff1f-00-m8o4v1fb1hb1.riker.replit.dev/api/layup-schedule/save:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+96223e0f-e513-4ce3-92fd-2bd9615fff1f-00-m8o4v1fb1hb1.riker.replit.dev/api/layup-schedule/save:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+96223e0f-e513-4ce3-92fd-2bd9615fff1f-00-m8o4v1fb1hb1.riker.replit.dev/api/layup-schedule/save:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:27 ✅ API Response from /api/layup-schedule/save: 500
+injected.js:27 💥 API Request failed for /api/layup-schedule/save: Error: Failed to save layup schedule
+    at apiRequest (queryClient.ts:79:13)
+(anonymous) @ injected.js:27
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+injected.js:27 [vite] server connection lost. Polling for restart...
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+injected.js:27 [vite] connecting...
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+injected.js:27 [vite] connected.
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+injected.js:27 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:27 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:27 App component is rendering...
+injected.js:27 Environment: development
+injected.js:27 Base URL: /
+injected.js:27 App component is rendering...
+injected.js:27 Environment: development
+injected.js:27 Base URL: /
+injected.js:27 Redirecting tasham to /admin-dashboard
+injected.js:27 Redirecting tasham to /admin-dashboard
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+b62f936bb28418c2.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ b62f936bb28418c2.js:2
+u @ fb43a53a024f786e.js:2
+d @ fb43a53a024f786e.js:2
+(anonymous) @ fb43a53a024f786e.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+[Violation] 'message' handler took <N>ms
+injected.js:27 🌐 API Request to /api/production-queue/prioritized (timeout: 120000ms, deployment: false)
+injected.js:27 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 120000ms, deployment: false)
+injected.js:27 🌐 API Request to /api/production-queue/attention (timeout: 120000ms, deployment: false)
+injected.js:27 ✅ API Response from /api/production-queue/attention: 200
+injected.js:27 ✅ API Response from /api/production-queue/prioritized: 200
+injected.js:27 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'setTimeout' handler took <N>ms
+[Violation] 'click' handler took <N>ms
+[Violation] 'click' handler took <N>ms
+[Violation] 'click' handler took <N>ms
+[Violation] 'click' handler took <N>ms
+[Violation] 'click' handler took <N>ms
+[Violation] Forced reflow while executing JavaScript took 162ms
+[Violation] 'input' handler took 184ms
+[Violation] 'input' handler took 166ms
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+(anonymous) @ chunk-4LNPKB7M.js?v=b41c2586:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b41c2586:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b41c2586:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b41c2586:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b41c2586:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+(anonymous) @ chunk-4LNPKB7M.js?v=b41c2586:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=b41c2586:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=b41c2586:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=b41c2586:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+[Violation] Forced reflow while executing JavaScript took 149ms
+injected.js:27 🌐 API Request to /api/layup-schedule/generate (timeout: 120000ms, deployment: false)
+injected.js:27 ✅ API Response from /api/layup-schedule/generate: 200
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+(anonymous) @ chunk-4LNPKB7M.js?v=b41c2586:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b41c2586:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b41c2586:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b41c2586:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b41c2586:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19432
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=b41c2586:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18718
+workLoop @ chunk-NFC5BX5N.js?v=b41c2586:197
+flushWork @ chunk-NFC5BX5N.js?v=b41c2586:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=b41c2586:384
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+(anonymous) @ chunk-4LNPKB7M.js?v=b41c2586:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=b41c2586:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=b41c2586:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=b41c2586:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19432
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+finishConcurrentRender @ chunk-NFC5BX5N.js?v=b41c2586:18805
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18718
+workLoop @ chunk-NFC5BX5N.js?v=b41c2586:197
+flushWork @ chunk-NFC5BX5N.js?v=b41c2586:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=b41c2586:384
+[Violation] Forced reflow while executing JavaScript took 163ms
+injected.js:27 📊 Generating barcode: LAYUP20251102
+injected.js:27 ✅ Barcode generated successfully
+injected.js:27 📊 SVG String length: 2179
+injected.js:27 📊 Barcode ID: LAYUP20251102
+injected.js:27 📊 Barcode data URL length: 2934
+injected.js:27 🌐 API Request to /api/layup-schedule/save (timeout: 120000ms, deployment: false)
+injected.js:27 ✅ API Response from /api/layup-schedule/save: 200
+injected.js:27 🌐 API Request to /api/production-queue/prioritized (timeout: 120000ms, deployment: false)
+injected.js:27 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 120000ms, deployment: false)
+[Violation] Forced reflow while executing JavaScript took 128ms
+injected.js:27 ✅ API Response from /api/production-queue/prioritized: 200
+injected.js:27 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:27 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+injected.js:27 🚀 Making direct API call to /api/p1-layup-queue
+injected.js:27 🌐 API Request to /api/orders/all (timeout: 120000ms, deployment: false)
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:27 🎯 Direct API response: {status: 200, length: 1046, firstItem: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ API Response from /api/orders/all: 200
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+[Violation] 'input' handler took 270ms
+injected.js:204  GET https://96223e0f-e513-4ce3-92fd-2bd9615fff1f-00-m8o4v1fb1hb1.riker.replit.dev/api/barcode/scan/LAYUP20251102 404 (Not Found)
+apply @ injected.js:204
+(anonymous) @ queryClient.ts:177
+fetchFn @ @tanstack_react-query.js?v=b41c2586:879
+run @ @tanstack_react-query.js?v=b41c2586:507
+start @ @tanstack_react-query.js?v=b41c2586:550
+fetch @ @tanstack_react-query.js?v=b41c2586:918
+executeFetch_fn @ @tanstack_react-query.js?v=b41c2586:2280
+setOptions @ @tanstack_react-query.js?v=b41c2586:2033
+(anonymous) @ @tanstack_react-query.js?v=b41c2586:3157
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b41c2586:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b41c2586:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b41c2586:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b41c2586:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+96223e0f-e513-4ce3-92fd-2bd9615fff1f-00-m8o4v1fb1hb1.riker.replit.dev/api/barcode/scan/LAYUP20251102:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+96223e0f-e513-4ce3-92fd-2bd9615fff1f-00-m8o4v1fb1hb1.riker.replit.dev/api/barcode/scan/LAYUP20251102:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+main.MWZiYTIxNGJmMQ.js:1  POST https://analytics.tiktok.com/api/v2/pixel/inter net::ERR_NAME_NOT_RESOLVED
+(anonymous) @ main.MWZiYTIxNGJmMQ.js:1
+l @ main.MWZiYTIxNGJmMQ.js:1
+n.value @ main.MWZiYTIxNGJmMQ.js:1
+(anonymous) @ main.MWZiYTIxNGJmMQ.js:1
+r8 @ main.MWZiYTIxNGJmMQ.js:1
+a @ main.MWZiYTIxNGJmMQ.js:1
+(anonymous) @ main.MWZiYTIxNGJmMQ.js:1
+r @ main.MWZiYTIxNGJmMQ.js:1
+n.send @ main.MWZiYTIxNGJmMQ.js:1
+(anonymous) @ main.MWZiYTIxNGJmMQ.js:1
+l @ main.MWZiYTIxNGJmMQ.js:1
+n.value @ main.MWZiYTIxNGJmMQ.js:1
+(anonymous) @ main.MWZiYTIxNGJmMQ.js:1
+rV @ main.MWZiYTIxNGJmMQ.js:1
+a @ main.MWZiYTIxNGJmMQ.js:1
+(anonymous) @ main.MWZiYTIxNGJmMQ.js:1
+(anonymous) @ main.MWZiYTIxNGJmMQ.js:1
+i.sendHttpReport @ main.MWZiYTIxNGJmMQ.js:1
+(anonymous) @ main.MWZiYTIxNGJmMQ.js:1
+l @ main.MWZiYTIxNGJmMQ.js:1
+n.value @ main.MWZiYTIxNGJmMQ.js:1
+(anonymous) @ main.MWZiYTIxNGJmMQ.js:1
+rV @ main.MWZiYTIxNGJmMQ.js:1
+a @ main.MWZiYTIxNGJmMQ.js:1
+(anonymous) @ main.MWZiYTIxNGJmMQ.js:1
+(anonymous) @ main.MWZiYTIxNGJmMQ.js:1
+i.report @ main.MWZiYTIxNGJmMQ.js:1
+(anonymous) @ main.MWZiYTIxNGJmMQ.js:1
+e.then @ main.MWZiYTIxNGJmMQ.js:1
+e.report @ main.MWZiYTIxNGJmMQ.js:1
+r.reportInteraction @ main.MWZiYTIxNGJmMQ.js:1
+(anonymous) @ main.MWZiYTIxNGJmMQ.js:1
+o @ b62f936bb28418c2.js:2
+8b6de32b36be51e4cb37dcf3111af591:1  GET https://gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404 404 (Not Found)
+Image
+z @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+injected.js:27 [vite] server connection lost. Polling for restart...
+injected.js:27 [vite] connecting...
+injected.js:27 [vite] connected.
+injected.js:27 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:27 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:27 App component is rendering...
+injected.js:27 Environment: development
+injected.js:27 Base URL: /
+injected.js:27 App component is rendering...
+injected.js:27 Environment: development
+injected.js:27 Base URL: /
+injected.js:27 Redirecting tasham to /admin-dashboard
+injected.js:27 Redirecting tasham to /admin-dashboard
+injected.js:27 [vite] hot updated: /src/pages/LayupPluggingQueuePage.tsx
+injected.js:27 [vite] hot updated: /src/index.css?v=Kyj3ShNvGMoD0Q9uDhyiT
+injected.js:27 [vite] server connection lost. Polling for restart...
+injected.js:27 [vite] connecting...
+injected.js:27 [vite] connected.
+injected.js:27 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:27 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:27 App component is rendering...
+injected.js:27 Environment: development
+injected.js:27 Base URL: /
+injected.js:27 App component is rendering...
+injected.js:27 Environment: development
+injected.js:27 Base URL: /
+injected.js:27 Redirecting tasham to /admin-dashboard
+injected.js:27 Redirecting tasham to /admin-dashboard
+8b6de32b36be51e4cb37dcf3111af591:1  GET https://gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404 404 (Not Found)
+Image
+z @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+8b6de32b36be51e4cb37dcf3111af591:1  GET https://gravatar.com/avatar/8b6de32b36be51e4cb37dcf3111af591?d=404 404 (Not Found)
+Image
+z @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+uq @ ed1e693c96a75807.js:2
+uY @ ed1e693c96a75807.js:2
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:27 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+injected.js:27 🚀 Making direct API call to /api/p1-layup-queue
+injected.js:27 🌐 API Request to /api/orders/all (timeout: 120000ms, deployment: false)
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:27 ✅ API Response from /api/orders/all: 200
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 0, loading: true, error: null, hasData: true, p1OrdersFirst3: Array(0)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 0, isLoading: true, hasError: false, firstOrderId: undefined}
+injected.js:27 🎯 Direct API response: {status: 200, length: 1046, firstItem: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:27 ✅ Processing 1046 orders in select transform
+injected.js:27 🔧 useUnifiedLayupOrders hook state: {p1OrdersCount: 1046, loading: false, error: null, hasData: true, p1OrdersFirst3: Array(3)}
+injected.js:27 🔧 Final hook return: {ordersReturned: 1046, isLoading: false, hasError: false, firstOrderId: 'EI439'}
+injected.js:204  GET https://96223e0f-e513-4ce3-92fd-2bd9615fff1f-00-m8o4v1fb1hb1.riker.replit.dev/api/barcode/scan/LAYUP20251102 404 (Not Found)
+apply @ injected.js:204
+(anonymous) @ queryClient.ts:177
+fetchFn @ @tanstack_react-query.js?v=b41c2586:879
+run @ @tanstack_react-query.js?v=b41c2586:507
+start @ @tanstack_react-query.js?v=b41c2586:550
+fetch @ @tanstack_react-query.js?v=b41c2586:918
+executeFetch_fn @ @tanstack_react-query.js?v=b41c2586:2280
+setOptions @ @tanstack_react-query.js?v=b41c2586:2033
+(anonymous) @ @tanstack_react-query.js?v=b41c2586:3157
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b41c2586:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b41c2586:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b41c2586:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b41c2586:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+injected.js:204  GET https://96223e0f-e513-4ce3-92fd-2bd9615fff1f-00-m8o4v1fb1hb1.riker.replit.dev/api/barcode/scan/LAYUP2025-11-02 404 (Not Found)
+apply @ injected.js:204
+(anonymous) @ queryClient.ts:177
+fetchFn @ @tanstack_react-query.js?v=b41c2586:879
+run @ @tanstack_react-query.js?v=b41c2586:507
+start @ @tanstack_react-query.js?v=b41c2586:550
+fetch @ @tanstack_react-query.js?v=b41c2586:918
+executeFetch_fn @ @tanstack_react-query.js?v=b41c2586:2280
+setOptions @ @tanstack_react-query.js?v=b41c2586:2033
+(anonymous) @ @tanstack_react-query.js?v=b41c2586:3157
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b41c2586:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b41c2586:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b41c2586:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b41c2586:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+injected.js:204  GET https://96223e0f-e513-4ce3-92fd-2bd9615fff1f-00-m8o4v1fb1hb1.riker.replit.dev/api/barcode/scan/LAYUP-2025-11-02 404 (Not Found)
+apply @ injected.js:204
+(anonymous) @ queryClient.ts:177
+fetchFn @ @tanstack_react-query.js?v=b41c2586:879
+run @ @tanstack_react-query.js?v=b41c2586:507
+start @ @tanstack_react-query.js?v=b41c2586:550
+fetch @ @tanstack_react-query.js?v=b41c2586:918
+executeFetch_fn @ @tanstack_react-query.js?v=b41c2586:2280
+setOptions @ @tanstack_react-query.js?v=b41c2586:2033
+(anonymous) @ @tanstack_react-query.js?v=b41c2586:3157
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b41c2586:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b41c2586:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b41c2586:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b41c2586:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+injected.js:27 🌐 API Request to /api/production-queue/prioritized (timeout: 120000ms, deployment: false)
+injected.js:27 🌐 API Request to /api/p1-po-queue/purchase-orders/open (timeout: 120000ms, deployment: false)
+injected.js:27 🌐 API Request to /api/production-queue/attention (timeout: 120000ms, deployment: false)
+injected.js:27 ✅ API Response from /api/production-queue/attention: 200
+injected.js:27 ✅ API Response from /api/production-queue/prioritized: 200
+injected.js:27 ✅ API Response from /api/p1-po-queue/purchase-orders/open: 200
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+(anonymous) @ chunk-4LNPKB7M.js?v=b41c2586:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b41c2586:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b41c2586:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b41c2586:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b41c2586:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+(anonymous) @ chunk-4LNPKB7M.js?v=b41c2586:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=b41c2586:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=b41c2586:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=b41c2586:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+(anonymous) @ chunk-4LNPKB7M.js?v=b41c2586:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b41c2586:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b41c2586:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b41c2586:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b41c2586:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+setTimeout
+defaultScheduler @ @tanstack_react-query.js?v=b41c2586:560
+flush @ @tanstack_react-query.js?v=b41c2586:584
+batch @ @tanstack_react-query.js?v=b41c2586:602
+dispatch_fn @ @tanstack_react-query.js?v=b41c2586:1038
+setData @ @tanstack_react-query.js?v=b41c2586:713
+fetch @ @tanstack_react-query.js?v=b41c2586:927
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=b41c2586:2280
+setOptions @ @tanstack_react-query.js?v=b41c2586:2033
+(anonymous) @ @tanstack_react-query.js?v=b41c2586:3157
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b41c2586:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b41c2586:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b41c2586:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b41c2586:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+(anonymous) @ chunk-4LNPKB7M.js?v=b41c2586:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=b41c2586:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=b41c2586:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=b41c2586:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+setTimeout
+defaultScheduler @ @tanstack_react-query.js?v=b41c2586:560
+flush @ @tanstack_react-query.js?v=b41c2586:584
+batch @ @tanstack_react-query.js?v=b41c2586:602
+dispatch_fn @ @tanstack_react-query.js?v=b41c2586:1038
+setData @ @tanstack_react-query.js?v=b41c2586:713
+fetch @ @tanstack_react-query.js?v=b41c2586:927
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=b41c2586:2280
+setOptions @ @tanstack_react-query.js?v=b41c2586:2033
+(anonymous) @ @tanstack_react-query.js?v=b41c2586:3157
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b41c2586:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b41c2586:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b41c2586:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b41c2586:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+injected.js:27 📊 Generating barcode: LAYUP20251102
+injected.js:27 ✅ Barcode generated successfully
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+(anonymous) @ chunk-4LNPKB7M.js?v=b41c2586:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b41c2586:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b41c2586:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b41c2586:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b41c2586:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+(anonymous) @ chunk-4LNPKB7M.js?v=b41c2586:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=b41c2586:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=b41c2586:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=b41c2586:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+injected.js:27 📊 Generating barcode: LAYUP20251102
+injected.js:27 ✅ Barcode generated successfully
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+(anonymous) @ chunk-4LNPKB7M.js?v=b41c2586:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b41c2586:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b41c2586:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b41c2586:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b41c2586:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+setTimeout
+defaultScheduler @ @tanstack_react-query.js?v=b41c2586:560
+flush @ @tanstack_react-query.js?v=b41c2586:584
+batch @ @tanstack_react-query.js?v=b41c2586:602
+dispatch_fn @ @tanstack_react-query.js?v=b41c2586:1038
+setData @ @tanstack_react-query.js?v=b41c2586:713
+fetch @ @tanstack_react-query.js?v=b41c2586:927
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=b41c2586:2280
+setOptions @ @tanstack_react-query.js?v=b41c2586:2033
+(anonymous) @ @tanstack_react-query.js?v=b41c2586:3157
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b41c2586:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b41c2586:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b41c2586:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b41c2586:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+injected.js:27 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:27
+(anonymous) @ chunk-4LNPKB7M.js?v=b41c2586:342
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+invokePassiveEffectMountInDEV @ chunk-NFC5BX5N.js?v=b41c2586:18324
+invokeEffectsInDev @ chunk-NFC5BX5N.js?v=b41c2586:19701
+commitDoubleInvokeEffectsInDEV @ chunk-NFC5BX5N.js?v=b41c2586:19686
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19503
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+setTimeout
+defaultScheduler @ @tanstack_react-query.js?v=b41c2586:560
+flush @ @tanstack_react-query.js?v=b41c2586:584
+batch @ @tanstack_react-query.js?v=b41c2586:602
+dispatch_fn @ @tanstack_react-query.js?v=b41c2586:1038
+setData @ @tanstack_react-query.js?v=b41c2586:713
+fetch @ @tanstack_react-query.js?v=b41c2586:927
+await in fetch
+executeFetch_fn @ @tanstack_react-query.js?v=b41c2586:2280
+setOptions @ @tanstack_react-query.js?v=b41c2586:2033
+(anonymous) @ @tanstack_react-query.js?v=b41c2586:3157
+commitHookEffectListMount @ chunk-NFC5BX5N.js?v=b41c2586:16915
+commitPassiveMountOnFiber @ chunk-NFC5BX5N.js?v=b41c2586:18156
+commitPassiveMountEffects_complete @ chunk-NFC5BX5N.js?v=b41c2586:18129
+commitPassiveMountEffects_begin @ chunk-NFC5BX5N.js?v=b41c2586:18119
+commitPassiveMountEffects @ chunk-NFC5BX5N.js?v=b41c2586:18109
+flushPassiveEffectsImpl @ chunk-NFC5BX5N.js?v=b41c2586:19490
+flushPassiveEffects @ chunk-NFC5BX5N.js?v=b41c2586:19447
+commitRootImpl @ chunk-NFC5BX5N.js?v=b41c2586:19416
+commitRoot @ chunk-NFC5BX5N.js?v=b41c2586:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=b41c2586:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=b41c2586:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=b41c2586:18627
+injected.js:27 📊 Generating barcode: LAYUP20251116
+injected.js:27 ✅ Barcode generated successfully

@@ -372,7 +372,7 @@ router.post('/save', async (req: Request, res: Response) => {
 
     try {
       // Get existing schedule for this week to decrement PO item counts
-      const existingScheduleResult = await pool.query(
+      const existingRows = await pool.query<{ order_id: string }>(
         `
         SELECT order_id 
         FROM layup_schedule 
@@ -383,7 +383,6 @@ router.post('/save', async (req: Request, res: Response) => {
       
       // Decrement PO item counts for items being removed
       const existingPOCounts = new Map<string, number>();
-      const existingRows = existingScheduleResult.rows as Array<{ order_id: string }>;
       for (const row of existingRows) {
         const orderId = row.order_id;
         if (orderId.startsWith('PO-')) {
@@ -534,7 +533,7 @@ router.post('/save', async (req: Request, res: Response) => {
         // Check which POs have all items fully scheduled
         const fullyScheduledPOs = [];
         for (const poNumber of poNumbersArray) {
-          const checkResult = await pool.query(
+          const checkRows = await pool.query<{ total_items: string; completed_items: string }>(
             `
             SELECT COUNT(*) as total_items,
                    COUNT(*) FILTER (WHERE quantity - COALESCE(order_count, 0) = 0) as completed_items
@@ -547,7 +546,6 @@ router.post('/save', async (req: Request, res: Response) => {
             [poNumber]
           );
           
-          const checkRows = checkResult.rows as Array<{ total_items: string; completed_items: string }>;
           if (checkRows.length > 0) {
             const totalItems = parseInt(checkRows[0].total_items);
             const completedItems = parseInt(checkRows[0].completed_items);
@@ -805,7 +803,7 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
     console.log(`📅 Fetching orders for schedule date: ${scheduleDate}`);
     
     // Get all schedule entries for this date
-    const scheduleResult = await pool.query(
+    const scheduleRows = await pool.query<{ order_id: string }>(
       `
       SELECT DISTINCT order_id
       FROM layup_schedule
@@ -816,7 +814,7 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
       [scheduleDate]
     );
     
-    const scheduleOrderIds = scheduleResult.rows.map((row: any) => row.order_id);
+    const scheduleOrderIds = scheduleRows.map((row) => row.order_id);
     console.log(`📋 Found ${scheduleOrderIds.length} schedule entries for ${scheduleDate}`);
     
     // Separate regular orders from PO units
@@ -859,7 +857,7 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
         );
         
         for (const mapping of uniqueMappings) {
-          const productionOrderResult = await pool.query(
+          const productionOrderRows = await pool.query<{ order_id: string }>(
             `
             SELECT DISTINCT order_id
             FROM production_orders
@@ -868,7 +866,7 @@ router.get('/by-schedule-date/:scheduleDate', async (req: Request, res: Response
             [mapping.poNumber, mapping.poItemId]
           );
           
-          for (const row of productionOrderResult.rows) {
+          for (const row of productionOrderRows) {
             productionOrderIds.add(row.order_id);
           }
         }
@@ -903,7 +901,7 @@ router.get('/weeks', async (req: Request, res: Response) => {
   try {
     console.log('📅 SCHEDULE WEEKS: Fetching list of weeks with schedules...');
     
-    const result = await pool.query(`
+    const weeks = await pool.query(`
       SELECT 
         DATE_TRUNC('week', scheduled_date)::date AS week_start,
         MIN(scheduled_date)::date AS first_day,
@@ -917,11 +915,11 @@ router.get('/weeks', async (req: Request, res: Response) => {
       LIMIT 52
     `);
     
-    console.log(`✅ Found ${result.rows.length} weeks with schedules`);
+    console.log(`✅ Found ${weeks.length} weeks with schedules`);
     
     res.json({
       success: true,
-      weeks: result.rows,
+      weeks,
     });
   } catch (error) {
     console.error('❌ Error fetching schedule weeks:', error);
@@ -943,7 +941,7 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
     const weekEnd = format(addDays(new Date(weekStart), 7), 'yyyy-MM-dd');
     
     // Get all schedule entries for this week
-    const scheduleResult = await pool.query(
+    const scheduleEntries = await pool.query(
       `
       SELECT 
         ls.id,
@@ -960,8 +958,6 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
     `,
       [weekStart, weekEnd]
     );
-    
-    const scheduleEntries = scheduleResult.rows;
     console.log(`📦 Found ${scheduleEntries.length} schedule entries`);
     
     // Separate PO items and regular orders
@@ -978,7 +974,7 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
     // Fetch regular order details
     let regularOrders = [];
     if (regularOrderIds.length > 0) {
-      const ordersResult = await pool.query(
+      regularOrders = await pool.query(
         `
         SELECT 
           ao.order_id,
@@ -991,13 +987,12 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
       `,
         [regularOrderIds]
       );
-      regularOrders = ordersResult.rows;
     }
     
     // Fetch PO order details
     let poOrders = [];
     if (poOrderIds.length > 0) {
-      const poResult = await pool.query(
+      poOrders = await pool.query(
         `
         SELECT 
           po_orders.order_id,
@@ -1014,7 +1009,6 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
       `,
         [poOrderIds]
       );
-      poOrders = poResult.rows;
     }
     
     // Build unified schedule items with details

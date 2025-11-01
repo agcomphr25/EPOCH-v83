@@ -156,6 +156,7 @@ export default function Navigation() {
   };
 
   const [verifiedModulesExpanded, setVerifiedModulesExpanded] = useState(false);
+  const [orderManagementExpanded, setOrderManagementExpanded] = useState(false);
   const [formsReportsExpanded, setFormsReportsExpanded] = useState(false);
   const [trainingExpanded, setTrainingExpanded] = useState(false);
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
@@ -170,6 +171,7 @@ export default function Navigation() {
 
   // Helper function to close all dropdowns
   const closeAllDropdowns = useCallback(() => {
+    setOrderManagementExpanded(false);
     setFormsReportsExpanded(false);
     setTrainingExpanded(false);
     setInventoryExpanded(false);
@@ -194,6 +196,7 @@ export default function Navigation() {
 
       // Close other dropdowns when opening a new one
       if (!isExpanded) {
+        if (dropdownName !== 'orderManagement') setOrderManagementExpanded(false);
         if (dropdownName !== 'formsReports') setFormsReportsExpanded(false);
         if (dropdownName !== 'training') setTrainingExpanded(false);
         if (dropdownName !== 'inventory') setInventoryExpanded(false);
@@ -215,24 +218,11 @@ export default function Navigation() {
 
   const navItems = [
     {
-      path: '/order-entry',
-      label: 'Order Entry',
-      icon: Plus,
-      description: 'Create single orders',
-    },
-    {
-      path: '/orders-list',
-      label: 'All Orders',
-      icon: List,
-      description: 'View all created orders',
-    },
-    {
       path: '/customers',
       label: 'Customer Management',
       icon: Users,
       description: 'Manage customer database',
     },
-
     {
       path: '/bom-administration',
       label: 'BOM Administration',
@@ -261,6 +251,33 @@ export default function Navigation() {
     //   icon: BookOpen,
     //   description: 'Complete system architecture and structure'
     // }
+  ];
+
+  const orderManagementItems = [
+    {
+      path: '/order-entry',
+      label: 'Order Entry',
+      icon: Plus,
+      description: 'Create single orders',
+    },
+    {
+      path: '/orders-list',
+      label: 'All Orders',
+      icon: List,
+      description: 'View all created orders',
+    },
+    {
+      path: '/nonconformance',
+      label: 'Nonconforming Tracker',
+      icon: XCircle,
+      description: 'Track and manage quality issues and dispositions',
+    },
+    {
+      path: '/rts',
+      label: 'RTS (Ready to Ship)',
+      icon: Truck,
+      description: 'View ready-to-ship orders and manage shipments',
+    },
   ];
 
   const inventoryItems = [
@@ -382,12 +399,6 @@ export default function Navigation() {
       label: 'Quality Control',
       icon: Shield,
       description: 'QC inspections and definitions',
-    },
-    {
-      path: '/nonconformance',
-      label: 'Nonconformance Tracking',
-      icon: ClipboardList,
-      description: 'Track and manage quality issues and dispositions',
     },
     {
       path: '/maintenance',
@@ -758,6 +769,10 @@ export default function Navigation() {
     () => filterByPermissions(navItems, currentUser?.username),
     [navItems, currentUser?.username]
   );
+  const filteredOrderManagementItems = useMemo(
+    () => filterByPermissions(orderManagementItems, currentUser?.username),
+    [orderManagementItems, currentUser?.username]
+  );
   const filteredInventoryItems = useMemo(
     () => filterByPermissions(inventoryItems, currentUser?.username),
     [inventoryItems, currentUser?.username]
@@ -804,6 +819,9 @@ export default function Navigation() {
   );
 
   const isVerifiedModulesActive = verifiedModulesItems.some(
+    (item) => location === item.path
+  );
+  const isOrderManagementActive = orderManagementItems.some(
     (item) => location === item.path
   );
   const isFormsReportsActive = formsReportsItems.some(
@@ -887,6 +905,60 @@ export default function Navigation() {
                 </Link>
               );
             })}
+
+            {/* Order Management Dropdown */}
+            {filteredOrderManagementItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isOrderManagementActive ? 'default' : 'ghost'}
+                  className={cn(
+                    'flex items-center gap-2 text-sm',
+                    isOrderManagementActive && 'bg-primary text-white'
+                  )}
+                  onClick={() =>
+                    toggleDropdown(
+                      'orderManagement',
+                      orderManagementExpanded,
+                      setOrderManagementExpanded
+                    )
+                  }
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  Order Management
+                  {orderManagementExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
+
+                {orderManagementExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredOrderManagementItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
+
+                      return (
+                        <button
+                          key={item.path}
+                          className={cn(
+                            'w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100',
+                            isActive && 'bg-primary text-white hover:bg-primary'
+                          )}
+                          onClick={() => {
+                            closeAllDropdowns();
+                            setLocation(item.path);
+                          }}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Communications Dropdown */}
             <div className="relative">

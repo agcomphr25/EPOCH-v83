@@ -77,7 +77,8 @@ export default function RTSPage() {
     window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
   };
 
-  const getDaysUntilDue = (dueDate: Date) => {
+  const getDaysUntilDue = (dueDate: Date | null | undefined) => {
+    if (!dueDate) return null;
     const today = new Date();
     const due = new Date(dueDate);
     const diffTime = due.getTime() - today.getTime();
@@ -85,8 +86,17 @@ export default function RTSPage() {
     return diffDays;
   };
 
-  const getDueDateBadge = (dueDate: Date) => {
+  const getDueDateBadge = (dueDate: Date | null | undefined) => {
     const daysUntilDue = getDaysUntilDue(dueDate);
+
+    if (daysUntilDue === null) {
+      return (
+        <Badge variant="secondary" className="gap-1">
+          <Clock className="h-3 w-3" />
+          No due date
+        </Badge>
+      );
+    }
 
     if (daysUntilDue < 0) {
       return (

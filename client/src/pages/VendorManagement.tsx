@@ -1880,15 +1880,6 @@ export default function VendorManagement() {
                     Name <SortIcon field="name" />
                   </div>
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Contact
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Email
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Phone
-                </th>
                 <th
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                   onClick={() => toggleSort('approved')}
@@ -1907,15 +1898,6 @@ export default function VendorManagement() {
                     Evaluated <SortIcon field="evaluated" />
                   </div>
                 </th>
-                <th
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
-                  onClick={() => toggleSort('evaluationDate')}
-                  data-testid="header-eval-date"
-                >
-                  <div className="flex items-center gap-1">
-                    Eval Date <SortIcon field="evaluationDate" />
-                  </div>
-                </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Score (/20)
                 </th>
@@ -1928,7 +1910,7 @@ export default function VendorManagement() {
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={5}
                     className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
                   >
                     Loading vendors...
@@ -1937,7 +1919,7 @@ export default function VendorManagement() {
               ) : vendorsData?.data.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={5}
                     className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
                   >
                     No vendors found
@@ -1955,15 +1937,6 @@ export default function VendorManagement() {
                       data-testid={`text-vendor-name-${vendor.id}`}
                     >
                       {vendor.name}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                      {vendor.contactPerson || '—'}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                      {vendor.email || '—'}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                      {vendor.phone || '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {vendor.scope && vendor.scope.trim().length > 0 ? (
@@ -1990,11 +1963,6 @@ export default function VendorManagement() {
                           <span className="text-xs">No</span>
                         </div>
                       )}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
-                      {vendor.evaluationDate
-                        ? new Date(vendor.evaluationDate).toLocaleDateString()
-                        : '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400 text-center">
                       {(() => {

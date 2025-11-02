@@ -20,9 +20,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Download, Upload, Search } from 'lucide-react';
+import { Plus, Edit, Trash2, Download, Upload, Search, Package, MoreHorizontal } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { InventoryItem } from '@shared/schema';
+import { Link } from 'wouter';
+import type { InventoryItem, ItemGroup } from '@shared/schema';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 
 interface InventoryFormData {
   agPartNumber: string;
@@ -411,6 +419,9 @@ export default function InventoryItemsCard() {
   const [replaceAllItems, setReplaceAllItems] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [utilizedFilter, setUtilizedFilter] = useState('all');
+  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
+  const [isAddToGroupDialogOpen, setIsAddToGroupDialogOpen] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
 
   const [formData, setFormData] = useState<InventoryFormData>({
     agPartNumber: '',
@@ -449,6 +460,18 @@ export default function InventoryItemsCard() {
   });
   
   const vendors = vendorsResponse?.data || [];
+
+  // Fetch all item groups
+  const { data: allGroups = [] } = useQuery<ItemGroup[]>({
+    queryKey: ['/api/inventory/groups'],
+    queryFn: () => apiRequest('/api/inventory/groups'),
+  });
+
+  // Fetch item-group mappings in bulk (single API call)
+  const { data: itemGroupsMap = {} } = useQuery<Record<number, ItemGroup[]>>({
+    queryKey: ['/api/inventory/items-groups-map'],
+    queryFn: () => apiRequest('/api/inventory/items-groups-map'),
+  });
 
   const items = Array.isArray(allItems)
     ? allItems.filter((item) => {
@@ -766,11 +789,89 @@ export default function InventoryItemsCard() {
     }
   };
 
+  // Checkbox selection handlers
+  const toggleSelectItem = (itemId: number) => {
+    const newSelected = new Set(selectedItems);
+    if (newSelected.has(itemId)) {
+      newSelected.delete(itemId);
+    } else {
+      newSelected.add(itemId);
+    }
+    setSelectedItems(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedItems.size === items.length) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(items.map(item => item.id)));
+    }
+  };
+
+  // Add items to group mutation
+  const addToGroupMutation = useMutation({
+    mutationFn: async ({ groupId, itemIds }: { groupId: number; itemIds: number[] }) => {
+      await apiRequest(`/api/inventory/groups/${groupId}/items`, {
+        method: 'POST',
+        body: JSON.stringify({ itemIds }),
+      });
+    },
+    onSuccess: () => {
+      toast.success('Items added to group successfully');
+      setIsAddToGroupDialogOpen(false);
+      setSelectedGroupId('');
+      setSelectedItems(new Set());
+      // Invalidate both the items-groups map and the base items query to update the UI
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/items-groups-map'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
+    },
+    onError: () => {
+      toast.error('Failed to add items to group');
+    },
+  });
+
+  const handleAddToGroup = () => {
+    if (!selectedGroupId) {
+      toast.error('Please select a group');
+      return;
+    }
+    
+    if (selectedItems.size === 0) {
+      toast.error('Please select at least one item');
+      return;
+    }
+
+    addToGroupMutation.mutate({
+      groupId: parseInt(selectedGroupId),
+      itemIds: Array.from(selectedItems),
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Inventory Items</h3>
+        <div className="flex items-center gap-4">
+          <h3 className="text-lg font-semibold">Inventory Items</h3>
+          <Link href="/manage-groups">
+            <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700" data-testid="link-manage-groups">
+              <Package className="h-4 w-4 mr-2" />
+              Manage Groups
+            </Button>
+          </Link>
+        </div>
         <div className="flex items-center gap-2">
+          {selectedItems.size > 0 && (
+            <Button
+              variant="default"
+              onClick={() => setIsAddToGroupDialogOpen(true)}
+              className="flex items-center gap-2"
+              data-testid="button-add-to-group"
+            >
+              <Package className="h-4 w-4" />
+              Add to Group ({selectedItems.size})
+            </Button>
+          )}
+          
           <Button
             variant="outline"
             onClick={handleExportCSV}
@@ -936,6 +1037,13 @@ export default function InventoryItemsCard() {
           <table className="w-full border-collapse border border-gray-200 dark:border-gray-700">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-800">
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center w-12">
+                  <Checkbox
+                    checked={selectedItems.size === items.length && items.length > 0}
+                    onCheckedChange={toggleSelectAll}
+                    data-testid="checkbox-select-all"
+                  />
+                </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   AG Part#
                 </th>
@@ -944,6 +1052,9 @@ export default function InventoryItemsCard() {
                 </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Name
+                </th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
+                  Groups
                 </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Source
@@ -966,21 +1077,70 @@ export default function InventoryItemsCard() {
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
-                <tr
-                  key={item.id}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                  data-testid={`row-item-${item.id}`}
-                >
-                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 font-medium">
-                    {item.agPartNumber}
-                  </td>
-                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
-                    {item.sku || '-'}
-                  </td>
-                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
-                    {item.name}
-                  </td>
+              {items.map((item) => {
+                const itemGroups = itemGroupsMap[item.id] || [];
+                const visibleGroups = itemGroups.slice(0, 3);
+                const remainingCount = itemGroups.length - 3;
+                
+                return (
+                  <tr
+                    key={item.id}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                    data-testid={`row-item-${item.id}`}
+                  >
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                      <Checkbox
+                        checked={selectedItems.has(item.id)}
+                        onCheckedChange={() => toggleSelectItem(item.id)}
+                        data-testid={`checkbox-item-${item.id}`}
+                      />
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 font-medium">
+                      {item.agPartNumber}
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                      {item.sku || '-'}
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                      {item.name}
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {visibleGroups.map((group) => (
+                          <Badge
+                            key={group.id}
+                            variant="secondary"
+                            className="text-xs"
+                            data-testid={`badge-group-${group.id}`}
+                          >
+                            {group.name}
+                          </Badge>
+                        ))}
+                        {remainingCount > 0 && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs cursor-help"
+                                  data-testid={`badge-more-groups-${item.id}`}
+                                >
+                                  +{remainingCount} more
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <div className="flex flex-col gap-1">
+                                  {itemGroups.slice(3).map((group) => (
+                                    <div key={group.id}>{group.name}</div>
+                                  ))}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                        {itemGroups.length === 0 && '-'}
+                      </div>
+                    </td>
                   <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                     {item.source || '-'}
                   </td>
@@ -1047,7 +1207,8 @@ export default function InventoryItemsCard() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1083,6 +1244,59 @@ export default function InventoryItemsCard() {
             }}
             vendors={vendors}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Add to Group Dialog */}
+      <Dialog open={isAddToGroupDialogOpen} onOpenChange={setIsAddToGroupDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Items to Group</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="group-select">Select Group</Label>
+              <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
+                <SelectTrigger id="group-select" data-testid="select-group">
+                  <SelectValue placeholder="Choose a group" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allGroups.map((group) => (
+                    <SelectItem key={group.id} value={group.id.toString()}>
+                      {group.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {allGroups.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No groups available. Create a group first from the Manage Groups page.
+                </p>
+              )}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {selectedItems.size} {selectedItems.size === 1 ? 'item' : 'items'} selected
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddToGroupDialogOpen(false);
+                setSelectedGroupId('');
+              }}
+              data-testid="button-cancel-add-to-group"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddToGroup}
+              disabled={addToGroupMutation.isPending || !selectedGroupId}
+              data-testid="button-confirm-add-to-group"
+            >
+              Add to Group
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

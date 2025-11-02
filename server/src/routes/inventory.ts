@@ -1043,4 +1043,15 @@ router.get('/items/:id/groups', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/inventory/items-groups-map - Get all item-group mappings in bulk (single query)
+router.get('/items-groups-map', async (req: Request, res: Response) => {
+  try {
+    const map = await storage.getAllItemGroupMappings();
+    res.json(map);
+  } catch (error) {
+    console.error('Get items-groups map error:', error);
+    res.status(500).json({ error: 'Failed to fetch items-groups map' });
+  }
+});
+
 export default router;

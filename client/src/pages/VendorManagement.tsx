@@ -74,6 +74,7 @@ import {
 } from '@shared/schema';
 import SimpleAddressInput from '@/components/SimpleAddressInput';
 import type { AddressData } from '@/utils/addressUtils';
+import VendorScopeSelector from '@/components/VendorScopeSelector';
 
 const vendorFormSchema = insertVendorSchema.extend({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
@@ -1540,17 +1541,12 @@ export default function VendorManagement() {
                         <FormItem>
                           <FormLabel>PL2 Approved Materials & Products *</FormLabel>
                           <FormControl>
-                            <Textarea
-                              {...field}
-                              placeholder="Example: CF stocks, FG stocks, Hybrid materials, etc."
-                              rows={6}
-                              data-testid="input-scope"
+                            <VendorScopeSelector
+                              value={field.value || ''}
+                              onChange={field.onChange}
                             />
                           </FormControl>
                           <FormMessage />
-                          <p className="text-xs text-gray-500">
-                            List the materials, products, and services this vendor is approved to provide.
-                          </p>
                         </FormItem>
                       )}
                     />

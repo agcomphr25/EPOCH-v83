@@ -528,6 +528,7 @@ export interface IStorage {
   // Inventory Item Groups (assigning items to groups)
   getItemsByGroupId(groupId: number): Promise<InventoryItem[]>;
   getGroupsByItemId(itemId: number): Promise<ItemGroup[]>;
+  getAllItemGroupMappings(): Promise<Record<number, ItemGroup[]>>;
   addItemsToGroup(groupId: number, itemIds: number[]): Promise<void>;
   removeItemFromGroup(itemId: number, groupId: number): Promise<void>;
   removeAllItemsFromGroup(groupId: number): Promise<void>;
@@ -3882,6 +3883,42 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(inventoryItemGroups, eq(itemGroups.id, inventoryItemGroups.groupId))
       .where(eq(inventoryItemGroups.itemId, itemId));
     return result;
+  }
+
+  async getAllItemGroupMappings(): Promise<Record<number, ItemGroup[]>> {
+    // Fetch all item-group relationships in a single query
+    const relationships = await db
+      .select({
+        itemId: inventoryItemGroups.itemId,
+        groupId: itemGroups.id,
+        groupName: itemGroups.name,
+        groupDescription: itemGroups.description,
+        groupNotes: itemGroups.notes,
+        groupIsActive: itemGroups.isActive,
+        groupCreatedAt: itemGroups.createdAt,
+        groupUpdatedAt: itemGroups.updatedAt,
+      })
+      .from(inventoryItemGroups)
+      .innerJoin(itemGroups, eq(inventoryItemGroups.groupId, itemGroups.id));
+
+    // Build the map: itemId -> array of groups
+    const map: Record<number, ItemGroup[]> = {};
+    for (const rel of relationships) {
+      if (!map[rel.itemId]) {
+        map[rel.itemId] = [];
+      }
+      map[rel.itemId].push({
+        id: rel.groupId,
+        name: rel.groupName,
+        description: rel.groupDescription,
+        notes: rel.groupNotes,
+        isActive: rel.groupIsActive,
+        createdAt: rel.groupCreatedAt,
+        updatedAt: rel.groupUpdatedAt,
+      });
+    }
+
+    return map;
   }
 
   async addItemsToGroup(groupId: number, itemIds: number[]): Promise<void> {

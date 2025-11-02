@@ -184,11 +184,13 @@ export default function RTSSalesDialog({
     
     // Fetch customer addresses to auto-fill shipping address
     try {
-      const response = await fetch(`/api/customer-addresses/${customer.id}`);
+      const response = await fetch(`/api/customers/${customer.id}/addresses`);
       if (response.ok) {
         const addresses = await response.json();
         // Find default shipping address or first address
         const shippingAddr = addresses.find((addr: any) => 
+          (addr.type === 'shipping' || addr.type === 'both') && addr.isDefault
+        ) || addresses.find((addr: any) => 
           addr.type === 'shipping' || addr.type === 'both'
         ) || addresses[0];
         

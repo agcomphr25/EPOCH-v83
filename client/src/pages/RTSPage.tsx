@@ -42,8 +42,10 @@ import {
   AlertCircle,
   Factory,
   Plus,
+  DollarSign,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import RTSSalesDialog from '@/components/RTSSalesDialog';
 
 interface RTSInventoryItem {
   id: string;
@@ -60,6 +62,7 @@ interface RTSInventoryItem {
   returnNotes: string | null;
   shippedDate: string | null;
   createdAt: string;
+  price: number | null;
 }
 
 const departments = [
@@ -93,6 +96,7 @@ export default function RTSPage() {
   const [selectedReason, setSelectedReason] = useState('');
   const [productionNotes, setProductionNotes] = useState('');
   const [addItemDialog, setAddItemDialog] = useState(false);
+  const [salesDialogOpen, setSalesDialogOpen] = useState(false);
   const [newItem, setNewItem] = useState({
     stockModel: '',
     actionLength: '',
@@ -295,6 +299,16 @@ export default function RTSPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            onClick={() => setSalesDialogOpen(true)}
+            variant="outline"
+            className="gap-2"
+            disabled={!availableInventory || availableInventory.length === 0}
+            data-testid="button-create-sale"
+          >
+            <DollarSign className="h-4 w-4" />
+            Create Sale
+          </Button>
           <Button
             onClick={() => setAddItemDialog(true)}
             className="bg-primary hover:bg-primary/90"
@@ -633,6 +647,13 @@ export default function RTSPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* RTS Sales Dialog */}
+      <RTSSalesDialog
+        isOpen={salesDialogOpen}
+        onClose={() => setSalesDialogOpen(false)}
+        availableItems={availableInventory || []}
+      />
     </div>
   );
 }

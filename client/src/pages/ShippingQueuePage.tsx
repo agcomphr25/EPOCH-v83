@@ -80,6 +80,11 @@ export default function ShippingQueuePage() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
+  // Fetch RTS inventory items in shipping department
+  const { data: rtsItemsInShipping = [] } = useQuery({
+    queryKey: ['/api/rts-inventory/in-shipping'],
+  });
+
   // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
     return (allKickbacks as any[]).some(
@@ -965,6 +970,97 @@ export default function ShippingQueuePage() {
           </Card>
         ) : (
           <>
+            {/* RTS Inventory Items in Shipping */}
+            {(rtsItemsInShipping as any[]).length > 0 && (
+              <Card className="border-purple-200 bg-purple-50/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-purple-700 text-sm font-medium flex items-center gap-2">
+                    📦 RTS Inventory ({(rtsItemsInShipping as any[]).length})
+                    <Badge variant="outline" className="ml-2 text-xs">
+                      Finished Stock - Does not count towards weekly metrics
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-2">
+                    {(rtsItemsInShipping as any[]).map((item: any) => (
+                      <div
+                        key={item.id}
+                        className="p-4 bg-white rounded-lg border border-purple-100 space-y-2"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1 flex-1">
+                            <div className="font-semibold text-purple-900">
+                              {item.stockModel}
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-gray-600">
+                              {item.actionLength && (
+                                <div>
+                                  <span className="font-medium">Action Length:</span> {item.actionLength}
+                                </div>
+                              )}
+                              {item.action && (
+                                <div>
+                                  <span className="font-medium">Action:</span> {item.action}
+                                </div>
+                              )}
+                              {item.barrel && (
+                                <div>
+                                  <span className="font-medium">Barrel:</span> {item.barrel}
+                                </div>
+                              )}
+                              {item.color && (
+                                <div>
+                                  <span className="font-medium">Color:</span> {item.color}
+                                </div>
+                              )}
+                            </div>
+                            {item.extras && (
+                              <div className="text-xs text-gray-500">
+                                Order Code: {item.extras}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-2 ml-4">
+                            <Badge className="bg-purple-100 text-purple-800">
+                              RTS Item
+                            </Badge>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                try {
+                                  await apiRequest(`/api/rts-inventory/${item.id}/mark-shipped`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({}),
+                                  });
+                                  queryClient.invalidateQueries({ queryKey: ['/api/rts-inventory/in-shipping'] });
+                                  toast({
+                                    title: 'Item Shipped',
+                                    description: `${item.stockModel} has been marked as shipped`,
+                                  });
+                                } catch (error: any) {
+                                  toast({
+                                    title: 'Error',
+                                    description: error.message || 'Failed to mark item as shipped',
+                                    variant: 'destructive',
+                                  });
+                                }
+                              }}
+                              className="w-full"
+                            >
+                              Mark as Shipped
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Overdue Orders */}
             {categorizedOrders.overdue.length > 0 && (
               <Card className="border-red-200 bg-red-50/30">

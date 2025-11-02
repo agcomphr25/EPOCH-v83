@@ -166,7 +166,7 @@ export default function RTSSalesDialog({
     }
   };
 
-  const handleCustomerSelect = (customer: any) => {
+  const handleCustomerSelect = async (customer: any) => {
     setSelectedCustomer(customer);
     
     if (!customer) {
@@ -176,17 +176,34 @@ export default function RTSSalesDialog({
     }
     
     setCustomerId(customer.id);
-    setCustomerName(`${customer.firstName} ${customer.lastName}`);
+    setCustomerName(customer.name);
     
-    // Auto-fill shipping address from customer
-    if (customer.address1) {
-      setShipToName(`${customer.firstName} ${customer.lastName}`);
-      setShipToStreet(customer.address1);
-      setShipToStreet2(customer.address2 || '');
-      setShipToCity(customer.city || '');
-      setShipToState(customer.state || '');
-      setShipToZipCode(customer.zip || '');
-      setShipToPhone(customer.mobilePhone || customer.homePhone || '');
+    // Set basic info
+    setShipToName(customer.name);
+    setShipToPhone(customer.phone || '');
+    
+    // Fetch customer addresses to auto-fill shipping address
+    try {
+      const response = await fetch(`/api/customer-addresses/${customer.id}`);
+      if (response.ok) {
+        const addresses = await response.json();
+        // Find default shipping address or first address
+        const shippingAddr = addresses.find((addr: any) => 
+          addr.type === 'shipping' || addr.type === 'both'
+        ) || addresses[0];
+        
+        if (shippingAddr) {
+          setShipToStreet(shippingAddr.street || '');
+          setShipToStreet2(shippingAddr.street2 || '');
+          setShipToCity(shippingAddr.city || '');
+          setShipToState(shippingAddr.state || '');
+          setShipToZipCode(shippingAddr.zipCode || '');
+          setShipToCountry(shippingAddr.country || 'US');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching customer addresses:', error);
+      // Continue without address auto-fill
     }
   };
 

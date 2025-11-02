@@ -23,6 +23,22 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Get RTS items in shipping department
+router.get('/in-shipping', async (req, res) => {
+  try {
+    const items = await db
+      .select()
+      .from(rtsInventory)
+      .where(eq(rtsInventory.status, 'IN_SHIPPING'))
+      .orderBy(desc(rtsInventory.createdAt));
+
+    res.json(items);
+  } catch (error) {
+    console.error('Error fetching RTS items in shipping:', error);
+    res.status(500).json({ error: 'Failed to fetch RTS items in shipping' });
+  }
+});
+
 // Get single RTS inventory item
 router.get('/:id', async (req, res) => {
   try {

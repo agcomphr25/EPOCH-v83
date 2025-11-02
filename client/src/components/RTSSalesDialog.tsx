@@ -257,10 +257,10 @@ export default function RTSSalesDialog({
     }
 
     const saleData = {
-      customerId,
+      customerId: customerId.toString(), // Convert to string
       items: Array.from(selectedItemIds).map(itemId => ({
-        itemId,
-        price: itemPrices[itemId],
+        rtsInventoryId: itemId, // Correct field name
+        unitPrice: itemPrices[itemId], // Correct field name
       })),
       shipTo: {
         name: shipToName,

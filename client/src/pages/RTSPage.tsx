@@ -41,6 +41,7 @@ import {
   CheckCircle,
   AlertCircle,
   Factory,
+  Plus,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -91,6 +92,16 @@ export default function RTSPage() {
   const [selectedDepartment, setSelectedDepartment] = useState('');
   const [selectedReason, setSelectedReason] = useState('');
   const [productionNotes, setProductionNotes] = useState('');
+  const [addItemDialog, setAddItemDialog] = useState(false);
+  const [newItem, setNewItem] = useState({
+    stockModel: '',
+    actionLength: '',
+    action: '',
+    barrel: '',
+    bottomMetal: '',
+    color: '',
+    extras: '',
+  });
 
   const { toast } = useToast();
 
@@ -113,6 +124,40 @@ export default function RTSPage() {
       item.color?.toLowerCase().includes(searchLower) ||
       item.extras?.toLowerCase().includes(searchLower)
     );
+  });
+
+  // Add new item mutation
+  const addItemMutation = useMutation({
+    mutationFn: async (item: typeof newItem) => {
+      return apiRequest('/api/rts-inventory', {
+        method: 'POST',
+        body: JSON.stringify(item),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/rts-inventory'] });
+      toast({
+        title: 'Item Added',
+        description: 'RTS inventory item has been added successfully.',
+      });
+      setAddItemDialog(false);
+      setNewItem({
+        stockModel: '',
+        actionLength: '',
+        action: '',
+        barrel: '',
+        bottomMetal: '',
+        color: '',
+        extras: '',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to add RTS inventory item.',
+        variant: 'destructive',
+      });
+    },
   });
 
   // Send to shipping mutation
@@ -249,11 +294,21 @@ export default function RTSPage() {
             </p>
           </div>
         </div>
-        {availableInventory && (
-          <Badge variant="secondary" className="text-lg px-4 py-2">
-            {availableInventory.length} Item{availableInventory.length !== 1 ? 's' : ''}
-          </Badge>
-        )}
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => setAddItemDialog(true)}
+            className="bg-primary hover:bg-primary/90"
+            data-testid="button-add-item"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add New Item
+          </Button>
+          {availableInventory && (
+            <Badge variant="secondary" className="text-lg px-4 py-2">
+              {availableInventory.length} Item{availableInventory.length !== 1 ? 's' : ''}
+            </Badge>
+          )}
+        </div>
       </div>
 
       {/* Search */}
@@ -447,6 +502,133 @@ export default function RTSPage() {
               data-testid="button-confirm-production"
             >
               {sendToProductionMutation.isPending ? 'Sending...' : 'Send to Production'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add New Item Dialog */}
+      <Dialog open={addItemDialog} onOpenChange={setAddItemDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New RTS Inventory Item</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="stockModel">Stock Model *</Label>
+              <Input
+                id="stockModel"
+                placeholder="e.g., SA Long Action"
+                value={newItem.stockModel}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, stockModel: e.target.value })
+                }
+                data-testid="input-stock-model"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="actionLength">Action Length</Label>
+              <Input
+                id="actionLength"
+                placeholder="e.g., Long"
+                value={newItem.actionLength}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, actionLength: e.target.value })
+                }
+                data-testid="input-action-length"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="action">Action</Label>
+              <Input
+                id="action"
+                placeholder="e.g., Tikka, Rem 700"
+                value={newItem.action}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, action: e.target.value })
+                }
+                data-testid="input-action"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="barrel">Barrel</Label>
+              <Input
+                id="barrel"
+                placeholder="e.g., Med Palma"
+                value={newItem.barrel}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, barrel: e.target.value })
+                }
+                data-testid="input-barrel"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="bottomMetal">Bottom Metal</Label>
+              <Input
+                id="bottomMetal"
+                placeholder="e.g., BDL, M5"
+                value={newItem.bottomMetal}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, bottomMetal: e.target.value })
+                }
+                data-testid="input-bottom-metal"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="color">Color</Label>
+              <Input
+                id="color"
+                placeholder="e.g., Black, Coyote"
+                value={newItem.color}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, color: e.target.value })
+                }
+                data-testid="input-color"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="extras">Extras / Order Code</Label>
+              <Input
+                id="extras"
+                placeholder="e.g., SAL-B-REG"
+                value={newItem.extras}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, extras: e.target.value })
+                }
+                data-testid="input-extras"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setAddItemDialog(false);
+                setNewItem({
+                  stockModel: '',
+                  actionLength: '',
+                  action: '',
+                  barrel: '',
+                  bottomMetal: '',
+                  color: '',
+                  extras: '',
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => addItemMutation.mutate(newItem)}
+              disabled={addItemMutation.isPending || !newItem.stockModel.trim()}
+              data-testid="button-confirm-add-item"
+            >
+              {addItemMutation.isPending ? 'Adding...' : 'Add Item'}
             </Button>
           </DialogFooter>
         </DialogContent>

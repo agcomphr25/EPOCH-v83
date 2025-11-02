@@ -83,6 +83,7 @@ const vendorFormSchema = insertVendorSchema.extend({
     .optional()
     .or(z.literal('')),
   scope: z.string().optional(),
+  approvalLevel: z.string().optional(),
   approvalSource: z.string().optional(),
   approvalPdfUrl: z.string().optional(),
   startRenewalDate: z.string().optional(),
@@ -159,6 +160,7 @@ export default function VendorManagement() {
       additionalEmail: '',
       phone: '',
       scope: '',
+      approvalLevel: '',
       approvalSource: '',
       approvalPdfUrl: '',
       startRenewalDate: '',
@@ -445,6 +447,7 @@ export default function VendorManagement() {
         country: vendor.country || 'United States',
 
         scope: vendor.scope || '',
+        approvalLevel: vendor.approvalLevel || '',
         approvalSource: vendor.approvalSource || '',
         approvalPdfUrl: vendor.approvalPdfUrl || '',
         startRenewalDate: vendor.startRenewalDate || '',
@@ -1382,6 +1385,32 @@ export default function VendorManagement() {
 
                     <FormField
                       control={form.control}
+                      name="approvalLevel"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Approval Level</FormLabel>
+                          <Select
+                            value={field.value || ''}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="select-approval-level">
+                                <SelectValue placeholder="Select approval level..." />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="A">A</SelectItem>
+                              <SelectItem value="B">B</SelectItem>
+                              <SelectItem value="C">C</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
                       name="approvalSource"
                       render={({ field }) => (
                         <FormItem className="space-y-3">
@@ -1882,6 +1911,15 @@ export default function VendorManagement() {
                 </th>
                 <th
                   className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                  onClick={() => toggleSort('approvalLevel')}
+                  data-testid="header-approval-level"
+                >
+                  <div className="flex items-center gap-1">
+                    Approval Level <SortIcon field="approvalLevel" />
+                  </div>
+                </th>
+                <th
+                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                   onClick={() => toggleSort('approved')}
                   data-testid="header-approved"
                 >
@@ -1910,7 +1948,7 @@ export default function VendorManagement() {
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
                   >
                     Loading vendors...
@@ -1919,7 +1957,7 @@ export default function VendorManagement() {
               ) : vendorsData?.data.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-4 py-8 text-center text-gray-500 dark:text-gray-400"
                   >
                     No vendors found
@@ -1937,6 +1975,9 @@ export default function VendorManagement() {
                       data-testid={`text-vendor-name-${vendor.id}`}
                     >
                       {vendor.name}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                      {vendor.approvalLevel || '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {vendor.scope && vendor.scope.trim().length > 0 ? (

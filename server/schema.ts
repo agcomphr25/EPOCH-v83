@@ -2248,6 +2248,7 @@ export const vendors = pgTable('vendors', {
   zipCode: text('zip_code'),
   country: text('country').default('United States'),
   scope: text('scope'), // Materials/products vendor is approved to supply
+  approvalLevel: text('approval_level'), // A, B, or C - vendor approval level
   approvalSource: text('approval_source'), // "Certification" or "Supplier Approval Form"
   approvalPdfUrl: text('approval_pdf_url'), // Path to uploaded PDF document
   startRenewalDate: date('start_renewal_date'), // Date when vendor approval started or was renewed

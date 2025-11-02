@@ -107,6 +107,7 @@ import ShippingQueuePage from './pages/ShippingQueuePage';
 import ShippingLabelPage from './pages/ShippingLabelPage';
 import NonconformanceDashboard from './components/NonconformanceDashboard';
 import NonconformanceReport from './components/NonconformanceReport';
+import RTSPage from './pages/RTSPage';
 import RFQRiskAssessment from './pages/RFQRiskAssessment';
 import ProductionQueueManager from './components/ProductionQueueManager';
 import EnhancedLayupSchedulerPage from './pages/EnhancedLayupSchedulerPage';
@@ -610,6 +611,9 @@ function App() {
                     path="/nonconformance-report"
                     component={NonconformanceReport}
                   />
+
+                  {/* RTS (Ready to Ship) Page */}
+                  <Route path="/rts" component={RTSPage} />
 
                   {/* Reports */}
                   <Route

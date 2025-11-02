@@ -9848,6 +9848,21 @@ export class DatabaseStorage implements IStorage {
       `🎯 AUTO-ADDED TO P1 PRODUCTION QUEUE: Order ${orderData.orderId} with stock model "${orderData.modelId}"`
     );
 
+    // Check if this order needs a signature email (no stock model + no review)
+    if (hasNoStockModel && orderData.isCustomOrder === 'no') {
+      console.log(
+        `📧 Order ${orderData.orderId} has no stock model and no review needed - triggering signature email`
+      );
+      
+      // Trigger signature email in the background
+      this.sendSignatureEmailForOrder(finalizedOrder.orderId).catch((error) => {
+        console.error(
+          `❌ Failed to send signature email for order ${finalizedOrder.orderId}:`,
+          error
+        );
+      });
+    }
+
     return finalizedOrder;
   }
 
@@ -9981,7 +9996,208 @@ export class DatabaseStorage implements IStorage {
       );
     }
 
+    // Check if this order needs a signature email (no stock model + no review)
+    if (hasNoStockModel && draft.isCustomOrder === 'no') {
+      console.log(
+        `📧 Order ${orderId} has no stock model and no review needed - triggering signature email`
+      );
+      
+      // Trigger signature email in the background
+      this.sendSignatureEmailForOrder(finalizedOrder.orderId).catch((error) => {
+        console.error(
+          `❌ Failed to send signature email for order ${finalizedOrder.orderId}:`,
+          error
+        );
+      });
+    }
+
     return finalizedOrder;
+  }
+
+  // Helper method to send signature email for orders that need it
+  private async sendSignatureEmailForOrder(orderId: string): Promise<void> {
+    try {
+      console.log(`📧 Preparing to send signature email for order ${orderId}`);
+      
+      // Get order details
+      const order = await this.getOrderById(orderId);
+      if (!order) {
+        throw new Error(`Order ${orderId} not found`);
+      }
+
+      // Get customer details
+      const customer = await this.getCustomerById(order.customerId || '');
+      if (!customer || !customer.email) {
+        throw new Error(`Customer email not found for order ${orderId}`);
+      }
+
+      // Check if followup order already exists
+      const existing = await this.getFollowupOrderByOrderId(orderId);
+      if (existing) {
+        console.log(`📧 Followup order already exists for ${orderId}, skipping`);
+        return;
+      }
+
+      // Import required modules
+      const { nanoid } = await import('nanoid');
+      const { generateSalesOrderPDF } = await import('./utils/pdf/salesOrderPdf');
+      const { sendFollowupOrderEmail } = await import('./utils/followupOrderEmail');
+
+      // Generate unique signature token
+      const signatureToken = nanoid(32);
+
+      // Generate signature link
+      const baseUrl = process.env.REPLIT_DOMAINS 
+        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+        : 'http://localhost:5000';
+      const signatureLink = `${baseUrl}/sign-order/${signatureToken}`;
+
+      // Get customer address
+      const addresses = await this.getCustomerAddresses(order.customerId || '');
+      const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
+
+      // Get stock model information
+      const stockModels = await this.getAllStockModels();
+      const stockModel = stockModels.find(m => m.id === order.modelId);
+
+      // Get features information
+      const allFeatures = await this.getAllFeatures();
+
+      // Build feature data
+      const featurePrices: Record<string, number> = {};
+      const featureDisplayNames: Record<string, string> = {};
+      const featureSelectionDisplayNames: Record<string, string> = {};
+      const featureSelectionPrices: Record<string, number> = {};
+
+      if (order.features && typeof order.features === 'object') {
+        for (const [featureKey, featureValue] of Object.entries(order.features)) {
+          if (featureValue && featureValue !== false && featureValue !== '') {
+            const featureDetail = allFeatures.find((f: any) => f.id === featureKey);
+            if (featureDetail) {
+              featureDisplayNames[featureKey] = featureDetail.displayName || featureDetail.name || featureKey;
+              const featureOptions = (featureDetail as any).options || [];
+              
+              if (Array.isArray(featureValue)) {
+                let totalPrice = 0;
+                for (const selectionValue of featureValue) {
+                  const option = featureOptions.find((opt: any) => opt.value === selectionValue);
+                  if (option) {
+                    featureSelectionDisplayNames[selectionValue] = option.displayName || option.label || selectionValue;
+                    const selectionPrice = option.price || 0;
+                    featureSelectionPrices[selectionValue] = selectionPrice;
+                    totalPrice += selectionPrice;
+                  }
+                }
+                featurePrices[featureKey] = totalPrice;
+              } else {
+                const option = featureOptions.find((opt: any) => opt.value === featureValue);
+                if (option) {
+                  featureSelectionDisplayNames[featureValue] = option.displayName || option.label || featureValue;
+                  const selectionPrice = option.price || 0;
+                  featureSelectionPrices[featureValue] = selectionPrice;
+                  featurePrices[featureKey] = selectionPrice;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Prepare order data for PDF
+      const orderData = {
+        orderId: order.orderId,
+        orderDate: new Date(order.orderDate),
+        dueDate: new Date(order.dueDate),
+        customerId: order.customerId || '',
+        customerPO: order.customerPO || undefined,
+        customerName: customer.name,
+        customerEmail: customer.email,
+        customerPhone: customer.phone || undefined,
+        customerCompany: customer.company || undefined,
+        customerAddress: defaultAddress ? {
+          street: defaultAddress.street,
+          street2: defaultAddress.street2 || undefined,
+          city: defaultAddress.city,
+          state: defaultAddress.state,
+          zipCode: defaultAddress.zipCode,
+          country: defaultAddress.country,
+        } : undefined,
+        modelId: order.modelId || undefined,
+        modelName: stockModel?.name || undefined,
+        modelDisplayName: stockModel?.displayName || undefined,
+        modelPrice: stockModel?.price || 0,
+        handedness: order.handedness || undefined,
+        features: order.features as Record<string, any> || undefined,
+        featurePrices,
+        featureDisplayNames,
+        featureSelectionDisplayNames,
+        featureSelectionPrices,
+        notes: order.notes || undefined,
+        shipping: order.shipping || 0,
+        paymentStatus: 'PENDING' as const,
+        discountCode: order.discountCode || undefined,
+        customDiscountType: order.customDiscountType || undefined,
+        customDiscountValue: order.customDiscountValue || undefined,
+        showCustomDiscount: order.showCustomDiscount || undefined,
+        priceOverride: order.priceOverride || undefined,
+        flattopPriceOverride: order.flattopPriceOverride || undefined,
+        isFlattop: order.isFlattop || false,
+      };
+
+      // Generate PDF
+      const pdfResult = await generateSalesOrderPDF(orderData);
+      
+      // Create followup order record
+      const followupOrder = await this.createFollowupOrder({
+        orderId: order.orderId,
+        customerId: order.customerId || '',
+        customerEmail: customer.email,
+        signatureToken,
+        pdfGenerated: true,
+        pdfPath: pdfResult.filePath,
+        orderSummary: orderData as any,
+      });
+
+      // Send email
+      const emailResult = await sendFollowupOrderEmail(
+        {
+          orderId: order.orderId,
+          customerName: customer.name,
+          customerEmail: customer.email,
+          orderDate: new Date(order.orderDate).toLocaleDateString(),
+          dueDate: new Date(order.dueDate).toLocaleDateString(),
+          customerPO: order.customerPO,
+          modelId: order.modelId,
+          signatureLink,
+        },
+        pdfResult.filePath
+      );
+
+      // Update followup order with email status
+      if (emailResult.success) {
+        await db
+          .update(followupOrders)
+          .set({
+            emailSent: true,
+            emailSentAt: new Date(),
+          })
+          .where(eq(followupOrders.id, followupOrder.id));
+        
+        console.log(`✅ Signature email sent successfully for order ${orderId}`);
+      } else {
+        await db
+          .update(followupOrders)
+          .set({
+            emailError: emailResult.error,
+          })
+          .where(eq(followupOrders.id, followupOrder.id));
+        
+        console.error(`❌ Failed to send signature email for order ${orderId}: ${emailResult.error}`);
+      }
+    } catch (error) {
+      console.error(`❌ Error in sendSignatureEmailForOrder for ${orderId}:`, error);
+      throw error;
+    }
   }
 
   // Get finalized order by ID

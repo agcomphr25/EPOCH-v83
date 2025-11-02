@@ -590,6 +590,107 @@ export const partsRequests = pgTable('parts_requests', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Ready to Ship (RTS) Inventory - Finished products on hand
+export const rtsInventory = pgTable('rts_inventory', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  stockModel: text('stock_model').notNull(),
+  actionLength: text('action_length'),
+  action: text('action'),
+  barrel: text('barrel'),
+  bottomMetal: text('bottom_metal'),
+  color: text('color'),
+  extras: text('extras'), // Order/identifier codes
+  price: real('price'), // Sale price for this item
+  status: text('status').notNull().default('AVAILABLE'), // AVAILABLE, SHIPPED, IN_PRODUCTION, SOLD
+  currentDepartment: text('current_department'), // If sent back to production
+  returnReason: text('return_reason'), // Why sent back to production
+  returnNotes: text('return_notes'), // Notes about changes needed
+  shippedDate: timestamp('shipped_date'),
+  shippedBy: text('shipped_by'),
+  returnedToProductionDate: timestamp('returned_to_production_date'),
+  returnedBy: text('returned_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// RTS Inventory Action History
+export const rtsInventoryHistory = pgTable('rts_inventory_history', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rtsInventoryId: uuid('rts_inventory_id').references(() => rtsInventory.id).notNull(),
+  action: text('action').notNull(), // CREATED, SHIPPED, RETURNED_TO_PRODUCTION
+  fromStatus: text('from_status'),
+  toStatus: text('to_status').notNull(),
+  department: text('department'), // Department sent to
+  reason: text('reason'),
+  notes: text('notes'),
+  performedBy: text('performed_by').notNull(),
+  performedAt: timestamp('performed_at').defaultNow(),
+});
+
+// RTS Sales Transactions - Track sales of RTS inventory to customers
+export const rtsSales = pgTable('rts_sales', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  saleNumber: text('sale_number').notNull().unique(), // e.g., RTS-2024-001
+  customerId: text('customer_id').notNull(),
+  // Shipping Information
+  trackingNumber: text('tracking_number'),
+  shippingCarrier: text('shipping_carrier').default('UPS'),
+  shippingMethod: text('shipping_method'),
+  shippingCost: real('shipping_cost'),
+  shippingLabelUrl: text('shipping_label_url'), // URL to shipping label PDF
+  // Ship To Address
+  shipToName: text('ship_to_name'),
+  shipToCompany: text('ship_to_company'),
+  shipToStreet: text('ship_to_street'),
+  shipToStreet2: text('ship_to_street2'),
+  shipToCity: text('ship_to_city'),
+  shipToState: text('ship_to_state'),
+  shipToZipCode: text('ship_to_zip_code'),
+  shipToCountry: text('ship_to_country').default('US'),
+  shipToPhone: text('ship_to_phone'),
+  isResidential: boolean('is_residential').default(true),
+  // Pricing
+  subtotal: real('subtotal'),
+  tax: real('tax'),
+  totalAmount: real('total_amount'),
+  // Payment
+  paymentStatus: text('payment_status').default('UNPAID'), // UNPAID, PARTIAL, PAID
+  amountPaid: real('amount_paid').default(0),
+  balanceDue: real('balance_due'),
+  // Status
+  status: text('status').default('PENDING'), // PENDING, LABELED, SHIPPED, DELIVERED
+  // Dates
+  saleDate: timestamp('sale_date').defaultNow(),
+  shippedDate: timestamp('shipped_date'),
+  deliveredDate: timestamp('delivered_date'),
+  // Notes
+  notes: text('notes'),
+  // Audit
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// RTS Sales Line Items - Individual items sold in each transaction
+export const rtsSaleItems = pgTable('rts_sale_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rtsSaleId: uuid('rts_sale_id').references(() => rtsSales.id).notNull(),
+  rtsInventoryId: uuid('rts_inventory_id').references(() => rtsInventory.id).notNull(),
+  // Snapshot of item details at time of sale
+  stockModel: text('stock_model').notNull(),
+  actionLength: text('action_length'),
+  action: text('action'),
+  barrel: text('barrel'),
+  bottomMetal: text('bottom_metal'),
+  color: text('color'),
+  extras: text('extras'),
+  // Pricing
+  unitPrice: real('unit_price').notNull(),
+  quantity: integer('quantity').default(1).notNull(),
+  lineTotal: real('line_total').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // Enhanced Employee Management System
 export const employees = pgTable('employees', {
   id: serial('id').primaryKey(),
@@ -4598,5 +4699,39 @@ export type ReceiverAccount = z.infer<typeof receiverAccountSchema>;
 export type BulkShipmentPreference = z.infer<typeof bulkShipmentPreferenceSchema>;
 export type BulkRatesRequest = z.infer<typeof bulkRatesRequestSchema>;
 export type BulkLabelRequest = z.infer<typeof bulkLabelRequestSchema>;
+
+// RTS Inventory Schemas
+export const insertRtsInventorySchema = createInsertSchema(rtsInventory).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertRtsInventoryHistorySchema = createInsertSchema(rtsInventoryHistory).omit({
+  id: true,
+  performedAt: true,
+});
+
+export type RtsInventory = typeof rtsInventory.$inferSelect;
+export type InsertRtsInventory = z.infer<typeof insertRtsInventorySchema>;
+export type RtsInventoryHistory = typeof rtsInventoryHistory.$inferSelect;
+export type InsertRtsInventoryHistory = z.infer<typeof insertRtsInventoryHistorySchema>;
+
+// RTS Sales Schemas
+export const insertRtsSaleSchema = createInsertSchema(rtsSales).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertRtsSaleItemSchema = createInsertSchema(rtsSaleItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type RtsSale = typeof rtsSales.$inferSelect;
+export type InsertRtsSale = z.infer<typeof insertRtsSaleSchema>;
+export type RtsSaleItem = typeof rtsSaleItems.$inferSelect;
+export type InsertRtsSaleItem = z.infer<typeof insertRtsSaleItemSchema>;
 
 export * from './calendar.schema';

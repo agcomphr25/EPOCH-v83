@@ -74,6 +74,32 @@ router.get('/:id/history', async (req, res) => {
   }
 });
 
+// Create a new RTS inventory item manually
+router.post('/', async (req, res) => {
+  try {
+    const validatedData = insertRtsInventorySchema.parse({
+      ...req.body,
+      status: 'AVAILABLE',
+    });
+
+    const [inserted] = await db.insert(rtsInventory).values(validatedData).returning();
+    
+    // Create history entry
+    await db.insert(rtsInventoryHistory).values({
+      rtsInventoryId: inserted.id,
+      action: 'CREATED',
+      toStatus: 'AVAILABLE',
+      performedBy: req.user?.username || 'System',
+      notes: 'Manually added',
+    });
+
+    res.json(inserted);
+  } catch (error) {
+    console.error('Error creating RTS inventory item:', error);
+    res.status(500).json({ error: 'Failed to create item' });
+  }
+});
+
 // Import Excel file
 router.post('/import', upload.single('file'), async (req, res) => {
   try {

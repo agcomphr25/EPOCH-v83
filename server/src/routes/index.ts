@@ -7,6 +7,7 @@ import tasksRoutes from './tasks';
 import kickbackRoutes from './kickbacks';
 import inventoryRoutes from './inventory';
 import rtsInventoryRoutes from './rtsInventory';
+import rtsSalesRoutes from './rtsSales';
 import customersRoutes from './customers';
 import vendorsRoutes from './vendors';
 import vendorPOsRoutes from './vendorPOs';
@@ -106,6 +107,9 @@ export function registerRoutes(app: Express): Server {
 
   // Ready to Ship (RTS) inventory routes
   app.use('/api/rts-inventory', rtsInventoryRoutes);
+
+  // RTS Sales routes
+  app.use('/api/rts-sales', rtsSalesRoutes);
 
   // Customer management routes
   app.use('/api/customers', customersRoutes);

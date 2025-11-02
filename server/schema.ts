@@ -600,7 +600,8 @@ export const rtsInventory = pgTable('rts_inventory', {
   bottomMetal: text('bottom_metal'),
   color: text('color'),
   extras: text('extras'), // Order/identifier codes
-  status: text('status').notNull().default('AVAILABLE'), // AVAILABLE, SHIPPED, IN_PRODUCTION
+  price: real('price'), // Sale price for this item
+  status: text('status').notNull().default('AVAILABLE'), // AVAILABLE, SHIPPED, IN_PRODUCTION, SOLD
   currentDepartment: text('current_department'), // If sent back to production
   returnReason: text('return_reason'), // Why sent back to production
   returnNotes: text('return_notes'), // Notes about changes needed

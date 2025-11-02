@@ -45,6 +45,7 @@ import FormRendererPage from './pages/FormRendererPage';
 import DocumentationPageNew from './pages/DocumentationPageNew';
 import CustomerManagement from './pages/CustomerManagement';
 import VendorManagement from './pages/VendorManagement';
+import ManageGroups from './pages/ManageGroups';
 import PurchaseOrders from './pages/PurchaseOrders';
 import P2PurchaseOrders from './pages/P2PurchaseOrders';
 import POProductsPage from './pages/POProductsPage';
@@ -304,6 +305,9 @@ function App() {
                   <Route path="/vendor-management" component={VendorManagement} />
                   <Route path="/vendors" component={VendorManagement} />
                   <Route path="/vendor-pos" component={VendorPOPage} />
+                  
+                  {/* Item Groups Management */}
+                  <Route path="/manage-groups" component={ManageGroups} />
 
                   {/* Purchase Order Routes */}
                   <Route path="/purchase-orders" component={PurchaseOrders} />

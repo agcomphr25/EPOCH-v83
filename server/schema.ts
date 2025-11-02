@@ -498,6 +498,59 @@ export const inventoryItems = pgTable('inventory_items', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Item Groups for inventory categorization
+export const itemGroups = pgTable('item_groups', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  description: text('description'),
+  notes: text('notes'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Junction table for inventory items and groups (many-to-many)
+export const inventoryItemGroups = pgTable('inventory_item_groups', {
+  id: serial('id').primaryKey(),
+  itemId: integer('item_id')
+    .references(() => inventoryItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  groupId: integer('group_id')
+    .references(() => itemGroups.id, { onDelete: 'cascade' })
+    .notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  uniqueItemGroup: unique().on(table.itemId, table.groupId),
+}));
+
+// Vendor scope - individual items
+export const vendorScopeItems = pgTable('vendor_scope_items', {
+  id: serial('id').primaryKey(),
+  vendorId: integer('vendor_id')
+    .references(() => vendors.id, { onDelete: 'cascade' })
+    .notNull(),
+  itemId: integer('item_id')
+    .references(() => inventoryItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  uniqueVendorItem: unique().on(table.vendorId, table.itemId),
+}));
+
+// Vendor scope - item groups
+export const vendorScopeGroups = pgTable('vendor_scope_groups', {
+  id: serial('id').primaryKey(),
+  vendorId: integer('vendor_id')
+    .references(() => vendors.id, { onDelete: 'cascade' })
+    .notNull(),
+  groupId: integer('group_id')
+    .references(() => itemGroups.id, { onDelete: 'cascade' })
+    .notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  uniqueVendorGroup: unique().on(table.vendorId, table.groupId),
+}));
+
 export const inventoryScans = pgTable('inventory_scans', {
   id: serial('id').primaryKey(),
   itemCode: text('item_code').notNull(),
@@ -1367,6 +1420,49 @@ export const insertInventoryScanSchema = createInsertSchema(inventoryScans)
     technicianId: z.string().optional().nullable(),
   });
 
+export const insertItemGroupSchema = createInsertSchema(itemGroups)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    name: z.string().min(1, 'Group name is required'),
+    description: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+    isActive: z.boolean().default(true),
+  });
+
+export const insertInventoryItemGroupSchema = createInsertSchema(inventoryItemGroups)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    itemId: z.number().int().positive('Item ID is required'),
+    groupId: z.number().int().positive('Group ID is required'),
+  });
+
+export const insertVendorScopeItemSchema = createInsertSchema(vendorScopeItems)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    vendorId: z.number().int().positive('Vendor ID is required'),
+    itemId: z.number().int().positive('Item ID is required'),
+  });
+
+export const insertVendorScopeGroupSchema = createInsertSchema(vendorScopeGroups)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    vendorId: z.number().int().positive('Vendor ID is required'),
+    groupId: z.number().int().positive('Group ID is required'),
+  });
+
 export const insertEmployeeSchema = createInsertSchema(employees)
   .omit({
     id: true,
@@ -1858,6 +1954,14 @@ export type InsertInventoryItem = z.infer<typeof insertInventoryItemSchema>;
 export type InventoryItem = typeof inventoryItems.$inferSelect;
 export type InsertInventoryScan = z.infer<typeof insertInventoryScanSchema>;
 export type InventoryScan = typeof inventoryScans.$inferSelect;
+export type InsertItemGroup = z.infer<typeof insertItemGroupSchema>;
+export type ItemGroup = typeof itemGroups.$inferSelect;
+export type InsertInventoryItemGroup = z.infer<typeof insertInventoryItemGroupSchema>;
+export type InventoryItemGroup = typeof inventoryItemGroups.$inferSelect;
+export type InsertVendorScopeItem = z.infer<typeof insertVendorScopeItemSchema>;
+export type VendorScopeItem = typeof vendorScopeItems.$inferSelect;
+export type InsertVendorScopeGroup = z.infer<typeof insertVendorScopeGroupSchema>;
+export type VendorScopeGroup = typeof vendorScopeGroups.$inferSelect;
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type Employee = typeof employees.$inferSelect;
 
@@ -2248,6 +2352,7 @@ export const vendors = pgTable('vendors', {
   zipCode: text('zip_code'),
   country: text('country').default('United States'),
   scope: text('scope'), // Materials/products vendor is approved to supply
+  approvalLevel: text('approval_level'), // A, B, or C - vendor approval level
   approvalSource: text('approval_source'), // "Certification" or "Supplier Approval Form"
   approvalPdfUrl: text('approval_pdf_url'), // Path to uploaded PDF document
   startRenewalDate: date('start_renewal_date'), // Date when vendor approval started or was renewed

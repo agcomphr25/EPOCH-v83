@@ -6,6 +6,7 @@ import {
   insertInventoryBalanceSchema,
   insertInventoryTransactionSchema,
   insertVendorPartSchema,
+  insertItemGroupSchema,
 } from '@shared/schema';
 
 import { storage } from '../../storage';
@@ -913,6 +914,132 @@ router.delete('/vendor-parts/:id', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Delete vendor part error:', error);
     res.status(500).json({ error: 'Failed to delete vendor part' });
+  }
+});
+
+// ===== ITEM GROUPS ROUTES =====
+
+// GET /api/inventory/groups - Get all item groups
+router.get('/groups', async (req: Request, res: Response) => {
+  try {
+    const groups = await storage.getAllItemGroups();
+    res.json(groups);
+  } catch (error) {
+    console.error('Get item groups error:', error);
+    res.status(500).json({ error: 'Failed to fetch item groups' });
+  }
+});
+
+// GET /api/inventory/groups/:id - Get a specific item group
+router.get('/groups/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const group = await storage.getItemGroup(id);
+    if (!group) {
+      return res.status(404).json({ error: 'Item group not found' });
+    }
+    res.json(group);
+  } catch (error) {
+    console.error('Get item group error:', error);
+    res.status(500).json({ error: 'Failed to fetch item group' });
+  }
+});
+
+// POST /api/inventory/groups - Create a new item group
+router.post('/groups', async (req: Request, res: Response) => {
+  try {
+    const data = insertItemGroupSchema.parse(req.body);
+    const group = await storage.createItemGroup(data);
+    res.status(201).json(group);
+  } catch (error) {
+    console.error('Create item group error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to create item group' });
+  }
+});
+
+// PUT /api/inventory/groups/:id - Update an item group
+router.put('/groups/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const data = insertItemGroupSchema.partial().parse(req.body);
+    const group = await storage.updateItemGroup(id, data);
+    res.json(group);
+  } catch (error) {
+    console.error('Update item group error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to update item group' });
+  }
+});
+
+// DELETE /api/inventory/groups/:id - Delete an item group
+router.delete('/groups/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    await storage.deleteItemGroup(id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete item group error:', error);
+    res.status(500).json({ error: 'Failed to delete item group' });
+  }
+});
+
+// GET /api/inventory/groups/:id/items - Get all items in a group
+router.get('/groups/:id/items', async (req: Request, res: Response) => {
+  try {
+    const groupId = parseInt(req.params.id);
+    const items = await storage.getItemsByGroupId(groupId);
+    res.json(items);
+  } catch (error) {
+    console.error('Get items by group error:', error);
+    res.status(500).json({ error: 'Failed to fetch items' });
+  }
+});
+
+// POST /api/inventory/groups/:id/items - Add items to a group
+router.post('/groups/:id/items', async (req: Request, res: Response) => {
+  try {
+    const groupId = parseInt(req.params.id);
+    const { itemIds } = req.body;
+    
+    if (!Array.isArray(itemIds)) {
+      return res.status(400).json({ error: 'itemIds must be an array' });
+    }
+    
+    await storage.addItemsToGroup(groupId, itemIds);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Add items to group error:', error);
+    res.status(500).json({ error: 'Failed to add items to group' });
+  }
+});
+
+// DELETE /api/inventory/groups/:groupId/items/:itemId - Remove item from group
+router.delete('/groups/:groupId/items/:itemId', async (req: Request, res: Response) => {
+  try {
+    const groupId = parseInt(req.params.groupId);
+    const itemId = parseInt(req.params.itemId);
+    await storage.removeItemFromGroup(itemId, groupId);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Remove item from group error:', error);
+    res.status(500).json({ error: 'Failed to remove item from group' });
+  }
+});
+
+// GET /api/inventory/items/:id/groups - Get all groups an item belongs to
+router.get('/items/:id/groups', async (req: Request, res: Response) => {
+  try {
+    const itemId = parseInt(req.params.id);
+    const groups = await storage.getGroupsByItemId(itemId);
+    res.json(groups);
+  } catch (error) {
+    console.error('Get groups by item error:', error);
+    res.status(500).json({ error: 'Failed to fetch groups' });
   }
 });
 

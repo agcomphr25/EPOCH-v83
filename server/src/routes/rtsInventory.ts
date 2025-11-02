@@ -108,7 +108,7 @@ router.post('/import', upload.single('file'), async (req, res) => {
   }
 });
 
-// Ship an item
+// Send item to Shipping department
 router.post('/:id/ship', async (req, res) => {
   try {
     const { id } = req.params;
@@ -124,7 +124,54 @@ router.post('/:id/ship', async (req, res) => {
     }
 
     if (item.status !== 'AVAILABLE') {
-      return res.status(400).json({ error: 'Item is not available for shipping' });
+      return res.status(400).json({ error: 'Item is not available to send to shipping' });
+    }
+
+    const [updated] = await db
+      .update(rtsInventory)
+      .set({
+        status: 'IN_SHIPPING',
+        currentDepartment: 'Shipping',
+        updatedAt: new Date(),
+      })
+      .where(eq(rtsInventory.id, id))
+      .returning();
+
+    // Create history entry
+    await db.insert(rtsInventoryHistory).values({
+      rtsInventoryId: id,
+      action: 'SENT_TO_SHIPPING',
+      fromStatus: 'AVAILABLE',
+      toStatus: 'IN_SHIPPING',
+      department: 'Shipping',
+      performedBy,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    console.error('Error sending RTS inventory item to shipping:', error);
+    res.status(500).json({ error: 'Failed to send item to shipping' });
+  }
+});
+
+// Mark item as shipped (used by Shipping department)
+router.post('/:id/mark-shipped', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { trackingNumber, shippingCarrier } = req.body;
+    const performedBy = req.user?.username || 'Unknown';
+
+    const [item] = await db
+      .select()
+      .from(rtsInventory)
+      .where(eq(rtsInventory.id, id));
+
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    if (item.status !== 'IN_SHIPPING') {
+      return res.status(400).json({ error: 'Item is not in shipping department' });
     }
 
     const [updated] = await db
@@ -142,15 +189,17 @@ router.post('/:id/ship', async (req, res) => {
     await db.insert(rtsInventoryHistory).values({
       rtsInventoryId: id,
       action: 'SHIPPED',
-      fromStatus: 'AVAILABLE',
+      fromStatus: 'IN_SHIPPING',
       toStatus: 'SHIPPED',
+      department: 'Shipping',
       performedBy,
+      notes: trackingNumber ? `Tracking: ${trackingNumber}` : null,
     });
 
     res.json(updated);
   } catch (error) {
-    console.error('Error shipping RTS inventory item:', error);
-    res.status(500).json({ error: 'Failed to ship item' });
+    console.error('Error marking RTS inventory item as shipped:', error);
+    res.status(500).json({ error: 'Failed to mark item as shipped' });
   }
 });
 

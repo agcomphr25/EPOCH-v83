@@ -115,8 +115,8 @@ export default function RTSPage() {
     );
   });
 
-  // Ship mutation
-  const shipMutation = useMutation({
+  // Send to shipping mutation
+  const sendToShippingMutation = useMutation({
     mutationFn: async (itemId: string) => {
       return apiRequest(`/api/rts-inventory/${itemId}/ship`, {
         method: 'POST',
@@ -125,14 +125,14 @@ export default function RTSPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/rts-inventory'] });
       toast({
-        title: 'Item Shipped',
-        description: 'The item has been marked as shipped.',
+        title: 'Sent to Shipping',
+        description: 'The item has been sent to the Shipping department.',
       });
     },
     onError: (error: any) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to ship item',
+        description: error.message || 'Failed to send item to shipping',
         variant: 'destructive',
       });
     },
@@ -203,10 +203,17 @@ export default function RTSPage() {
             Available
           </Badge>
         );
-      case 'SHIPPED':
+      case 'IN_SHIPPING':
         return (
           <Badge className="bg-blue-100 text-blue-800 gap-1">
             <Truck className="h-3 w-3" />
+            In Shipping
+          </Badge>
+        );
+      case 'SHIPPED':
+        return (
+          <Badge className="bg-gray-100 text-gray-800 gap-1">
+            <CheckCircle className="h-3 w-3" />
             Shipped
           </Badge>
         );
@@ -321,13 +328,13 @@ export default function RTSPage() {
                           <Button
                             variant="default"
                             size="sm"
-                            onClick={() => shipMutation.mutate(item.id)}
-                            disabled={shipMutation.isPending}
+                            onClick={() => sendToShippingMutation.mutate(item.id)}
+                            disabled={sendToShippingMutation.isPending}
                             className="bg-green-600 hover:bg-green-700 flex items-center gap-1"
                             data-testid={`button-ship-${item.id}`}
                           >
                             <Truck className="h-3 w-3" />
-                            Ship
+                            Send to Shipping
                           </Button>
                           <Button
                             variant="outline"

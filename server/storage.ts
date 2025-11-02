@@ -14,6 +14,10 @@ import {
   formSubmissions,
   inventoryItems,
   inventoryScans,
+  itemGroups,
+  inventoryItemGroups,
+  vendorScopeItems,
+  vendorScopeGroups,
   partsRequests,
   employees,
   qcDefinitions,
@@ -128,9 +132,17 @@ import {
   type InventoryItem,
   type InsertInventoryItem,
   type InventoryScan,
+  type InsertInventoryScan,
+  type ItemGroup,
+  type InsertItemGroup,
+  type InventoryItemGroup,
+  type InsertInventoryItemGroup,
+  type VendorScopeItem,
+  type InsertVendorScopeItem,
+  type VendorScopeGroup,
+  type InsertVendorScopeGroup,
   type FollowupOrder,
   type InsertFollowupOrder,
-  type InsertInventoryScan,
   type PartsRequest,
   type InsertPartsRequest,
   type Employee,
@@ -505,6 +517,29 @@ export interface IStorage {
   getInventoryScan(id: number): Promise<InventoryScan | undefined>;
   createInventoryScan(data: InsertInventoryScan): Promise<InventoryScan>;
   deleteInventoryScan(id: number): Promise<void>;
+
+  // Item Groups CRUD
+  getAllItemGroups(): Promise<ItemGroup[]>;
+  getItemGroup(id: number): Promise<ItemGroup | undefined>;
+  createItemGroup(data: InsertItemGroup): Promise<ItemGroup>;
+  updateItemGroup(id: number, data: Partial<InsertItemGroup>): Promise<ItemGroup>;
+  deleteItemGroup(id: number): Promise<void>;
+
+  // Inventory Item Groups (assigning items to groups)
+  getItemsByGroupId(groupId: number): Promise<InventoryItem[]>;
+  getGroupsByItemId(itemId: number): Promise<ItemGroup[]>;
+  addItemsToGroup(groupId: number, itemIds: number[]): Promise<void>;
+  removeItemFromGroup(itemId: number, groupId: number): Promise<void>;
+  removeAllItemsFromGroup(groupId: number): Promise<void>;
+
+  // Vendor Scope - Items and Groups
+  getVendorScopeItems(vendorId: number): Promise<InventoryItem[]>;
+  getVendorScopeGroups(vendorId: number): Promise<ItemGroup[]>;
+  setVendorScope(vendorId: number, itemIds: number[], groupIds: number[]): Promise<void>;
+  addItemsToVendorScope(vendorId: number, itemIds: number[]): Promise<void>;
+  addGroupsToVendorScope(vendorId: number, groupIds: number[]): Promise<void>;
+  removeItemFromVendorScope(vendorId: number, itemId: number): Promise<void>;
+  removeGroupFromVendorScope(vendorId: number, groupId: number): Promise<void>;
 
   // Parts Requests CRUD
   getAllPartsRequests(): Promise<PartsRequest[]>;
@@ -3756,6 +3791,256 @@ export class DatabaseStorage implements IStorage {
 
   async deleteInventoryScan(id: number): Promise<void> {
     await db.delete(inventoryScans).where(eq(inventoryScans.id, id));
+  }
+
+  // Item Groups CRUD
+  async getAllItemGroups(): Promise<ItemGroup[]> {
+    return await db
+      .select()
+      .from(itemGroups)
+      .where(eq(itemGroups.isActive, true))
+      .orderBy(itemGroups.name);
+  }
+
+  async getItemGroup(id: number): Promise<ItemGroup | undefined> {
+    const [group] = await db
+      .select()
+      .from(itemGroups)
+      .where(eq(itemGroups.id, id));
+    return group || undefined;
+  }
+
+  async createItemGroup(data: InsertItemGroup): Promise<ItemGroup> {
+    const [group] = await db.insert(itemGroups).values(data).returning();
+    return group;
+  }
+
+  async updateItemGroup(id: number, data: Partial<InsertItemGroup>): Promise<ItemGroup> {
+    const updateData: any = { ...data, updatedAt: new Date() };
+    const [group] = await db
+      .update(itemGroups)
+      .set(updateData)
+      .where(eq(itemGroups.id, id))
+      .returning();
+    return group;
+  }
+
+  async deleteItemGroup(id: number): Promise<void> {
+    await db.delete(itemGroups).where(eq(itemGroups.id, id));
+  }
+
+  // Inventory Item Groups (assigning items to groups)
+  async getItemsByGroupId(groupId: number): Promise<InventoryItem[]> {
+    const result = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+        sku: inventoryItems.sku,
+        name: inventoryItems.name,
+        type: inventoryItems.type,
+        source: inventoryItems.source,
+        vendorId: inventoryItems.vendorId,
+        supplierPartNumber: inventoryItems.supplierPartNumber,
+        secondarySupplierPartNumber: inventoryItems.secondarySupplierPartNumber,
+        costPer: inventoryItems.costPer,
+        purchaseUnit: inventoryItems.purchaseUnit,
+        usageQuantityPerUnit: inventoryItems.usageQuantityPerUnit,
+        usageUnit: inventoryItems.usageUnit,
+        cogsPerUnit: inventoryItems.cogsPerUnit,
+        orderDate: inventoryItems.orderDate,
+        department: inventoryItems.department,
+        secondarySource: inventoryItems.secondarySource,
+        notes: inventoryItems.notes,
+        isStockItem: inventoryItems.isStockItem,
+        utilizedInPL1: inventoryItems.utilizedInPL1,
+        utilizedInPL2: inventoryItems.utilizedInPL2,
+        utilizedInFacilities: inventoryItems.utilizedInFacilities,
+        utilizedInAdmin: inventoryItems.utilizedInAdmin,
+        utilizedInServices: inventoryItems.utilizedInServices,
+        isActive: inventoryItems.isActive,
+        createdAt: inventoryItems.createdAt,
+        updatedAt: inventoryItems.updatedAt,
+      })
+      .from(inventoryItems)
+      .innerJoin(inventoryItemGroups, eq(inventoryItems.id, inventoryItemGroups.itemId))
+      .where(eq(inventoryItemGroups.groupId, groupId));
+    return result;
+  }
+
+  async getGroupsByItemId(itemId: number): Promise<ItemGroup[]> {
+    const result = await db
+      .select({
+        id: itemGroups.id,
+        name: itemGroups.name,
+        description: itemGroups.description,
+        notes: itemGroups.notes,
+        isActive: itemGroups.isActive,
+        createdAt: itemGroups.createdAt,
+        updatedAt: itemGroups.updatedAt,
+      })
+      .from(itemGroups)
+      .innerJoin(inventoryItemGroups, eq(itemGroups.id, inventoryItemGroups.groupId))
+      .where(eq(inventoryItemGroups.itemId, itemId));
+    return result;
+  }
+
+  async addItemsToGroup(groupId: number, itemIds: number[]): Promise<void> {
+    if (itemIds.length === 0) return;
+    
+    const values = itemIds.map(itemId => ({
+      groupId,
+      itemId,
+    }));
+    
+    // Insert only if not already exists (ignore conflicts)
+    for (const value of values) {
+      try {
+        await db.insert(inventoryItemGroups).values(value);
+      } catch (error) {
+        // Ignore duplicate key errors (item already in group)
+        if (!(error as any).message?.includes('duplicate') && !(error as any).message?.includes('unique')) {
+          throw error;
+        }
+      }
+    }
+  }
+
+  async removeItemFromGroup(itemId: number, groupId: number): Promise<void> {
+    await db
+      .delete(inventoryItemGroups)
+      .where(and(
+        eq(inventoryItemGroups.itemId, itemId),
+        eq(inventoryItemGroups.groupId, groupId)
+      ));
+  }
+
+  async removeAllItemsFromGroup(groupId: number): Promise<void> {
+    await db
+      .delete(inventoryItemGroups)
+      .where(eq(inventoryItemGroups.groupId, groupId));
+  }
+
+  // Vendor Scope - Items and Groups
+  async getVendorScopeItems(vendorId: number): Promise<InventoryItem[]> {
+    const result = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+        sku: inventoryItems.sku,
+        name: inventoryItems.name,
+        type: inventoryItems.type,
+        source: inventoryItems.source,
+        vendorId: inventoryItems.vendorId,
+        supplierPartNumber: inventoryItems.supplierPartNumber,
+        secondarySupplierPartNumber: inventoryItems.secondarySupplierPartNumber,
+        costPer: inventoryItems.costPer,
+        purchaseUnit: inventoryItems.purchaseUnit,
+        usageQuantityPerUnit: inventoryItems.usageQuantityPerUnit,
+        usageUnit: inventoryItems.usageUnit,
+        cogsPerUnit: inventoryItems.cogsPerUnit,
+        orderDate: inventoryItems.orderDate,
+        department: inventoryItems.department,
+        secondarySource: inventoryItems.secondarySource,
+        notes: inventoryItems.notes,
+        isStockItem: inventoryItems.isStockItem,
+        utilizedInPL1: inventoryItems.utilizedInPL1,
+        utilizedInPL2: inventoryItems.utilizedInPL2,
+        utilizedInFacilities: inventoryItems.utilizedInFacilities,
+        utilizedInAdmin: inventoryItems.utilizedInAdmin,
+        utilizedInServices: inventoryItems.utilizedInServices,
+        isActive: inventoryItems.isActive,
+        createdAt: inventoryItems.createdAt,
+        updatedAt: inventoryItems.updatedAt,
+      })
+      .from(inventoryItems)
+      .innerJoin(vendorScopeItems, eq(inventoryItems.id, vendorScopeItems.itemId))
+      .where(eq(vendorScopeItems.vendorId, vendorId));
+    return result;
+  }
+
+  async getVendorScopeGroups(vendorId: number): Promise<ItemGroup[]> {
+    const result = await db
+      .select({
+        id: itemGroups.id,
+        name: itemGroups.name,
+        description: itemGroups.description,
+        notes: itemGroups.notes,
+        isActive: itemGroups.isActive,
+        createdAt: itemGroups.createdAt,
+        updatedAt: itemGroups.updatedAt,
+      })
+      .from(itemGroups)
+      .innerJoin(vendorScopeGroups, eq(itemGroups.id, vendorScopeGroups.groupId))
+      .where(eq(vendorScopeGroups.vendorId, vendorId));
+    return result;
+  }
+
+  async setVendorScope(vendorId: number, itemIds: number[], groupIds: number[]): Promise<void> {
+    // Delete existing scope
+    await db.delete(vendorScopeItems).where(eq(vendorScopeItems.vendorId, vendorId));
+    await db.delete(vendorScopeGroups).where(eq(vendorScopeGroups.vendorId, vendorId));
+    
+    // Add new scope items
+    if (itemIds.length > 0) {
+      const itemValues = itemIds.map(itemId => ({ vendorId, itemId }));
+      await db.insert(vendorScopeItems).values(itemValues);
+    }
+    
+    // Add new scope groups
+    if (groupIds.length > 0) {
+      const groupValues = groupIds.map(groupId => ({ vendorId, groupId }));
+      await db.insert(vendorScopeGroups).values(groupValues);
+    }
+  }
+
+  async addItemsToVendorScope(vendorId: number, itemIds: number[]): Promise<void> {
+    if (itemIds.length === 0) return;
+    
+    const values = itemIds.map(itemId => ({ vendorId, itemId }));
+    
+    for (const value of values) {
+      try {
+        await db.insert(vendorScopeItems).values(value);
+      } catch (error) {
+        if (!(error as any).message?.includes('duplicate') && !(error as any).message?.includes('unique')) {
+          throw error;
+        }
+      }
+    }
+  }
+
+  async addGroupsToVendorScope(vendorId: number, groupIds: number[]): Promise<void> {
+    if (groupIds.length === 0) return;
+    
+    const values = groupIds.map(groupId => ({ vendorId, groupId }));
+    
+    for (const value of values) {
+      try {
+        await db.insert(vendorScopeGroups).values(value);
+      } catch (error) {
+        if (!(error as any).message?.includes('duplicate') && !(error as any).message?.includes('unique')) {
+          throw error;
+        }
+      }
+    }
+  }
+
+  async removeItemFromVendorScope(vendorId: number, itemId: number): Promise<void> {
+    await db
+      .delete(vendorScopeItems)
+      .where(and(
+        eq(vendorScopeItems.vendorId, vendorId),
+        eq(vendorScopeItems.itemId, itemId)
+      ));
+  }
+
+  async removeGroupFromVendorScope(vendorId: number, groupId: number): Promise<void> {
+    await db
+      .delete(vendorScopeGroups)
+      .where(and(
+        eq(vendorScopeGroups.vendorId, vendorId),
+        eq(vendorScopeGroups.groupId, groupId)
+      ));
   }
 
   // Parts Requests CRUD

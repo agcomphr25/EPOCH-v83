@@ -51,6 +51,7 @@ export default function RTSSalesDialog({
   const { toast } = useToast();
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [itemPrices, setItemPrices] = useState<Record<string, number>>({});
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [customerId, setCustomerId] = useState<string>('');
   const [customerName, setCustomerName] = useState<string>('');
 
@@ -79,6 +80,7 @@ export default function RTSSalesDialog({
     if (isOpen) {
       setSelectedItemIds(new Set());
       setItemPrices({});
+      setSelectedCustomer(null);
       setCustomerId('');
       setCustomerName('');
       setShipToName('');
@@ -165,6 +167,8 @@ export default function RTSSalesDialog({
   };
 
   const handleCustomerSelect = (customer: any) => {
+    setSelectedCustomer(customer);
+    
     if (!customer) {
       setCustomerId('');
       setCustomerName('');
@@ -340,14 +344,10 @@ export default function RTSSalesDialog({
           <div>
             <h3 className="font-semibold mb-3">Customer</h3>
             <CustomerSearchInput
+              value={selectedCustomer}
               onValueChange={handleCustomerSelect}
               placeholder="Search or create customer..."
             />
-            {customerName && (
-              <p className="mt-2 text-sm text-muted-foreground">
-                Selected: {customerName}
-              </p>
-            )}
           </div>
 
           <Separator />

@@ -186,41 +186,38 @@ router.post('/', async (req, res) => {
     if (data.generateLabel) {
       try {
         const labelResult = await createShipment({
-          shipFrom: {
-            name: 'AG Composites',
-            company: 'AG Composites',
-            street: '230 Hamer Rd.',
-            city: 'Owens Crossroads',
-            state: 'AL',
-            zipCode: '35763',
-            country: 'US',
-            phone: '256-723-8381',
-          },
-          shipTo: data.shipTo,
-          package: {
-            weight: data.package.weight,
-            length: data.package.length || 12,
-            width: data.package.width || 12,
-            height: data.package.height || 6,
+          shipTo: {
+            name: data.shipTo.name,
+            attention: data.shipTo.name,
+            phone: data.shipTo.phone,
+            address1: data.shipTo.street,
+            address2: data.shipTo.street2,
+            city: data.shipTo.city,
+            state: data.shipTo.state,
+            postalCode: data.shipTo.zipCode,
+            country: data.shipTo.country,
           },
           serviceCode: data.shipping.method,
-          reference1: saleNumber,
-          reference2: data.customerId,
+          weightLbs: data.package.weight,
+          referenceNumber: saleNumber,
         });
+
+        // Store label as base64 in shippingLabelUrl (we'll convert to PDF URL later if needed)
+        const labelData = labelResult.labelBase64 ? `data:image/gif;base64,${labelResult.labelBase64}` : null;
 
         // Update sale with tracking info
         await db
           .update(rtsSales)
           .set({
             trackingNumber: labelResult.trackingNumber,
-            shippingLabelUrl: labelResult.labelUrl,
+            shippingLabelUrl: labelData,
             status: 'LABELED',
             updatedAt: new Date(),
           })
           .where(eq(rtsSales.id, sale.id));
 
         res.json({
-          sale: { ...sale, trackingNumber: labelResult.trackingNumber, shippingLabelUrl: labelResult.labelUrl },
+          sale: { ...sale, trackingNumber: labelResult.trackingNumber, shippingLabelUrl: labelData },
           label: labelResult,
         });
       } catch (labelError: any) {
@@ -263,40 +260,31 @@ router.post('/:id/label', async (req, res) => {
     }
 
     const labelResult = await createShipment({
-      shipFrom: {
-        name: 'AG Composites',
-        company: 'AG Composites',
-        street: '230 Hamer Rd.',
-        city: 'Owens Crossroads',
-        state: 'AL',
-        zipCode: '35763',
-        country: 'US',
-        phone: '256-723-8381',
-      },
       shipTo: {
         name: sale.shipToName || '',
-        company: sale.shipToCompany || undefined,
-        street: sale.shipToStreet || '',
-        street2: sale.shipToStreet2 || undefined,
+        attention: sale.shipToName || '',
+        phone: sale.shipToPhone,
+        address1: sale.shipToStreet || '',
+        address2: sale.shipToStreet2,
         city: sale.shipToCity || '',
         state: sale.shipToState || '',
-        zipCode: sale.shipToZipCode || '',
+        postalCode: sale.shipToZipCode || '',
         country: sale.shipToCountry || 'US',
-        phone: sale.shipToPhone || undefined,
-        isResidential: sale.isResidential || true,
       },
-      package: packageInfo,
       serviceCode: sale.shippingMethod || '03',
-      reference1: sale.saleNumber,
-      reference2: sale.customerId,
+      weightLbs: packageInfo.weight,
+      referenceNumber: sale.saleNumber,
     });
+
+    // Store label as base64
+    const labelData = labelResult.labelBase64 ? `data:image/gif;base64,${labelResult.labelBase64}` : null;
 
     // Update sale with tracking info
     await db
       .update(rtsSales)
       .set({
         trackingNumber: labelResult.trackingNumber,
-        shippingLabelUrl: labelResult.labelUrl,
+        shippingLabelUrl: labelData,
         status: 'LABELED',
         updatedAt: new Date(),
       })

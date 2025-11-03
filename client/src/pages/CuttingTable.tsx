@@ -117,7 +117,7 @@ export default function CuttingTable() {
 
   // Form state for Add Fabric Inventory tab
   const [fabricFormLine, setFabricFormLine] = useState('');
-  const [fabricBrand, setFabricBrand] = useState('');
+  const [fabricSource, setFabricSource] = useState('');
   const [fabricType, setFabricType] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
   const [internalControlNumber, setInternalControlNumber] = useState('');
@@ -598,10 +598,10 @@ export default function CuttingTable() {
     const handleFabricSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       
-      if (!fabricFormLine || !fabricBrand || !fabricType || !fabricQuantity) {
+      if (!fabricFormLine || !fabricSource || !fabricType || !fabricQuantity) {
         toast({
           title: "Missing Information",
-          description: "Please fill in Production Line, Brand, Fabric, and Quantity",
+          description: "Please fill in Production Line, Source, Fabric, and Quantity",
           variant: "destructive"
         });
         return;
@@ -612,7 +612,7 @@ export default function CuttingTable() {
           method: 'POST',
           body: JSON.stringify({
             productionLineId: fabricFormLine,
-            brand: fabricBrand,
+            source: fabricSource,
             fabric: fabricType,
             batchNumber: batchNumber || null,
             internalControlNumber: internalControlNumber || null,
@@ -636,7 +636,7 @@ export default function CuttingTable() {
 
         // Reset form
         setFabricFormLine('');
-        setFabricBrand('');
+        setFabricSource('');
         setFabricType('');
         setBatchNumber('');
         setInternalControlNumber('');
@@ -689,13 +689,13 @@ export default function CuttingTable() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Brand *</label>
+              <label className="text-sm font-medium">Source *</label>
               <Input 
                 type="text" 
-                value={fabricBrand}
-                onChange={(e) => setFabricBrand(e.target.value)}
+                value={fabricSource}
+                onChange={(e) => setFabricSource(e.target.value)}
                 placeholder="e.g., Hexcel, Toray"
-                data-testid="input-fabric-brand"
+                data-testid="input-fabric-source"
               />
             </div>
 
@@ -823,7 +823,7 @@ export default function CuttingTable() {
   };
 
   const renderFabricInventory = () => {
-    type FabricWithDetails = FabricInventory & { brand?: string; fabric?: string; batchNumber?: string; internalControlNumber?: string; barcode?: string; receivedDate?: string; manufactureDate?: string; productionLineId?: string; conformanceDocumentLink?: string };
+    type FabricWithDetails = FabricInventory & { source?: string; fabric?: string; batchNumber?: string; internalControlNumber?: string; barcode?: string; receivedDate?: string; manufactureDate?: string; productionLineId?: string; conformanceDocumentLink?: string };
     const fabricWithDetails = fabricInventory as FabricWithDetails[];
 
     return (
@@ -837,7 +837,7 @@ export default function CuttingTable() {
               <thead>
                 <tr className="border-b">
                   <th className="text-left p-2 text-sm font-medium">Production Line</th>
-                  <th className="text-left p-2 text-sm font-medium">Brand</th>
+                  <th className="text-left p-2 text-sm font-medium">Source</th>
                   <th className="text-left p-2 text-sm font-medium">Fabric</th>
                   <th className="text-left p-2 text-sm font-medium">Batch #</th>
                   <th className="text-left p-2 text-sm font-medium">Control #</th>
@@ -866,7 +866,7 @@ export default function CuttingTable() {
                           {line?.lineName || '-'}
                         </span>
                       </td>
-                      <td className="p-2 text-sm">{item.brand || '-'}</td>
+                      <td className="p-2 text-sm">{item.source || '-'}</td>
                       <td className="p-2 text-sm">{item.fabric || '-'}</td>
                       <td className="p-2 text-sm">{item.batchNumber || '-'}</td>
                       <td className="p-2 text-sm">{item.internalControlNumber || '-'}</td>

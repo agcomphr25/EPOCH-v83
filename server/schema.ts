@@ -4812,7 +4812,7 @@ export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
   id: uuid('id').defaultRandom().primaryKey(),
   materialId: uuid('material_id').references(() => cuttingMaterials.id),
   productionLineId: uuid('production_line_id').references(() => cuttingProductionLines.id),
-  brand: text('brand'), // Fabric brand/manufacturer
+  source: text('source'), // Fabric source/manufacturer
   fabric: text('fabric'), // Fabric type/description
   batchNumber: text('batch_number'), // Batch/lot number
   internalControlNumber: text('internal_control_number'), // Part number/internal control

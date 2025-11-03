@@ -4778,6 +4778,16 @@ export const cuttingComponents = pgTable('cutting_components', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Cutting Table - Packet Compositions (what components make up each packet type)
+export const cuttingPacketCompositions = pgTable('cutting_packet_compositions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
+  componentId: uuid('component_id').references(() => cuttingComponents.id),
+  quantityNeeded: integer('quantity_needed').notNull(), // How many of this component per packet
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Cutting Table - Weekly Production Data
 export const cuttingWeeklyData = pgTable('cutting_weekly_data', {
   id: uuid('id').defaultRandom().primaryKey(),

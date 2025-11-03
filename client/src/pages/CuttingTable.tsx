@@ -54,7 +54,7 @@ type PacketComposition = {
   id: string;
   productCategoryId: string;
   componentId: string;
-  quantityPerPacket: number;
+  quantityNeeded: number;
 };
 
 type WeeklyData = {
@@ -476,7 +476,7 @@ export default function CuttingTable() {
         const component = components.find(c => c.id === comp.componentId);
         if (!component) return null;
         
-        const totalPieces = parseInt(packetsNeeded) * comp.quantityPerPacket;
+        const totalPieces = parseInt(packetsNeeded) * comp.quantityNeeded;
         const cutsRequired = Math.ceil(totalPieces / component.yieldPerCut);
         
         return {
@@ -484,7 +484,7 @@ export default function CuttingTable() {
           fabricType: component.fabricType,
           thickness: component.thickness,
           yieldPerCut: component.yieldPerCut,
-          quantityPerPacket: comp.quantityPerPacket,
+          quantityPerPacket: comp.quantityNeeded,
           totalPieces,
           cutsRequired
         };
@@ -607,7 +607,7 @@ export default function CuttingTable() {
                     const component = components.find(c => c.id === comp.componentId);
                     return component ? (
                       <li key={comp.id}>
-                        {comp.quantityPerPacket}x {component.componentName} ({component.fabricType} - {component.thickness})
+                        {comp.quantityNeeded}x {component.componentName} ({component.fabricType} - {component.thickness})
                       </li>
                     ) : null;
                   })}

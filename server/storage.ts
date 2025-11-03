@@ -299,6 +299,28 @@ import {
   vendorPOSettings,
   type VendorPOSettings,
   type InsertVendorPOSettings,
+  // Cutting Table types
+  cuttingMaterials,
+  type CuttingMaterial,
+  type InsertCuttingMaterial,
+  cuttingProductionLines,
+  type CuttingProductionLine,
+  type InsertCuttingProductionLine,
+  cuttingProductCategories,
+  type CuttingProductCategory,
+  type InsertCuttingProductCategory,
+  cuttingComponents,
+  type CuttingComponent,
+  type InsertCuttingComponent,
+  cuttingWeeklyData,
+  type CuttingWeeklyData,
+  type InsertCuttingWeeklyData,
+  cuttingCutProgress,
+  type CuttingCutProgress,
+  type InsertCuttingCutProgress,
+  cuttingFabricInventory,
+  type CuttingFabricInventory,
+  type InsertCuttingFabricInventory,
 } from './schema';
 import { db } from './db';
 import {
@@ -1390,6 +1412,61 @@ export interface IStorage {
   // Vendor PO Settings
   getVendorPOSettings(): Promise<any | undefined>;
   updateVendorPOSettings(data: any): Promise<any>;
+
+  // Cutting Table - Materials CRUD
+  getAllCuttingMaterials(): Promise<CuttingMaterial[]>;
+  getCuttingMaterial(id: string): Promise<CuttingMaterial | undefined>;
+  createCuttingMaterial(data: InsertCuttingMaterial): Promise<CuttingMaterial>;
+  updateCuttingMaterial(id: string, data: Partial<InsertCuttingMaterial>): Promise<CuttingMaterial>;
+  deleteCuttingMaterial(id: string): Promise<void>;
+
+  // Cutting Table - Production Lines CRUD
+  getAllCuttingProductionLines(): Promise<CuttingProductionLine[]>;
+  getCuttingProductionLine(id: string): Promise<CuttingProductionLine | undefined>;
+  createCuttingProductionLine(data: InsertCuttingProductionLine): Promise<CuttingProductionLine>;
+  updateCuttingProductionLine(id: string, data: Partial<InsertCuttingProductionLine>): Promise<CuttingProductionLine>;
+  deleteCuttingProductionLine(id: string): Promise<void>;
+
+  // Cutting Table - Product Categories CRUD
+  getAllCuttingProductCategories(): Promise<CuttingProductCategory[]>;
+  getCuttingProductCategory(id: string): Promise<CuttingProductCategory | undefined>;
+  getCuttingProductCategoriesByLine(lineId: string): Promise<CuttingProductCategory[]>;
+  createCuttingProductCategory(data: InsertCuttingProductCategory): Promise<CuttingProductCategory>;
+  updateCuttingProductCategory(id: string, data: Partial<InsertCuttingProductCategory>): Promise<CuttingProductCategory>;
+  deleteCuttingProductCategory(id: string): Promise<void>;
+
+  // Cutting Table - Components CRUD
+  getAllCuttingComponents(): Promise<CuttingComponent[]>;
+  getCuttingComponent(id: string): Promise<CuttingComponent | undefined>;
+  getCuttingComponentsByCategory(categoryId: string): Promise<CuttingComponent[]>;
+  createCuttingComponent(data: InsertCuttingComponent): Promise<CuttingComponent>;
+  updateCuttingComponent(id: string, data: Partial<InsertCuttingComponent>): Promise<CuttingComponent>;
+  deleteCuttingComponent(id: string): Promise<void>;
+
+  // Cutting Table - Weekly Data CRUD
+  getAllCuttingWeeklyData(): Promise<CuttingWeeklyData[]>;
+  getCuttingWeeklyData(id: string): Promise<CuttingWeeklyData | undefined>;
+  getCuttingWeeklyDataByWeek(weekDate: string): Promise<CuttingWeeklyData[]>;
+  createCuttingWeeklyData(data: InsertCuttingWeeklyData): Promise<CuttingWeeklyData>;
+  updateCuttingWeeklyData(id: string, data: Partial<InsertCuttingWeeklyData>): Promise<CuttingWeeklyData>;
+  deleteCuttingWeeklyData(id: string): Promise<void>;
+
+  // Cutting Table - Cut Progress CRUD
+  getAllCuttingCutProgress(): Promise<CuttingCutProgress[]>;
+  getCuttingCutProgress(id: string): Promise<CuttingCutProgress | undefined>;
+  getCuttingCutProgressByWeek(weekDate: string): Promise<CuttingCutProgress[]>;
+  getCuttingCutProgressByDay(workDate: string): Promise<CuttingCutProgress[]>;
+  createCuttingCutProgress(data: InsertCuttingCutProgress): Promise<CuttingCutProgress>;
+  updateCuttingCutProgress(id: string, data: Partial<InsertCuttingCutProgress>): Promise<CuttingCutProgress>;
+  deleteCuttingCutProgress(id: string): Promise<void>;
+
+  // Cutting Table - Fabric Inventory CRUD
+  getAllCuttingFabricInventory(): Promise<CuttingFabricInventory[]>;
+  getCuttingFabricInventory(id: string): Promise<CuttingFabricInventory | undefined>;
+  getCuttingFabricInventoryByMaterial(materialId: string): Promise<CuttingFabricInventory[]>;
+  createCuttingFabricInventory(data: InsertCuttingFabricInventory): Promise<CuttingFabricInventory>;
+  updateCuttingFabricInventory(id: string, data: Partial<InsertCuttingFabricInventory>): Promise<CuttingFabricInventory>;
+  deleteCuttingFabricInventory(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -10994,6 +11071,226 @@ export class DatabaseStorage implements IStorage {
       .delete(magicLinkTokens)
       .where(lt(magicLinkTokens.expiresAt, new Date()));
     return result.rowCount || 0;
+  }
+
+  // Cutting Table - Materials CRUD
+  async getAllCuttingMaterials(): Promise<CuttingMaterial[]> {
+    return await db.select().from(cuttingMaterials).orderBy(asc(cuttingMaterials.materialName));
+  }
+
+  async getCuttingMaterial(id: string): Promise<CuttingMaterial | undefined> {
+    const [material] = await db.select().from(cuttingMaterials).where(eq(cuttingMaterials.id, id));
+    return material || undefined;
+  }
+
+  async createCuttingMaterial(data: InsertCuttingMaterial): Promise<CuttingMaterial> {
+    const [material] = await db.insert(cuttingMaterials).values(data).returning();
+    return material;
+  }
+
+  async updateCuttingMaterial(id: string, data: Partial<InsertCuttingMaterial>): Promise<CuttingMaterial> {
+    const [material] = await db
+      .update(cuttingMaterials)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(cuttingMaterials.id, id))
+      .returning();
+    return material;
+  }
+
+  async deleteCuttingMaterial(id: string): Promise<void> {
+    await db.delete(cuttingMaterials).where(eq(cuttingMaterials.id, id));
+  }
+
+  // Cutting Table - Production Lines CRUD
+  async getAllCuttingProductionLines(): Promise<CuttingProductionLine[]> {
+    return await db.select().from(cuttingProductionLines).orderBy(asc(cuttingProductionLines.lineNumber));
+  }
+
+  async getCuttingProductionLine(id: string): Promise<CuttingProductionLine | undefined> {
+    const [line] = await db.select().from(cuttingProductionLines).where(eq(cuttingProductionLines.id, id));
+    return line || undefined;
+  }
+
+  async createCuttingProductionLine(data: InsertCuttingProductionLine): Promise<CuttingProductionLine> {
+    const [line] = await db.insert(cuttingProductionLines).values(data).returning();
+    return line;
+  }
+
+  async updateCuttingProductionLine(id: string, data: Partial<InsertCuttingProductionLine>): Promise<CuttingProductionLine> {
+    const [line] = await db
+      .update(cuttingProductionLines)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(cuttingProductionLines.id, id))
+      .returning();
+    return line;
+  }
+
+  async deleteCuttingProductionLine(id: string): Promise<void> {
+    await db.delete(cuttingProductionLines).where(eq(cuttingProductionLines.id, id));
+  }
+
+  // Cutting Table - Product Categories CRUD
+  async getAllCuttingProductCategories(): Promise<CuttingProductCategory[]> {
+    return await db.select().from(cuttingProductCategories).orderBy(asc(cuttingProductCategories.displayOrder));
+  }
+
+  async getCuttingProductCategory(id: string): Promise<CuttingProductCategory | undefined> {
+    const [category] = await db.select().from(cuttingProductCategories).where(eq(cuttingProductCategories.id, id));
+    return category || undefined;
+  }
+
+  async getCuttingProductCategoriesByLine(lineId: string): Promise<CuttingProductCategory[]> {
+    return await db.select().from(cuttingProductCategories).where(eq(cuttingProductCategories.productionLineId, lineId));
+  }
+
+  async createCuttingProductCategory(data: InsertCuttingProductCategory): Promise<CuttingProductCategory> {
+    const [category] = await db.insert(cuttingProductCategories).values(data).returning();
+    return category;
+  }
+
+  async updateCuttingProductCategory(id: string, data: Partial<InsertCuttingProductCategory>): Promise<CuttingProductCategory> {
+    const [category] = await db
+      .update(cuttingProductCategories)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(cuttingProductCategories.id, id))
+      .returning();
+    return category;
+  }
+
+  async deleteCuttingProductCategory(id: string): Promise<void> {
+    await db.delete(cuttingProductCategories).where(eq(cuttingProductCategories.id, id));
+  }
+
+  // Cutting Table - Components CRUD
+  async getAllCuttingComponents(): Promise<CuttingComponent[]> {
+    return await db.select().from(cuttingComponents);
+  }
+
+  async getCuttingComponent(id: string): Promise<CuttingComponent | undefined> {
+    const [component] = await db.select().from(cuttingComponents).where(eq(cuttingComponents.id, id));
+    return component || undefined;
+  }
+
+  async getCuttingComponentsByCategory(categoryId: string): Promise<CuttingComponent[]> {
+    return await db.select().from(cuttingComponents).where(eq(cuttingComponents.productCategoryId, categoryId));
+  }
+
+  async createCuttingComponent(data: InsertCuttingComponent): Promise<CuttingComponent> {
+    const [component] = await db.insert(cuttingComponents).values(data).returning();
+    return component;
+  }
+
+  async updateCuttingComponent(id: string, data: Partial<InsertCuttingComponent>): Promise<CuttingComponent> {
+    const [component] = await db
+      .update(cuttingComponents)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(cuttingComponents.id, id))
+      .returning();
+    return component;
+  }
+
+  async deleteCuttingComponent(id: string): Promise<void> {
+    await db.delete(cuttingComponents).where(eq(cuttingComponents.id, id));
+  }
+
+  // Cutting Table - Weekly Data CRUD
+  async getAllCuttingWeeklyData(): Promise<CuttingWeeklyData[]> {
+    return await db.select().from(cuttingWeeklyData).orderBy(desc(cuttingWeeklyData.weekDate));
+  }
+
+  async getCuttingWeeklyData(id: string): Promise<CuttingWeeklyData | undefined> {
+    const [data] = await db.select().from(cuttingWeeklyData).where(eq(cuttingWeeklyData.id, id));
+    return data || undefined;
+  }
+
+  async getCuttingWeeklyDataByWeek(weekDate: string): Promise<CuttingWeeklyData[]> {
+    return await db.select().from(cuttingWeeklyData).where(eq(cuttingWeeklyData.weekDate, weekDate));
+  }
+
+  async createCuttingWeeklyData(data: InsertCuttingWeeklyData): Promise<CuttingWeeklyData> {
+    const [weekData] = await db.insert(cuttingWeeklyData).values(data).returning();
+    return weekData;
+  }
+
+  async updateCuttingWeeklyData(id: string, data: Partial<InsertCuttingWeeklyData>): Promise<CuttingWeeklyData> {
+    const [weekData] = await db
+      .update(cuttingWeeklyData)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(cuttingWeeklyData.id, id))
+      .returning();
+    return weekData;
+  }
+
+  async deleteCuttingWeeklyData(id: string): Promise<void> {
+    await db.delete(cuttingWeeklyData).where(eq(cuttingWeeklyData.id, id));
+  }
+
+  // Cutting Table - Cut Progress CRUD
+  async getAllCuttingCutProgress(): Promise<CuttingCutProgress[]> {
+    return await db.select().from(cuttingCutProgress).orderBy(desc(cuttingCutProgress.workDate));
+  }
+
+  async getCuttingCutProgress(id: string): Promise<CuttingCutProgress | undefined> {
+    const [progress] = await db.select().from(cuttingCutProgress).where(eq(cuttingCutProgress.id, id));
+    return progress || undefined;
+  }
+
+  async getCuttingCutProgressByWeek(weekDate: string): Promise<CuttingCutProgress[]> {
+    return await db.select().from(cuttingCutProgress).where(eq(cuttingCutProgress.weekDate, weekDate));
+  }
+
+  async getCuttingCutProgressByDay(workDate: string): Promise<CuttingCutProgress[]> {
+    return await db.select().from(cuttingCutProgress).where(eq(cuttingCutProgress.workDate, workDate));
+  }
+
+  async createCuttingCutProgress(data: InsertCuttingCutProgress): Promise<CuttingCutProgress> {
+    const [progress] = await db.insert(cuttingCutProgress).values(data).returning();
+    return progress;
+  }
+
+  async updateCuttingCutProgress(id: string, data: Partial<InsertCuttingCutProgress>): Promise<CuttingCutProgress> {
+    const [progress] = await db
+      .update(cuttingCutProgress)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(cuttingCutProgress.id, id))
+      .returning();
+    return progress;
+  }
+
+  async deleteCuttingCutProgress(id: string): Promise<void> {
+    await db.delete(cuttingCutProgress).where(eq(cuttingCutProgress.id, id));
+  }
+
+  // Cutting Table - Fabric Inventory CRUD
+  async getAllCuttingFabricInventory(): Promise<CuttingFabricInventory[]> {
+    return await db.select().from(cuttingFabricInventory);
+  }
+
+  async getCuttingFabricInventory(id: string): Promise<CuttingFabricInventory | undefined> {
+    const [inventory] = await db.select().from(cuttingFabricInventory).where(eq(cuttingFabricInventory.id, id));
+    return inventory || undefined;
+  }
+
+  async getCuttingFabricInventoryByMaterial(materialId: string): Promise<CuttingFabricInventory[]> {
+    return await db.select().from(cuttingFabricInventory).where(eq(cuttingFabricInventory.materialId, materialId));
+  }
+
+  async createCuttingFabricInventory(data: InsertCuttingFabricInventory): Promise<CuttingFabricInventory> {
+    const [inventory] = await db.insert(cuttingFabricInventory).values(data).returning();
+    return inventory;
+  }
+
+  async updateCuttingFabricInventory(id: string, data: Partial<InsertCuttingFabricInventory>): Promise<CuttingFabricInventory> {
+    const [inventory] = await db
+      .update(cuttingFabricInventory)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(cuttingFabricInventory.id, id))
+      .returning();
+    return inventory;
+  }
+
+  async deleteCuttingFabricInventory(id: string): Promise<void> {
+    await db.delete(cuttingFabricInventory).where(eq(cuttingFabricInventory.id, id));
   }
 }
 

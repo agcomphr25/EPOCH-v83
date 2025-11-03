@@ -56,6 +56,7 @@ import googleOAuthRoutes from './googleOAuth';
 import microsoftAuthRoutes from './microsoftAuth';
 import gmailRoutes from './gmail';
 import followupOrdersRoutes from './followupOrders';
+import cuttingTableRoutes from './cuttingTable';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -225,6 +226,9 @@ export function registerRoutes(app: Express): Server {
 
   // Follow-up orders routes
   app.use('/api/followup-orders', followupOrdersRoutes);
+
+  // Cutting Table routes
+  app.use('/api/cutting-table', cuttingTableRoutes);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

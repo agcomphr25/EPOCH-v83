@@ -666,6 +666,12 @@ export default function Navigation() {
 
   const productionSchedulingItems = [
     {
+      path: '/cutting-table',
+      label: 'Cutting Table',
+      icon: Scissors,
+      description: 'Fabric cutting production planning for two production lines',
+    },
+    {
       path: '/p2-layup-scheduler',
       label: 'P2 Layup Scheduler',
       icon: Calendar,

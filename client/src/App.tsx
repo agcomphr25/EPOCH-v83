@@ -123,6 +123,7 @@ import SimplifiedLayupScheduler from './components/SimplifiedLayupScheduler';
 import CustomerSatisfaction from './pages/CustomerSatisfaction';
 import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
+import CuttingTable from './pages/CuttingTable';
 import MetalAccessoriesTracker from './pages/MetalAccessoriesTracker';
 import DocumentIntelligence from './pages/DocumentIntelligence';
 import SignOrderPage from './pages/SignOrderPage';
@@ -438,6 +439,9 @@ function App() {
                     path="/joeyb-dashboard"
                     component={JOEYBTestDashboard}
                   />
+
+                  {/* Cutting Table Route */}
+                  <Route path="/cutting-table" component={CuttingTable} />
 
                   {/* Test Routes */}
                   <Route path="/module8-test" component={Module8TestPage} />

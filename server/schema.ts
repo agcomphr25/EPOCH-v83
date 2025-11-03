@@ -4734,4 +4734,157 @@ export type InsertRtsSale = z.infer<typeof insertRtsSaleSchema>;
 export type RtsSaleItem = typeof rtsSaleItems.$inferSelect;
 export type InsertRtsSaleItem = z.infer<typeof insertRtsSaleItemSchema>;
 
+// Cutting Table - Material tracking
+export const cuttingMaterials = pgTable('cutting_materials', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  materialName: text('material_name').notNull().unique(),
+  yieldPerCut: integer('yield_per_cut').notNull(), // 1-1188 pieces per cut
+  materialType: text('material_type').notNull(), // Carbon Fiber, Fiberglass, Primtex, etc.
+  wasteFactor: numeric('waste_factor', { precision: 5, scale: 4 }).notNull().default('0.05'), // typically 0.05-0.25
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cutting Table - Production Lines
+export const cuttingProductionLines = pgTable('cutting_production_lines', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  lineName: text('line_name').notNull().unique(), // "Production Line 1", "Production Line 2"
+  lineNumber: integer('line_number').notNull(), // 1 or 2
+  description: text('description'), // "Gun stock products", "Aircraft products"
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cutting Table - Product Categories
+export const cuttingProductCategories = pgTable('cutting_product_categories', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  productionLineId: uuid('production_line_id').references(() => cuttingProductionLines.id),
+  categoryName: text('category_name').notNull(), // "Fiberglass Stock Packets", "Rudders", etc.
+  displayOrder: integer('display_order').default(0),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cutting Table - Components
+export const cuttingComponents = pgTable('cutting_components', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
+  componentName: text('component_name').notNull(),
+  materialId: uuid('material_id').references(() => cuttingMaterials.id),
+  requiredQuantity: integer('required_quantity').notNull(), // Quantity needed per product
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cutting Table - Weekly Production Data
+export const cuttingWeeklyData = pgTable('cutting_weekly_data', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  weekDate: date('week_date').notNull(), // Monday of the week
+  productionLineId: uuid('production_line_id').references(() => cuttingProductionLines.id),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
+  quantity: integer('quantity').notNull(), // Number of product packets/units needed
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cutting Table - Daily Cut Progress
+export const cuttingCutProgress = pgTable('cutting_cut_progress', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  weekDate: date('week_date').notNull(), // Monday of the week
+  workDate: date('work_date').notNull(), // Actual work day (Mon-Thu)
+  materialId: uuid('material_id').references(() => cuttingMaterials.id),
+  productionLineId: uuid('production_line_id').references(() => cuttingProductionLines.id),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
+  componentId: uuid('component_id').references(() => cuttingComponents.id),
+  cutsCompleted: integer('cuts_completed').default(0),
+  cutsRequired: integer('cuts_required').notNull(),
+  isCompleted: boolean('is_completed').default(false),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cutting Table - Fabric Inventory
+export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  materialId: uuid('material_id').references(() => cuttingMaterials.id),
+  lotNumber: text('lot_number'),
+  quantityInStock: integer('quantity_in_stock').notNull().default(0),
+  receivedDate: date('received_date'),
+  expirationDate: date('expiration_date'),
+  lowStockThreshold: integer('low_stock_threshold').default(10),
+  location: text('location'), // Storage location
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cutting Table Insert Schemas
+export const insertCuttingMaterialSchema = createInsertSchema(cuttingMaterials).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCuttingProductionLineSchema = createInsertSchema(cuttingProductionLines).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCuttingProductCategorySchema = createInsertSchema(cuttingProductCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCuttingComponentSchema = createInsertSchema(cuttingComponents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCuttingWeeklyDataSchema = createInsertSchema(cuttingWeeklyData).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCuttingCutProgressSchema = createInsertSchema(cuttingCutProgress).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCuttingFabricInventorySchema = createInsertSchema(cuttingFabricInventory).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Cutting Table Types
+export type CuttingMaterial = typeof cuttingMaterials.$inferSelect;
+export type InsertCuttingMaterial = z.infer<typeof insertCuttingMaterialSchema>;
+
+export type CuttingProductionLine = typeof cuttingProductionLines.$inferSelect;
+export type InsertCuttingProductionLine = z.infer<typeof insertCuttingProductionLineSchema>;
+
+export type CuttingProductCategory = typeof cuttingProductCategories.$inferSelect;
+export type InsertCuttingProductCategory = z.infer<typeof insertCuttingProductCategorySchema>;
+
+export type CuttingComponent = typeof cuttingComponents.$inferSelect;
+export type InsertCuttingComponent = z.infer<typeof insertCuttingComponentSchema>;
+
+export type CuttingWeeklyData = typeof cuttingWeeklyData.$inferSelect;
+export type InsertCuttingWeeklyData = z.infer<typeof insertCuttingWeeklyDataSchema>;
+
+export type CuttingCutProgress = typeof cuttingCutProgress.$inferSelect;
+export type InsertCuttingCutProgress = z.infer<typeof insertCuttingCutProgressSchema>;
+
+export type CuttingFabricInventory = typeof cuttingFabricInventory.$inferSelect;
+export type InsertCuttingFabricInventory = z.infer<typeof insertCuttingFabricInventorySchema>;
+
 export * from './calendar.schema';

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -108,6 +108,12 @@ export default function CuttingTable() {
   const { toast } = useToast();
   const [currentWeek, setCurrentWeek] = useState(getMondayOfWeek(new Date()));
   const [selectedLine, setSelectedLine] = useState<string>("all");
+  
+  // Form state for Submit Data tab
+  const [selectedWeek, setSelectedWeek] = useState(getMondayOfWeek(new Date()));
+  const [selectedFormLine, setSelectedFormLine] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [quantity, setQuantity] = useState('');
 
   // Fetch all data
   const { data: materials = [], isLoading: loadingMaterials } = useQuery<Material[]>({
@@ -392,12 +398,154 @@ export default function CuttingTable() {
     </Card>
   );
 
-  const renderSubmitData = () => (
-    <Card className="p-8" data-testid="submit-data">
-      <h3 className="text-lg font-semibold mb-4">Submit Weekly Data</h3>
-      <p className="text-muted-foreground">Form to input weekly production goals coming soon...</p>
-    </Card>
-  );
+  const renderSubmitData = () => {
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      
+      if (!selectedFormLine || !selectedCategory || !quantity) {
+        toast({
+          title: "Missing Information",
+          description: "Please fill in all fields",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      try {
+        await apiRequest('/api/cutting-table/weekly-data', {
+          method: 'POST',
+          body: JSON.stringify({
+            weekDate: selectedWeek,
+            productionLineId: selectedFormLine,
+            productCategoryId: selectedCategory,
+            quantity: parseInt(quantity),
+          }),
+        });
+
+        toast({
+          title: "Success",
+          description: "Weekly production data added successfully"
+        });
+
+        // Reset form
+        setSelectedFormLine('');
+        setSelectedCategory('');
+        setQuantity('');
+
+        // Refetch data
+        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/weekly-data'] });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to submit weekly data",
+          variant: "destructive"
+        });
+      }
+    };
+
+    return (
+      <Card className="p-8" data-testid="submit-data">
+        <h3 className="text-lg font-semibold mb-6">Submit Weekly Production Goals</h3>
+        
+        <form onSubmit={handleSubmit} className="space-y-6 max-w-md">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Week Starting</label>
+            <Input 
+              type="date" 
+              value={selectedWeek}
+              onChange={(e) => setSelectedWeek(e.target.value)}
+              data-testid="input-week-date"
+              className="w-full"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Production Line</label>
+            <Select value={selectedFormLine} onValueChange={setSelectedFormLine}>
+              <SelectTrigger data-testid="select-production-line">
+                <SelectValue placeholder="Select production line" />
+              </SelectTrigger>
+              <SelectContent>
+                {productionLines.map(line => (
+                  <SelectItem 
+                    key={line.id} 
+                    value={line.id}
+                    data-testid={`option-line-${line.id}`}
+                  >
+                    {line.lineName} - {line.description}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Product Category</label>
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger data-testid="select-product-category">
+                <SelectValue placeholder="Select product category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map(cat => (
+                  <SelectItem 
+                    key={cat.id} 
+                    value={cat.id}
+                    data-testid={`option-category-${cat.id}`}
+                  >
+                    {cat.categoryName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Quantity (Units)</label>
+            <Input 
+              type="number" 
+              min="1"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="Enter quantity"
+              data-testid="input-quantity"
+              className="w-full"
+            />
+          </div>
+
+          <Button 
+            type="submit" 
+            className="w-full"
+            data-testid="button-submit-data"
+          >
+            Submit Production Goal
+          </Button>
+        </form>
+
+        <div className="mt-8 pt-6 border-t">
+          <h4 className="font-medium mb-3">Current Week's Goals</h4>
+          {weeklyData.filter(w => w.weekDate === selectedWeek).length === 0 ? (
+            <p className="text-sm text-muted-foreground">No goals set for this week yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {weeklyData.filter(w => w.weekDate === selectedWeek).map(week => {
+                const line = productionLines.find(l => l.id === week.productionLineId);
+                const category = categories.find(c => c.id === week.productCategoryId);
+                return (
+                  <div 
+                    key={week.id} 
+                    className="text-sm p-2 bg-muted rounded"
+                    data-testid={`current-goal-${week.id}`}
+                  >
+                    <span className="font-medium">{line?.lineName}</span> - {category?.categoryName}: {week.quantity} units
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </Card>
+    );
+  };
 
   const renderFabricInventory = () => (
     <Card className="p-8" data-testid="fabric-inventory">

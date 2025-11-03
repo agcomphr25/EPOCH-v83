@@ -217,6 +217,17 @@ router.delete('/components/:id', async (req, res) => {
   }
 });
 
+// Packet Compositions endpoints
+router.get('/packet-compositions', async (req, res) => {
+  try {
+    const compositions = await storage.getAllPacketCompositions();
+    res.json(compositions);
+  } catch (error) {
+    console.error('Error fetching packet compositions:', error);
+    res.status(500).json({ error: 'Failed to fetch packet compositions' });
+  }
+});
+
 // Weekly Data endpoints
 router.get('/weekly-data', async (req, res) => {
   try {

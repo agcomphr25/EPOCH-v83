@@ -312,6 +312,8 @@ import {
   cuttingComponents,
   type CuttingComponent,
   type InsertCuttingComponent,
+  cuttingPacketCompositions,
+  type CuttingPacketComposition,
   cuttingWeeklyData,
   type CuttingWeeklyData,
   type InsertCuttingWeeklyData,
@@ -1442,6 +1444,9 @@ export interface IStorage {
   createCuttingComponent(data: InsertCuttingComponent): Promise<CuttingComponent>;
   updateCuttingComponent(id: string, data: Partial<InsertCuttingComponent>): Promise<CuttingComponent>;
   deleteCuttingComponent(id: string): Promise<void>;
+
+  // Cutting Table - Packet Compositions
+  getAllPacketCompositions(): Promise<CuttingPacketComposition[]>;
 
   // Cutting Table - Weekly Data CRUD
   getAllCuttingWeeklyData(): Promise<CuttingWeeklyData[]>;
@@ -11191,6 +11196,11 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCuttingComponent(id: string): Promise<void> {
     await db.delete(cuttingComponents).where(eq(cuttingComponents.id, id));
+  }
+
+  // Cutting Table - Packet Compositions methods
+  async getAllPacketCompositions(): Promise<CuttingPacketComposition[]> {
+    return await db.select().from(cuttingPacketCompositions);
   }
 
   // Cutting Table - Weekly Data CRUD

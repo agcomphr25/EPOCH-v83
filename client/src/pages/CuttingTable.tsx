@@ -125,6 +125,7 @@ export default function CuttingTable() {
   const [receivedDate, setReceivedDate] = useState('');
   const [expirationDate, setExpirationDate] = useState('');
   const [location, setLocation] = useState('');
+  const [conformanceDocLink, setConformanceDocLink] = useState('');
   const [fabricQuantity, setFabricQuantity] = useState('');
   const [fabricNotes, setFabricNotes] = useState('');
 
@@ -619,6 +620,7 @@ export default function CuttingTable() {
             receivedDate: receivedDate || null,
             expirationDate: expirationDate || null,
             location: location || null,
+            conformanceDocumentLink: conformanceDocLink || null,
             quantityInStock: parseInt(fabricQuantity),
             notes: fabricNotes || null,
           }),
@@ -642,6 +644,7 @@ export default function CuttingTable() {
         setReceivedDate('');
         setExpirationDate('');
         setLocation('');
+        setConformanceDocLink('');
         setFabricQuantity('');
         setFabricNotes('');
       } catch (error) {
@@ -784,6 +787,18 @@ export default function CuttingTable() {
           </div>
 
           <div className="space-y-2">
+            <label className="text-sm font-medium">Conformance & Traceability Paperwork Link</label>
+            <Input 
+              type="url" 
+              value={conformanceDocLink}
+              onChange={(e) => setConformanceDocLink(e.target.value)}
+              placeholder="https://drive.google.com/... or file path"
+              data-testid="input-conformance-doc-link"
+            />
+            <p className="text-xs text-muted-foreground">Enter a link to Google Drive, Dropbox, or internal file system path</p>
+          </div>
+
+          <div className="space-y-2">
             <label className="text-sm font-medium">Notes</label>
             <Input 
               type="text" 
@@ -808,7 +823,7 @@ export default function CuttingTable() {
   };
 
   const renderFabricInventory = () => {
-    type FabricWithDetails = FabricInventory & { brand?: string; fabric?: string; batchNumber?: string; internalControlNumber?: string; barcode?: string; receivedDate?: string; manufactureDate?: string; productionLineId?: string };
+    type FabricWithDetails = FabricInventory & { brand?: string; fabric?: string; batchNumber?: string; internalControlNumber?: string; barcode?: string; receivedDate?: string; manufactureDate?: string; productionLineId?: string; conformanceDocumentLink?: string };
     const fabricWithDetails = fabricInventory as FabricWithDetails[];
 
     return (
@@ -828,6 +843,7 @@ export default function CuttingTable() {
                   <th className="text-left p-2 text-sm font-medium">Control #</th>
                   <th className="text-left p-2 text-sm font-medium">Barcode</th>
                   <th className="text-left p-2 text-sm font-medium">Location</th>
+                  <th className="text-left p-2 text-sm font-medium">Paperwork</th>
                   <th className="text-left p-2 text-sm font-medium">Qty</th>
                   <th className="text-left p-2 text-sm font-medium">Received</th>
                   <th className="text-left p-2 text-sm font-medium">Expires</th>
@@ -862,6 +878,19 @@ export default function CuttingTable() {
                         ) : '-'}
                       </td>
                       <td className="p-2 text-sm">{item.location || '-'}</td>
+                      <td className="p-2 text-sm">
+                        {item.conformanceDocumentLink ? (
+                          <a 
+                            href={item.conformanceDocumentLink} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline text-xs"
+                            data-testid={`link-conformance-${item.id}`}
+                          >
+                            📄 View
+                          </a>
+                        ) : '-'}
+                      </td>
                       <td className="p-2 text-sm">
                         <span className={`font-semibold ${isLowStock ? 'text-red-600' : ''}`} data-testid={`text-stock-${item.id}`}>
                           {item.quantityInStock}

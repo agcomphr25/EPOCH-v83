@@ -565,6 +565,7 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
     ${inventory.fabric ? `<div class="label-info">Fabric: ${inventory.fabric}</div>` : ''}
     ${inventory.batchNumber ? `<div class="label-info">Batch: ${inventory.batchNumber}</div>` : ''}
     ${inventory.location ? `<div class="label-info">Location: ${inventory.location}</div>` : ''}
+    ${inventory.conformanceDocumentLink ? `<div class="label-info">📄 Conformance Doc: <a href="${inventory.conformanceDocumentLink}" target="_blank" style="color: #007bff; text-decoration: none;">View Link</a></div>` : ''}
     <div class="barcode-container">
       <svg id="barcode"></svg>
     </div>

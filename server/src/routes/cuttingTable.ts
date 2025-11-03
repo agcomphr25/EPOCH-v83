@@ -502,8 +502,8 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
   <style>
     @media print {
       @page { 
-        margin: 0.2cm;
-        size: 4in 3in;
+        margin: 0;
+        size: 3.33in 4in;
       }
       body { margin: 0; }
       .no-print { display: none; }
@@ -519,12 +519,15 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
     }
     .label {
       background: white;
-      padding: 12px;
+      padding: 10px;
       border: 2px solid #333;
-      width: 4in;
-      max-height: 3in;
+      width: 3.33in;
+      height: 4in;
       text-align: center;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
     .label-header {
       font-size: 13px;

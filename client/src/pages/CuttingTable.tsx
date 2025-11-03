@@ -500,17 +500,18 @@ export default function CuttingTable() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Packet Type</label>
-              <select
-                className="w-full p-2 border rounded"
-                value={selectedPacketCategory}
-                onChange={(e) => setSelectedPacketCategory(e.target.value)}
-                data-testid="select-packet-type"
-              >
-                <option value="">Select packet type...</option>
-                {packetCategories.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.categoryName}</option>
-                ))}
-              </select>
+              <Select value={selectedPacketCategory} onValueChange={setSelectedPacketCategory}>
+                <SelectTrigger data-testid="select-packet-type">
+                  <SelectValue placeholder="Select packet type..." />
+                </SelectTrigger>
+                <SelectContent position="popper" side="bottom" align="start">
+                  {packetCategories.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.categoryName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             
             <div className="space-y-2">

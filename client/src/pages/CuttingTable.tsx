@@ -137,6 +137,10 @@ export default function CuttingTable() {
   const [fabricQuantity, setFabricQuantity] = useState('');
   const [fabricNotes, setFabricNotes] = useState('');
 
+  // Form state for Packet Management tab
+  const [selectedPacketCategory, setSelectedPacketCategory] = useState('');
+  const [packetsNeeded, setPacketsNeeded] = useState('');
+
   // Fetch all data
   const { data: materials = [], isLoading: loadingMaterials } = useQuery<Material[]>({
     queryKey: ['/api/cutting-table/materials'],

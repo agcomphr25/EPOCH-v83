@@ -4769,10 +4769,11 @@ export const cuttingProductCategories = pgTable('cutting_product_categories', {
 // Cutting Table - Components
 export const cuttingComponents = pgTable('cutting_components', {
   id: uuid('id').defaultRandom().primaryKey(),
-  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
   componentName: text('component_name').notNull(),
-  materialId: uuid('material_id').references(() => cuttingMaterials.id),
-  requiredQuantity: integer('required_quantity').notNull(), // Quantity needed per product
+  yieldPerCut: integer('yield_per_cut'), // How many pieces per cut (e.g., 70 buttstocks, 500 wrist)
+  fabricType: text('fabric_type'), // Carbon Fiber, Fiberglass, etc.
+  thickness: text('thickness'), // Thin, Thick
+  isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

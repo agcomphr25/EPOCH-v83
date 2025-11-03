@@ -1,0 +1,52 @@
+Build a manufacturing production planning dashboard for a fabric cutting operation with two production lines.
+
+Core Data Model
+Create a PostgreSQL database with these tables:
+
+materials - Store material properties:
+
+material_name (unique identifier)
+yield_per_cut (integer, ranges 1-1188)
+material_type (Carbon Fiber, Fiberglass, Primtex, etc.)
+waste_factor (decimal, typically 0.05-0.25)
+production_lines → product_categories → components (hierarchical structure):
+
+Production Line 1: Gun stock products (Fiberglass/Carbon Stock Packets, Seam Bundles)
+Production Line 2: Aircraft products (Rudders, Ailerons, Elevators, Stabilizers, Tubes, Tailcone)
+Each product category contains multiple components with required quantities
+weekly_data - Track weekly production goals:
+
+week_date, production_line, product_category, quantity
+cut_progress - Track daily cutting completion
+
+Key Business Logic
+Cut Calculation Formula:
+
+effective_yield = floor(yield_per_cut × (1 - waste_factor))
+cuts_required = ceiling(total_pieces_needed / effective_yield)
+
+Default waste percentage: 5% (configurable)
+
+Required Features
+Dashboard - Show weekly packet requirements as 1x1 inch visual cards (96px × 96px), color-coded by completion status. Display checklist of required cuts separated by production line.
+
+Daily Tracker - Auto-distribute weekly goals across 4 days (Monday-Thursday). Group Production Line 1 cuts by material type, Production Line 2 cuts by product. Show total cuts per day.
+
+Weekly Report - Display historical data by week with drill-down.
+
+Projections - Calculate future requirements based on averaging past weeks (user-selectable window).
+
+Submit Weekly Data - Form to input weekly production goals per line, saves to database, triggers app refresh.
+
+Fabric Inventory - Track materials with FIFO recommendations, expiration dates, and low-stock alerts.
+
+Technical Requirements
+Use Streamlit for the UI with sidebar navigation
+PostgreSQL with SQLAlchemy for data persistence
+Implement reload_data() function that fetches fresh data from database
+Call st.rerun() after every database write to refresh the UI
+Use cached database manager with @st.cache_resource
+Critical Implementation Detail
+After any database INSERT/UPDATE operation, immediately call st.rerun() to reload all data from the database. Never rely on in-memory dictionaries after writes—always fetch fresh data.
+
+That specification should allow another agent to recreate the core functionality of your cutting table dashboard.

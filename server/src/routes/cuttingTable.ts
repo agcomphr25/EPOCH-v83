@@ -386,4 +386,58 @@ router.delete('/fabric-inventory/:id', async (req, res) => {
   }
 });
 
+// Initialize seed data for production lines and categories
+router.post('/initialize', async (req, res) => {
+  try {
+    // Create P1 production line
+    const p1Line = await storage.createCuttingProductionLine({
+      lineName: 'P1',
+      lineNumber: 1,
+      description: 'Production Line 1',
+      isActive: true,
+    });
+
+    // Create P2 production line
+    const p2Line = await storage.createCuttingProductionLine({
+      lineName: 'P2',
+      lineNumber: 2,
+      description: 'Production Line 2',
+      isActive: true,
+    });
+
+    // Create P1 categories
+    const p1Categories = [
+      { categoryName: 'Fiberglass Packets', displayOrder: 1 },
+      { categoryName: 'Carbon Fiber Packets', displayOrder: 2 },
+      { categoryName: 'Pillar Seams', displayOrder: 3 },
+      { categoryName: 'Texture Stencils - Mesa Wrists', displayOrder: 4 },
+      { categoryName: 'Texture Stencils - APR Wrist', displayOrder: 5 },
+      { categoryName: 'Texture Stencils - AG Wrist', displayOrder: 6 },
+      { categoryName: 'Texture Stencils - Small Forends', displayOrder: 7 },
+      { categoryName: 'Texture Stencils - Long Forends', displayOrder: 8 },
+    ];
+
+    const createdP1Categories = [];
+    for (const category of p1Categories) {
+      const created = await storage.createCuttingProductCategory({
+        productionLineId: p1Line.id,
+        ...category,
+      });
+      createdP1Categories.push(created);
+    }
+
+    res.json({
+      success: true,
+      message: 'Cutting table initialized successfully',
+      data: {
+        productionLines: [p1Line, p2Line],
+        p1Categories: createdP1Categories,
+      },
+    });
+  } catch (error) {
+    console.error('Error initializing cutting table:', error);
+    res.status(500).json({ error: 'Failed to initialize cutting table' });
+  }
+});
+
 export default router;

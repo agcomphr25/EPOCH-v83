@@ -146,6 +146,31 @@ export default function CuttingTable() {
 
   const isLoading = loadingMaterials || loadingLines || loadingCategories || loadingComponents || loadingWeekly || loadingProgress || loadingInventory;
 
+  // Initialize mutation
+  const initializeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('/api/cutting-table/initialize', {
+        method: 'POST',
+      });
+      return response;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Cutting table initialized with P1/P2 production lines and categories"
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/production-lines'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/product-categories'] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to initialize cutting table",
+        variant: "destructive"
+      });
+    },
+  });
+
   // Navigate weeks
   const previousWeek = () => {
     const d = new Date(currentWeek);
@@ -602,9 +627,51 @@ export default function CuttingTable() {
     );
   }
 
+  // Show initialization prompt if no production lines exist
+  if (productionLines.length === 0 && !isLoading) {
+    return (
+      <div className="container mx-auto p-6" data-testid="cutting-table-page">
+        <h1 className="text-3xl font-bold mb-6" data-testid="text-page-title">Cutting Table</h1>
+        <Card className="p-8 text-center">
+          <h3 className="text-xl font-semibold mb-4">Initialize Cutting Table</h3>
+          <p className="text-muted-foreground mb-6">
+            Click the button below to set up the production lines (P1 and P2) and product categories.
+          </p>
+          <Button 
+            onClick={() => initializeMutation.mutate()}
+            disabled={initializeMutation.isPending}
+            data-testid="button-initialize"
+          >
+            {initializeMutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Initializing...
+              </>
+            ) : (
+              'Initialize Production Lines & Categories'
+            )}
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto p-6" data-testid="cutting-table-page">
-      <h1 className="text-3xl font-bold mb-6" data-testid="text-page-title">Cutting Table</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold" data-testid="text-page-title">Cutting Table</h1>
+        {productionLines.length > 0 && categories.length === 0 && (
+          <Button 
+            onClick={() => initializeMutation.mutate()}
+            variant="outline"
+            size="sm"
+            disabled={initializeMutation.isPending}
+            data-testid="button-reinitialize"
+          >
+            {initializeMutation.isPending ? 'Initializing...' : 'Reinitialize Categories'}
+          </Button>
+        )}
+      </div>
 
       <Tabs defaultValue="dashboard" className="w-full" data-testid="tabs-main">
         <TabsList className="grid w-full grid-cols-6" data-testid="tabs-list">

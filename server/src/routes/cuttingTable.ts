@@ -357,6 +357,18 @@ router.get('/fabric-inventory/by-material/:materialId', async (req, res) => {
 router.post('/fabric-inventory', async (req, res) => {
   try {
     const validatedData = insertCuttingFabricInventorySchema.parse(req.body);
+    
+    // Auto-generate barcode for P2 items
+    if (validatedData.productionLineId) {
+      const line = await storage.getCuttingProductionLine(validatedData.productionLineId);
+      if (line && line.lineName === 'P2') {
+        // Generate unique barcode: FI-P2-YYYYMMDD-XXXX
+        const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+        const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+        validatedData.barcode = `FI-P2-${date}-${random}`;
+      }
+    }
+    
     const inventory = await storage.createCuttingFabricInventory(validatedData);
     res.json(inventory);
   } catch (error) {

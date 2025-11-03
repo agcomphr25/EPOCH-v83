@@ -4811,12 +4811,18 @@ export const cuttingCutProgress = pgTable('cutting_cut_progress', {
 export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
   id: uuid('id').defaultRandom().primaryKey(),
   materialId: uuid('material_id').references(() => cuttingMaterials.id),
-  lotNumber: text('lot_number'),
-  quantityInStock: integer('quantity_in_stock').notNull().default(0),
+  productionLineId: uuid('production_line_id').references(() => cuttingProductionLines.id),
+  brand: text('brand'), // Fabric brand/manufacturer
+  fabric: text('fabric'), // Fabric type/description
+  batchNumber: text('batch_number'), // Batch/lot number
+  internalControlNumber: text('internal_control_number'), // Part number/internal control
+  manufactureDate: date('manufacture_date'),
   receivedDate: date('received_date'),
   expirationDate: date('expiration_date'),
+  location: text('location'), // Storage location/freezer #
+  quantityInStock: integer('quantity_in_stock').notNull().default(0),
   lowStockThreshold: integer('low_stock_threshold').default(10),
-  location: text('location'), // Storage location
+  barcode: text('barcode').unique(), // Auto-generated for P2 items
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

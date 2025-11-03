@@ -115,6 +115,19 @@ export default function CuttingTable() {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [quantity, setQuantity] = useState('');
 
+  // Form state for Add Fabric Inventory tab
+  const [fabricFormLine, setFabricFormLine] = useState('');
+  const [fabricBrand, setFabricBrand] = useState('');
+  const [fabricType, setFabricType] = useState('');
+  const [batchNumber, setBatchNumber] = useState('');
+  const [internalControlNumber, setInternalControlNumber] = useState('');
+  const [manufactureDate, setManufactureDate] = useState('');
+  const [receivedDate, setReceivedDate] = useState('');
+  const [expirationDate, setExpirationDate] = useState('');
+  const [location, setLocation] = useState('');
+  const [fabricQuantity, setFabricQuantity] = useState('');
+  const [fabricNotes, setFabricNotes] = useState('');
+
   // Fetch all data
   const { data: materials = [], isLoading: loadingMaterials } = useQuery<Material[]>({
     queryKey: ['/api/cutting-table/materials'],
@@ -580,52 +593,296 @@ export default function CuttingTable() {
     );
   };
 
-  const renderFabricInventory = () => (
-    <Card className="p-8" data-testid="fabric-inventory">
-      <h3 className="text-lg font-semibold mb-4">Fabric Inventory</h3>
-      {fabricInventory.length === 0 ? (
-        <p className="text-muted-foreground">No fabric inventory data available.</p>
-      ) : (
-        <div className="space-y-4">
-          {fabricInventory.map(item => {
-            const material = materials.find(m => m.id === item.materialId);
-            const isLowStock = item.quantityInStock <= item.lowStockThreshold;
+  const renderAddFabricForm = () => {
+    const handleFabricSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      
+      if (!fabricFormLine || !fabricBrand || !fabricType || !fabricQuantity) {
+        toast({
+          title: "Missing Information",
+          description: "Please fill in Production Line, Brand, Fabric, and Quantity",
+          variant: "destructive"
+        });
+        return;
+      }
 
-            return (
-              <div 
-                key={item.id} 
-                className={`p-4 border rounded-lg ${isLowStock ? 'border-red-500 bg-red-50 dark:bg-red-900/20' : ''}`}
-                data-testid={`inventory-item-${item.id}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-medium">{material?.materialName}</h4>
-                    {item.lotNumber && <p className="text-sm text-muted-foreground">Lot: {item.lotNumber}</p>}
-                    {item.location && <p className="text-sm text-muted-foreground">Location: {item.location}</p>}
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-semibold" data-testid={`text-stock-${item.id}`}>
-                      {item.quantityInStock} in stock
-                    </p>
-                    {isLowStock && (
-                      <span className="text-xs text-red-600 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" /> Low Stock
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {item.expirationDate && (
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Expires: {new Date(item.expirationDate).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </Card>
-  );
+      try {
+        await apiRequest('/api/cutting-table/fabric-inventory', {
+          method: 'POST',
+          body: JSON.stringify({
+            productionLineId: fabricFormLine,
+            brand: fabricBrand,
+            fabric: fabricType,
+            batchNumber: batchNumber || null,
+            internalControlNumber: internalControlNumber || null,
+            manufactureDate: manufactureDate || null,
+            receivedDate: receivedDate || null,
+            expirationDate: expirationDate || null,
+            location: location || null,
+            quantityInStock: parseInt(fabricQuantity),
+            notes: fabricNotes || null,
+          }),
+        });
+
+        toast({
+          title: "Success",
+          description: "Fabric inventory added successfully"
+        });
+
+        // Invalidate cache to refresh the data display
+        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
+
+        // Reset form
+        setFabricFormLine('');
+        setFabricBrand('');
+        setFabricType('');
+        setBatchNumber('');
+        setInternalControlNumber('');
+        setManufactureDate('');
+        setReceivedDate('');
+        setExpirationDate('');
+        setLocation('');
+        setFabricQuantity('');
+        setFabricNotes('');
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to add fabric inventory",
+          variant: "destructive"
+        });
+      }
+    };
+
+    const selectedLine = productionLines.find(l => l.id === fabricFormLine);
+    const isP2 = selectedLine?.lineName === 'P2';
+
+    return (
+      <Card className="p-8" data-testid="add-fabric-form">
+        <h3 className="text-lg font-semibold mb-6">Add Fabric to Inventory</h3>
+        
+        <form onSubmit={handleFabricSubmit} className="space-y-6 max-w-2xl">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Production Line *</label>
+              <Select value={fabricFormLine} onValueChange={setFabricFormLine}>
+                <SelectTrigger data-testid="select-fabric-production-line">
+                  <SelectValue placeholder="Select production line" />
+                </SelectTrigger>
+                <SelectContent>
+                  {productionLines.map(line => (
+                    <SelectItem 
+                      key={line.id} 
+                      value={line.id}
+                      data-testid={`option-fabric-line-${line.id}`}
+                    >
+                      {line.lineName} - {line.description}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {isP2 && (
+                <p className="text-xs text-green-600">✓ Barcode will be auto-generated for P2</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Brand *</label>
+              <Input 
+                type="text" 
+                value={fabricBrand}
+                onChange={(e) => setFabricBrand(e.target.value)}
+                placeholder="e.g., Hexcel, Toray"
+                data-testid="input-fabric-brand"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Fabric *</label>
+              <Input 
+                type="text" 
+                value={fabricType}
+                onChange={(e) => setFabricType(e.target.value)}
+                placeholder="e.g., Carbon Fiber, Fiberglass"
+                data-testid="input-fabric-type"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Batch Number</label>
+              <Input 
+                type="text" 
+                value={batchNumber}
+                onChange={(e) => setBatchNumber(e.target.value)}
+                placeholder="Enter batch number"
+                data-testid="input-batch-number"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Internal Control/Part Number</label>
+              <Input 
+                type="text" 
+                value={internalControlNumber}
+                onChange={(e) => setInternalControlNumber(e.target.value)}
+                placeholder="Enter part number"
+                data-testid="input-control-number"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Manufacture Date</label>
+              <Input 
+                type="date" 
+                value={manufactureDate}
+                onChange={(e) => setManufactureDate(e.target.value)}
+                data-testid="input-manufacture-date"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Received Date</label>
+              <Input 
+                type="date" 
+                value={receivedDate}
+                onChange={(e) => setReceivedDate(e.target.value)}
+                data-testid="input-received-date"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Expiration Date</label>
+              <Input 
+                type="date" 
+                value={expirationDate}
+                onChange={(e) => setExpirationDate(e.target.value)}
+                data-testid="input-expiration-date"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Location/Freezer #</label>
+              <Input 
+                type="text" 
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g., Freezer 2, Rack A3"
+                data-testid="input-location"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Quantity (Rolls/Units) *</label>
+              <Input 
+                type="number" 
+                min="0"
+                value={fabricQuantity}
+                onChange={(e) => setFabricQuantity(e.target.value)}
+                placeholder="Enter quantity"
+                data-testid="input-fabric-quantity"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Notes</label>
+            <Input 
+              type="text" 
+              value={fabricNotes}
+              onChange={(e) => setFabricNotes(e.target.value)}
+              placeholder="Additional notes"
+              data-testid="input-fabric-notes"
+            />
+          </div>
+
+          <Button 
+            type="submit" 
+            className="w-full"
+            data-testid="button-submit-fabric"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Fabric to Inventory
+          </Button>
+        </form>
+      </Card>
+    );
+  };
+
+  const renderFabricInventory = () => {
+    type FabricWithDetails = FabricInventory & { brand?: string; fabric?: string; batchNumber?: string; internalControlNumber?: string; barcode?: string; receivedDate?: string; manufactureDate?: string; productionLineId?: string };
+    const fabricWithDetails = fabricInventory as FabricWithDetails[];
+
+    return (
+      <Card className="p-8" data-testid="fabric-inventory">
+        <h3 className="text-lg font-semibold mb-4">Fabric Inventory</h3>
+        {fabricWithDetails.length === 0 ? (
+          <p className="text-muted-foreground">No fabric inventory data available. Use the "Add Fabric" tab to add inventory.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-2 text-sm font-medium">Production Line</th>
+                  <th className="text-left p-2 text-sm font-medium">Brand</th>
+                  <th className="text-left p-2 text-sm font-medium">Fabric</th>
+                  <th className="text-left p-2 text-sm font-medium">Batch #</th>
+                  <th className="text-left p-2 text-sm font-medium">Control #</th>
+                  <th className="text-left p-2 text-sm font-medium">Barcode</th>
+                  <th className="text-left p-2 text-sm font-medium">Location</th>
+                  <th className="text-left p-2 text-sm font-medium">Qty</th>
+                  <th className="text-left p-2 text-sm font-medium">Received</th>
+                  <th className="text-left p-2 text-sm font-medium">Expires</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fabricWithDetails.map(item => {
+                  const line = productionLines.find(l => l.id === item.productionLineId);
+                  const isLowStock = item.quantityInStock <= item.lowStockThreshold;
+
+                  return (
+                    <tr 
+                      key={item.id} 
+                      className={`border-b hover:bg-muted/50 ${isLowStock ? 'bg-red-50 dark:bg-red-900/10' : ''}`}
+                      data-testid={`inventory-item-${item.id}`}
+                    >
+                      <td className="p-2 text-sm">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${line?.lineName === 'P2' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
+                          {line?.lineName || '-'}
+                        </span>
+                      </td>
+                      <td className="p-2 text-sm">{item.brand || '-'}</td>
+                      <td className="p-2 text-sm">{item.fabric || '-'}</td>
+                      <td className="p-2 text-sm">{item.batchNumber || '-'}</td>
+                      <td className="p-2 text-sm">{item.internalControlNumber || '-'}</td>
+                      <td className="p-2 text-sm font-mono text-xs">
+                        {item.barcode ? (
+                          <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded" data-testid={`barcode-${item.id}`}>
+                            {item.barcode}
+                          </span>
+                        ) : '-'}
+                      </td>
+                      <td className="p-2 text-sm">{item.location || '-'}</td>
+                      <td className="p-2 text-sm">
+                        <span className={`font-semibold ${isLowStock ? 'text-red-600' : ''}`} data-testid={`text-stock-${item.id}`}>
+                          {item.quantityInStock}
+                        </span>
+                        {isLowStock && <span className="text-xs text-red-600 ml-1">⚠</span>}
+                      </td>
+                      <td className="p-2 text-sm">
+                        {item.receivedDate ? new Date(item.receivedDate).toLocaleDateString() : '-'}
+                      </td>
+                      <td className="p-2 text-sm">
+                        {item.expirationDate ? new Date(item.expirationDate).toLocaleDateString() : '-'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -682,12 +939,13 @@ export default function CuttingTable() {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full" data-testid="tabs-main">
-        <TabsList className="grid w-full grid-cols-6" data-testid="tabs-list">
+        <TabsList className="grid w-full grid-cols-7" data-testid="tabs-list">
           <TabsTrigger value="dashboard" data-testid="tab-dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="daily" data-testid="tab-daily">Daily Tracker</TabsTrigger>
           <TabsTrigger value="weekly" data-testid="tab-weekly">Weekly Report</TabsTrigger>
           <TabsTrigger value="projections" data-testid="tab-projections">Projections</TabsTrigger>
           <TabsTrigger value="submit" data-testid="tab-submit">Submit Data</TabsTrigger>
+          <TabsTrigger value="addFabric" data-testid="tab-add-fabric">Add Fabric</TabsTrigger>
           <TabsTrigger value="inventory" data-testid="tab-inventory">Inventory</TabsTrigger>
         </TabsList>
 
@@ -709,6 +967,10 @@ export default function CuttingTable() {
 
         <TabsContent value="submit" className="mt-6" data-testid="content-submit">
           {renderSubmitData()}
+        </TabsContent>
+
+        <TabsContent value="addFabric" className="mt-6" data-testid="content-add-fabric">
+          {renderAddFabricForm()}
         </TabsContent>
 
         <TabsContent value="inventory" className="mt-6" data-testid="content-inventory">

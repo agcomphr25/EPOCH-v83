@@ -164,6 +164,39 @@ router.delete('/items/:id', async (req: Request, res: Response) => {
   }
 });
 
+// TEMPORARY: Bulk update utilized fields for multiple items
+router.post('/items/bulk-update-utilized', async (req: Request, res: Response) => {
+  try {
+    const { itemIds, utilizedFields } = req.body;
+
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ error: 'Item IDs array is required' });
+    }
+
+    if (!utilizedFields || typeof utilizedFields !== 'object') {
+      return res.status(400).json({ error: 'Utilized fields object is required' });
+    }
+
+    // Update each item with the new utilized fields
+    const updates = {
+      utilizedInPL1: utilizedFields.utilizedInPL1 || false,
+      utilizedInPL2: utilizedFields.utilizedInPL2 || false,
+      utilizedInFacilities: utilizedFields.utilizedInFacilities || false,
+      utilizedInAdmin: utilizedFields.utilizedInAdmin || false,
+      utilizedInServices: utilizedFields.utilizedInServices || false,
+    };
+
+    for (const itemId of itemIds) {
+      await storage.updateInventoryItem(itemId, updates);
+    }
+
+    res.json({ success: true, updatedCount: itemIds.length });
+  } catch (error) {
+    console.error('Bulk update utilized fields error:', error);
+    res.status(500).json({ error: 'Failed to update items' });
+  }
+});
+
 // Inventory Scanning
 router.get('/scans', async (req: Request, res: Response) => {
   try {

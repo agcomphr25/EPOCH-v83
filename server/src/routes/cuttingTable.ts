@@ -426,12 +426,34 @@ router.post('/initialize', async (req, res) => {
       createdP1Categories.push(created);
     }
 
+    // Create P2 categories
+    const p2Categories = [
+      { categoryName: '12" Tube', displayOrder: 1 },
+      { categoryName: '10" Tube', displayOrder: 2 },
+      { categoryName: 'Antenna Cover', displayOrder: 3 },
+      { categoryName: 'Vertical', displayOrder: 4 },
+      { categoryName: 'Horizontal', displayOrder: 5 },
+      { categoryName: 'Aileron', displayOrder: 6 },
+      { categoryName: 'Rudder', displayOrder: 7 },
+      { categoryName: 'Elevator', displayOrder: 8 },
+    ];
+
+    const createdP2Categories = [];
+    for (const category of p2Categories) {
+      const created = await storage.createCuttingProductCategory({
+        productionLineId: p2Line.id,
+        ...category,
+      });
+      createdP2Categories.push(created);
+    }
+
     res.json({
       success: true,
       message: 'Cutting table initialized successfully',
       data: {
         productionLines: [p1Line, p2Line],
         p1Categories: createdP1Categories,
+        p2Categories: createdP2Categories,
       },
     });
   } catch (error) {

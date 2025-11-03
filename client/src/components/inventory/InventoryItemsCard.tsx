@@ -422,6 +422,16 @@ export default function InventoryItemsCard() {
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [isAddToGroupDialogOpen, setIsAddToGroupDialogOpen] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
+  
+  // TEMPORARY: Bulk update utilized fields state
+  const [isBulkUtilizedDialogOpen, setIsBulkUtilizedDialogOpen] = useState(false);
+  const [bulkUtilizedFields, setBulkUtilizedFields] = useState({
+    utilizedInPL1: false,
+    utilizedInPL2: false,
+    utilizedInFacilities: false,
+    utilizedInAdmin: false,
+    utilizedInServices: false,
+  });
 
   const [formData, setFormData] = useState<InventoryFormData>({
     agPartNumber: '',
@@ -847,6 +857,55 @@ export default function InventoryItemsCard() {
     });
   };
 
+  // TEMPORARY: Bulk update utilized fields mutation
+  const bulkUpdateUtilizedMutation = useMutation({
+    mutationFn: async ({ itemIds, utilizedFields }: { itemIds: number[]; utilizedFields: any }) => {
+      await apiRequest('/api/enhanced/inventory/items/bulk-update-utilized', {
+        method: 'POST',
+        body: { itemIds, utilizedFields },
+      });
+    },
+    onSuccess: () => {
+      toast.success('Items updated successfully');
+      setIsBulkUtilizedDialogOpen(false);
+      setBulkUtilizedFields({
+        utilizedInPL1: false,
+        utilizedInPL2: false,
+        utilizedInFacilities: false,
+        utilizedInAdmin: false,
+        utilizedInServices: false,
+      });
+      setSelectedItems(new Set());
+      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
+    },
+    onError: () => {
+      toast.error('Failed to update items');
+    },
+  });
+
+  // TEMPORARY: Handler for bulk utilized update
+  const handleBulkUtilizedUpdate = () => {
+    if (selectedItems.size === 0) {
+      toast.error('Please select at least one item');
+      return;
+    }
+
+    // Send ALL fields - this is a REPLACEMENT operation
+    // All selected items will have their utilization flags set to exactly match the dialog
+    const fieldsToUpdate = {
+      utilizedInPL1: bulkUtilizedFields.utilizedInPL1,
+      utilizedInPL2: bulkUtilizedFields.utilizedInPL2,
+      utilizedInFacilities: bulkUtilizedFields.utilizedInFacilities,
+      utilizedInAdmin: bulkUtilizedFields.utilizedInAdmin,
+      utilizedInServices: bulkUtilizedFields.utilizedInServices,
+    };
+
+    bulkUpdateUtilizedMutation.mutate({
+      itemIds: Array.from(selectedItems),
+      utilizedFields: fieldsToUpdate,
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -861,15 +920,29 @@ export default function InventoryItemsCard() {
         </div>
         <div className="flex items-center gap-2">
           {selectedItems.size > 0 && (
-            <Button
-              variant="default"
-              onClick={() => setIsAddToGroupDialogOpen(true)}
-              className="flex items-center gap-2"
-              data-testid="button-add-to-group"
-            >
-              <Package className="h-4 w-4" />
-              Add to Group ({selectedItems.size})
-            </Button>
+            <>
+              <Button
+                variant="default"
+                onClick={() => setIsAddToGroupDialogOpen(true)}
+                className="flex items-center gap-2"
+                data-testid="button-add-to-group"
+              >
+                <Package className="h-4 w-4" />
+                Add to Group ({selectedItems.size})
+              </Button>
+              
+              {/* TEMPORARY: Bulk update utilized fields button - COMMENTED OUT */}
+              {/* 
+              <Button
+                variant="secondary"
+                onClick={() => setIsBulkUtilizedDialogOpen(true)}
+                className="flex items-center gap-2"
+                data-testid="button-bulk-update-utilized"
+              >
+                Update Utilized In ({selectedItems.size})
+              </Button>
+              */}
+            </>
           )}
           
           <Button
@@ -1299,6 +1372,123 @@ export default function InventoryItemsCard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* TEMPORARY: Bulk Update Utilized In Dialog - COMMENTED OUT */}
+      {/*
+      <Dialog open={isBulkUtilizedDialogOpen} onOpenChange={setIsBulkUtilizedDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Bulk Update Utilized In</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md p-3 mb-4">
+              <p className="text-sm text-amber-900 dark:text-amber-100">
+                <strong>⚠️ Warning:</strong> This will REPLACE all utilization flags for the selected items.
+                Checked options will be enabled, unchecked options will be DISABLED for all selected items.
+              </p>
+            </div>
+            <div className="space-y-3">
+              <Label>Select which production lines/departments these items should be utilized in:</Label>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="bulk-utilizedInPL1"
+                    checked={bulkUtilizedFields.utilizedInPL1}
+                    onCheckedChange={(checked) =>
+                      setBulkUtilizedFields({ ...bulkUtilizedFields, utilizedInPL1: checked as boolean })
+                    }
+                    data-testid="checkbox-bulk-utilizedInPL1"
+                  />
+                  <Label htmlFor="bulk-utilizedInPL1" className="cursor-pointer">
+                    PL1
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="bulk-utilizedInPL2"
+                    checked={bulkUtilizedFields.utilizedInPL2}
+                    onCheckedChange={(checked) =>
+                      setBulkUtilizedFields({ ...bulkUtilizedFields, utilizedInPL2: checked as boolean })
+                    }
+                    data-testid="checkbox-bulk-utilizedInPL2"
+                  />
+                  <Label htmlFor="bulk-utilizedInPL2" className="cursor-pointer">
+                    PL2
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="bulk-utilizedInFacilities"
+                    checked={bulkUtilizedFields.utilizedInFacilities}
+                    onCheckedChange={(checked) =>
+                      setBulkUtilizedFields({ ...bulkUtilizedFields, utilizedInFacilities: checked as boolean })
+                    }
+                    data-testid="checkbox-bulk-utilizedInFacilities"
+                  />
+                  <Label htmlFor="bulk-utilizedInFacilities" className="cursor-pointer">
+                    Facilities
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="bulk-utilizedInAdmin"
+                    checked={bulkUtilizedFields.utilizedInAdmin}
+                    onCheckedChange={(checked) =>
+                      setBulkUtilizedFields({ ...bulkUtilizedFields, utilizedInAdmin: checked as boolean })
+                    }
+                    data-testid="checkbox-bulk-utilizedInAdmin"
+                  />
+                  <Label htmlFor="bulk-utilizedInAdmin" className="cursor-pointer">
+                    Admin
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="bulk-utilizedInServices"
+                    checked={bulkUtilizedFields.utilizedInServices}
+                    onCheckedChange={(checked) =>
+                      setBulkUtilizedFields({ ...bulkUtilizedFields, utilizedInServices: checked as boolean })
+                    }
+                    data-testid="checkbox-bulk-utilizedInServices"
+                  />
+                  <Label htmlFor="bulk-utilizedInServices" className="cursor-pointer">
+                    Services
+                  </Label>
+                </div>
+              </div>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {selectedItems.size} {selectedItems.size === 1 ? 'item' : 'items'} will be updated
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsBulkUtilizedDialogOpen(false);
+                setBulkUtilizedFields({
+                  utilizedInPL1: false,
+                  utilizedInPL2: false,
+                  utilizedInFacilities: false,
+                  utilizedInAdmin: false,
+                  utilizedInServices: false,
+                });
+              }}
+              data-testid="button-cancel-bulk-utilized"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkUtilizedUpdate}
+              disabled={bulkUpdateUtilizedMutation.isPending}
+              data-testid="button-confirm-bulk-utilized"
+            >
+              Update Items
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      */}
     </div>
   );
 }

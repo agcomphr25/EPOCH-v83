@@ -164,6 +164,57 @@ router.delete('/items/:id', async (req: Request, res: Response) => {
   }
 });
 
+// TEMPORARY: Bulk update utilized fields for multiple items
+// REPLACEMENT operation: Sets ALL selected items to have the EXACT same utilization flags
+// as specified in the request. Frontend sends all 5 fields with true/false values.
+// - Checked fields = true for all items
+// - Unchecked fields = false for all items
+// Example: If request includes {utilizedInPL1: true, utilizedInPL2: false, ...other false},
+//          all selected items will get PL1=true and all others=false.
+router.post('/items/bulk-update-utilized', async (req: Request, res: Response) => {
+  try {
+    const { itemIds, utilizedFields } = req.body;
+
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ error: 'Item IDs array is required' });
+    }
+
+    if (!utilizedFields || typeof utilizedFields !== 'object') {
+      return res.status(400).json({ error: 'Utilized fields object is required' });
+    }
+
+    // Build update object with only the fields explicitly provided in the request
+    // Only fields present in the request payload will be updated
+    const updates: any = {};
+    
+    if ('utilizedInPL1' in utilizedFields) {
+      updates.utilizedInPL1 = Boolean(utilizedFields.utilizedInPL1);
+    }
+    if ('utilizedInPL2' in utilizedFields) {
+      updates.utilizedInPL2 = Boolean(utilizedFields.utilizedInPL2);
+    }
+    if ('utilizedInFacilities' in utilizedFields) {
+      updates.utilizedInFacilities = Boolean(utilizedFields.utilizedInFacilities);
+    }
+    if ('utilizedInAdmin' in utilizedFields) {
+      updates.utilizedInAdmin = Boolean(utilizedFields.utilizedInAdmin);
+    }
+    if ('utilizedInServices' in utilizedFields) {
+      updates.utilizedInServices = Boolean(utilizedFields.utilizedInServices);
+    }
+
+    // Update each item with the new utilized fields
+    for (const itemId of itemIds) {
+      await storage.updateInventoryItem(itemId, updates);
+    }
+
+    res.json({ success: true, updatedCount: itemIds.length });
+  } catch (error) {
+    console.error('Bulk update utilized fields error:', error);
+    res.status(500).json({ error: 'Failed to update items' });
+  }
+});
+
 // Inventory Scanning
 router.get('/scans', async (req: Request, res: Response) => {
   try {

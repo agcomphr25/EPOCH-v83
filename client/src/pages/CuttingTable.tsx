@@ -457,13 +457,13 @@ export default function CuttingTable() {
           description: "Weekly production data added successfully"
         });
 
+        // Invalidate cache to refresh the data display
+        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/weekly-data'] });
+
         // Reset form
         setSelectedFormLine('');
         setSelectedCategory('');
         setQuantity('');
-
-        // Refetch data
-        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/weekly-data'] });
       } catch (error) {
         toast({
           title: "Error",

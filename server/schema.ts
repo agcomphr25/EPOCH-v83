@@ -4738,9 +4738,7 @@ export type InsertRtsSaleItem = z.infer<typeof insertRtsSaleItemSchema>;
 export const cuttingMaterials = pgTable('cutting_materials', {
   id: uuid('id').defaultRandom().primaryKey(),
   materialName: text('material_name').notNull().unique(),
-  yieldPerCut: integer('yield_per_cut').notNull(), // 1-1188 pieces per cut
   materialType: text('material_type').notNull(), // Carbon Fiber, Fiberglass, Primtex, etc.
-  wasteFactor: numeric('waste_factor', { precision: 5, scale: 4 }).notNull().default('0.05'), // typically 0.05-0.25
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

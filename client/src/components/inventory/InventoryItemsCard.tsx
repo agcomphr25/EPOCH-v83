@@ -890,9 +890,19 @@ export default function InventoryItemsCard() {
       return;
     }
 
+    // Send ALL fields - this is a REPLACEMENT operation
+    // All selected items will have their utilization flags set to exactly match the dialog
+    const fieldsToUpdate = {
+      utilizedInPL1: bulkUtilizedFields.utilizedInPL1,
+      utilizedInPL2: bulkUtilizedFields.utilizedInPL2,
+      utilizedInFacilities: bulkUtilizedFields.utilizedInFacilities,
+      utilizedInAdmin: bulkUtilizedFields.utilizedInAdmin,
+      utilizedInServices: bulkUtilizedFields.utilizedInServices,
+    };
+
     bulkUpdateUtilizedMutation.mutate({
       itemIds: Array.from(selectedItems),
-      utilizedFields: bulkUtilizedFields,
+      utilizedFields: fieldsToUpdate,
     });
   };
 
@@ -1371,8 +1381,14 @@ export default function InventoryItemsCard() {
             <DialogTitle>Bulk Update Utilized In</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md p-3 mb-4">
+              <p className="text-sm text-amber-900 dark:text-amber-100">
+                <strong>⚠️ Warning:</strong> This will REPLACE all utilization flags for the selected items.
+                Checked options will be enabled, unchecked options will be DISABLED for all selected items.
+              </p>
+            </div>
             <div className="space-y-3">
-              <Label>Select which production lines/departments these items are utilized in:</Label>
+              <Label>Select which production lines/departments these items should be utilized in:</Label>
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
                   <Checkbox

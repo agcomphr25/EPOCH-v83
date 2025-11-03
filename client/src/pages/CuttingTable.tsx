@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card } from "@/components/ui/card";
@@ -145,6 +145,11 @@ export default function CuttingTable() {
   });
 
   const isLoading = loadingMaterials || loadingLines || loadingCategories || loadingComponents || loadingWeekly || loadingProgress || loadingInventory;
+
+  // Clear selected category when production line changes
+  useEffect(() => {
+    setSelectedCategory('');
+  }, [selectedFormLine]);
 
   // Initialize mutation
   const initializeMutation = useMutation({
@@ -507,19 +512,22 @@ export default function CuttingTable() {
           <div className="space-y-2">
             <label className="text-sm font-medium">Product Category</label>
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger data-testid="select-product-category">
-                <SelectValue placeholder="Select product category" />
+              <SelectTrigger data-testid="select-product-category" disabled={!selectedFormLine}>
+                <SelectValue placeholder={selectedFormLine ? "Select product category" : "Select production line first"} />
               </SelectTrigger>
               <SelectContent>
-                {categories.map(cat => (
-                  <SelectItem 
-                    key={cat.id} 
-                    value={cat.id}
-                    data-testid={`option-category-${cat.id}`}
-                  >
-                    {cat.categoryName}
-                  </SelectItem>
-                ))}
+                {categories
+                  .filter(cat => cat.productionLineId === selectedFormLine)
+                  .map(cat => (
+                    <SelectItem 
+                      key={cat.id} 
+                      value={cat.id}
+                      data-testid={`option-category-${cat.id}`}
+                    >
+                      {cat.categoryName}
+                    </SelectItem>
+                  ))
+                }
               </SelectContent>
             </Select>
           </div>

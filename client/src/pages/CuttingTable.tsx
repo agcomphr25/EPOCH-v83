@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, Plus, Trash2, CheckCircle2, AlertCircle, Printer } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 type Material = {
@@ -831,6 +831,7 @@ export default function CuttingTable() {
                   <th className="text-left p-2 text-sm font-medium">Qty</th>
                   <th className="text-left p-2 text-sm font-medium">Received</th>
                   <th className="text-left p-2 text-sm font-medium">Expires</th>
+                  <th className="text-left p-2 text-sm font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -872,6 +873,22 @@ export default function CuttingTable() {
                       </td>
                       <td className="p-2 text-sm">
                         {item.expirationDate ? new Date(item.expirationDate).toLocaleDateString() : '-'}
+                      </td>
+                      <td className="p-2">
+                        {item.barcode ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => window.open(`/api/cutting-table/fabric-inventory/${item.id}/print-barcode`, '_blank')}
+                            data-testid={`button-print-barcode-${item.id}`}
+                            className="flex items-center gap-1"
+                          >
+                            <Printer className="w-3 h-3" />
+                            Print
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No barcode</span>
+                        )}
                       </td>
                     </tr>
                   );

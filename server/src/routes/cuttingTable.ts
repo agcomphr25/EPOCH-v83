@@ -474,4 +474,122 @@ router.post('/initialize', async (req, res) => {
   }
 });
 
+// Print barcode label for fabric inventory
+router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
+  try {
+    const inventory = await storage.getCuttingFabricInventory(req.params.id);
+    if (!inventory) {
+      return res.status(404).json({ error: 'Inventory item not found' });
+    }
+
+    if (!inventory.barcode) {
+      return res.status(400).json({ error: 'This item does not have a barcode' });
+    }
+
+    // Get production line info
+    const line = inventory.productionLineId 
+      ? await storage.getCuttingProductionLine(inventory.productionLineId)
+      : null;
+
+    // Generate printable HTML with barcode
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Barcode Label - ${inventory.barcode}</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <style>
+    @media print {
+      @page { margin: 0.5cm; }
+      body { margin: 0; }
+      .no-print { display: none; }
+    }
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: #f5f5f5;
+    }
+    .label {
+      background: white;
+      padding: 20px;
+      border: 2px solid #333;
+      width: 4in;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .label-header {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #333;
+    }
+    .label-info {
+      font-size: 12px;
+      margin: 5px 0;
+      color: #666;
+    }
+    .barcode-container {
+      margin: 15px 0;
+    }
+    .barcode-text {
+      font-size: 14px;
+      font-weight: bold;
+      margin-top: 8px;
+      letter-spacing: 2px;
+    }
+    .print-btn {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .print-btn:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="label">
+    <div class="label-header">AG Composites - Fabric Inventory</div>
+    ${line ? `<div class="label-info">Production Line: <strong>${line.lineName}</strong></div>` : ''}
+    ${inventory.brand ? `<div class="label-info">Brand: ${inventory.brand}</div>` : ''}
+    ${inventory.fabric ? `<div class="label-info">Fabric: ${inventory.fabric}</div>` : ''}
+    ${inventory.batchNumber ? `<div class="label-info">Batch: ${inventory.batchNumber}</div>` : ''}
+    ${inventory.location ? `<div class="label-info">Location: ${inventory.location}</div>` : ''}
+    <div class="barcode-container">
+      <svg id="barcode"></svg>
+    </div>
+    <div class="barcode-text">${inventory.barcode}</div>
+    <button class="print-btn no-print" onclick="window.print()">Print Label</button>
+  </div>
+  <script>
+    JsBarcode("#barcode", "${inventory.barcode}", {
+      format: "CODE39",
+      width: 2,
+      height: 80,
+      displayValue: false,
+      margin: 10
+    });
+  </script>
+</body>
+</html>
+    `;
+
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (error) {
+    console.error('Error generating barcode label:', error);
+    res.status(500).json({ error: 'Failed to generate barcode label' });
+  }
+});
+
 export default router;

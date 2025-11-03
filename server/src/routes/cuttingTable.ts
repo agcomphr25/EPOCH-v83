@@ -501,7 +501,10 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
   <style>
     @media print {
-      @page { margin: 0.5cm; }
+      @page { 
+        margin: 0.2cm;
+        size: 4in 3in;
+      }
       body { margin: 0; }
       .no-print { display: none; }
     }
@@ -516,41 +519,43 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
     }
     .label {
       background: white;
-      padding: 20px;
+      padding: 12px;
       border: 2px solid #333;
       width: 4in;
+      max-height: 3in;
       text-align: center;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     .label-header {
-      font-size: 18px;
+      font-size: 13px;
       font-weight: bold;
-      margin-bottom: 10px;
+      margin-bottom: 6px;
       color: #333;
     }
     .label-info {
-      font-size: 12px;
-      margin: 5px 0;
+      font-size: 9px;
+      margin: 2px 0;
       color: #666;
+      line-height: 1.2;
     }
     .barcode-container {
-      margin: 15px 0;
+      margin: 6px 0;
     }
     .barcode-text {
-      font-size: 14px;
+      font-size: 11px;
       font-weight: bold;
-      margin-top: 8px;
-      letter-spacing: 2px;
+      margin-top: 4px;
+      letter-spacing: 1px;
     }
     .print-btn {
-      margin-top: 20px;
-      padding: 10px 20px;
+      margin-top: 12px;
+      padding: 8px 16px;
       background: #007bff;
       color: white;
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 16px;
+      font-size: 14px;
     }
     .print-btn:hover {
       background: #0056b3;
@@ -575,10 +580,10 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
   <script>
     JsBarcode("#barcode", "${inventory.barcode}", {
       format: "CODE39",
-      width: 2,
-      height: 80,
+      width: 1.5,
+      height: 50,
       displayValue: false,
-      margin: 10
+      margin: 5
     });
   </script>
 </body>

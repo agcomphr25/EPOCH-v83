@@ -98,9 +98,9 @@ app.use((req, res, next) => {
   if (contentType.includes('multipart/form-data')) {
     return next();
   }
-  express.json()(req, res, next);
+  express.json({ limit: '50mb' })(req, res, next);
 });
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
 // Also add express.static as fallback
 app.use('/attached_assets', express.static(assetsPath));

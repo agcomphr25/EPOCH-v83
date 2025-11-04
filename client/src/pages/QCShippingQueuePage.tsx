@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  Printer,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -36,6 +37,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
+import { SalesOrderModal } from '@/components/SalesOrderModal';
 
 export default function QCShippingQueuePage() {
   // State for tab selection
@@ -61,8 +63,13 @@ export default function QCShippingQueuePage() {
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
     null
   );
+  
+  // State for RTS sales order modal
+  const [showSalesOrderModal, setShowSalesOrderModal] = useState(false);
+  const [salesOrderId, setSalesOrderId] = useState<string | null>(null);
+  
   const queryClient = useQueryClient();
-  const { toast } = useToast();
+  const { toast} = useToast();
   const [, setLocation] = useLocation();
 
   // Get all orders from production pipeline
@@ -772,6 +779,50 @@ export default function QCShippingQueuePage() {
     });
   };
 
+  // Handle RTS sales order view
+  const handleRTSSalesOrderView = (orderId: string) => {
+    setSalesOrderId(orderId);
+    setShowSalesOrderModal(true);
+  };
+
+  // Handle RTS shipping label print
+  const handleRTSLabelPrint = (order: any) => {
+    if (!order.trackingNumber || !order.shippingLabelUrl) {
+      toast({
+        title: 'No Shipping Label',
+        description: 'This RTS order does not have a shipping label yet',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Open the label in a new window for printing
+    const labelWindow = window.open('', '_blank');
+    if (labelWindow) {
+      labelWindow.document.write(`
+        <html>
+          <head>
+            <title>Shipping Label - ${order.orderId}</title>
+          </head>
+          <body style="margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh;">
+            <img src="${order.shippingLabelUrl}" alt="Shipping Label" style="max-width: 100%; height: auto;" />
+            <script>
+              window.onload = function() {
+                window.print();
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      labelWindow.document.close();
+    }
+
+    toast({
+      title: 'Label Opened',
+      description: `Shipping label for ${order.orderId} opened for printing`,
+    });
+  };
+
   // Order card component with updated buttons - Sales Order + Shipping Label
   const OrderCard = ({
     order,
@@ -798,6 +849,12 @@ export default function QCShippingQueuePage() {
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2 flex-wrap">
               <span>{order.orderId}</span>
+              {order.isRtsOrder && (
+                <Badge className="bg-orange-500 text-white flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
+                  <Package className="w-3 h-3" />
+                  RTS
+                </Badge>
+              )}
               {(order.urgency === 'high' || order.urgency === 'critical') && order.isManualUrgency && (
                 <Badge className="bg-orange-500 text-white animate-pulse flex items-center gap-1 px-2 py-0.5 font-bold text-xs">
                   <Zap className="w-3 h-3" />
@@ -883,26 +940,52 @@ export default function QCShippingQueuePage() {
           </div>
         )}
 
-        <div className="flex gap-1 mt-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleQCChecklistDownload(order.orderId)}
-            className="flex-1 text-xs"
-          >
-            <CheckCircle className="h-3 w-3 mr-1" />
-            QC Checklist
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => handleSalesOrderView(order.orderId)}
-            className="flex-1 text-xs"
-          >
-            <FileText className="h-3 w-3 mr-1" />
-            Sales Order
-          </Button>
-        </div>
+        {/* RTS Order specific buttons */}
+        {order.isRtsOrder ? (
+          <div className="flex gap-1 mt-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleRTSSalesOrderView(order.orderId)}
+              className="flex-1 text-xs"
+              data-testid={`button-rts-sales-order-${order.orderId}`}
+            >
+              <FileText className="h-3 w-3 mr-1" />
+              Sales Order
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleRTSLabelPrint(order)}
+              className="flex-1 text-xs"
+              data-testid={`button-rts-label-${order.orderId}`}
+            >
+              <Printer className="h-3 w-3 mr-1" />
+              Label
+            </Button>
+          </div>
+        ) : (
+          <div className="flex gap-1 mt-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleQCChecklistDownload(order.orderId)}
+              className="flex-1 text-xs"
+            >
+              <CheckCircle className="h-3 w-3 mr-1" />
+              QC Checklist
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleSalesOrderView(order.orderId)}
+              className="flex-1 text-xs"
+            >
+              <FileText className="h-3 w-3 mr-1" />
+              Sales Order
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -1577,6 +1660,18 @@ export default function QCShippingQueuePage() {
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Sales Order Modal for RTS Orders */}
+      {salesOrderId && (
+        <SalesOrderModal
+          isOpen={showSalesOrderModal}
+          onClose={() => {
+            setShowSalesOrderModal(false);
+            setSalesOrderId(null);
+          }}
+          orderId={salesOrderId}
+        />
       )}
     </div>
   );

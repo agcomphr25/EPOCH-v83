@@ -149,6 +149,9 @@ export const allOrders = pgTable('all_orders', {
   // Customer Signature Data
   signatureData: text('signature_data'), // Base64 signature image from customer
   signedAt: timestamp('signed_at'), // When customer signed the order
+  // RTS Order Tracking
+  isRtsOrder: boolean('is_rts_order').default(false), // True if this order was created from RTS inventory sale
+  rtsSaleId: uuid('rts_sale_id'), // Reference to RTS sale if applicable
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -648,6 +651,7 @@ export const rtsSales = pgTable('rts_sales', {
   id: uuid('id').defaultRandom().primaryKey(),
   saleNumber: text('sale_number').notNull().unique(), // e.g., RTS-2024-001
   customerId: text('customer_id').notNull(),
+  orderId: text('order_id'), // Reference to order created for this sale
   // Shipping Information
   trackingNumber: text('tracking_number'),
   shippingCarrier: text('shipping_carrier').default('UPS'),

@@ -1267,7 +1267,7 @@ export default function QCShippingQueuePage() {
                             <div className="space-y-2">
                               {po.items.map((item: any) => {
                                 const isSelected = selectedPOItems.has(item.orderId);
-                                const isDisabled = selectedCustomer && selectedCustomer !== customer.customerName;
+                                const isDisabled = !!(selectedCustomer && selectedCustomer !== customer.customerName);
                                 
                                 return (
                                   <div

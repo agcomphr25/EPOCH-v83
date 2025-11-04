@@ -90,6 +90,7 @@ import TrainingMatrixImport from '@/pages/TrainingMatrixImport';
 import TrainingMatrixManage from '@/pages/TrainingMatrixManage';
 import ImportCertifications from '@/pages/ImportCertifications';
 import CertificationBacklog from '@/pages/CertificationBacklog';
+import P2CertificationsManager from '@/pages/P2CertificationsManager';
 import Calendar from './pages/Calendar';
 import EmailInbox from './pages/EmailInbox';
 import LayupPluggingQueuePage from './pages/LayupPluggingQueuePage';
@@ -572,6 +573,10 @@ function App() {
                   <Route
                     path="/certification-backlog"
                     component={CertificationBacklog}
+                  />
+                  <Route
+                    path="/p2-certifications"
+                    component={P2CertificationsManager}
                   />
                   <Route
                     path="/training/:moduleId"

@@ -3222,6 +3222,40 @@ export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// P2 Part Certification Requirements - defines which certifications are required for parts by department
+export const p2PartCertifications = pgTable('p2_part_certifications', {
+  id: serial('id').primaryKey(),
+  partNumber: text('part_number').notNull(), // Composite # from P2 PO items
+  partName: text('part_name'), // Display name for reference
+  department: text('department').notNull(), // Department where certification is required
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// P2 Employee Part Certifications - tracks employee completion of certifications for specific parts
+export const p2EmployeePartCertifications = pgTable('p2_employee_part_certifications', {
+  id: serial('id').primaryKey(),
+  partCertificationId: integer('part_certification_id')
+    .references(() => p2PartCertifications.id, { onDelete: 'cascade' })
+    .notNull(),
+  partNumber: text('part_number').notNull(), // Denormalized for queries
+  employeeId: integer('employee_id')
+    .references(() => employees.id)
+    .notNull(),
+  employeeName: text('employee_name'), // Denormalized for performance
+  department: text('department').notNull(),
+  // Three competency checkboxes
+  drawingKnowledge: boolean('drawing_knowledge').default(false), // Knowledge of drawing and department standards
+  specSheetUnderstanding: boolean('spec_sheet_understanding').default(false), // Spec Sheet Understanding
+  procedureCompletion: boolean('procedure_completion').default(false), // Completion of procedure after proper training
+  certifiedDate: timestamp('certified_date'),
+  certifiedBy: text('certified_by'), // Who verified the certification
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Production Orders - separate from regular orders for PO tracking
 export const productionOrders = pgTable('production_orders', {
   id: serial('id').primaryKey(),
@@ -3401,6 +3435,42 @@ export const insertP2PurchaseOrderItemSchema = createInsertSchema(
     notes: z.string().optional().nullable(),
   });
 
+// P2 Part Certification Schemas
+export const insertP2PartCertificationSchema = createInsertSchema(p2PartCertifications)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    partNumber: z.string().min(1, 'Part Number is required'),
+    partName: z.string().optional().nullable(),
+    department: z.string().min(1, 'Department is required'),
+    notes: z.string().optional().nullable(),
+  });
+
+export const insertP2EmployeePartCertificationSchema = createInsertSchema(
+  p2EmployeePartCertifications
+)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    partCertificationId: z.number().min(1, 'Part Certification ID is required'),
+    partNumber: z.string().min(1, 'Part Number is required'),
+    employeeId: z.number().min(1, 'Employee ID is required'),
+    employeeName: z.string().optional().nullable(),
+    department: z.string().min(1, 'Department is required'),
+    drawingKnowledge: z.boolean().default(false),
+    specSheetUnderstanding: z.boolean().default(false),
+    procedureCompletion: z.boolean().default(false),
+    certifiedDate: z.coerce.date().optional().nullable(),
+    certifiedBy: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  });
+
 // Production Order Schema
 export const insertProductionOrderSchema = createInsertSchema(productionOrders)
   .omit({
@@ -3463,6 +3533,14 @@ export type InsertP2PurchaseOrderItem = z.infer<
   typeof insertP2PurchaseOrderItemSchema
 >;
 export type P2PurchaseOrderItem = typeof p2PurchaseOrderItems.$inferSelect;
+
+// P2 Part Certification Types
+export type InsertP2PartCertification = z.infer<typeof insertP2PartCertificationSchema>;
+export type P2PartCertification = typeof p2PartCertifications.$inferSelect;
+export type InsertP2EmployeePartCertification = z.infer<
+  typeof insertP2EmployeePartCertificationSchema
+>;
+export type P2EmployeePartCertification = typeof p2EmployeePartCertifications.$inferSelect;
 
 // Production Order Types
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;

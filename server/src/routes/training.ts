@@ -11,18 +11,25 @@ import {
   trainingMatrix,
   employees,
   users,
+  p2PartCertifications,
+  p2EmployeePartCertifications,
+  p2PurchaseOrderItems,
   insertTrainingModuleSchema,
   insertTrainingQuestionSchema,
   insertTrainingQuestionOptionSchema,
   insertEmployeeTrainingRecordSchema,
   insertEmployeeQuizAttemptSchema,
   insertTrainingMatrixSchema,
+  insertP2PartCertificationSchema,
+  insertP2EmployeePartCertificationSchema,
   type InsertTrainingModule,
   type InsertTrainingQuestion,
   type InsertTrainingQuestionOption,
   type InsertEmployeeTrainingRecord,
   type InsertEmployeeQuizAttempt,
   type InsertTrainingMatrix,
+  type InsertP2PartCertification,
+  type InsertP2EmployeePartCertification,
 } from '../../schema';
 import { eq, and, desc } from 'drizzle-orm';
 import {
@@ -1126,6 +1133,248 @@ router.post('/sync-quiz-data', async (req, res) => {
     });
   } catch (error: any) {
     console.error('Error syncing quiz data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// P2 PART CERTIFICATIONS ROUTES
+// ============================================
+
+// Get all P2 part certifications
+router.get('/p2-certifications', async (req, res) => {
+  try {
+    const certifications = await db
+      .select()
+      .from(p2PartCertifications)
+      .orderBy(desc(p2PartCertifications.createdAt));
+    res.json(certifications);
+  } catch (error: any) {
+    console.error('Error fetching P2 certifications:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get unique part numbers from P2 PO items for dropdown
+router.get('/p2-certifications/part-numbers', async (req, res) => {
+  try {
+    const parts = await db
+      .selectDistinct({
+        partNumber: p2PurchaseOrderItems.partNumber,
+        partName: p2PurchaseOrderItems.partName,
+      })
+      .from(p2PurchaseOrderItems)
+      .orderBy(p2PurchaseOrderItems.partNumber);
+    res.json(parts);
+  } catch (error: any) {
+    console.error('Error fetching part numbers:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create P2 part certification requirement
+router.post('/p2-certifications', async (req, res) => {
+  try {
+    const validatedData = insertP2PartCertificationSchema.parse(req.body);
+
+    const [newCertification] = await db
+      .insert(p2PartCertifications)
+      .values(validatedData as InsertP2PartCertification)
+      .returning();
+
+    res.status(201).json(newCertification);
+  } catch (error: any) {
+    console.error('Error creating P2 certification:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ error: 'Validation error', details: error.errors });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update P2 part certification requirement
+router.patch('/p2-certifications/:id', async (req, res) => {
+  try {
+    const certId = parseInt(req.params.id);
+    const validatedData = insertP2PartCertificationSchema.partial().parse(req.body);
+
+    const [updatedCertification] = await db
+      .update(p2PartCertifications)
+      .set({ ...validatedData, updatedAt: new Date() })
+      .where(eq(p2PartCertifications.id, certId))
+      .returning();
+
+    if (!updatedCertification) {
+      return res.status(404).json({ error: 'P2 certification not found' });
+    }
+
+    res.json(updatedCertification);
+  } catch (error: any) {
+    console.error('Error updating P2 certification:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ error: 'Validation error', details: error.errors });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete P2 part certification requirement
+router.delete('/p2-certifications/:id', async (req, res) => {
+  try {
+    const certId = parseInt(req.params.id);
+
+    const [deleted] = await db
+      .delete(p2PartCertifications)
+      .where(eq(p2PartCertifications.id, certId))
+      .returning();
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'P2 certification not found' });
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting P2 certification:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// P2 EMPLOYEE PART CERTIFICATIONS ROUTES
+// ============================================
+
+// Get all employee certifications (optionally filter by part)
+router.get('/p2-employee-certifications', async (req, res) => {
+  try {
+    const { partNumber } = req.query;
+
+    let query = db.select().from(p2EmployeePartCertifications);
+
+    if (partNumber) {
+      query = query.where(eq(p2EmployeePartCertifications.partNumber, partNumber as string));
+    }
+
+    const certifications = await query.orderBy(desc(p2EmployeePartCertifications.createdAt));
+    res.json(certifications);
+  } catch (error: any) {
+    console.error('Error fetching employee certifications:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get employee certifications by employee ID
+router.get('/p2-employee-certifications/employee/:employeeId', async (req, res) => {
+  try {
+    const employeeId = parseInt(req.params.employeeId);
+
+    const certifications = await db
+      .select()
+      .from(p2EmployeePartCertifications)
+      .where(eq(p2EmployeePartCertifications.employeeId, employeeId))
+      .orderBy(desc(p2EmployeePartCertifications.createdAt));
+
+    res.json(certifications);
+  } catch (error: any) {
+    console.error('Error fetching employee certifications:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create employee part certification
+router.post('/p2-employee-certifications', async (req, res) => {
+  try {
+    const validatedData = insertP2EmployeePartCertificationSchema.parse(req.body);
+
+    // If all three checkboxes are true, set certified date
+    const certifiedDate =
+      validatedData.drawingKnowledge &&
+      validatedData.specSheetUnderstanding &&
+      validatedData.procedureCompletion
+        ? new Date()
+        : null;
+
+    const [newCertification] = await db
+      .insert(p2EmployeePartCertifications)
+      .values({
+        ...validatedData,
+        certifiedDate,
+      } as InsertP2EmployeePartCertification)
+      .returning();
+
+    res.status(201).json(newCertification);
+  } catch (error: any) {
+    console.error('Error creating employee certification:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ error: 'Validation error', details: error.errors });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update employee part certification
+router.patch('/p2-employee-certifications/:id', async (req, res) => {
+  try {
+    const certId = parseInt(req.params.id);
+    const validatedData = insertP2EmployeePartCertificationSchema.partial().parse(req.body);
+
+    // Get existing record to check checkbox status
+    const [existing] = await db
+      .select()
+      .from(p2EmployeePartCertifications)
+      .where(eq(p2EmployeePartCertifications.id, certId));
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Employee certification not found' });
+    }
+
+    // Determine final checkbox states
+    const drawingKnowledge = validatedData.drawingKnowledge ?? existing.drawingKnowledge;
+    const specSheetUnderstanding = validatedData.specSheetUnderstanding ?? existing.specSheetUnderstanding;
+    const procedureCompletion = validatedData.procedureCompletion ?? existing.procedureCompletion;
+
+    // If all three checkboxes are true, set certified date
+    const certifiedDate =
+      drawingKnowledge && specSheetUnderstanding && procedureCompletion
+        ? (validatedData.certifiedDate ?? existing.certifiedDate ?? new Date())
+        : null;
+
+    const [updatedCertification] = await db
+      .update(p2EmployeePartCertifications)
+      .set({
+        ...validatedData,
+        certifiedDate,
+        updatedAt: new Date(),
+      })
+      .where(eq(p2EmployeePartCertifications.id, certId))
+      .returning();
+
+    res.json(updatedCertification);
+  } catch (error: any) {
+    console.error('Error updating employee certification:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ error: 'Validation error', details: error.errors });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete employee part certification
+router.delete('/p2-employee-certifications/:id', async (req, res) => {
+  try {
+    const certId = parseInt(req.params.id);
+
+    const [deleted] = await db
+      .delete(p2EmployeePartCertifications)
+      .where(eq(p2EmployeePartCertifications.id, certId))
+      .returning();
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'Employee certification not found' });
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting employee certification:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -99,8 +99,9 @@ function PartsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearch
   const { toast } = useToast();
 
   // Fetch inventory items from the BOM parts endpoint (which now returns inventory items)
+  const queryUrl = `/api/robust-boms/parts?pageSize=1000${searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : ''}`;
   const { data: partsData, isLoading } = useQuery({
-    queryKey: ['/api/robust-boms/parts', searchTerm],
+    queryKey: [queryUrl],
   });
 
   const parts = (partsData as any)?.data || [];
@@ -125,7 +126,7 @@ function PartsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearch
               />
             </div>
             <Button 
-              onClick={() => window.location.href = '/inventory/enhanced-mrp'}
+              onClick={() => window.location.href = '/inventory/manager'}
               data-testid="button-manage-inventory"
             >
               <Plus className="mr-2 h-4 w-4" />
@@ -186,12 +187,13 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
   const { toast } = useToast();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
+  const bomsQueryUrl = `/api/robust-boms/boms?${searchTerm ? `search=${encodeURIComponent(searchTerm)}` : ''}`;
   const { data: bomsData, isLoading } = useQuery({
-    queryKey: ['/api/robust-boms/boms', searchTerm],
+    queryKey: [bomsQueryUrl],
   });
 
   const { data: partsData } = useQuery({
-    queryKey: ['/api/robust-boms/parts'],
+    queryKey: ['/api/robust-boms/parts?pageSize=1000'],
   });
 
   const createBOMMutation = useMutation({

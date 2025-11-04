@@ -23,8 +23,14 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card';
+import {
   Check,
   ChevronDown,
+  Edit,
   Mail,
   MapPin,
   Phone,
@@ -69,6 +75,8 @@ export default function CustomerSearchInput({
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editCustomer, setEditCustomer] = useState<any>(null);
   const [newCustomer, setNewCustomer] = useState({
     name: '',
     email: '',
@@ -99,6 +107,17 @@ export default function CustomerSearchInput({
       return response as Customer[];
     },
     enabled: false,
+  });
+
+  // Fetch customer addresses when a customer is selected
+  const { data: customerAddresses = [] } = useQuery({
+    queryKey: ['/api/addresses/customer', value?.id],
+    queryFn: async () => {
+      if (!value?.id) return [];
+      const response = await apiRequest(`/api/addresses/customer/${value.id}`);
+      return response as any[];
+    },
+    enabled: !!value?.id,
   });
 
   // 🔧 Debounced search
@@ -216,6 +235,38 @@ export default function CustomerSearchInput({
     },
   });
 
+  const updateCustomerMutation = useMutation({
+    mutationFn: async (customerData: any) => {
+      const response = await apiRequest(`/api/customers/${customerData.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: customerData.name.trim(),
+          email: customerData.email?.trim() || undefined,
+          phone: customerData.phone?.trim() || undefined,
+          contact: customerData.contact?.trim() || undefined,
+        }),
+      });
+      return response as Customer;
+    },
+    onSuccess: (customer) => {
+      toast({
+        title: 'Customer Updated',
+        description: `${customer.name} has been updated successfully.`,
+      });
+      setShowEditDialog(false);
+      onValueChange(customer);
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/addresses/customer'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update customer',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleSelectCustomer = (customer: Customer) => {
     onValueChange(customer);
     setIsOpen(false);
@@ -234,28 +285,139 @@ export default function CustomerSearchInput({
     createCustomerMutation.mutate(newCustomer);
   };
 
+  const handleEditCustomer = () => {
+    if (!editCustomer?.name?.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Customer name is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+    updateCustomerMutation.mutate(editCustomer);
+  };
+
+  const openEditDialog = () => {
+    if (value) {
+      setEditCustomer({
+        id: value.id,
+        name: value.name || '',
+        email: value.email || '',
+        phone: value.phone || '',
+        contact: value.contact || '',
+      });
+      setShowEditDialog(true);
+    }
+  };
+
   const displayValue = value
     ? value.company
       ? `${value.name} (${value.company})`
       : value.name
     : '';
 
+  const defaultAddress = customerAddresses.find((addr: any) => addr.isDefault) || customerAddresses[0];
+
   return (
     <div className={`space-y-2 ${className}`}>
       <Label htmlFor="customer-search">Customer</Label>
       <div className="relative">
         <Popover open={isOpen} onOpenChange={setIsOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              role="combobox"
-              aria-expanded={isOpen}
-              className="w-full justify-between text-left font-normal"
-            >
-              {displayValue || placeholder}
-              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
+          {value ? (
+            <HoverCard openDelay={200}>
+              <HoverCardTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={isOpen}
+                    className="w-full justify-between text-left font-normal"
+                    data-testid="button-customer-select"
+                  >
+                    {displayValue || placeholder}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+              </HoverCardTrigger>
+              <HoverCardContent className="w-80" side="right" align="start">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-semibold">{value.name}</h4>
+                      {value.company && (
+                        <p className="text-sm text-muted-foreground">{value.company}</p>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={openEditDialog}
+                      data-testid="button-edit-customer"
+                      className="h-8"
+                    >
+                      <Edit className="h-3 w-3 mr-1" />
+                      Edit
+                    </Button>
+                  </div>
+                  
+                  <div className="space-y-2 text-sm">
+                    {value.email && (
+                      <div className="flex items-start gap-2">
+                        <Mail className="h-4 w-4 text-muted-foreground mt-0.5" />
+                        <span className="text-muted-foreground">{value.email}</span>
+                      </div>
+                    )}
+                    
+                    {value.phone && (
+                      <div className="flex items-start gap-2">
+                        <Phone className="h-4 w-4 text-muted-foreground mt-0.5" />
+                        <span className="text-muted-foreground">{value.phone}</span>
+                      </div>
+                    )}
+                    
+                    {defaultAddress && (
+                      <div className="flex items-start gap-2">
+                        <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                        <div className="text-muted-foreground">
+                          <div>{defaultAddress.street}</div>
+                          {defaultAddress.street2 && <div>{defaultAddress.street2}</div>}
+                          <div>
+                            {defaultAddress.city}, {defaultAddress.state} {defaultAddress.zipCode}
+                          </div>
+                          {defaultAddress.country && defaultAddress.country !== 'United States' && (
+                            <div>{defaultAddress.country}</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {!value.email && !value.phone && !defaultAddress && (
+                      <p className="text-sm text-muted-foreground italic">
+                        No contact information available
+                      </p>
+                    )}
+                  </div>
+                  
+                  <p className="text-xs text-muted-foreground border-t pt-2">
+                    Hover to verify customer information is correct
+                  </p>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
+          ) : (
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={isOpen}
+                className="w-full justify-between text-left font-normal"
+                data-testid="button-customer-select"
+              >
+                {displayValue || placeholder}
+                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+          )}
           <PopoverContent className="w-full p-0" align="start">
             <Command>
               <CommandInput
@@ -578,6 +740,98 @@ export default function CustomerSearchInput({
         </Popover>
       </div>
       {error && <p className="text-red-500 text-sm">{error}</p>}
+
+      {/* Edit Customer Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Customer Information</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Name *</Label>
+              <Input
+                id="edit-name"
+                data-testid="input-edit-customer-name"
+                value={editCustomer?.name || ''}
+                onChange={(e) =>
+                  setEditCustomer((prev: any) => ({
+                    ...prev,
+                    name: e.target.value,
+                  }))
+                }
+                placeholder="Customer Name"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Email</Label>
+              <Input
+                id="edit-email"
+                data-testid="input-edit-customer-email"
+                type="email"
+                value={editCustomer?.email || ''}
+                onChange={(e) =>
+                  setEditCustomer((prev: any) => ({
+                    ...prev,
+                    email: e.target.value,
+                  }))
+                }
+                placeholder="email@example.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">Phone</Label>
+              <Input
+                id="edit-phone"
+                data-testid="input-edit-customer-phone"
+                value={editCustomer?.phone || ''}
+                onChange={(e) =>
+                  setEditCustomer((prev: any) => ({
+                    ...prev,
+                    phone: e.target.value,
+                  }))
+                }
+                placeholder="555-0123"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-contact">Contact Person</Label>
+              <Input
+                id="edit-contact"
+                data-testid="input-edit-customer-contact"
+                value={editCustomer?.contact || ''}
+                onChange={(e) =>
+                  setEditCustomer((prev: any) => ({
+                    ...prev,
+                    contact: e.target.value,
+                  }))
+                }
+                placeholder="Contact Name"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button
+              variant="outline"
+              data-testid="button-cancel-edit-customer"
+              onClick={() => setShowEditDialog(false)}
+              disabled={updateCustomerMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              data-testid="button-save-customer"
+              onClick={handleEditCustomer}
+              disabled={updateCustomerMutation.isPending}
+            >
+              {updateCustomerMutation.isPending ? 'Updating...' : 'Update Customer'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -111,7 +111,7 @@ export default function CustomerSearchInput({
 
   // Fetch customer addresses when a customer is selected
   const { data: customerAddresses = [] } = useQuery({
-    queryKey: [`/api/addresses/customer/${value?.id || 0}`],
+    queryKey: [`/api/addresses?customerId=${value?.id || 0}`],
     enabled: !!value?.id,
   });
 

@@ -1,0 +1,20 @@
+Your branch is ahead of 'origin/main' by 5 commits.
+  (use "git push" to publish your local commits)
+Already up to date.
+[feature-20251104-2042-my-change 67e0395e] feat: my-change
+ 1 file changed, 3 insertions(+)
+ create mode 100644 push_log_20251104-204246.txt
+> 67e0395e (HEAD -> feature-20251104-2042-my-change) feat: my-change
+> b5ee1e42 (gitsafe-backup/main, gitsafe-backup/HEAD, main) Update inventory and BOM management pages with correct data fetching and navigation
+> 91037ca0 Improve usability of the Parent Part dropdown in the BOM administration
+> 24f5d3a7 Saved your changes before starting work
+> 3243e6ca (repl-0ce1429f-ab65-4d48-bef3-611aab96e0df/main, repl-0ce1429f-ab65-4d48-bef3-611aab96e0df/HEAD) Improve order filtering and address data accuracy
+> 4ac1fed9 Update inventory display and MRP calculation data handling
+ attached_assets/image_1762278231240.png            | Bin 0 -> 109363 bytes
+ attached_assets/image_1762287693173.png            | Bin 0 -> 115747 bytes
+ .../inventory/InventoryTransactionsCard.tsx        |   4 +-
+ .../components/inventory/MRPCalculationCard.tsx    |   5 +-
+ client/src/pages/RobustBOMAdministration.tsx       |  86 ++++++++++++++++-----
+ push_log_20251104-204246.txt                       |   3 +
+ 6 files changed, 75 insertions(+), 23 deletions(-)
+Open PR: https://github.com/agcomphr25/EPOCH-v83/compare/feature-20251104-2042-my-change?expand=1

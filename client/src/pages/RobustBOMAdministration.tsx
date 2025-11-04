@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Search, Edit, Trash2, FileText, ChevronRight } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,10 @@ import { useToast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { cn } from '@/lib/utils';
 
 // Part schema
 const partSchema = z.object({
@@ -96,8 +99,9 @@ function PartsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearch
   const { toast } = useToast();
 
   // Fetch inventory items from the BOM parts endpoint (which now returns inventory items)
+  const queryUrl = `/api/robust-boms/parts?pageSize=1000${searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : ''}`;
   const { data: partsData, isLoading } = useQuery({
-    queryKey: ['/api/robust-boms/parts', searchTerm],
+    queryKey: [queryUrl],
   });
 
   const parts = (partsData as any)?.data || [];
@@ -122,7 +126,7 @@ function PartsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearch
               />
             </div>
             <Button 
-              onClick={() => window.location.href = '/inventory/enhanced-mrp'}
+              onClick={() => window.location.href = '/inventory/manager'}
               data-testid="button-manage-inventory"
             >
               <Plus className="mr-2 h-4 w-4" />
@@ -183,12 +187,13 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
   const { toast } = useToast();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
+  const bomsQueryUrl = `/api/robust-boms/boms?${searchTerm ? `search=${encodeURIComponent(searchTerm)}` : ''}`;
   const { data: bomsData, isLoading } = useQuery({
-    queryKey: ['/api/robust-boms/boms', searchTerm],
+    queryKey: [bomsQueryUrl],
   });
 
   const { data: partsData } = useQuery({
-    queryKey: ['/api/robust-boms/parts'],
+    queryKey: ['/api/robust-boms/parts?pageSize=1000'],
   });
 
   const createBOMMutation = useMutation({
@@ -269,22 +274,63 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                       control={form.control}
                       name="parentPartAgNumber"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="flex flex-col">
                           <FormLabel>Parent Part (Inventory Item)</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-parent-part">
-                                <SelectValue placeholder="Select a parent part" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {parts.map((part: any) => (
-                                <SelectItem key={part.agPartNumber} value={part.agPartNumber}>
-                                  {part.agPartNumber} - {part.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  className={cn(
+                                    "w-full justify-between",
+                                    !field.value && "text-muted-foreground"
+                                  )}
+                                  data-testid="select-parent-part"
+                                >
+                                  {field.value
+                                    ? parts.find((part: any) => part.agPartNumber === field.value)
+                                      ? `${parts.find((part: any) => part.agPartNumber === field.value).agPartNumber} - ${parts.find((part: any) => part.agPartNumber === field.value).name}`
+                                      : "Select a parent part"
+                                    : "Select a parent part"}
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-full p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder="Search parts by AG#, SKU, or name..." />
+                                <CommandList>
+                                  <CommandEmpty>No part found.</CommandEmpty>
+                                  <CommandGroup>
+                                    {parts.map((part: any) => (
+                                      <CommandItem
+                                        key={part.agPartNumber}
+                                        value={`${part.agPartNumber} ${part.name} ${part.sku || ''}`}
+                                        onSelect={() => {
+                                          form.setValue("parentPartAgNumber", part.agPartNumber);
+                                        }}
+                                        data-testid={`option-part-${part.agPartNumber}`}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            part.agPartNumber === field.value
+                                              ? "opacity-100"
+                                              : "opacity-0"
+                                          )}
+                                        />
+                                        <div className="flex flex-col">
+                                          <span className="font-medium">{part.agPartNumber} - {part.name}</span>
+                                          {part.sku && <span className="text-xs text-muted-foreground">SKU: {part.sku}</span>}
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                           <FormDescription>
                             The inventory item that this BOM produces
                           </FormDescription>

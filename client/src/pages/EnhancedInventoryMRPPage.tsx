@@ -47,10 +47,13 @@ export default function EnhancedInventoryMRPPage() {
   const [activeCard, setActiveCard] = useState<string | null>(null);
   const [isInventoryItemsModalOpen, setIsInventoryItemsModalOpen] =
     useState(false);
+  const [isVendorPOModalOpen, setIsVendorPOModalOpen] = useState(false);
 
   const handleCardClick = (cardType: string) => {
     if (cardType === 'inventory-items') {
       setIsInventoryItemsModalOpen(true);
+    } else if (cardType === 'vendor-po') {
+      setIsVendorPOModalOpen(true);
     } else {
       setActiveCard(activeCard === cardType ? null : cardType);
     }
@@ -393,6 +396,22 @@ export default function EnhancedInventoryMRPPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Vendor Purchase Orders Modal */}
+      <Dialog
+        open={isVendorPOModalOpen}
+        onOpenChange={setIsVendorPOModalOpen}
+      >
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <ShoppingCart className="h-5 w-5" />
+              Vendor Purchase Orders
+            </DialogTitle>
+          </DialogHeader>
+          <VendorPOManager />
+        </DialogContent>
+      </Dialog>
+
       {/* Expanded Card Content */}
       {activeCard && (
         <div className="mt-8">
@@ -442,12 +461,6 @@ export default function EnhancedInventoryMRPPage() {
                       Outside Processing
                     </>
                   )}
-                  {activeCard === 'vendor-po' && (
-                    <>
-                      <ShoppingCart className="h-5 w-5" />
-                      Vendor Purchase Orders
-                    </>
-                  )}
                   {activeCard === 'po-settings' && (
                     <>
                       <Settings className="h-5 w-5" />
@@ -477,7 +490,6 @@ export default function EnhancedInventoryMRPPage() {
               {activeCard === 'mrp-shortages' && <MRPShortagesCard />}
               {activeCard === 'po-suggestions' && <POSuggestionsCard />}
               {activeCard === 'outside-processing' && <OutsideProcessingCard />}
-              {activeCard === 'vendor-po' && <VendorPOManager />}
               {activeCard === 'po-settings' && <VendorPOSettings />}
             </CardContent>
           </Card>

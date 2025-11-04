@@ -423,7 +423,7 @@ export default function InventoryItemsCard() {
   const [isAddToGroupDialogOpen, setIsAddToGroupDialogOpen] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   
-  // TEMPORARY: Bulk update utilized fields state
+  // Bulk update utilized fields state
   const [isBulkUtilizedDialogOpen, setIsBulkUtilizedDialogOpen] = useState(false);
   const [bulkUtilizedFields, setBulkUtilizedFields] = useState({
     utilizedInPL1: false,
@@ -857,10 +857,10 @@ export default function InventoryItemsCard() {
     });
   };
 
-  // TEMPORARY: Bulk update utilized fields mutation
+  // Bulk update utilized fields mutation
   const bulkUpdateUtilizedMutation = useMutation({
     mutationFn: async ({ itemIds, utilizedFields }: { itemIds: number[]; utilizedFields: any }) => {
-      await apiRequest('/api/enhanced/inventory/items/bulk-update-utilized', {
+      await apiRequest('/api/enhanced/items/bulk-update-utilized', {
         method: 'POST',
         body: { itemIds, utilizedFields },
       });
@@ -883,7 +883,7 @@ export default function InventoryItemsCard() {
     },
   });
 
-  // TEMPORARY: Handler for bulk utilized update
+  // Handler for bulk utilized update
   const handleBulkUtilizedUpdate = () => {
     if (selectedItems.size === 0) {
       toast.error('Please select at least one item');
@@ -931,8 +931,6 @@ export default function InventoryItemsCard() {
                 Add to Group ({selectedItems.size})
               </Button>
               
-              {/* TEMPORARY: Bulk update utilized fields button - COMMENTED OUT */}
-              {/* 
               <Button
                 variant="secondary"
                 onClick={() => setIsBulkUtilizedDialogOpen(true)}
@@ -941,7 +939,6 @@ export default function InventoryItemsCard() {
               >
                 Update Utilized In ({selectedItems.size})
               </Button>
-              */}
             </>
           )}
           
@@ -1373,8 +1370,6 @@ export default function InventoryItemsCard() {
         </DialogContent>
       </Dialog>
 
-      {/* TEMPORARY: Bulk Update Utilized In Dialog - COMMENTED OUT */}
-      {/*
       <Dialog open={isBulkUtilizedDialogOpen} onOpenChange={setIsBulkUtilizedDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1488,7 +1483,6 @@ export default function InventoryItemsCard() {
           </div>
         </DialogContent>
       </Dialog>
-      */}
     </div>
   );
 }

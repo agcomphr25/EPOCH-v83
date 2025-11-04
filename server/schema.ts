@@ -471,31 +471,47 @@ export const formSubmissions = pgTable('form_submissions', {
 export const inventoryItems = pgTable('inventory_items', {
   id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
   agPartNumber: text('ag_part_number').notNull().unique(), // AG Part#
-  sku: text('sku'), // SKU - Links to stock models (informational)
   name: text('name').notNull(), // Name
-  type: text('type'), // Type: Purchased or Manufactured
   source: text('source'), // Source
-  vendorId: integer('vendor_id').references(() => vendors.id), // Primary vendor for this part
   supplierPartNumber: text('supplier_part_number'), // Supplier Part #
-  secondarySupplierPartNumber: text('secondary_supplier_part_number'), // Secondary Supplier Part #
   costPer: real('cost_per'), // Purchase cost from vendor (e.g., $491.20 for 80lb box)
+  orderDate: date('order_date'), // Order Date
+  notes: text('notes'), // Notes
+  department: text('department'), // Dept.
+  secondarySource: text('secondary_source'), // Secondary Source
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  // Legacy columns (preserved for data integrity)
+  code: text('code'), // Legacy code field
+  description: text('description'), // Legacy description
+  category: text('category'), // Legacy category
+  quantityInStock: integer('quantity_in_stock'), // Legacy quantity
+  unitCost: real('unit_cost'), // Legacy unit cost
+  supplier: text('supplier'), // Legacy supplier text field
+  status: text('status'), // Legacy status
+  onHand: integer('on_hand'), // On-hand quantity
+  location: text('location'), // Storage location
+  minimumStock: integer('minimum_stock'), // Minimum stock level
+  lastUpdated: timestamp('last_updated'), // Last update timestamp
+  committed: integer('committed'), // Committed quantity
+  available: integer('available'), // Available quantity
+  reorderPoint: integer('reorder_point'), // Reorder point
+  // Current/Enhanced MRP columns
+  sku: text('sku'), // SKU - Links to stock models (informational)
+  secondarySupplierPartNumber: text('secondary_supplier_part_number'), // Secondary Supplier Part #
   purchaseUnit: text('purchase_unit'), // What is purchased (e.g., "80 lb box", "20/carton")
   usageQuantityPerUnit: real('usage_quantity_per_unit'), // How much used per manufactured unit (e.g., 50 grams)
   usageUnit: text('usage_unit'), // Unit of measurement for usage (e.g., "grams", "each")
   cogsPerUnit: real('cogs_per_unit'), // Calculated or manual COGS per manufactured unit
-  orderDate: date('order_date'), // Order Date
-  department: text('department'), // Dept.
-  secondarySource: text('secondary_source'), // Secondary Source
-  notes: text('notes'), // Notes
   isStockItem: boolean('is_stock_item').default(false), // Used in stock models
   utilizedInPL1: boolean('utilized_in_pl1').default(false), // Used in Production Line 1
   utilizedInPL2: boolean('utilized_in_pl2').default(false), // Used in Production Line 2
   utilizedInFacilities: boolean('utilized_in_facilities').default(false), // Used in Facilities
   utilizedInAdmin: boolean('utilized_in_admin').default(false), // Used in Admin
   utilizedInServices: boolean('utilized_in_services').default(false), // Used in Services
-  isActive: boolean('is_active').default(true),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  type: text('type'), // Type: Purchased or Manufactured
+  vendorId: integer('vendor_id').references(() => vendors.id), // Primary vendor for this part
 });
 
 // Item Groups for inventory categorization
@@ -2306,12 +2322,21 @@ export const layupSchedule = pgTable('layup_schedule', {
     .references(() => molds.moldId)
     .notNull(),
   employeeAssignments: jsonb('employee_assignments').notNull().default('[]'), // Array of {employeeId, workload}
-  weekLocked: boolean('week_locked').default(false), // Indicates if this week has been locked
   isOverride: boolean('is_override').default(false), // Manual override flag
   overriddenAt: timestamp('overridden_at'),
   overriddenBy: text('overridden_by'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+  // Additional fields from database
+  layupDay: date('layup_day'), // Specific layup day
+  weekLocked: boolean('week_locked').default(false), // Indicates if this week has been locked
+  customerName: text('customer_name'), // Customer name for display
+  stockModel: text('stock_model'), // Stock model for production
+  materialType: text('material_type'), // Material type
+  actionLength: text('action_length'), // Action length specification
+  lopValue: text('lop_value'), // LOP value
+  fbOrderNumber: text('fb_order_number'), // FishBowl order number
+  scheduleSnapshot: jsonb('schedule_snapshot'), // Snapshot of schedule data for printing
 });
 
 // Insert schemas for Layup Scheduler
@@ -3589,15 +3614,16 @@ export const parts = pgTable('parts', {
 }));
 
 // BOM definitions - parent record for each BOM
+// Now references inventoryItems instead of deprecated parts table
 export const boms = pgTable('boms', {
   id: uuid('id').primaryKey().defaultRandom(),
-  parentPartId: uuid('parent_part_id').notNull().references(() => parts.id, { onDelete: 'cascade' }),
+  parentPartAgNumber: text('parent_part_ag_number').notNull().references(() => inventoryItems.agPartNumber, { onDelete: 'cascade' }),
   code: text('code').notNull(),
   description: text('description').default(''),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 }, (t) => ({
-  byParent: index('boms_parent_idx').on(t.parentPartId),
+  byParent: index('boms_parent_idx').on(t.parentPartAgNumber),
   byCode: index('boms_code_idx').on(t.code),
 }));
 
@@ -3617,10 +3643,11 @@ export const bomRevisions = pgTable('bom_revisions', {
 }));
 
 // BOM lines - individual line items within a revision
+// Now references inventoryItems instead of deprecated parts table
 export const bomLines = pgTable('bom_lines', {
   id: uuid('id').primaryKey().defaultRandom(),
   revisionId: uuid('revision_id').notNull().references(() => bomRevisions.id, { onDelete: 'cascade' }),
-  childPartId: uuid('child_part_id').notNull().references(() => parts.id, { onDelete: 'restrict' }),
+  childPartAgNumber: text('child_part_ag_number').notNull().references(() => inventoryItems.agPartNumber, { onDelete: 'restrict' }),
   qtyPer: numeric('qty_per', { precision: 18, scale: 6 }).notNull().default('1'),
   scrapPct: numeric('scrap_pct', { precision: 6, scale: 3 }).notNull().default('0'),
   uom: text('uom').notNull().default('EA'),
@@ -3631,10 +3658,11 @@ export const bomLines = pgTable('bom_lines', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 }, (t) => ({
   byRev: index('bom_lines_rev_idx').on(t.revisionId),
-  byChild: index('bom_lines_child_idx').on(t.childPartId),
+  byChild: index('bom_lines_child_idx').on(t.childPartAgNumber),
 }));
 
 // Robust BOM Relations
+// Note: parts relations kept for backward compatibility (deprecated table)
 export const partsRelations = relations(parts, ({ many }) => ({
   childBomLines: many(bomLines),
   parentBoms: many(boms),
@@ -3642,7 +3670,7 @@ export const partsRelations = relations(parts, ({ many }) => ({
 
 export const bomsRelations = relations(boms, ({ many, one }) => ({
   revisions: many(bomRevisions),
-  parentPart: one(parts, { fields: [boms.parentPartId], references: [parts.id] }),
+  parentInventoryItem: one(inventoryItems, { fields: [boms.parentPartAgNumber], references: [inventoryItems.agPartNumber] }),
 }));
 
 export const bomRevisionsRelations = relations(bomRevisions, ({ many, one }) => ({
@@ -3652,7 +3680,7 @@ export const bomRevisionsRelations = relations(bomRevisions, ({ many, one }) => 
 
 export const bomLinesRelations = relations(bomLines, ({ one }) => ({
   revision: one(bomRevisions, { fields: [bomLines.revisionId], references: [bomRevisions.id] }),
-  childPart: one(parts, { fields: [bomLines.childPartId], references: [parts.id] }),
+  childInventoryItem: one(inventoryItems, { fields: [bomLines.childPartAgNumber], references: [inventoryItems.agPartNumber] }),
 }));
 
 // Robust BOM Insert Schemas
@@ -3674,7 +3702,7 @@ export const insertBomSchema = createInsertSchema(boms).omit({
   createdAt: true,
   updatedAt: true,
 }).extend({
-  parentPartId: z.string().uuid('Invalid parent part ID'),
+  parentPartAgNumber: z.string().min(1, 'Parent part AG Number is required'),
   code: z.string().min(1, 'Code is required'),
   description: z.string().default(''),
 });
@@ -3698,7 +3726,7 @@ export const insertBomLineSchema = createInsertSchema(bomLines).omit({
   updatedAt: true,
 }).extend({
   revisionId: z.string().uuid('Invalid revision ID'),
-  childPartId: z.string().uuid('Invalid child part ID'),
+  childPartAgNumber: z.string().min(1, 'Child part AG Number is required'),
   qtyPer: z.string().default('1'),
   scrapPct: z.string().default('0'),
   uom: z.string().default('EA'),

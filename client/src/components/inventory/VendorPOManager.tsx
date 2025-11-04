@@ -768,7 +768,7 @@ export default function VendorPOManager() {
                     <td>${item.description || '-'}</td>
                     <td>${item.quantity}</td>
                     <td>$${item.unitPrice.toFixed(2)}</td>
-                    <td>$${item.lineTotal.toFixed(2)}</td>
+                    <td>$${item.totalPrice.toFixed(2)}</td>
                   </tr>
                 `).join('')}
               </tbody>

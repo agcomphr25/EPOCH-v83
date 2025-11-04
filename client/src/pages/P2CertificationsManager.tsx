@@ -503,13 +503,33 @@ export default function P2CertificationsManager() {
                       <SelectValue placeholder="Select department" />
                     </SelectTrigger>
                     <SelectContent>
-                      {DEPARTMENTS.map((dept) => (
-                        <SelectItem key={dept} value={dept}>
-                          {dept}
-                        </SelectItem>
-                      ))}
+                      {(() => {
+                        const selectedPartCert = partCertifications.find(
+                          pc => pc.partNumber === empPartNumber
+                        );
+                        const availableDepts = selectedPartCert?.departments || [];
+                        
+                        if (availableDepts.length === 0 && empPartNumber) {
+                          return (
+                            <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                              No certification requirements defined for this part
+                            </div>
+                          );
+                        }
+                        
+                        return availableDepts.map((dept: string) => (
+                          <SelectItem key={dept} value={dept}>
+                            {dept}
+                          </SelectItem>
+                        ));
+                      })()}
                     </SelectContent>
                   </Select>
+                  {empPartNumber && !partCertifications.find(pc => pc.partNumber === empPartNumber) && (
+                    <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
+                      ⚠️ Please create a certification requirement for this part first
+                    </p>
+                  )}
                 </div>
               </div>
 

@@ -164,7 +164,7 @@ router.delete('/items/:id', async (req: Request, res: Response) => {
   }
 });
 
-// TEMPORARY: Bulk update utilized fields for multiple items
+// Bulk update utilized fields for multiple items
 // REPLACEMENT operation: Sets ALL selected items to have the EXACT same utilization flags
 // as specified in the request. Frontend sends all 5 fields with true/false values.
 // - Checked fields = true for all items

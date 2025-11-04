@@ -217,6 +217,17 @@ router.delete('/components/:id', async (req, res) => {
   }
 });
 
+// Packet Compositions endpoints
+router.get('/packet-compositions', async (req, res) => {
+  try {
+    const compositions = await storage.getAllPacketCompositions();
+    res.json(compositions);
+  } catch (error) {
+    console.error('Error fetching packet compositions:', error);
+    res.status(500).json({ error: 'Failed to fetch packet compositions' });
+  }
+});
+
 // Weekly Data endpoints
 router.get('/weekly-data', async (req, res) => {
   try {
@@ -502,8 +513,8 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
   <style>
     @media print {
       @page { 
-        margin: 0.2cm;
-        size: 4in 3in;
+        margin: 0;
+        size: 3.33in 4in;
       }
       body { margin: 0; }
       .no-print { display: none; }
@@ -519,12 +530,15 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
     }
     .label {
       background: white;
-      padding: 12px;
+      padding: 10px;
       border: 2px solid #333;
-      width: 4in;
-      max-height: 3in;
+      width: 3.33in;
+      height: 4in;
       text-align: center;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
     .label-header {
       font-size: 13px;
@@ -566,7 +580,7 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
   <div class="label">
     <div class="label-header">AG Composites - Fabric Inventory</div>
     ${line ? `<div class="label-info">Production Line: <strong>${line.lineName}</strong></div>` : ''}
-    ${inventory.brand ? `<div class="label-info">Brand: ${inventory.brand}</div>` : ''}
+    ${inventory.source ? `<div class="label-info">Source: ${inventory.source}</div>` : ''}
     ${inventory.fabric ? `<div class="label-info">Fabric: ${inventory.fabric}</div>` : ''}
     ${inventory.batchNumber ? `<div class="label-info">Batch: ${inventory.batchNumber}</div>` : ''}
     ${inventory.location ? `<div class="label-info">Location: ${inventory.location}</div>` : ''}

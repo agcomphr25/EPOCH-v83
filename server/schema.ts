@@ -4738,9 +4738,7 @@ export type InsertRtsSaleItem = z.infer<typeof insertRtsSaleItemSchema>;
 export const cuttingMaterials = pgTable('cutting_materials', {
   id: uuid('id').defaultRandom().primaryKey(),
   materialName: text('material_name').notNull().unique(),
-  yieldPerCut: integer('yield_per_cut').notNull(), // 1-1188 pieces per cut
   materialType: text('material_type').notNull(), // Carbon Fiber, Fiberglass, Primtex, etc.
-  wasteFactor: numeric('waste_factor', { precision: 5, scale: 4 }).notNull().default('0.05'), // typically 0.05-0.25
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -4771,10 +4769,21 @@ export const cuttingProductCategories = pgTable('cutting_product_categories', {
 // Cutting Table - Components
 export const cuttingComponents = pgTable('cutting_components', {
   id: uuid('id').defaultRandom().primaryKey(),
-  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
   componentName: text('component_name').notNull(),
-  materialId: uuid('material_id').references(() => cuttingMaterials.id),
-  requiredQuantity: integer('required_quantity').notNull(), // Quantity needed per product
+  yieldPerCut: integer('yield_per_cut'), // How many pieces per cut (e.g., 70 buttstocks, 500 wrist)
+  fabricType: text('fabric_type'), // Carbon Fiber, Fiberglass, etc.
+  thickness: text('thickness'), // Thin, Thick
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cutting Table - Packet Compositions (what components make up each packet type)
+export const cuttingPacketCompositions = pgTable('cutting_packet_compositions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
+  componentId: uuid('component_id').references(() => cuttingComponents.id),
+  quantityNeeded: integer('quantity_needed').notNull(), // How many of this component per packet
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -4812,7 +4821,7 @@ export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
   id: uuid('id').defaultRandom().primaryKey(),
   materialId: uuid('material_id').references(() => cuttingMaterials.id),
   productionLineId: uuid('production_line_id').references(() => cuttingProductionLines.id),
-  brand: text('brand'), // Fabric brand/manufacturer
+  source: text('source'), // Fabric source/manufacturer
   fabric: text('fabric'), // Fabric type/description
   batchNumber: text('batch_number'), // Batch/lot number
   internalControlNumber: text('internal_control_number'), // Part number/internal control

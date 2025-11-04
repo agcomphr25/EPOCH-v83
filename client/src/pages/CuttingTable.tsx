@@ -43,10 +43,18 @@ type ProductCategory = {
 
 type Component = {
   id: string;
-  productCategoryId: string;
   componentName: string;
-  materialId: string;
-  requiredQuantity: number;
+  yieldPerCut: number;
+  fabricType: string;
+  thickness: string;
+  isActive: boolean;
+};
+
+type PacketComposition = {
+  id: string;
+  productCategoryId: string;
+  componentId: string;
+  quantityNeeded: number;
 };
 
 type WeeklyData = {
@@ -117,7 +125,7 @@ export default function CuttingTable() {
 
   // Form state for Add Fabric Inventory tab
   const [fabricFormLine, setFabricFormLine] = useState('');
-  const [fabricBrand, setFabricBrand] = useState('');
+  const [fabricSource, setFabricSource] = useState('');
   const [fabricType, setFabricType] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
   const [internalControlNumber, setInternalControlNumber] = useState('');
@@ -128,6 +136,10 @@ export default function CuttingTable() {
   const [conformanceDocLink, setConformanceDocLink] = useState('');
   const [fabricQuantity, setFabricQuantity] = useState('');
   const [fabricNotes, setFabricNotes] = useState('');
+
+  // Form state for Packet Management tab
+  const [selectedPacketCategory, setSelectedPacketCategory] = useState('');
+  const [packetsNeeded, setPacketsNeeded] = useState('');
 
   // Fetch all data
   const { data: materials = [], isLoading: loadingMaterials } = useQuery<Material[]>({
@@ -146,6 +158,10 @@ export default function CuttingTable() {
     queryKey: ['/api/cutting-table/components'],
   });
 
+  const { data: packetCompositions = [], isLoading: loadingPacketCompositions } = useQuery<PacketComposition[]>({
+    queryKey: ['/api/cutting-table/packet-compositions'],
+  });
+
   const { data: weeklyData = [], isLoading: loadingWeekly } = useQuery<WeeklyData[]>({
     queryKey: ['/api/cutting-table/weekly-data/by-week', currentWeek],
   });
@@ -158,7 +174,7 @@ export default function CuttingTable() {
     queryKey: ['/api/cutting-table/fabric-inventory'],
   });
 
-  const isLoading = loadingMaterials || loadingLines || loadingCategories || loadingComponents || loadingWeekly || loadingProgress || loadingInventory;
+  const isLoading = loadingMaterials || loadingLines || loadingCategories || loadingComponents || loadingPacketCompositions || loadingWeekly || loadingProgress || loadingInventory;
 
   // Clear selected category when production line changes
   useEffect(() => {
@@ -442,6 +458,169 @@ export default function CuttingTable() {
     </Card>
   );
 
+  const renderPacketManagement = () => {
+    // Get packet categories (only P1 categories with packet compositions)
+    const packetCategories = categories.filter(cat => 
+      packetCompositions.some(comp => comp.productCategoryId === cat.id)
+    );
+
+    // Calculate cuts needed for selected packet
+    const calculatePacketCuts = () => {
+      if (!selectedPacketCategory || !packetsNeeded) return [];
+      
+      const categoryCompositions = packetCompositions.filter(
+        comp => comp.productCategoryId === selectedPacketCategory
+      );
+      
+      return categoryCompositions.map(comp => {
+        const component = components.find(c => c.id === comp.componentId);
+        if (!component) return null;
+        
+        const totalPieces = parseInt(packetsNeeded) * comp.quantityNeeded;
+        const cutsRequired = Math.ceil(totalPieces / component.yieldPerCut);
+        
+        return {
+          componentName: component.componentName,
+          fabricType: component.fabricType,
+          thickness: component.thickness,
+          yieldPerCut: component.yieldPerCut,
+          quantityPerPacket: comp.quantityNeeded,
+          totalPieces,
+          cutsRequired
+        };
+      }).filter(Boolean);
+    };
+
+    const calculatedCuts = calculatePacketCuts();
+
+    return (
+      <div className="space-y-6" data-testid="packet-management">
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Production Calculator</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Packet Type</label>
+              <Select value={selectedPacketCategory} onValueChange={setSelectedPacketCategory}>
+                <SelectTrigger data-testid="select-packet-type">
+                  <SelectValue placeholder="Select packet type..." />
+                </SelectTrigger>
+                <SelectContent position="popper" side="bottom" align="start">
+                  {packetCategories.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.categoryName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Packets Needed</label>
+              <Input
+                type="number"
+                placeholder="Enter quantity"
+                value={packetsNeeded}
+                onChange={(e) => setPacketsNeeded(e.target.value)}
+                data-testid="input-packets-needed"
+              />
+            </div>
+
+            <div className="flex items-end">
+              <Button 
+                onClick={() => {
+                  setSelectedPacketCategory('');
+                  setPacketsNeeded('');
+                }}
+                variant="outline"
+                data-testid="button-reset-calculator"
+              >
+                Reset
+              </Button>
+            </div>
+          </div>
+
+          {calculatedCuts.length > 0 && (
+            <div className="mt-6">
+              <h4 className="font-semibold mb-3">Cuts Required:</h4>
+              <table className="w-full text-sm">
+                <thead className="border-b">
+                  <tr>
+                    <th className="text-left p-2">Component</th>
+                    <th className="text-left p-2">Fabric</th>
+                    <th className="text-left p-2">Thickness</th>
+                    <th className="text-right p-2">Qty/Packet</th>
+                    <th className="text-right p-2">Total Pieces</th>
+                    <th className="text-right p-2">Yield/Cut</th>
+                    <th className="text-right p-2 font-bold">Cuts Needed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {calculatedCuts.map((item, idx) => (
+                    <tr key={idx} className="border-b">
+                      <td className="p-2">{item.componentName}</td>
+                      <td className="p-2">{item.fabricType}</td>
+                      <td className="p-2">{item.thickness}</td>
+                      <td className="text-right p-2">{item.quantityPerPacket}</td>
+                      <td className="text-right p-2">{item.totalPieces}</td>
+                      <td className="text-right p-2">{item.yieldPerCut}</td>
+                      <td className="text-right p-2 font-bold">{item.cutsRequired}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Components & Yields</h3>
+          <table className="w-full text-sm">
+            <thead className="border-b">
+              <tr>
+                <th className="text-left p-2">Component</th>
+                <th className="text-left p-2">Fabric Type</th>
+                <th className="text-left p-2">Thickness</th>
+                <th className="text-right p-2">Yield per Cut</th>
+              </tr>
+            </thead>
+            <tbody>
+              {components.map(comp => (
+                <tr key={comp.id} className="border-b">
+                  <td className="p-2">{comp.componentName}</td>
+                  <td className="p-2">{comp.fabricType}</td>
+                  <td className="p-2">{comp.thickness}</td>
+                  <td className="text-right p-2">{comp.yieldPerCut}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Packet Compositions</h3>
+          {packetCategories.map(cat => {
+            const comps = packetCompositions.filter(pc => pc.productCategoryId === cat.id);
+            return (
+              <div key={cat.id} className="mb-4">
+                <h4 className="font-medium mb-2">{cat.categoryName}</h4>
+                <ul className="list-disc list-inside text-sm text-muted-foreground ml-4">
+                  {comps.map(comp => {
+                    const component = components.find(c => c.id === comp.componentId);
+                    return component ? (
+                      <li key={comp.id}>
+                        {comp.quantityNeeded}x {component.componentName} ({component.fabricType} - {component.thickness})
+                      </li>
+                    ) : null;
+                  })}
+                </ul>
+              </div>
+            );
+          })}
+        </Card>
+      </div>
+    );
+  };
+
   const renderSubmitData = () => {
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -598,10 +777,10 @@ export default function CuttingTable() {
     const handleFabricSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       
-      if (!fabricFormLine || !fabricBrand || !fabricType || !fabricQuantity) {
+      if (!fabricFormLine || !fabricSource || !fabricType || !fabricQuantity) {
         toast({
           title: "Missing Information",
-          description: "Please fill in Production Line, Brand, Fabric, and Quantity",
+          description: "Please fill in Production Line, Source, Fabric, and Quantity",
           variant: "destructive"
         });
         return;
@@ -612,7 +791,7 @@ export default function CuttingTable() {
           method: 'POST',
           body: JSON.stringify({
             productionLineId: fabricFormLine,
-            brand: fabricBrand,
+            source: fabricSource,
             fabric: fabricType,
             batchNumber: batchNumber || null,
             internalControlNumber: internalControlNumber || null,
@@ -636,7 +815,7 @@ export default function CuttingTable() {
 
         // Reset form
         setFabricFormLine('');
-        setFabricBrand('');
+        setFabricSource('');
         setFabricType('');
         setBatchNumber('');
         setInternalControlNumber('');
@@ -689,13 +868,13 @@ export default function CuttingTable() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Brand *</label>
+              <label className="text-sm font-medium">Source *</label>
               <Input 
                 type="text" 
-                value={fabricBrand}
-                onChange={(e) => setFabricBrand(e.target.value)}
+                value={fabricSource}
+                onChange={(e) => setFabricSource(e.target.value)}
                 placeholder="e.g., Hexcel, Toray"
-                data-testid="input-fabric-brand"
+                data-testid="input-fabric-source"
               />
             </div>
 
@@ -823,7 +1002,7 @@ export default function CuttingTable() {
   };
 
   const renderFabricInventory = () => {
-    type FabricWithDetails = FabricInventory & { brand?: string; fabric?: string; batchNumber?: string; internalControlNumber?: string; barcode?: string; receivedDate?: string; manufactureDate?: string; productionLineId?: string; conformanceDocumentLink?: string };
+    type FabricWithDetails = FabricInventory & { source?: string; fabric?: string; batchNumber?: string; internalControlNumber?: string; barcode?: string; receivedDate?: string; manufactureDate?: string; productionLineId?: string; conformanceDocumentLink?: string };
     const fabricWithDetails = fabricInventory as FabricWithDetails[];
 
     return (
@@ -837,7 +1016,7 @@ export default function CuttingTable() {
               <thead>
                 <tr className="border-b">
                   <th className="text-left p-2 text-sm font-medium">Production Line</th>
-                  <th className="text-left p-2 text-sm font-medium">Brand</th>
+                  <th className="text-left p-2 text-sm font-medium">Source</th>
                   <th className="text-left p-2 text-sm font-medium">Fabric</th>
                   <th className="text-left p-2 text-sm font-medium">Batch #</th>
                   <th className="text-left p-2 text-sm font-medium">Control #</th>
@@ -866,7 +1045,7 @@ export default function CuttingTable() {
                           {line?.lineName || '-'}
                         </span>
                       </td>
-                      <td className="p-2 text-sm">{item.brand || '-'}</td>
+                      <td className="p-2 text-sm">{item.source || '-'}</td>
                       <td className="p-2 text-sm">{item.fabric || '-'}</td>
                       <td className="p-2 text-sm">{item.batchNumber || '-'}</td>
                       <td className="p-2 text-sm">{item.internalControlNumber || '-'}</td>
@@ -985,11 +1164,12 @@ export default function CuttingTable() {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full" data-testid="tabs-main">
-        <TabsList className="grid w-full grid-cols-7" data-testid="tabs-list">
+        <TabsList className="grid w-full grid-cols-8" data-testid="tabs-list">
           <TabsTrigger value="dashboard" data-testid="tab-dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="daily" data-testid="tab-daily">Daily Tracker</TabsTrigger>
           <TabsTrigger value="weekly" data-testid="tab-weekly">Weekly Report</TabsTrigger>
           <TabsTrigger value="projections" data-testid="tab-projections">Projections</TabsTrigger>
+          <TabsTrigger value="packetMgmt" data-testid="tab-packet-mgmt">Packet Mgmt</TabsTrigger>
           <TabsTrigger value="submit" data-testid="tab-submit">Submit Data</TabsTrigger>
           <TabsTrigger value="addFabric" data-testid="tab-add-fabric">Add Fabric</TabsTrigger>
           <TabsTrigger value="inventory" data-testid="tab-inventory">Inventory</TabsTrigger>
@@ -1009,6 +1189,10 @@ export default function CuttingTable() {
 
         <TabsContent value="projections" className="mt-6" data-testid="content-projections">
           {renderProjections()}
+        </TabsContent>
+
+        <TabsContent value="packetMgmt" className="mt-6" data-testid="content-packet-mgmt">
+          {renderPacketManagement()}
         </TabsContent>
 
         <TabsContent value="submit" className="mt-6" data-testid="content-submit">

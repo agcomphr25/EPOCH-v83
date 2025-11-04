@@ -336,6 +336,10 @@ function App() {
                     path="/robust-bom-administration"
                     component={RobustBOMAdministration}
                   />
+                  <Route
+                    path="/robust-bom"
+                    component={RobustBOMAdministration}
+                  />
 
                   {/* Barcode and Scanner Routes */}
                   <Route

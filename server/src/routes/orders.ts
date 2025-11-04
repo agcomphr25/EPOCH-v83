@@ -1946,8 +1946,8 @@ router.get('/export/csv', async (req: Request, res: Response) => {
 // CSV Export endpoint for ALL orders (including fulfilled and cancelled)
 router.get('/export/csv-all', async (req: Request, res: Response) => {
   try {
-    // Get all orders without any filtering
-    const orders = await storage.getAllOrdersWithPaymentStatus();
+    // Get all orders without any filtering - pass large limit to get all orders
+    const orders = await storage.getAllOrdersWithPaymentStatus('', 999999);
 
     // CSV headers
     const csvHeaders = [

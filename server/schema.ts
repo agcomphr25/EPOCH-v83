@@ -3445,7 +3445,7 @@ export const insertP2PartCertificationSchema = createInsertSchema(p2PartCertific
   .extend({
     partNumber: z.string().min(1, 'Part Number is required'),
     partName: z.string().optional().nullable(),
-    department: z.string().min(1, 'Department is required'),
+    departments: z.array(z.string()).min(1, 'At least one department is required'),
     notes: z.string().optional().nullable(),
   });
 

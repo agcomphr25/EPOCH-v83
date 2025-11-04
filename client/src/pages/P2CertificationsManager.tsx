@@ -71,7 +71,7 @@ export default function P2CertificationsManager() {
   const [empNotes, setEmpNotes] = useState('');
 
   // Fetch data
-  const { data: partNumbers = [] } = useQuery({
+  const { data: partNumbers = [] } = useQuery<Array<{ partNumber: string; partName: string }>>({
     queryKey: ['/api/training/p2-certifications/part-numbers'],
   });
 
@@ -90,10 +90,11 @@ export default function P2CertificationsManager() {
   // Create Part Certification Mutation
   const createPartCertMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest('/api/training/p2-certifications', 'POST', data);
+      return apiRequest('/api/training/p2-certifications', { method: 'POST', body: data });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/training/p2-certifications'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/training/p2-certifications/part-numbers'] });
       toast({ title: 'Success', description: 'Part certification requirement created' });
       // Reset form
       setPartNumber('');
@@ -113,10 +114,11 @@ export default function P2CertificationsManager() {
   // Delete Part Certification Mutation
   const deletePartCertMutation = useMutation({
     mutationFn: async (id: number) => {
-      return apiRequest(`/api/training/p2-certifications/${id}`, 'DELETE');
+      return apiRequest(`/api/training/p2-certifications/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/training/p2-certifications'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/training/p2-certifications/part-numbers'] });
       toast({ title: 'Success', description: 'Part certification deleted' });
     },
     onError: (error: any) => {
@@ -131,7 +133,7 @@ export default function P2CertificationsManager() {
   // Create Employee Certification Mutation
   const createEmpCertMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest('/api/training/p2-employee-certifications', 'POST', data);
+      return apiRequest('/api/training/p2-employee-certifications', { method: 'POST', body: data });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/training/p2-employee-certifications'] });
@@ -151,7 +153,7 @@ export default function P2CertificationsManager() {
   // Update Employee Certification Mutation
   const updateEmpCertMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      return apiRequest(`/api/training/p2-employee-certifications/${id}`, 'PATCH', data);
+      return apiRequest(`/api/training/p2-employee-certifications/${id}`, { method: 'PATCH', body: data });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/training/p2-employee-certifications'] });
@@ -169,7 +171,7 @@ export default function P2CertificationsManager() {
   // Delete Employee Certification Mutation
   const deleteEmpCertMutation = useMutation({
     mutationFn: async (id: number) => {
-      return apiRequest(`/api/training/p2-employee-certifications/${id}`, 'DELETE');
+      return apiRequest(`/api/training/p2-employee-certifications/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/training/p2-employee-certifications'] });
@@ -631,7 +633,7 @@ export default function P2CertificationsManager() {
                             <TableCell>{cert.department}</TableCell>
                             <TableCell className="text-center">
                               <Checkbox
-                                checked={cert.drawingKnowledge}
+                                checked={cert.drawingKnowledge || false}
                                 onCheckedChange={(checked) => 
                                   handleCheckboxChange(cert.id, 'drawingKnowledge', checked as boolean)
                                 }
@@ -640,7 +642,7 @@ export default function P2CertificationsManager() {
                             </TableCell>
                             <TableCell className="text-center">
                               <Checkbox
-                                checked={cert.specSheetUnderstanding}
+                                checked={cert.specSheetUnderstanding || false}
                                 onCheckedChange={(checked) => 
                                   handleCheckboxChange(cert.id, 'specSheetUnderstanding', checked as boolean)
                                 }
@@ -649,7 +651,7 @@ export default function P2CertificationsManager() {
                             </TableCell>
                             <TableCell className="text-center">
                               <Checkbox
-                                checked={cert.procedureCompletion}
+                                checked={cert.procedureCompletion || false}
                                 onCheckedChange={(checked) => 
                                   handleCheckboxChange(cert.id, 'procedureCompletion', checked as boolean)
                                 }

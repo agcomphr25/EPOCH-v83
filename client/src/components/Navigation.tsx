@@ -45,6 +45,7 @@ import {
   Home,
   FileSpreadsheet,
   Search,
+  Award,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -438,6 +439,12 @@ export default function Navigation() {
       label: 'Manage Training Assignments',
       icon: GraduationCap,
       description: 'Add, edit, and delete training assignments for employees',
+    },
+    {
+      path: '/p2-certifications',
+      label: 'P2 Certifications Manager',
+      icon: Award,
+      description: 'Manage P2 part certifications and track employee competency',
     },
   ];
 

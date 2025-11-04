@@ -14,6 +14,7 @@ import {
   p2PartCertifications,
   p2EmployeePartCertifications,
   p2PurchaseOrderItems,
+  inventoryItems,
   insertTrainingModuleSchema,
   insertTrainingQuestionSchema,
   insertTrainingQuestionOptionSchema,
@@ -31,7 +32,7 @@ import {
   type InsertP2PartCertification,
   type InsertP2EmployeePartCertification,
 } from '../../schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import {
   extractTrainingContent,
   extractTrainingMatrixData,
@@ -1155,17 +1156,18 @@ router.get('/p2-certifications', async (req, res) => {
   }
 });
 
-// Get unique part numbers from P2 PO items for dropdown
+// Get inventory items for part number dropdown
 router.get('/p2-certifications/part-numbers', async (req, res) => {
   try {
-    const parts = await db
-      .selectDistinct({
-        partNumber: p2PurchaseOrderItems.partNumber,
-        partName: p2PurchaseOrderItems.partName,
+    const items = await db
+      .select({
+        partNumber: inventoryItems.agPartNumber,
+        partName: inventoryItems.name,
       })
-      .from(p2PurchaseOrderItems)
-      .orderBy(p2PurchaseOrderItems.partNumber);
-    res.json(parts);
+      .from(inventoryItems)
+      .where(sql`${inventoryItems.agPartNumber} IS NOT NULL AND ${inventoryItems.agPartNumber} != ''`)
+      .orderBy(inventoryItems.agPartNumber);
+    res.json(items);
   } catch (error: any) {
     console.error('Error fetching part numbers:', error);
     res.status(500).json({ error: error.message });

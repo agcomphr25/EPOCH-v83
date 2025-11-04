@@ -528,7 +528,7 @@ export default function RTSSalesDialog({
             disabled={createSaleMutation.isPending || selectedItemIds.size === 0}
             data-testid="button-create-sale"
           >
-            {createSaleMutation.isPending ? 'Creating...' : 'Create Sale & Generate Label'}
+            {createSaleMutation.isPending ? 'Creating...' : 'Create RTS Sale'}
           </Button>
         </DialogFooter>
       </DialogContent>

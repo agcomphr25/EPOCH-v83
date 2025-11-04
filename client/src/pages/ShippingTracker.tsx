@@ -62,6 +62,8 @@ interface Order {
   notificationSentAt?: string;
   shippingCarrier?: string;
   shippingMethod?: string;
+  isRtsOrder?: boolean;
+  rtsSaleId?: string;
 }
 
 interface Customer {
@@ -471,6 +473,15 @@ export default function ShippingTracker() {
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
                               {order.orderId}
+                              {order.isRtsOrder && (
+                                <Badge 
+                                  variant="secondary" 
+                                  className="bg-blue-100 text-blue-800 text-xs"
+                                  data-testid={`badge-rts-${order.orderId}`}
+                                >
+                                  RTS
+                                </Badge>
+                              )}
                               {consolidated && (
                                 <Badge 
                                   variant="secondary" 

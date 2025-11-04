@@ -63,6 +63,21 @@ export function SalesOrderModal({
     enabled: isOpen && !!orderId,
   });
 
+  // Fetch RTS sale data if this is an RTS order
+  const {
+    data: rtsSaleData,
+    isLoading: isLoadingRtsSale,
+  } = useQuery({
+    queryKey: ['/api/rts-sales', orderData?.rtsSaleId],
+    queryFn: async () => {
+      if (!orderData?.rtsSaleId) return null;
+      const response = await fetch(`/api/rts-sales/${orderData.rtsSaleId}`);
+      if (!response.ok) throw new Error('Failed to fetch RTS sale');
+      return response.json();
+    },
+    enabled: isOpen && !!orderData?.isRtsOrder && !!orderData?.rtsSaleId,
+  });
+
   const handleDownloadPdf = async () => {
     try {
       setDownloadingPdf(true);
@@ -164,68 +179,149 @@ export function SalesOrderModal({
 
             <Separator />
 
-            {/* Product Information */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-gray-500" />
-                <span className="font-semibold">Product Details</span>
-              </div>
-              <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                <p className="font-medium">
-                  {orderData.modelId
-                    ?.replace(/_/g, ' ')
-                    .replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="outline">{orderData.currentDepartment}</Badge>
-                  {orderData.isPaid && <Badge variant="secondary">PAID</Badge>}
+            {/* RTS Stock Items or Regular Product Information */}
+            {orderData.isRtsOrder ? (
+              isLoadingRtsSale ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                  Loading RTS stock items...
                 </div>
-              </div>
-            </div>
-
-            {/* Features/Options */}
-            {orderData.features &&
-              Object.keys(orderData.features).length > 0 && (
-                <>
-                  <Separator />
+              ) : rtsSaleData?.items ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Package className="w-4 h-4 text-gray-500" />
+                    <span className="font-semibold">RTS Stock Items</span>
+                    <Badge className="bg-orange-500 text-white">RTS</Badge>
+                  </div>
                   <div className="space-y-2">
-                    <h3 className="font-semibold">Features & Options</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {/* Ensure action_length is always shown if it exists */}
-                      {orderData.features.action_length && (
-                        <div
-                          key="action_length"
-                          className="flex justify-between items-center text-sm"
-                        >
-                          <span className="text-gray-600">Action Length:</span>
-                          <span className="font-medium">
-                            {formatFeatureValue(
-                              'action_length',
-                              orderData.features.action_length
-                            )}
-                          </span>
-                        </div>
-                      )}
-                      {/* Show all other features */}
-                      {Object.entries(orderData.features)
-                        .filter(([key]) => key !== 'action_length') // Avoid duplicating action_length
-                        .map(([key, value]) => (
-                          <div
-                            key={key}
-                            className="flex justify-between items-center text-sm"
-                          >
-                            <span className="text-gray-600">
-                              {formatFeatureName(key)}:
-                            </span>
-                            <span className="font-medium">
-                              {formatFeatureValue(key, value)}
-                            </span>
+                    {rtsSaleData.items.map((item: any, index: number) => (
+                      <div
+                        key={item.id || index}
+                        className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{item.stockModel}</p>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-xs text-gray-600">
+                              {item.actionLength && (
+                                <div>
+                                  <span className="font-medium">Length:</span> {item.actionLength}
+                                </div>
+                              )}
+                              {item.action && (
+                                <div>
+                                  <span className="font-medium">Action:</span> {item.action}
+                                </div>
+                              )}
+                              {item.barrel && (
+                                <div>
+                                  <span className="font-medium">Barrel:</span> {item.barrel}
+                                </div>
+                              )}
+                              {item.bottomMetal && (
+                                <div>
+                                  <span className="font-medium">Bottom Metal:</span> {item.bottomMetal}
+                                </div>
+                              )}
+                              {item.color && (
+                                <div>
+                                  <span className="font-medium">Color:</span> {item.color}
+                                </div>
+                              )}
+                              {item.extras && (
+                                <div className="col-span-2">
+                                  <span className="font-medium">Extras:</span> {item.extras}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        ))}
+                          <div className="text-right ml-4">
+                            <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
+                            <p className="font-bold text-base">
+                              ${item.unitPrice.toFixed(2)}
+                            </p>
+                            {item.quantity > 1 && (
+                              <p className="text-xs text-gray-500">
+                                Total: ${item.lineTotal.toFixed(2)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-red-600">
+                  <p>Unable to load RTS sale data</p>
+                </div>
+              )
+            ) : (
+              <>
+                {/* Regular Product Information */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Package className="w-4 h-4 text-gray-500" />
+                    <span className="font-semibold">Product Details</span>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                    <p className="font-medium">
+                      {orderData.modelId
+                        ?.replace(/_/g, ' ')
+                        .replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge variant="outline">{orderData.currentDepartment}</Badge>
+                      {orderData.isPaid && <Badge variant="secondary">PAID</Badge>}
                     </div>
                   </div>
-                </>
-              )}
+                </div>
+
+                {/* Features/Options */}
+                {orderData.features &&
+                  Object.keys(orderData.features).length > 0 && (
+                    <>
+                      <Separator />
+                      <div className="space-y-2">
+                        <h3 className="font-semibold">Features & Options</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {/* Ensure action_length is always shown if it exists */}
+                          {orderData.features.action_length && (
+                            <div
+                              key="action_length"
+                              className="flex justify-between items-center text-sm"
+                            >
+                              <span className="text-gray-600">Action Length:</span>
+                              <span className="font-medium">
+                                {formatFeatureValue(
+                                  'action_length',
+                                  orderData.features.action_length
+                                )}
+                              </span>
+                            </div>
+                          )}
+                          {/* Show all other features */}
+                          {Object.entries(orderData.features)
+                            .filter(([key]) => key !== 'action_length') // Avoid duplicating action_length
+                            .map(([key, value]) => (
+                              <div
+                                key={key}
+                                className="flex justify-between items-center text-sm"
+                              >
+                                <span className="text-gray-600">
+                                  {formatFeatureName(key)}:
+                                </span>
+                                <span className="font-medium">
+                                  {formatFeatureValue(key, value)}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+              </>
+            )}
 
             {/* Pricing */}
             <Separator />
@@ -234,11 +330,38 @@ export function SalesOrderModal({
                 <DollarSign className="w-4 h-4 text-gray-500" />
                 <span className="font-semibold">Pricing</span>
               </div>
-              <div className="text-right">
-                <p className="text-2xl font-bold">
-                  ${orderData.totalPrice?.toFixed(2) || '0.00'}
-                </p>
-              </div>
+              {orderData.isRtsOrder && rtsSaleData ? (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Subtotal:</span>
+                    <span>${rtsSaleData.subtotal?.toFixed(2) || '0.00'}</span>
+                  </div>
+                  {rtsSaleData.shippingCost > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Shipping:</span>
+                      <span>${rtsSaleData.shippingCost?.toFixed(2) || '0.00'}</span>
+                    </div>
+                  )}
+                  {rtsSaleData.tax > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Tax:</span>
+                      <span>${rtsSaleData.tax?.toFixed(2) || '0.00'}</span>
+                    </div>
+                  )}
+                  <Separator className="my-2" />
+                  <div className="text-right">
+                    <p className="text-2xl font-bold">
+                      ${rtsSaleData.totalAmount?.toFixed(2) || '0.00'}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-right">
+                  <p className="text-2xl font-bold">
+                    ${orderData.totalPrice?.toFixed(2) || '0.00'}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Actions */}

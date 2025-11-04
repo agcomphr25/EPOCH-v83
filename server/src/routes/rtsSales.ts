@@ -5,12 +5,14 @@ import {
   rtsSaleItems, 
   rtsInventory, 
   rtsInventoryHistory,
+  allOrders,
   insertRtsSaleSchema,
   insertRtsSaleItemSchema 
 } from '../../schema';
 import { eq, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { createShipment } from '../utils/upsShipping';
+import { generateP1OrderId } from '../../utils/orderIdGenerator';
 
 const router = Router();
 
@@ -182,6 +184,57 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Create an order in allOrders that goes directly to Shipping QC
+    // Generate unique order ID
+    const existingOrders = await db
+      .select({ orderId: allOrders.orderId })
+      .from(allOrders)
+      .orderBy(desc(allOrders.createdAt))
+      .limit(1);
+    
+    const lastOrderId = existingOrders.length > 0 ? existingOrders[0].orderId : '';
+    const newOrderId = generateP1OrderId(new Date(), lastOrderId);
+
+    // Get the first RTS item's stock model for the order (or a descriptive string)
+    const firstItem = selectedItems[0];
+    const modelDescription = `RTS - ${firstItem.stockModel}${data.items.length > 1 ? ` (+${data.items.length - 1} more)` : ''}`;
+
+    // Create order in allOrders table
+    const [order] = await db.insert(allOrders).values({
+      orderId: newOrderId,
+      orderDate: new Date(),
+      dueDate: new Date(), // Due today since it's ready to ship
+      customerId: data.customerId,
+      modelId: firstItem.stockModel, // Use stock model as modelId
+      status: 'IN_PROGRESS',
+      currentDepartment: 'Shipping QC', // Goes directly to Shipping QC
+      notes: `RTS Sale: ${saleNumber}. ${modelDescription}`,
+      isRtsOrder: true, // Mark as RTS order
+      rtsSaleId: sale.id, // Link to RTS sale
+      shipping: data.shipping.cost,
+      shippingCarrier: data.shipping.carrier,
+      shippingMethod: data.shipping.method,
+      // Copy shipping address to alt ship to fields
+      hasAltShipTo: true,
+      altShipToName: data.shipTo.name,
+      altShipToCompany: data.shipTo.company || null,
+      altShipToPhone: data.shipTo.phone || null,
+      altShipToAddress: {
+        street: data.shipTo.street,
+        street2: data.shipTo.street2,
+        city: data.shipTo.city,
+        state: data.shipTo.state,
+        zipCode: data.shipTo.zipCode,
+        country: data.shipTo.country,
+      },
+    }).returning();
+
+    // Update sale with order ID reference
+    await db
+      .update(rtsSales)
+      .set({ orderId: newOrderId, updatedAt: new Date() })
+      .where(eq(rtsSales.id, sale.id));
+
     // Generate shipping label if requested
     if (data.generateLabel) {
       try {
@@ -216,20 +269,35 @@ router.post('/', async (req, res) => {
           })
           .where(eq(rtsSales.id, sale.id));
 
+        // Update order with tracking info
+        await db
+          .update(allOrders)
+          .set({
+            trackingNumber: labelResult.trackingNumber,
+            shippingLabelGenerated: true,
+            updatedAt: new Date(),
+          })
+          .where(eq(allOrders.orderId, newOrderId));
+
         res.json({
-          sale: { ...sale, trackingNumber: labelResult.trackingNumber, shippingLabelUrl: labelData },
+          sale: { ...sale, orderId: newOrderId, trackingNumber: labelResult.trackingNumber, shippingLabelUrl: labelData },
+          order: { orderId: newOrderId },
           label: labelResult,
         });
       } catch (labelError: any) {
         console.error('Error generating shipping label:', labelError);
         // Sale was created successfully, but label generation failed
         res.json({
-          sale,
+          sale: { ...sale, orderId: newOrderId },
+          order: { orderId: newOrderId },
           labelError: labelError.message || 'Failed to generate shipping label',
         });
       }
     } else {
-      res.json({ sale });
+      res.json({ 
+        sale: { ...sale, orderId: newOrderId },
+        order: { orderId: newOrderId },
+      });
     }
   } catch (error: any) {
     console.error('Error creating RTS sale:', error);
@@ -263,9 +331,9 @@ router.post('/:id/label', async (req, res) => {
       shipTo: {
         name: sale.shipToName || '',
         attention: sale.shipToName || '',
-        phone: sale.shipToPhone,
+        phone: sale.shipToPhone || undefined,
         address1: sale.shipToStreet || '',
-        address2: sale.shipToStreet2,
+        address2: sale.shipToStreet2 || undefined,
         city: sale.shipToCity || '',
         state: sale.shipToState || '',
         postalCode: sale.shipToZipCode || '',

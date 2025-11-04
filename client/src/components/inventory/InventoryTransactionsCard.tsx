@@ -243,7 +243,7 @@ export default function InventoryTransactionsCard() {
 
   // Calculate summary statistics
   const summaryStats = transactions.reduce(
-    (acc, transaction) => {
+    (acc: { receipts: number; issues: number; totalValue: number }, transaction: InventoryTransaction) => {
       if (transaction.transactionType === 'RECEIPT') {
         acc.receipts += transaction.quantity;
       } else if (
@@ -479,7 +479,7 @@ export default function InventoryTransactionsCard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((transaction) => {
+                {transactions.map((transaction: InventoryTransaction) => {
                   const typeInfo = getTransactionTypeInfo(
                     transaction.transactionType
                   );

@@ -58,7 +58,7 @@ export default function P2CertificationsManager() {
   // Part Certification Form State
   const [partNumber, setPartNumber] = useState('');
   const [partName, setPartName] = useState('');
-  const [department, setDepartment] = useState('');
+  const [departments, setDepartments] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
 
   // Employee Certification Form State
@@ -99,7 +99,7 @@ export default function P2CertificationsManager() {
       // Reset form
       setPartNumber('');
       setPartName('');
-      setDepartment('');
+      setDepartments([]);
       setNotes('');
     },
     onError: (error: any) => {
@@ -186,10 +186,10 @@ export default function P2CertificationsManager() {
   });
 
   const handleCreatePartCert = () => {
-    if (!partNumber || !department) {
+    if (!partNumber || departments.length === 0) {
       toast({ 
         title: 'Validation Error', 
-        description: 'Part Number and Department are required',
+        description: 'Part Number and at least one Department are required',
         variant: 'destructive'
       });
       return;
@@ -198,9 +198,17 @@ export default function P2CertificationsManager() {
     createPartCertMutation.mutate({
       partNumber,
       partName,
-      department,
+      departments,
       notes,
     });
+  };
+
+  const toggleDepartment = (dept: string) => {
+    setDepartments(prev => 
+      prev.includes(dept) 
+        ? prev.filter(d => d !== dept)
+        : [...prev, dept]
+    );
   };
 
   const handleCreateEmpCert = () => {
@@ -215,7 +223,7 @@ export default function P2CertificationsManager() {
 
     // Find the part certification for this part and department
     const partCert = partCertifications.find(
-      pc => pc.partNumber === empPartNumber && pc.department === empDepartment
+      pc => pc.partNumber === empPartNumber && pc.departments?.includes(empDepartment)
     );
 
     if (!partCert) {
@@ -333,19 +341,30 @@ export default function P2CertificationsManager() {
               </div>
 
               <div>
-                <Label htmlFor="department">Department</Label>
-                <Select value={department} onValueChange={setDepartment}>
-                  <SelectTrigger id="department" data-testid="select-department">
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DEPARTMENTS.map((dept) => (
-                      <SelectItem key={dept} value={dept}>
+                <Label>Departments (Select one or more)</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2 p-3 border rounded-md max-h-64 overflow-y-auto">
+                  {DEPARTMENTS.map((dept) => (
+                    <div key={dept} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`dept-${dept}`}
+                        checked={departments.includes(dept)}
+                        onCheckedChange={() => toggleDepartment(dept)}
+                        data-testid={`checkbox-department-${dept}`}
+                      />
+                      <label
+                        htmlFor={`dept-${dept}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
                         {dept}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {departments.length > 0 && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Selected: {departments.join(', ')}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -396,7 +415,14 @@ export default function P2CertificationsManager() {
                         <div className="font-semibold">{cert.partNumber}</div>
                         <div className="text-sm text-muted-foreground">{cert.partName}</div>
                         <div className="text-sm mt-1">
-                          <span className="font-medium">Department:</span> {cert.department}
+                          <span className="font-medium">Departments:</span>{' '}
+                          <span className="inline-flex gap-1 flex-wrap">
+                            {cert.departments?.map((dept: string) => (
+                              <span key={dept} className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs">
+                                {dept}
+                              </span>
+                            ))}
+                          </span>
                         </div>
                         {cert.notes && (
                           <div className="text-sm text-muted-foreground mt-1">{cert.notes}</div>

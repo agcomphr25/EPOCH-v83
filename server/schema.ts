@@ -3227,7 +3227,7 @@ export const p2PartCertifications = pgTable('p2_part_certifications', {
   id: serial('id').primaryKey(),
   partNumber: text('part_number').notNull(), // Composite # from P2 PO items
   partName: text('part_name'), // Display name for reference
-  department: text('department').notNull(), // Department where certification is required
+  departments: text('departments').array().notNull(), // Departments where certification is required
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

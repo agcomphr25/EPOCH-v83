@@ -30,7 +30,7 @@ const partSchema = z.object({
 
 // BOM schema
 const bomSchema = z.object({
-  parentPartId: z.string().min(1, 'Parent part is required'),
+  parentPartAgNumber: z.string().min(1, 'Parent part is required'),
   code: z.string().min(1, 'Code is required'),
   description: z.string().default(''),
 });
@@ -91,75 +91,14 @@ export default function RobustBOMAdministration() {
   );
 }
 
-// Parts Tab Component
+// Parts Tab Component - Now displays inventory items
 function PartsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchTerm: (s: string) => void }) {
   const { toast } = useToast();
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [editingPart, setEditingPart] = useState<any>(null);
 
+  // Fetch inventory items from the BOM parts endpoint (which now returns inventory items)
   const { data: partsData, isLoading } = useQuery({
     queryKey: ['/api/robust-boms/parts', searchTerm],
   });
-
-  const createPartMutation = useMutation({
-    mutationFn: (data: any) => apiRequest('/api/robust-boms/parts', { method: 'POST', body: data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/parts'] });
-      toast({ title: 'Success', description: 'Part created successfully' });
-      setIsAddDialogOpen(false);
-    },
-    onError: () => {
-      toast({ title: 'Error', description: 'Failed to create part', variant: 'destructive' });
-    },
-  });
-
-  const updatePartMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) =>
-      apiRequest(`/api/robust-boms/parts/${id}`, { method: 'PUT', body: data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/parts'] });
-      toast({ title: 'Success', description: 'Part updated successfully' });
-      setEditingPart(null);
-    },
-    onError: () => {
-      toast({ title: 'Error', description: 'Failed to update part', variant: 'destructive' });
-    },
-  });
-
-  const deletePartMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/robust-boms/parts/${id}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/parts'] });
-      toast({ title: 'Success', description: 'Part deleted successfully' });
-    },
-    onError: (error: any) => {
-      toast({ 
-        title: 'Error', 
-        description: error?.response?.data?.details || 'Failed to delete part', 
-        variant: 'destructive' 
-      });
-    },
-  });
-
-  const form = useForm({
-    resolver: zodResolver(partSchema),
-    defaultValues: {
-      sku: '',
-      name: '',
-      uom: 'EA',
-      stdCost: '0',
-      weight: '0',
-      isMake: false,
-    },
-  });
-
-  const onSubmit = (data: z.infer<typeof partSchema>) => {
-    if (editingPart) {
-      updatePartMutation.mutate({ id: editingPart.id, data });
-    } else {
-      createPartMutation.mutate(data);
-    }
-  };
 
   const parts = (partsData as any)?.data || [];
 
@@ -168,149 +107,27 @@ function PartsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearch
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Parts Library</CardTitle>
-            <CardDescription>Manage all parts used in BOMs</CardDescription>
+            <CardTitle>Parts Library (Inventory Items)</CardTitle>
+            <CardDescription>Parts are managed through the Enhanced Inventory MRP system</CardDescription>
           </div>
           <div className="flex gap-2">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search parts..."
+                placeholder="Search by AG Part#, SKU, or Name..."
                 className="pl-8 w-[300px]"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 data-testid="input-search-parts"
               />
             </div>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button data-testid="button-add-part">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Part
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{editingPart ? 'Edit Part' : 'Add New Part'}</DialogTitle>
-                  <DialogDescription>
-                    {editingPart ? 'Update the part details below' : 'Enter the details for the new part'}
-                  </DialogDescription>
-                </DialogHeader>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="sku"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>SKU</FormLabel>
-                          <FormControl>
-                            <Input {...field} data-testid="input-part-sku" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Name</FormLabel>
-                          <FormControl>
-                            <Input {...field} data-testid="input-part-name" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="uom"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>UOM</FormLabel>
-                            <FormControl>
-                              <Input {...field} data-testid="input-part-uom" />
-                            </FormControl>
-                            <FormDescription>Unit of measure</FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="stdCost"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Standard Cost</FormLabel>
-                            <FormControl>
-                              <Input type="number" step="0.01" {...field} data-testid="input-part-cost" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <FormField
-                      control={form.control}
-                      name="weight"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Weight</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.001" {...field} data-testid="input-part-weight" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="isMake"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              data-testid="checkbox-part-is-make"
-                            />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel>Make Part</FormLabel>
-                            <FormDescription>
-                              Check if this is a manufactured part
-                            </FormDescription>
-                          </div>
-                        </FormItem>
-                      )}
-                    />
-                    <DialogFooter>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setIsAddDialogOpen(false);
-                          setEditingPart(null);
-                          form.reset();
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="submit"
-                        disabled={createPartMutation.isPending || updatePartMutation.isPending}
-                        data-testid="button-submit-part"
-                      >
-                        {createPartMutation.isPending || updatePartMutation.isPending ? 'Saving...' : 'Save'}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
+            <Button 
+              onClick={() => window.location.href = '/inventory/enhanced-mrp'}
+              data-testid="button-manage-inventory"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Manage Inventory Items
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -319,60 +136,36 @@ function PartsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearch
           <div className="text-center py-8 text-muted-foreground">Loading parts...</div>
         ) : parts.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground" data-testid="text-no-parts">
-            No parts found. Click "Add Part" to create one.
+            No inventory items found. Go to Inventory MRP to add parts.
           </div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>SKU</TableHead>
+                <TableHead>AG Part #</TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>UOM</TableHead>
-                <TableHead>Cost</TableHead>
-                <TableHead>Weight</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>SKU</TableHead>
+                <TableHead>Vendor</TableHead>
+                <TableHead>Latest Price</TableHead>
+                <TableHead>Utilization</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {parts.map((part: any) => (
-                <TableRow key={part.id} data-testid={`row-part-${part.id}`}>
-                  <TableCell className="font-medium">{part.sku}</TableCell>
+                <TableRow key={part.id} data-testid={`row-part-${part.agPartNumber}`}>
+                  <TableCell className="font-medium font-mono">{part.agPartNumber}</TableCell>
                   <TableCell>{part.name}</TableCell>
-                  <TableCell>{part.uom}</TableCell>
-                  <TableCell>${Number(part.stdCost).toFixed(2)}</TableCell>
-                  <TableCell>{Number(part.weight).toFixed(3)}</TableCell>
+                  <TableCell>{part.sku || '-'}</TableCell>
+                  <TableCell>{part.vendorName || '-'}</TableCell>
+                  <TableCell>{part.latestPrice ? `$${Number(part.latestPrice).toFixed(2)}` : '-'}</TableCell>
                   <TableCell>
-                    <Badge variant={part.isMake ? 'default' : 'secondary'}>
-                      {part.isMake ? 'Make' : 'Buy'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditingPart(part);
-                          form.reset(part);
-                          setIsAddDialogOpen(true);
-                        }}
-                        data-testid={`button-edit-part-${part.id}`}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm('Are you sure you want to delete this part?')) {
-                            deletePartMutation.mutate(part.id);
-                          }
-                        }}
-                        data-testid={`button-delete-part-${part.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    <div className="flex gap-1 flex-wrap">
+                      {part.isProductionLinePL1 && <Badge variant="outline" className="text-xs">PL1</Badge>}
+                      {part.isProductionLinePL2 && <Badge variant="outline" className="text-xs">PL2</Badge>}
+                      {part.isUtilizedFacilities && <Badge variant="outline" className="text-xs">Facilities</Badge>}
+                      {part.isUtilizedAdmin && <Badge variant="outline" className="text-xs">Admin</Badge>}
+                      {part.isUtilizedServices && <Badge variant="outline" className="text-xs">Services</Badge>}
+                      {!part.isProductionLinePL1 && !part.isProductionLinePL2 && !part.isUtilizedFacilities && !part.isUtilizedAdmin && !part.isUtilizedServices && '-'}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -424,7 +217,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
   const form = useForm({
     resolver: zodResolver(bomSchema),
     defaultValues: {
-      parentPartId: '',
+      parentPartAgNumber: '',
       code: '',
       description: '',
     },
@@ -474,10 +267,10 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                     <FormField
                       control={form.control}
-                      name="parentPartId"
+                      name="parentPartAgNumber"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Parent Part</FormLabel>
+                          <FormLabel>Parent Part (Inventory Item)</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger data-testid="select-parent-part">
@@ -486,14 +279,14 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                             </FormControl>
                             <SelectContent>
                               {parts.map((part: any) => (
-                                <SelectItem key={part.id} value={part.id}>
-                                  {part.sku} - {part.name}
+                                <SelectItem key={part.agPartNumber} value={part.agPartNumber}>
+                                  {part.agPartNumber} - {part.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                           <FormDescription>
-                            The part that this BOM produces
+                            The inventory item that this BOM produces
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -577,7 +370,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                 <TableRow key={bom.id} data-testid={`row-bom-${bom.id}`}>
                   <TableCell className="font-medium">{bom.code}</TableCell>
                   <TableCell>
-                    {bom.parentPart ? `${bom.parentPart.sku} - ${bom.parentPart.name}` : 'N/A'}
+                    {bom.parentInventoryItem ? `${bom.parentInventoryItem.agPartNumber} - ${bom.parentInventoryItem.name}` : 'N/A'}
                   </TableCell>
                   <TableCell>{bom.description || '-'}</TableCell>
                   <TableCell>

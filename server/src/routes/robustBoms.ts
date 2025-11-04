@@ -2,16 +2,15 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../../db';
 import { 
-  parts, 
+  inventoryItems,
   boms, 
   bomRevisions, 
   bomLines,
-  insertPartSchema,
   insertBomSchema,
   insertBomRevisionSchema,
   insertBomLineSchema
 } from '../../schema';
-import { eq, ilike, desc, count, and } from 'drizzle-orm';
+import { eq, ilike, desc, count, or } from 'drizzle-orm';
 import { 
   explodeBOMRevisionWithRollups, 
   whereUsed, 
@@ -21,10 +20,10 @@ import {
 const router = Router();
 
 // ========================================
-// PARTS MANAGEMENT ROUTES
+// PARTS MANAGEMENT ROUTES (Now uses Inventory Items)
 // ========================================
 
-// Get all parts with pagination and search
+// Get all parts (inventory items) with pagination and search
 router.get('/parts', async (req, res) => {
   try {
     const search = (req.query.search as string) ?? '';
@@ -33,18 +32,22 @@ router.get('/parts', async (req, res) => {
     const offset = (page - 1) * pageSize;
     
     const where = search 
-      ? ilike(parts.sku, `%${search}%`)
+      ? or(
+          ilike(inventoryItems.agPartNumber, `%${search}%`),
+          ilike(inventoryItems.sku, `%${search}%`),
+          ilike(inventoryItems.name, `%${search}%`)
+        )
       : undefined;
 
     const [rows, total] = await Promise.all([
       db.select()
-        .from(parts)
+        .from(inventoryItems)
         .where(where as any)
-        .orderBy(desc(parts.updatedAt))
+        .orderBy(desc(inventoryItems.updatedAt))
         .limit(pageSize)
         .offset(offset),
       db.select({ c: count() })
-        .from(parts)
+        .from(inventoryItems)
         .where(where as any),
     ]);
 
@@ -60,12 +63,12 @@ router.get('/parts', async (req, res) => {
   }
 });
 
-// Get single part by ID
+// Get single part (inventory item) by AG Part Number
 router.get('/parts/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const part = await db.query.parts.findFirst({
-      where: eq(parts.id, id),
+    const part = await db.query.inventoryItems.findFirst({
+      where: eq(inventoryItems.agPartNumber, id),
     });
 
     if (!part) {
@@ -79,61 +82,42 @@ router.get('/parts/:id', async (req, res) => {
   }
 });
 
-// Create new part
+// Create new part - DEPRECATED: Use inventory items management instead
+// This endpoint is kept for backward compatibility but redirects to inventory
 router.post('/parts', async (req, res) => {
   try {
-    const partData = insertPartSchema.parse(req.body);
-    const [newPart] = await db.insert(parts).values(partData).returning();
-    res.status(201).json(newPart);
+    return res.status(400).json({ 
+      error: 'Use /api/enhanced/inventory/items endpoint',
+      details: 'Parts are now managed through the Inventory Items system. Please use the inventory management endpoints.'
+    });
   } catch (error) {
     console.error('Create part error:', error);
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
-        error: 'Invalid part data', 
-        details: error.errors 
-      });
-    }
     res.status(500).json({ error: 'Failed to create part' });
   }
 });
 
-// Update part
+// Update part - DEPRECATED: Use inventory items management instead
 router.put('/parts/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    const partData = insertPartSchema.partial().parse(req.body);
-    
-    const [updated] = await db
-      .update(parts)
-      .set({ ...partData, updatedAt: new Date() })
-      .where(eq(parts.id, id))
-      .returning();
-
-    if (!updated) {
-      return res.status(404).json({ error: 'Part not found' });
-    }
-
-    res.json(updated);
+    return res.status(400).json({ 
+      error: 'Use /api/enhanced/inventory/items/:id endpoint',
+      details: 'Parts are now managed through the Inventory Items system. Please use the inventory management endpoints.'
+    });
   } catch (error) {
     console.error('Update part error:', error);
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
-        error: 'Invalid part data', 
-        details: error.errors 
-      });
-    }
     res.status(500).json({ error: 'Failed to update part' });
   }
 });
 
-// Delete part (check if it's used as child OR parent in any BOMs)
+// Delete part - DEPRECATED: Use inventory items management instead
+// But check BOM usage before allowing deletion
 router.delete('/parts/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
     // Check if part is used in any BOM lines as a child part
     const childUsage = await db.query.bomLines.findFirst({
-      where: eq(bomLines.childPartId, id),
+      where: eq(bomLines.childPartAgNumber, id),
     });
 
     if (childUsage) {
@@ -145,7 +129,7 @@ router.delete('/parts/:id', async (req, res) => {
 
     // Check if part is used as a parent part in any BOMs
     const parentUsage = await db.query.boms.findFirst({
-      where: eq(boms.parentPartId, id),
+      where: eq(boms.parentPartAgNumber, id),
     });
 
     if (parentUsage) {
@@ -155,8 +139,10 @@ router.delete('/parts/:id', async (req, res) => {
       });
     }
 
-    await db.delete(parts).where(eq(parts.id, id));
-    res.json({ success: true });
+    return res.status(400).json({ 
+      error: 'Use /api/enhanced/inventory/items/:id endpoint',
+      details: 'Parts are now managed through the Inventory Items system. Please use the inventory management endpoints to delete items.'
+    });
   } catch (error) {
     console.error('Delete part error:', error);
     res.status(500).json({ error: 'Failed to delete part' });
@@ -195,7 +181,7 @@ router.get('/boms', async (req, res) => {
       db.query.boms.findMany({
         where: where as any,
         with: {
-          parentPart: true,
+          parentInventoryItem: true,
           revisions: {
             limit: 5,
             orderBy: desc(bomRevisions.createdAt),
@@ -228,7 +214,7 @@ router.get('/boms/:id', async (req, res) => {
     const bom = await db.query.boms.findFirst({
       where: eq(boms.id, id),
       with: {
-        parentPart: true,
+        parentInventoryItem: true,
         revisions: {
           orderBy: desc(bomRevisions.createdAt),
         },
@@ -345,12 +331,12 @@ router.get('/revisions/:revId', async (req, res) => {
       with: {
         bom: {
           with: {
-            parentPart: true,
+            parentInventoryItem: true,
           },
         },
         lines: {
           with: {
-            childPart: true,
+            childInventoryItem: true,
           },
           orderBy: desc(bomLines.operationSeq),
         },

@@ -3589,15 +3589,16 @@ export const parts = pgTable('parts', {
 }));
 
 // BOM definitions - parent record for each BOM
+// Now references inventoryItems instead of deprecated parts table
 export const boms = pgTable('boms', {
   id: uuid('id').primaryKey().defaultRandom(),
-  parentPartId: uuid('parent_part_id').notNull().references(() => parts.id, { onDelete: 'cascade' }),
+  parentPartAgNumber: text('parent_part_ag_number').notNull().references(() => inventoryItems.agPartNumber, { onDelete: 'cascade' }),
   code: text('code').notNull(),
   description: text('description').default(''),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 }, (t) => ({
-  byParent: index('boms_parent_idx').on(t.parentPartId),
+  byParent: index('boms_parent_idx').on(t.parentPartAgNumber),
   byCode: index('boms_code_idx').on(t.code),
 }));
 
@@ -3617,10 +3618,11 @@ export const bomRevisions = pgTable('bom_revisions', {
 }));
 
 // BOM lines - individual line items within a revision
+// Now references inventoryItems instead of deprecated parts table
 export const bomLines = pgTable('bom_lines', {
   id: uuid('id').primaryKey().defaultRandom(),
   revisionId: uuid('revision_id').notNull().references(() => bomRevisions.id, { onDelete: 'cascade' }),
-  childPartId: uuid('child_part_id').notNull().references(() => parts.id, { onDelete: 'restrict' }),
+  childPartAgNumber: text('child_part_ag_number').notNull().references(() => inventoryItems.agPartNumber, { onDelete: 'restrict' }),
   qtyPer: numeric('qty_per', { precision: 18, scale: 6 }).notNull().default('1'),
   scrapPct: numeric('scrap_pct', { precision: 6, scale: 3 }).notNull().default('0'),
   uom: text('uom').notNull().default('EA'),
@@ -3631,10 +3633,11 @@ export const bomLines = pgTable('bom_lines', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 }, (t) => ({
   byRev: index('bom_lines_rev_idx').on(t.revisionId),
-  byChild: index('bom_lines_child_idx').on(t.childPartId),
+  byChild: index('bom_lines_child_idx').on(t.childPartAgNumber),
 }));
 
 // Robust BOM Relations
+// Note: parts relations kept for backward compatibility (deprecated table)
 export const partsRelations = relations(parts, ({ many }) => ({
   childBomLines: many(bomLines),
   parentBoms: many(boms),
@@ -3642,7 +3645,7 @@ export const partsRelations = relations(parts, ({ many }) => ({
 
 export const bomsRelations = relations(boms, ({ many, one }) => ({
   revisions: many(bomRevisions),
-  parentPart: one(parts, { fields: [boms.parentPartId], references: [parts.id] }),
+  parentInventoryItem: one(inventoryItems, { fields: [boms.parentPartAgNumber], references: [inventoryItems.agPartNumber] }),
 }));
 
 export const bomRevisionsRelations = relations(bomRevisions, ({ many, one }) => ({
@@ -3652,7 +3655,7 @@ export const bomRevisionsRelations = relations(bomRevisions, ({ many, one }) => 
 
 export const bomLinesRelations = relations(bomLines, ({ one }) => ({
   revision: one(bomRevisions, { fields: [bomLines.revisionId], references: [bomRevisions.id] }),
-  childPart: one(parts, { fields: [bomLines.childPartId], references: [parts.id] }),
+  childInventoryItem: one(inventoryItems, { fields: [bomLines.childPartAgNumber], references: [inventoryItems.agPartNumber] }),
 }));
 
 // Robust BOM Insert Schemas
@@ -3674,7 +3677,7 @@ export const insertBomSchema = createInsertSchema(boms).omit({
   createdAt: true,
   updatedAt: true,
 }).extend({
-  parentPartId: z.string().uuid('Invalid parent part ID'),
+  parentPartAgNumber: z.string().min(1, 'Parent part AG Number is required'),
   code: z.string().min(1, 'Code is required'),
   description: z.string().default(''),
 });
@@ -3698,7 +3701,7 @@ export const insertBomLineSchema = createInsertSchema(bomLines).omit({
   updatedAt: true,
 }).extend({
   revisionId: z.string().uuid('Invalid revision ID'),
-  childPartId: z.string().uuid('Invalid child part ID'),
+  childPartAgNumber: z.string().min(1, 'Child part AG Number is required'),
   qtyPer: z.string().default('1'),
   scrapPct: z.string().default('0'),
   uom: z.string().default('EA'),

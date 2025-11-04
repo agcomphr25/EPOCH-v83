@@ -40,15 +40,14 @@ import type {
 // Department list
 const DEPARTMENTS = [
   'Layup',
-  'Plugging',
+  'Assembly/Disassembly',
   'CNC',
+  'Lathe/Wrapping',
+  'Cores',
   'Finish',
-  'Gunsmith',
   'Paint',
-  'QC',
-  'Shipping',
-  'Assembly',
-  'Inspection',
+  'Final QC',
+  'Cutting Table',
 ];
 
 export default function P2CertificationsManager() {

@@ -931,8 +931,6 @@ export default function InventoryItemsCard() {
                 Add to Group ({selectedItems.size})
               </Button>
               
-              {/* TEMPORARY: Bulk update utilized fields button - COMMENTED OUT */}
-              {/* 
               <Button
                 variant="secondary"
                 onClick={() => setIsBulkUtilizedDialogOpen(true)}
@@ -941,7 +939,6 @@ export default function InventoryItemsCard() {
               >
                 Update Utilized In ({selectedItems.size})
               </Button>
-              */}
             </>
           )}
           
@@ -1373,8 +1370,6 @@ export default function InventoryItemsCard() {
         </DialogContent>
       </Dialog>
 
-      {/* TEMPORARY: Bulk Update Utilized In Dialog - COMMENTED OUT */}
-      {/*
       <Dialog open={isBulkUtilizedDialogOpen} onOpenChange={setIsBulkUtilizedDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1488,7 +1483,6 @@ export default function InventoryItemsCard() {
           </div>
         </DialogContent>
       </Dialog>
-      */}
     </div>
   );
 }

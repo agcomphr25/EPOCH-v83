@@ -1,3 +1,25 @@
 Your branch is ahead of 'origin/main' by 9 commits.
   (use "git push" to publish your local commits)
 Already up to date.
+[feature-20251104-2240-my-change 17d5fd03] feat: my-change
+ 1 file changed, 3 insertions(+)
+ create mode 100644 push_log_20251104-224005.txt
+> 17d5fd03 (HEAD -> feature-20251104-2240-my-change) feat: my-change
+> 4a0b9733 (gitsafe-backup/main, gitsafe-backup/HEAD, main) Update certification requirements to allow multiple departments
+> d79cb901 Improve certification management and API request handling
+> 41e14622 Improve certification management by showing available departments dynamically
+> 52af5713 Update list of manufacturing departments
+> 838227b5 Allow users to select multiple departments for part certifications
+> 50efc22b Use inventory items to create the dropdown for the composite part number
+> b5219a19 Improve address input for more accurate customer data
+> 5127ed51 Add P2 Certifications Manager for tracking employee part competency
+> 39943faa Transitioned from Plan to Build mode
+ ...invalid-source--1762294656043_1762294656044.txt | 369 +++++++++++
+ client/src/App.tsx                                 |   5 +
+ client/src/components/Navigation.tsx               |   7 +
+ client/src/pages/P2CertificationsManager.tsx       | 690 +++++++++++++++++++++
+ push_log_20251104-224005.txt                       |   3 +
+ server/schema.ts                                   |  78 +++
+ server/src/routes/training.ts                      | 253 +++++++-
+ 7 files changed, 1404 insertions(+), 1 deletion(-)
+Open PR: https://github.com/agcomphr25/EPOCH-v83/compare/feature-20251104-2240-my-change?expand=1

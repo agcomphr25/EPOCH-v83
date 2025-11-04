@@ -316,7 +316,8 @@ export default function CustomerSearchInput({
       : value.name
     : '';
 
-  const defaultAddress = customerAddresses.find((addr: any) => addr.isDefault) || customerAddresses[0];
+  const addressList = Array.isArray(customerAddresses) ? customerAddresses : [];
+  const defaultAddress = addressList.find((addr: any) => addr.isDefault) || addressList[0];
 
   return (
     <div className={`space-y-2 ${className}`}>

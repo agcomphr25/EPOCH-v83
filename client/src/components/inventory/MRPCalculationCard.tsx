@@ -44,10 +44,13 @@ export default function MRPCalculationCard() {
   });
 
   // Get MRP history
-  const { data: history = [] } = useQuery({
+  const { data: historyData } = useQuery({
     queryKey: ['/api/enhanced/mrp/calculation-history'],
     queryFn: () => apiRequest('/api/enhanced/mrp/calculation-history?limit=5'),
   });
+  
+  // Ensure history is always an array
+  const history = Array.isArray(historyData) ? historyData : [];
 
   const handleRunMRP = () => {
     const data: any = { scope: selectedScope };

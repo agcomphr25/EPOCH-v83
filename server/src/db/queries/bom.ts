@@ -106,8 +106,7 @@ export async function buildBOMTree(revisionId: string) {
         bl.reference,
         bl.notes,
         i.ag_part_number as sku, 
-        i.name,
-        i.is_assembly_item
+        i.name
       FROM bom_lines bl
       JOIN inventory_items i ON i.ag_part_number = bl.child_part_ag_number
       WHERE bl.revision_id = ${revId}
@@ -171,7 +170,6 @@ export async function buildBOMTree(revisionId: string) {
           operationSeq: line.operation_seq,
           reference: line.reference,
           notes: line.notes,
-          isMake: line.is_assembly_item,
           children: []
         });
       }

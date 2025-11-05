@@ -79,7 +79,13 @@ export default function RobustBOMAdministration() {
 // BOMs Tab Component
 function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchTerm: (s: string) => void }) {
   const { toast } = useToast();
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [wizardData, setWizardData] = useState<any>({
+    step1: null, // BOM metadata
+    step2: null, // Initial revision
+    step3: [], // BOM lines
+  });
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [selectedBom, setSelectedBom] = useState<any>(null);
@@ -100,7 +106,9 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/boms'] });
       toast({ title: 'Success', description: 'BOM created successfully' });
-      setIsAddDialogOpen(false);
+      setIsWizardOpen(false);
+      setWizardStep(1);
+      setWizardData({ step1: null, step2: null, step3: [] });
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to create BOM', variant: 'destructive' });
@@ -160,6 +168,37 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     }
   };
 
+  // Wizard navigation handlers
+  const handleStep1Next = () => {
+    form.trigger().then((isValid) => {
+      if (isValid) {
+        const formData = form.getValues();
+        setWizardData({ ...wizardData, step1: formData });
+        setWizardStep(2);
+      }
+    });
+  };
+
+  const handleWizardBack = () => {
+    if (wizardStep > 1) {
+      setWizardStep(wizardStep - 1);
+    }
+  };
+
+  const handleWizardCancel = () => {
+    setIsWizardOpen(false);
+    setWizardStep(1);
+    setWizardData({ step1: null, step2: null, step3: [] });
+    form.reset();
+  };
+
+  const handleStep2Next = () => {
+    // TODO: Task 3 - Validate and save Step 2 revision data
+    // For now, just advance to Step 3
+    setWizardData({ ...wizardData, step2: { revCode: 'A', notes: '' } }); // Placeholder
+    setWizardStep(3);
+  };
+
   // Populate edit form when a BOM is selected
   useEffect(() => {
     if (selectedBom && isEditDialogOpen) {
@@ -170,6 +209,13 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
       });
     }
   }, [selectedBom, isEditDialogOpen, editForm]);
+
+  // Restore wizard Step 1 data when navigating back
+  useEffect(() => {
+    if (wizardStep === 1 && wizardData.step1) {
+      form.reset(wizardData.step1);
+    }
+  }, [wizardStep, wizardData.step1, form]);
 
   const boms = (bomsData as any)?.data || [];
   const parts = (partsData as any)?.data || [];
@@ -205,143 +251,224 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                 data-testid="input-search-boms"
               />
             </div>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            {/* Create BOM Wizard */}
+            <Dialog open={isWizardOpen} onOpenChange={(open) => {
+              setIsWizardOpen(open);
+              if (!open) {
+                setWizardStep(1);
+                setWizardData({ step1: null, step2: null, step3: [] });
+                form.reset();
+              }
+            }}>
               <DialogTrigger asChild>
                 <Button data-testid="button-add-bom">
                   <Plus className="mr-2 h-4 w-4" />
                   Add BOM
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-3xl">
                 <DialogHeader>
-                  <DialogTitle>Add New BOM</DialogTitle>
+                  <DialogTitle>Create New BOM - Step {wizardStep} of 3</DialogTitle>
                   <DialogDescription>
-                    Create a new bill of materials
+                    {wizardStep === 1 && "Define BOM metadata (parent part, code, description)"}
+                    {wizardStep === 2 && "Create initial revision"}
+                    {wizardStep === 3 && "Add child parts and quantities"}
                   </DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="parentPartAgNumber"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                          <FormLabel>Parent Part (Inventory Item)</FormLabel>
-                          <Popover open={isPartPopoverOpen} onOpenChange={setIsPartPopoverOpen}>
-                            <PopoverTrigger asChild>
+                    {/* Step 1: BOM Metadata */}
+                    {wizardStep === 1 && (
+                      <>
+                        <FormField
+                          control={form.control}
+                          name="parentPartAgNumber"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-col">
+                              <FormLabel>Parent Part (Inventory Item)</FormLabel>
+                              <Popover open={isPartPopoverOpen} onOpenChange={setIsPartPopoverOpen}>
+                                <PopoverTrigger asChild>
+                                  <FormControl>
+                                    <Button
+                                      variant="outline"
+                                      role="combobox"
+                                      className={cn(
+                                        "w-full justify-between",
+                                        !field.value && "text-muted-foreground"
+                                      )}
+                                      data-testid="select-parent-part"
+                                    >
+                                      {field.value
+                                        ? parts.find((part: any) => part.agPartNumber === field.value)
+                                          ? `${parts.find((part: any) => part.agPartNumber === field.value).agPartNumber} - ${parts.find((part: any) => part.agPartNumber === field.value).name}`
+                                          : "Select a parent part"
+                                        : "Select a parent part"}
+                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                  </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full p-0" align="start">
+                                  <Command shouldFilter={false}>
+                                    <CommandInput 
+                                      placeholder="Search parts by AG#, SKU, or name..." 
+                                      value={partSearch}
+                                      onValueChange={setPartSearch}
+                                    />
+                                    <CommandList>
+                                      <CommandEmpty>No part found.</CommandEmpty>
+                                      <CommandGroup>
+                                        {filteredParts.map((part: any) => (
+                                          <CommandItem
+                                            key={part.agPartNumber}
+                                            value={part.agPartNumber}
+                                            onSelect={() => {
+                                              form.setValue("parentPartAgNumber", part.agPartNumber);
+                                              setPartSearch('');
+                                              setIsPartPopoverOpen(false);
+                                            }}
+                                            data-testid={`option-part-${part.agPartNumber}`}
+                                          >
+                                            <Check
+                                              className={cn(
+                                                "mr-2 h-4 w-4",
+                                                part.agPartNumber === field.value
+                                                  ? "opacity-100"
+                                                  : "opacity-0"
+                                              )}
+                                            />
+                                            <div className="flex flex-col">
+                                              <span className="font-medium">{part.agPartNumber} - {part.name}</span>
+                                              {part.sku && <span className="text-xs text-muted-foreground">SKU: {part.sku}</span>}
+                                            </div>
+                                          </CommandItem>
+                                        ))}
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
+                              <FormDescription>
+                                The inventory item that this BOM produces
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="code"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>BOM Code</FormLabel>
                               <FormControl>
-                                <Button
-                                  variant="outline"
-                                  role="combobox"
-                                  className={cn(
-                                    "w-full justify-between",
-                                    !field.value && "text-muted-foreground"
-                                  )}
-                                  data-testid="select-parent-part"
-                                >
-                                  {field.value
-                                    ? parts.find((part: any) => part.agPartNumber === field.value)
-                                      ? `${parts.find((part: any) => part.agPartNumber === field.value).agPartNumber} - ${parts.find((part: any) => part.agPartNumber === field.value).name}`
-                                      : "Select a parent part"
-                                    : "Select a parent part"}
-                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
+                                <Input {...field} data-testid="input-bom-code" />
                               </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-full p-0" align="start">
-                              <Command shouldFilter={false}>
-                                <CommandInput 
-                                  placeholder="Search parts by AG#, SKU, or name..." 
-                                  value={partSearch}
-                                  onValueChange={setPartSearch}
-                                />
-                                <CommandList>
-                                  <CommandEmpty>No part found.</CommandEmpty>
-                                  <CommandGroup>
-                                    {filteredParts.map((part: any) => (
-                                      <CommandItem
-                                        key={part.agPartNumber}
-                                        value={part.agPartNumber}
-                                        onSelect={() => {
-                                          form.setValue("parentPartAgNumber", part.agPartNumber);
-                                          setPartSearch('');
-                                          setIsPartPopoverOpen(false);
-                                        }}
-                                        data-testid={`option-part-${part.agPartNumber}`}
-                                      >
-                                        <Check
-                                          className={cn(
-                                            "mr-2 h-4 w-4",
-                                            part.agPartNumber === field.value
-                                              ? "opacity-100"
-                                              : "opacity-0"
-                                          )}
-                                        />
-                                        <div className="flex flex-col">
-                                          <span className="font-medium">{part.agPartNumber} - {part.name}</span>
-                                          {part.sku && <span className="text-xs text-muted-foreground">SKU: {part.sku}</span>}
-                                        </div>
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
-                          <FormDescription>
-                            The inventory item that this BOM produces
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="code"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>BOM Code</FormLabel>
-                          <FormControl>
-                            <Input {...field} data-testid="input-bom-code" />
-                          </FormControl>
-                          <FormDescription>
-                            Unique identifier for this BOM
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Description</FormLabel>
-                          <FormControl>
-                            <Textarea {...field} data-testid="input-bom-description" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <DialogFooter>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setIsAddDialogOpen(false);
-                          form.reset();
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="submit"
-                        disabled={createBOMMutation.isPending}
-                        data-testid="button-submit-bom"
-                      >
-                        {createBOMMutation.isPending ? 'Creating...' : 'Create BOM'}
-                      </Button>
+                              <FormDescription>
+                                Unique identifier for this BOM
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="description"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Description</FormLabel>
+                              <FormControl>
+                                <Textarea {...field} data-testid="input-bom-description" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </>
+                    )}
+
+                    {/* Step 2: Initial Revision (Coming in Task 3) */}
+                    {wizardStep === 2 && (
+                      <div className="py-8 text-center">
+                        <h3 className="text-lg font-semibold mb-2">Initial Revision Details</h3>
+                        <p className="text-muted-foreground mb-4">
+                          This step will allow you to define the initial revision code and notes.
+                        </p>
+                        <div className="bg-muted p-4 rounded-lg">
+                          <p className="text-sm">Coming in Task 3...</p>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Preview: You'll enter revision code (e.g., "A", "Rev 1") and optional notes.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Step 3: Add BOM Lines (Coming in Task 4) */}
+                    {wizardStep === 3 && (
+                      <div className="py-8 text-center">
+                        <h3 className="text-lg font-semibold mb-2">Add Child Parts & Quantities</h3>
+                        <p className="text-muted-foreground mb-4">
+                          This step will provide a table to add child parts with quantities, scrap %, UOM, and more.
+                        </p>
+                        <div className="bg-muted p-4 rounded-lg">
+                          <p className="text-sm">Coming in Task 4...</p>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Preview: You'll add rows with child parts, quantity per unit, scrap percentage,
+                            unit of measure, reference designator, and operation sequence.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <DialogFooter className="flex justify-between">
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleWizardCancel}
+                          data-testid="button-wizard-cancel"
+                        >
+                          Cancel
+                        </Button>
+                        {wizardStep > 1 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleWizardBack}
+                            data-testid="button-wizard-back"
+                          >
+                            Back
+                          </Button>
+                        )}
+                      </div>
+                      <div>
+                        {wizardStep === 1 && (
+                          <Button
+                            type="button"
+                            onClick={handleStep1Next}
+                            data-testid="button-wizard-next"
+                          >
+                            Next: Initial Revision
+                          </Button>
+                        )}
+                        {wizardStep === 2 && (
+                          <Button
+                            type="button"
+                            onClick={handleStep2Next}
+                            data-testid="button-wizard-next"
+                          >
+                            Next: Add Parts
+                          </Button>
+                        )}
+                        {wizardStep === 3 && (
+                          <Button
+                            type="submit"
+                            disabled={createBOMMutation.isPending}
+                            data-testid="button-submit-bom"
+                          >
+                            {createBOMMutation.isPending ? 'Creating...' : 'Complete & Create BOM'}
+                          </Button>
+                        )}
+                      </div>
                     </DialogFooter>
                   </form>
                 </Form>

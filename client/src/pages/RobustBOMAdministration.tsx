@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Eye, Copy, Save, X } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Copy, Save, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -1306,10 +1306,10 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                                               <TableCell>
                                                 <Input
                                                   type="number"
-                                                  value={line.operationSequence || ''}
+                                                  value={line.operationSequence ?? ''}
                                                   onChange={(e) => {
                                                     const newLines = [...editingLines];
-                                                    newLines[index].operationSequence = parseInt(e.target.value) || undefined;
+                                                    newLines[index].operationSequence = e.target.value ? parseInt(e.target.value) : undefined;
                                                     setEditingLines(newLines);
                                                   }}
                                                   className="w-20"
@@ -1431,22 +1431,6 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedBom(bom);
-                          setIsViewDrawerOpen(true);
-                          // Auto-select first revision if available
-                          if (bom.revisions && bom.revisions.length > 0) {
-                            setSelectedRevisionId(bom.revisions[0].id);
-                          }
-                        }}
-                        data-testid={`button-view-bom-${bom.id}`}
-                        title="View & Edit BOM Details"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"

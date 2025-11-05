@@ -3809,8 +3809,8 @@ export const insertBomLineSchema = createInsertSchema(bomLines).omit({
 }).extend({
   revisionId: z.string().uuid('Invalid revision ID'),
   childPartAgNumber: z.string().min(1, 'Child part AG Number is required'),
-  qtyPer: z.string().default('1'),
-  scrapPct: z.string().default('0'),
+  qtyPer: z.union([z.string(), z.number()]).transform(val => String(val)).default('1'),
+  scrapPct: z.union([z.string(), z.number()]).transform(val => String(val)).default('0'),
   uom: z.string().default('EA'),
   reference: z.string().default(''),
   operationSeq: z.number().default(10),

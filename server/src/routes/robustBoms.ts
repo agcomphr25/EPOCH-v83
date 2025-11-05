@@ -442,6 +442,7 @@ router.get('/revisions/:revId/tree', async (req, res) => {
   try {
     const { revId } = req.params;
     const tree = await buildBOMTree(revId);
+    console.log('🌳 BOM Tree for revision', revId, ':', JSON.stringify(tree, null, 2));
     res.json(tree);
   } catch (error) {
     console.error('Build BOM tree error:', error);

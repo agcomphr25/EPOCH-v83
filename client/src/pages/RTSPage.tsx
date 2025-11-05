@@ -43,6 +43,7 @@ import {
   Factory,
   Plus,
   DollarSign,
+  Edit,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import RTSSalesDialog from '@/components/RTSSalesDialog';
@@ -96,6 +97,10 @@ export default function RTSPage() {
   const [selectedReason, setSelectedReason] = useState('');
   const [productionNotes, setProductionNotes] = useState('');
   const [addItemDialog, setAddItemDialog] = useState(false);
+  const [editItemDialog, setEditItemDialog] = useState<{
+    isOpen: boolean;
+    item: RTSInventoryItem | null;
+  }>({ isOpen: false, item: null });
   const [salesDialogOpen, setSalesDialogOpen] = useState(false);
   const [newItem, setNewItem] = useState({
     stockModel: '',
@@ -105,6 +110,16 @@ export default function RTSPage() {
     bottomMetal: '',
     color: '',
     extras: '',
+  });
+  const [editItem, setEditItem] = useState({
+    stockModel: '',
+    actionLength: '',
+    action: '',
+    barrel: '',
+    bottomMetal: '',
+    color: '',
+    extras: '',
+    price: '',
   });
 
   const { toast } = useToast();
@@ -159,6 +174,41 @@ export default function RTSPage() {
       toast({
         title: 'Error',
         description: 'Failed to add RTS inventory item.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Edit item mutation
+  const editItemMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof editItem }) => {
+      return apiRequest(`/api/rts-inventory/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/rts-inventory'] });
+      toast({
+        title: 'Item Updated',
+        description: 'RTS inventory item has been updated successfully.',
+      });
+      setEditItemDialog({ isOpen: false, item: null });
+      setEditItem({
+        stockModel: '',
+        actionLength: '',
+        action: '',
+        barrel: '',
+        bottomMetal: '',
+        color: '',
+        extras: '',
+        price: '',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to update RTS inventory item.',
         variant: 'destructive',
       });
     },
@@ -394,6 +444,28 @@ export default function RTSPage() {
                       <TableCell>{getStatusBadge(item.status)}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditItemDialog({ isOpen: true, item });
+                              setEditItem({
+                                stockModel: item.stockModel || '',
+                                actionLength: item.actionLength || '',
+                                action: item.action || '',
+                                barrel: item.barrel || '',
+                                bottomMetal: item.bottomMetal || '',
+                                color: item.color || '',
+                                extras: item.extras || '',
+                                price: item.price?.toString() || '',
+                              });
+                            }}
+                            className="flex items-center gap-1"
+                            data-testid={`button-edit-${item.id}`}
+                          >
+                            <Edit className="h-3 w-3" />
+                            Edit
+                          </Button>
                           <Button
                             variant="default"
                             size="sm"
@@ -643,6 +715,173 @@ export default function RTSPage() {
               data-testid="button-confirm-add-item"
             >
               {addItemMutation.isPending ? 'Adding...' : 'Add Item'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Item Dialog */}
+      <Dialog
+        open={editItemDialog.isOpen}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setEditItemDialog({ isOpen: false, item: null });
+            setEditItem({
+              stockModel: '',
+              actionLength: '',
+              action: '',
+              barrel: '',
+              bottomMetal: '',
+              color: '',
+              extras: '',
+              price: '',
+            });
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit RTS Inventory Item</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="edit-stockModel">Stock Model *</Label>
+              <Input
+                id="edit-stockModel"
+                placeholder="e.g., SA Long Action"
+                value={editItem.stockModel}
+                onChange={(e) =>
+                  setEditItem({ ...editItem, stockModel: e.target.value })
+                }
+                data-testid="input-edit-stock-model"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-actionLength">Action Length</Label>
+              <Input
+                id="edit-actionLength"
+                placeholder="e.g., Long"
+                value={editItem.actionLength}
+                onChange={(e) =>
+                  setEditItem({ ...editItem, actionLength: e.target.value })
+                }
+                data-testid="input-edit-action-length"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-action">Action</Label>
+              <Input
+                id="edit-action"
+                placeholder="e.g., Tikka, Rem 700"
+                value={editItem.action}
+                onChange={(e) =>
+                  setEditItem({ ...editItem, action: e.target.value })
+                }
+                data-testid="input-edit-action"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-barrel">Barrel</Label>
+              <Input
+                id="edit-barrel"
+                placeholder="e.g., Med Palma"
+                value={editItem.barrel}
+                onChange={(e) =>
+                  setEditItem({ ...editItem, barrel: e.target.value })
+                }
+                data-testid="input-edit-barrel"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-bottomMetal">Bottom Metal</Label>
+              <Input
+                id="edit-bottomMetal"
+                placeholder="e.g., BDL, M5"
+                value={editItem.bottomMetal}
+                onChange={(e) =>
+                  setEditItem({ ...editItem, bottomMetal: e.target.value })
+                }
+                data-testid="input-edit-bottom-metal"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-color">Color</Label>
+              <Input
+                id="edit-color"
+                placeholder="e.g., Black, Coyote"
+                value={editItem.color}
+                onChange={(e) =>
+                  setEditItem({ ...editItem, color: e.target.value })
+                }
+                data-testid="input-edit-color"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-extras">Extras / Order Code</Label>
+              <Input
+                id="edit-extras"
+                placeholder="e.g., SAL-B-REG"
+                value={editItem.extras}
+                onChange={(e) =>
+                  setEditItem({ ...editItem, extras: e.target.value })
+                }
+                data-testid="input-edit-extras"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-price">Price</Label>
+              <Input
+                id="edit-price"
+                type="number"
+                step="0.01"
+                placeholder="e.g., 1250.00"
+                value={editItem.price}
+                onChange={(e) =>
+                  setEditItem({ ...editItem, price: e.target.value })
+                }
+                data-testid="input-edit-price"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditItemDialog({ isOpen: false, item: null });
+                setEditItem({
+                  stockModel: '',
+                  actionLength: '',
+                  action: '',
+                  barrel: '',
+                  bottomMetal: '',
+                  color: '',
+                  extras: '',
+                  price: '',
+                });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (editItemDialog.item) {
+                  editItemMutation.mutate({
+                    id: editItemDialog.item.id,
+                    data: editItem,
+                  });
+                }
+              }}
+              disabled={editItemMutation.isPending || !editItem.stockModel.trim()}
+              data-testid="button-confirm-edit-item"
+            >
+              {editItemMutation.isPending ? 'Updating...' : 'Update Item'}
             </Button>
           </DialogFooter>
         </DialogContent>

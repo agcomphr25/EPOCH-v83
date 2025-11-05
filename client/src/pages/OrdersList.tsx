@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -205,6 +206,7 @@ export default function OrdersList() {
 
   // Cancel order state
   const [cancelReason, setCancelReason] = useState('');
+  const [sendToRts, setSendToRts] = useState(true);
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<string>('');
 
@@ -231,25 +233,29 @@ export default function OrdersList() {
     mutationFn: async ({
       orderId,
       reason,
+      sendToRts,
     }: {
       orderId: string;
       reason: string;
+      sendToRts: boolean;
     }) => {
       return apiRequest(`/api/orders/cancel/${orderId}`, {
         method: 'POST',
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ reason, sendToRts }),
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['/api/orders/with-payment-status'],
       });
+      queryClient.invalidateQueries({ queryKey: ['/api/rts-inventory'] });
       showToast({
         title: 'Order Cancelled',
         description: 'The order has been cancelled successfully.',
       });
       setIsCancelDialogOpen(false);
       setCancelReason('');
+      setSendToRts(true);
       setOrderToCancel('');
     },
     onError: (error: any) => {
@@ -574,6 +580,7 @@ export default function OrdersList() {
       cancelOrderMutation.mutate({
         orderId: orderToCancel,
         reason: cancelReason,
+        sendToRts: sendToRts,
       });
     }
   };
@@ -1984,13 +1991,29 @@ export default function OrdersList() {
                 cancellation.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <div className="my-4">
-              <Textarea
-                placeholder="Enter reason for cancellation..."
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                className="w-full"
-              />
+            <div className="my-4 space-y-4">
+              <div>
+                <Textarea
+                  placeholder="Enter reason for cancellation..."
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="sendToRts"
+                  checked={sendToRts}
+                  onCheckedChange={(checked) => setSendToRts(checked as boolean)}
+                  data-testid="checkbox-send-to-rts"
+                />
+                <Label
+                  htmlFor="sendToRts"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  Send produced items to RTS inventory (if order is in production)
+                </Label>
+              </div>
             </div>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>

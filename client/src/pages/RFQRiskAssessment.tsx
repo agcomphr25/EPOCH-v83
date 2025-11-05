@@ -77,7 +77,7 @@ export default function RFQRiskAssessment() {
     console.log('Fetching RFQ number for customer:', customerId);
 
     try {
-      const response = await fetch(`/api/p2/customers/${customerId}/rfq-next-number`);
+      const response = await fetch(`/api/customers/${customerId}/rfq-next-number`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch RFQ number: ${response.statusText}`);

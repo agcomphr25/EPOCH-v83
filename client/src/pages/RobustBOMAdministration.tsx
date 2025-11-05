@@ -242,7 +242,9 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     lineForm.trigger().then((isValid) => {
       if (isValid) {
         const lineData = lineForm.getValues();
-        setBomLines([...bomLines, lineData]);
+        const newLines = [...bomLines, lineData];
+        setBomLines(newLines);
+        setWizardData({ ...wizardData, step3: newLines }); // Sync with wizard data
         lineForm.reset({
           childPartAgNumber: '',
           quantityPer: 1,
@@ -257,7 +259,9 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
   };
 
   const handleRemoveLine = (index: number) => {
-    setBomLines(bomLines.filter((_, i) => i !== index));
+    const newLines = bomLines.filter((_, i) => i !== index);
+    setBomLines(newLines);
+    setWizardData({ ...wizardData, step3: newLines }); // Sync with wizard data
   };
 
   const handleStep3Finish = () => {
@@ -395,13 +399,14 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                     {wizardStep === 3 && "Add child parts and quantities"}
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4">
-                  {/* Step 1: BOM Metadata */}
-                  {wizardStep === 1 && (
-                    <Form {...form}>
-                      <FormField
-                        control={form.control}
-                        name="parentPartAgNumber"
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    {/* Step 1: BOM Metadata */}
+                    {wizardStep === 1 && (
+                      <>
+                        <FormField
+                          control={form.control}
+                          name="parentPartAgNumber"
                           render={({ field }) => (
                             <FormItem className="flex flex-col">
                               <FormLabel>Parent Part (Inventory Item)</FormLabel>
@@ -502,12 +507,11 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                             </FormItem>
                           )}
                         />
-                    </Form>
-                  )}
+                      </>
+                    )}
 
-                  {/* Step 2: Initial Revision */}
-                  {wizardStep === 2 && (
-                    <Form {...revisionForm}>
+                    {/* Step 2: Initial Revision */}
+                    {wizardStep === 2 && (
                       <div className="space-y-4">
                         <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
                           <p className="text-sm text-blue-900 dark:text-blue-100">
@@ -559,12 +563,10 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                           )}
                         />
                       </div>
-                    </Form>
-                  )}
+                    )}
 
-                  {/* Step 3: Add BOM Lines */}
-                  {wizardStep === 3 && (
-                    <Form {...lineForm}>
+                    {/* Step 3: Add BOM Lines */}
+                    {wizardStep === 3 && (
                       <div className="space-y-6">
                         <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
                           <p className="text-sm text-blue-900 dark:text-blue-100">
@@ -819,11 +821,9 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                           )}
                         </div>
                       </div>
-                    </Form>
-                  )}
-                </div>
+                    )}
 
-                <DialogFooter className="flex justify-between">
+                    <DialogFooter className="flex justify-between">
                       <div className="flex gap-2">
                         <Button
                           type="button"

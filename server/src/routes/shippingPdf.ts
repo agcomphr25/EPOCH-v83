@@ -881,7 +881,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
 
     // Get comprehensive order data from storage with payment status
     const { storage } = await import('../../storage');
-    const { generateSalesOrderPDF } = await import('../utils/pdf/salesOrderPdf');
+    const { generateSalesOrderPDF } = await import('../../utils/pdf/salesOrderPdf.js');
     
     // Check if there's a signed PDF for this order
     const followupOrder = await storage.getFollowupOrderByOrderId(orderId);

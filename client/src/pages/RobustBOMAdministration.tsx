@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Copy, Save, X } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Copy, Save, X, ChevronDown, Package } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -111,6 +111,9 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
   const [isCreatingBom, setIsCreatingBom] = useState(false); // Loading state for API calls
   const [editLinePartSearch, setEditLinePartSearch] = useState<{[key: number]: string}>({}); // Search for each line
   const [editLinePopoverOpen, setEditLinePopoverOpen] = useState<{[key: number]: boolean}>({}); // Popover state for each line
+  const [isExplosionDialogOpen, setIsExplosionDialogOpen] = useState(false);
+  const [explosionBom, setExplosionBom] = useState<any>(null); // BOM being exploded
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set()); // Track expanded tree nodes
 
   const bomsQueryUrl = `/api/robust-boms/boms?${searchTerm ? `search=${encodeURIComponent(searchTerm)}` : ''}`;
   const { data: bomsData, isLoading } = useQuery({
@@ -164,6 +167,13 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
   const { data: revisionData } = useQuery({
     queryKey: [`/api/robust-boms/revisions/${selectedRevisionId}`],
     enabled: !!selectedRevisionId,
+  });
+
+  // Fetch BOM tree for explosion view
+  const selectedRevisionForExplosion = explosionBom?.revisions?.[0]?.id; // Use first (latest) revision
+  const { data: bomTreeData, isLoading: isTreeLoading } = useQuery({
+    queryKey: [`/api/robust-boms/revisions/${selectedRevisionForExplosion}/tree`],
+    enabled: isExplosionDialogOpen && !!selectedRevisionForExplosion,
   });
 
   // Update revision lines mutation
@@ -1395,6 +1405,68 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                 )}
               </SheetContent>
             </Sheet>
+
+            {/* BOM Explosion Dialog */}
+            <Dialog open={isExplosionDialogOpen} onOpenChange={(open) => {
+              setIsExplosionDialogOpen(open);
+              if (!open) {
+                setExplosionBom(null);
+                setExpandedNodes(new Set());
+              }
+            }}>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>BOM Explosion - {explosionBom?.code}</DialogTitle>
+                  <DialogDescription>
+                    Hierarchical view of all components and sub-assemblies
+                  </DialogDescription>
+                </DialogHeader>
+                
+                {isTreeLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Loading BOM tree...
+                  </div>
+                ) : bomTreeData ? (
+                  <div className="space-y-2">
+                    {/* Parent assembly header */}
+                    <div className="font-semibold text-lg border-b pb-2">
+                      {explosionBom?.parentInventoryItem?.agPartNumber} - {explosionBom?.parentInventoryItem?.name}
+                    </div>
+                    
+                    {/* Tree display */}
+                    {(bomTreeData as any)?.children && (bomTreeData as any).children.length > 0 ? (
+                      <div className="space-y-1">
+                        {(bomTreeData as any).children.map((child: any, index: number) => (
+                          <TreeNode 
+                            key={index} 
+                            node={child} 
+                            level={0}
+                            expandedNodes={expandedNodes}
+                            onToggleExpand={(nodeId: string) => {
+                              const newExpanded = new Set(expandedNodes);
+                              if (newExpanded.has(nodeId)) {
+                                newExpanded.delete(nodeId);
+                              } else {
+                                newExpanded.add(nodeId);
+                              }
+                              setExpandedNodes(newExpanded);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No components in this BOM
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Unable to load BOM tree
+                  </p>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </CardHeader>
@@ -1431,6 +1503,20 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setExplosionBom(bom);
+                          setIsExplosionDialogOpen(true);
+                          setExpandedNodes(new Set()); // Reset expanded nodes
+                        }}
+                        data-testid={`button-explode-bom-${bom.id}`}
+                        title="Explode BOM"
+                        disabled={!bom.revisions || bom.revisions.length === 0}
+                      >
+                        <Package className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1492,5 +1578,82 @@ function RevisionsTab() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// Tree Node Component for BOM Explosion
+interface TreeNodeProps {
+  node: any;
+  level: number;
+  expandedNodes: Set<string>;
+  onToggleExpand: (nodeId: string) => void;
+}
+
+function TreeNode({ node, level, expandedNodes, onToggleExpand }: TreeNodeProps) {
+  const nodeId = `${node.partId || node.sku}-${level}`;
+  const isExpanded = expandedNodes.has(nodeId);
+  const hasChildren = node.children && node.children.length > 0;
+  const indentWidth = level * 24; // 24px per level
+
+  return (
+    <div>
+      <div 
+        className={cn(
+          "flex items-center gap-2 p-2 rounded hover:bg-muted/50 cursor-pointer",
+          node.type === 'assembly' && "font-medium"
+        )}
+        style={{ paddingLeft: `${indentWidth + 8}px` }}
+        onClick={() => hasChildren && onToggleExpand(nodeId)}
+      >
+        {hasChildren ? (
+          <div className="w-4 h-4 flex items-center justify-center">
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </div>
+        ) : (
+          <div className="w-4 h-4" />
+        )}
+        
+        <Badge variant={node.type === 'assembly' ? 'default' : 'outline'} className="shrink-0">
+          {node.type === 'assembly' ? 'Assembly' : 'Component'}
+        </Badge>
+        
+        <span className="flex-1">
+          {node.sku} - {node.name}
+        </span>
+        
+        <span className="text-sm text-muted-foreground">
+          Qty: {node.qtyPer}
+        </span>
+        
+        {node.scrapPct > 0 && (
+          <span className="text-sm text-muted-foreground">
+            Scrap: {node.scrapPct}%
+          </span>
+        )}
+        
+        <span className="text-xs text-muted-foreground">
+          {node.uom}
+        </span>
+      </div>
+      
+      {/* Render children recursively */}
+      {hasChildren && isExpanded && (
+        <div>
+          {node.children.map((child: any, index: number) => (
+            <TreeNode
+              key={`${child.partId || child.sku}-${index}`}
+              node={child}
+              level={level + 1}
+              expandedNodes={expandedNodes}
+              onToggleExpand={onToggleExpand}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

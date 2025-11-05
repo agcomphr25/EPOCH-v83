@@ -1659,11 +1659,12 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
 router.post('/cancel/:orderId', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
-    const { reason } = req.body;
+    const { reason, sendToRts = true } = req.body;
 
     console.log('🔧 CANCEL ORDER ROUTE CALLED');
     console.log('🔧 Order ID:', orderId);
     console.log('🔧 Cancel reason:', reason);
+    console.log('🔧 Send to RTS:', sendToRts);
 
     // Try to cancel the order (check if it exists first)
     const order = await storage.getOrderById(orderId);
@@ -1689,8 +1690,8 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
     const isInProduction = productionDepartments.includes(order.currentDepartment);
     let rtsInventoryCreated = false;
 
-    // If order is already in production, move it to RTS inventory
-    if (isInProduction && order.modelId) {
+    // If order is already in production and user chose to send to RTS, move it to RTS inventory
+    if (isInProduction && order.modelId && sendToRts) {
       console.log('🔧 Order is in production, creating RTS inventory item(s)...');
       console.log(`🔧 Total produced: ${order.totalProduced}, Department: ${order.currentDepartment}`);
       

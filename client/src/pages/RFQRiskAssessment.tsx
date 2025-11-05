@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save, Printer, Download } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
-import type { SelectP2Customer } from '@shared/schema';
+import type { P2Customer } from '@shared/schema';
 
 export default function RFQRiskAssessment() {
   // Signature canvas reference
@@ -62,17 +62,29 @@ export default function RFQRiskAssessment() {
     signature: '',
   });
 
-  const { data: customers = [] } = useQuery<SelectP2Customer[]>({
+  const { data: customers = [] } = useQuery<P2Customer[]>({
     queryKey: ['/api/p2-customers-bypass'],
   });
 
   const handleCustomerChange = async (customerId: string) => {
     const selectedCustomer = customers.find(c => c.customerId === customerId);
-    if (!selectedCustomer) return;
+    if (!selectedCustomer) {
+      console.error('Customer not found:', customerId);
+      return;
+    }
+
+    console.log('Selected customer:', selectedCustomer);
+    console.log('Fetching RFQ number for customer:', customerId);
 
     try {
-      const response = await fetch(`/api/customers/${customerId}/rfq-next-number`);
+      const response = await fetch(`/api/p2/customers/${customerId}/rfq-next-number`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch RFQ number: ${response.statusText}`);
+      }
+      
       const data = await response.json();
+      console.log('Generated RFQ number:', data);
       
       setFormData((prev) => ({
         ...prev,
@@ -480,7 +492,7 @@ export default function RFQRiskAssessment() {
                 <div className="flex items-center gap-2">
                   <Label className="font-medium">RFQ #</Label>
                   <div 
-                    className="text-2xl font-bold text-blue-600"
+                    className="text-2xl text-blue-600"
                     data-testid="text-rfq-number"
                   >
                     {formData.rfqNumber}

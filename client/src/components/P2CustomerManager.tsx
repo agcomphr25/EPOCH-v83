@@ -235,7 +235,7 @@ export function P2CustomerManager() {
               Add P2 Customer
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {selectedCustomer ? 'Edit P2 Customer' : 'Add P2 Customer'}
@@ -424,13 +424,15 @@ export function P2CustomerManager() {
                       name="currentYearSequence"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Current Year Starting Number</FormLabel>
+                          <FormLabel>Current Year Starting #</FormLabel>
                           <FormControl>
                             <Input 
                               type="number"
                               placeholder="0" 
                               min="0"
-                              {...field}
+                              value={field.value}
+                              onChange={(e) => field.onChange(e.target.value)}
+                              data-testid="input-current-year-sequence"
                             />
                           </FormControl>
                           <p className="text-xs text-muted-foreground">

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,14 +7,18 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save, Printer, Download } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
+import type { SelectP2Customer } from '@shared/schema';
 
 export default function RFQRiskAssessment() {
   // Signature canvas reference
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
 
   const [formData, setFormData] = useState({
+    customerId: '',
+    customerName: '',
     rfqNumber: '',
     description: '',
 
@@ -56,6 +61,29 @@ export default function RFQRiskAssessment() {
     printedName: '',
     signature: '',
   });
+
+  const { data: customers = [] } = useQuery<SelectP2Customer[]>({
+    queryKey: ['/api/p2-customers-bypass'],
+  });
+
+  const handleCustomerChange = async (customerId: string) => {
+    const selectedCustomer = customers.find(c => c.customerId === customerId);
+    if (!selectedCustomer) return;
+
+    try {
+      const response = await fetch(`/api/customers/${customerId}/rfq-next-number`);
+      const data = await response.json();
+      
+      setFormData((prev) => ({
+        ...prev,
+        customerId,
+        customerName: selectedCustomer.customerName,
+        rfqNumber: data.rfqNumber,
+      }));
+    } catch (error) {
+      console.error('Failed to generate RFQ number:', error);
+    }
+  };
 
   // Effect to handle canvas resizing
   useEffect(() => {
@@ -343,12 +371,38 @@ export default function RFQRiskAssessment() {
     return true;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validateForm()) return;
 
-    // Form is valid, proceed with save
-    console.log('Form data saved:', formData);
-    alert('RFQ Risk Assessment saved successfully!');
+    try {
+      const response = await fetch('/api/customers/rfq-assessments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          rfqNumber: formData.rfqNumber,
+          customerId: formData.customerId,
+          description: formData.description,
+          formData: formData,
+          totalOverallPoints: formData.totalOverallPoints,
+          adjustedRiskLevel: formData.adjustedRiskLevel,
+          riskDetermination: formData.riskDetermination,
+          bidDecision: formData.bidDecision,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save RFQ Risk Assessment');
+      }
+
+      const savedAssessment = await response.json();
+      console.log('Form data saved:', savedAssessment);
+      alert('RFQ Risk Assessment saved successfully!');
+    } catch (error) {
+      console.error('Error saving RFQ Risk Assessment:', error);
+      alert('Failed to save RFQ Risk Assessment. Please try again.');
+    }
   };
 
   const handlePrint = () => {
@@ -396,17 +450,43 @@ export default function RFQRiskAssessment() {
             <CardTitle className="text-center">RFQ Risk Assessment</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-center gap-2">
-              <Label htmlFor="rfqNumber" className="font-medium">
-                #
-              </Label>
-              <Input
-                id="rfqNumber"
-                value={formData.rfqNumber}
-                onChange={(e) => handleInputChange('rfqNumber', e.target.value)}
-                className="w-64 text-center"
-                placeholder="Enter RFQ Number"
-              />
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-96">
+                <Label htmlFor="customer" className="font-medium">
+                  Customer
+                </Label>
+                <Select
+                  value={formData.customerId}
+                  onValueChange={handleCustomerChange}
+                >
+                  <SelectTrigger data-testid="select-customer">
+                    <SelectValue placeholder="Select a customer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {customers.map((customer: any) => (
+                      <SelectItem 
+                        key={customer.customerId} 
+                        value={customer.customerId}
+                        data-testid={`customer-option-${customer.customerId}`}
+                      >
+                        {customer.customerName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {formData.rfqNumber && (
+                <div className="flex items-center gap-2">
+                  <Label className="font-medium">RFQ #</Label>
+                  <div 
+                    className="text-2xl font-bold text-blue-600"
+                    data-testid="text-rfq-number"
+                  >
+                    {formData.rfqNumber}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col items-center gap-2">
@@ -415,6 +495,7 @@ export default function RFQRiskAssessment() {
               </Label>
               <Textarea
                 id="description"
+                data-testid="input-description"
                 value={formData.description}
                 onChange={(e) =>
                   handleInputChange('description', e.target.value)

@@ -352,6 +352,101 @@ router.delete('/customers/:id', async (req: Request, res: Response) => {
   }
 });
 
+// RFQ Configuration Routes
+router.put('/:id/rfq-config', async (req: Request, res: Response) => {
+  try {
+    const customerId = parseInt(req.params.id);
+    const { rfqPrefix, rfqSequences } = req.body;
+    
+    const updatedCustomer = await storage.updateP2CustomerRFQConfig(customerId, {
+      rfqPrefix,
+      rfqSequences,
+    });
+    
+    res.json(updatedCustomer);
+  } catch (error) {
+    console.error('Update P2 customer RFQ config error:', error);
+    res.status(500).json({ error: 'Failed to update RFQ configuration' });
+  }
+});
+
+router.get('/:customerId/rfq-next-number', async (req: Request, res: Response) => {
+  try {
+    const { customerId } = req.params;
+    
+    const currentYear = new Date().getFullYear().toString();
+    
+    // Use atomic reservation method to prevent race conditions
+    const result = await storage.reserveNextRFQNumber(customerId, currentYear);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Get next RFQ number error:', error);
+    res.status(500).json({ error: 'Failed to generate RFQ number' });
+  }
+});
+
+// RFQ Risk Assessment Routes
+router.post('/rfq-assessments', async (req: Request, res: Response) => {
+  try {
+    const assessmentData = req.body;
+    
+    // Validate that rfqNumber is provided (it should have been generated via GET /:customerId/rfq-next-number)
+    if (!assessmentData.rfqNumber) {
+      return res.status(400).json({ error: 'RFQ number is required' });
+    }
+    
+    const customer = await storage.getP2CustomerByCustomerId(assessmentData.customerId);
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    
+    // Use the RFQ number that was already generated and reserved
+    const newAssessment = await storage.createRFQRiskAssessment({
+      rfqNumber: assessmentData.rfqNumber,
+      customerId: assessmentData.customerId,
+      customerName: customer.customerName,
+      description: assessmentData.description,
+      formData: assessmentData.formData,
+      totalOverallPoints: assessmentData.totalOverallPoints,
+      adjustedRiskLevel: assessmentData.adjustedRiskLevel,
+      riskDetermination: assessmentData.riskDetermination,
+      bidDecision: assessmentData.bidDecision,
+    });
+    
+    res.status(201).json(newAssessment);
+  } catch (error) {
+    console.error('Create RFQ risk assessment error:', error);
+    res.status(500).json({ error: 'Failed to create RFQ risk assessment' });
+  }
+});
+
+router.get('/rfq-assessments', async (req: Request, res: Response) => {
+  try {
+    const assessments = await storage.getAllRFQRiskAssessments();
+    res.json(assessments);
+  } catch (error) {
+    console.error('Get RFQ risk assessments error:', error);
+    res.status(500).json({ error: 'Failed to fetch RFQ risk assessments' });
+  }
+});
+
+router.get('/rfq-assessments/:rfqNumber', async (req: Request, res: Response) => {
+  try {
+    const { rfqNumber } = req.params;
+    const assessment = await storage.getRFQRiskAssessment(rfqNumber);
+    
+    if (!assessment) {
+      return res.status(404).json({ error: 'RFQ risk assessment not found' });
+    }
+    
+    res.json(assessment);
+  } catch (error) {
+    console.error('Get RFQ risk assessment error:', error);
+    res.status(500).json({ error: 'Failed to fetch RFQ risk assessment' });
+  }
+});
+
 // Address autocomplete bypass route (to avoid monolithic route conflicts)
 router.post(
   '/address-autocomplete-bypass',

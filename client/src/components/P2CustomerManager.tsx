@@ -51,6 +51,8 @@ const p2CustomerSchema = z.object({
   paymentTerms: z.string().default('NET_30'),
   status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).default('ACTIVE'),
   notes: z.string().optional(),
+  rfqPrefix: z.string().length(3, 'RFQ Prefix must be exactly 3 characters').optional().or(z.literal('')),
+  currentYearSequence: z.string().optional().or(z.literal('')),
 });
 
 type P2CustomerForm = z.infer<typeof p2CustomerSchema>;
@@ -59,6 +61,7 @@ interface P2Customer extends P2CustomerForm {
   id: number;
   createdAt: string;
   updatedAt: string;
+  rfqSequences?: Record<string, number>;
 }
 
 export function P2CustomerManager() {
@@ -85,6 +88,8 @@ export function P2CustomerManager() {
       paymentTerms: 'NET_30',
       status: 'ACTIVE',
       notes: '',
+      rfqPrefix: '',
+      currentYearSequence: '',
     },
   });
 
@@ -157,15 +162,35 @@ export function P2CustomerManager() {
   });
 
   const handleSubmit = (data: P2CustomerForm) => {
+    const currentYear = new Date().getFullYear().toString();
+    const rfqPrefix = data.rfqPrefix || data.customerName.substring(0, 3).toUpperCase();
+    const sequenceValue = data.currentYearSequence ? parseInt(data.currentYearSequence) : 0;
+    
+    const rfqSequences = selectedCustomer?.rfqSequences || {};
+    if (data.currentYearSequence) {
+      rfqSequences[currentYear] = sequenceValue;
+    }
+    
+    const submitData: any = {
+      ...data,
+      rfqPrefix,
+      rfqSequences,
+    };
+    
+    delete submitData.currentYearSequence;
+    
     if (selectedCustomer) {
-      updateMutation.mutate({ id: selectedCustomer.id, data });
+      updateMutation.mutate({ id: selectedCustomer.id, data: submitData });
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(submitData);
     }
   };
 
   const openEditDialog = (customer: P2Customer) => {
     setSelectedCustomer(customer);
+    const currentYear = new Date().getFullYear().toString();
+    const currentSequence = customer.rfqSequences?.[currentYear] || 0;
+    
     form.reset({
       customerId: customer.customerId,
       customerName: customer.customerName,
@@ -176,6 +201,8 @@ export function P2CustomerManager() {
       paymentTerms: customer.paymentTerms,
       status: customer.status,
       notes: customer.notes || '',
+      rfqPrefix: customer.rfqPrefix || '',
+      currentYearSequence: currentSequence.toString(),
     });
     setDialogOpen(true);
   };
@@ -367,6 +394,55 @@ export function P2CustomerManager() {
                     )}
                   />
                 </div>
+                
+                <div className="border-t pt-4 mt-4">
+                  <h3 className="text-sm font-semibold mb-3">RFQ Configuration</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="rfqPrefix"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>RFQ Prefix (3 letters)</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="e.g., STR" 
+                              maxLength={3}
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                            />
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground">
+                            Defaults to first 3 letters of customer name if empty
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="currentYearSequence"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Current Year Starting Number</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number"
+                              placeholder="0" 
+                              min="0"
+                              {...field}
+                            />
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground">
+                            Leave empty or 0 for new customers
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+                
                 <FormField
                   control={form.control}
                   name="notes"

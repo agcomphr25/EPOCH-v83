@@ -499,10 +499,8 @@ export interface IStorage {
   getOrderById(orderId: string): Promise<OrderDraft | AllOrder | null>; // Get order by ID, checking both drafts and finalized orders
   getOrdersByIds(orderIds: string[]): Promise<Array<OrderDraft | AllOrder>>; // Get multiple orders by IDs
 
-  // Order ID generation with atomic reservation system
+  // Order ID generation with atomic database sequence
   generateNextOrderId(): Promise<string>;
-  markOrderIdAsUsed(orderId: string): Promise<void>;
-  cleanupExpiredReservations(): Promise<number>;
 
   // Payments CRUD
   getPaymentsByOrderId(orderId: string): Promise<Payment[]>;
@@ -1924,12 +1922,6 @@ export class DatabaseStorage implements IStorage {
         .returning();
       console.log('Created draft:', draft.id);
 
-      // CRITICAL: Mark the Order ID as used to prevent duplicate assignments
-      await this.markOrderIdAsUsed(data.orderId);
-      console.log(
-        `FIXED: Marked Order ID ${data.orderId} as used to prevent duplicates`
-      );
-
       return draft;
     } catch (error) {
       console.error('Database error creating order draft:', error);
@@ -2096,46 +2088,6 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('❌ Critical error in Order ID generation:', error);
       throw new Error(`Failed to generate order ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }
-
-  async markOrderIdAsUsed(orderId: string): Promise<void> {
-    try {
-      await db
-        .update(orderIdReservations)
-        .set({
-          isUsed: true,
-          usedAt: new Date(),
-        })
-        .where(eq(orderIdReservations.orderId, orderId));
-
-      console.log(`Marked Order ID as used: ${orderId}`);
-    } catch (error) {
-      console.error(`Error marking Order ID as used: ${orderId}`, error);
-      // Don't throw - this is not critical for order creation
-    }
-  }
-
-  // Cleanup expired reservations (call periodically)
-  async cleanupExpiredReservations(): Promise<number> {
-    try {
-      const result = await db
-        .delete(orderIdReservations)
-        .where(
-          and(
-            eq(orderIdReservations.isUsed, false),
-            lt(orderIdReservations.expiresAt, new Date())
-          )
-        );
-
-      const count = result.rowCount || 0;
-      if (count > 0) {
-        console.log(`Cleaned up ${count} expired Order ID reservations`);
-      }
-      return count;
-    } catch (error) {
-      console.error('Error cleaning up expired reservations:', error);
-      return 0;
     }
   }
 
@@ -9829,12 +9781,6 @@ export class DatabaseStorage implements IStorage {
       .insert(allOrders)
       .values(insertData)
       .returning();
-
-    // Mark the Order ID as used to prevent duplicate assignments
-    await this.markOrderIdAsUsed(orderData.orderId);
-    console.log(
-      `🔒 MARKED ORDER ID: ${orderData.orderId} as used to prevent duplicates`
-    );
 
     // Log the auto-addition to Production Queue
     console.log(

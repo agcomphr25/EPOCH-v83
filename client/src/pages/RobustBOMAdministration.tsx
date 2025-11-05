@@ -181,6 +181,9 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
         }
       });
       toast({ title: 'Success', description: 'BOM lines updated successfully' });
+      // Close the drawer after successful save
+      setIsViewDrawerOpen(false);
+      setSelectedRevisionId(null);
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to update BOM lines', variant: 'destructive' });

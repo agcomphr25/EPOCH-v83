@@ -28,7 +28,7 @@ router.get('/parts', async (req, res) => {
   try {
     const search = (req.query.search as string) ?? '';
     const page = Number(req.query.page ?? 1);
-    const pageSize = Math.min(Number(req.query.pageSize ?? 50), 100);
+    const pageSize = Math.min(Number(req.query.pageSize ?? 50), 10000);
     const offset = (page - 1) * pageSize;
     
     const where = search 

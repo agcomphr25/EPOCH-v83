@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Copy, Save, X, ChevronDown, Package } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Copy, Save, X, ChevronDown, Package, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -170,7 +170,9 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
   });
 
   // Fetch BOM tree for explosion view
-  const selectedRevisionForExplosion = explosionBom?.revisions?.[0]?.id; // Use first (latest) revision
+  // Select the released revision, fallback to latest if no released revision exists
+  const selectedRevisionForExplosion = explosionBom?.revisions?.find((rev: any) => rev.isReleased)?.id 
+    || explosionBom?.revisions?.[0]?.id;
   const { data: bomTreeData, isLoading: isTreeLoading } = useQuery({
     queryKey: [`/api/robust-boms/revisions/${selectedRevisionForExplosion}/tree`],
     enabled: isExplosionDialogOpen && !!selectedRevisionForExplosion,
@@ -197,6 +199,28 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to update BOM lines', variant: 'destructive' });
+    },
+  });
+
+  // Release revision mutation
+  const releaseRevisionMutation = useMutation({
+    mutationFn: (revisionId: string) => 
+      apiRequest(`/api/robust-boms/revisions/${revisionId}/release`, { 
+        method: 'POST', 
+        body: {} 
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/boms'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/robust-boms/revisions');
+        }
+      });
+      toast({ title: 'Success', description: 'Revision released successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to release revision', variant: 'destructive' });
     },
   });
 
@@ -1149,24 +1173,38 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                                 <div className="mt-3 ml-4 p-4 border rounded-md bg-background">
                                   <div className="flex items-center justify-between mb-4">
                                     <h4 className="font-semibold">Line Items</h4>
-                                    <Button
-                                      size="sm"
-                                      onClick={() => {
-                                        const newLine = {
-                                          childPartAgNumber: '',
-                                          quantityPer: 1,
-                                          scrapPercent: 0,
-                                          uom: 'EA',
-                                          referenceDesignator: '',
-                                          operationSequence: (editingLines.length + 1) * 10,
-                                        };
-                                        setEditingLines([...editingLines, newLine]);
-                                      }}
-                                      data-testid="button-add-line"
-                                    >
-                                      <Plus className="mr-2 h-4 w-4" />
-                                      Add Line
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                      {!rev.isReleased && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => releaseRevisionMutation.mutate(rev.id)}
+                                          disabled={releaseRevisionMutation.isPending}
+                                          data-testid="button-release-revision"
+                                        >
+                                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                                          {releaseRevisionMutation.isPending ? 'Releasing...' : 'Release Revision'}
+                                        </Button>
+                                      )}
+                                      <Button
+                                        size="sm"
+                                        onClick={() => {
+                                          const newLine = {
+                                            childPartAgNumber: '',
+                                            quantityPer: 1,
+                                            scrapPercent: 0,
+                                            uom: 'EA',
+                                            referenceDesignator: '',
+                                            operationSequence: (editingLines.length + 1) * 10,
+                                          };
+                                          setEditingLines([...editingLines, newLine]);
+                                        }}
+                                        data-testid="button-add-line"
+                                      >
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Add Line
+                                      </Button>
+                                    </div>
                                   </div>
 
                                   {editingLines.length > 0 ? (

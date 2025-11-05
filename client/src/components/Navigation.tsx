@@ -224,12 +224,12 @@ export default function Navigation() {
       icon: Users,
       description: 'Manage customer database',
     },
-    {
-      path: '/bom-administration',
-      label: 'BOM Administration',
-      icon: Package,
-      description: 'Manage Bill of Materials for P2 operations',
-    },
+    // {
+    //   path: '/bom-administration',
+    //   label: 'BOM Administration',
+    //   icon: Package,
+    //   description: 'Manage Bill of Materials for P2 operations',
+    // },
     {
       path: '/robust-bom-administration',
       label: 'P2 Robust BOM',

@@ -329,10 +329,10 @@ function App() {
                     path="/production-tracking"
                     component={ProductionTracking}
                   />
-                  <Route
+                  {/* <Route
                     path="/bom-administration"
                     component={BOMAdministration}
-                  />
+                  /> */}
                   <Route
                     path="/robust-bom-administration"
                     component={RobustBOMAdministration}

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../../db';
+import { pool } from '../../db';
 import { payments, allOrders } from '../../../shared/schema';
 import { eq, sql, desc } from 'drizzle-orm';
 import { storage } from '../../storage';
@@ -1671,7 +1672,87 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    console.log('🔧 Found order:', order.id, order.status);
+    console.log('🔧 Found order:', order.id, order.currentDepartment, order.status);
+
+    // Check if order is already in production (beyond P1 Production Queue)
+    const productionDepartments = [
+      'Layup/Plugging',
+      'Barcode',
+      'CNC',
+      'Finish',
+      'Gunsmith',
+      'Paint',
+      'Shipping QC',
+      'Shipping'
+    ];
+    
+    const isInProduction = productionDepartments.includes(order.currentDepartment);
+    let rtsInventoryCreated = false;
+
+    // If order is already in production, move it to RTS inventory
+    if (isInProduction && order.modelId) {
+      console.log('🔧 Order is in production, creating RTS inventory item...');
+      
+      try {
+        const features = order.features || {};
+        
+        // Create RTS inventory item from the order
+        const rtsItem = {
+          stockModel: order.modelId,
+          actionLength: features.action_length || null,
+          action: features.action || null,
+          barrel: features.barrel || null,
+          bottomMetal: features.bottom_metal || null,
+          color: features.color || features.paint_color || null,
+          extras: `Cancelled order ${orderId}`,
+          price: order.totalPrice || null,
+          status: 'AVAILABLE',
+        };
+
+        const insertQuery = `
+          INSERT INTO rts_inventory (
+            stock_model, action_length, action, barrel, bottom_metal, color, extras, price, status, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+          RETURNING id
+        `;
+
+        const result = await db.query(insertQuery, [
+          rtsItem.stockModel,
+          rtsItem.actionLength,
+          rtsItem.action,
+          rtsItem.barrel,
+          rtsItem.bottomMetal,
+          rtsItem.color,
+          rtsItem.extras,
+          rtsItem.price,
+          rtsItem.status,
+        ]);
+
+        const rtsInventoryId = result.rows?.[0]?.id;
+
+        if (rtsInventoryId) {
+          // Create history entry for RTS inventory
+          await db.query(
+            `INSERT INTO rts_inventory_history (
+              rts_inventory_id, action, to_status, performed_by, notes, performed_at
+            ) VALUES ($1, $2, $3, $4, $5, NOW())`,
+            [
+              rtsInventoryId,
+              'CREATED',
+              'AVAILABLE',
+              req.user?.username || 'System',
+              `Created from cancelled order ${orderId}. Reason: ${reason || 'No reason provided'}`
+            ]
+          );
+
+          rtsInventoryCreated = true;
+          console.log(`✅ Created RTS inventory item ${rtsInventoryId} from order ${orderId}`);
+        }
+      } catch (rtsError) {
+        console.error('❌ Failed to create RTS inventory item:', rtsError);
+        // Continue with cancellation even if RTS creation fails
+      }
+    }
 
     // Update the order with cancellation information
     const updateData = {
@@ -1720,10 +1801,15 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
 
     console.log('🔧 Order cancelled successfully:', updatedOrder.orderId);
 
+    const responseMessage = rtsInventoryCreated
+      ? 'Order cancelled successfully. The item was in production and has been moved to RTS inventory.'
+      : 'Order cancelled successfully and removed from production queue.';
+
     res.json({
       success: true,
-      message: 'Order cancelled successfully and removed from production queue',
+      message: responseMessage,
       order: updatedOrder,
+      rtsInventoryCreated,
     });
   } catch (error) {
     console.error('🔧 Error cancelling order:', error);

@@ -21,16 +21,6 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
 
-// Part schema
-const partSchema = z.object({
-  sku: z.string().min(1, 'SKU is required'),
-  name: z.string().min(1, 'Name is required'),
-  uom: z.string().default('EA'),
-  stdCost: z.string().default('0'),
-  weight: z.string().default('0'),
-  isMake: z.boolean().default(false),
-});
-
 // BOM schema
 const bomSchema = z.object({
   parentPartAgNumber: z.string().min(1, 'Parent part is required'),
@@ -48,8 +38,7 @@ const revisionSchema = z.object({
 export default function RobustBOMAdministration() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTab, setSelectedTab] = useState('parts');
-  const [selectedPart, setSelectedPart] = useState<any>(null);
+  const [selectedTab, setSelectedTab] = useState('boms');
   const [selectedBom, setSelectedBom] = useState<any>(null);
 
   return (
@@ -60,16 +49,13 @@ export default function RobustBOMAdministration() {
             Robust BOM Administration
           </h1>
           <p className="text-muted-foreground mt-2">
-            Manage parts, bills of materials, and revisions with advanced tracking
+            Manage bills of materials and revisions with advanced tracking
           </p>
         </div>
       </div>
 
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="parts" data-testid="tab-parts">
-            Parts Library
-          </TabsTrigger>
           <TabsTrigger value="boms" data-testid="tab-boms">
             BOMs
           </TabsTrigger>
@@ -77,10 +63,6 @@ export default function RobustBOMAdministration() {
             Revisions
           </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="parts" className="space-y-4">
-          <PartsTab searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
-        </TabsContent>
 
         <TabsContent value="boms" className="space-y-4">
           <BOMsTab searchTerm={searchTerm} setSearchTerm={setSearchTerm} />
@@ -91,94 +73,6 @@ export default function RobustBOMAdministration() {
         </TabsContent>
       </Tabs>
     </div>
-  );
-}
-
-// Parts Tab Component - Now displays inventory items
-function PartsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchTerm: (s: string) => void }) {
-  const { toast } = useToast();
-
-  // Fetch inventory items from the BOM parts endpoint (which now returns inventory items)
-  const queryUrl = `/api/robust-boms/parts?pageSize=1000${searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : ''}`;
-  const { data: partsData, isLoading } = useQuery({
-    queryKey: [queryUrl],
-  });
-
-  const parts = (partsData as any)?.data || [];
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Parts Library (Inventory Items)</CardTitle>
-            <CardDescription>Parts are managed through the Enhanced Inventory MRP system</CardDescription>
-          </div>
-          <div className="flex gap-2">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by AG Part#, SKU, or Name..."
-                className="pl-8 w-[300px]"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                data-testid="input-search-parts"
-              />
-            </div>
-            <Button 
-              onClick={() => window.location.href = '/inventory/manager'}
-              data-testid="button-manage-inventory"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Manage Inventory Items
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="text-center py-8 text-muted-foreground">Loading parts...</div>
-        ) : parts.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground" data-testid="text-no-parts">
-            No inventory items found. Go to Inventory MRP to add parts.
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>AG Part #</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>SKU</TableHead>
-                <TableHead>Vendor</TableHead>
-                <TableHead>Latest Price</TableHead>
-                <TableHead>Utilization</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {parts.map((part: any) => (
-                <TableRow key={part.id} data-testid={`row-part-${part.agPartNumber}`}>
-                  <TableCell className="font-medium font-mono">{part.agPartNumber}</TableCell>
-                  <TableCell>{part.name}</TableCell>
-                  <TableCell>{part.sku || '-'}</TableCell>
-                  <TableCell>{part.vendorName || '-'}</TableCell>
-                  <TableCell>{part.latestPrice ? `$${Number(part.latestPrice).toFixed(2)}` : '-'}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1 flex-wrap">
-                      {part.isProductionLinePL1 && <Badge variant="outline" className="text-xs">PL1</Badge>}
-                      {part.isProductionLinePL2 && <Badge variant="outline" className="text-xs">PL2</Badge>}
-                      {part.isUtilizedFacilities && <Badge variant="outline" className="text-xs">Facilities</Badge>}
-                      {part.isUtilizedAdmin && <Badge variant="outline" className="text-xs">Admin</Badge>}
-                      {part.isUtilizedServices && <Badge variant="outline" className="text-xs">Services</Badge>}
-                      {!part.isProductionLinePL1 && !part.isProductionLinePL2 && !part.isUtilizedFacilities && !part.isUtilizedAdmin && !part.isUtilizedServices && '-'}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 

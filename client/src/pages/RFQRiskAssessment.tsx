@@ -12,6 +12,13 @@ import { Save, Printer, Download } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import type { P2Customer } from '@shared/schema';
 
+interface SessionUser {
+  id: number;
+  username: string;
+  role: string;
+  employeeId?: number | null;
+}
+
 export default function RFQRiskAssessment() {
   // Signature canvas reference
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
@@ -67,7 +74,7 @@ export default function RFQRiskAssessment() {
   });
 
   // Fetch current user session for authorization
-  const { data: session } = useQuery({
+  const { data: session } = useQuery<SessionUser>({
     queryKey: ['/api/auth/session'],
   });
 
@@ -411,6 +418,17 @@ export default function RFQRiskAssessment() {
   };
 
   const handleSave = async () => {
+    // Check authorization for high-risk RFQs
+    if (isHighRisk && !canSign) {
+      alert(
+        `Authorization Required\n\n` +
+        `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n` +
+        `Only Dave Tandy or Matt Tandy are authorized to save high-risk RFQs.\n\n` +
+        `Current user: ${session?.username || 'Not logged in'}`
+      );
+      return;
+    }
+
     if (!validateForm()) return;
 
     try {
@@ -445,6 +463,17 @@ export default function RFQRiskAssessment() {
   };
 
   const handlePrint = () => {
+    // Check authorization for high-risk RFQs
+    if (isHighRisk && !canSign) {
+      alert(
+        `Authorization Required\n\n` +
+        `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n` +
+        `Only Dave Tandy or Matt Tandy are authorized to print high-risk RFQs.\n\n` +
+        `Current user: ${session?.username || 'Not logged in'}`
+      );
+      return;
+    }
+
     if (!validateForm()) return;
 
     window.print();
@@ -464,7 +493,12 @@ export default function RFQRiskAssessment() {
 
           {/* Action Buttons */}
           <div className="flex justify-center gap-3 mb-6">
-            <Button onClick={handleSave} className="flex items-center gap-2">
+            <Button 
+              onClick={handleSave} 
+              className="flex items-center gap-2"
+              disabled={!canSign}
+              data-testid="button-save-form"
+            >
               <Save className="h-4 w-4" />
               Save Form
             </Button>
@@ -472,11 +506,18 @@ export default function RFQRiskAssessment() {
               onClick={handlePrint}
               variant="outline"
               className="flex items-center gap-2"
+              disabled={!canSign}
+              data-testid="button-print-form"
             >
               <Printer className="h-4 w-4" />
               Print
             </Button>
-            <Button variant="outline" className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              className="flex items-center gap-2"
+              disabled={!canSign}
+              data-testid="button-export-pdf"
+            >
               <Download className="h-4 w-4" />
               Export PDF
             </Button>

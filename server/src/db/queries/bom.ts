@@ -106,7 +106,8 @@ export async function buildBOMTree(revisionId: string) {
         bl.reference,
         bl.notes,
         i.ag_part_number as sku, 
-        i.name
+        i.name,
+        COALESCE(i.cogs_per_unit, i.cost_per, i.unit_cost, 0) as unit_cost
       FROM bom_lines bl
       JOIN inventory_items i ON i.ag_part_number = bl.child_part_ag_number
       WHERE bl.revision_id = ${revId}
@@ -136,48 +137,70 @@ export async function buildBOMTree(revisionId: string) {
   async function buildNode(currentRevId: string): Promise<any> {
     const lines = await getLines(currentRevId);
     const children: any[] = [];
+    let totalCost = 0;
     
     for (const line of lines) {
+      const unitCost = Number(line.unit_cost) || 0;
+      const qtyPer = Number(line.qty_per);
+      const scrapPct = Number(line.scrap_pct);
+      
+      // Calculate effective quantity including scrap
+      const effectiveQty = qtyPer * (1 + scrapPct / 100);
+      
       // Check if this part has a BOM (is a make part / sub-assembly)
       const childRevId = await findReleasedRevisionForParentPart(line.child_part_ag_number);
       
       if (childRevId) {
         // This is a sub-assembly, recurse into it
         const childNode = await buildNode(childRevId);
+        const childTotalCost = childNode.totalCost || 0;
+        const extendedCost = childTotalCost * effectiveQty;
+        
         children.push({
           type: 'assembly',
           partId: line.child_part_ag_number,
           sku: line.sku,
           name: line.name,
-          qtyPer: Number(line.qty_per),
-          scrapPct: Number(line.scrap_pct),
+          qtyPer,
+          scrapPct,
           uom: line.uom,
           operationSeq: line.operation_seq,
           reference: line.reference,
           notes: line.notes,
+          unitCost: childTotalCost,
+          extendedCost,
           children: childNode.children
         });
+        
+        totalCost += extendedCost;
       } else {
         // This is a leaf component (buy or make part without BOM)
+        const extendedCost = unitCost * effectiveQty;
+        
         children.push({
           type: 'component',
           partId: line.child_part_ag_number,
           sku: line.sku,
           name: line.name,
-          qtyPer: Number(line.qty_per),
-          scrapPct: Number(line.scrap_pct),
+          qtyPer,
+          scrapPct,
           uom: line.uom,
           operationSeq: line.operation_seq,
           reference: line.reference,
           notes: line.notes,
+          unitCost,
+          extendedCost,
           children: []
         });
+        
+        totalCost += extendedCost;
       }
     }
     
     return {
       revisionId: currentRevId,
-      children
+      children,
+      totalCost
     };
   }
   

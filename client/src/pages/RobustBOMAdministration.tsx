@@ -1427,10 +1427,38 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                     Loading BOM tree...
                   </div>
                 ) : bomTreeData ? (
-                  <div className="space-y-2">
+                  <div className="space-y-4">
+                    {/* Cost Summary Card */}
+                    {(bomTreeData as any)?.totalCost !== undefined && (
+                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-semibold text-lg">Total Assembly Cost</h3>
+                            <p className="text-sm text-muted-foreground">
+                              Rolled-up cost including all components and scrap
+                            </p>
+                          </div>
+                          <div className="text-2xl font-bold text-primary">
+                            {new Intl.NumberFormat('en-US', { 
+                              style: 'currency', 
+                              currency: 'USD',
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2 
+                            }).format((bomTreeData as any).totalCost || 0)}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Parent assembly header */}
-                    <div className="font-semibold text-lg border-b pb-2">
-                      {explosionBom?.parentInventoryItem?.agPartNumber} - {explosionBom?.parentInventoryItem?.name}
+                    <div className="flex items-center justify-between border-b pb-2">
+                      <div className="font-semibold text-lg">
+                        {explosionBom?.parentInventoryItem?.agPartNumber} - {explosionBom?.parentInventoryItem?.name}
+                      </div>
+                      <div className="flex items-center gap-4 text-sm font-medium text-muted-foreground">
+                        <span className="min-w-[80px] text-right">Unit Cost</span>
+                        <span className="min-w-[90px] text-right">Extended</span>
+                      </div>
                     </div>
                     
                     {/* Tree display */}
@@ -1595,49 +1623,72 @@ function TreeNode({ node, level, expandedNodes, onToggleExpand }: TreeNodeProps)
   const hasChildren = node.children && node.children.length > 0;
   const indentWidth = level * 24; // 24px per level
 
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2 
+    }).format(value);
+  };
+
   return (
     <div>
       <div 
         className={cn(
-          "flex items-center gap-2 p-2 rounded hover:bg-muted/50 cursor-pointer",
+          "flex items-center gap-3 p-2 rounded hover:bg-muted/50",
           node.type === 'assembly' && "font-medium"
         )}
         style={{ paddingLeft: `${indentWidth + 8}px` }}
-        onClick={() => hasChildren && onToggleExpand(nodeId)}
       >
-        {hasChildren ? (
-          <div className="w-4 h-4 flex items-center justify-center">
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-          </div>
-        ) : (
-          <div className="w-4 h-4" />
-        )}
-        
-        <Badge variant={node.type === 'assembly' ? 'default' : 'outline'} className="shrink-0">
-          {node.type === 'assembly' ? 'Assembly' : 'Component'}
-        </Badge>
-        
-        <span className="flex-1">
-          {node.sku} - {node.name}
-        </span>
-        
-        <span className="text-sm text-muted-foreground">
-          Qty: {node.qtyPer}
-        </span>
-        
-        {node.scrapPct > 0 && (
-          <span className="text-sm text-muted-foreground">
-            Scrap: {node.scrapPct}%
+        <div 
+          className="cursor-pointer flex items-center gap-2 flex-1"
+          onClick={() => hasChildren && onToggleExpand(nodeId)}
+        >
+          {hasChildren ? (
+            <div className="w-4 h-4 flex items-center justify-center">
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </div>
+          ) : (
+            <div className="w-4 h-4" />
+          )}
+          
+          <Badge variant={node.type === 'assembly' ? 'default' : 'outline'} className="shrink-0">
+            {node.type === 'assembly' ? 'Assembly' : 'Component'}
+          </Badge>
+          
+          <span className="flex-1">
+            {node.sku} - {node.name}
           </span>
-        )}
+        </div>
         
-        <span className="text-xs text-muted-foreground">
-          {node.uom}
-        </span>
+        <div className="flex items-center gap-4 text-sm">
+          <span className="text-muted-foreground min-w-[60px]">
+            Qty: {node.qtyPer}
+          </span>
+          
+          {node.scrapPct > 0 && (
+            <span className="text-muted-foreground min-w-[70px]">
+              Scrap: {node.scrapPct}%
+            </span>
+          )}
+          
+          <span className="text-xs text-muted-foreground min-w-[40px]">
+            {node.uom}
+          </span>
+          
+          <span className="text-muted-foreground min-w-[80px] text-right">
+            {formatCurrency(node.unitCost || 0)}
+          </span>
+          
+          <span className="font-medium min-w-[90px] text-right">
+            {formatCurrency(node.extendedCost || 0)}
+          </span>
+        </div>
       </div>
       
       {/* Render children recursively */}

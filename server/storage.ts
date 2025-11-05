@@ -8431,16 +8431,16 @@ export class DatabaseStorage implements IStorage {
       UPDATE p2_customers
       SET rfq_sequences = COALESCE(rfq_sequences, '{}'::jsonb) || 
         jsonb_build_object(
-          ${year}, 
-          COALESCE((rfq_sequences->${year})::int, 0) + 1
+          ${year}::text, 
+          COALESCE((rfq_sequences->>${year}::text)::int, 0) + 1
         )
-      WHERE customer_id = ${customerId}
+      WHERE customer_id = ${customerId}::text
       RETURNING 
         id,
         customer_id,
         customer_name,
         rfq_prefix,
-        (rfq_sequences->${year})::int as sequence
+        (rfq_sequences->>${year}::text)::int as sequence
     `);
 
     if (!result.rows || result.rows.length === 0) {

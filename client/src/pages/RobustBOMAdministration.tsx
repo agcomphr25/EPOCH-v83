@@ -1371,10 +1371,10 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                                               revisionId: rev.id,
                                               lines: editingLines.map(line => ({
                                                 childPartAgNumber: line.childPartAgNumber,
-                                                quantityPer: line.quantityPer,
-                                                scrapPercent: line.scrapPercent,
+                                                qtyPer: line.quantityPer,
+                                                scrapPct: line.scrapPercent,
                                                 uom: line.uom,
-                                                referenceDesignator: line.referenceDesignator,
+                                                reference: line.referenceDesignator,
                                                 operationSeq: line.operationSequence,
                                               }))
                                             });

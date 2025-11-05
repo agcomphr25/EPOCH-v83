@@ -98,32 +98,32 @@ export async function buildBOMTree(revisionId: string) {
     const query = sql`
       SELECT 
         bl.id, 
-        bl.child_part_id, 
+        bl.child_part_ag_number, 
         bl.qty_per, 
         bl.scrap_pct, 
         bl.uom, 
         bl.operation_seq, 
         bl.reference,
         bl.notes,
-        p.sku, 
-        p.name,
-        p.is_make
+        i.ag_part_number as sku, 
+        i.name,
+        COALESCE(i.cogs_per_unit, i.cost_per, i.unit_cost, 0) as unit_cost
       FROM bom_lines bl
-      JOIN parts p ON p.id = bl.child_part_id
+      JOIN inventory_items i ON i.ag_part_number = bl.child_part_ag_number
       WHERE bl.revision_id = ${revId}
-      ORDER BY bl.operation_seq, p.sku;
+      ORDER BY bl.operation_seq, i.ag_part_number;
     `;
     
     const result = await db.execute(query);
     return (Array.isArray(result) ? result : result.rows || []) as any[];
   }
   
-  async function findReleasedRevisionForParentPart(partId: string) {
+  async function findReleasedRevisionForParentPart(partAgNumber: string) {
     const query = sql`
       SELECT br.id AS rev_id
       FROM boms bo 
       JOIN bom_revisions br ON br.bom_id = bo.id
-      WHERE bo.parent_part_id = ${partId} 
+      WHERE bo.parent_part_ag_number = ${partAgNumber} 
         AND br.is_released = true
       ORDER BY br.effective_from DESC NULLS LAST
       LIMIT 1;
@@ -137,49 +137,70 @@ export async function buildBOMTree(revisionId: string) {
   async function buildNode(currentRevId: string): Promise<any> {
     const lines = await getLines(currentRevId);
     const children: any[] = [];
+    let totalCost = 0;
     
     for (const line of lines) {
+      const unitCost = Number(line.unit_cost) || 0;
+      const qtyPer = Number(line.qty_per);
+      const scrapPct = Number(line.scrap_pct);
+      
+      // Calculate effective quantity including scrap
+      const effectiveQty = qtyPer * (1 + scrapPct / 100);
+      
       // Check if this part has a BOM (is a make part / sub-assembly)
-      const childRevId = await findReleasedRevisionForParentPart(line.child_part_id);
+      const childRevId = await findReleasedRevisionForParentPart(line.child_part_ag_number);
       
       if (childRevId) {
         // This is a sub-assembly, recurse into it
         const childNode = await buildNode(childRevId);
+        const childTotalCost = childNode.totalCost || 0;
+        const extendedCost = childTotalCost * effectiveQty;
+        
         children.push({
           type: 'assembly',
-          partId: line.child_part_id,
+          partId: line.child_part_ag_number,
           sku: line.sku,
           name: line.name,
-          qtyPer: Number(line.qty_per),
-          scrapPct: Number(line.scrap_pct),
+          qtyPer,
+          scrapPct,
           uom: line.uom,
           operationSeq: line.operation_seq,
           reference: line.reference,
           notes: line.notes,
+          unitCost: childTotalCost,
+          extendedCost,
           children: childNode.children
         });
+        
+        totalCost += extendedCost;
       } else {
         // This is a leaf component (buy or make part without BOM)
+        const extendedCost = unitCost * effectiveQty;
+        
         children.push({
           type: 'component',
-          partId: line.child_part_id,
+          partId: line.child_part_ag_number,
           sku: line.sku,
           name: line.name,
-          qtyPer: Number(line.qty_per),
-          scrapPct: Number(line.scrap_pct),
+          qtyPer,
+          scrapPct,
           uom: line.uom,
           operationSeq: line.operation_seq,
           reference: line.reference,
           notes: line.notes,
-          isMake: line.is_make,
+          unitCost,
+          extendedCost,
           children: []
         });
+        
+        totalCost += extendedCost;
       }
     }
     
     return {
       revisionId: currentRevId,
-      children
+      children,
+      totalCost
     };
   }
   

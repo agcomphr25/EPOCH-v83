@@ -358,10 +358,10 @@ function App() {
                     path="/inventory/dashboard"
                     component={InventoryDashboardPage}
                   /> */}
-                  {/* <Route
+                  <Route
                     path="/inventory/manager"
                     component={InventoryManagerPage}
-                  /> */}
+                  />
                   <Route
                     path="/inventory/receiving"
                     component={InventoryReceivingPage}

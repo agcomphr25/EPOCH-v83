@@ -2022,67 +2022,46 @@ export class DatabaseStorage implements IStorage {
       const now = new Date();
       const currentPrefix = getCurrentYearMonthPrefix(now);
 
-      // Use database-level atomic sequence for guaranteed unique IDs
-      // This approach uses PostgreSQL's row-level locking via UPDATE...RETURNING
-      // which guarantees atomicity even under high concurrency
-      
-      const result = await db.transaction(async (tx) => {
-        // Try to get existing sequence for this prefix
-        const existingSequence = await tx
-          .select()
-          .from(orderIdSequences)
-          .where(eq(orderIdSequences.yearMonthPrefix, currentPrefix))
-          .limit(1);
+      // Find the highest existing order ID with this prefix to ensure continuity
+      const existingOrders = await db
+        .select({ orderId: allOrders.orderId })
+        .from(allOrders)
+        .where(like(allOrders.orderId, `${currentPrefix}%`))
+        .orderBy(desc(allOrders.orderId))
+        .limit(1);
 
-        if (existingSequence.length > 0) {
-          // Atomically increment existing sequence
-          const [updated] = await tx
-            .update(orderIdSequences)
-            .set({
-              currentSequence: sql`${orderIdSequences.currentSequence} + 1`,
-              lastUsedAt: now,
-              updatedAt: now,
-            })
-            .where(eq(orderIdSequences.yearMonthPrefix, currentPrefix))
-            .returning();
-          
-          return updated.currentSequence;
-        } else {
-          // New prefix - initialize sequence
-          // First, find the highest existing order ID with this prefix
-          // to ensure continuity when month changes
-          const existingOrders = await tx
-            .select({ orderId: allOrders.orderId })
-            .from(allOrders)
-            .where(like(allOrders.orderId, `${currentPrefix}%`))
-            .orderBy(desc(allOrders.orderId))
-            .limit(1);
-
-          let startSequence = 0;
-          if (existingOrders.length > 0) {
-            const parsed = parseOrderId(existingOrders[0].orderId);
-            if (parsed && parsed.prefix === currentPrefix) {
-              startSequence = parsed.sequence;
-            }
-          }
-
-          // Create new sequence record starting from the next number
-          const [newSequence] = await tx
-            .insert(orderIdSequences)
-            .values({
-              yearMonthPrefix: currentPrefix,
-              currentSequence: startSequence + 1,
-              lastUsedAt: now,
-            })
-            .returning();
-          
-          return newSequence.currentSequence;
+      let startSequence = 0;
+      if (existingOrders.length > 0) {
+        const parsed = parseOrderId(existingOrders[0].orderId);
+        if (parsed && parsed.prefix === currentPrefix) {
+          startSequence = parsed.sequence;
         }
-      });
+      }
+
+      // Use atomic INSERT...ON CONFLICT to increment sequence
+      // This is natively atomic in PostgreSQL and works with neon-http driver
+      const [result] = await db
+        .insert(orderIdSequences)
+        .values({
+          yearMonthPrefix: currentPrefix,
+          currentSequence: startSequence + 1,
+          lastUsedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: orderIdSequences.yearMonthPrefix,
+          set: {
+            currentSequence: sql`${orderIdSequences.currentSequence} + 1`,
+            lastUsedAt: now,
+            updatedAt: now,
+          },
+        })
+        .returning();
 
       // Format the order ID with prefix and sequence
-      const nextOrderId = formatOrderId(currentPrefix, result);
-      console.log(`✓ Generated Order ID: ${nextOrderId} (sequence: ${result}, prefix: ${currentPrefix})`);
+      const nextOrderId = formatOrderId(currentPrefix, result.currentSequence);
+      console.log(`✓ Generated Order ID: ${nextOrderId} (sequence: ${result.currentSequence}, prefix: ${currentPrefix})`);
       return nextOrderId;
 
     } catch (error) {

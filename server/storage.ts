@@ -49,6 +49,7 @@ import {
   bomDefinitions,
   bomItems,
   orderIdReservations,
+  orderIdSequences,
   purchaseReviewChecklists,
   manufacturersCertificates,
   // Task tracker table
@@ -2029,162 +2030,72 @@ export class DatabaseStorage implements IStorage {
       const now = new Date();
       const currentPrefix = getCurrentYearMonthPrefix(now);
 
-      // Clean up expired reservations first (non-atomic, but helps keep table clean)
-      try {
-        await db
-          .delete(orderIdReservations)
-          .where(
-            and(
-              eq(orderIdReservations.isUsed, false),
-              lt(orderIdReservations.expiresAt, now)
-            )
-          );
-      } catch (cleanupError) {
-        console.warn('Cleanup error (non-critical):', cleanupError);
-      }
+      // Use database-level atomic sequence for guaranteed unique IDs
+      // This approach uses PostgreSQL's row-level locking via UPDATE...RETURNING
+      // which guarantees atomicity even under high concurrency
+      
+      const result = await db.transaction(async (tx) => {
+        // Try to get existing sequence for this prefix
+        const existingSequence = await tx
+          .select()
+          .from(orderIdSequences)
+          .where(eq(orderIdSequences.yearMonthPrefix, currentPrefix))
+          .limit(1);
 
-      // Retry loop for handling race conditions
-      for (let attempt = 0; attempt < 5; attempt++) {
-        try {
-          // Find the highest sequence number for current year-month prefix
-          // Check finalized orders and active reservations
-          const [finalizedOrderResult, reservationResult] =
-            await Promise.all([
-              // Get highest sequence from finalized orders (includes all orders now)
-              db
-                .select({ orderId: allOrders.orderId })
-                .from(allOrders)
-                .where(like(allOrders.orderId, `${currentPrefix}%`))
-                .orderBy(desc(allOrders.orderId))
-                .limit(1),
-
-              // Get highest sequence from active reservations
-              db
-                .select({ sequenceNumber: orderIdReservations.sequenceNumber })
-                .from(orderIdReservations)
-                .where(
-                  and(
-                    eq(orderIdReservations.yearMonthPrefix, currentPrefix),
-                    eq(orderIdReservations.isUsed, false),
-                    gt(orderIdReservations.expiresAt, now)
-                  )
-                )
-                .orderBy(desc(orderIdReservations.sequenceNumber))
-                .limit(1),
-            ]);
-
-          let maxSequence = 0;
-
-          // Check highest sequence from finalized orders
-          if (finalizedOrderResult.length > 0) {
-            const parsed = parseOrderId(finalizedOrderResult[0].orderId);
-            if (parsed && parsed.prefix === currentPrefix) {
-              maxSequence = Math.max(maxSequence, parsed.sequence);
-            }
-          }
-
-          // Check highest sequence from active reservations
-          if (reservationResult.length > 0) {
-            maxSequence = Math.max(
-              maxSequence,
-              reservationResult[0].sequenceNumber
-            );
-          }
-
-          // Generate next sequence number
-          const nextSequence = maxSequence + 1;
-          const nextOrderId = formatOrderId(currentPrefix, nextSequence);
-
-          // Atomically reserve the Order ID using INSERT (will fail if duplicate)
-          const expiresAt = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes from now
-
-          await db.insert(orderIdReservations).values({
-            orderId: nextOrderId,
-            yearMonthPrefix: currentPrefix,
-            sequenceNumber: nextSequence,
-            reservedAt: now,
-            expiresAt: expiresAt,
-            isUsed: false,
-          });
-
-          console.log(
-            `Reserved Order ID: ${nextOrderId} (expires: ${expiresAt.toISOString()})`
-          );
-          return nextOrderId;
-        } catch (insertError: any) {
-          // If unique constraint violation, retry with next sequence
-          if (
-            insertError.code === '23505' ||
-            insertError.message?.includes('duplicate') ||
-            insertError.message?.includes('unique')
-          ) {
-            console.log(
-              `Order ID conflict on attempt ${attempt + 1}, retrying...`
-            );
-            continue;
-          }
-          throw insertError;
-        }
-      }
-
-      // If all retries failed, try to find the next sequence number manually
-      // Query database directly for highest sequence number from both tables
-      try {
-        const [draftOrderResult, finalizedOrderResult] = await Promise.all([
-          db
-            .select({ orderId: orderDrafts.orderId })
-            .from(orderDrafts)
-            .where(like(orderDrafts.orderId, `${currentPrefix}%`))
-            .orderBy(desc(orderDrafts.orderId))
-            .limit(1),
-          db
+        if (existingSequence.length > 0) {
+          // Atomically increment existing sequence
+          const [updated] = await tx
+            .update(orderIdSequences)
+            .set({
+              currentSequence: sql`${orderIdSequences.currentSequence} + 1`,
+              lastUsedAt: now,
+              updatedAt: now,
+            })
+            .where(eq(orderIdSequences.yearMonthPrefix, currentPrefix))
+            .returning();
+          
+          return updated.currentSequence;
+        } else {
+          // New prefix - initialize sequence
+          // First, find the highest existing order ID with this prefix
+          // to ensure continuity when month changes
+          const existingOrders = await tx
             .select({ orderId: allOrders.orderId })
             .from(allOrders)
             .where(like(allOrders.orderId, `${currentPrefix}%`))
             .orderBy(desc(allOrders.orderId))
-            .limit(1),
-        ]);
+            .limit(1);
 
-        let maxSequence = 0;
-
-        // Check draft orders
-        if (draftOrderResult.length > 0) {
-          const parsed = parseOrderId(draftOrderResult[0].orderId);
-          if (parsed && parsed.prefix === currentPrefix) {
-            maxSequence = Math.max(maxSequence, parsed.sequence);
+          let startSequence = 0;
+          if (existingOrders.length > 0) {
+            const parsed = parseOrderId(existingOrders[0].orderId);
+            if (parsed && parsed.prefix === currentPrefix) {
+              startSequence = parsed.sequence;
+            }
           }
-        }
 
-        // Check finalized orders
-        if (finalizedOrderResult.length > 0) {
-          const parsed = parseOrderId(finalizedOrderResult[0].orderId);
-          if (parsed && parsed.prefix === currentPrefix) {
-            maxSequence = Math.max(maxSequence, parsed.sequence);
-          }
+          // Create new sequence record starting from the next number
+          const [newSequence] = await tx
+            .insert(orderIdSequences)
+            .values({
+              yearMonthPrefix: currentPrefix,
+              currentSequence: startSequence + 1,
+              lastUsedAt: now,
+            })
+            .returning();
+          
+          return newSequence.currentSequence;
         }
+      });
 
-        // Generate next sequential ID without reservation (fallback only)
-        const fallbackSequence = maxSequence + 1;
-        const fallbackId = formatOrderId(currentPrefix, fallbackSequence);
-        console.warn(
-          `All Order ID generation attempts failed, using sequential fallback: ${fallbackId}`
-        );
-        return fallbackId;
-      } catch (fallbackError) {
-        console.error('Fallback ID generation also failed:', fallbackError);
-        // Ultimate fallback - use next available sequence starting from 001
-        const fallbackId = currentPrefix + '001';
-        console.warn(`Using emergency fallback: ${fallbackId}`);
-        return fallbackId;
-      }
+      // Format the order ID with prefix and sequence
+      const nextOrderId = formatOrderId(currentPrefix, result);
+      console.log(`✓ Generated Order ID: ${nextOrderId} (sequence: ${result}, prefix: ${currentPrefix})`);
+      return nextOrderId;
+
     } catch (error) {
-      console.error('Error in Order ID generation:', error);
-      // Ultimate fallback - use current prefix with 001
-      const now = new Date();
-      const currentPrefix = getCurrentYearMonthPrefix(now);
-      const fallbackId = currentPrefix + '001';
-      console.warn(`Using ultimate fallback: ${fallbackId}`);
-      return fallbackId;
+      console.error('❌ Critical error in Order ID generation:', error);
+      throw new Error(`Failed to generate order ID: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

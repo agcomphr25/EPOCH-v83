@@ -361,20 +361,18 @@ router.post('/revisions/:revId/lines', async (req, res) => {
     const linesData = z.array(insertBomLineSchema.omit({ revisionId: true }))
       .parse(req.body.lines || []);
 
-    await db.transaction(async (tx) => {
-      // Delete existing lines
-      await tx.delete(bomLines).where(eq(bomLines.revisionId, revId));
-      
-      // Insert new lines
-      if (linesData.length > 0) {
-        await tx.insert(bomLines).values(
-          linesData.map(line => ({
-            ...line,
-            revisionId: revId,
-          }))
-        );
-      }
-    });
+    // Delete existing lines
+    await db.delete(bomLines).where(eq(bomLines.revisionId, revId));
+    
+    // Insert new lines
+    if (linesData.length > 0) {
+      await db.insert(bomLines).values(
+        linesData.map(line => ({
+          ...line,
+          revisionId: revId,
+        }))
+      );
+    }
 
     res.json({ success: true });
   } catch (error) {
@@ -403,24 +401,22 @@ router.post('/revisions/:revId/release', async (req, res) => {
       return res.status(404).json({ error: 'Revision not found' });
     }
 
-    await db.transaction(async (tx) => {
-      // Un-release all other revisions for this BOM
-      await tx
-        .update(bomRevisions)
-        .set({ isReleased: false })
-        .where(eq(bomRevisions.bomId, revision.bomId));
+    // Un-release all other revisions for this BOM
+    await db
+      .update(bomRevisions)
+      .set({ isReleased: false })
+      .where(eq(bomRevisions.bomId, revision.bomId));
 
-      // Release this revision
-      await tx
-        .update(bomRevisions)
-        .set({
-          isReleased: true,
-          effectiveFrom: effectiveFrom ? new Date(effectiveFrom) : new Date(),
-          effectiveTo: effectiveTo ? new Date(effectiveTo) : null,
-          updatedAt: new Date(),
-        })
-        .where(eq(bomRevisions.id, revId));
-    });
+    // Release this revision
+    await db
+      .update(bomRevisions)
+      .set({
+        isReleased: true,
+        effectiveFrom: effectiveFrom ? new Date(effectiveFrom) : new Date(),
+        effectiveTo: effectiveTo ? new Date(effectiveTo) : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(bomRevisions.id, revId));
 
     res.json({ success: true });
   } catch (error) {

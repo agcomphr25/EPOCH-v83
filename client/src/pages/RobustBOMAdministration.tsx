@@ -158,6 +158,14 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     },
   });
 
+  const revisionForm = useForm({
+    resolver: zodResolver(revisionSchema.omit({ bomId: true })),
+    defaultValues: {
+      revCode: '',
+      notes: '',
+    },
+  });
+
   const onSubmit = (data: z.infer<typeof bomSchema>) => {
     createBOMMutation.mutate(data);
   };
@@ -190,13 +198,17 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     setWizardStep(1);
     setWizardData({ step1: null, step2: null, step3: [] });
     form.reset();
+    revisionForm.reset();
   };
 
   const handleStep2Next = () => {
-    // TODO: Task 3 - Validate and save Step 2 revision data
-    // For now, just advance to Step 3
-    setWizardData({ ...wizardData, step2: { revCode: 'A', notes: '' } }); // Placeholder
-    setWizardStep(3);
+    revisionForm.trigger().then((isValid) => {
+      if (isValid) {
+        const formData = revisionForm.getValues();
+        setWizardData({ ...wizardData, step2: formData });
+        setWizardStep(3);
+      }
+    });
   };
 
   // Populate edit form when a BOM is selected
@@ -216,6 +228,13 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
       form.reset(wizardData.step1);
     }
   }, [wizardStep, wizardData.step1, form]);
+
+  // Restore wizard Step 2 data when navigating back
+  useEffect(() => {
+    if (wizardStep === 2 && wizardData.step2) {
+      revisionForm.reset(wizardData.step2);
+    }
+  }, [wizardStep, wizardData.step2, revisionForm]);
 
   const boms = (bomsData as any)?.data || [];
   const parts = (partsData as any)?.data || [];
@@ -258,6 +277,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                 setWizardStep(1);
                 setWizardData({ step1: null, step2: null, step3: [] });
                 form.reset();
+                revisionForm.reset();
               }
             }}>
               <DialogTrigger asChild>
@@ -386,19 +406,58 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                       </>
                     )}
 
-                    {/* Step 2: Initial Revision (Coming in Task 3) */}
+                    {/* Step 2: Initial Revision */}
                     {wizardStep === 2 && (
-                      <div className="py-8 text-center">
-                        <h3 className="text-lg font-semibold mb-2">Initial Revision Details</h3>
-                        <p className="text-muted-foreground mb-4">
-                          This step will allow you to define the initial revision code and notes.
-                        </p>
-                        <div className="bg-muted p-4 rounded-lg">
-                          <p className="text-sm">Coming in Task 3...</p>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            Preview: You'll enter revision code (e.g., "A", "Rev 1") and optional notes.
+                      <div className="space-y-4">
+                        <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
+                          <p className="text-sm text-blue-900 dark:text-blue-100">
+                            <strong>Define your initial revision.</strong> The revision code typically follows a versioning scheme 
+                            like "A", "B", "C" or "Rev 1", "Rev 2", etc. This will be the first version of your BOM.
                           </p>
                         </div>
+                        
+                        <FormField
+                          control={revisionForm.control}
+                          name="revCode"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Revision Code *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="e.g., A, Rev 1, V1.0" 
+                                  data-testid="input-revision-code"
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Enter a unique code for this revision (e.g., "A", "Rev 1", "V1.0")
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={revisionForm.control}
+                          name="notes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Revision Notes (Optional)</FormLabel>
+                              <FormControl>
+                                <Textarea 
+                                  {...field} 
+                                  placeholder="Enter any notes about this revision (e.g., initial release, design changes, etc.)"
+                                  rows={4}
+                                  data-testid="input-revision-notes"
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Add notes about what this revision includes or why it was created
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       </div>
                     )}
 

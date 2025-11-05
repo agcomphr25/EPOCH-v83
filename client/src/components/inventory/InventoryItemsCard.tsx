@@ -20,7 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Download, Upload, Search, Package, MoreHorizontal } from 'lucide-react';
+import { Plus, Edit, Trash2, Download, Upload, Search, Package, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'wouter';
 import type { InventoryItem, ItemGroup } from '@shared/schema';
@@ -423,6 +423,10 @@ export default function InventoryItemsCard() {
   const [isAddToGroupDialogOpen, setIsAddToGroupDialogOpen] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   
+  // Sorting state
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  
   // Bulk update utilized fields state
   const [isBulkUtilizedDialogOpen, setIsBulkUtilizedDialogOpen] = useState(false);
   const [bulkUtilizedFields, setBulkUtilizedFields] = useState({
@@ -483,45 +487,103 @@ export default function InventoryItemsCard() {
     queryFn: () => apiRequest('/api/inventory/items-groups-map'),
   });
 
+  // Sort handler function
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
   const items = Array.isArray(allItems)
-    ? allItems.filter((item) => {
-        // Search filter
-        if (searchTerm.trim()) {
-          const searchLower = searchTerm.toLowerCase();
-          const matchesSearch = (
-            item.agPartNumber.toLowerCase().includes(searchLower) ||
-            item.name.toLowerCase().includes(searchLower) ||
-            (item.sku && item.sku.toLowerCase().includes(searchLower)) ||
-            (item.source && item.source.toLowerCase().includes(searchLower)) ||
-            (item.supplierPartNumber &&
-              item.supplierPartNumber.toLowerCase().includes(searchLower)) ||
-            (item.department &&
-              item.department.toLowerCase().includes(searchLower)) ||
-            (item.notes && item.notes.toLowerCase().includes(searchLower))
-          );
-          if (!matchesSearch) return false;
-        }
-        
-        // Utilized filter
-        if (utilizedFilter !== 'all') {
-          switch(utilizedFilter) {
-            case 'pl1':
-              return item.utilizedInPL1;
-            case 'pl2':
-              return item.utilizedInPL2;
-            case 'facilities':
-              return item.utilizedInFacilities;
-            case 'admin':
-              return item.utilizedInAdmin;
-            case 'services':
-              return item.utilizedInServices;
-            default:
-              return true;
+    ? allItems
+        .filter((item) => {
+          // Search filter
+          if (searchTerm.trim()) {
+            const searchLower = searchTerm.toLowerCase();
+            const matchesSearch = (
+              item.agPartNumber.toLowerCase().includes(searchLower) ||
+              item.name.toLowerCase().includes(searchLower) ||
+              (item.sku && item.sku.toLowerCase().includes(searchLower)) ||
+              (item.source && item.source.toLowerCase().includes(searchLower)) ||
+              (item.supplierPartNumber &&
+                item.supplierPartNumber.toLowerCase().includes(searchLower)) ||
+              (item.department &&
+                item.department.toLowerCase().includes(searchLower)) ||
+              (item.notes && item.notes.toLowerCase().includes(searchLower))
+            );
+            if (!matchesSearch) return false;
           }
-        }
-        
-        return true;
-      })
+          
+          // Utilized filter
+          if (utilizedFilter !== 'all') {
+            switch(utilizedFilter) {
+              case 'pl1':
+                return item.utilizedInPL1;
+              case 'pl2':
+                return item.utilizedInPL2;
+              case 'facilities':
+                return item.utilizedInFacilities;
+              case 'admin':
+                return item.utilizedInAdmin;
+              case 'services':
+                return item.utilizedInServices;
+              default:
+                return true;
+            }
+          }
+          
+          return true;
+        })
+        .sort((a, b) => {
+          if (!sortColumn) return 0;
+          
+          let aValue: any;
+          let bValue: any;
+          
+          switch (sortColumn) {
+            case 'agPartNumber':
+              aValue = a.agPartNumber || '';
+              bValue = b.agPartNumber || '';
+              break;
+            case 'sku':
+              aValue = a.sku || '';
+              bValue = b.sku || '';
+              break;
+            case 'name':
+              aValue = a.name || '';
+              bValue = b.name || '';
+              break;
+            case 'source':
+              aValue = a.source || '';
+              bValue = b.source || '';
+              break;
+            case 'supplierPartNumber':
+              aValue = a.supplierPartNumber || '';
+              bValue = b.supplierPartNumber || '';
+              break;
+            case 'secondarySource':
+              aValue = a.secondarySource || '';
+              bValue = b.secondarySource || '';
+              break;
+            case 'costPer':
+              aValue = a.costPer || 0;
+              bValue = b.costPer || 0;
+              break;
+            default:
+              return 0;
+          }
+          
+          if (typeof aValue === 'string') {
+            const comparison = aValue.localeCompare(bValue);
+            return sortDirection === 'asc' ? comparison : -comparison;
+          } else {
+            const comparison = aValue - bValue;
+            return sortDirection === 'asc' ? comparison : -comparison;
+          }
+        })
     : [];
 
   const createMutation = useMutation({
@@ -1067,33 +1129,44 @@ export default function InventoryItemsCard() {
         </DialogContent>
       </Dialog>
 
-      <div className="mb-4 flex gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Input
-            placeholder="Search by AG Part #, SKU, Name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-            data-testid="input-search"
-          />
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+      <div className="mb-4 space-y-3">
+        <div className="flex gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Input
+              placeholder="Search by AG Part #, SKU, Name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+              data-testid="input-search"
+            />
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+          </div>
+          
+          <div className="w-48">
+            <Select value={utilizedFilter} onValueChange={setUtilizedFilter}>
+              <SelectTrigger data-testid="select-utilized-filter">
+                <SelectValue placeholder="Filter by utilization" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Items</SelectItem>
+                <SelectItem value="pl1">PL1 Only</SelectItem>
+                <SelectItem value="pl2">PL2 Only</SelectItem>
+                <SelectItem value="facilities">Facilities Only</SelectItem>
+                <SelectItem value="admin">Admin Only</SelectItem>
+                <SelectItem value="services">Services Only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         
-        <div className="w-48">
-          <Select value={utilizedFilter} onValueChange={setUtilizedFilter}>
-            <SelectTrigger data-testid="select-utilized-filter">
-              <SelectValue placeholder="Filter by utilization" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Items</SelectItem>
-              <SelectItem value="pl1">PL1 Only</SelectItem>
-              <SelectItem value="pl2">PL2 Only</SelectItem>
-              <SelectItem value="facilities">Facilities Only</SelectItem>
-              <SelectItem value="admin">Admin Only</SelectItem>
-              <SelectItem value="services">Services Only</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {!isLoading && (
+          <div className="text-sm text-gray-600 dark:text-gray-400" data-testid="text-item-count">
+            Showing <span className="font-semibold">{items.length}</span> {items.length === 1 ? 'item' : 'items'}
+            {allItems.length !== items.length && (
+              <span className="text-gray-500"> (filtered from {allItems.length} total)</span>
+            )}
+          </div>
+        )}
       </div>
 
       {isLoading ? (
@@ -1114,29 +1187,134 @@ export default function InventoryItemsCard() {
                     data-testid="checkbox-select-all"
                   />
                 </th>
-                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
-                  AG Part#
+                <th 
+                  className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  onClick={() => handleSort('agPartNumber')}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSort('agPartNumber')}
+                  tabIndex={0}
+                  role="button"
+                  aria-sort={sortColumn === 'agPartNumber' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  data-testid="header-agPartNumber"
+                >
+                  <div className="flex items-center gap-2">
+                    AG Part#
+                    {sortColumn === 'agPartNumber' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                    ) : (
+                      <ArrowUpDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </div>
                 </th>
-                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
-                  SKU
+                <th 
+                  className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  onClick={() => handleSort('sku')}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSort('sku')}
+                  tabIndex={0}
+                  role="button"
+                  aria-sort={sortColumn === 'sku' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  data-testid="header-sku"
+                >
+                  <div className="flex items-center gap-2">
+                    SKU
+                    {sortColumn === 'sku' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                    ) : (
+                      <ArrowUpDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </div>
                 </th>
-                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
-                  Name
+                <th 
+                  className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  onClick={() => handleSort('name')}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
+                  tabIndex={0}
+                  role="button"
+                  aria-sort={sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  data-testid="header-name"
+                >
+                  <div className="flex items-center gap-2">
+                    Name
+                    {sortColumn === 'name' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                    ) : (
+                      <ArrowUpDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </div>
                 </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Groups
                 </th>
-                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
-                  Source
+                <th 
+                  className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  onClick={() => handleSort('source')}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSort('source')}
+                  tabIndex={0}
+                  role="button"
+                  aria-sort={sortColumn === 'source' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  data-testid="header-source"
+                >
+                  <div className="flex items-center gap-2">
+                    Source
+                    {sortColumn === 'source' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                    ) : (
+                      <ArrowUpDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </div>
                 </th>
-                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
-                  Supplier Part #
+                <th 
+                  className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  onClick={() => handleSort('supplierPartNumber')}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSort('supplierPartNumber')}
+                  tabIndex={0}
+                  role="button"
+                  aria-sort={sortColumn === 'supplierPartNumber' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  data-testid="header-supplierPartNumber"
+                >
+                  <div className="flex items-center gap-2">
+                    Supplier Part #
+                    {sortColumn === 'supplierPartNumber' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                    ) : (
+                      <ArrowUpDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </div>
                 </th>
-                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
-                  Secondary Source
+                <th 
+                  className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  onClick={() => handleSort('secondarySource')}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSort('secondarySource')}
+                  tabIndex={0}
+                  role="button"
+                  aria-sort={sortColumn === 'secondarySource' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  data-testid="header-secondarySource"
+                >
+                  <div className="flex items-center gap-2">
+                    Secondary Source
+                    {sortColumn === 'secondarySource' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                    ) : (
+                      <ArrowUpDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </div>
                 </th>
-                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
-                  Cost per
+                <th 
+                  className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  onClick={() => handleSort('costPer')}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSort('costPer')}
+                  tabIndex={0}
+                  role="button"
+                  aria-sort={sortColumn === 'costPer' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  data-testid="header-costPer"
+                >
+                  <div className="flex items-center gap-2">
+                    Cost per
+                    {sortColumn === 'costPer' ? (
+                      sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                    ) : (
+                      <ArrowUpDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </div>
                 </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Utilized In

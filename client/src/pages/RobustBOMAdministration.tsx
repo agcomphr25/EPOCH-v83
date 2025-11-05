@@ -3,12 +3,13 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Eye, Copy } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Eye, Copy, Save, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Separator } from '@/components/ui/separator';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
 
@@ -97,8 +99,10 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     step3: [], // BOM lines
   });
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false);
   const [selectedBom, setSelectedBom] = useState<any>(null);
+  const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
+  const [editingLines, setEditingLines] = useState<any[]>([]);
   const [partSearch, setPartSearch] = useState('');
   const [isPartPopoverOpen, setIsPartPopoverOpen] = useState(false);
   const [bomLines, setBomLines] = useState<any[]>([]); // For Step 3
@@ -154,6 +158,33 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     },
   });
 
+  // Fetch revision details with lines
+  const { data: revisionData } = useQuery({
+    queryKey: [`/api/robust-boms/revisions/${selectedRevisionId}`],
+    enabled: !!selectedRevisionId,
+  });
+
+  // Update revision lines mutation
+  const updateLinesMutation = useMutation({
+    mutationFn: ({ revisionId, lines }: { revisionId: string; lines: any[] }) => 
+      apiRequest(`/api/robust-boms/revisions/${revisionId}/lines`, { 
+        method: 'POST', 
+        body: { lines } 
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/robust-boms/revisions');
+        }
+      });
+      toast({ title: 'Success', description: 'BOM lines updated successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update BOM lines', variant: 'destructive' });
+    },
+  });
+
   const form = useForm({
     resolver: zodResolver(bomSchema),
     defaultValues: {
@@ -191,6 +222,22 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
       operationSequence: undefined,
     },
   });
+
+  // Sync editing lines when revision data loads
+  useEffect(() => {
+    const revision = revisionData as any;
+    if (revision && revision.lines) {
+      setEditingLines(revision.lines.map((line: any) => ({
+        id: line.id,
+        childPartAgNumber: line.childPartAgNumber,
+        quantityPer: line.quantityPer,
+        scrapPercent: line.scrapPercent || 0,
+        uom: line.uom || '',
+        referenceDesignator: line.referenceDesignator || '',
+        operationSequence: line.operationSeq,
+      })));
+    }
+  }, [revisionData]);
 
   const onSubmit = (data: z.infer<typeof bomSchema>) => {
     createBOMMutation.mutate(data);
@@ -1012,88 +1059,280 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
               </DialogContent>
             </Dialog>
 
-            {/* View BOM Dialog */}
-            <Dialog open={isViewDialogOpen} onOpenChange={(open) => {
-              setIsViewDialogOpen(open);
-              if (!open) setSelectedBom(null);
+            {/* View/Edit BOM Details Drawer */}
+            <Sheet open={isViewDrawerOpen} onOpenChange={(open) => {
+              setIsViewDrawerOpen(open);
+              if (!open) {
+                setSelectedBom(null);
+                setSelectedRevisionId(null);
+                setEditingLines([]);
+              }
             }}>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>BOM Details</DialogTitle>
-                  <DialogDescription>
-                    View BOM information and revisions
-                  </DialogDescription>
-                </DialogHeader>
+              <SheetContent side="right" className="w-full sm:max-w-4xl overflow-y-auto">
+                <SheetHeader>
+                  <SheetTitle>BOM Details & Line Items</SheetTitle>
+                  <SheetDescription>
+                    View and edit BOM revisions and their line items
+                  </SheetDescription>
+                </SheetHeader>
                 {selectedBom && (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">BOM Code</label>
-                        <p className="text-sm font-mono mt-1">{selectedBom.code}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-muted-foreground">Parent Part</label>
-                        <p className="text-sm mt-1">
-                          {selectedBom.parentInventoryItem 
-                            ? `${selectedBom.parentInventoryItem.agPartNumber} - ${selectedBom.parentInventoryItem.name}` 
-                            : selectedBom.parentPartAgNumber || 'N/A'}
-                        </p>
+                  <div className="mt-6 space-y-6">
+                    {/* BOM Metadata */}
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-lg">BOM Information</h3>
+                      <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground">BOM Code</label>
+                          <p className="text-sm font-mono mt-1">{selectedBom.code}</p>
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-muted-foreground">Parent Part</label>
+                          <p className="text-sm mt-1">
+                            {selectedBom.parentInventoryItem 
+                              ? `${selectedBom.parentInventoryItem.agPartNumber} - ${selectedBom.parentInventoryItem.name}` 
+                              : selectedBom.parentPartAgNumber || 'N/A'}
+                          </p>
+                        </div>
+                        <div className="col-span-2">
+                          <label className="text-xs font-medium text-muted-foreground">Description</label>
+                          <p className="text-sm mt-1">{selectedBom.description || 'No description'}</p>
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Description</label>
-                      <p className="text-sm mt-1">{selectedBom.description || 'No description'}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-muted-foreground">Revisions</label>
+
+                    <Separator />
+
+                    {/* Revisions List */}
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-lg">Revisions</h3>
                       {selectedBom.revisions && selectedBom.revisions.length > 0 ? (
-                        <div className="mt-2 space-y-2">
+                        <div className="space-y-2">
                           {selectedBom.revisions.map((rev: any) => (
-                            <div key={rev.id} className="flex items-center justify-between p-2 border rounded-md">
-                              <div>
-                                <span className="font-medium">{rev.revCode}</span>
-                                {rev.notes && <span className="text-sm text-muted-foreground ml-2">- {rev.notes}</span>}
+                            <div key={rev.id}>
+                              <div 
+                                className={cn(
+                                  "flex items-center justify-between p-3 border rounded-md cursor-pointer transition-colors",
+                                  selectedRevisionId === rev.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                                )}
+                                onClick={() => setSelectedRevisionId(rev.id)}
+                                data-testid={`revision-${rev.id}`}
+                              >
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">{rev.revCode}</span>
+                                    <Badge variant={rev.isReleased ? 'default' : 'secondary'}>
+                                      {rev.isReleased ? 'Released' : 'Draft'}
+                                    </Badge>
+                                  </div>
+                                  {rev.notes && <p className="text-sm text-muted-foreground mt-1">{rev.notes}</p>}
+                                </div>
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
                               </div>
-                              <Badge variant={rev.isReleased ? 'default' : 'secondary'}>
-                                {rev.isReleased ? 'Released' : 'Draft'}
-                              </Badge>
+
+                              {/* Show Line Items when revision is selected */}
+                              {selectedRevisionId === rev.id && revisionData && (
+                                <div className="mt-3 ml-4 p-4 border rounded-md bg-background">
+                                  <div className="flex items-center justify-between mb-4">
+                                    <h4 className="font-semibold">Line Items</h4>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => {
+                                        const newLine = {
+                                          childPartAgNumber: '',
+                                          quantityPer: 1,
+                                          scrapPercent: 0,
+                                          uom: 'EA',
+                                          referenceDesignator: '',
+                                          operationSequence: (editingLines.length + 1) * 10,
+                                        };
+                                        setEditingLines([...editingLines, newLine]);
+                                      }}
+                                      data-testid="button-add-line"
+                                    >
+                                      <Plus className="mr-2 h-4 w-4" />
+                                      Add Line
+                                    </Button>
+                                  </div>
+
+                                  {editingLines.length > 0 ? (
+                                    <div className="space-y-4">
+                                      <Table>
+                                        <TableHeader>
+                                          <TableRow>
+                                            <TableHead>Child Part</TableHead>
+                                            <TableHead>Qty Per</TableHead>
+                                            <TableHead>Scrap %</TableHead>
+                                            <TableHead>UOM</TableHead>
+                                            <TableHead>Ref Des</TableHead>
+                                            <TableHead>Op Seq</TableHead>
+                                            <TableHead></TableHead>
+                                          </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {editingLines.map((line, index) => (
+                                            <TableRow key={index}>
+                                              <TableCell className="min-w-[200px]">
+                                                <Select
+                                                  value={line.childPartAgNumber}
+                                                  onValueChange={(value) => {
+                                                    const newLines = [...editingLines];
+                                                    newLines[index].childPartAgNumber = value;
+                                                    setEditingLines(newLines);
+                                                  }}
+                                                >
+                                                  <SelectTrigger data-testid={`select-child-part-${index}`}>
+                                                    <SelectValue placeholder="Select part..." />
+                                                  </SelectTrigger>
+                                                  <SelectContent>
+                                                    {parts.slice(0, 100).map((part: any) => (
+                                                      <SelectItem key={part.id} value={part.agPartNumber}>
+                                                        {part.agPartNumber} - {part.name}
+                                                      </SelectItem>
+                                                    ))}
+                                                  </SelectContent>
+                                                </Select>
+                                              </TableCell>
+                                              <TableCell>
+                                                <Input
+                                                  type="number"
+                                                  value={line.quantityPer}
+                                                  onChange={(e) => {
+                                                    const newLines = [...editingLines];
+                                                    newLines[index].quantityPer = parseFloat(e.target.value) || 0;
+                                                    setEditingLines(newLines);
+                                                  }}
+                                                  className="w-20"
+                                                  data-testid={`input-quantity-${index}`}
+                                                />
+                                              </TableCell>
+                                              <TableCell>
+                                                <Input
+                                                  type="number"
+                                                  value={line.scrapPercent}
+                                                  onChange={(e) => {
+                                                    const newLines = [...editingLines];
+                                                    newLines[index].scrapPercent = parseFloat(e.target.value) || 0;
+                                                    setEditingLines(newLines);
+                                                  }}
+                                                  className="w-20"
+                                                  data-testid={`input-scrap-${index}`}
+                                                />
+                                              </TableCell>
+                                              <TableCell>
+                                                <Input
+                                                  value={line.uom || ''}
+                                                  onChange={(e) => {
+                                                    const newLines = [...editingLines];
+                                                    newLines[index].uom = e.target.value;
+                                                    setEditingLines(newLines);
+                                                  }}
+                                                  className="w-20"
+                                                  data-testid={`input-uom-${index}`}
+                                                />
+                                              </TableCell>
+                                              <TableCell>
+                                                <Input
+                                                  value={line.referenceDesignator || ''}
+                                                  onChange={(e) => {
+                                                    const newLines = [...editingLines];
+                                                    newLines[index].referenceDesignator = e.target.value;
+                                                    setEditingLines(newLines);
+                                                  }}
+                                                  className="w-24"
+                                                  data-testid={`input-refdes-${index}`}
+                                                />
+                                              </TableCell>
+                                              <TableCell>
+                                                <Input
+                                                  type="number"
+                                                  value={line.operationSequence || ''}
+                                                  onChange={(e) => {
+                                                    const newLines = [...editingLines];
+                                                    newLines[index].operationSequence = parseInt(e.target.value) || undefined;
+                                                    setEditingLines(newLines);
+                                                  }}
+                                                  className="w-20"
+                                                  data-testid={`input-opseq-${index}`}
+                                                />
+                                              </TableCell>
+                                              <TableCell>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => {
+                                                    setEditingLines(editingLines.filter((_, i) => i !== index));
+                                                  }}
+                                                  data-testid={`button-delete-line-${index}`}
+                                                >
+                                                  <X className="h-4 w-4" />
+                                                </Button>
+                                              </TableCell>
+                                            </TableRow>
+                                          ))}
+                                        </TableBody>
+                                      </Table>
+
+                                      <div className="flex justify-end gap-2">
+                                        <Button
+                                          variant="outline"
+                                          onClick={() => {
+                                            // Reset to original lines from server
+                                            const revision = revisionData as any;
+                                            if (revision && revision.lines) {
+                                              setEditingLines(revision.lines.map((line: any) => ({
+                                                id: line.id,
+                                                childPartAgNumber: line.childPartAgNumber,
+                                                quantityPer: line.quantityPer,
+                                                scrapPercent: line.scrapPercent || 0,
+                                                uom: line.uom || '',
+                                                referenceDesignator: line.referenceDesignator || '',
+                                                operationSequence: line.operationSeq,
+                                              })));
+                                            }
+                                          }}
+                                        >
+                                          Reset
+                                        </Button>
+                                        <Button
+                                          onClick={() => {
+                                            updateLinesMutation.mutate({
+                                              revisionId: rev.id,
+                                              lines: editingLines.map(line => ({
+                                                childPartAgNumber: line.childPartAgNumber,
+                                                quantityPer: line.quantityPer,
+                                                scrapPercent: line.scrapPercent,
+                                                uom: line.uom,
+                                                referenceDesignator: line.referenceDesignator,
+                                                operationSeq: line.operationSequence,
+                                              }))
+                                            });
+                                          }}
+                                          disabled={updateLinesMutation.isPending}
+                                          data-testid="button-save-lines"
+                                        >
+                                          <Save className="mr-2 h-4 w-4" />
+                                          {updateLinesMutation.isPending ? 'Saving...' : 'Save Changes'}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground text-center py-4">
+                                      No line items yet. Click "Add Line" to add components.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <p className="text-sm text-muted-foreground mt-2">No revisions yet</p>
-                      )}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      <p>Created: {new Date(selectedBom.createdAt).toLocaleString()}</p>
-                      {selectedBom.updatedAt && (
-                        <p>Last Updated: {new Date(selectedBom.updatedAt).toLocaleString()}</p>
+                        <p className="text-sm text-muted-foreground">No revisions yet</p>
                       )}
                     </div>
                   </div>
                 )}
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setIsViewDialogOpen(false);
-                      setSelectedBom(null);
-                    }}
-                  >
-                    Close
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setIsViewDialogOpen(false);
-                      setIsEditDialogOpen(true);
-                    }}
-                  >
-                    <Edit className="mr-2 h-4 w-4" />
-                    Edit BOM
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </CardHeader>
@@ -1135,10 +1374,14 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                         size="sm"
                         onClick={() => {
                           setSelectedBom(bom);
-                          setIsViewDialogOpen(true);
+                          setIsViewDrawerOpen(true);
+                          // Auto-select first revision if available
+                          if (bom.revisions && bom.revisions.length > 0) {
+                            setSelectedRevisionId(bom.revisions[0].id);
+                          }
                         }}
                         data-testid={`button-view-bom-${bom.id}`}
-                        title="View BOM Details"
+                        title="View & Edit BOM Details"
                       >
                         <Eye className="h-4 w-4" />
                       </Button>

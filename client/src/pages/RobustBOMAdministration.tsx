@@ -35,6 +35,16 @@ const revisionSchema = z.object({
   notes: z.string().default(''),
 });
 
+// BOM Line schema (for wizard Step 3)
+const bomLineSchema = z.object({
+  childPartAgNumber: z.string().min(1, 'Child part is required'),
+  quantityPer: z.number().min(0.001, 'Quantity must be greater than 0'),
+  scrapPercent: z.number().min(0).max(100).optional(),
+  uom: z.string().optional(),
+  referenceDesignator: z.string().optional(),
+  operationSequence: z.number().int().min(1).optional(),
+});
+
 export default function RobustBOMAdministration() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -91,6 +101,9 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
   const [selectedBom, setSelectedBom] = useState<any>(null);
   const [partSearch, setPartSearch] = useState('');
   const [isPartPopoverOpen, setIsPartPopoverOpen] = useState(false);
+  const [bomLines, setBomLines] = useState<any[]>([]); // For Step 3
+  const [linePartSearch, setLinePartSearch] = useState('');
+  const [isLinePartPopoverOpen, setIsLinePartPopoverOpen] = useState(false);
 
   const bomsQueryUrl = `/api/robust-boms/boms?${searchTerm ? `search=${encodeURIComponent(searchTerm)}` : ''}`;
   const { data: bomsData, isLoading } = useQuery({
@@ -166,6 +179,18 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     },
   });
 
+  const lineForm = useForm({
+    resolver: zodResolver(bomLineSchema),
+    defaultValues: {
+      childPartAgNumber: '',
+      quantityPer: 1,
+      scrapPercent: 0,
+      uom: '',
+      referenceDesignator: '',
+      operationSequence: undefined,
+    },
+  });
+
   const onSubmit = (data: z.infer<typeof bomSchema>) => {
     createBOMMutation.mutate(data);
   };
@@ -197,8 +222,10 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     setIsWizardOpen(false);
     setWizardStep(1);
     setWizardData({ step1: null, step2: null, step3: [] });
+    setBomLines([]);
     form.reset();
     revisionForm.reset();
+    lineForm.reset();
   };
 
   const handleStep2Next = () => {
@@ -209,6 +236,58 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
         setWizardStep(3);
       }
     });
+  };
+
+  const handleAddLine = () => {
+    lineForm.trigger().then((isValid) => {
+      if (isValid) {
+        const lineData = lineForm.getValues();
+        setBomLines([...bomLines, lineData]);
+        lineForm.reset({
+          childPartAgNumber: '',
+          quantityPer: 1,
+          scrapPercent: 0,
+          uom: '',
+          referenceDesignator: '',
+          operationSequence: undefined,
+        });
+        setLinePartSearch('');
+      }
+    });
+  };
+
+  const handleRemoveLine = (index: number) => {
+    setBomLines(bomLines.filter((_, i) => i !== index));
+  };
+
+  const handleStep3Finish = () => {
+    if (bomLines.length === 0) {
+      toast({ 
+        title: 'Validation Error', 
+        description: 'Please add at least one BOM line before finishing',
+        variant: 'destructive' 
+      });
+      return;
+    }
+    
+    // Save Step 3 data
+    const completeWizardData = { 
+      ...wizardData, 
+      step3: bomLines 
+    };
+    setWizardData(completeWizardData);
+    
+    // TODO: Task 5 - Chain API calls to create BOM, revision, and lines
+    // For now, just show what we collected
+    toast({ 
+      title: 'Wizard Complete', 
+      description: `Ready to create BOM with ${bomLines.length} line(s). API integration coming in Task 5.`,
+    });
+    
+    console.log('Complete BOM Data:', completeWizardData);
+    
+    // TODO: Task 5 will reset wizard after successful API calls
+    // For now, keep wizard open so user can see the data was captured
   };
 
   // Populate edit form when a BOM is selected
@@ -236,14 +315,33 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     }
   }, [wizardStep, wizardData.step2, revisionForm]);
 
+  // Restore wizard Step 3 data when navigating back
+  useEffect(() => {
+    if (wizardStep === 3 && wizardData.step3 && wizardData.step3.length > 0) {
+      setBomLines(wizardData.step3);
+    }
+  }, [wizardStep, wizardData.step3]);
+
   const boms = (bomsData as any)?.data || [];
   const parts = (partsData as any)?.data || [];
   
-  // Filter parts based on search
+  // Filter parts based on search (for Step 1 parent part)
   const filteredParts = partSearch.trim() === '' 
     ? parts 
     : parts.filter((part: any) => {
         const search = partSearch.toLowerCase();
+        return (
+          part.agPartNumber?.toLowerCase().includes(search) ||
+          part.name?.toLowerCase().includes(search) ||
+          part.sku?.toLowerCase().includes(search)
+        );
+      });
+
+  // Filter parts based on search (for Step 3 child parts)
+  const filteredLineParts = linePartSearch.trim() === '' 
+    ? parts 
+    : parts.filter((part: any) => {
+        const search = linePartSearch.toLowerCase();
         return (
           part.agPartNumber?.toLowerCase().includes(search) ||
           part.name?.toLowerCase().includes(search) ||
@@ -276,8 +374,10 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
               if (!open) {
                 setWizardStep(1);
                 setWizardData({ step1: null, step2: null, step3: [] });
+                setBomLines([]);
                 form.reset();
                 revisionForm.reset();
+                lineForm.reset();
               }
             }}>
               <DialogTrigger asChild>
@@ -295,14 +395,13 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                     {wizardStep === 3 && "Add child parts and quantities"}
                   </DialogDescription>
                 </DialogHeader>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                    {/* Step 1: BOM Metadata */}
-                    {wizardStep === 1 && (
-                      <>
-                        <FormField
-                          control={form.control}
-                          name="parentPartAgNumber"
+                <div className="space-y-4">
+                  {/* Step 1: BOM Metadata */}
+                  {wizardStep === 1 && (
+                    <Form {...form}>
+                      <FormField
+                        control={form.control}
+                        name="parentPartAgNumber"
                           render={({ field }) => (
                             <FormItem className="flex flex-col">
                               <FormLabel>Parent Part (Inventory Item)</FormLabel>
@@ -403,11 +502,12 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                             </FormItem>
                           )}
                         />
-                      </>
-                    )}
+                    </Form>
+                  )}
 
-                    {/* Step 2: Initial Revision */}
-                    {wizardStep === 2 && (
+                  {/* Step 2: Initial Revision */}
+                  {wizardStep === 2 && (
+                    <Form {...revisionForm}>
                       <div className="space-y-4">
                         <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
                           <p className="text-sm text-blue-900 dark:text-blue-100">
@@ -459,26 +559,271 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                           )}
                         />
                       </div>
-                    )}
+                    </Form>
+                  )}
 
-                    {/* Step 3: Add BOM Lines (Coming in Task 4) */}
-                    {wizardStep === 3 && (
-                      <div className="py-8 text-center">
-                        <h3 className="text-lg font-semibold mb-2">Add Child Parts & Quantities</h3>
-                        <p className="text-muted-foreground mb-4">
-                          This step will provide a table to add child parts with quantities, scrap %, UOM, and more.
-                        </p>
-                        <div className="bg-muted p-4 rounded-lg">
-                          <p className="text-sm">Coming in Task 4...</p>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            Preview: You'll add rows with child parts, quantity per unit, scrap percentage,
-                            unit of measure, reference designator, and operation sequence.
+                  {/* Step 3: Add BOM Lines */}
+                  {wizardStep === 3 && (
+                    <Form {...lineForm}>
+                      <div className="space-y-6">
+                        <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
+                          <p className="text-sm text-blue-900 dark:text-blue-100">
+                            <strong>Add child parts to your BOM.</strong> Each line represents a component that makes up the parent part. 
+                            You must add at least one line item to complete the BOM.
                           </p>
                         </div>
-                      </div>
-                    )}
 
-                    <DialogFooter className="flex justify-between">
+                        {/* Add Line Form */}
+                        <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
+                          <h4 className="font-semibold">Add BOM Line</h4>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Child Part Selection */}
+                            <FormField
+                              control={lineForm.control}
+                              name="childPartAgNumber"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-col">
+                                  <FormLabel>Child Part *</FormLabel>
+                                  <Popover open={isLinePartPopoverOpen} onOpenChange={setIsLinePartPopoverOpen}>
+                                    <PopoverTrigger asChild>
+                                      <FormControl>
+                                        <Button
+                                          variant="outline"
+                                          role="combobox"
+                                          className={cn(
+                                            "justify-between",
+                                            !field.value && "text-muted-foreground"
+                                          )}
+                                          data-testid="button-select-child-part"
+                                        >
+                                          {field.value
+                                            ? parts.find((p: any) => p.agPartNumber === field.value)?.agPartNumber + ' - ' + parts.find((p: any) => p.agPartNumber === field.value)?.name
+                                            : "Select child part"}
+                                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                      </FormControl>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[400px] p-0">
+                                      <Command>
+                                        <CommandInput 
+                                          placeholder="Search parts..." 
+                                          value={linePartSearch}
+                                          onValueChange={setLinePartSearch}
+                                        />
+                                        <CommandList>
+                                          <CommandEmpty>No parts found.</CommandEmpty>
+                                          <CommandGroup>
+                                            {filteredLineParts.slice(0, 50).map((part: any) => (
+                                              <CommandItem
+                                                key={part.agPartNumber}
+                                                value={part.agPartNumber}
+                                                onSelect={() => {
+                                                  lineForm.setValue('childPartAgNumber', part.agPartNumber);
+                                                  setIsLinePartPopoverOpen(false);
+                                                  setLinePartSearch('');
+                                                }}
+                                              >
+                                                <Check
+                                                  className={cn(
+                                                    "mr-2 h-4 w-4",
+                                                    part.agPartNumber === field.value
+                                                      ? "opacity-100"
+                                                      : "opacity-0"
+                                                  )}
+                                                />
+                                                <div>
+                                                  <div className="font-medium">{part.agPartNumber}</div>
+                                                  <div className="text-sm text-muted-foreground">{part.name}</div>
+                                                </div>
+                                              </CommandItem>
+                                            ))}
+                                          </CommandGroup>
+                                        </CommandList>
+                                      </Command>
+                                    </PopoverContent>
+                                  </Popover>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            {/* Quantity Per */}
+                            <FormField
+                              control={lineForm.control}
+                              name="quantityPer"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Quantity Per Unit *</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      step="0.001"
+                                      {...field}
+                                      onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                                      data-testid="input-quantity-per"
+                                    />
+                                  </FormControl>
+                                  <FormDescription>How many of this part per parent unit</FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            {/* Scrap % */}
+                            <FormField
+                              control={lineForm.control}
+                              name="scrapPercent"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Scrap % (Optional)</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      step="0.1"
+                                      min="0"
+                                      max="100"
+                                      {...field}
+                                      onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                                      data-testid="input-scrap-percent"
+                                    />
+                                  </FormControl>
+                                  <FormDescription>Expected scrap percentage (0-100)</FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            {/* UOM */}
+                            <FormField
+                              control={lineForm.control}
+                              name="uom"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Unit of Measure (Optional)</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="e.g., EA, FT, LB" data-testid="input-uom" />
+                                  </FormControl>
+                                  <FormDescription>Unit of measure (EA, FT, LB, etc.)</FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            {/* Reference Designator */}
+                            <FormField
+                              control={lineForm.control}
+                              name="referenceDesignator"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Reference Designator (Optional)</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="e.g., R1, C2, U3" data-testid="input-reference-designator" />
+                                  </FormControl>
+                                  <FormDescription>Reference designator on drawings</FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            {/* Operation Sequence */}
+                            <FormField
+                              control={lineForm.control}
+                              name="operationSequence"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Operation Sequence (Optional)</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      {...field}
+                                      onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                                      data-testid="input-operation-sequence"
+                                    />
+                                  </FormControl>
+                                  <FormDescription>Assembly operation order</FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+
+                          <Button
+                            type="button"
+                            onClick={handleAddLine}
+                            className="w-full"
+                            data-testid="button-add-line"
+                          >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Add Line to BOM
+                          </Button>
+                        </div>
+
+                        {/* BOM Lines Table */}
+                        <div>
+                          <h4 className="font-semibold mb-2">
+                            BOM Lines ({bomLines.length})
+                          </h4>
+                          {bomLines.length === 0 ? (
+                            <div className="border rounded-lg p-8 text-center text-muted-foreground">
+                              <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                              <p>No lines added yet. Add at least one line to complete the BOM.</p>
+                            </div>
+                          ) : (
+                            <div className="border rounded-lg overflow-hidden">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Child Part</TableHead>
+                                    <TableHead>Qty/Unit</TableHead>
+                                    <TableHead>Scrap %</TableHead>
+                                    <TableHead>UOM</TableHead>
+                                    <TableHead>Ref Des</TableHead>
+                                    <TableHead>Op Seq</TableHead>
+                                    <TableHead className="w-[80px]">Actions</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {bomLines.map((line, index) => {
+                                    const part = parts.find((p: any) => p.agPartNumber === line.childPartAgNumber);
+                                    return (
+                                      <TableRow key={index} data-testid={`row-bom-line-${index}`}>
+                                        <TableCell>
+                                          <div>
+                                            <div className="font-medium">{line.childPartAgNumber}</div>
+                                            <div className="text-sm text-muted-foreground">{part?.name}</div>
+                                          </div>
+                                        </TableCell>
+                                        <TableCell>{line.quantityPer}</TableCell>
+                                        <TableCell>{line.scrapPercent || '-'}</TableCell>
+                                        <TableCell>{line.uom || '-'}</TableCell>
+                                        <TableCell>{line.referenceDesignator || '-'}</TableCell>
+                                        <TableCell>{line.operationSequence || '-'}</TableCell>
+                                        <TableCell>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleRemoveLine(index)}
+                                            data-testid={`button-delete-line-${index}`}
+                                          >
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                          </Button>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </Form>
+                  )}
+                </div>
+
+                <DialogFooter className="flex justify-between">
                       <div className="flex gap-2">
                         <Button
                           type="button"
@@ -520,11 +865,11 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                         )}
                         {wizardStep === 3 && (
                           <Button
-                            type="submit"
-                            disabled={createBOMMutation.isPending}
+                            type="button"
+                            onClick={handleStep3Finish}
                             data-testid="button-submit-bom"
                           >
-                            {createBOMMutation.isPending ? 'Creating...' : 'Complete & Create BOM'}
+                            Complete & Create BOM
                           </Button>
                         )}
                       </div>

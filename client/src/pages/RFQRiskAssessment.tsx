@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,14 +7,25 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save, Printer, Download } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
+import type { P2Customer } from '@shared/schema';
+
+interface SessionUser {
+  id: number;
+  username: string;
+  role: string;
+  employeeId?: number | null;
+}
 
 export default function RFQRiskAssessment() {
   // Signature canvas reference
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
 
   const [formData, setFormData] = useState({
+    customerId: '',
+    customerName: '',
     rfqNumber: '',
     description: '',
 
@@ -56,6 +68,51 @@ export default function RFQRiskAssessment() {
     printedName: '',
     signature: '',
   });
+
+  const { data: customers = [] } = useQuery<P2Customer[]>({
+    queryKey: ['/api/p2-customers-bypass'],
+  });
+
+  // Fetch current user session for authorization
+  const { data: session } = useQuery<SessionUser>({
+    queryKey: ['/api/auth/session'],
+  });
+
+  // Check if user is authorized to sign high-risk RFQs (score > 16)
+  const isHighRisk = formData.totalOverallPoints > 16;
+  const isAuthorizedSigner = session?.username === 'tandyd' || session?.username === 'tandym';
+  const canSign = !isHighRisk || isAuthorizedSigner;
+
+  const handleCustomerChange = async (customerId: string) => {
+    const selectedCustomer = customers.find(c => c.customerId === customerId);
+    if (!selectedCustomer) {
+      console.error('Customer not found:', customerId);
+      return;
+    }
+
+    console.log('Selected customer:', selectedCustomer);
+    console.log('Fetching RFQ number for customer:', customerId);
+
+    try {
+      const response = await fetch(`/api/customers/${customerId}/rfq-next-number`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch RFQ number: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Generated RFQ number:', data);
+      
+      setFormData((prev) => ({
+        ...prev,
+        customerId,
+        customerName: selectedCustomer.customerName,
+        rfqNumber: data.rfqNumber,
+      }));
+    } catch (error) {
+      console.error('Failed to generate RFQ number:', error);
+    }
+  };
 
   // Effect to handle canvas resizing
   useEffect(() => {
@@ -274,6 +331,23 @@ export default function RFQRiskAssessment() {
 
   // Handle form submission
   const handleSubmitAssessment = () => {
+    // Check authorization for high-risk RFQs
+    if (isHighRisk && !canSign) {
+      alert(
+        `Authorization Required\n\n` +
+        `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n` +
+        `Only Dave Tandy or Matt Tandy are authorized to sign high-risk RFQs.\n\n` +
+        `Current user: ${session?.username || 'Not logged in'}`
+      );
+      return;
+    }
+
+    // Validate signature is present
+    if (!formData.signature) {
+      alert('Please sign the form before submitting.');
+      return;
+    }
+
     // TODO: Implement form submission logic
     // For now, just show a placeholder message
     console.log('RFQ Risk Assessment submitted:', formData);
@@ -343,15 +417,63 @@ export default function RFQRiskAssessment() {
     return true;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // Check authorization for high-risk RFQs
+    if (isHighRisk && !canSign) {
+      alert(
+        `Authorization Required\n\n` +
+        `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n` +
+        `Only Dave Tandy or Matt Tandy are authorized to save high-risk RFQs.\n\n` +
+        `Current user: ${session?.username || 'Not logged in'}`
+      );
+      return;
+    }
+
     if (!validateForm()) return;
 
-    // Form is valid, proceed with save
-    console.log('Form data saved:', formData);
-    alert('RFQ Risk Assessment saved successfully!');
+    try {
+      const response = await fetch('/api/customers/rfq-assessments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          rfqNumber: formData.rfqNumber,
+          customerId: formData.customerId,
+          description: formData.description,
+          formData: formData,
+          totalOverallPoints: formData.totalOverallPoints,
+          adjustedRiskLevel: formData.adjustedRiskLevel,
+          riskDetermination: formData.riskDetermination,
+          bidDecision: formData.bidDecision,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save RFQ Risk Assessment');
+      }
+
+      const savedAssessment = await response.json();
+      console.log('Form data saved:', savedAssessment);
+      alert('RFQ Risk Assessment saved successfully!');
+    } catch (error) {
+      console.error('Error saving RFQ Risk Assessment:', error);
+      alert('Failed to save RFQ Risk Assessment. Please try again.');
+    }
   };
 
   const handlePrint = () => {
+    // Check authorization for high-risk RFQs
+    if (isHighRisk && !canSign) {
+      alert(
+        `Authorization Required\n\n` +
+        `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n` +
+        `Only Dave Tandy or Matt Tandy are authorized to print high-risk RFQs.\n\n` +
+        `Current user: ${session?.username || 'Not logged in'}`
+      );
+      return;
+    }
+
     if (!validateForm()) return;
 
     window.print();
@@ -371,7 +493,12 @@ export default function RFQRiskAssessment() {
 
           {/* Action Buttons */}
           <div className="flex justify-center gap-3 mb-6">
-            <Button onClick={handleSave} className="flex items-center gap-2">
+            <Button 
+              onClick={handleSave} 
+              className="flex items-center gap-2"
+              disabled={!canSign}
+              data-testid="button-save-form"
+            >
               <Save className="h-4 w-4" />
               Save Form
             </Button>
@@ -379,11 +506,18 @@ export default function RFQRiskAssessment() {
               onClick={handlePrint}
               variant="outline"
               className="flex items-center gap-2"
+              disabled={!canSign}
+              data-testid="button-print-form"
             >
               <Printer className="h-4 w-4" />
               Print
             </Button>
-            <Button variant="outline" className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              className="flex items-center gap-2"
+              disabled={!canSign}
+              data-testid="button-export-pdf"
+            >
               <Download className="h-4 w-4" />
               Export PDF
             </Button>
@@ -396,17 +530,43 @@ export default function RFQRiskAssessment() {
             <CardTitle className="text-center">RFQ Risk Assessment</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-center gap-2">
-              <Label htmlFor="rfqNumber" className="font-medium">
-                #
-              </Label>
-              <Input
-                id="rfqNumber"
-                value={formData.rfqNumber}
-                onChange={(e) => handleInputChange('rfqNumber', e.target.value)}
-                className="w-64 text-center"
-                placeholder="Enter RFQ Number"
-              />
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-96">
+                <Label htmlFor="customer" className="font-medium">
+                  Customer
+                </Label>
+                <Select
+                  value={formData.customerId}
+                  onValueChange={handleCustomerChange}
+                >
+                  <SelectTrigger data-testid="select-customer">
+                    <SelectValue placeholder="Select a customer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {customers.map((customer: any) => (
+                      <SelectItem 
+                        key={customer.customerId} 
+                        value={customer.customerId}
+                        data-testid={`customer-option-${customer.customerId}`}
+                      >
+                        {customer.customerName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {formData.rfqNumber && (
+                <div className="flex items-center gap-2">
+                  <Label className="font-medium">RFQ #</Label>
+                  <div 
+                    className="text-blue-600"
+                    data-testid="text-rfq-number"
+                  >
+                    {formData.rfqNumber}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col items-center gap-2">
@@ -415,6 +575,7 @@ export default function RFQRiskAssessment() {
               </Label>
               <Textarea
                 id="description"
+                data-testid="input-description"
                 value={formData.description}
                 onChange={(e) =>
                   handleInputChange('description', e.target.value)
@@ -822,6 +983,18 @@ export default function RFQRiskAssessment() {
             <CardTitle>Signature</CardTitle>
           </CardHeader>
           <CardContent>
+            {isHighRisk && !canSign && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-red-700 font-medium">
+                  ⚠️ Authorization Required
+                </p>
+                <p className="text-red-600 text-sm mt-1">
+                  This RFQ has a risk score of {formData.totalOverallPoints} (exceeds threshold of 16).
+                  Only Dave Tandy or Matt Tandy are authorized to sign high-risk RFQs.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <Label htmlFor="date">Date</Label>
@@ -831,6 +1004,8 @@ export default function RFQRiskAssessment() {
                   value={formData.date}
                   onChange={(e) => handleInputChange('date', e.target.value)}
                   className="mt-1"
+                  disabled={!canSign}
+                  data-testid="input-signature-date"
                 />
               </div>
 
@@ -843,6 +1018,8 @@ export default function RFQRiskAssessment() {
                     handleInputChange('printedName', e.target.value)
                   }
                   className="mt-1"
+                  disabled={!canSign}
+                  data-testid="input-printed-name"
                 />
               </div>
             </div>
@@ -850,7 +1027,9 @@ export default function RFQRiskAssessment() {
             <div className="mt-6">
               <Label className="block mb-2">Digital Signature</Label>
               <div
-                className="border border-gray-300 rounded-md p-2 bg-white"
+                className={`border border-gray-300 rounded-md p-2 ${
+                  canSign ? 'bg-white' : 'bg-gray-100'
+                }`}
                 style={{ width: '100%', maxWidth: '500px' }}
               >
                 <SignatureCanvas
@@ -864,16 +1043,30 @@ export default function RFQRiskAssessment() {
                       height: '200px',
                       border: '1px solid #e5e7eb',
                       borderRadius: '4px',
+                      opacity: canSign ? 1 : 0.5,
+                      pointerEvents: canSign ? 'auto' : 'none',
                     },
                   }}
                   onEnd={saveSignature}
                 />
               </div>
               <div className="flex gap-2 mt-2">
-                <Button size="sm" variant="outline" onClick={clearSignature}>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={clearSignature}
+                  disabled={!canSign}
+                  data-testid="button-clear-signature"
+                >
                   Clear
                 </Button>
-                <Button size="sm" variant="outline" onClick={saveSignature}>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={saveSignature}
+                  disabled={!canSign}
+                  data-testid="button-save-signature"
+                >
                   Save Signature
                 </Button>
               </div>
@@ -887,6 +1080,7 @@ export default function RFQRiskAssessment() {
             onClick={handleSubmitAssessment}
             className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg font-medium"
             size="lg"
+            data-testid="button-submit-assessment"
           >
             Submit Assessment
           </Button>

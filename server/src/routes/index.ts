@@ -114,6 +114,9 @@ export function registerRoutes(app: Express): Server {
 
   // Customer management routes
   app.use('/api/customers', customersRoutes);
+  
+  // P2 Customer management routes (mount same router for P2-specific endpoints)
+  app.use('/api/p2', customersRoutes);
 
   // Vendor management routes
   app.use('/api/vendors', vendorsRoutes);

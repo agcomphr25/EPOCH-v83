@@ -42,6 +42,7 @@ import {
   p2PurchaseOrders,
   p2PurchaseOrderItems,
   p2ProductionOrders,
+  rfqRiskAssessments,
   molds,
   employeeLayupSettings,
   productionQueue,
@@ -218,6 +219,8 @@ import {
   type InsertP2PurchaseOrderItem,
   type P2ProductionOrder,
   type InsertP2ProductionOrder,
+  type RFQRiskAssessment,
+  type InsertRFQRiskAssessment,
   type Mold,
   type InsertMold,
   type EmployeeLayupSettings,
@@ -928,6 +931,20 @@ export interface IStorage {
     data: Partial<InsertP2Customer>
   ): Promise<P2Customer>;
   deleteP2Customer(id: number): Promise<void>;
+  updateP2CustomerRFQConfig(
+    id: number,
+    config: { rfqPrefix?: string; rfqSequences?: Record<string, number> }
+  ): Promise<P2Customer>;
+  
+  reserveNextRFQNumber(
+    customerId: string,
+    year: string
+  ): Promise<{ rfqNumber: string; prefix: string; year: string; sequence: number }>;
+
+  // RFQ Risk Assessments CRUD
+  createRFQRiskAssessment(data: InsertRFQRiskAssessment): Promise<RFQRiskAssessment>;
+  getAllRFQRiskAssessments(): Promise<RFQRiskAssessment[]>;
+  getRFQRiskAssessment(rfqNumber: string): Promise<RFQRiskAssessment | undefined>;
 
   // P2 Purchase Orders CRUD
   getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]>;
@@ -8383,6 +8400,94 @@ export class DatabaseStorage implements IStorage {
 
   async deleteP2Customer(id: number): Promise<void> {
     await db.delete(p2Customers).where(eq(p2Customers.id, id));
+  }
+
+  async updateP2CustomerRFQConfig(
+    id: number,
+    config: { rfqPrefix?: string; rfqSequences?: Record<string, number> }
+  ): Promise<P2Customer> {
+    const updateData: Partial<InsertP2Customer> = {};
+    if (config.rfqPrefix !== undefined) {
+      updateData.rfqPrefix = config.rfqPrefix;
+    }
+    if (config.rfqSequences !== undefined) {
+      updateData.rfqSequences = config.rfqSequences;
+    }
+
+    const [customer] = await db
+      .update(p2Customers)
+      .set(updateData)
+      .where(eq(p2Customers.id, id))
+      .returning();
+    return customer;
+  }
+
+  async reserveNextRFQNumber(
+    customerId: string,
+    year: string
+  ): Promise<{ rfqNumber: string; prefix: string; year: string; sequence: number }> {
+    // Use raw SQL for atomic increment to prevent race conditions
+    const result = await db.execute(sql`
+      UPDATE p2_customers
+      SET rfq_sequences = COALESCE(rfq_sequences, '{}'::jsonb) || 
+        jsonb_build_object(
+          ${year}::text, 
+          COALESCE((rfq_sequences->>${year}::text)::int, 0) + 1
+        )
+      WHERE customer_id = ${customerId}::text
+      RETURNING 
+        id,
+        customer_id,
+        customer_name,
+        rfq_prefix,
+        (rfq_sequences->>${year}::text)::int as sequence
+    `);
+
+    if (!result.rows || result.rows.length === 0) {
+      throw new Error(`Customer ${customerId} not found`);
+    }
+
+    const row = result.rows[0] as any;
+    const prefix = row.rfq_prefix || row.customer_name.substring(0, 3).toUpperCase();
+    const sequence = row.sequence;
+    const yearSuffix = year.slice(-2);
+    const rfqNumber = `${prefix}${yearSuffix}${sequence.toString().padStart(4, '0')}`;
+
+    return {
+      rfqNumber,
+      prefix,
+      year: yearSuffix,
+      sequence,
+    };
+  }
+
+  // RFQ Risk Assessments CRUD
+  async createRFQRiskAssessment(
+    data: InsertRFQRiskAssessment
+  ): Promise<RFQRiskAssessment> {
+    const [assessment] = await db
+      .insert(rfqRiskAssessments)
+      .values(data)
+      .returning();
+    return assessment;
+  }
+
+  async getAllRFQRiskAssessments(): Promise<RFQRiskAssessment[]> {
+    return await db
+      .select()
+      .from(rfqRiskAssessments)
+      .orderBy(desc(rfqRiskAssessments.createdAt));
+  }
+
+  async getRFQRiskAssessment(
+    rfqNumber: string
+  ): Promise<RFQRiskAssessment | undefined> {
+    const [assessment] = await db
+      .select()
+      .from(rfqRiskAssessments)
+      .where(eq(rfqRiskAssessments.rfqNumber, rfqNumber))
+      .limit(1);
+    return assessment;
   }
 
   // P2 Purchase Orders CRUD

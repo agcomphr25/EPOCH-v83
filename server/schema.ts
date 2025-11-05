@@ -3186,6 +3186,8 @@ export const p2Customers = pgTable('p2_customers', {
   paymentTerms: text('payment_terms').default('NET_30'),
   status: text('status').notNull().default('ACTIVE'), // ACTIVE, INACTIVE, SUSPENDED
   notes: text('notes'),
+  rfqPrefix: text('rfq_prefix'), // 3-letter prefix for RFQ numbers (e.g., "STR" for Strata-G)
+  rfqSequences: jsonb('rfq_sequences').default('{}'), // Tracks RFQ sequence by year: {"2025": 15, "2024": 50}
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -3218,6 +3220,24 @@ export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
   totalPrice: real('total_price').default(0), // quantity * unitPrice
   specifications: text('specifications'), // Part specifications
   notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// RFQ Risk Assessments - stores RFQ risk assessment records
+export const rfqRiskAssessments = pgTable('rfq_risk_assessments', {
+  id: serial('id').primaryKey(),
+  rfqNumber: text('rfq_number').notNull().unique(),
+  customerId: text('customer_id')
+    .references(() => p2Customers.customerId)
+    .notNull(),
+  customerName: text('customer_name').notNull(),
+  description: text('description'),
+  formData: jsonb('form_data').notNull(), // Stores all the risk assessment form data
+  totalOverallPoints: integer('total_overall_points').default(0),
+  adjustedRiskLevel: integer('adjusted_risk_level').default(0),
+  riskDetermination: text('risk_determination'),
+  bidDecision: text('bid_decision'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -3397,6 +3417,8 @@ export const insertP2CustomerSchema = createInsertSchema(p2Customers)
     paymentTerms: z.string().default('NET_30'),
     status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).default('ACTIVE'),
     notes: z.string().optional().nullable(),
+    rfqPrefix: z.string().length(3).optional().nullable(),
+    rfqSequences: z.any().optional().nullable(),
   });
 
 // P2 Purchase Order Insert Schemas
@@ -3433,6 +3455,25 @@ export const insertP2PurchaseOrderItemSchema = createInsertSchema(
     totalPrice: z.number().min(0).default(0),
     specifications: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
+  });
+
+// RFQ Risk Assessment Insert Schema
+export const insertRFQRiskAssessmentSchema = createInsertSchema(rfqRiskAssessments)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    rfqNumber: z.string().min(1, 'RFQ Number is required'),
+    customerId: z.string().min(1, 'Customer ID is required'),
+    customerName: z.string().min(1, 'Customer Name is required'),
+    description: z.string().optional().nullable(),
+    formData: z.any(),
+    totalOverallPoints: z.number().min(0).default(0),
+    adjustedRiskLevel: z.number().min(0).default(0),
+    riskDetermination: z.string().optional().nullable(),
+    bidDecision: z.string().optional().nullable(),
   });
 
 // P2 Part Certification Schemas
@@ -3533,6 +3574,10 @@ export type InsertP2PurchaseOrderItem = z.infer<
   typeof insertP2PurchaseOrderItemSchema
 >;
 export type P2PurchaseOrderItem = typeof p2PurchaseOrderItems.$inferSelect;
+
+// RFQ Risk Assessment Types
+export type InsertRFQRiskAssessment = z.infer<typeof insertRFQRiskAssessmentSchema>;
+export type RFQRiskAssessment = typeof rfqRiskAssessments.$inferSelect;
 
 // P2 Part Certification Types
 export type InsertP2PartCertification = z.infer<typeof insertP2PartCertificationSchema>;

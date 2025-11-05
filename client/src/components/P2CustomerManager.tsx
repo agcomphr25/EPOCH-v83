@@ -162,6 +162,8 @@ export function P2CustomerManager() {
   });
 
   const handleSubmit = (data: P2CustomerForm) => {
+    console.log('💾 Form submitted with data:', data);
+    
     const currentYear = new Date().getFullYear().toString();
     const rfqPrefix = data.rfqPrefix || data.customerName.substring(0, 3).toUpperCase();
     
@@ -170,9 +172,13 @@ export function P2CustomerManager() {
       ? parseInt(data.currentYearSequence) 
       : 0;
     
+    console.log('🔢 Parsed sequence value:', sequenceValue, 'from input:', data.currentYearSequence);
+    
     // Always update rfqSequences with the current year's value
     const rfqSequences = { ...(selectedCustomer?.rfqSequences || {}) };
     rfqSequences[currentYear] = sequenceValue;
+    
+    console.log('📊 Final rfqSequences to save:', rfqSequences);
     
     const submitData: any = {
       ...data,
@@ -181,6 +187,8 @@ export function P2CustomerManager() {
     };
     
     delete submitData.currentYearSequence;
+    
+    console.log('🚀 Sending to server:', submitData);
     
     if (selectedCustomer) {
       updateMutation.mutate({ id: selectedCustomer.id, data: submitData });
@@ -193,6 +201,11 @@ export function P2CustomerManager() {
     setSelectedCustomer(customer);
     const currentYear = new Date().getFullYear().toString();
     const currentSequence = customer.rfqSequences?.[currentYear] || 0;
+    
+    console.log('📝 Opening edit dialog for customer:', customer.customerName);
+    console.log('📊 RFQ Sequences:', customer.rfqSequences);
+    console.log('📅 Current Year:', currentYear);
+    console.log('🔢 Current Sequence for this year:', currentSequence);
     
     form.reset({
       customerId: customer.customerId,
@@ -207,6 +220,8 @@ export function P2CustomerManager() {
       rfqPrefix: customer.rfqPrefix || '',
       currentYearSequence: currentSequence.toString(),
     });
+    
+    console.log('✅ Form reset with currentYearSequence:', currentSequence.toString());
     setDialogOpen(true);
   };
 

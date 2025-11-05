@@ -164,12 +164,15 @@ export function P2CustomerManager() {
   const handleSubmit = (data: P2CustomerForm) => {
     const currentYear = new Date().getFullYear().toString();
     const rfqPrefix = data.rfqPrefix || data.customerName.substring(0, 3).toUpperCase();
-    const sequenceValue = data.currentYearSequence ? parseInt(data.currentYearSequence) : 0;
     
-    const rfqSequences = selectedCustomer?.rfqSequences || {};
-    if (data.currentYearSequence) {
-      rfqSequences[currentYear] = sequenceValue;
-    }
+    // Parse the sequence value, allowing 0 and empty string
+    const sequenceValue = data.currentYearSequence !== undefined && data.currentYearSequence !== '' 
+      ? parseInt(data.currentYearSequence) 
+      : 0;
+    
+    // Always update rfqSequences with the current year's value
+    const rfqSequences = { ...(selectedCustomer?.rfqSequences || {}) };
+    rfqSequences[currentYear] = sequenceValue;
     
     const submitData: any = {
       ...data,

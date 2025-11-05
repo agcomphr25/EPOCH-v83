@@ -492,7 +492,7 @@ export default function RFQRiskAssessment() {
                 <div className="flex items-center gap-2">
                   <Label className="font-medium">RFQ #</Label>
                   <div 
-                    className="text-2xl text-blue-600"
+                    className="text-blue-600"
                     data-testid="text-rfq-number"
                   >
                     {formData.rfqNumber}

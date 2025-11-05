@@ -109,6 +109,8 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
   const [linePartSearch, setLinePartSearch] = useState('');
   const [isLinePartPopoverOpen, setIsLinePartPopoverOpen] = useState(false);
   const [isCreatingBom, setIsCreatingBom] = useState(false); // Loading state for API calls
+  const [editLinePartSearch, setEditLinePartSearch] = useState<{[key: number]: string}>({}); // Search for each line
+  const [editLinePopoverOpen, setEditLinePopoverOpen] = useState<{[key: number]: boolean}>({}); // Popover state for each line
 
   const bomsQueryUrl = `/api/robust-boms/boms?${searchTerm ? `search=${encodeURIComponent(searchTerm)}` : ''}`;
   const { data: bomsData, isLoading } = useQuery({
@@ -1169,28 +1171,84 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                                           </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                          {editingLines.map((line, index) => (
+                                          {editingLines.map((line, index) => {
+                                            const lineSearch = editLinePartSearch[index] || '';
+                                            const filteredParts = lineSearch.trim() === '' 
+                                              ? parts 
+                                              : parts.filter((part: any) => {
+                                                  const search = lineSearch.toLowerCase();
+                                                  return (
+                                                    part.agPartNumber?.toLowerCase().includes(search) ||
+                                                    part.name?.toLowerCase().includes(search) ||
+                                                    part.sku?.toLowerCase().includes(search)
+                                                  );
+                                                });
+                                            
+                                            return (
                                             <TableRow key={index}>
-                                              <TableCell className="min-w-[200px]">
-                                                <Select
-                                                  value={line.childPartAgNumber}
-                                                  onValueChange={(value) => {
-                                                    const newLines = [...editingLines];
-                                                    newLines[index].childPartAgNumber = value;
-                                                    setEditingLines(newLines);
+                                              <TableCell className="min-w-[250px]">
+                                                <Popover 
+                                                  open={editLinePopoverOpen[index] || false} 
+                                                  onOpenChange={(open) => {
+                                                    setEditLinePopoverOpen({...editLinePopoverOpen, [index]: open});
                                                   }}
                                                 >
-                                                  <SelectTrigger data-testid={`select-child-part-${index}`}>
-                                                    <SelectValue placeholder="Select part..." />
-                                                  </SelectTrigger>
-                                                  <SelectContent>
-                                                    {parts.slice(0, 100).map((part: any) => (
-                                                      <SelectItem key={part.id} value={part.agPartNumber}>
-                                                        {part.agPartNumber} - {part.name}
-                                                      </SelectItem>
-                                                    ))}
-                                                  </SelectContent>
-                                                </Select>
+                                                  <PopoverTrigger asChild>
+                                                    <Button
+                                                      variant="outline"
+                                                      role="combobox"
+                                                      className={cn(
+                                                        "w-full justify-between",
+                                                        !line.childPartAgNumber && "text-muted-foreground"
+                                                      )}
+                                                      data-testid={`button-select-child-part-${index}`}
+                                                    >
+                                                      {line.childPartAgNumber
+                                                        ? `${line.childPartAgNumber} - ${parts.find((p: any) => p.agPartNumber === line.childPartAgNumber)?.name || ''}`
+                                                        : "Select part..."}
+                                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                    </Button>
+                                                  </PopoverTrigger>
+                                                  <PopoverContent className="w-[400px] p-0">
+                                                    <Command>
+                                                      <CommandInput 
+                                                        placeholder="Search parts..." 
+                                                        value={lineSearch}
+                                                        onValueChange={(value) => {
+                                                          setEditLinePartSearch({...editLinePartSearch, [index]: value});
+                                                        }}
+                                                      />
+                                                      <CommandList>
+                                                        <CommandEmpty>No parts found.</CommandEmpty>
+                                                        <CommandGroup>
+                                                          {filteredParts.slice(0, 50).map((part: any) => (
+                                                            <CommandItem
+                                                              key={part.agPartNumber}
+                                                              value={part.agPartNumber}
+                                                              onSelect={() => {
+                                                                const newLines = [...editingLines];
+                                                                newLines[index].childPartAgNumber = part.agPartNumber;
+                                                                setEditingLines(newLines);
+                                                                setEditLinePopoverOpen({...editLinePopoverOpen, [index]: false});
+                                                                setEditLinePartSearch({...editLinePartSearch, [index]: ''});
+                                                              }}
+                                                            >
+                                                              <Check
+                                                                className={cn(
+                                                                  "mr-2 h-4 w-4",
+                                                                  line.childPartAgNumber === part.agPartNumber
+                                                                    ? "opacity-100"
+                                                                    : "opacity-0"
+                                                                )}
+                                                              />
+                                                              {part.agPartNumber} - {part.name}
+                                                            </CommandItem>
+                                                          ))}
+                                                        </CommandGroup>
+                                                      </CommandList>
+                                                    </Command>
+                                                  </PopoverContent>
+                                                </Popover>
                                               </TableCell>
                                               <TableCell>
                                                 <Input
@@ -1268,7 +1326,8 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                                                 </Button>
                                               </TableCell>
                                             </TableRow>
-                                          ))}
+                                          );
+                                          })}
                                         </TableBody>
                                       </Table>
 

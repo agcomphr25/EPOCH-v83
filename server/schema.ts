@@ -3702,6 +3702,7 @@ export const boms = pgTable('boms', {
   parentPartAgNumber: text('parent_part_ag_number').notNull().references(() => inventoryItems.agPartNumber, { onDelete: 'cascade' }),
   code: text('code').notNull(),
   description: text('description').default(''),
+  isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 }, (t) => ({
@@ -3855,6 +3856,28 @@ export type InsertOrderIdReservation = z.infer<
   typeof insertOrderIdReservationSchema
 >;
 export type OrderIdReservation = typeof orderIdReservations.$inferSelect;
+
+// Order ID Sequence System - Database-level atomic sequence for guaranteed unique order IDs
+// Replaces the reservation system with a simpler, faster, and 100% reliable approach
+export const orderIdSequences = pgTable('order_id_sequences', {
+  id: serial('id').primaryKey(),
+  yearMonthPrefix: text('year_month_prefix').notNull().unique(), // Year-month prefix (e.g., EH for Aug 2025)
+  currentSequence: integer('current_sequence').notNull().default(0), // Current sequence number
+  lastUsedAt: timestamp('last_used_at').defaultNow().notNull(), // Last time this prefix was used
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const insertOrderIdSequenceSchema = createInsertSchema(
+  orderIdSequences
+).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertOrderIdSequence = z.infer<typeof insertOrderIdSequenceSchema>;
+export type OrderIdSequence = typeof orderIdSequences.$inferSelect;
 
 // P2 Production Orders - Generated from P2 Purchase Orders based on BOM
 export const p2ProductionOrders = pgTable('p2_production_orders', {

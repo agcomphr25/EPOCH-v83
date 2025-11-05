@@ -10021,6 +10021,9 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
+      // Extract miscellaneous items from features object
+      const miscItems = (order.features as any)?.miscItems || [];
+
       // Prepare order data for PDF
       const orderData = {
         orderId: order.orderId,
@@ -10050,6 +10053,8 @@ export class DatabaseStorage implements IStorage {
         featureDisplayNames,
         featureSelectionDisplayNames,
         featureSelectionPrices,
+        featureQuantities: order.featureQuantities as Record<string, number> || undefined,
+        miscItems: miscItems.length > 0 ? miscItems : undefined,
         notes: order.notes || undefined,
         shipping: order.shipping || 0,
         paymentStatus: 'PENDING' as const,

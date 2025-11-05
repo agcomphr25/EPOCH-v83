@@ -80,6 +80,7 @@ export default function RobustBOMAdministration() {
 function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchTerm: (s: string) => void }) {
   const { toast } = useToast();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [partSearch, setPartSearch] = useState('');
 
   const bomsQueryUrl = `/api/robust-boms/boms?${searchTerm ? `search=${encodeURIComponent(searchTerm)}` : ''}`;
   const { data: bomsData, isLoading } = useQuery({
@@ -128,6 +129,18 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
 
   const boms = (bomsData as any)?.data || [];
   const parts = (partsData as any)?.data || [];
+  
+  // Filter parts based on search
+  const filteredParts = partSearch.trim() === '' 
+    ? parts 
+    : parts.filter((part: any) => {
+        const search = partSearch.toLowerCase();
+        return (
+          part.agPartNumber?.toLowerCase().includes(search) ||
+          part.name?.toLowerCase().includes(search) ||
+          part.sku?.toLowerCase().includes(search)
+        );
+      });
 
   return (
     <Card>
@@ -192,17 +205,22 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                               </FormControl>
                             </PopoverTrigger>
                             <PopoverContent className="w-full p-0" align="start">
-                              <Command>
-                                <CommandInput placeholder="Search parts by AG#, SKU, or name..." />
+                              <Command shouldFilter={false}>
+                                <CommandInput 
+                                  placeholder="Search parts by AG#, SKU, or name..." 
+                                  value={partSearch}
+                                  onValueChange={setPartSearch}
+                                />
                                 <CommandList>
                                   <CommandEmpty>No part found.</CommandEmpty>
                                   <CommandGroup>
-                                    {parts.map((part: any) => (
+                                    {filteredParts.map((part: any) => (
                                       <CommandItem
                                         key={part.agPartNumber}
-                                        value={`${part.agPartNumber} ${part.name} ${part.sku || ''}`}
+                                        value={part.agPartNumber}
                                         onSelect={() => {
                                           form.setValue("parentPartAgNumber", part.agPartNumber);
+                                          setPartSearch('');
                                         }}
                                         data-testid={`option-part-${part.agPartNumber}`}
                                       >

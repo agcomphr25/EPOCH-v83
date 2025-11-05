@@ -81,6 +81,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
   const { toast } = useToast();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [partSearch, setPartSearch] = useState('');
+  const [isPartPopoverOpen, setIsPartPopoverOpen] = useState(false);
 
   const bomsQueryUrl = `/api/robust-boms/boms?${searchTerm ? `search=${encodeURIComponent(searchTerm)}` : ''}`;
   const { data: bomsData, isLoading } = useQuery({
@@ -183,7 +184,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                       render={({ field }) => (
                         <FormItem className="flex flex-col">
                           <FormLabel>Parent Part (Inventory Item)</FormLabel>
-                          <Popover>
+                          <Popover open={isPartPopoverOpen} onOpenChange={setIsPartPopoverOpen}>
                             <PopoverTrigger asChild>
                               <FormControl>
                                 <Button
@@ -221,6 +222,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                                         onSelect={() => {
                                           form.setValue("parentPartAgNumber", part.agPartNumber);
                                           setPartSearch('');
+                                          setIsPartPopoverOpen(false);
                                         }}
                                         data-testid={`option-part-${part.agPartNumber}`}
                                       >

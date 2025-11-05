@@ -333,7 +333,15 @@ router.put('/customers/:id', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
     const updates = req.body;
+    
+    console.log('📝 Updating P2 customer:', customerId);
+    console.log('📊 Update data received:', JSON.stringify(updates, null, 2));
+    console.log('🔢 rfqSequences in update:', updates.rfqSequences);
+    
     const updatedCustomer = await storage.updateP2Customer(customerId, updates);
+    
+    console.log('✅ Customer updated, rfqSequences after update:', updatedCustomer.rfqSequences);
+    
     res.json(updatedCustomer);
   } catch (error) {
     console.error('Update P2 customer error:', error);

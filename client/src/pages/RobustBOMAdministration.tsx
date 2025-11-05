@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Copy, Save, X, ChevronDown, Package, CheckCircle2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Copy, Save, X, ChevronDown, Package, CheckCircle2, Power } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -127,7 +127,11 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
   const createBOMMutation = useMutation({
     mutationFn: (data: any) => apiRequest('/api/robust-boms/boms', { method: 'POST', body: data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/boms'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && 
+          query.queryKey[0].startsWith('/api/robust-boms/boms')
+      });
       toast({ title: 'Success', description: 'BOM created successfully' });
       setIsWizardOpen(false);
       setWizardStep(1);
@@ -141,7 +145,11 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
   const deleteBOMMutation = useMutation({
     mutationFn: (id: string) => apiRequest(`/api/robust-boms/boms/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/boms'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && 
+          query.queryKey[0].startsWith('/api/robust-boms/boms')
+      });
       toast({ title: 'Success', description: 'BOM deleted successfully' });
     },
     onError: () => {
@@ -153,13 +161,36 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     mutationFn: ({ id, data }: { id: string; data: any }) => 
       apiRequest(`/api/robust-boms/boms/${id}`, { method: 'PUT', body: data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/boms'] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && 
+          query.queryKey[0].startsWith('/api/robust-boms/boms')
+      });
       toast({ title: 'Success', description: 'BOM updated successfully' });
       setIsEditDialogOpen(false);
       setSelectedBom(null);
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to update BOM', variant: 'destructive' });
+    },
+  });
+
+  const toggleBomActiveMutation = useMutation({
+    mutationFn: (id: string) => 
+      apiRequest(`/api/robust-boms/boms/${id}/toggle-active`, { method: 'PATCH' }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          typeof query.queryKey[0] === 'string' && 
+          query.queryKey[0].startsWith('/api/robust-boms/boms')
+      });
+      toast({ 
+        title: 'Success', 
+        description: `BOM ${data.isActive ? 'activated' : 'deactivated'} successfully` 
+      });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to toggle BOM status', variant: 'destructive' });
     },
   });
 
@@ -1051,10 +1082,10 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                         <FormItem>
                           <FormLabel>BOM Code</FormLabel>
                           <FormControl>
-                            <Input {...field} data-testid="input-edit-bom-code" />
+                            <Input {...field} disabled data-testid="input-edit-bom-code" />
                           </FormControl>
                           <FormDescription>
-                            Unique identifier for this BOM
+                            BOM Code cannot be changed after creation (immutable identifier)
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -1063,15 +1094,28 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                     <FormField
                       control={editForm.control}
                       name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Description</FormLabel>
-                          <FormControl>
-                            <Textarea {...field} data-testid="input-edit-bom-description" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                      render={({ field }) => {
+                        const hasReleasedRevisions = selectedBom?.revisions?.some((rev: any) => rev.isReleased);
+                        return (
+                          <FormItem>
+                            <FormLabel>Description</FormLabel>
+                            <FormControl>
+                              <Textarea 
+                                {...field} 
+                                disabled={hasReleasedRevisions}
+                                data-testid="input-edit-bom-description" 
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              {hasReleasedRevisions 
+                                ? 'Description locked - BOM has released revisions' 
+                                : 'You can edit the description while in draft status'
+                              }
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        );
+                      }}
                     />
                     <DialogFooter>
                       <Button
@@ -1550,6 +1594,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                 <TableHead>Code</TableHead>
                 <TableHead>Parent Part</TableHead>
                 <TableHead>Description</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Revisions</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -1562,6 +1607,14 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                     {bom.parentInventoryItem ? `${bom.parentInventoryItem.agPartNumber} - ${bom.parentInventoryItem.name}` : 'N/A'}
                   </TableCell>
                   <TableCell>{bom.description || '-'}</TableCell>
+                  <TableCell>
+                    <Badge 
+                      variant={bom.isActive ? "default" : "secondary"}
+                      data-testid={`badge-bom-status-${bom.id}`}
+                    >
+                      {bom.isActive ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline">
                       {bom.revisions?.length || 0} revision(s)
@@ -1598,6 +1651,15 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                         title="Edit BOM & Line Items"
                       >
                         <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleBomActiveMutation.mutate(bom.id)}
+                        data-testid={`button-toggle-active-${bom.id}`}
+                        title={bom.isActive ? "Deactivate BOM" : "Activate BOM"}
+                      >
+                        <Power className={`h-4 w-4 ${bom.isActive ? 'text-green-600' : 'text-gray-400'}`} />
                       </Button>
                       <Button
                         variant="ghost"

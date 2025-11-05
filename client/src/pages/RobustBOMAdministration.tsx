@@ -104,6 +104,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
   const [bomLines, setBomLines] = useState<any[]>([]); // For Step 3
   const [linePartSearch, setLinePartSearch] = useState('');
   const [isLinePartPopoverOpen, setIsLinePartPopoverOpen] = useState(false);
+  const [isCreatingBom, setIsCreatingBom] = useState(false); // Loading state for API calls
 
   const bomsQueryUrl = `/api/robust-boms/boms?${searchTerm ? `search=${encodeURIComponent(searchTerm)}` : ''}`;
   const { data: bomsData, isLoading } = useQuery({
@@ -264,7 +265,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     setWizardData({ ...wizardData, step3: newLines }); // Sync with wizard data
   };
 
-  const handleStep3Finish = () => {
+  const handleStep3Finish = async () => {
     if (bomLines.length === 0) {
       toast({ 
         title: 'Validation Error', 
@@ -274,24 +275,67 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
       return;
     }
     
-    // Save Step 3 data
-    const completeWizardData = { 
-      ...wizardData, 
-      step3: bomLines 
-    };
-    setWizardData(completeWizardData);
+    setIsCreatingBom(true);
     
-    // TODO: Task 5 - Chain API calls to create BOM, revision, and lines
-    // For now, just show what we collected
-    toast({ 
-      title: 'Wizard Complete', 
-      description: `Ready to create BOM with ${bomLines.length} line(s). API integration coming in Task 5.`,
-    });
-    
-    console.log('Complete BOM Data:', completeWizardData);
-    
-    // TODO: Task 5 will reset wizard after successful API calls
-    // For now, keep wizard open so user can see the data was captured
+    try {
+      // Step 1: Create BOM
+      const bomResponse = await apiRequest('/api/robust-boms/boms', {
+        method: 'POST',
+        body: wizardData.step1,
+      });
+      
+      if (!bomResponse || !bomResponse.id) {
+        throw new Error('Failed to create BOM');
+      }
+      
+      // Step 2: Create Initial Revision
+      const revisionResponse = await apiRequest(`/api/robust-boms/boms/${bomResponse.id}/revisions`, {
+        method: 'POST',
+        body: wizardData.step2,
+      });
+      
+      if (!revisionResponse || !revisionResponse.id) {
+        throw new Error('Failed to create revision');
+      }
+      
+      // Step 3: Create BOM Lines
+      await apiRequest(`/api/robust-boms/revisions/${revisionResponse.id}/lines`, {
+        method: 'POST',
+        body: { lines: bomLines },
+      });
+      
+      // Success! Invalidate all BOM queries (including those with search params)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/robust-boms/boms');
+        }
+      });
+      
+      toast({ 
+        title: 'Success!', 
+        description: `BOM "${bomResponse.code}" created with revision "${revisionResponse.revCode}" and ${bomLines.length} line(s)`,
+      });
+      
+      // Reset wizard
+      setIsWizardOpen(false);
+      setWizardStep(1);
+      setWizardData({ step1: null, step2: null, step3: [] });
+      setBomLines([]);
+      form.reset();
+      revisionForm.reset();
+      lineForm.reset();
+      
+    } catch (error: any) {
+      console.error('BOM creation error:', error);
+      toast({ 
+        title: 'Error', 
+        description: error.message || 'Failed to create BOM. Please try again.',
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsCreatingBom(false);
+    }
   };
 
   // Populate edit form when a BOM is selected
@@ -867,9 +911,10 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                           <Button
                             type="button"
                             onClick={handleStep3Finish}
+                            disabled={isCreatingBom}
                             data-testid="button-submit-bom"
                           >
-                            Complete & Create BOM
+                            {isCreatingBom ? 'Creating BOM...' : 'Complete & Create BOM'}
                           </Button>
                         )}
                       </div>

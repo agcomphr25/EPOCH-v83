@@ -1390,10 +1390,14 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                         size="sm"
                         onClick={() => {
                           setSelectedBom(bom);
-                          setIsEditDialogOpen(true);
+                          setIsViewDrawerOpen(true);
+                          // Auto-select first revision if available
+                          if (bom.revisions && bom.revisions.length > 0) {
+                            setSelectedRevisionId(bom.revisions[0].id);
+                          }
                         }}
                         data-testid={`button-edit-bom-${bom.id}`}
-                        title="Edit BOM"
+                        title="Edit BOM & Line Items"
                       >
                         <Edit className="h-4 w-4" />
                       </Button>

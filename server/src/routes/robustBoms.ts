@@ -279,10 +279,37 @@ router.put('/boms/:id', async (req, res) => {
   }
 });
 
+// Toggle BOM active status
+router.patch('/boms/:id/toggle-active', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const [currentBom] = await db
+      .select({ isActive: boms.isActive })
+      .from(boms)
+      .where(eq(boms.id, id));
+    
+    if (!currentBom) {
+      return res.status(404).json({ error: 'BOM not found' });
+    }
+    
+    const [updated] = await db
+      .update(boms)
+      .set({ isActive: !currentBom.isActive, updatedAt: new Date() })
+      .where(eq(boms.id, id))
+      .returning();
+    
+    res.json(updated);
+  } catch (error) {
+    console.error('Toggle BOM active status error:', error);
+    res.status(500).json({ error: 'Failed to toggle BOM active status' });
+  }
+});
+
 // Delete BOM (cascades to revisions and lines)
 router.delete('/boms/:id', async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id} = req.params;
     await db.delete(boms).where(eq(boms.id, id));
     res.json({ success: true });
   } catch (error) {

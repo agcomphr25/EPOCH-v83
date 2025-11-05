@@ -43,6 +43,7 @@ interface OrderData {
   featureDisplayNames?: Record<string, string>;
   featureSelectionDisplayNames?: Record<string, string>;
   featureSelectionPrices?: Record<string, number>;
+  featureQuantities?: Record<string, number>;
   miscItems?: MiscItem[];
   notes?: string;
   shipping?: number;
@@ -349,7 +350,12 @@ export async function generateSalesOrderPDF(
   if (orderData.features) {
     for (const featureKey of featureOrder) {
       if (orderData.features[featureKey]) {
-        featureCount++;
+        // Special handling for other_options - need to count header line + each individual item
+        if (featureKey === 'other_options' && Array.isArray(orderData.features[featureKey])) {
+          featureCount += 1 + orderData.features[featureKey].length; // Header line + each option on its own line
+        } else {
+          featureCount++;
+        }
       }
     }
   }
@@ -457,45 +463,106 @@ export async function generateSalesOrderPDF(
     for (const featureKey of featureOrder) {
       const featureValue = orderData.features[featureKey];
       if (featureValue) {
-        // Get feature display name
-        const displayName = orderData.featureDisplayNames?.[featureKey] || featureKey;
-        const featurePrice = orderData.featurePrices?.[featureKey] || 0;
-        calculatedSubtotal += featurePrice;
+        // Special handling for other_options with quantities
+        if (featureKey === 'other_options' && Array.isArray(featureValue)) {
+          // Display "Other Options:" header
+          const displayName = orderData.featureDisplayNames?.[featureKey] || featureKey;
+          page.drawText(displayName + ':', {
+            x: margin + 8,
+            y: summaryLineY,
+            size: 8,
+            font: boldFont,
+            color: rgb(0.2, 0.2, 0.2),
+          });
+          summaryLineY -= 15;
 
-        page.drawText(displayName + ':', {
-          x: margin + 8,
-          y: summaryLineY,
-          size: 8,
-          font: font,
-        });
+          // Display each option separately with its quantity
+          for (const optionValue of featureValue) {
+            const optionDisplayName = orderData.featureSelectionDisplayNames?.[optionValue] || optionValue;
+            const optionBasePrice = orderData.featureSelectionPrices?.[optionValue] || 0;
+            const quantity = orderData.featureQuantities?.[optionValue] || 1;
+            const optionTotalPrice = optionBasePrice * quantity;
+            
+            calculatedSubtotal += optionTotalPrice;
 
-        // Get selection display name(s)
-        let selectionDisplayName: string;
-        if (Array.isArray(featureValue)) {
-          // For array values (like rails), map each value to its display name
-          selectionDisplayName = featureValue
-            .map(val => orderData.featureSelectionDisplayNames?.[val] || val)
-            .join(', ');
+            // Show quantity in the label if > 1
+            const itemLabel = quantity > 1 
+              ? `${optionDisplayName} (${quantity} @ $${optionBasePrice.toFixed(2)})`
+              : optionDisplayName;
+
+            page.drawText(itemLabel, {
+              x: margin + 8,
+              y: summaryLineY,
+              size: 8,
+              font: font,
+            });
+
+            page.drawText(`$${optionTotalPrice.toFixed(2)}`, {
+              x: margin + printableWidth - 70,
+              y: summaryLineY,
+              size: 8,
+              font: font,
+            });
+
+            summaryLineY -= 15;
+          }
         } else {
-          // For single values, look up the display name
-          selectionDisplayName = orderData.featureSelectionDisplayNames?.[featureValue] || String(featureValue);
+          // Standard feature rendering - check for quantities in featureQuantities
+          const displayName = orderData.featureDisplayNames?.[featureKey] || featureKey;
+          let featurePrice = orderData.featurePrices?.[featureKey] || 0;
+          
+          // Check if there's a quantity for this feature (for single-value features)
+          let quantity = 1;
+          let displayWithQuantity = false;
+          if (!Array.isArray(featureValue) && orderData.featureQuantities?.[featureValue]) {
+            quantity = orderData.featureQuantities[featureValue];
+            featurePrice = featurePrice * quantity;
+            displayWithQuantity = true;
+          }
+          
+          calculatedSubtotal += featurePrice;
+
+          page.drawText(displayName + ':', {
+            x: margin + 8,
+            y: summaryLineY,
+            size: 8,
+            font: font,
+          });
+
+          // Get selection display name(s)
+          let selectionDisplayName: string;
+          if (Array.isArray(featureValue)) {
+            // For array values (like rails), map each value to its display name
+            selectionDisplayName = featureValue
+              .map(val => orderData.featureSelectionDisplayNames?.[val] || val)
+              .join(', ');
+          } else {
+            // For single values, look up the display name and optionally add quantity
+            const baseDisplayName = orderData.featureSelectionDisplayNames?.[featureValue] || String(featureValue);
+            if (displayWithQuantity && quantity > 1) {
+              const unitPrice = (orderData.featurePrices?.[featureKey] || 0);
+              selectionDisplayName = `${baseDisplayName} (${quantity} @ $${unitPrice.toFixed(2)})`;
+            } else {
+              selectionDisplayName = baseDisplayName;
+            }
+          }
+
+          page.drawText(selectionDisplayName, {
+            x: margin + 140,
+            y: summaryLineY,
+            size: 8,
+            font: font,
+          });
+
+          page.drawText(`$${featurePrice.toFixed(2)}`, {
+            x: margin + printableWidth - 70,
+            y: summaryLineY,
+            size: 8,
+            font: font,
+          });
+
+          summaryLineY -= 15;
         }
-
-        page.drawText(selectionDisplayName, {
-          x: margin + 140,
-          y: summaryLineY,
-          size: 8,
-          font: font,
-        });
-
-        page.drawText(`$${featurePrice.toFixed(2)}`, {
-          x: margin + printableWidth - 70,
-          y: summaryLineY,
-          size: 8,
-          font: font,
-        });
-
-        summaryLineY -= 15;
       }
     }
   }

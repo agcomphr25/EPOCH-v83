@@ -123,6 +123,7 @@ router.post('/auto-populate', async (req: Request, res: Response) => {
         END as hasValidStock
       FROM all_orders o
       WHERE o.status = 'FINALIZED' 
+        AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
         AND o.current_department NOT IN ('Shipping', 'Layup/Plugging', 'Barcode', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'Shipping QC')
         AND (o.model_id IS NOT NULL AND o.model_id != '' AND o.model_id != 'None' 
              AND LOWER(o.model_id) != 'no stock' AND LOWER(o.model_id) != 'no_stock')
@@ -250,6 +251,7 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
       FROM production_orders
       WHERE current_department = 'P1 Production Queue'
         AND status = 'IN_PROGRESS'
+        AND (is_cancelled IS NULL OR is_cancelled = false)
       ORDER BY due_date ASC, created_at ASC
     `);
 
@@ -332,6 +334,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
       LEFT JOIN customers c ON CAST(o.customer_id AS INTEGER) = c.id
       WHERE o.current_department = 'P1 Production Queue'
         AND o.status IN ('FINALIZED', 'Active')
+        AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
         AND o.model_id IS NOT NULL 
         AND o.model_id != '' 
         AND o.model_id != 'None'
@@ -505,6 +508,7 @@ router.get('/po-items', async (req: Request, res: Response) => {
           OR (poi.item_type = 'custom_model' AND pp.product_type = 'stock')
         )
         AND po.status != 'CANCELED'
+        AND (po.is_cancelled IS NULL OR po.is_cancelled = false)
         AND (poi.order_count < poi.quantity OR poi.order_count IS NULL)
       ORDER BY po.expected_delivery ASC, po.created_at ASC
     `;

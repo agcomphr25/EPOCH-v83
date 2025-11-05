@@ -32,6 +32,7 @@ interface OrderData {
   dueDate?: string;
   customerName: string;
   customerEmail?: string;
+  customerPO?: string;
   modelId: string;
   totalPrice: number;
   currentDepartment: string;
@@ -155,6 +156,12 @@ export function SalesOrderModal({
                 {orderData.customerEmail && (
                   <p className="text-sm text-gray-600">
                     {orderData.customerEmail}
+                  </p>
+                )}
+                {orderData.customerPO && (
+                  <p className="text-sm">
+                    <span className="text-gray-600">Customer PO:</span>{' '}
+                    <span className="font-medium">{orderData.customerPO}</span>
                   </p>
                 )}
               </div>

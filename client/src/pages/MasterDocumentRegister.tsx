@@ -54,7 +54,9 @@ export default function MasterDocumentRegister() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<ControlledDocument | null>(null);
   const [createNewVersion, setCreateNewVersion] = useState(false);
   const [versionType, setVersionType] = useState<'major' | 'minor'>('minor');
@@ -291,6 +293,48 @@ export default function MasterDocumentRegister() {
     approveDocumentMutation.mutate({ id: selectedDocument.id, effectiveDate });
   };
 
+  // CSV Import mutation
+  const importCsvMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return await apiRequest('/api/controlled-documents/import/csv', {
+        method: 'POST',
+        body: formData,
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] });
+      setIsImportDialogOpen(false);
+      setCsvFile(null);
+      const results = data.results;
+      toast({
+        title: 'CSV Import Complete',
+        description: `Successfully imported ${results.success} documents. Skipped: ${results.skipped}. ${results.errors.length > 0 ? `Errors: ${results.errors.length}` : ''}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to import CSV',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleCsvImport = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!csvFile) {
+      toast({
+        title: 'No file selected',
+        description: 'Please select a CSV file to import',
+        variant: 'destructive',
+      });
+      return;
+    }
+    importCsvMutation.mutate(csvFile);
+  };
+
   const openEditDialog = (doc: ControlledDocument) => {
     setSelectedDocument(doc);
     setIsEditDialogOpen(true);
@@ -319,14 +363,25 @@ export default function MasterDocumentRegister() {
               </p>
             </div>
             {canCreateEdit && (
-              <Button
-                className="flex items-center gap-2"
-                data-testid="button-create-document"
-                onClick={() => setIsCreateDialogOpen(true)}
-              >
-                <Plus className="h-4 w-4" />
-                New Document
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  data-testid="button-import-csv"
+                  onClick={() => setIsImportDialogOpen(true)}
+                >
+                  <Upload className="h-4 w-4" />
+                  Import CSV
+                </Button>
+                <Button
+                  className="flex items-center gap-2"
+                  data-testid="button-create-document"
+                  onClick={() => setIsCreateDialogOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  New Document
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -983,6 +1038,68 @@ export default function MasterDocumentRegister() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV Import Dialog */}
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Import Documents from CSV</DialogTitle>
+            <DialogDescription>
+              Upload a CSV file to import or update multiple documents at once
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleCsvImport} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="csvFile">CSV File *</Label>
+              <Input
+                id="csvFile"
+                type="file"
+                accept=".csv"
+                onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                data-testid="input-csv-file"
+                required
+              />
+              <p className="text-xs text-gray-500">
+                CSV should have columns: TITLE, CODE, Department, Version, Date, Record Retention Length, Summary of Changes
+              </p>
+            </div>
+
+            <Card className="bg-blue-50 border-blue-200">
+              <CardHeader className="py-3">
+                <CardTitle className="text-sm font-medium">Import Behavior</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-gray-700 space-y-1">
+                <p>• Documents with matching CODE will be updated</p>
+                <p>• New documents will be created</p>
+                <p>• Document type is auto-detected from CODE</p>
+                <p>• Effective dates will be parsed from the Date column</p>
+              </CardContent>
+            </Card>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsImportDialogOpen(false);
+                  setCsvFile(null);
+                }}
+                data-testid="button-cancel-import"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={importCsvMutation.isPending || !csvFile}
+                data-testid="button-submit-import"
+              >
+                {importCsvMutation.isPending ? 'Importing...' : 'Import CSV'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

@@ -7,6 +7,7 @@ import { controlledDocuments, documentVersionHistory, insertControlledDocumentSc
 import { eq, desc, and } from 'drizzle-orm';
 import fs from 'fs/promises';
 import { z } from 'zod';
+import Papa from 'papaparse';
 
 const router = Router();
 
@@ -467,6 +468,163 @@ router.delete('/:id', requireAdminOrOwner, async (req: Request, res: Response) =
   } catch (error) {
     console.error('Error deleting document:', error);
     res.status(500).json({ error: 'Failed to delete document' });
+  }
+});
+
+// CSV Import (admin/owner only)
+router.post('/import/csv', requireAdminOrOwner, upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user!;
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'No CSV file uploaded' });
+    }
+
+    // Read the CSV file
+    const fileContent = await fs.readFile(req.file.path, 'utf-8');
+    
+    // Parse CSV
+    const parseResult = Papa.parse(fileContent, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header: string) => header.trim(),
+    });
+
+    if (parseResult.errors.length > 0) {
+      console.error('CSV parsing errors:', parseResult.errors);
+      return res.status(400).json({ 
+        error: 'CSV parsing failed',
+        details: parseResult.errors 
+      });
+    }
+
+    const rows = parseResult.data as any[];
+    
+    // Skip the first row if it's a title row
+    const dataRows = rows[0]?.TITLE?.includes('QMS MASTER LIST') ? rows.slice(1) : rows;
+    
+    const importResults = {
+      success: 0,
+      skipped: 0,
+      errors: [] as string[],
+    };
+
+    // Helper function to determine document type from code
+    const determineDocumentType = (code: string): string => {
+      const upperCode = code?.toUpperCase() || '';
+      if (upperCode.includes('POSTER')) return 'POSTER';
+      if (upperCode.includes('FORM')) return 'FORM';
+      if (upperCode.includes('DOC')) return 'PROCEDURE';
+      return 'OTHER';
+    };
+
+    // Process each row
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+      
+      try {
+        // Skip rows with missing critical data
+        if (!row.TITLE || !row.CODE) {
+          importResults.skipped++;
+          importResults.errors.push(`Row ${i + 2}: Missing TITLE or CODE`);
+          continue;
+        }
+
+        const documentNumber = String(row.CODE || '').trim();
+        const documentName = String(row.TITLE || '').trim();
+        const department = String(row.Department || 'General Use').trim();
+        const currentVersion = String(row.Version || '1.0').trim();
+        const retentionLength = String(row['Record Retention Length'] || 'N/A').trim();
+        const description = String(row['Summary of Changes (if needed)'] || '').trim();
+        const dateStr = String(row.Date || '').trim();
+        
+        // Parse effective date
+        let effectiveDate = null;
+        if (dateStr && dateStr !== 'N/A' && dateStr !== 'on-going') {
+          try {
+            const parsedDate = new Date(dateStr);
+            if (!isNaN(parsedDate.getTime())) {
+              effectiveDate = parsedDate.toISOString().split('T')[0];
+            }
+          } catch {
+            // Invalid date, leave as null
+          }
+        }
+
+        const documentType = determineDocumentType(documentNumber);
+
+        // Calculate expiration date (1 year from effective date or now)
+        const baseDate = effectiveDate ? new Date(effectiveDate) : new Date();
+        const expirationDate = new Date(baseDate);
+        expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+
+        // Check if document already exists
+        const [existing] = await db
+          .select()
+          .from(controlledDocuments)
+          .where(eq(controlledDocuments.documentNumber, documentNumber));
+
+        if (existing) {
+          // Update existing document
+          await db
+            .update(controlledDocuments)
+            .set({
+              documentName,
+              documentType,
+              department,
+              currentVersion,
+              retentionLength,
+              description: description || existing.description,
+              effectiveDate: effectiveDate || existing.effectiveDate,
+              expirationDate: expirationDate.toISOString().split('T')[0],
+              updatedAt: new Date(),
+            })
+            .where(eq(controlledDocuments.id, existing.id));
+        } else {
+          // Create new document
+          const [newDoc] = await db.insert(controlledDocuments).values({
+            documentNumber,
+            documentName,
+            documentType,
+            department,
+            currentVersion,
+            status: effectiveDate ? 'approved' : 'draft',
+            retentionLength,
+            description,
+            effectiveDate,
+            expirationDate: expirationDate.toISOString().split('T')[0],
+            createdBy: user.username,
+          }).returning();
+
+          // Create initial version history
+          await db.insert(documentVersionHistory).values({
+            documentId: newDoc.id,
+            versionNumber: currentVersion,
+            changeDescription: description || 'Imported from CSV',
+            changeType: 'major',
+            status: effectiveDate ? 'approved' : 'draft',
+            createdBy: user.username,
+            effectiveDate,
+            expirationDate: expirationDate.toISOString().split('T')[0],
+          });
+        }
+
+        importResults.success++;
+      } catch (error: any) {
+        importResults.errors.push(`Row ${i + 2}: ${error.message}`);
+      }
+    }
+
+    // Delete the uploaded CSV file
+    await fs.unlink(req.file.path).catch(console.error);
+
+    res.json({
+      message: 'CSV import completed',
+      results: importResults,
+    });
+  } catch (error) {
+    console.error('Error importing CSV:', error);
+    res.status(500).json({ error: 'Failed to import CSV' });
   }
 });
 

@@ -110,6 +110,19 @@ const upload = multer({
   }
 });
 
+// Separate multer configuration for CSV imports
+const csvUpload = multer({
+  storage: multer.memoryStorage(), // Store in memory for CSV parsing
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit for CSV
+  fileFilter: (req, file, cb) => {
+    if (file.originalname.toLowerCase().endsWith('.csv')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only CSV files are allowed.'));
+    }
+  }
+});
+
 // Get all controlled documents (authenticated users only)
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -472,7 +485,7 @@ router.delete('/:id', requireAdminOrOwner, async (req: Request, res: Response) =
 });
 
 // CSV Import (admin/owner only)
-router.post('/import/csv', requireAdminOrOwner, upload.single('file'), async (req: Request, res: Response) => {
+router.post('/import/csv', requireAdminOrOwner, csvUpload.single('file'), async (req: Request, res: Response) => {
   try {
     const user = (req as any).user!;
     
@@ -480,8 +493,8 @@ router.post('/import/csv', requireAdminOrOwner, upload.single('file'), async (re
       return res.status(400).json({ error: 'No CSV file uploaded' });
     }
 
-    // Read the CSV file
-    const fileContent = await fs.readFile(req.file.path, 'utf-8');
+    // Convert buffer to string (file is stored in memory)
+    const fileContent = req.file.buffer.toString('utf-8');
     
     // Parse CSV
     const parseResult = Papa.parse(fileContent, {

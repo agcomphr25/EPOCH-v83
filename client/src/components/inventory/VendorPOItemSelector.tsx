@@ -13,8 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Trash2, Pencil, Check, X } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, Info } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 type VendorPOItemSelectorProps = {
   vendorPoId: number;
@@ -33,6 +39,11 @@ type VendorPOItem = {
   unitPrice: number;
   lineTotal: number;
   notes?: string;
+  // Extended with inventory item UOM data
+  purchaseUnit?: string;
+  usageUnit?: string;
+  usageQuantityPerUnit?: number;
+  purchaseUnitLabel?: string;
 };
 
 type VendorPart = {
@@ -49,6 +60,44 @@ type VendorPart = {
   itemCategory?: string;
   itemUom?: string;
 };
+
+// Helper component to display quantity with conversion info
+function QuantityDisplay({ item }: { item: VendorPOItem }) {
+  // If no conversion data available, just show simple quantity
+  if (!item.usageQuantityPerUnit || !item.purchaseUnit || !item.usageUnit) {
+    return <span>{item.quantity}</span>;
+  }
+
+  // Calculate implied usage quantity
+  const usageQty = item.quantity * item.usageQuantityPerUnit;
+  
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex items-center gap-1 cursor-help">
+            <div>
+              <div className="font-medium">
+                {item.quantity} {item.purchaseUnit}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                = {usageQty.toFixed(2)} {item.usageUnit}
+              </div>
+            </div>
+            <Info className="w-3 h-3 text-muted-foreground" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <div className="space-y-1 text-xs">
+            <p><strong>Purchase Quantity:</strong> {item.quantity} {item.purchaseUnitLabel || item.purchaseUnit}</p>
+            <p><strong>Conversion:</strong> {item.usageQuantityPerUnit} {item.usageUnit} per {item.purchaseUnit}</p>
+            <p><strong>Usage Quantity:</strong> {usageQty.toFixed(2)} {item.usageUnit}</p>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, onTotalChange }: VendorPOItemSelectorProps) {
   const queryClient = useQueryClient();
@@ -350,7 +399,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                         data-testid={`input-edit-quantity-${item.id}`}
                       />
                     ) : (
-                      item.quantity
+                      <QuantityDisplay item={item} />
                     )}
                   </TableCell>
                   <TableCell>

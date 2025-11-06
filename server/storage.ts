@@ -5932,11 +5932,38 @@ export class DatabaseStorage implements IStorage {
 
   // Vendor PO Items CRUD
   async getVendorPOItems(vendorPoId: number): Promise<any[]> {
-    return await db
-      .select()
+    const items = await db
+      .select({
+        id: vendorPOItems.id,
+        vendorPoId: vendorPOItems.vendorPoId,
+        lineNumber: vendorPOItems.lineNumber,
+        agPartNumber: vendorPOItems.agPartNumber,
+        vendorPartNumber: vendorPOItems.vendorPartNumber,
+        description: vendorPOItems.description,
+        quantity: vendorPOItems.quantity,
+        receivedQuantity: vendorPOItems.receivedQuantity,
+        receivedDate: vendorPOItems.receivedDate,
+        unitPrice: vendorPOItems.unitPrice,
+        lineTotal: vendorPOItems.totalPrice, // Alias totalPrice as lineTotal for frontend compatibility
+        uom: vendorPOItems.uom,
+        notes: vendorPOItems.notes,
+        createdAt: vendorPOItems.createdAt,
+        updatedAt: vendorPOItems.updatedAt,
+        // Include UOM conversion data from inventory items
+        purchaseUnit: inventoryItems.purchaseUnit,
+        usageUnit: inventoryItems.usageUnit,
+        usageQuantityPerUnit: inventoryItems.usageQuantityPerUnit,
+        purchaseUnitLabel: inventoryItems.purchaseUnitLabel,
+      })
       .from(vendorPOItems)
+      .leftJoin(
+        inventoryItems,
+        eq(vendorPOItems.agPartNumber, inventoryItems.agPartNumber)
+      )
       .where(eq(vendorPOItems.vendorPoId, vendorPoId))
       .orderBy(vendorPOItems.lineNumber);
+    
+    return items;
   }
 
   async createVendorPOItem(data: any): Promise<any> {

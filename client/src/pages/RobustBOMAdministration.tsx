@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -186,6 +187,10 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     mutationFn: (id: string) => 
       apiRequest(`/api/robust-boms/boms/${id}/toggle-active`, { method: 'PATCH' }),
     onSuccess: (data: any) => {
+      // Update selectedBom if it's the one that was toggled
+      if (selectedBom && selectedBom.id === data.id) {
+        setSelectedBom({ ...selectedBom, isActive: data.isActive });
+      }
       queryClient.invalidateQueries({ 
         predicate: (query) => 
           typeof query.queryKey[0] === 'string' && 
@@ -1187,6 +1192,25 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                           <label className="text-xs font-medium text-muted-foreground">Description</label>
                           <p className="text-sm mt-1">{selectedBom.description || 'No description'}</p>
                         </div>
+                        <div className="col-span-2 flex items-center justify-between pt-2 border-t">
+                          <div>
+                            <label className="text-xs font-medium text-muted-foreground">BOM Status</label>
+                            <p className="text-sm mt-1">
+                              {selectedBom.isActive ? 'Active - In use for production' : 'Inactive - Not used for production'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">
+                              {selectedBom.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                            <Switch
+                              checked={selectedBom.isActive}
+                              onCheckedChange={() => toggleBomActiveMutation.mutate(selectedBom.id)}
+                              disabled={toggleBomActiveMutation.isPending}
+                              data-testid="switch-bom-active"
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -1662,15 +1686,6 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => toggleBomActiveMutation.mutate(bom.id)}
-                        data-testid={`button-toggle-active-${bom.id}`}
-                        title={bom.isActive ? "Deactivate BOM" : "Activate BOM"}
-                      >
-                        <Power className={`h-4 w-4 ${bom.isActive ? 'text-green-600' : 'text-gray-400'}`} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
                         onClick={() => {
                           if (confirm('Are you sure you want to delete this BOM and all its revisions?')) {
                             deleteBOMMutation.mutate(bom.id);
@@ -2045,6 +2060,13 @@ function CreateStockBOMWizard({
 }) {
   const [itemType, setItemType] = useState<'material' | 'labor'>('material');
   const { toast } = useToast();
+  const [partSearchOpen, setPartSearchOpen] = useState(false);
+  const [partSearchValue, setPartSearchValue] = useState('');
+
+  // Fetch inventory items for part selection
+  const { data: inventoryItems = [] } = useQuery<any[]>({
+    queryKey: ['/api/inventory/items'],
+  });
 
   // Step 1: Basic Info Form
   const basicInfoForm = useForm({
@@ -2096,7 +2118,7 @@ function CreateStockBOMWizard({
     itemForm.reset({
       partName: '',
       quantity: 1,
-      itemType: itemType,
+      itemType: 'material' as const,
       isOptional: false,
       laborHours: null,
       hourlyRate: null,
@@ -2222,7 +2244,7 @@ function CreateStockBOMWizard({
           <div className="space-y-6">
             <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
               <p className="text-sm text-blue-900 dark:text-blue-100">
-                <strong>Add materials and labor to your BOM.</strong> Include all required and optional components. 
+                <strong>Add parts and labor to your BOM.</strong> Select parts from your inventory or add custom labor operations. 
                 For labor items, specify hours and hourly rate.
               </p>
             </div>
@@ -2238,12 +2260,12 @@ function CreateStockBOMWizard({
                     size="sm"
                     onClick={() => {
                       setItemType('material');
-                      itemForm.setValue('itemType', 'material');
+                      (itemForm.setValue as any)('itemType', 'material');
                     }}
-                    data-testid="button-type-material"
+                    data-testid="button-type-part"
                   >
                     <Package className="h-4 w-4 mr-2" />
-                    Material
+                    Part
                   </Button>
                   <Button
                     type="button"
@@ -2251,7 +2273,7 @@ function CreateStockBOMWizard({
                     size="sm"
                     onClick={() => {
                       setItemType('labor');
-                      itemForm.setValue('itemType', 'labor');
+                      (itemForm.setValue as any)('itemType', 'labor');
                     }}
                     data-testid="button-type-labor"
                   >
@@ -2264,19 +2286,98 @@ function CreateStockBOMWizard({
               <Form {...itemForm}>
                 <form onSubmit={itemForm.handleSubmit(handleAddItem)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={itemForm.control}
-                      name="partName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Part/Operation Name *</FormLabel>
-                          <FormControl>
-                            <Input placeholder={itemType === 'labor' ? 'Layup Labor' : 'Carbon Fiber Sheet'} {...field} data-testid="input-part-name" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {itemType === 'material' ? (
+                      <FormField
+                        control={itemForm.control}
+                        name="partName"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                            <FormLabel>Inventory Part *</FormLabel>
+                            <Popover open={partSearchOpen} onOpenChange={setPartSearchOpen}>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    className={cn(
+                                      "w-full justify-between",
+                                      !field.value && "text-muted-foreground"
+                                    )}
+                                    data-testid="button-select-part"
+                                  >
+                                    {field.value || "Select inventory part..."}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                  </Button>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[400px] p-0">
+                                <Command>
+                                  <CommandInput 
+                                    placeholder="Search parts..." 
+                                    value={partSearchValue}
+                                    onValueChange={setPartSearchValue}
+                                  />
+                                  <CommandList>
+                                    <CommandEmpty>No parts found.</CommandEmpty>
+                                    <CommandGroup>
+                                      {inventoryItems
+                                        .filter((item: any) => {
+                                          if (!partSearchValue) return true;
+                                          const search = partSearchValue.toLowerCase();
+                                          return (
+                                            item.agPartNumber?.toLowerCase().includes(search) ||
+                                            item.name?.toLowerCase().includes(search) ||
+                                            item.sku?.toLowerCase().includes(search)
+                                          );
+                                        })
+                                        .slice(0, 50)
+                                        .map((item: any) => (
+                                          <CommandItem
+                                            key={item.id}
+                                            value={`${item.agPartNumber} - ${item.name}`}
+                                            onSelect={() => {
+                                              field.onChange(`${item.agPartNumber} - ${item.name}`);
+                                              setPartSearchOpen(false);
+                                              setPartSearchValue('');
+                                            }}
+                                            data-testid={`option-part-${item.id}`}
+                                          >
+                                            <Check
+                                              className={cn(
+                                                "mr-2 h-4 w-4",
+                                                field.value === `${item.agPartNumber} - ${item.name}` ? "opacity-100" : "opacity-0"
+                                              )}
+                                            />
+                                            <div className="flex flex-col">
+                                              <span className="font-medium">{item.agPartNumber}</span>
+                                              <span className="text-sm text-muted-foreground">{item.name}</span>
+                                            </div>
+                                          </CommandItem>
+                                        ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : (
+                      <FormField
+                        control={itemForm.control}
+                        name="partName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Operation Name *</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Layup Labor" {...field} data-testid="input-part-name" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
 
                     <FormField
                       control={itemForm.control}
@@ -2369,7 +2470,7 @@ function CreateStockBOMWizard({
 
                   <Button type="submit" className="w-full" data-testid="button-add-item">
                     <Plus className="mr-2 h-4 w-4" />
-                    Add {itemType === 'labor' ? 'Labor' : 'Material'}
+                    Add {itemType === 'labor' ? 'Labor' : 'Part'}
                   </Button>
                 </form>
               </Form>
@@ -2404,7 +2505,7 @@ function CreateStockBOMWizard({
                         <TableRow key={index} data-testid={`row-item-${index}`}>
                           <TableCell>
                             <Badge variant={item.itemType === 'labor' ? 'secondary' : 'outline'}>
-                              {item.itemType === 'labor' ? '⚙️ Labor' : '📦 Material'}
+                              {item.itemType === 'labor' ? '⚙️ Labor' : '📦 Part'}
                             </Badge>
                           </TableCell>
                           <TableCell className="font-medium">{item.partName}</TableCell>
@@ -2453,7 +2554,7 @@ function CreateStockBOMWizard({
   );
 }
 
-// Edit Stock BOM Dialog
+// Edit Stock BOM Dialog (with item management)
 function EditStockBOMDialog({
   open,
   onOpenChange,
@@ -2467,7 +2568,32 @@ function EditStockBOMDialog({
   onSubmit: (data: any) => void;
   isPending: boolean;
 }) {
-  const form = useForm({
+  const { toast } = useToast();
+  const [itemType, setItemType] = useState<'material' | 'labor'>('material');
+  const [partSearchOpen, setPartSearchOpen] = useState(false);
+  const [partSearchValue, setPartSearchValue] = useState('');
+  const [editingItems, setEditingItems] = useState<any[]>([]);
+
+  // Fetch inventory items for part selection
+  const { data: inventoryItems = [] } = useQuery<any[]>({
+    queryKey: ['/api/inventory/items'],
+  });
+
+  // Fetch BOM details with items when dialog opens
+  const { data: bomDetails } = useQuery({
+    queryKey: ['/api/robust-boms/stock-boms', bom.id],
+    queryFn: () => apiRequest(`/api/robust-boms/stock-boms/${bom.id}`),
+    enabled: open && !!bom.id,
+  });
+
+  // Initialize editing items when bomDetails loads
+  useEffect(() => {
+    if (bomDetails?.items) {
+      setEditingItems(bomDetails.items.map((item: any) => ({ ...item, isExisting: true })));
+    }
+  }, [bomDetails]);
+
+  const metadataForm = useForm({
     resolver: zodResolver(
       z.object({
         modelName: z.string().min(1, 'Model name is required'),
@@ -2484,80 +2610,416 @@ function EditStockBOMDialog({
     },
   });
 
+  const itemForm = useForm({
+    resolver: zodResolver(
+      z.object({
+        partName: z.string().min(1, 'Part name is required'),
+        quantity: z.number().min(0.001, 'Quantity must be greater than 0'),
+        itemType: z.enum(['material', 'labor']),
+        isOptional: z.boolean().default(false),
+        laborHours: z.number().min(0).optional().nullable(),
+        hourlyRate: z.number().min(0).optional().nullable(),
+      })
+    ),
+    defaultValues: {
+      partName: '',
+      quantity: 1,
+      itemType: 'material' as const,
+      isOptional: false,
+      laborHours: null,
+      hourlyRate: null,
+    },
+  });
+
+  const handleAddItem = (data: any) => {
+    setEditingItems([...editingItems, { ...data, isExisting: false }]);
+    itemForm.reset({
+      partName: '',
+      quantity: 1,
+      itemType: 'material' as const,
+      isOptional: false,
+      laborHours: null,
+      hourlyRate: null,
+    });
+    toast({ title: 'Item added', description: 'Item added to BOM' });
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setEditingItems(editingItems.filter((_, i) => i !== index));
+  };
+
+  const handleSaveAll = (metadataData: any) => {
+    // Combine metadata and items
+    const completeData = {
+      ...metadataData,
+      items: editingItems,
+    };
+    onSubmit(completeData);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Stock BOM</DialogTitle>
           <DialogDescription>
-            Update the Bill of Materials details
+            Update BOM metadata and manage parts and labor
           </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="modelName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Model Name</FormLabel>
-                  <FormControl>
-                    <Input {...field} disabled={isPending} data-testid="input-edit-model-name" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="sku"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>SKU (Optional)</FormLabel>
-                  <FormControl>
-                    <Input {...field} disabled={isPending} data-testid="input-edit-sku" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="revision"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Revision</FormLabel>
-                  <FormControl>
-                    <Input {...field} disabled={isPending} data-testid="input-edit-revision" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description (Optional)</FormLabel>
-                  <FormControl>
-                    <Textarea {...field} disabled={isPending} data-testid="input-edit-description" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending} data-testid="button-cancel-edit">
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isPending} data-testid="button-submit-edit">
-                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isPending ? 'Updating...' : 'Update BOM'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+
+        <div className="space-y-6">
+          {/* Metadata Section */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <h3 className="font-semibold text-lg">BOM Metadata</h3>
+            <Form {...metadataForm}>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={metadataForm.control}
+                  name="modelName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Model Name *</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-edit-model-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={metadataForm.control}
+                  name="sku"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>SKU</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-edit-sku" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={metadataForm.control}
+                  name="revision"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Revision</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-edit-revision" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={metadataForm.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea {...field} data-testid="input-edit-description" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </Form>
+          </div>
+
+          <Separator />
+
+          {/* Items Section */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-lg">BOM Items ({editingItems.length})</h3>
+            
+            {/* Add Item Form */}
+            <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold">Add Item</h4>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={itemType === 'material' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      setItemType('material');
+                      (itemForm.setValue as any)('itemType', 'material');
+                    }}
+                    data-testid="button-type-part-edit"
+                  >
+                    <Package className="h-4 w-4 mr-2" />
+                    Part
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={itemType === 'labor' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      setItemType('labor');
+                      (itemForm.setValue as any)('itemType', 'labor');
+                    }}
+                    data-testid="button-type-labor-edit"
+                  >
+                    <Power className="h-4 w-4 mr-2" />
+                    Labor
+                  </Button>
+                </div>
+              </div>
+
+              <Form {...itemForm}>
+                <form onSubmit={itemForm.handleSubmit(handleAddItem)} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {itemType === 'material' ? (
+                      <FormField
+                        control={itemForm.control}
+                        name="partName"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                            <FormLabel>Inventory Part *</FormLabel>
+                            <Popover open={partSearchOpen} onOpenChange={setPartSearchOpen}>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    className={cn(
+                                      "w-full justify-between",
+                                      !field.value && "text-muted-foreground"
+                                    )}
+                                    data-testid="button-select-part-edit"
+                                  >
+                                    {field.value || "Select inventory part..."}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                  </Button>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[400px] p-0">
+                                <Command>
+                                  <CommandInput 
+                                    placeholder="Search parts..." 
+                                    value={partSearchValue}
+                                    onValueChange={setPartSearchValue}
+                                  />
+                                  <CommandList>
+                                    <CommandEmpty>No parts found.</CommandEmpty>
+                                    <CommandGroup>
+                                      {inventoryItems
+                                        .filter((item: any) => {
+                                          if (!partSearchValue) return true;
+                                          const search = partSearchValue.toLowerCase();
+                                          return (
+                                            item.agPartNumber?.toLowerCase().includes(search) ||
+                                            item.name?.toLowerCase().includes(search) ||
+                                            item.sku?.toLowerCase().includes(search)
+                                          );
+                                        })
+                                        .slice(0, 50)
+                                        .map((item: any) => (
+                                          <CommandItem
+                                            key={item.id}
+                                            value={`${item.agPartNumber} - ${item.name}`}
+                                            onSelect={() => {
+                                              field.onChange(`${item.agPartNumber} - ${item.name}`);
+                                              setPartSearchOpen(false);
+                                              setPartSearchValue('');
+                                            }}
+                                          >
+                                            <Check
+                                              className={cn(
+                                                "mr-2 h-4 w-4",
+                                                field.value === `${item.agPartNumber} - ${item.name}` ? "opacity-100" : "opacity-0"
+                                              )}
+                                            />
+                                            <div className="flex flex-col">
+                                              <span className="font-medium">{item.agPartNumber}</span>
+                                              <span className="text-sm text-muted-foreground">{item.name}</span>
+                                            </div>
+                                          </CommandItem>
+                                        ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : (
+                      <FormField
+                        control={itemForm.control}
+                        name="partName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Operation Name *</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Layup Labor" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    <FormField
+                      control={itemForm.control}
+                      name="quantity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Quantity *</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.001"
+                              {...field}
+                              onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {itemType === 'labor' && (
+                      <>
+                        <FormField
+                          control={itemForm.control}
+                          name="laborHours"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Labor Hours *</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="0.25"
+                                  {...field}
+                                  onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                                  value={field.value || ''}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={itemForm.control}
+                          name="hourlyRate"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Hourly Rate ($) *</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  {...field}
+                                  onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                                  value={field.value || ''}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </>
+                    )}
+
+                    <FormField
+                      control={itemForm.control}
+                      name="isOptional"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel>Optional Item</FormLabel>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <Button type="submit" className="w-full">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add {itemType === 'labor' ? 'Labor' : 'Part'}
+                  </Button>
+                </form>
+              </Form>
+            </div>
+
+            {/* Items List */}
+            {editingItems.length === 0 ? (
+              <div className="border rounded-lg p-8 text-center text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>No items in this BOM yet. Add parts or labor above.</p>
+              </div>
+            ) : (
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Qty</TableHead>
+                      <TableHead>Labor Hours</TableHead>
+                      <TableHead>Hourly Rate</TableHead>
+                      <TableHead>Optional</TableHead>
+                      <TableHead className="w-[80px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {editingItems.map((item, index) => (
+                      <TableRow key={index}>
+                        <TableCell>
+                          <Badge variant={item.itemType === 'labor' ? 'secondary' : 'outline'}>
+                            {item.itemType === 'labor' ? '⚙️ Labor' : '📦 Part'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">{item.partName}</TableCell>
+                        <TableCell>{item.quantity}</TableCell>
+                        <TableCell>{item.laborHours || '-'}</TableCell>
+                        <TableCell>{item.hourlyRate ? `$${item.hourlyRate}` : '-'}</TableCell>
+                        <TableCell>
+                          {item.isOptional ? <Badge variant="outline">Optional</Badge> : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveItem(index)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={metadataForm.handleSubmit(handleSaveAll)} 
+            disabled={isPending}
+            data-testid="button-save-all"
+          >
+            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isPending ? 'Saving...' : 'Save All Changes'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

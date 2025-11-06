@@ -3677,9 +3677,23 @@ export class DatabaseStorage implements IStorage {
       return;
     }
 
+    // Deduplicate items by AG Part Number (keep last occurrence for each part number)
+    const itemMap = new Map<string, InsertInventoryItem>();
+    for (const item of newItems) {
+      itemMap.set(item.agPartNumber, item);
+    }
+    const uniqueItems = Array.from(itemMap.values());
+    
+    const duplicateCount = newItems.length - uniqueItems.length;
+    if (duplicateCount > 0) {
+      console.log(`⚠️  Found ${duplicateCount} duplicate AG Part Numbers in CSV - using latest values for each`);
+    }
+    
+    console.log(`📦 Processing ${uniqueItems.length} unique items...`);
+
     // Upsert in batches of 100 to avoid query size limits
-    for (let i = 0; i < newItems.length; i += 100) {
-      const batch = newItems.slice(i, i + 100);
+    for (let i = 0; i < uniqueItems.length; i += 100) {
+      const batch = uniqueItems.slice(i, i + 100);
       
       // Use PostgreSQL's ON CONFLICT to upsert (insert or update)
       await db
@@ -3709,7 +3723,7 @@ export class DatabaseStorage implements IStorage {
       console.log(`    ✓ Processed batch ${Math.floor(i / 100) + 1} (${batch.length} items)`);
     }
     
-    console.log(`✅ Storage: Complete - ${newItems.length} items upserted successfully`);
+    console.log(`✅ Storage: Complete - ${uniqueItems.length} unique items upserted successfully`);
   }
 
   // Inventory Scans CRUD

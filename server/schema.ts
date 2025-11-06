@@ -517,6 +517,10 @@ export const inventoryItems = pgTable('inventory_items', {
   utilizedInServices: boolean('utilized_in_services').default(false), // Used in Services
   type: text('type'), // Type: Purchased or Manufactured
   vendorId: integer('vendor_id').references(() => vendors.id), // Primary vendor for this part
+  // UOM Conversion for MRP calculations
+  purchaseUom: text('purchase_uom'), // Unit of measure for purchasing (e.g., "gallon", "box", "case")
+  usageUom: text('usage_uom'), // Unit of measure for BOM usage (e.g., "oz", "each", "gram")
+  conversionFactor: real('conversion_factor').default(1), // How many usage units per purchase unit (e.g., 128 if gallon->oz)
 });
 
 // Item Groups for inventory categorization
@@ -3794,7 +3798,6 @@ export const bomLines = pgTable('bom_lines', {
   childPartAgNumber: text('child_part_ag_number').notNull().references(() => inventoryItems.agPartNumber, { onDelete: 'restrict' }),
   qtyPer: numeric('qty_per', { precision: 18, scale: 6 }).notNull().default('1'),
   scrapPct: numeric('scrap_pct', { precision: 6, scale: 3 }).notNull().default('0'),
-  uom: text('uom').notNull().default('EA'),
   reference: text('reference').default(''),
   operationSeq: integer('operation_seq').default(10),
   notes: text('notes').default(''),

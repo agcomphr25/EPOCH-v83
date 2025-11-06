@@ -31,6 +31,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
+import InventoryItemCostHistory from './InventoryItemCostHistory';
 
 interface InventoryFormData {
   agPartNumber: string;
@@ -1489,7 +1490,7 @@ export default function InventoryItemsCard() {
           }
         }}
       >
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Inventory Item</DialogTitle>
           </DialogHeader>
@@ -1509,6 +1510,16 @@ export default function InventoryItemsCard() {
             }}
             vendors={vendors}
           />
+          {editingItem?.agPartNumber && (
+            <div className="mt-6 border-t pt-6">
+              <InventoryItemCostHistory 
+                agPartNumber={editingItem.agPartNumber}
+                currentCost={editingItem.latestCost || undefined}
+                purchaseUnit={editingItem.purchaseUnit || undefined}
+                usageUnit={editingItem.usageUnit || undefined}
+              />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

@@ -1435,6 +1435,7 @@ export interface IStorage {
     notes?: string;
     createdBy?: number;
   }): Promise<any>;
+  getInventoryItemCostHistory(agPartNumber: string): Promise<any[]>;
 
   // Vendor PO Settings
   getVendorPOSettings(): Promise<any | undefined>;
@@ -6129,6 +6130,47 @@ export class DatabaseStorage implements IStorage {
         },
       };
     });
+  }
+
+  // Get cost history for an inventory item by AG Part Number
+  async getInventoryItemCostHistory(agPartNumber: string): Promise<any[]> {
+    // First get the inventory item to get its ID
+    const [inventoryItem] = await db
+      .select({
+        id: inventoryItems.id,
+        purchaseUnit: inventoryItems.purchaseUnit,
+        usageUnit: inventoryItems.usageUnit,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.agPartNumber, agPartNumber));
+
+    if (!inventoryItem) {
+      return [];
+    }
+
+    // Get cost history with vendor names
+    const history = await db
+      .select({
+        id: inventoryItemCostHistory.id,
+        inventoryItemId: inventoryItemCostHistory.inventoryItemId,
+        vendorId: inventoryItemCostHistory.vendorId,
+        vendorName: vendors.name,
+        receivedDate: inventoryItemCostHistory.receivedDate,
+        purchaseUnitCost: inventoryItemCostHistory.purchaseUnitCost,
+        usageUnitCost: inventoryItemCostHistory.usageUnitCost,
+        currency: inventoryItemCostHistory.currency,
+        poLineItemId: inventoryItemCostHistory.poLineItemId,
+        notes: inventoryItemCostHistory.notes,
+        createdAt: inventoryItemCostHistory.createdAt,
+        purchaseUnit: inventoryItem.purchaseUnit,
+        usageUnit: inventoryItem.usageUnit,
+      })
+      .from(inventoryItemCostHistory)
+      .leftJoin(vendors, eq(inventoryItemCostHistory.vendorId, vendors.id))
+      .where(eq(inventoryItemCostHistory.inventoryItemId, inventoryItem.id))
+      .orderBy(desc(inventoryItemCostHistory.receivedDate));
+
+    return history;
   }
 
   // Vendor PO Settings

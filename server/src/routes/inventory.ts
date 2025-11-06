@@ -164,6 +164,18 @@ router.delete('/items/:id', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/inventory/items/:agPartNumber/cost-history - Get cost history for an inventory item
+router.get('/items/:agPartNumber/cost-history', async (req: Request, res: Response) => {
+  try {
+    const { agPartNumber } = req.params;
+    const costHistory = await storage.getInventoryItemCostHistory(agPartNumber);
+    res.json(costHistory);
+  } catch (error) {
+    console.error('Get cost history error:', error);
+    res.status(500).json({ error: 'Failed to retrieve cost history' });
+  }
+});
+
 // Bulk update utilized fields for multiple items
 // REPLACEMENT operation: Sets ALL selected items to have the EXACT same utilization flags
 // as specified in the request. Frontend sends all 5 fields with true/false values.

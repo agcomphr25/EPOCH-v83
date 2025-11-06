@@ -185,13 +185,21 @@ export function OrderTooltip({
                   </Badge>
                 )}
                 {isRepair && (
-                  <Badge 
-                    className="bg-blue-500 text-white flex items-center gap-1 px-2 py-0.5 font-bold text-xs cursor-help"
-                    title={repairNotes || 'Repair order'}
-                  >
-                    <Wrench className="w-3 h-3" />
-                    REPAIR
-                  </Badge>
+                  <div className="relative group">
+                    <Badge 
+                      className="bg-blue-500 text-white flex items-center gap-1 px-2 py-0.5 font-bold text-xs cursor-help"
+                    >
+                      <Wrench className="w-3 h-3" />
+                      REPAIR
+                    </Badge>
+                    {repairNotes && (
+                      <div className="absolute bottom-full left-0 mb-1 hidden group-hover:block z-50 w-64">
+                        <div className="bg-gray-900 text-white text-sm px-3 py-2 rounded shadow-lg">
+                          {repairNotes}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
               {order.fbOrderNumber && order.fbOrderNumber.trim() !== '' && (

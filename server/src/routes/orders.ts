@@ -369,8 +369,11 @@ router.post('/finalized', async (req: Request, res: Response) => {
   try {
     const orderData = insertAllOrderSchema.parse(req.body);
     
-    // Determine if stock is selected (has modelId)
-    const hasStock: boolean = !!(orderData.modelId && orderData.modelId.trim() !== '');
+    // Determine if stock is selected (has modelId and it's not "no_stock" or similar)
+    // Normalize the modelId for checking (trim whitespace and convert to lowercase)
+    const normalizedModelId = orderData.modelId?.trim().toLowerCase() || '';
+    const noStockIdentifiers = ['', 'no_stock', 'no stock', 'none'];
+    const hasStock: boolean = !noStockIdentifiers.includes(normalizedModelId);
     
     // If no stock, create as FINALIZED and skip signature requirement
     // If has stock, create as PENDING_SIGNATURE and require customer confirmation

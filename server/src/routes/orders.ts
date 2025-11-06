@@ -364,19 +364,30 @@ router.get('/draft/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Create order with PENDING_SIGNATURE status and send follow-up email for customer confirmation
+// Create order - with or without signature requirement based on whether stock is selected
 router.post('/finalized', async (req: Request, res: Response) => {
   try {
     const orderData = insertAllOrderSchema.parse(req.body);
     
-    // Create with PENDING_SIGNATURE status - order will stay here until customer signs
+    // Determine if stock is selected (has modelId)
+    const hasStock: boolean = !!(orderData.modelId && orderData.modelId.trim() !== '');
+    
+    // If no stock, create as FINALIZED and skip signature requirement
+    // If has stock, create as PENDING_SIGNATURE and require customer confirmation
+    const orderStatus = hasStock ? 'PENDING_SIGNATURE' : 'FINALIZED';
+    const orderDepartment = hasStock ? 'Awaiting Customer Signature' : 'Order Entry';
+    
     const order = await storage.createFinalizedOrder({
       ...orderData,
-      status: 'PENDING_SIGNATURE',
-      currentDepartment: 'Awaiting Customer Signature'
+      status: orderStatus,
+      currentDepartment: orderDepartment
     });
     
-    console.log(`📧 Order ${order.orderId} created with PENDING_SIGNATURE status - sending confirmation email to customer...`);
+    if (hasStock) {
+      console.log(`📧 Order ${order.orderId} created with PENDING_SIGNATURE status - sending confirmation email to customer...`);
+    } else {
+      console.log(`📧 Order ${order.orderId} created as FINALIZED (no stock) - sending thank you email to customer...`);
+    }
     
     // Automatically create followup order and send email
     try {
@@ -384,22 +395,20 @@ router.post('/finalized', async (req: Request, res: Response) => {
       const { nanoid } = await import('nanoid');
       const { generateSalesOrderPDF } = await import('../../utils/pdf/salesOrderPdf');
       const { sendFollowupOrderEmail } = await import('../../utils/followupOrderEmail');
+      const { sendThankYouOrderEmail } = await import('../../utils/thankYouOrderEmail');
       const fs = await import('fs');
       const path = await import('path');
       
       // Get customer details
       const customer = await storage.getCustomerById(orderData.customerId || '');
       if (!customer || !customer.email) {
-        console.warn(`⚠️  No email found for customer ${orderData.customerId} - skipping follow-up email`);
+        console.warn(`⚠️  No email found for customer ${orderData.customerId} - skipping email`);
         return res.status(201).json(order);
       }
       
       // Get customer address
       const addresses = await storage.getCustomerAddresses(String(customer.id));
       const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
-      
-      // Generate unique signature token
-      const signatureToken = nanoid(32);
       
       // Get features and stock models
       const allFeatures = await storage.getAllFeatures();
@@ -516,67 +525,89 @@ router.post('/finalized', async (req: Request, res: Response) => {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }
       
-      const pdfBuffer = await generateSalesOrderPDF(pdfOrderData, true);
+      const pdfBuffer = await generateSalesOrderPDF(pdfOrderData, hasStock);
       const pdfFilename = `sales_order_${order.orderId}_${Date.now()}.pdf`;
       const pdfPath = path.join(uploadsDir, pdfFilename);
       fs.writeFileSync(pdfPath, pdfBuffer);
       
-      // Create order summary for email
-      const orderSummary = {
-        orderId: order.orderId,
-        orderDate: order.orderDate,
-        dueDate: order.dueDate,
-        customerPO: order.customerPO,
-        modelId: order.modelId,
-        handedness: order.handedness,
-        features: order.features,
-        notes: order.notes,
-        shipping: order.shipping,
-      };
-      
-      // Create followup order record
-      const followupOrder = await storage.createFollowupOrder({
-        orderId: order.orderId,
-        customerId: order.customerId || '',
-        customerEmail: customer.email,
-        signatureToken,
-        pdfGenerated: true,
-        pdfPath,
-        pdfGeneratedAt: new Date(),
-        orderSummary,
-      });
-      
-      console.log(`✅ Follow-up order created for ${order.orderId}, sending email...`);
-      
-      // Prepare email data
-      const baseUrl = process.env.REPLIT_DOMAINS 
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-        : 'http://localhost:5000';
-      
-      const emailData = {
-        orderId: order.orderId,
-        customerName: customer.name,
-        customerEmail: customer.email,
-        customerPO: order.customerPO || '',
-        modelId: stockModel?.displayName || order.modelId || 'Custom',
-        orderDate: new Date(order.orderDate).toISOString().split('T')[0],
-        dueDate: new Date(order.dueDate).toISOString().split('T')[0],
-        signatureLink: `${baseUrl}/sign-order/${signatureToken}`,
-        features: order.features as Record<string, any> || undefined,
-      };
-      
-      // Send email
-      await sendFollowupOrderEmail(emailData, pdfPath);
-      
-      // Update followup order to mark email as sent
-      await storage.updateFollowupOrder(followupOrder.id, {
-        emailSent: true,
-        emailSentAt: new Date(),
-      });
-      
-      console.log(`📧 Confirmation email sent for order ${order.orderId}`);
+      if (hasStock) {
+        // Order with stock - require signature
+        // Generate unique signature token
+        const signatureToken = nanoid(32);
+        
+        // Create order summary for email
+        const orderSummary = {
+          orderId: order.orderId,
+          orderDate: order.orderDate,
+          dueDate: order.dueDate,
+          customerPO: order.customerPO,
+          modelId: order.modelId,
+          handedness: order.handedness,
+          features: order.features,
+          notes: order.notes,
+          shipping: order.shipping,
+        };
+        
+        // Create followup order record
+        const followupOrder = await storage.createFollowupOrder({
+          orderId: order.orderId,
+          customerId: order.customerId || '',
+          customerEmail: customer.email,
+          signatureToken,
+          pdfGenerated: true,
+          pdfPath,
+          pdfGeneratedAt: new Date(),
+          orderSummary,
+        });
+        
+        console.log(`✅ Follow-up order created for ${order.orderId}, sending signature email...`);
+        
+        // Prepare email data
+        const baseUrl = process.env.REPLIT_DOMAINS 
+          ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
+          : 'http://localhost:5000';
+        
+        const emailData = {
+          orderId: order.orderId,
+          customerName: customer.name,
+          customerEmail: customer.email,
+          customerPO: order.customerPO || '',
+          modelId: stockModel?.displayName || order.modelId || 'Custom',
+          orderDate: new Date(order.orderDate).toISOString().split('T')[0],
+          dueDate: new Date(order.dueDate).toISOString().split('T')[0],
+          signatureLink: `${baseUrl}/sign-order/${signatureToken}`,
+          features: order.features as Record<string, any> || undefined,
+        };
+        
+        // Send signature email
+        await sendFollowupOrderEmail(emailData, pdfPath);
+        
+        // Update followup order to mark email as sent
+        await storage.updateFollowupOrder(followupOrder.id, {
+          emailSent: true,
+          emailSentAt: new Date(),
+        });
+        
+        console.log(`📧 Signature email sent for order ${order.orderId}`);
+      } else {
+        // Order without stock - send thank you email (no signature required)
+        const emailData = {
+          orderId: order.orderId,
+          customerName: customer.name,
+          customerEmail: customer.email,
+          customerPO: order.customerPO || '',
+          orderDate: new Date(order.orderDate).toISOString().split('T')[0],
+          dueDate: new Date(order.dueDate).toISOString().split('T')[0],
+          notes: order.notes || '',
+        };
+        
+        // Send thank you email
+        await sendThankYouOrderEmail(emailData, pdfPath);
+        
+        console.log(`📧 Thank you email sent for order ${order.orderId} (no signature required)`);
+      }
     } catch (emailError) {
-      console.error('Error sending follow-up email:', emailError);
+      console.error('Error sending email:', emailError);
       // Don't fail the order creation if email fails
     }
     

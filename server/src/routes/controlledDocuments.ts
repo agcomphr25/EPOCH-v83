@@ -513,6 +513,12 @@ router.post('/import/csv', requireAdminOrOwner, csvUpload.single('file'), async 
 
     const rows = parseResult.data as any[];
     
+    // Debug: Log the columns we found
+    if (rows.length > 0) {
+      console.log('CSV Columns found:', Object.keys(rows[0]));
+      console.log('First row sample:', rows[0]);
+    }
+    
     // Skip the first row if it's a title row
     const dataRows = rows[0]?.TITLE?.includes('QMS MASTER LIST') ? rows.slice(1) : rows;
     
@@ -624,12 +630,20 @@ router.post('/import/csv', requireAdminOrOwner, csvUpload.single('file'), async 
 
         importResults.success++;
       } catch (error: any) {
-        importResults.errors.push(`Row ${i + 2}: ${error.message}`);
+        const errorMsg = `Row ${i + 2}: ${error.message}`;
+        console.error('CSV import error:', errorMsg);
+        importResults.errors.push(errorMsg);
       }
     }
 
-    // Delete the uploaded CSV file
-    await fs.unlink(req.file.path).catch(console.error);
+    // Log final results
+    console.log('CSV Import Results:', {
+      total: dataRows.length,
+      success: importResults.success,
+      skipped: importResults.skipped,
+      errors: importResults.errors.length,
+      firstFewErrors: importResults.errors.slice(0, 5)
+    });
 
     res.json({
       message: 'CSV import completed',

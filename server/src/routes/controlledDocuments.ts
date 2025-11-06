@@ -201,6 +201,13 @@ router.put('/:id', requireAdminOrOwner, upload.single('file'), async (req: Reque
     let filePath = existingDoc.filePath;
 
     if (createNewVersion === 'true' || createNewVersion === true) {
+      // Validate that file is uploaded when creating new version
+      if (!req.file) {
+        return res.status(400).json({ 
+          error: 'File upload is required when creating a new version' 
+        });
+      }
+
       // Calculate new version number
       const [major, minor] = existingDoc.currentVersion.split('.').map(Number);
       if (versionType === 'major') {
@@ -209,10 +216,8 @@ router.put('/:id', requireAdminOrOwner, upload.single('file'), async (req: Reque
         newVersion = `${major}.${minor + 1}`;
       }
 
-      // Use new file if uploaded, otherwise keep current
-      if (req.file) {
-        filePath = `/assets/documents/${req.file.filename}`;
-      }
+      // Use the newly uploaded file
+      filePath = `/assets/documents/${req.file.filename}`;
 
       // Calculate new expiration date (1 year from now)
       const now = new Date();

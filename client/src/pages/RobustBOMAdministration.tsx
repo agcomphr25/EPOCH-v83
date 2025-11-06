@@ -952,7 +952,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                                         </TableCell>
                                         <TableCell>{line.quantityPer}</TableCell>
                                         <TableCell>{line.scrapPercent || '-'}</TableCell>
-                                        <TableCell>{parts.find((p: any) => p.agPartNumber === line.childPartAgNumber)?.usageUom || 'EA'}</TableCell>
+                                        <TableCell>{parts.find((p: any) => p.agPartNumber === line.childPartAgNumber)?.usageUnit || 'EA'}</TableCell>
                                         <TableCell>{line.referenceDesignator || '-'}</TableCell>
                                         <TableCell>{line.operationSequence || '-'}</TableCell>
                                         <TableCell>
@@ -1355,7 +1355,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                                                 />
                                               </TableCell>
                                               <TableCell>
-                                                {parts.find((p: any) => p.agPartNumber === line.childPartAgNumber)?.usageUom || 'EA'}
+                                                {parts.find((p: any) => p.agPartNumber === line.childPartAgNumber)?.usageUnit || 'EA'}
                                               </TableCell>
                                               <TableCell>
                                                 <Input

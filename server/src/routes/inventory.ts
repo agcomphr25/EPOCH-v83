@@ -1110,11 +1110,13 @@ router.get('/items-groups-map', async (req: Request, res: Response) => {
 // ========================================
 
 // GET /api/inventory/material-forecast - Calculate material requirements from stock orders with BOMs
+// Now includes UOM conversion: calculates both usage requirements (for manufacturing) 
+// and purchase requirements (for procurement) using conversion factors
 router.get('/material-forecast', async (req: Request, res: Response) => {
   try {
     // Import required tables dynamically to avoid circular dependencies
     const { db } = await import('../../db');
-    const { allOrders, bomDefinitions, bomItems } = await import('../../schema');
+    const { allOrders, bomDefinitions, bomItems, inventoryItems } = await import('../../schema');
     const { isNotNull, eq, and } = await import('drizzle-orm');
     const { buildStockBOMTree } = await import('../db/queries/bom');
 
@@ -1131,8 +1133,36 @@ router.get('/material-forecast', async (req: Request, res: Response) => {
 
     console.log(`📊 Found ${ordersWithBoms.length} orders with Stock BOMs for material forecast`);
 
+    // Preload ALL inventory items to avoid N+1 queries (critical performance optimization)
+    const allInventoryItems = await db
+      .select({
+        name: inventoryItems.name,
+        agPartNumber: inventoryItems.agPartNumber,
+        usageUnit: inventoryItems.usageUnit,
+        purchaseUnit: inventoryItems.purchaseUnit,
+        usageQuantityPerUnit: inventoryItems.usageQuantityPerUnit,
+      })
+      .from(inventoryItems);
+
+    // Build lookup map by part name for O(1) access
+    const inventoryLookup = new Map(
+      allInventoryItems.map(item => [item.name, item])
+    );
+
+    console.log(`📦 Preloaded ${allInventoryItems.length} inventory items for UOM lookup`);
+
     // Track material demand by part name
-    const materialDemand: Record<string, { partName: string; totalQty: number; orders: string[]; itemType: string }> = {};
+    const materialDemand: Record<string, { 
+      partName: string; 
+      agPartNumber: string | null;
+      usageQty: number; // Quantity needed for manufacturing (in usageUom)
+      purchaseQty: number; // Quantity to purchase (in purchaseUom, after conversion)
+      usageUom: string;
+      purchaseUom: string;
+      conversionFactor: number;
+      orders: string[]; 
+      itemType: string;
+    }> = {};
 
     // Process each order
     for (const order of ordersWithBoms) {
@@ -1150,15 +1180,40 @@ router.get('/material-forecast', async (req: Request, res: Response) => {
 
           const key = item.partName;
           if (!materialDemand[key]) {
+            // Look up the inventory item from preloaded map (O(1) lookup)
+            const itemData = inventoryLookup.get(item.partName);
+            
+            const usageUom = itemData?.usageUnit || 'EA';
+            const purchaseUom = itemData?.purchaseUnit || 'EA';
+            const conversionFactor = itemData?.usageQuantityPerUnit || 1;
+
+            // Validate conversion factor to prevent divide-by-zero
+            if (conversionFactor <= 0) {
+              console.warn(`⚠️ Invalid conversion factor for ${item.partName}: ${conversionFactor}, defaulting to 1`);
+            }
+
             materialDemand[key] = {
               partName: item.partName,
-              totalQty: 0,
+              agPartNumber: itemData?.agPartNumber || null,
+              usageQty: 0,
+              purchaseQty: 0,
+              usageUom,
+              purchaseUom,
+              conversionFactor: conversionFactor > 0 ? conversionFactor : 1,
               orders: [],
               itemType: item.itemType,
             };
           }
 
-          materialDemand[key].totalQty += item.quantity;
+          // Add to usage quantity (this is in usageUom)
+          materialDemand[key].usageQty += item.quantity;
+          
+          // Calculate purchase quantity using validated conversion factor
+          // purchaseQty = usageQty / conversionFactor
+          // Example: 256 oz (usage) / 128 (oz per gallon) = 2 gallons (purchase)
+          const safeFactor = materialDemand[key].conversionFactor > 0 ? materialDemand[key].conversionFactor : 1;
+          materialDemand[key].purchaseQty = materialDemand[key].usageQty / safeFactor;
+          
           if (!materialDemand[key].orders.includes(order.orderId)) {
             materialDemand[key].orders.push(order.orderId);
           }
@@ -1168,10 +1223,16 @@ router.get('/material-forecast', async (req: Request, res: Response) => {
       }
     }
 
-    // Convert to array and sort by total quantity
-    const forecast = Object.values(materialDemand).sort((a, b) => b.totalQty - a.totalQty);
+    // Convert to array and sort by purchase quantity (what we need to buy)
+    const forecast = Object.values(materialDemand).sort((a, b) => b.purchaseQty - a.purchaseQty);
 
     console.log(`✅ Material forecast calculated: ${forecast.length} unique materials required`);
+    console.log(`📦 Example conversions:`, forecast.slice(0, 3).map(f => ({
+      part: f.partName,
+      usage: `${f.usageQty.toFixed(2)} ${f.usageUom}`,
+      purchase: `${f.purchaseQty.toFixed(2)} ${f.purchaseUom}`,
+      factor: f.conversionFactor
+    })));
 
     res.json({
       ordersProcessed: ordersWithBoms.length,

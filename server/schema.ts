@@ -517,10 +517,6 @@ export const inventoryItems = pgTable('inventory_items', {
   utilizedInServices: boolean('utilized_in_services').default(false), // Used in Services
   type: text('type'), // Type: Purchased or Manufactured
   vendorId: integer('vendor_id').references(() => vendors.id), // Primary vendor for this part
-  // UOM Conversion for MRP calculations
-  purchaseUom: text('purchase_uom'), // Unit of measure for purchasing (e.g., "gallon", "box", "case")
-  usageUom: text('usage_uom'), // Unit of measure for BOM usage (e.g., "oz", "each", "gram")
-  conversionFactor: real('conversion_factor').default(1), // How many usage units per purchase unit (e.g., 128 if gallon->oz)
 });
 
 // Item Groups for inventory categorization

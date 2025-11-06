@@ -53,10 +53,14 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
     `🌐 API Request to ${url} (timeout: ${timeoutDuration}ms, deployment: ${isDeployment})`
   );
 
-  const defaultHeaders = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
+  // Don't set Content-Type for FormData - browser will set it automatically with correct boundary
+  const isFormData = options.body instanceof FormData;
+  const defaultHeaders: HeadersInit = isFormData
+    ? { ...options.headers }
+    : {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      };
 
   // Add timeout protection
   const controller = new AbortController();
@@ -74,14 +78,19 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
     signal: controller.signal,
   };
 
-  if (
+  // Handle different body types
+  if (isFormData) {
+    // FormData: pass as-is, browser handles everything
+    config.body = options.body;
+  } else if (
     options.body &&
     typeof options.body === 'object' &&
-    !(options.body instanceof FormData) &&
     !(options.headers as any)?.['Content-Type']?.includes('multipart/form-data')
   ) {
+    // JSON objects: stringify
     config.body = JSON.stringify(options.body);
   } else if (typeof options.body === 'string') {
+    // String body: pass as-is
     config.body = options.body;
   }
 

@@ -43,6 +43,7 @@ interface InventoryFormData {
   secondarySupplierPartNumber: string;
   costPer: string;
   purchaseUnit: string;
+  purchaseUnitLabel: string;
   usageQuantityPerUnit: string;
   usageUnit: string;
   cogsPerUnit: string;
@@ -247,10 +248,22 @@ const InventoryForm = ({
             name="purchaseUnit"
             value={formData.purchaseUnit}
             onChange={onChange}
-            placeholder="80 lb box"
+            placeholder="BOX"
             data-testid="input-purchaseUnit"
           />
-          <p className="text-xs text-gray-500 mt-1">What you're buying (e.g., "80 lb box", "20/carton")</p>
+          <p className="text-xs text-gray-500 mt-1">Machine-friendly unit (e.g., "BOX", "GAL", "EA")</p>
+        </div>
+        <div>
+          <Label htmlFor="purchaseUnitLabel">Purchase Unit Label</Label>
+          <Input
+            id="purchaseUnitLabel"
+            name="purchaseUnitLabel"
+            value={formData.purchaseUnitLabel}
+            onChange={onChange}
+            placeholder="80 lb box"
+            data-testid="input-purchaseUnitLabel"
+          />
+          <p className="text-xs text-gray-500 mt-1">Human-readable description (e.g., "80 lb box", "5 gallon pail")</p>
         </div>
         <div>
           <Label htmlFor="usageQuantityPerUnit">Usage Qty per Unit</Label>
@@ -448,6 +461,7 @@ export default function InventoryItemsCard() {
     secondarySupplierPartNumber: '',
     costPer: '',
     purchaseUnit: '',
+    purchaseUnitLabel: '',
     usageQuantityPerUnit: '',
     usageUnit: '',
     cogsPerUnit: '',
@@ -745,6 +759,7 @@ export default function InventoryItemsCard() {
       secondarySupplierPartNumber: '',
       costPer: '',
       purchaseUnit: '',
+      purchaseUnitLabel: '',
       usageQuantityPerUnit: '',
       usageUnit: '',
       cogsPerUnit: '',
@@ -797,6 +812,7 @@ export default function InventoryItemsCard() {
         secondarySupplierPartNumber: formData.secondarySupplierPartNumber || null,
         costPer: formData.costPer ? parseFloat(formData.costPer) : null,
         purchaseUnit: formData.purchaseUnit || null,
+        purchaseUnitLabel: formData.purchaseUnitLabel || null,
         usageQuantityPerUnit: formData.usageQuantityPerUnit ? parseFloat(formData.usageQuantityPerUnit) : null,
         usageUnit: formData.usageUnit || null,
         cogsPerUnit: formData.cogsPerUnit ? parseFloat(formData.cogsPerUnit) : null,
@@ -834,6 +850,7 @@ export default function InventoryItemsCard() {
       secondarySupplierPartNumber: item.secondarySupplierPartNumber || '',
       costPer: item.costPer ? item.costPer.toString() : '',
       purchaseUnit: item.purchaseUnit || '',
+      purchaseUnitLabel: item.purchaseUnitLabel || '',
       usageQuantityPerUnit: item.usageQuantityPerUnit ? item.usageQuantityPerUnit.toString() : '',
       usageUnit: item.usageUnit || '',
       cogsPerUnit: item.cogsPerUnit ? item.cogsPerUnit.toString() : '',

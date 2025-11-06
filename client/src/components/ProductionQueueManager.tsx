@@ -424,6 +424,168 @@ export default function ProductionQueueManager() {
     progressToBarcodeMutation.mutate(Array.from(selectedQueueOrders));
   };
 
+  // Function to print barcode labels for multiple orders
+  const printBarcodeLabelsForOrders = (orders: any[]) => {
+    if (!orders || orders.length === 0) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({
+        title: 'Pop-up Blocked',
+        description: 'Please allow pop-ups to print labels',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Generate HTML for all labels
+    const labelsHTML = orders.map((order) => {
+      const barcode = order.orderId || 'UNKNOWN';
+      const customerName = order.customerName || 'No Customer';
+      const stockModel = order.stockModelId || order.modelId || '';
+      const dueDate = order.dueDate || '';
+
+      return `
+        <div class="avery-label">
+          <div class="label-content">
+            <div class="line1">${barcode}</div>
+            <div class="line2">${customerName}</div>
+            ${stockModel ? `<div class="line3">${stockModel}</div>` : ''}
+            ${dueDate ? `<div class="line4">Due: ${new Date(dueDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}</div>` : ''}
+            <div class="line5">
+              <canvas class="barcode-canvas" data-barcode="${barcode}"></canvas>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Barcode Labels</title>
+          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+          <style>
+            body {
+              margin: 0;
+              padding: 0;
+              font-family: Arial, sans-serif;
+            }
+
+            .avery-label {
+              width: 2.625in;
+              height: 1in;
+              border: 1px solid #ddd;
+              margin: 0;
+              padding: 0.03in;
+              display: inline-block;
+              vertical-align: top;
+              box-sizing: border-box;
+              page-break-inside: avoid;
+              background: white;
+            }
+
+            .label-content {
+              height: 100%;
+              display: flex;
+              flex-direction: column;
+              justify-content: space-between;
+              text-align: center;
+              padding: 2px;
+              box-sizing: border-box;
+            }
+
+            .line1 {
+              font-size: 8pt;
+              font-weight: bold;
+              color: #000;
+              margin-bottom: 2px;
+              text-overflow: ellipsis;
+              overflow: hidden;
+              white-space: nowrap;
+            }
+
+            .line2 {
+              font-size: 6pt;
+              color: #000;
+              margin: 1px 0;
+              text-overflow: ellipsis;
+              overflow: hidden;
+              white-space: nowrap;
+            }
+
+            .line3 {
+              font-size: 6pt;
+              color: #000;
+              margin: 1px 0;
+            }
+
+            .line4 {
+              font-size: 5pt;
+              color: #000;
+              margin: 1px 0;
+            }
+
+            .line5 {
+              text-align: center;
+            }
+
+            .barcode-canvas {
+              max-width: 100%;
+              height: auto;
+            }
+
+            @media print {
+              body {
+                margin: 0;
+                padding: 0;
+              }
+              .avery-label {
+                border: none;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          ${labelsHTML}
+          <script>
+            window.addEventListener('load', function() {
+              const canvases = document.querySelectorAll('.barcode-canvas');
+              canvases.forEach(canvas => {
+                const barcode = canvas.getAttribute('data-barcode');
+                try {
+                  JsBarcode(canvas, barcode, {
+                    format: 'CODE39',
+                    width: 2,
+                    height: 40,
+                    displayValue: false,
+                    fontSize: 10,
+                    textAlign: 'center',
+                    textPosition: 'bottom',
+                    textMargin: 2,
+                    fontOptions: '',
+                    font: 'monospace',
+                    background: '#ffffff',
+                    lineColor: '#000000',
+                    margin: 5,
+                  });
+                } catch (e) {
+                  console.error('Barcode generation error:', e);
+                }
+              });
+              
+              // Auto-print after barcodes are generated
+              setTimeout(() => {
+                window.print();
+              }, 500);
+            });
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   // Handler for progressing P1 PO items to Barcode
   const handleProgressToBarcode = async () => {
     if (selectedPOItems.size === 0) {
@@ -462,13 +624,16 @@ export default function ProductionQueueManager() {
       refetchPOs();
 
       // Print barcode labels for the progressed items
-      // Note: We'll need to fetch the order details from the response to print labels
       if (response.orderIds && response.orderIds.length > 0) {
-        // TODO: Implement batch label printing
-        toast({
-          title: 'Labels Ready',
-          description: 'Opening label print preview...',
-        });
+        // Fetch order details for label printing
+        const orderDetails = await Promise.all(
+          response.orderIds.map((orderId: string) =>
+            apiRequest(`/api/orders/${orderId}`)
+          )
+        );
+
+        // Print labels for all progressed orders
+        printBarcodeLabelsForOrders(orderDetails);
       }
     } catch (error) {
       console.error('Error progressing to Barcode:', error);

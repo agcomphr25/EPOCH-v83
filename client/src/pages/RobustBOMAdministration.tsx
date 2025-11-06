@@ -1820,10 +1820,16 @@ function TreeNode({ node, level, expandedNodes, onToggleExpand }: TreeNodeProps)
 function StockBOMsTab() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [wizardData, setWizardData] = useState<any>({
+    step1: null, // BOM metadata (modelName, SKU, revision, description)
+    step2: [], // BOM items (materials and labor)
+  });
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedBom, setSelectedBom] = useState<any>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [bomItems, setBomItems] = useState<any[]>([]); // For Step 2
 
   // Fetch stock BOMs with harmonized query key
   const { data: stockBoms, isLoading } = useQuery({
@@ -1836,7 +1842,10 @@ function StockBOMsTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/stock-boms'] });
       toast({ title: 'Success', description: 'Stock BOM created successfully' });
-      setIsCreateDialogOpen(false);
+      setIsWizardOpen(false);
+      setWizardStep(1);
+      setWizardData({ step1: null, step2: [] });
+      setBomItems([]);
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to create stock BOM', variant: 'destructive' });
@@ -1881,7 +1890,7 @@ function StockBOMsTab() {
             data-testid="input-search-stock-boms"
           />
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-create-stock-bom">
+        <Button onClick={() => setIsWizardOpen(true)} data-testid="button-create-stock-bom">
           <Plus className="h-4 w-4 mr-2" />
           New Stock BOM
         </Button>
@@ -1973,11 +1982,17 @@ function StockBOMsTab() {
         </CardContent>
       </Card>
 
-      {/* Create Stock BOM Dialog */}
-      <CreateStockBOMDialog
-        open={isCreateDialogOpen}
-        onOpenChange={setIsCreateDialogOpen}
-        onSubmit={(data) => createBomMutation.mutate(data)}
+      {/* Create Stock BOM Wizard */}
+      <CreateStockBOMWizard
+        open={isWizardOpen}
+        onOpenChange={setIsWizardOpen}
+        wizardStep={wizardStep}
+        setWizardStep={setWizardStep}
+        wizardData={wizardData}
+        setWizardData={setWizardData}
+        bomItems={bomItems}
+        setBomItems={setBomItems}
+        onComplete={(data) => createBomMutation.mutate(data)}
         isPending={createBomMutation.isPending}
       />
 
@@ -2004,19 +2019,35 @@ function StockBOMsTab() {
   );
 }
 
-// Create Stock BOM Dialog
-function CreateStockBOMDialog({
+// Create Stock BOM Wizard
+function CreateStockBOMWizard({
   open,
   onOpenChange,
-  onSubmit,
+  wizardStep,
+  setWizardStep,
+  wizardData,
+  setWizardData,
+  bomItems,
+  setBomItems,
+  onComplete,
   isPending,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: any) => void;
+  wizardStep: number;
+  setWizardStep: (step: number) => void;
+  wizardData: any;
+  setWizardData: (data: any) => void;
+  bomItems: any[];
+  setBomItems: (items: any[]) => void;
+  onComplete: (data: any) => void;
   isPending: boolean;
 }) {
-  const form = useForm({
+  const [itemType, setItemType] = useState<'material' | 'labor'>('material');
+  const { toast } = useToast();
+
+  // Step 1: Basic Info Form
+  const basicInfoForm = useForm({
     resolver: zodResolver(
       z.object({
         modelName: z.string().min(1, 'Model name is required'),
@@ -2025,7 +2056,7 @@ function CreateStockBOMDialog({
         description: z.string().optional(),
       })
     ),
-    defaultValues: {
+    defaultValues: wizardData.step1 || {
       modelName: '',
       sku: '',
       revision: 'A',
@@ -2033,80 +2064,390 @@ function CreateStockBOMDialog({
     },
   });
 
+  // Step 2: Add Item Form
+  const itemForm = useForm({
+    resolver: zodResolver(
+      z.object({
+        partName: z.string().min(1, 'Part name is required'),
+        quantity: z.number().min(0.001, 'Quantity must be greater than 0'),
+        itemType: z.enum(['material', 'labor']),
+        isOptional: z.boolean().default(false),
+        laborHours: z.number().min(0).optional().nullable(),
+        hourlyRate: z.number().min(0).optional().nullable(),
+      })
+    ),
+    defaultValues: {
+      partName: '',
+      quantity: 1,
+      itemType: 'material' as const,
+      isOptional: false,
+      laborHours: null,
+      hourlyRate: null,
+    },
+  });
+
+  const handleStep1Next = (data: any) => {
+    setWizardData({ ...wizardData, step1: data });
+    setWizardStep(2);
+  };
+
+  const handleAddItem = (data: any) => {
+    setBomItems([...bomItems, data]);
+    itemForm.reset({
+      partName: '',
+      quantity: 1,
+      itemType: itemType,
+      isOptional: false,
+      laborHours: null,
+      hourlyRate: null,
+    });
+    toast({ title: 'Success', description: 'Item added to BOM' });
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setBomItems(bomItems.filter((_, i) => i !== index));
+  };
+
+  const handleComplete = () => {
+    if (bomItems.length === 0) {
+      toast({ 
+        title: 'Error', 
+        description: 'Please add at least one item to the BOM', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    // Combine step1 data with items
+    const completeData = {
+      ...wizardData.step1,
+      items: bomItems,
+    };
+    onComplete(completeData);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Stock BOM</DialogTitle>
+          <DialogTitle>Create Stock BOM - Step {wizardStep} of 2</DialogTitle>
           <DialogDescription>
-            Create a new Bill of Materials for a stock model
+            {wizardStep === 1 && 'Enter basic information for your stock BOM'}
+            {wizardStep === 2 && 'Add materials and labor items to your BOM'}
           </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="modelName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Model Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="AR-15 Carbon Fiber Stock" {...field} disabled={isPending} data-testid="input-model-name" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+
+        {/* Step 1: Basic Info */}
+        {wizardStep === 1 && (
+          <Form {...basicInfoForm}>
+            <form onSubmit={basicInfoForm.handleSubmit(handleStep1Next)} className="space-y-4">
+              <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
+                <p className="text-sm text-blue-900 dark:text-blue-100">
+                  <strong>Define your stock BOM.</strong> Enter the model name, SKU, and revision information. 
+                  This will create a template for tracking materials and labor costs for stock items.
+                </p>
+              </div>
+
+              <FormField
+                control={basicInfoForm.control}
+                name="modelName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Model Name *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="AR-15 Carbon Fiber Stock" {...field} data-testid="input-model-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={basicInfoForm.control}
+                name="sku"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>SKU (Optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="AR15-CF-KIT" {...field} data-testid="input-sku" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={basicInfoForm.control}
+                name="revision"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Revision</FormLabel>
+                    <FormControl>
+                      <Input placeholder="A" {...field} data-testid="input-revision" />
+                    </FormControl>
+                    <FormDescription>Revision code (e.g., A, B, Rev 1)</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={basicInfoForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Complete kit with all materials and labor" {...field} data-testid="input-description" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
+                  Cancel
+                </Button>
+                <Button type="submit" data-testid="button-next">
+                  Next Step
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        )}
+
+        {/* Step 2: Add Items */}
+        {wizardStep === 2 && (
+          <div className="space-y-6">
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
+              <p className="text-sm text-blue-900 dark:text-blue-100">
+                <strong>Add materials and labor to your BOM.</strong> Include all required and optional components. 
+                For labor items, specify hours and hourly rate.
+              </p>
+            </div>
+
+            {/* Add Item Form */}
+            <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold">Add Item</h4>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={itemType === 'material' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      setItemType('material');
+                      itemForm.setValue('itemType', 'material');
+                    }}
+                    data-testid="button-type-material"
+                  >
+                    <Package className="h-4 w-4 mr-2" />
+                    Material
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={itemType === 'labor' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      setItemType('labor');
+                      itemForm.setValue('itemType', 'labor');
+                    }}
+                    data-testid="button-type-labor"
+                  >
+                    <Power className="h-4 w-4 mr-2" />
+                    Labor
+                  </Button>
+                </div>
+              </div>
+
+              <Form {...itemForm}>
+                <form onSubmit={itemForm.handleSubmit(handleAddItem)} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={itemForm.control}
+                      name="partName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Part/Operation Name *</FormLabel>
+                          <FormControl>
+                            <Input placeholder={itemType === 'labor' ? 'Layup Labor' : 'Carbon Fiber Sheet'} {...field} data-testid="input-part-name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={itemForm.control}
+                      name="quantity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Quantity *</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.001"
+                              {...field}
+                              onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                              data-testid="input-quantity"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {itemType === 'labor' && (
+                      <>
+                        <FormField
+                          control={itemForm.control}
+                          name="laborHours"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Labor Hours *</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="0.25"
+                                  {...field}
+                                  onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                                  value={field.value || ''}
+                                  data-testid="input-labor-hours"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={itemForm.control}
+                          name="hourlyRate"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Hourly Rate ($) *</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  {...field}
+                                  onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                                  value={field.value || ''}
+                                  data-testid="input-hourly-rate"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </>
+                    )}
+
+                    <FormField
+                      control={itemForm.control}
+                      name="isOptional"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-optional"
+                            />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel>Optional Item</FormLabel>
+                            <FormDescription>
+                              Mark if this item is not always required
+                            </FormDescription>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <Button type="submit" className="w-full" data-testid="button-add-item">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add {itemType === 'labor' ? 'Labor' : 'Material'}
+                  </Button>
+                </form>
+              </Form>
+            </div>
+
+            {/* Items List */}
+            <div>
+              <h4 className="font-semibold mb-2">
+                BOM Items ({bomItems.length})
+              </h4>
+              {bomItems.length === 0 ? (
+                <div className="border rounded-lg p-8 text-center text-muted-foreground">
+                  <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p>No items added yet. Add at least one item to complete the BOM.</p>
+                </div>
+              ) : (
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Qty</TableHead>
+                        <TableHead>Labor Hours</TableHead>
+                        <TableHead>Hourly Rate</TableHead>
+                        <TableHead>Optional</TableHead>
+                        <TableHead className="w-[80px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bomItems.map((item, index) => (
+                        <TableRow key={index} data-testid={`row-item-${index}`}>
+                          <TableCell>
+                            <Badge variant={item.itemType === 'labor' ? 'secondary' : 'outline'}>
+                              {item.itemType === 'labor' ? '⚙️ Labor' : '📦 Material'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium">{item.partName}</TableCell>
+                          <TableCell>{item.quantity}</TableCell>
+                          <TableCell>{item.laborHours || '-'}</TableCell>
+                          <TableCell>{item.hourlyRate ? `$${item.hourlyRate}` : '-'}</TableCell>
+                          <TableCell>
+                            {item.isOptional ? <Badge variant="outline">Optional</Badge> : '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveItem(index)}
+                              data-testid={`button-remove-item-${index}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
-            />
-            <FormField
-              control={form.control}
-              name="sku"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>SKU (Optional)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="AR15-CF-KIT" {...field} disabled={isPending} data-testid="input-sku" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="revision"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Revision</FormLabel>
-                  <FormControl>
-                    <Input placeholder="A" {...field} disabled={isPending} data-testid="input-revision" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description (Optional)</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Complete kit with all materials and labor" {...field} disabled={isPending} data-testid="input-description" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            </div>
+
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending} data-testid="button-cancel">
-                Cancel
+              <Button type="button" variant="outline" onClick={() => setWizardStep(1)} data-testid="button-back">
+                Back
               </Button>
-              <Button type="submit" disabled={isPending} data-testid="button-submit">
+              <Button
+                type="button"
+                onClick={handleComplete}
+                disabled={isPending || bomItems.length === 0}
+                data-testid="button-complete"
+              >
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isPending ? 'Creating...' : 'Create BOM'}
+                {isPending ? 'Creating...' : 'Create Stock BOM'}
               </Button>
             </DialogFooter>
-          </form>
-        </Form>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

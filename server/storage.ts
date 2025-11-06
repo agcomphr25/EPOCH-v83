@@ -6047,8 +6047,10 @@ export class DatabaseStorage implements IStorage {
         .select({
           id: inventoryItems.id,
           agPartNumber: inventoryItems.agPartNumber,
-          usageQuantityPerUnit: inventoryItems.usageQuantityPerUnit,
+          vendorUnit: inventoryItems.vendorUnit,
           purchaseUnit: inventoryItems.purchaseUnit,
+          purchaseQuantity: inventoryItems.purchaseQuantity,
+          consumptionRate: inventoryItems.consumptionRate,
           usageUnit: inventoryItems.usageUnit,
         })
         .from(inventoryItems)
@@ -6058,25 +6060,47 @@ export class DatabaseStorage implements IStorage {
         throw new Error(`Inventory item ${poLineItem.agPartNumber} not found`);
       }
 
-      // Require valid conversion factor (no defaults - must be configured)
-      if (!inventoryItem.usageQuantityPerUnit || inventoryItem.usageQuantityPerUnit <= 0) {
+      // Require valid purchase quantity and consumption rate (no defaults - must be configured)
+      if (!inventoryItem.purchaseQuantity || inventoryItem.purchaseQuantity <= 0) {
         throw new Error(
-          `Conversion factor not configured for ${poLineItem.agPartNumber}. Please set usageQuantityPerUnit to a positive value before receiving PO items.`
+          `Purchase quantity not configured for ${poLineItem.agPartNumber}. Please set purchaseQuantity before receiving PO items.`
         );
       }
 
-      const conversionFactor = inventoryItem.usageQuantityPerUnit;
+      if (!inventoryItem.consumptionRate || inventoryItem.consumptionRate <= 0) {
+        throw new Error(
+          `Consumption rate not configured for ${poLineItem.agPartNumber}. Please set consumptionRate before receiving PO items.`
+        );
+      }
 
-      // Calculate COGS per usage unit
-      // usageUnitCost = purchaseUnitCost / usageQuantityPerUnit
-      // Example: $320 per box / 80 lbs per box = $4/lb
-      const purchaseUnitCost = poLineItem.unitPrice;
-      const usageUnitCost = purchaseUnitCost / conversionFactor;
+      if (!inventoryItem.purchaseUnit || !inventoryItem.usageUnit) {
+        throw new Error(
+          `Units not configured for ${poLineItem.agPartNumber}. Please set purchaseUnit and usageUnit before receiving PO items.`
+        );
+      }
+
+      // Import unit conversion utility
+      const { calculateCOGS } = await import('./src/utils/unitConversion.js');
+
+      // Calculate COGS per item using automatic unit conversion
+      // Example: $491.20 per BOX, 80 lbs per BOX, 50g consumption rate
+      // Result: $491.20 / 80 = $6.14/lb = $0.0135/g * 50g = $0.68 per item
+      const cogsPerItem = calculateCOGS(
+        poLineItem.unitPrice, // $491.20
+        inventoryItem.purchaseQuantity, // 80 lbs
+        inventoryItem.purchaseUnit, // "lb"
+        inventoryItem.consumptionRate, // 50g
+        inventoryItem.usageUnit // "g"
+      );
+
+      const costPerPurchaseUnit = poLineItem.unitPrice / inventoryItem.purchaseQuantity;
 
       console.log(`💰 COGS Calculation for ${poLineItem.agPartNumber}:`);
-      console.log(`   Purchase Unit Cost: $${purchaseUnitCost} per ${inventoryItem.purchaseUnit || 'unit'}`);
-      console.log(`   Conversion Factor: ${conversionFactor} ${inventoryItem.usageUnit || 'units'} per ${inventoryItem.purchaseUnit || 'unit'}`);
-      console.log(`   Usage Unit Cost: $${usageUnitCost.toFixed(4)} per ${inventoryItem.usageUnit || 'unit'}`);
+      console.log(`   Vendor Unit Cost: $${poLineItem.unitPrice} per ${inventoryItem.vendorUnit || 'unit'}`);
+      console.log(`   Purchase Quantity: ${inventoryItem.purchaseQuantity} ${inventoryItem.purchaseUnit} per ${inventoryItem.vendorUnit || 'unit'}`);
+      console.log(`   Cost per Purchase Unit: $${costPerPurchaseUnit.toFixed(4)} per ${inventoryItem.purchaseUnit}`);
+      console.log(`   Consumption Rate: ${inventoryItem.consumptionRate} ${inventoryItem.usageUnit} per item`);
+      console.log(`   COGS per Item: $${cogsPerItem.toFixed(4)}`);
 
       // Insert into cost history
       const [costHistory] = await tx
@@ -6085,8 +6109,8 @@ export class DatabaseStorage implements IStorage {
           inventoryItemId: inventoryItem.id,
           vendorId: vendorPO.vendorId,
           receivedDate,
-          purchaseUnitCost,
-          usageUnitCost,
+          purchaseUnitCost: costPerPurchaseUnit,
+          usageUnitCost: cogsPerItem,
           currency: 'USD',
           poLineItemId,
           notes,
@@ -6094,11 +6118,12 @@ export class DatabaseStorage implements IStorage {
         })
         .returning();
 
-      // Update the inventory item's latest cost
+      // Update the inventory item's latest cost and COGS
       await tx
         .update(inventoryItems)
         .set({
-          latestCost: usageUnitCost,
+          latestCost: costPerPurchaseUnit,
+          cogsPerUnit: cogsPerItem,
           updatedAt: new Date(),
         })
         .where(eq(inventoryItems.id, inventoryItem.id));
@@ -6113,19 +6138,25 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(vendorPOItems.id, poLineItemId));
 
-      console.log(`✅ Cost history recorded for ${poLineItem.agPartNumber}, latest cost updated to $${usageUnitCost.toFixed(4)}/${inventoryItem.usageUnit || 'unit'}`);
+      console.log(`✅ Cost history recorded for ${poLineItem.agPartNumber}`);
+      console.log(`   Latest cost: $${costPerPurchaseUnit.toFixed(4)}/${inventoryItem.purchaseUnit}`);
+      console.log(`   COGS per item: $${cogsPerItem.toFixed(4)}`);
 
       return {
         costHistory,
         inventoryItem: {
           agPartNumber: inventoryItem.agPartNumber,
-          latestCost: usageUnitCost,
+          latestCost: costPerPurchaseUnit,
+          cogsPerUnit: cogsPerItem,
         },
         calculation: {
-          purchaseUnitCost,
-          usageUnitCost,
-          conversionFactor,
+          vendorUnitCost: poLineItem.unitPrice,
+          purchaseUnitCost: costPerPurchaseUnit,
+          cogsPerItem,
+          vendorUnit: inventoryItem.vendorUnit,
           purchaseUnit: inventoryItem.purchaseUnit,
+          purchaseQuantity: inventoryItem.purchaseQuantity,
+          consumptionRate: inventoryItem.consumptionRate,
           usageUnit: inventoryItem.usageUnit,
         },
       };

@@ -505,13 +505,16 @@ export const inventoryItems = pgTable('inventory_items', {
   // Current/Enhanced MRP columns
   sku: text('sku'), // SKU - Links to stock models (informational)
   secondarySupplierPartNumber: text('secondary_supplier_part_number'), // Secondary Supplier Part #
-  purchaseUnit: text('purchase_unit'), // What is purchased (e.g., "BOX", "GAL", "EA")
-  purchaseUnitLabel: text('purchase_unit_label'), // Human-readable purchase unit (e.g., "80 lb box", "5 gallon pail")
-  usageQuantityPerUnit: real('usage_quantity_per_unit'), // How much used per manufactured unit (e.g., 50 grams)
-  usageUnit: text('usage_unit'), // Unit of measurement for usage (e.g., "grams", "each")
+  vendorUnit: text('vendor_unit'), // Vendor's unit of sale (e.g., "BOX", "DRUM", "PAIL")
+  purchaseUnitLabel: text('purchase_unit_label'), // Human-readable vendor unit (e.g., "80 lb box", "5 gallon pail")
+  purchaseUnit: text('purchase_unit'), // Standard purchase unit for calculations (e.g., "lb", "gal")
+  purchaseQuantity: real('purchase_quantity'), // Quantity in purchase unit per vendor unit (e.g., 80 lbs per BOX)
+  consumptionRate: real('consumption_rate'), // Amount per item manufactured (e.g., 50 grams per rod)
+  usageUnit: text('usage_unit'), // Unit of measurement for consumption (e.g., "g", "oz", "ea")
   cogsPerUnit: real('cogs_per_unit'), // Calculated or manual COGS per manufactured unit
   latestCost: real('latest_cost'), // Latest cost per usage unit (auto-calculated from PO receipts)
   allowManualCostOverride: boolean('allow_manual_cost_override').default(false), // Allow manual COGS override
+  leadTimeDays: integer('lead_time_days'), // Lead time in days for forecasting/MRP
   isStockItem: boolean('is_stock_item').default(false), // Used in stock models
   utilizedInPL1: boolean('utilized_in_pl1').default(false), // Used in Production Line 1
   utilizedInPL2: boolean('utilized_in_pl2').default(false), // Used in Production Line 2

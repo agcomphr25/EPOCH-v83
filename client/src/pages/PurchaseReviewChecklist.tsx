@@ -17,6 +17,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Save, Printer, Download, FileText } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
+import { COMPANY_INFO } from '@shared/company-config';
 
 // SmartyStreets address autocomplete hook
 const useSmartyStreetsAutocomplete = (query: string) => {
@@ -335,7 +336,7 @@ export default function PurchaseReviewChecklist() {
         {/* Header */}
         <div className="mb-6 text-center">
           <div className="mb-4">
-            <h1 className="text-2xl font-bold text-gray-900">LLC</h1>
+            <h1 className="text-2xl font-bold text-gray-900">{COMPANY_INFO.name}</h1>
             <p className="text-sm text-gray-600">
               Responsive • Reliable • Supportive
             </p>

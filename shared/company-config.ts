@@ -11,8 +11,9 @@ export const COMPANY_INFO = {
 
   // Additional company details for future use
   phone: '256-723-8381',
-  email: 'glenn@agcomposites.com',
-  website: '',
+  email: 'sales@agcomposites.com',
+  website: 'www.agcomposites.com',
+  websiteSecondary: 'www.agadvanced.com',
 
   // Quality/Manufacturing specific info
   qualityManager: '',

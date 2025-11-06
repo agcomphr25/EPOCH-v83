@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Save, Printer, Download } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import type { P2Customer } from '@shared/schema';
+import { COMPANY_INFO } from '@shared/company-config';
 
 interface SessionUser {
   id: number;
@@ -485,7 +486,7 @@ export default function RFQRiskAssessment() {
         {/* Header */}
         <div className="mb-6 text-center">
           <div className="mb-4">
-            <h1 className="text-2xl font-bold text-gray-900">LLC</h1>
+            <h1 className="text-2xl font-bold text-gray-900">{COMPANY_INFO.name}</h1>
             <p className="text-sm text-gray-600">
               Responsive • Reliable • Supportive
             </p>

@@ -1,0 +1,473 @@
+import { Router, Request, Response } from 'express';
+import multer from 'multer';
+import path from 'path';
+import { db } from '../../../server/db';
+import { pool } from '../../../server/db';
+import { controlledDocuments, documentVersionHistory, insertControlledDocumentSchema, insertDocumentVersionHistorySchema } from '../../../server/schema';
+import { eq, desc, and } from 'drizzle-orm';
+import fs from 'fs/promises';
+import { z } from 'zod';
+
+const router = Router();
+
+// Helper function to get user from session
+async function getUserFromSession(req: Request): Promise<any | null> {
+  const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
+  
+  if (!sessionToken) {
+    return null;
+  }
+
+  try {
+    // Query database for session
+    const result = await pool.query(
+      'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1',
+      [sessionToken]
+    );
+
+    if (!result || result.length === 0) {
+      return null;
+    }
+
+    const session = result[0];
+
+    // Check if session is expired
+    if (new Date(session.expires_at) < new Date()) {
+      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
+      return null;
+    }
+
+    // Get user data from database
+    const dbUserResult = await pool.query(
+      `SELECT id, username, role FROM users WHERE username = $1 AND is_active = true`,
+      [session.username.toLowerCase()]
+    );
+
+    if (dbUserResult && dbUserResult.length > 0) {
+      return dbUserResult[0];
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error getting user from session:', error);
+    return null;
+  }
+}
+
+// Authentication middleware - runs before all other route handlers
+const requireAuth = async (req: Request, res: Response, next: any) => {
+  const user = await getUserFromSession(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  (req as any).user = user;
+  next();
+};
+
+// Authorization middleware - check for admin/owner role
+const requireAdminOrOwner = async (req: Request, res: Response, next: any) => {
+  const user = await getUserFromSession(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  if (user.role !== 'ADMIN' && user.role !== 'OWNER') {
+    return res.status(403).json({ error: 'Only admins and owners can perform this action' });
+  }
+  (req as any).user = user;
+  next();
+};
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    const uploadDir = path.join(process.cwd(), 'server/src/assets/documents');
+    try {
+      await fs.mkdir(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    } catch (error) {
+      cb(error as Error, uploadDir);
+    }
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    const name = path.basename(file.originalname, ext);
+    cb(null, `${name}-${uniqueSuffix}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /\.(pdf|docx?|xlsx?|txt|jpg|jpeg|png)$/i;
+    if (allowedTypes.test(file.originalname)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Allowed: PDF, Word, Excel, Text, Images'));
+    }
+  }
+});
+
+// Get all controlled documents (authenticated users only)
+router.get('/', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const docs = await db.select().from(controlledDocuments).orderBy(desc(controlledDocuments.createdAt));
+    res.json(docs);
+  } catch (error) {
+    console.error('Error fetching controlled documents:', error);
+    res.status(500).json({ error: 'Failed to fetch controlled documents' });
+  }
+});
+
+// Get single document by ID (authenticated users only)
+router.get('/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const [doc] = await db
+      .select()
+      .from(controlledDocuments)
+      .where(eq(controlledDocuments.id, req.params.id));
+    
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    res.json(doc);
+  } catch (error) {
+    console.error('Error fetching document:', error);
+    res.status(500).json({ error: 'Failed to fetch document' });
+  }
+});
+
+// Get version history for a document (authenticated users only)
+router.get('/:id/versions', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const versions = await db
+      .select()
+      .from(documentVersionHistory)
+      .where(eq(documentVersionHistory.documentId, req.params.id))
+      .orderBy(desc(documentVersionHistory.createdAt));
+    
+    res.json(versions);
+  } catch (error) {
+    console.error('Error fetching version history:', error);
+    res.status(500).json({ error: 'Failed to fetch version history' });
+  }
+});
+
+// Create new document with file upload (admin/owner only)
+// Auth middleware runs BEFORE upload to prevent anonymous file uploads
+router.post('/', requireAdminOrOwner, upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user!; // Guaranteed by middleware
+    const {
+      documentNumber,
+      documentName,
+      documentType,
+      department,
+      category,
+      description,
+      retentionLength,
+      documentOwner
+    } = req.body;
+    
+    const createdBy = user.username; // Use authenticated user
+
+    const filePath = req.file ? `/assets/documents/${req.file.filename}` : null;
+
+    // Calculate expiration date (1 year from now)
+    const now = new Date();
+    const expirationDate = new Date(now);
+    expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+
+    const [newDoc] = await db.insert(controlledDocuments).values({
+      documentNumber,
+      documentName,
+      documentType,
+      department,
+      category,
+      description,
+      currentVersion: '1.0',
+      status: 'pending',
+      retentionLength,
+      documentOwner,
+      filePath,
+      createdBy,
+      expirationDate: expirationDate.toISOString().split('T')[0],
+    }).returning();
+
+    // Create initial version history entry
+    await db.insert(documentVersionHistory).values({
+      documentId: newDoc.id,
+      versionNumber: '1.0',
+      changeDescription: 'Initial version',
+      changeType: 'major',
+      filePath,
+      status: 'pending',
+      createdBy,
+      expirationDate: expirationDate.toISOString().split('T')[0],
+    });
+
+    res.status(201).json(newDoc);
+  } catch (error) {
+    console.error('Error creating document:', error);
+    res.status(500).json({ error: 'Failed to create document' });
+  }
+});
+
+// Update document / Create new version (admin/owner only)
+// Auth middleware runs BEFORE upload to prevent anonymous file uploads
+router.put('/:id', requireAdminOrOwner, upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user!; // Guaranteed by middleware
+    const {
+      createNewVersion,
+      versionType, // 'major' or 'minor'
+      changeDescription,
+      documentName,
+      documentType,
+      department,
+      category,
+      description,
+      retentionLength,
+      documentOwner
+    } = req.body;
+    
+    const createdBy = user.username; // Use authenticated user
+
+    const [existingDoc] = await db
+      .select()
+      .from(controlledDocuments)
+      .where(eq(controlledDocuments.id, req.params.id));
+
+    if (!existingDoc) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    let newVersion = existingDoc.currentVersion;
+    let filePath = existingDoc.filePath;
+
+    if (createNewVersion === 'true' || createNewVersion === true) {
+      // Validate that file is uploaded when creating new version
+      if (!req.file) {
+        return res.status(400).json({ 
+          error: 'File upload is required when creating a new version' 
+        });
+      }
+
+      // Calculate new version number
+      const [major, minor] = existingDoc.currentVersion.split('.').map(Number);
+      if (versionType === 'major') {
+        newVersion = `${major + 1}.0`;
+      } else {
+        newVersion = `${major}.${minor + 1}`;
+      }
+
+      // Use the newly uploaded file
+      filePath = `/assets/documents/${req.file.filename}`;
+
+      // Calculate new expiration date (1 year from now)
+      const now = new Date();
+      const expirationDate = new Date(now);
+      expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+
+      // Create version history entry
+      await db.insert(documentVersionHistory).values({
+        documentId: req.params.id,
+        versionNumber: newVersion,
+        changeDescription: changeDescription || 'Document updated',
+        changeType: versionType,
+        filePath,
+        status: 'pending',
+        createdBy,
+        expirationDate: expirationDate.toISOString().split('T')[0],
+      });
+
+      // Update main document
+      const [updatedDoc] = await db
+        .update(controlledDocuments)
+        .set({
+          currentVersion: newVersion,
+          status: 'pending',
+          filePath,
+          documentName,
+          documentType,
+          department,
+          category,
+          description,
+          retentionLength,
+          documentOwner,
+          expirationDate: expirationDate.toISOString().split('T')[0],
+          updatedAt: new Date(),
+        })
+        .where(eq(controlledDocuments.id, req.params.id))
+        .returning();
+
+      res.json(updatedDoc);
+    } else {
+      // Just update metadata without versioning
+      if (req.file) {
+        filePath = `/assets/documents/${req.file.filename}`;
+      }
+
+      const [updatedDoc] = await db
+        .update(controlledDocuments)
+        .set({
+          documentName,
+          documentType,
+          department,
+          category,
+          description,
+          retentionLength,
+          documentOwner,
+          filePath,
+          updatedAt: new Date(),
+        })
+        .where(eq(controlledDocuments.id, req.params.id))
+        .returning();
+
+      res.json(updatedDoc);
+    }
+  } catch (error) {
+    console.error('Error updating document:', error);
+    res.status(500).json({ error: 'Failed to update document' });
+  }
+});
+
+// Approve document (Laurie Tandy only - session-based auth)
+router.post('/:id/approve', async (req: Request, res: Response) => {
+  try {
+    // Get username from session (server-side auth)
+    const user = (req as any).user;
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    if (user.username !== 'lauriet') {
+      return res.status(403).json({ error: 'Only Laurie Tandy can approve documents' });
+    }
+
+    const { effectiveDate } = req.body;
+    const approvedBy = user.username; // Use session username, not client input
+
+    const [existingDoc] = await db
+      .select()
+      .from(controlledDocuments)
+      .where(eq(controlledDocuments.id, req.params.id));
+
+    if (!existingDoc) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    const approvalDate = new Date();
+    const effectiveDateObj = effectiveDate ? new Date(effectiveDate) : approvalDate;
+    
+    // Calculate expiration date (1 year from effective date)
+    const expirationDate = new Date(effectiveDateObj);
+    expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+
+    // Update main document
+    const [updatedDoc] = await db
+      .update(controlledDocuments)
+      .set({
+        status: 'approved',
+        effectiveDate: effectiveDateObj.toISOString().split('T')[0],
+        expirationDate: expirationDate.toISOString().split('T')[0],
+        updatedAt: new Date(),
+      })
+      .where(eq(controlledDocuments.id, req.params.id))
+      .returning();
+
+    // Update version history for current version
+    await db
+      .update(documentVersionHistory)
+      .set({
+        status: 'approved',
+        approvedBy,
+        approvedAt: approvalDate,
+        effectiveDate: effectiveDateObj.toISOString().split('T')[0],
+        expirationDate: expirationDate.toISOString().split('T')[0],
+      })
+      .where(and(
+        eq(documentVersionHistory.documentId, req.params.id),
+        eq(documentVersionHistory.versionNumber, existingDoc.currentVersion)
+      ));
+
+    res.json(updatedDoc);
+  } catch (error) {
+    console.error('Error approving document:', error);
+    res.status(500).json({ error: 'Failed to approve document' });
+  }
+});
+
+// Download document file (authenticated users only)
+router.get('/:id/download', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const [doc] = await db
+      .select()
+      .from(controlledDocuments)
+      .where(eq(controlledDocuments.id, req.params.id));
+
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    if (!doc.filePath) {
+      return res.status(404).json({ error: 'No file attached to this document' });
+    }
+
+    // Strip leading slash from filePath before joining
+    const relativePath = doc.filePath.replace(/^\//, '');
+    const filePath = path.join(process.cwd(), 'server/src', relativePath);
+    
+    // Check if file exists
+    try {
+      await fs.access(filePath);
+    } catch {
+      return res.status(404).json({ error: 'File not found on server' });
+    }
+
+    // Send file with appropriate content type
+    res.download(filePath, path.basename(filePath));
+  } catch (error) {
+    console.error('Error downloading document:', error);
+    res.status(500).json({ error: 'Failed to download document' });
+  }
+});
+
+// Delete document (admin/owner only)
+router.delete('/:id', requireAdminOrOwner, async (req: Request, res: Response) => {
+  try {
+    const [doc] = await db
+      .select()
+      .from(controlledDocuments)
+      .where(eq(controlledDocuments.id, req.params.id));
+
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // Delete version history first (foreign key constraint)
+    await db
+      .delete(documentVersionHistory)
+      .where(eq(documentVersionHistory.documentId, req.params.id));
+
+    // Delete main document
+    await db
+      .delete(controlledDocuments)
+      .where(eq(controlledDocuments.id, req.params.id));
+
+    // Optionally delete files from filesystem
+    // This is commented out for safety - consider implementing with soft delete
+    // if (doc.filePath) {
+    //   const fullPath = path.join(process.cwd(), 'server/src', doc.filePath);
+    //   await fs.unlink(fullPath).catch(console.error);
+    // }
+
+    res.json({ message: 'Document deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting document:', error);
+    res.status(500).json({ error: 'Failed to delete document' });
+  }
+});
+
+export default router;

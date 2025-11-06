@@ -5081,4 +5081,61 @@ export type InsertCuttingCutProgress = z.infer<typeof insertCuttingCutProgressSc
 export type CuttingFabricInventory = typeof cuttingFabricInventory.$inferSelect;
 export type InsertCuttingFabricInventory = z.infer<typeof insertCuttingFabricInventorySchema>;
 
+// Controlled Documents - Master Document Register
+export const controlledDocuments = pgTable('controlled_documents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  documentNumber: text('document_number').notNull().unique(), // e.g., DOC-001
+  documentName: text('document_name').notNull(),
+  documentType: text('document_type').notNull(), // SOP, Work Instruction, Form, etc.
+  department: text('department').notNull(), // P1, P2, Quality, etc.
+  category: text('category'), // Optional additional categorization
+  description: text('description'),
+  currentVersion: text('current_version').notNull().default('1.0'), // Major.Minor format
+  status: text('status').notNull().default('draft'), // draft, pending, approved, expired
+  effectiveDate: date('effective_date'),
+  expirationDate: date('expiration_date'),
+  retentionLength: text('retention_length'), // Optional: e.g., "7 years", "permanent"
+  documentOwner: text('document_owner'), // Employee responsible
+  filePath: text('file_path'), // Path to current version file
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Document Version History
+export const documentVersionHistory = pgTable('document_version_history', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  documentId: uuid('document_id').references(() => controlledDocuments.id).notNull(),
+  versionNumber: text('version_number').notNull(), // e.g., "1.0", "1.1", "2.0"
+  changeDescription: text('change_description'),
+  changeType: text('change_type'), // major, minor
+  filePath: text('file_path'), // Path to version file
+  status: text('status').notNull(), // draft, pending, approved
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  approvedBy: text('approved_by'),
+  approvedAt: timestamp('approved_at'),
+  effectiveDate: date('effective_date'),
+  expirationDate: date('expiration_date'),
+});
+
+// Insert Schemas
+export const insertControlledDocumentSchema = createInsertSchema(controlledDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDocumentVersionHistorySchema = createInsertSchema(documentVersionHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types
+export type ControlledDocument = typeof controlledDocuments.$inferSelect;
+export type InsertControlledDocument = z.infer<typeof insertControlledDocumentSchema>;
+
+export type DocumentVersionHistory = typeof documentVersionHistory.$inferSelect;
+export type InsertDocumentVersionHistory = z.infer<typeof insertDocumentVersionHistorySchema>;
+
 export * from './calendar.schema';

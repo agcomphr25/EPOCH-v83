@@ -16,11 +16,10 @@ export function useRepairOrders() {
 
   // Create a Set of repair order IDs for O(1) lookup performance
   const repairOrderIds = useMemo(() => {
-    return new Set(
-      (nonconformanceRecords as any[])
-        .filter((record: any) => record.disposition === 'Repair')
-        .map((record: any) => record.orderId)
-    );
+    const repairRecords = (nonconformanceRecords as any[])
+      .filter((record: any) => record.disposition === 'Repair');
+    
+    return new Set(repairRecords.map((record: any) => record.orderId));
   }, [nonconformanceRecords]);
 
   // Create a Map of repair notes by order ID for O(1) lookup
@@ -48,5 +47,6 @@ export function useRepairOrders() {
     isRepairOrder,
     getRepairNotes,
     repairOrders: Array.from(repairOrderIds),
+    repairNotesMap,
   };
 }

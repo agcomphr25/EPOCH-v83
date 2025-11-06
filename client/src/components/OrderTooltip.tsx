@@ -3,7 +3,13 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
-import { Zap } from 'lucide-react';
+import { Zap, Wrench } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface OrderTooltipProps {
   order: any;
@@ -15,6 +21,8 @@ interface OrderTooltipProps {
   showPaintAndTexture?: boolean;
   disableHoverPopup?: boolean;
   showTechnician?: boolean;
+  isRepair?: boolean;
+  repairNotes?: string;
 }
 
 // Format order features for display
@@ -140,6 +148,8 @@ export function OrderTooltip({
   showPaintAndTexture = false,
   disableHoverPopup = false,
   showTechnician = false,
+  isRepair = false,
+  repairNotes,
 }: OrderTooltipProps) {
   const modelId = order.stockModelId || order.modelId;
   const materialType = modelId?.startsWith('cf_')
@@ -179,6 +189,23 @@ export function OrderTooltip({
                     <Zap className="w-3 h-3" />
                     URGENT!!!
                   </Badge>
+                )}
+                {isRepair && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge className="bg-blue-500 text-white flex items-center gap-1 px-2 py-0.5 font-bold text-xs cursor-help">
+                          <Wrench className="w-3 h-3" />
+                          REPAIR
+                        </Badge>
+                      </TooltipTrigger>
+                      {repairNotes && (
+                        <TooltipContent>
+                          <p className="max-w-xs">{repairNotes}</p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
               </div>
               {order.fbOrderNumber && order.fbOrderNumber.trim() !== '' && (

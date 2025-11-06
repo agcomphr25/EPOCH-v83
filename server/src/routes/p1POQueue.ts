@@ -159,7 +159,7 @@ router.post('/progress', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No selections to progress' });
     }
 
-    // Process each purchase order item: update orderCount and create orders
+    // Process each purchase order item: update orderCount and create production orders
     const progressedOrders: string[] = [];
     const errors: Array<{ poProductId: number; error: string }> = [];
 
@@ -170,7 +170,7 @@ router.post('/progress', async (req: Request, res: Response) => {
 
         // Get the purchase order item details
         const poItem = await pool.query`
-          SELECT poi.*, po.po_number, po.customer_name, po.customer_id
+          SELECT poi.*, po.id as po_id, po.po_number, po.customer_name, po.customer_id
           FROM purchase_order_items poi
           JOIN purchase_orders po ON poi.po_id = po.id
           WHERE poi.id = ${poItemId}
@@ -183,41 +183,51 @@ router.post('/progress', async (req: Request, res: Response) => {
 
         const item = poItem[0];
         const specs = item.specifications || {};
-        const stockModel = specs.stockModel || specs.stock_model || 'unknown';
         
-        // Create orders for the selected quantity
+        // Create production orders for the selected quantity
         for (let i = 0; i < quantity; i++) {
           const currentOrderCount = (item.order_count || 0) + i + 1;
           const orderId = `P1-${item.po_number}-${poItemId}-${currentOrderCount}`;
           
           await pool.query`
-            INSERT INTO "allOrders" (
+            INSERT INTO production_orders (
               order_id,
+              po_id,
+              po_item_id,
               customer_id,
               customer_name,
-              model_id,
-              stock_model_id,
-              current_department,
-              status,
+              po_number,
+              item_type,
+              item_id,
+              item_name,
+              specifications,
               order_date,
               due_date,
+              production_status,
+              current_department,
               created_at,
               updated_at
             ) VALUES (
               ${orderId},
-              ${item.customer_id || null},
+              ${item.po_id},
+              ${poItemId},
+              ${item.customer_id || ''},
               ${item.customer_name},
-              ${stockModel},
-              ${stockModel},
-              'Barcode',
-              'in_production',
+              ${item.po_number},
+              'stock',
+              ${item.item_id || ''},
+              ${item.item_name || ''},
+              ${JSON.stringify(specs)},
               NOW(),
               ${item.due_date || null},
+              'LAID_UP',
+              'Barcode',
               NOW(),
               NOW()
             )
             ON CONFLICT (order_id) DO UPDATE
             SET current_department = 'Barcode',
+                production_status = 'LAID_UP',
                 updated_at = NOW()
           `;
 

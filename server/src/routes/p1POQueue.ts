@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
+import { pool } from '../../db';
 import { insertPOProductSelectionSchema } from '@shared/schema';
 import { nanoid } from 'nanoid';
 
@@ -158,16 +159,99 @@ router.post('/progress', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No selections to progress' });
     }
 
-    // TODO: Implement order creation and progression to Barcode
-    // This will:
-    // 1. Create production orders for each selected PO item (or link to existing orders)
-    // 2. Set currentDepartment to 'Barcode'
-    // 3. Update PO product status to 'scheduled' or 'released'
-    // For now, return a placeholder response
+    // Process each PO item: create/update orders and set to Barcode department
+    const progressedOrders: string[] = [];
+    const errors: Array<{ poProductId: number; error: string }> = [];
+
+    for (const selection of selectionsToProgress) {
+      try {
+        const poProductId = selection.poProductId;
+        const quantity = selection.quantity || 1;
+
+        // Get the PO product details
+        const poProduct = await pool.query`
+          SELECT * FROM po_products WHERE id = ${poProductId}
+        `;
+
+        if (!poProduct || poProduct.length === 0) {
+          errors.push({ poProductId, error: 'PO product not found' });
+          continue;
+        }
+
+        const product = poProduct[0];
+
+        // Check if this PO product already has an associated order
+        if (product.order_id) {
+          // Update existing order to Barcode department
+          await pool.query`
+            UPDATE "allOrders"
+            SET current_department = 'Barcode',
+                updated_at = NOW()
+            WHERE order_id = ${product.order_id}
+          `;
+          progressedOrders.push(product.order_id);
+        } else {
+          // Create new order(s) for this PO product
+          // For now, we'll create one order per PO item
+          // This matches the quantity in the PO product
+          const orderId = `P1-${product.po_number}-${product.id}`;
+          
+          await pool.query`
+            INSERT INTO "allOrders" (
+              order_id,
+              customer_id,
+              customer_name,
+              model_id,
+              stock_model_id,
+              current_department,
+              status,
+              order_date,
+              created_at,
+              updated_at
+            ) VALUES (
+              ${orderId},
+              ${product.customer_id || null},
+              ${product.customer_name},
+              ${product.stock_model || 'unknown'},
+              ${product.stock_model || 'unknown'},
+              'Barcode',
+              'in_production',
+              NOW(),
+              NOW(),
+              NOW()
+            )
+            ON CONFLICT (order_id) DO UPDATE
+            SET current_department = 'Barcode',
+                updated_at = NOW()
+          `;
+
+          // Link the order back to the PO product
+          await pool.query`
+            UPDATE po_products
+            SET order_id = ${orderId},
+                status = 'scheduled',
+                updated_at = NOW()
+            WHERE id = ${poProductId}
+          `;
+
+          progressedOrders.push(orderId);
+        }
+      } catch (error) {
+        console.error(`Error progressing PO product ${selection.poProductId}:`, error);
+        errors.push({
+          poProductId: selection.poProductId,
+          error: (error as Error).message,
+        });
+      }
+    }
+
     res.json({
-      message: 'Order progression will be implemented in next phase',
-      itemsProgressed: selectionsToProgress.length,
+      success: true,
+      message: `Progressed ${progressedOrders.length} items to Barcode`,
+      itemsProgressed: progressedOrders.length,
       targetDepartment: 'Barcode',
+      orderIds: progressedOrders,
+      errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
     console.error('Error progressing orders:', error);

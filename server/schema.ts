@@ -3048,6 +3048,11 @@ export const nonconformanceRecords = pgTable('nonconformance_records', {
   notes: text('notes'),
   status: text('status').default('Open'), // Open, Resolved
   resolvedAt: timestamp('resolved_at'),
+  repairDepartment: text('repair_department'),
+  repairNotes: text('repair_notes'),
+  hasCustomerPartsToReturn: boolean('has_customer_parts_to_return').default(false),
+  addedToRts: boolean('added_to_rts').default(false),
+  rtsAddedAt: timestamp('rts_added_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

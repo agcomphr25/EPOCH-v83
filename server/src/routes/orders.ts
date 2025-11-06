@@ -1774,7 +1774,7 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
       'Shipping'
     ];
     
-    const isInProduction = productionDepartments.includes(order.currentDepartment);
+    const isInProduction = productionDepartments.includes(order.currentDepartment || '');
     let rtsInventoryCreated = false;
 
     // If order is already in production and user chose to send to RTS, move it to RTS inventory
@@ -1799,8 +1799,8 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
             `SELECT base_price FROM stock_models WHERE model_id = $1`,
             [order.modelId]
           );
-          if (stockPriceQuery.rows && stockPriceQuery.rows.length > 0) {
-            estimatedPrice = stockPriceQuery.rows[0].base_price;
+          if (stockPriceQuery && stockPriceQuery.length > 0) {
+            estimatedPrice = stockPriceQuery[0].base_price;
             console.log(`🔧 Found base price for ${order.modelId}: $${estimatedPrice}`);
           }
         } catch (priceError) {
@@ -1843,7 +1843,7 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
             rtsItem.status,
           ]);
 
-          const rtsInventoryId = result.rows?.[0]?.id;
+          const rtsInventoryId = result?.[0]?.id;
 
           if (rtsInventoryId) {
             // Create history entry for RTS inventory

@@ -3033,7 +3033,7 @@ export const insertPdfDocumentSchema = createInsertSchema(pdfDocuments)
 
 // Nonconformance Tracking - Module 17
 export const nonconformanceRecords = pgTable('nonconformance_records', {
-  id: serial('id').primaryKey(),
+  id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
   orderId: text('order_id'),
   serialNumber: text('serial_number'),
   customerName: text('customer_name'),

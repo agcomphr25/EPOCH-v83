@@ -736,6 +736,9 @@ router.get('/all', async (req: Request, res: Response) => {
       modelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
       fbOrderNumber: po.po_number,
       isP1Order: true, // Flag to identify P1 orders
+      // Include full features/specifications for barcode labels
+      features: po.specifications || {},
+      actionLength: po.specifications?.actionLength || po.specifications?.action_length,
     }));
     
     console.log(`📦 Retrieved ${regularOrders.length} regular orders and ${productionOrders.length} P1 production orders`);
@@ -963,6 +966,9 @@ router.get('/:id', async (req: Request, res: Response) => {
             modelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
             fbOrderNumber: po.po_number,
             isP1Order: true,
+            // Include full features/specifications for barcode labels
+            features: po.specifications || {},
+            actionLength: po.specifications?.actionLength || po.specifications?.action_length,
           };
         } else {
           console.log(`❌ No production order found for ${orderId}`);

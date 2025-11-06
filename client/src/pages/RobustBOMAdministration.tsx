@@ -69,10 +69,13 @@ export default function RobustBOMAdministration() {
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="boms" data-testid="tab-boms">
-            BOMs
+            P2 BOMs
           </TabsTrigger>
           <TabsTrigger value="revisions" data-testid="tab-revisions">
             Revisions
+          </TabsTrigger>
+          <TabsTrigger value="stock-boms" data-testid="tab-stock-boms">
+            Stock BOMs
           </TabsTrigger>
         </TabsList>
 
@@ -82,6 +85,10 @@ export default function RobustBOMAdministration() {
 
         <TabsContent value="revisions" className="space-y-4">
           <RevisionsTab />
+        </TabsContent>
+
+        <TabsContent value="stock-boms" className="space-y-4">
+          <StockBOMsTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -1806,5 +1813,797 @@ function TreeNode({ node, level, expandedNodes, onToggleExpand }: TreeNodeProps)
         </div>
       )}
     </div>
+  );
+}
+
+// Stock BOMs Tab Component (for Stock Model BOMs with optional items and labor)
+function StockBOMsTab() {
+  const { toast } = useToast();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedBom, setSelectedBom] = useState<any>(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+
+  // Fetch stock BOMs with harmonized query key
+  const { data: stockBoms, isLoading } = useQuery({
+    queryKey: ['/api/robust-boms/stock-boms', { search: searchTerm }],
+    queryFn: () => apiRequest(`/api/robust-boms/stock-boms?search=${searchTerm}`),
+  });
+
+  const createBomMutation = useMutation({
+    mutationFn: (data: any) => apiRequest('/api/robust-boms/stock-boms', { method: 'POST', body: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/stock-boms'] });
+      toast({ title: 'Success', description: 'Stock BOM created successfully' });
+      setIsCreateDialogOpen(false);
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to create stock BOM', variant: 'destructive' });
+    },
+  });
+
+  const updateBomMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) =>
+      apiRequest(`/api/robust-boms/stock-boms/${id}`, { method: 'PUT', body: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/stock-boms'] });
+      toast({ title: 'Success', description: 'Stock BOM updated successfully' });
+      setIsEditDialogOpen(false);
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update stock BOM', variant: 'destructive' });
+    },
+  });
+
+  const deleteBomMutation = useMutation({
+    mutationFn: (id: number) => apiRequest(`/api/robust-boms/stock-boms/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/stock-boms'] });
+      toast({ title: 'Success', description: 'Stock BOM deleted successfully' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to delete stock BOM', variant: 'destructive' });
+    },
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* Header Actions */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-1">
+          <Search className="h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search stock BOMs..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm"
+            data-testid="input-search-stock-boms"
+          />
+        </div>
+        <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-create-stock-bom">
+          <Plus className="h-4 w-4 mr-2" />
+          New Stock BOM
+        </Button>
+      </div>
+
+      {/* Stock BOMs Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Stock BOMs</CardTitle>
+          <CardDescription>
+            Bill of Materials for stock models with optional components and labor tracking
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Loading...</div>
+          ) : !stockBoms || stockBoms.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No stock BOMs found. Create one to get started.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Model Name</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Revision</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {stockBoms.map((bom: any) => (
+                  <TableRow key={bom.id}>
+                    <TableCell className="font-medium">{bom.modelName}</TableCell>
+                    <TableCell>{bom.sku || '-'}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{bom.revision}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{bom.description || '-'}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedBom(bom);
+                            setIsViewDialogOpen(true);
+                          }}
+                          data-testid={`button-view-${bom.id}`}
+                        >
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedBom(bom);
+                            setIsEditDialogOpen(true);
+                          }}
+                          data-testid={`button-edit-${bom.id}`}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm('Are you sure you want to delete this stock BOM?')) {
+                              deleteBomMutation.mutate(bom.id);
+                            }
+                          }}
+                          data-testid={`button-delete-${bom.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Create Stock BOM Dialog */}
+      <CreateStockBOMDialog
+        open={isCreateDialogOpen}
+        onOpenChange={setIsCreateDialogOpen}
+        onSubmit={(data) => createBomMutation.mutate(data)}
+        isPending={createBomMutation.isPending}
+      />
+
+      {/* Edit Stock BOM Dialog */}
+      {selectedBom && (
+        <EditStockBOMDialog
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          bom={selectedBom}
+          onSubmit={(data) => updateBomMutation.mutate({ id: selectedBom.id, data })}
+          isPending={updateBomMutation.isPending}
+        />
+      )}
+
+      {/* View Stock BOM Dialog */}
+      {selectedBom && (
+        <ViewStockBOMDialog
+          open={isViewDialogOpen}
+          onOpenChange={setIsViewDialogOpen}
+          bomId={selectedBom.id}
+        />
+      )}
+    </div>
+  );
+}
+
+// Create Stock BOM Dialog
+function CreateStockBOMDialog({
+  open,
+  onOpenChange,
+  onSubmit,
+  isPending,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (data: any) => void;
+  isPending: boolean;
+}) {
+  const form = useForm({
+    resolver: zodResolver(
+      z.object({
+        modelName: z.string().min(1, 'Model name is required'),
+        sku: z.string().optional(),
+        revision: z.string().default('A'),
+        description: z.string().optional(),
+      })
+    ),
+    defaultValues: {
+      modelName: '',
+      sku: '',
+      revision: 'A',
+      description: '',
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create Stock BOM</DialogTitle>
+          <DialogDescription>
+            Create a new Bill of Materials for a stock model
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="modelName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Model Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="AR-15 Carbon Fiber Stock" {...field} data-testid="input-model-name" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="sku"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>SKU (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="AR15-CF-KIT" {...field} data-testid="input-sku" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="revision"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Revision</FormLabel>
+                  <FormControl>
+                    <Input placeholder="A" {...field} data-testid="input-revision" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description (Optional)</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Complete kit with all materials and labor" {...field} data-testid="input-description" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending} data-testid="button-submit">
+                {isPending ? 'Creating...' : 'Create BOM'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Edit Stock BOM Dialog
+function EditStockBOMDialog({
+  open,
+  onOpenChange,
+  bom,
+  onSubmit,
+  isPending,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  bom: any;
+  onSubmit: (data: any) => void;
+  isPending: boolean;
+}) {
+  const form = useForm({
+    resolver: zodResolver(
+      z.object({
+        modelName: z.string().min(1, 'Model name is required'),
+        sku: z.string().optional(),
+        revision: z.string().default('A'),
+        description: z.string().optional(),
+      })
+    ),
+    defaultValues: {
+      modelName: bom.modelName || '',
+      sku: bom.sku || '',
+      revision: bom.revision || 'A',
+      description: bom.description || '',
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Stock BOM</DialogTitle>
+          <DialogDescription>
+            Update the Bill of Materials details
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="modelName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Model Name</FormLabel>
+                  <FormControl>
+                    <Input {...field} data-testid="input-edit-model-name" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="sku"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>SKU (Optional)</FormLabel>
+                  <FormControl>
+                    <Input {...field} data-testid="input-edit-sku" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="revision"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Revision</FormLabel>
+                  <FormControl>
+                    <Input {...field} data-testid="input-edit-revision" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description (Optional)</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} data-testid="input-edit-description" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-edit">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending} data-testid="button-submit-edit">
+                {isPending ? 'Updating...' : 'Update BOM'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// View Stock BOM Dialog (shows items with optional and labor support)
+function ViewStockBOMDialog({
+  open,
+  onOpenChange,
+  bomId,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  bomId: number;
+}) {
+  const { data: bomDetails } = useQuery({
+    queryKey: ['/api/robust-boms/stock-boms', bomId],
+    queryFn: () => apiRequest(`/api/robust-boms/stock-boms/${bomId}`),
+    enabled: open,
+  });
+
+  const [isAddItemDialogOpen, setIsAddItemDialogOpen] = useState(false);
+
+  const addItemMutation = useMutation({
+    mutationFn: (data: any) => 
+      apiRequest(`/api/robust-boms/stock-boms/${bomId}/items`, { method: 'POST', body: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/stock-boms', bomId] });
+      setIsAddItemDialogOpen(false);
+    },
+  });
+
+  const deleteItemMutation = useMutation({
+    mutationFn: (itemId: number) =>
+      apiRequest(`/api/robust-boms/stock-boms/${bomId}/items/${itemId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/robust-boms/stock-boms', bomId] });
+    },
+  });
+
+  const materials = bomDetails?.items?.filter((item: any) => item.itemType !== 'labor') || [];
+  const labor = bomDetails?.items?.filter((item: any) => item.itemType === 'labor') || [];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{bomDetails?.modelName} - Items</DialogTitle>
+          <DialogDescription>
+            Materials and labor for {bomDetails?.modelName} (Rev {bomDetails?.revision})
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          {/* Materials Section */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold">Materials</h3>
+              <Button size="sm" onClick={() => setIsAddItemDialogOpen(true)} data-testid="button-add-item">
+                <Plus className="h-4 w-4 mr-1" />
+                Add Item
+              </Button>
+            </div>
+            {materials.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No materials added yet.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Part Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Qty</TableHead>
+                    <TableHead>Dept</TableHead>
+                    <TableHead>Optional</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {materials.map((item: any) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{item.partName}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{item.itemType}</Badge>
+                      </TableCell>
+                      <TableCell>{item.quantity}</TableCell>
+                      <TableCell>{item.firstDept}</TableCell>
+                      <TableCell>
+                        {item.isOptional && <Badge>Optional</Badge>}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm('Delete this item?')) {
+                              deleteItemMutation.mutate(item.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+
+          {/* Labor Section */}
+          <div>
+            <h3 className="text-lg font-semibold mb-3">Labor</h3>
+            {labor.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No labor added yet.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Operation</TableHead>
+                    <TableHead>Dept</TableHead>
+                    <TableHead>Hours</TableHead>
+                    <TableHead>Rate</TableHead>
+                    <TableHead>Cost</TableHead>
+                    <TableHead>Optional</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {labor.map((item: any) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{item.partName}</TableCell>
+                      <TableCell>{item.firstDept}</TableCell>
+                      <TableCell>{item.laborHours || 0}</TableCell>
+                      <TableCell>${item.hourlyRate || 0}/hr</TableCell>
+                      <TableCell className="font-medium">
+                        ${((item.laborHours || 0) * (item.hourlyRate || 0)).toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        {item.isOptional && <Badge>Optional</Badge>}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm('Delete this labor item?')) {
+                              deleteItemMutation.mutate(item.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </div>
+
+        {/* Add Item Dialog */}
+        <AddStockBOMItemDialog
+          open={isAddItemDialogOpen}
+          onOpenChange={setIsAddItemDialogOpen}
+          onSubmit={(data) => addItemMutation.mutate(data)}
+          isPending={addItemMutation.isPending}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Add Stock BOM Item Dialog
+function AddStockBOMItemDialog({
+  open,
+  onOpenChange,
+  onSubmit,
+  isPending,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (data: any) => void;
+  isPending: boolean;
+}) {
+  const form = useForm({
+    resolver: zodResolver(
+      z.object({
+        partName: z.string().min(1, 'Part name is required'),
+        quantity: z.number().min(1, 'Quantity must be at least 1'),
+        firstDept: z.string().default('Layup'),
+        itemType: z.enum(['material', 'manufactured', 'labor']),
+        isOptional: z.boolean().default(false),
+        laborHours: z.number().optional(),
+        hourlyRate: z.number().optional(),
+        notes: z.string().optional(),
+      })
+    ),
+    defaultValues: {
+      partName: '',
+      quantity: 1,
+      firstDept: 'Layup',
+      itemType: 'material' as const,
+      isOptional: false,
+      laborHours: undefined,
+      hourlyRate: undefined,
+      notes: '',
+    },
+  });
+
+  const watchItemType = form.watch('itemType');
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add BOM Item</DialogTitle>
+          <DialogDescription>
+            Add a material or labor item to this BOM
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="itemType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Item Type</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-item-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="material">Material</SelectItem>
+                      <SelectItem value="manufactured">Manufactured</SelectItem>
+                      <SelectItem value="labor">Labor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="partName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{watchItemType === 'labor' ? 'Operation Name' : 'Part Name'}</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder={watchItemType === 'labor' ? 'Layup Labor' : 'Carbon Fiber Sheet'} 
+                      {...field} 
+                      data-testid="input-part-name" 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="quantity"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Quantity</FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="number" 
+                      {...field} 
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                      data-testid="input-quantity" 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="firstDept"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Department</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-dept">
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Layup">Layup</SelectItem>
+                      <SelectItem value="Assembly/Disassembly">Assembly/Disassembly</SelectItem>
+                      <SelectItem value="Finish">Finish</SelectItem>
+                      <SelectItem value="Paint">Paint</SelectItem>
+                      <SelectItem value="QC">QC</SelectItem>
+                      <SelectItem value="Shipping">Shipping</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {watchItemType === 'labor' && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="laborHours"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Labor Hours</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.1" 
+                          {...field} 
+                          onChange={(e) => field.onChange(Number(e.target.value))}
+                          data-testid="input-labor-hours" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="hourlyRate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Hourly Rate ($)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          {...field} 
+                          onChange={(e) => field.onChange(Number(e.target.value))}
+                          data-testid="input-hourly-rate" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
+            <FormField
+              control={form.control}
+              name="isOptional"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      data-testid="checkbox-is-optional"
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>
+                      Optional Component
+                    </FormLabel>
+                    <FormDescription>
+                      Mark this item as optional (e.g., paint, accessories)
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes (Optional)</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} data-testid="input-notes" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-add-item">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending} data-testid="button-submit-add-item">
+                {isPending ? 'Adding...' : 'Add Item'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }

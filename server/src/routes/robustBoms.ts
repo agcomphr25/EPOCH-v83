@@ -6,15 +6,20 @@ import {
   boms, 
   bomRevisions, 
   bomLines,
+  bomDefinitions,
+  bomItems,
   insertBomSchema,
   insertBomRevisionSchema,
-  insertBomLineSchema
+  insertBomLineSchema,
+  insertBomDefinitionSchema,
+  insertBomItemSchema
 } from '../../schema';
-import { eq, ilike, desc, count, or } from 'drizzle-orm';
+import { eq, ilike, desc, count, or, and } from 'drizzle-orm';
 import { 
   explodeBOMRevisionWithRollups, 
   whereUsed, 
-  buildBOMTree 
+  buildBOMTree,
+  buildStockBOMTree
 } from '../db/queries/bom';
 
 const router = Router();
@@ -474,6 +479,220 @@ router.get('/revisions/:revId/tree', async (req, res) => {
   } catch (error) {
     console.error('Build BOM tree error:', error);
     res.status(500).json({ error: 'Failed to build BOM tree' });
+  }
+});
+
+// ========================================
+// STOCK BOM MANAGEMENT ROUTES (Simple BOM System for Stocks)
+// ========================================
+
+// Get all stock BOMs
+router.get('/stock-boms', async (req, res) => {
+  try {
+    const search = (req.query.search as string) ?? '';
+    
+    const where = search 
+      ? or(
+          ilike(bomDefinitions.modelName, `%${search}%`),
+          ilike(bomDefinitions.sku, `%${search}%`),
+          ilike(bomDefinitions.description, `%${search}%`)
+        )
+      : undefined;
+
+    const boms = await db.select()
+      .from(bomDefinitions)
+      .where(where ? and(eq(bomDefinitions.isActive, true), where) : eq(bomDefinitions.isActive, true))
+      .orderBy(desc(bomDefinitions.createdAt));
+
+    res.json(boms);
+  } catch (error) {
+    console.error('Get stock BOMs error:', error);
+    res.status(500).json({ error: 'Failed to fetch stock BOMs' });
+  }
+});
+
+// Get single stock BOM with items
+router.get('/stock-boms/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const bomId = parseInt(id);
+
+    const [bom] = await db.select()
+      .from(bomDefinitions)
+      .where(eq(bomDefinitions.id, bomId));
+
+    if (!bom) {
+      return res.status(404).json({ error: 'Stock BOM not found' });
+    }
+
+    const items = await db.select()
+      .from(bomItems)
+      .where(and(eq(bomItems.bomId, bomId), eq(bomItems.isActive, true)))
+      .orderBy(bomItems.assemblyLevel, bomItems.partName);
+
+    res.json({ ...bom, items });
+  } catch (error) {
+    console.error('Get stock BOM error:', error);
+    res.status(500).json({ error: 'Failed to fetch stock BOM' });
+  }
+});
+
+// Create stock BOM
+router.post('/stock-boms', async (req, res) => {
+  try {
+    const bomData = insertBomDefinitionSchema.parse(req.body);
+
+    const [newBom] = await db.insert(bomDefinitions)
+      .values({
+        ...bomData,
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    res.json(newBom);
+  } catch (error: any) {
+    console.error('Create stock BOM error:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ error: 'Validation error', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to create stock BOM' });
+  }
+});
+
+// Update stock BOM
+router.put('/stock-boms/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const bomId = parseInt(id);
+    const bomData = insertBomDefinitionSchema.partial().parse(req.body);
+
+    const [updatedBom] = await db.update(bomDefinitions)
+      .set({
+        ...bomData,
+        updatedAt: new Date(),
+      })
+      .where(eq(bomDefinitions.id, bomId))
+      .returning();
+
+    if (!updatedBom) {
+      return res.status(404).json({ error: 'Stock BOM not found' });
+    }
+
+    res.json(updatedBom);
+  } catch (error: any) {
+    console.error('Update stock BOM error:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ error: 'Validation error', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to update stock BOM' });
+  }
+});
+
+// Delete stock BOM (soft delete)
+router.delete('/stock-boms/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const bomId = parseInt(id);
+
+    await db.update(bomDefinitions)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(bomDefinitions.id, bomId));
+
+    // Also soft delete all items
+    await db.update(bomItems)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(bomItems.bomId, bomId));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete stock BOM error:', error);
+    res.status(500).json({ error: 'Failed to delete stock BOM' });
+  }
+});
+
+// Add item to stock BOM
+router.post('/stock-boms/:id/items', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const bomId = parseInt(id);
+    const itemData = insertBomItemSchema.parse(req.body);
+
+    const [newItem] = await db.insert(bomItems)
+      .values({
+        ...itemData,
+        bomId,
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    res.json(newItem);
+  } catch (error: any) {
+    console.error('Add BOM item error:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ error: 'Validation error', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to add BOM item' });
+  }
+});
+
+// Update BOM item
+router.put('/stock-boms/:bomId/items/:itemId', async (req, res) => {
+  try {
+    const { bomId, itemId } = req.params;
+    const bomIdNum = parseInt(bomId);
+    const itemIdNum = parseInt(itemId);
+    const itemData = insertBomItemSchema.partial().parse(req.body);
+
+    const [updatedItem] = await db.update(bomItems)
+      .set({
+        ...itemData,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(bomItems.id, itemIdNum), eq(bomItems.bomId, bomIdNum)))
+      .returning();
+
+    if (!updatedItem) {
+      return res.status(404).json({ error: 'BOM item not found' });
+    }
+
+    res.json(updatedItem);
+  } catch (error: any) {
+    console.error('Update BOM item error:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ error: 'Validation error', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to update BOM item' });
+  }
+});
+
+// Delete BOM item (soft delete)
+router.delete('/stock-boms/:bomId/items/:itemId', async (req, res) => {
+  try {
+    const { bomId, itemId } = req.params;
+    const bomIdNum = parseInt(bomId);
+    const itemIdNum = parseInt(itemId);
+
+    await db.update(bomItems)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(and(eq(bomItems.id, itemIdNum), eq(bomItems.bomId, bomIdNum)));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete BOM item error:', error);
+    res.status(500).json({ error: 'Failed to delete BOM item' });
+  }
+});
+
+// Get stock BOM tree with cost summary
+router.get('/stock-boms/:id/tree', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const bomId = parseInt(id);
+    const tree = await buildStockBOMTree(bomId);
+    res.json(tree);
+  } catch (error) {
+    console.error('Build stock BOM tree error:', error);
+    res.status(500).json({ error: 'Failed to build stock BOM tree' });
   }
 });
 

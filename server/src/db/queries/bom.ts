@@ -206,3 +206,91 @@ export async function buildBOMTree(revisionId: string) {
   
   return buildNode(revisionId);
 }
+
+/**
+ * Build simplified Stock BOM structure (for stock models with optional items and labor)
+ * Returns structure with material costs, labor costs, and optional item flags
+ */
+export async function buildStockBOMTree(bomDefinitionId: number) {
+  const query = sql`
+    SELECT 
+      bi.id,
+      bi.part_name,
+      bi.quantity,
+      bi.first_dept,
+      bi.item_type,
+      bi.is_optional,
+      bi.labor_hours,
+      bi.hourly_rate,
+      bi.notes,
+      bi.assembly_level
+    FROM bom_items bi
+    WHERE bi.bom_id = ${bomDefinitionId} 
+      AND bi.is_active = true
+    ORDER BY bi.assembly_level, bi.part_name;
+  `;
+  
+  const result = await db.execute(query);
+  const items = (Array.isArray(result) ? result : result.rows || []) as any[];
+  
+  let materialCost = 0;
+  let laborCost = 0;
+  let optionalMaterialCost = 0;
+  let optionalLaborCost = 0;
+  
+  const processedItems = items.map(item => {
+    const qty = Number(item.quantity) || 1;
+    const isLabor = item.item_type === 'labor';
+    const isOptional = item.is_optional === true;
+    
+    let itemCost = 0;
+    
+    if (isLabor) {
+      const hours = Number(item.labor_hours) || 0;
+      const rate = Number(item.hourly_rate) || 0;
+      itemCost = hours * rate;
+      
+      if (isOptional) {
+        optionalLaborCost += itemCost;
+      } else {
+        laborCost += itemCost;
+      }
+    } else {
+      // For materials, we would look up cost from inventory_items
+      // For now, set to 0 - will be enhanced later when integrated with inventory
+      itemCost = 0;
+      
+      if (isOptional) {
+        optionalMaterialCost += itemCost * qty;
+      } else {
+        materialCost += itemCost * qty;
+      }
+    }
+    
+    return {
+      id: item.id,
+      partName: item.part_name,
+      quantity: qty,
+      firstDept: item.first_dept,
+      itemType: item.item_type,
+      isOptional,
+      laborHours: isLabor ? Number(item.labor_hours) || 0 : null,
+      hourlyRate: isLabor ? Number(item.hourly_rate) || 0 : null,
+      itemCost,
+      notes: item.notes,
+      assemblyLevel: item.assembly_level
+    };
+  });
+  
+  return {
+    items: processedItems,
+    costSummary: {
+      baseMaterialCost: materialCost,
+      baseLaborCost: laborCost,
+      optionalMaterialCost,
+      optionalLaborCost,
+      totalBaseCost: materialCost + laborCost,
+      totalWithOptional: materialCost + laborCost + optionalMaterialCost + optionalLaborCost
+    }
+  };
+}

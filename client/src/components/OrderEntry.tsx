@@ -1763,6 +1763,28 @@ export default function OrderEntry() {
 
       console.log('Complete features being saved:', completeFeatures);
 
+      // Try to find matching Stock BOM for this model (for MRP integration)
+      let bomDefinitionId = null;
+      try {
+        const selectedModel = modelOptions.find((m) => m.id === modelId);
+        if (selectedModel) {
+          const stockBoms = await apiRequest('/api/robust-boms/stock-boms');
+          // Try to match by SKU or model name
+          const matchingBom = stockBoms?.find(
+            (bom: any) =>
+              bom.sku === selectedModel.sku ||
+              bom.modelName === selectedModel.name ||
+              bom.modelName === selectedModel.displayName
+          );
+          if (matchingBom) {
+            bomDefinitionId = matchingBom.id;
+            console.log(`✅ Auto-linked Stock BOM ${matchingBom.id} for model ${selectedModel.name}`);
+          }
+        }
+      } catch (error) {
+        console.warn('Could not fetch stock BOMs for auto-linking:', error);
+      }
+
       const orderData = {
         customerId: customer.id.toString(),
         modelId,
@@ -1808,6 +1830,8 @@ export default function OrderEntry() {
         specialShippingInternational: specialShipping.international,
         specialShippingNextDayAir: specialShipping.nextDayAir,
         specialShippingBillToReceiver: specialShipping.billToReceiver,
+        // Stock BOM auto-linking (for MRP integration)
+        bomDefinitionId,
         // Payment fields removed - now handled by PaymentManager
       };
 

@@ -707,36 +707,38 @@ router.get('/all', async (req: Request, res: Response) => {
     // Get P1 production orders from production_orders table
     const productionOrdersResult = await pool.query`
       SELECT 
-        order_id as "orderId",
-        customer_id as "customerId",
-        customer_name as "customerName",
-        po_number as "poNumber",
-        item_name as "itemName",
+        order_id,
+        customer_id,
+        customer_name,
+        po_number,
+        item_name,
         specifications,
-        order_date as "orderDate",
-        due_date as "dueDate",
-        production_status as "productionStatus",
-        current_department as "currentDepartment",
-        created_at as "createdAt",
-        updated_at as "updatedAt"
+        order_date,
+        due_date,
+        production_status,
+        current_department,
+        created_at,
+        updated_at
       FROM production_orders
       WHERE current_department IS NOT NULL
     `;
     
     const productionOrders = productionOrdersResult.map((po: any) => ({
-      orderId: po.orderId,
-      customerId: po.customerId,
-      customerName: po.customerName,
-      currentDepartment: po.currentDepartment,
-      orderDate: po.orderDate,
-      dueDate: po.dueDate,
+      orderId: po.order_id,
+      customerId: po.customer_id,
+      customerName: po.customer_name,
+      currentDepartment: po.current_department,
+      orderDate: po.order_date,
+      dueDate: po.due_date,
       status: 'in_production',
       // Add additional fields for compatibility
       stockModelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
       modelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
-      fbOrderNumber: po.poNumber,
+      fbOrderNumber: po.po_number,
       isP1Order: true, // Flag to identify P1 orders
     }));
+    
+    console.log(`📦 Retrieved ${regularOrders.length} regular orders and ${productionOrders.length} P1 production orders`);
     
     // Combine and return both types of orders
     const allOrders = [...regularOrders, ...productionOrders];
@@ -910,15 +912,72 @@ router.post('/generate-id', async (req: Request, res: Response) => {
 });
 
 // Parameterized route - MUST be after specific routes
+// Supports both regular orders and P1 production orders
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.id;
-    const order = await storage.getOrderById(orderId);
+    console.log(`📋 GET /${orderId} - Fetching order details`);
+
+    // Try to find the order in both drafts and finalized tables
+    let order = await storage.getOrderById(orderId);
+
+    // If not found in regular orders, check production_orders table (P1 orders)
+    if (!order && orderId.startsWith('P1-')) {
+      console.log(`🔍 P1 order detected: ${orderId}, querying production_orders table`);
+      const { pool } = await import('../../db');
+      
+      try {
+        const productionOrderResult = await pool.query`
+          SELECT 
+            order_id,
+            customer_id,
+            customer_name,
+            po_number,
+            item_name,
+            specifications,
+            order_date,
+            due_date,
+            production_status,
+            current_department,
+            created_at,
+            updated_at
+          FROM production_orders
+          WHERE order_id = ${orderId}
+          LIMIT 1
+        `;
+        
+        console.log(`🔍 Production order query result:`, productionOrderResult);
+        
+        if (productionOrderResult && productionOrderResult.length > 0) {
+          const po = productionOrderResult[0];
+          console.log(`✅ Found P1 production order:`, po);
+          order = {
+            orderId: po.order_id,
+            customerId: po.customer_id,
+            customerName: po.customer_name,
+            currentDepartment: po.current_department,
+            orderDate: po.order_date,
+            dueDate: po.due_date,
+            status: 'in_production',
+            stockModelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
+            modelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
+            fbOrderNumber: po.po_number,
+            isP1Order: true,
+          };
+        } else {
+          console.log(`❌ No production order found for ${orderId}`);
+        }
+      } catch (queryError) {
+        console.error(`❌ Error querying production_orders:`, queryError);
+      }
+    }
 
     if (!order) {
+      console.log(`❌ Order ${orderId} not found`);
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    console.log(`✅ Found order ${orderId} in department: ${order.currentDepartment}`);
     res.json(order);
   } catch (error) {
     console.error('Get order error:', error);
@@ -2296,70 +2355,6 @@ router.put('/:orderId/urgency', async (req: Request, res: Response) => {
       error: 'Failed to update order urgency',
       details: error instanceof Error ? error.message : 'Unknown error',
     });
-  }
-});
-
-// Get a single order by ID - MUST BE LAST to avoid catching other routes
-router.get('/:orderId', async (req: Request, res: Response) => {
-  try {
-    const { orderId } = req.params;
-    console.log(`📋 GET /${orderId} - Fetching order details`);
-
-    // Try to find the order in both drafts and finalized tables
-    let order = await storage.getOrderById(orderId);
-
-    // If not found in regular orders, check production_orders table (P1 orders)
-    if (!order && orderId.startsWith('P1-')) {
-      const { pool } = await import('../../db');
-      const productionOrderResult = await pool.query`
-        SELECT 
-          order_id as "orderId",
-          customer_id as "customerId",
-          customer_name as "customerName",
-          po_number as "poNumber",
-          item_name as "itemName",
-          specifications,
-          order_date as "orderDate",
-          due_date as "dueDate",
-          production_status as "productionStatus",
-          current_department as "currentDepartment",
-          created_at as "createdAt",
-          updated_at as "updatedAt"
-        FROM production_orders
-        WHERE order_id = ${orderId}
-        LIMIT 1
-      `;
-      
-      if (productionOrderResult.length > 0) {
-        const po = productionOrderResult[0];
-        order = {
-          orderId: po.orderId,
-          customerId: po.customerId,
-          customerName: po.customerName,
-          currentDepartment: po.currentDepartment,
-          orderDate: po.orderDate,
-          dueDate: po.dueDate,
-          status: 'in_production',
-          stockModelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
-          modelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
-          fbOrderNumber: po.poNumber,
-          isP1Order: true,
-        };
-      }
-    }
-
-    if (!order) {
-      console.log(`❌ Order ${orderId} not found`);
-      return res.status(404).json({ error: `Order ${orderId} not found` });
-    }
-
-    console.log(
-      `✅ Found order ${orderId} in department: ${order.currentDepartment}`
-    );
-    res.json(order);
-  } catch (error) {
-    console.error(`❌ GET /${req.params.orderId} error:`, error);
-    res.status(500).json({ error: 'Failed to fetch order' });
   }
 });
 

@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Copy, Save, X, ChevronDown, Package, CheckCircle2, Power } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Copy, Save, X, ChevronDown, Package, CheckCircle2, Power, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -1954,9 +1954,14 @@ function StockBOMsTab() {
                               deleteBomMutation.mutate(bom.id);
                             }
                           }}
+                          disabled={deleteBomMutation.isPending}
                           data-testid={`button-delete-${bom.id}`}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          {deleteBomMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
                         </Button>
                       </div>
                     </TableCell>
@@ -2046,7 +2051,7 @@ function CreateStockBOMDialog({
                 <FormItem>
                   <FormLabel>Model Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="AR-15 Carbon Fiber Stock" {...field} data-testid="input-model-name" />
+                    <Input placeholder="AR-15 Carbon Fiber Stock" {...field} disabled={isPending} data-testid="input-model-name" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -2059,7 +2064,7 @@ function CreateStockBOMDialog({
                 <FormItem>
                   <FormLabel>SKU (Optional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="AR15-CF-KIT" {...field} data-testid="input-sku" />
+                    <Input placeholder="AR15-CF-KIT" {...field} disabled={isPending} data-testid="input-sku" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -2072,7 +2077,7 @@ function CreateStockBOMDialog({
                 <FormItem>
                   <FormLabel>Revision</FormLabel>
                   <FormControl>
-                    <Input placeholder="A" {...field} data-testid="input-revision" />
+                    <Input placeholder="A" {...field} disabled={isPending} data-testid="input-revision" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -2085,17 +2090,18 @@ function CreateStockBOMDialog({
                 <FormItem>
                   <FormLabel>Description (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Complete kit with all materials and labor" {...field} data-testid="input-description" />
+                    <Textarea placeholder="Complete kit with all materials and labor" {...field} disabled={isPending} data-testid="input-description" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending} data-testid="button-cancel">
                 Cancel
               </Button>
               <Button type="submit" disabled={isPending} data-testid="button-submit">
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isPending ? 'Creating...' : 'Create BOM'}
               </Button>
             </DialogFooter>
@@ -2155,7 +2161,7 @@ function EditStockBOMDialog({
                 <FormItem>
                   <FormLabel>Model Name</FormLabel>
                   <FormControl>
-                    <Input {...field} data-testid="input-edit-model-name" />
+                    <Input {...field} disabled={isPending} data-testid="input-edit-model-name" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -2168,7 +2174,7 @@ function EditStockBOMDialog({
                 <FormItem>
                   <FormLabel>SKU (Optional)</FormLabel>
                   <FormControl>
-                    <Input {...field} data-testid="input-edit-sku" />
+                    <Input {...field} disabled={isPending} data-testid="input-edit-sku" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -2181,7 +2187,7 @@ function EditStockBOMDialog({
                 <FormItem>
                   <FormLabel>Revision</FormLabel>
                   <FormControl>
-                    <Input {...field} data-testid="input-edit-revision" />
+                    <Input {...field} disabled={isPending} data-testid="input-edit-revision" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -2194,17 +2200,18 @@ function EditStockBOMDialog({
                 <FormItem>
                   <FormLabel>Description (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea {...field} data-testid="input-edit-description" />
+                    <Textarea {...field} disabled={isPending} data-testid="input-edit-description" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-edit">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending} data-testid="button-cancel-edit">
                 Cancel
               </Button>
               <Button type="submit" disabled={isPending} data-testid="button-submit-edit">
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isPending ? 'Updating...' : 'Update BOM'}
               </Button>
             </DialogFooter>

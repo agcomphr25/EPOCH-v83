@@ -505,10 +505,13 @@ export const inventoryItems = pgTable('inventory_items', {
   // Current/Enhanced MRP columns
   sku: text('sku'), // SKU - Links to stock models (informational)
   secondarySupplierPartNumber: text('secondary_supplier_part_number'), // Secondary Supplier Part #
-  purchaseUnit: text('purchase_unit'), // What is purchased (e.g., "80 lb box", "20/carton")
+  purchaseUnit: text('purchase_unit'), // What is purchased (e.g., "BOX", "GAL", "EA")
+  purchaseUnitLabel: text('purchase_unit_label'), // Human-readable purchase unit (e.g., "80 lb box", "5 gallon pail")
   usageQuantityPerUnit: real('usage_quantity_per_unit'), // How much used per manufactured unit (e.g., 50 grams)
   usageUnit: text('usage_unit'), // Unit of measurement for usage (e.g., "grams", "each")
   cogsPerUnit: real('cogs_per_unit'), // Calculated or manual COGS per manufactured unit
+  latestCost: real('latest_cost'), // Latest cost per usage unit (auto-calculated from PO receipts)
+  allowManualCostOverride: boolean('allow_manual_cost_override').default(false), // Allow manual COGS override
   isStockItem: boolean('is_stock_item').default(false), // Used in stock models
   utilizedInPL1: boolean('utilized_in_pl1').default(false), // Used in Production Line 1
   utilizedInPL2: boolean('utilized_in_pl2').default(false), // Used in Production Line 2
@@ -517,6 +520,23 @@ export const inventoryItems = pgTable('inventory_items', {
   utilizedInServices: boolean('utilized_in_services').default(false), // Used in Services
   type: text('type'), // Type: Purchased or Manufactured
   vendorId: integer('vendor_id').references(() => vendors.id), // Primary vendor for this part
+});
+
+// Inventory Item Cost History - Tracks price changes over time
+export const inventoryItemCostHistory = pgTable('inventory_item_cost_history', {
+  id: serial('id').primaryKey(),
+  inventoryItemId: integer('inventory_item_id')
+    .references(() => inventoryItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  vendorId: integer('vendor_id').references(() => vendors.id), // Which vendor supplied at this price
+  receivedDate: timestamp('received_date').notNull(), // When this cost was recorded
+  purchaseUnitCost: real('purchase_unit_cost').notNull(), // Cost per purchase unit (e.g., $491.20 per box)
+  usageUnitCost: real('usage_unit_cost').notNull(), // Calculated cost per usage unit (e.g., $6.14 per lb)
+  currency: text('currency').default('USD'), // Currency code
+  poLineItemId: integer('po_line_item_id'), // Reference to the PO line item (optional)
+  notes: text('notes'), // Additional notes about this cost entry
+  createdAt: timestamp('created_at').defaultNow(),
+  createdBy: integer('created_by').references(() => employees.id), // Who recorded this cost
 });
 
 // Item Groups for inventory categorization

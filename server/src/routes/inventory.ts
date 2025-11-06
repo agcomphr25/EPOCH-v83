@@ -1105,4 +1105,84 @@ router.get('/items-groups-map', async (req: Request, res: Response) => {
   }
 });
 
+// ========================================
+// Stock BOM Material Forecasting (MRP Integration)
+// ========================================
+
+// GET /api/inventory/material-forecast - Calculate material requirements from stock orders with BOMs
+router.get('/material-forecast', async (req: Request, res: Response) => {
+  try {
+    // Import required tables dynamically to avoid circular dependencies
+    const { db } = await import('../../db');
+    const { allOrders, bomDefinitions, bomItems } = await import('../../schema');
+    const { isNotNull, eq, and } = await import('drizzle-orm');
+    const { buildStockBOMTree } = await import('../db/queries/bom');
+
+    // Get all orders that have a linked Stock BOM
+    const ordersWithBoms = await db
+      .select({
+        orderId: allOrders.orderId,
+        bomDefinitionId: allOrders.bomDefinitionId,
+        status: allOrders.status,
+        modelId: allOrders.modelId,
+      })
+      .from(allOrders)
+      .where(isNotNull(allOrders.bomDefinitionId));
+
+    console.log(`📊 Found ${ordersWithBoms.length} orders with Stock BOMs for material forecast`);
+
+    // Track material demand by part name
+    const materialDemand: Record<string, { partName: string; totalQty: number; orders: string[]; itemType: string }> = {};
+
+    // Process each order
+    for (const order of ordersWithBoms) {
+      if (!order.bomDefinitionId) continue;
+
+      try {
+        // Explode the BOM to get material requirements
+        const bomTree = await buildStockBOMTree(order.bomDefinitionId);
+        
+        // Aggregate material requirements (exclude labor and optional items for now)
+        for (const item of bomTree.items) {
+          if (item.itemType === 'labor' || item.isOptional) {
+            continue; // Skip labor and optional items in material forecast
+          }
+
+          const key = item.partName;
+          if (!materialDemand[key]) {
+            materialDemand[key] = {
+              partName: item.partName,
+              totalQty: 0,
+              orders: [],
+              itemType: item.itemType,
+            };
+          }
+
+          materialDemand[key].totalQty += item.quantity;
+          if (!materialDemand[key].orders.includes(order.orderId)) {
+            materialDemand[key].orders.push(order.orderId);
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ Failed to explode BOM ${order.bomDefinitionId} for order ${order.orderId}:`, error);
+      }
+    }
+
+    // Convert to array and sort by total quantity
+    const forecast = Object.values(materialDemand).sort((a, b) => b.totalQty - a.totalQty);
+
+    console.log(`✅ Material forecast calculated: ${forecast.length} unique materials required`);
+
+    res.json({
+      ordersProcessed: ordersWithBoms.length,
+      materialsRequired: forecast.length,
+      forecast,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Material forecast error:', error);
+    res.status(500).json({ error: 'Failed to calculate material forecast' });
+  }
+});
+
 export default router;

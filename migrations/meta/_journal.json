@@ -15,6 +15,13 @@
       "when": 1761670951515,
       "tag": "0001_amusing_avengers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762399597251,
+      "tag": "0002_long_thunderbird",
+      "breakpoints": true
     }
   ]
 }

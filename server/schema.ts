@@ -152,6 +152,8 @@ export const allOrders = pgTable('all_orders', {
   // RTS Order Tracking
   isRtsOrder: boolean('is_rts_order').default(false), // True if this order was created from RTS inventory sale
   rtsSaleId: uuid('rts_sale_id'), // Reference to RTS sale if applicable
+  // BOM Reference for Costing and MRP
+  bomDefinitionId: integer('bom_definition_id').references(() => bomDefinitions.id), // Links order to BOM for costing/MRP
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -1354,6 +1356,8 @@ export const insertAllOrderSchema = createInsertSchema(allOrders)
     paymentTimestamp: z.coerce.date().optional().nullable(),
     // Verification field
     isVerified: z.boolean().default(false),
+    // BOM Reference
+    bomDefinitionId: z.number().optional().nullable(),
   });
 
 export const insertLinkedOrderGroupSchema = createInsertSchema(linkedOrderGroups)
@@ -3655,7 +3659,7 @@ export const bomItems = pgTable('bom_items', {
   partName: text('part_name').notNull(),
   quantity: integer('quantity').notNull().default(1),
   firstDept: text('first_dept').notNull().default('Layup'),
-  itemType: text('item_type').notNull().default('manufactured'), // 'manufactured', 'material', or 'sub_assembly'
+  itemType: text('item_type').notNull().default('manufactured'), // 'manufactured', 'material', 'sub_assembly', or 'labor'
   // Multi-Level Hierarchy Support
   referenceBomId: integer('reference_bom_id').references(
     () => bomDefinitions.id
@@ -3664,6 +3668,10 @@ export const bomItems = pgTable('bom_items', {
   // Component Library Support
   quantityMultiplier: integer('quantity_multiplier').default(1), // Multiplies quantities when used as sub-assembly
   notes: text('notes'), // Manufacturing notes or special instructions
+  // Optional Components & Labor Tracking
+  isOptional: boolean('is_optional').default(false), // For optional components/labor
+  laborHours: real('labor_hours'), // For labor items - estimated hours
+  hourlyRate: real('hourly_rate'), // For labor items - standard hourly rate
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -3705,12 +3713,15 @@ export const insertBomItemSchema = createInsertSchema(bomItems)
       ])
       .default('Layup'),
     itemType: z
-      .enum(['manufactured', 'material', 'sub_assembly'])
+      .enum(['manufactured', 'material', 'sub_assembly', 'labor'])
       .default('manufactured'),
     referenceBomId: z.number().optional(), // Optional reference to another BOM
     assemblyLevel: z.number().default(0),
     quantityMultiplier: z.number().min(1).default(1),
     notes: z.string().optional(),
+    isOptional: z.boolean().default(false),
+    laborHours: z.number().optional().nullable(),
+    hourlyRate: z.number().optional().nullable(),
     isActive: z.boolean().default(true),
   });
 

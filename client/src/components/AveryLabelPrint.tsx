@@ -143,20 +143,12 @@ export function AveryLabelPrint({
               ? `${actionLength} ${stockModel}`
               : actionLength || stockModel || orderId;
 
-          const swivelStudsText = getSwivelStudsText();
-          const textureText = getTextureText();
-          const specialOptionsLine = [swivelStudsText, textureText]
-            .filter(Boolean)
-            .join(' | ');
-
           return `
             <div class="avery-label">
               <div class="label-content">
                 <div class="line1">${orderId}</div>
                 ${customerName ? `<div class="line2">${customerName}</div>` : ''}
                 ${stockModel || paintOption ? `<div class="line3">${stockModel || ''}${stockModel && paintOption ? ' - ' : ''}${paintOption || ''}</div>` : ''}
-                ${specialOptionsLine ? `<div class="line-special"><span class="swivel-studs">${swivelStudsText || ''}</span>${swivelStudsText && textureText ? ' | ' : ''}<span class="texture-options">${textureText || ''}</span></div>` : ''}
-                ${dueDate ? `<div class="line4">Due: ${formatDate(dueDate)}</div>` : ''}
                 <div class="line5">
                   <canvas id="barcode-${index}" width="180" height="25"></canvas>
                 </div>

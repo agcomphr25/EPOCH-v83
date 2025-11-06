@@ -714,6 +714,7 @@ export default function POManager() {
           <div className="space-y-4">
             <POItemsManager
               poId={selectedPO.id}
+              poNumber={selectedPO.poNumber}
               customerName={selectedPO.customerName}
               onAddItem={() => setShowOrderEntry(true)}
             />

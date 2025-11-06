@@ -76,6 +76,7 @@ import UserManagement from './pages/UserManagement';
 import Settings from './pages/Settings';
 import LoginPage from './pages/LoginPage';
 import P2Forms from '@/pages/P2Forms';
+import MasterDocumentRegister from '@/pages/MasterDocumentRegister';
 import WasteManagementForm from '@/pages/WasteManagementForm';
 import TaskTracker from '@/pages/TaskTracker';
 import KickbackTracking from '@/components/KickbackTracking';
@@ -514,6 +515,10 @@ function App() {
 
                   {/* P2 Forms Routes */}
                   <Route path="/p2-forms" component={P2Forms} />
+                  <Route
+                    path="/master-document-register"
+                    component={MasterDocumentRegister}
+                  />
                   <Route
                     path="/waste-management-form"
                     component={WasteManagementForm}

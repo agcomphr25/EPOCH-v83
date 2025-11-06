@@ -57,6 +57,7 @@ import microsoftAuthRoutes from './microsoftAuth';
 import gmailRoutes from './gmail';
 import followupOrdersRoutes from './followupOrders';
 import cuttingTableRoutes from './cuttingTable';
+import controlledDocumentsRoutes from './controlledDocuments';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -129,6 +130,9 @@ export function registerRoutes(app: Express): Server {
 
   // Document management routes
   app.use('/api/documents', documentsRoutes);
+
+  // Controlled Documents (Master Document Register) routes
+  app.use('/api/controlled-documents', controlledDocumentsRoutes);
 
   // Order attachments routes
   app.use('/api/order-attachments', orderAttachmentsRoutes);

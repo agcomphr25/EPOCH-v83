@@ -49,6 +49,7 @@ import {
   layupSchedule,
   bomDefinitions,
   bomItems,
+  bomLines,
   orderIdReservations,
   orderIdSequences,
   purchaseReviewChecklists,
@@ -3669,26 +3670,60 @@ export class DatabaseStorage implements IStorage {
   }
 
   async replaceAllInventoryItems(newItems: InsertInventoryItem[]): Promise<void> {
-    console.log(`🔄 Storage: Replacing all inventory items with ${newItems.length} new items...`);
+    console.log(`🔄 Storage: Upserting ${newItems.length} inventory items (update existing, insert new)...`);
     
-    // Note: Neon HTTP driver doesn't support transactions, so we do this sequentially
-    // Step 1: Delete all existing items
-    console.log('  🗑️  Step 1: Deleting all existing items...');
-    await db.delete(inventoryItems);
-    console.log('  ✅ Step 1 complete: All existing items deleted');
+    if (newItems.length === 0) {
+      console.log('⚠️  No items to upsert');
+      return;
+    }
+
+    // Deduplicate items by AG Part Number (keep last occurrence for each part number)
+    const itemMap = new Map<string, InsertInventoryItem>();
+    for (const item of newItems) {
+      itemMap.set(item.agPartNumber, item);
+    }
+    const uniqueItems = Array.from(itemMap.values());
     
-    // Step 2: Insert all new items
-    console.log(`  ➕ Step 2: Inserting ${newItems.length} new items...`);
-    if (newItems.length > 0) {
-      // Insert in batches of 100 to avoid query size limits
-      for (let i = 0; i < newItems.length; i += 100) {
-        const batch = newItems.slice(i, i + 100);
-        await db.insert(inventoryItems).values(batch);
-        console.log(`    ✓ Inserted batch ${Math.floor(i / 100) + 1} (${batch.length} items)`);
-      }
+    const duplicateCount = newItems.length - uniqueItems.length;
+    if (duplicateCount > 0) {
+      console.log(`⚠️  Found ${duplicateCount} duplicate AG Part Numbers in CSV - using latest values for each`);
     }
     
-    console.log('✅ Storage: All inventory items replaced successfully');
+    console.log(`📦 Processing ${uniqueItems.length} unique items...`);
+
+    // Upsert in batches of 100 to avoid query size limits
+    for (let i = 0; i < uniqueItems.length; i += 100) {
+      const batch = uniqueItems.slice(i, i + 100);
+      
+      // Use PostgreSQL's ON CONFLICT to upsert (insert or update)
+      await db
+        .insert(inventoryItems)
+        .values(batch)
+        .onConflictDoUpdate({
+          target: inventoryItems.agPartNumber,
+          set: {
+            name: sql`EXCLUDED.name`,
+            source: sql`EXCLUDED.source`,
+            supplierPartNumber: sql`EXCLUDED.supplier_part_number`,
+            costPer: sql`EXCLUDED.cost_per`,
+            orderDate: sql`EXCLUDED.order_date`,
+            notes: sql`EXCLUDED.notes`,
+            department: sql`EXCLUDED.department`,
+            secondarySource: sql`EXCLUDED.secondary_source`,
+            sku: sql`EXCLUDED.sku`,
+            type: sql`EXCLUDED.type`,
+            purchaseUnit: sql`EXCLUDED.purchase_unit`,
+            utilizedPL1: sql`EXCLUDED.utilized_pl1`,
+            utilizedPL2: sql`EXCLUDED.utilized_pl2`,
+            secondarySupplierPartNumber: sql`EXCLUDED.secondary_supplier_part_number`,
+            updatedAt: sql`NOW()`,
+          },
+        });
+      
+      console.log(`    ✓ Processed batch ${Math.floor(i / 100) + 1} (${batch.length} items)`);
+    }
+    
+    console.log(`✅ Storage: Complete - ${uniqueItems.length} unique items upserted successfully`);
   }
 
   // Inventory Scans CRUD

@@ -7,6 +7,7 @@ import { controlledDocuments, documentVersionHistory, insertControlledDocumentSc
 import { eq, desc, and } from 'drizzle-orm';
 import fs from 'fs/promises';
 import { z } from 'zod';
+import Papa from 'papaparse';
 
 const router = Router();
 
@@ -105,6 +106,19 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(new Error('Invalid file type. Allowed: PDF, Word, Excel, Text, Images'));
+    }
+  }
+});
+
+// Separate multer configuration for CSV imports
+const csvUpload = multer({
+  storage: multer.memoryStorage(), // Store in memory for CSV parsing
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit for CSV
+  fileFilter: (req, file, cb) => {
+    if (file.originalname.toLowerCase().endsWith('.csv')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only CSV files are allowed.'));
     }
   }
 });
@@ -467,6 +481,177 @@ router.delete('/:id', requireAdminOrOwner, async (req: Request, res: Response) =
   } catch (error) {
     console.error('Error deleting document:', error);
     res.status(500).json({ error: 'Failed to delete document' });
+  }
+});
+
+// CSV Import (admin/owner only)
+router.post('/import/csv', requireAdminOrOwner, csvUpload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user!;
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'No CSV file uploaded' });
+    }
+
+    // Convert buffer to string (file is stored in memory)
+    const fileContent = req.file.buffer.toString('utf-8');
+    
+    // Parse CSV
+    const parseResult = Papa.parse(fileContent, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header: string) => header.trim(),
+    });
+
+    if (parseResult.errors.length > 0) {
+      console.error('CSV parsing errors:', parseResult.errors);
+      return res.status(400).json({ 
+        error: 'CSV parsing failed',
+        details: parseResult.errors 
+      });
+    }
+
+    const rows = parseResult.data as any[];
+    
+    // Debug: Log the columns we found
+    if (rows.length > 0) {
+      console.log('CSV Columns found:', Object.keys(rows[0]));
+      console.log('First row sample:', rows[0]);
+    }
+    
+    // Skip the first row if it's a title row
+    const dataRows = rows[0]?.TITLE?.includes('QMS MASTER LIST') ? rows.slice(1) : rows;
+    
+    const importResults = {
+      success: 0,
+      skipped: 0,
+      errors: [] as string[],
+    };
+
+    // Helper function to determine document type from code
+    const determineDocumentType = (code: string): string => {
+      const upperCode = code?.toUpperCase() || '';
+      if (upperCode.includes('POSTER')) return 'POSTER';
+      if (upperCode.includes('FORM')) return 'FORM';
+      if (upperCode.includes('DOC')) return 'PROCEDURE';
+      return 'OTHER';
+    };
+
+    // Process each row
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+      
+      try {
+        // Skip rows with missing critical data
+        if (!row.TITLE || !row.CODE) {
+          importResults.skipped++;
+          importResults.errors.push(`Row ${i + 2}: Missing TITLE or CODE`);
+          continue;
+        }
+
+        const documentNumber = String(row.CODE || '').trim();
+        const documentName = String(row.TITLE || '').trim();
+        const department = String(row.Department || 'General Use').trim();
+        const currentVersion = String(row.Version || '1.0').trim();
+        const retentionLength = String(row['Record Retention Length'] || 'N/A').trim();
+        const description = String(row['Summary of Changes (if needed)'] || '').trim();
+        const dateStr = String(row.Date || '').trim();
+        
+        // Parse effective date
+        let effectiveDate = null;
+        if (dateStr && dateStr !== 'N/A' && dateStr !== 'on-going') {
+          try {
+            const parsedDate = new Date(dateStr);
+            if (!isNaN(parsedDate.getTime())) {
+              effectiveDate = parsedDate.toISOString().split('T')[0];
+            }
+          } catch {
+            // Invalid date, leave as null
+          }
+        }
+
+        const documentType = determineDocumentType(documentNumber);
+
+        // Calculate expiration date (1 year from effective date or now)
+        const baseDate = effectiveDate ? new Date(effectiveDate) : new Date();
+        const expirationDate = new Date(baseDate);
+        expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+
+        // Check if document already exists
+        const [existing] = await db
+          .select()
+          .from(controlledDocuments)
+          .where(eq(controlledDocuments.documentNumber, documentNumber));
+
+        if (existing) {
+          // Update existing document
+          await db
+            .update(controlledDocuments)
+            .set({
+              documentName,
+              documentType,
+              department,
+              currentVersion,
+              retentionLength,
+              description: description || existing.description,
+              effectiveDate: effectiveDate || existing.effectiveDate,
+              expirationDate: expirationDate.toISOString().split('T')[0],
+              updatedAt: new Date(),
+            })
+            .where(eq(controlledDocuments.id, existing.id));
+        } else {
+          // Create new document
+          const [newDoc] = await db.insert(controlledDocuments).values({
+            documentNumber,
+            documentName,
+            documentType,
+            department,
+            currentVersion,
+            status: effectiveDate ? 'approved' : 'draft',
+            retentionLength,
+            description,
+            effectiveDate,
+            expirationDate: expirationDate.toISOString().split('T')[0],
+            createdBy: user.username,
+          }).returning();
+
+          // Create initial version history
+          await db.insert(documentVersionHistory).values({
+            documentId: newDoc.id,
+            versionNumber: currentVersion,
+            changeDescription: description || 'Imported from CSV',
+            changeType: 'major',
+            status: effectiveDate ? 'approved' : 'draft',
+            createdBy: user.username,
+            effectiveDate,
+            expirationDate: expirationDate.toISOString().split('T')[0],
+          });
+        }
+
+        importResults.success++;
+      } catch (error: any) {
+        const errorMsg = `Row ${i + 2}: ${error.message}`;
+        console.error('CSV import error:', errorMsg);
+        importResults.errors.push(errorMsg);
+      }
+    }
+
+    // Log final results
+    console.log('CSV Import Results:', {
+      total: dataRows.length,
+      success: importResults.success,
+      skipped: importResults.skipped,
+      errors: importResults.errors.length,
+      firstFewErrors: importResults.errors.slice(0, 5)
+    });
+
+    res.json({
+      message: 'CSV import completed',
+      results: importResults,
+    });
+  } catch (error) {
+    console.error('Error importing CSV:', error);
+    res.status(500).json({ error: 'Failed to import CSV' });
   }
 });
 

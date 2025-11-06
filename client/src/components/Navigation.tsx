@@ -392,6 +392,12 @@ export default function Navigation() {
       icon: Package,
       description: 'Track stocks shipped by company week',
     },
+    {
+      path: '/master-document-register',
+      label: 'Master Document Register',
+      icon: FileText,
+      description: 'Comprehensive document register with tracking and management',
+    },
   ];
 
   const qcMaintenanceItems = [

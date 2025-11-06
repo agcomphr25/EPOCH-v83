@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import { db } from '../../../server/db';
+import { pool } from '../../../server/db';
 import { controlledDocuments, documentVersionHistory, insertControlledDocumentSchema, insertDocumentVersionHistorySchema } from '../../../server/schema';
 import { eq, desc, and } from 'drizzle-orm';
 import fs from 'fs/promises';
@@ -9,24 +10,70 @@ import { z } from 'zod';
 
 const router = Router();
 
+// Helper function to get user from session
+async function getUserFromSession(req: Request): Promise<any | null> {
+  const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
+  
+  if (!sessionToken) {
+    return null;
+  }
+
+  try {
+    // Query database for session
+    const result = await pool.query(
+      'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1',
+      [sessionToken]
+    );
+
+    if (!result || result.length === 0) {
+      return null;
+    }
+
+    const session = result[0];
+
+    // Check if session is expired
+    if (new Date(session.expires_at) < new Date()) {
+      await pool.query('DELETE FROM user_sessions WHERE session_token = $1', [sessionToken]);
+      return null;
+    }
+
+    // Get user data from database
+    const dbUserResult = await pool.query(
+      `SELECT id, username, role FROM users WHERE username = $1 AND is_active = true`,
+      [session.username.toLowerCase()]
+    );
+
+    if (dbUserResult && dbUserResult.length > 0) {
+      return dbUserResult[0];
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error getting user from session:', error);
+    return null;
+  }
+}
+
 // Authentication middleware - runs before all other route handlers
-const requireAuth = (req: Request, res: Response, next: any) => {
-  const user = (req as any).user;
+const requireAuth = async (req: Request, res: Response, next: any) => {
+  const user = await getUserFromSession(req);
   if (!user) {
     return res.status(401).json({ error: 'Authentication required' });
   }
+  (req as any).user = user;
   next();
 };
 
 // Authorization middleware - check for admin/owner role
-const requireAdminOrOwner = (req: Request, res: Response, next: any) => {
-  const user = (req as any).user;
+const requireAdminOrOwner = async (req: Request, res: Response, next: any) => {
+  const user = await getUserFromSession(req);
   if (!user) {
     return res.status(401).json({ error: 'Authentication required' });
   }
   if (user.role !== 'ADMIN' && user.role !== 'OWNER') {
     return res.status(403).json({ error: 'Only admins and owners can perform this action' });
   }
+  (req as any).user = user;
   next();
 };
 

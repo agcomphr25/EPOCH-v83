@@ -143,12 +143,16 @@ export function AveryLabelPrint({
               ? `${actionLength} ${stockModel}`
               : actionLength || stockModel || orderId;
 
+          // Get texture text for display
+          const textureText = getTextureText();
+
           return `
             <div class="avery-label">
               <div class="label-content">
                 <div class="line1">${orderId}</div>
                 ${customerName ? `<div class="line2">${customerName}</div>` : ''}
                 ${stockModel || paintOption ? `<div class="line3">${stockModel || ''}${stockModel && paintOption ? ' - ' : ''}${paintOption || ''}</div>` : ''}
+                ${textureText ? `<div class="line4">${textureText}</div>` : ''}
                 <div class="line5">
                   <canvas id="barcode-${index}" width="180" height="25"></canvas>
                 </div>

@@ -1828,7 +1828,7 @@ function StockBOMsTab() {
   // Fetch stock BOMs with harmonized query key
   const { data: stockBoms, isLoading } = useQuery({
     queryKey: ['/api/robust-boms/stock-boms', { search: searchTerm }],
-    queryFn: () => apiRequest(`/api/robust-boms/stock-boms?search=${searchTerm}`),
+    queryFn: () => apiRequest(`/api/robust-boms/stock-boms?search=${encodeURIComponent(searchTerm)}`),
   });
 
   const createBomMutation = useMutation({

@@ -159,51 +159,36 @@ router.post('/progress', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No selections to progress' });
     }
 
-    // Process each PO item: create/update orders and set to Barcode department
+    // Process each purchase order item: update orderCount and create orders
     const progressedOrders: string[] = [];
     const errors: Array<{ poProductId: number; error: string }> = [];
 
     for (const selection of selectionsToProgress) {
       try {
-        const poProductId = selection.poProductId;
+        const poItemId = selection.poProductId; // Actually purchase_order_items.id
         const quantity = selection.quantity || 1;
 
-        // Get the PO product details
-        const poProduct = await pool.query`
-          SELECT * FROM po_products WHERE id = ${poProductId}
+        // Get the purchase order item details
+        const poItem = await pool.query`
+          SELECT poi.*, po.po_number, po.customer_name, po.customer_id
+          FROM purchase_order_items poi
+          JOIN purchase_orders po ON poi.po_id = po.id
+          WHERE poi.id = ${poItemId}
         `;
 
-        if (!poProduct || poProduct.length === 0) {
-          errors.push({ poProductId, error: 'PO product not found' });
+        if (!poItem || poItem.length === 0) {
+          errors.push({ poProductId: poItemId, error: 'Purchase order item not found' });
           continue;
         }
 
-        const product = poProduct[0];
-
-        // Check if this PO product already has an associated order
-        if (product.order_id) {
-          // Update existing order to Barcode department
-          await pool.query`
-            UPDATE "allOrders"
-            SET current_department = 'Barcode',
-                updated_at = NOW()
-            WHERE order_id = ${product.order_id}
-          `;
-          
-          // Update PO product status to prevent re-queueing
-          await pool.query`
-            UPDATE po_products
-            SET status = 'scheduled',
-                updated_at = NOW()
-            WHERE id = ${poProductId}
-          `;
-          
-          progressedOrders.push(product.order_id);
-        } else {
-          // Create new order(s) for this PO product
-          // For now, we'll create one order per PO item
-          // This matches the quantity in the PO product
-          const orderId = `P1-${product.po_number}-${product.id}`;
+        const item = poItem[0];
+        const specs = item.specifications || {};
+        const stockModel = specs.stockModel || specs.stock_model || 'unknown';
+        
+        // Create orders for the selected quantity
+        for (let i = 0; i < quantity; i++) {
+          const currentOrderCount = (item.order_count || 0) + i + 1;
+          const orderId = `P1-${item.po_number}-${poItemId}-${currentOrderCount}`;
           
           await pool.query`
             INSERT INTO "allOrders" (
@@ -215,17 +200,19 @@ router.post('/progress', async (req: Request, res: Response) => {
               current_department,
               status,
               order_date,
+              due_date,
               created_at,
               updated_at
             ) VALUES (
               ${orderId},
-              ${product.customer_id || null},
-              ${product.customer_name},
-              ${product.stock_model || 'unknown'},
-              ${product.stock_model || 'unknown'},
+              ${item.customer_id || null},
+              ${item.customer_name},
+              ${stockModel},
+              ${stockModel},
               'Barcode',
               'in_production',
               NOW(),
+              ${item.due_date || null},
               NOW(),
               NOW()
             )
@@ -234,19 +221,20 @@ router.post('/progress', async (req: Request, res: Response) => {
                 updated_at = NOW()
           `;
 
-          // Link the order back to the PO product
-          await pool.query`
-            UPDATE po_products
-            SET order_id = ${orderId},
-                status = 'scheduled',
-                updated_at = NOW()
-            WHERE id = ${poProductId}
-          `;
-
           progressedOrders.push(orderId);
         }
+
+        // Update the orderCount in purchase_order_items to reflect scheduled quantity
+        const newOrderCount = (item.order_count || 0) + quantity;
+        await pool.query`
+          UPDATE purchase_order_items
+          SET order_count = ${newOrderCount},
+              updated_at = NOW()
+          WHERE id = ${poItemId}
+        `;
+        
       } catch (error) {
-        console.error(`Error progressing PO product ${selection.poProductId}:`, error);
+        console.error(`Error progressing PO item ${selection.poProductId}:`, error);
         errors.push({
           poProductId: selection.poProductId,
           error: (error as Error).message,

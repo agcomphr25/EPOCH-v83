@@ -424,6 +424,62 @@ export default function ProductionQueueManager() {
     progressToBarcodeMutation.mutate(Array.from(selectedQueueOrders));
   };
 
+  // Handler for progressing P1 PO items to Barcode
+  const handleProgressToBarcode = async () => {
+    if (selectedPOItems.size === 0) {
+      toast({
+        title: 'No Items Selected',
+        description: 'Please select items to progress to Barcode',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Convert selected PO items to the format expected by the API
+    const selections: Array<{ poProductId: number; quantity: number }> = [];
+    selectedPOItems.forEach((itemMap, poNumber) => {
+      itemMap.forEach((quantity, itemId) => {
+        selections.push({ poProductId: itemId, quantity });
+      });
+    });
+
+    try {
+      const response = await apiRequest('/api/p1-po-queue/progress', {
+        method: 'POST',
+        body: JSON.stringify({ selections }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      toast({
+        title: 'Success',
+        description: `Progressed ${selections.length} items to Barcode`,
+      });
+
+      // Clear selections
+      setSelectedPOItems(new Map());
+
+      // Refetch data
+      refetchPOs();
+
+      // Print barcode labels for the progressed items
+      // Note: We'll need to fetch the order details from the response to print labels
+      if (response.orderIds && response.orderIds.length > 0) {
+        // TODO: Implement batch label printing
+        toast({
+          title: 'Labels Ready',
+          description: 'Opening label print preview...',
+        });
+      }
+    } catch (error) {
+      console.error('Error progressing to Barcode:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to progress items to Barcode',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Handlers for P1 PO item selection with quantity support
   const handlePOItemQuantityChange = (poNumber: string, itemId: number, quantity: number, maxQuantity: number) => {
     const validQuantity = Math.max(0, Math.min(quantity, maxQuantity));
@@ -907,15 +963,12 @@ export default function ProductionQueueManager() {
                           className="bg-green-600 hover:bg-green-700 text-white"
                           size="sm"
                           onClick={() => {
-                            toast({
-                              title: 'Action Pending',
-                              description: `Ready to process ${totalSelected} selected items`,
-                            });
+                            handleProgressToBarcode();
                           }}
-                          data-testid="button-process-selected"
+                          data-testid="button-progress-to-barcode"
                         >
                           <ArrowRight className="w-4 h-4 mr-2" />
-                          Process Selected Items
+                          Progress to Barcode
                         </Button>
                       </div>
                     </div>

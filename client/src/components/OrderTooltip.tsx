@@ -4,12 +4,6 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { Zap, Wrench } from 'lucide-react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 
 interface OrderTooltipProps {
   order: any;
@@ -191,21 +185,13 @@ export function OrderTooltip({
                   </Badge>
                 )}
                 {isRepair && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Badge className="bg-blue-500 text-white flex items-center gap-1 px-2 py-0.5 font-bold text-xs cursor-help">
-                          <Wrench className="w-3 h-3" />
-                          REPAIR
-                        </Badge>
-                      </TooltipTrigger>
-                      {repairNotes && (
-                        <TooltipContent>
-                          <p className="max-w-xs">{repairNotes}</p>
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
-                  </TooltipProvider>
+                  <Badge 
+                    className="bg-blue-500 text-white flex items-center gap-1 px-2 py-0.5 font-bold text-xs cursor-help"
+                    title={repairNotes || 'Repair order'}
+                  >
+                    <Wrench className="w-3 h-3" />
+                    REPAIR
+                  </Badge>
                 )}
               </div>
               {order.fbOrderNumber && order.fbOrderNumber.trim() !== '' && (

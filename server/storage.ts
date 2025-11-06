@@ -13,6 +13,7 @@ import {
   forms,
   formSubmissions,
   inventoryItems,
+  inventoryItemCostHistory,
   inventoryScans,
   itemGroups,
   inventoryItemGroups,
@@ -1427,6 +1428,13 @@ export interface IStorage {
   createVendorPOItem(data: any): Promise<any>;
   updateVendorPOItem(id: number, data: any): Promise<any>;
   deleteVendorPOItem(id: number): Promise<void>;
+  recordVendorPOReceipt(params: {
+    poLineItemId: number;
+    receivedQuantity: number;
+    receivedDate: Date;
+    notes?: string;
+    createdBy?: number;
+  }): Promise<any>;
 
   // Vendor PO Settings
   getVendorPOSettings(): Promise<any | undefined>;
@@ -5947,6 +5955,153 @@ export class DatabaseStorage implements IStorage {
 
   async deleteVendorPOItem(id: number): Promise<void> {
     await db.delete(vendorPOItems).where(eq(vendorPOItems.id, id));
+  }
+
+  async recordVendorPOReceipt(params: {
+    poLineItemId: number;
+    receivedQuantity: number;
+    receivedDate: Date;
+    notes?: string;
+    createdBy?: number;
+  }): Promise<any> {
+    const { poLineItemId, receivedQuantity, receivedDate, notes, createdBy } = params;
+
+    // Validate received date is valid and not in the future
+    if (isNaN(receivedDate.getTime())) {
+      throw new Error(`Invalid received date provided: ${receivedDate}`);
+    }
+    
+    const now = new Date();
+    if (receivedDate > now) {
+      throw new Error(`Received date cannot be in the future. Received: ${receivedDate.toISOString()}, Current: ${now.toISOString()}`);
+    }
+
+    // Wrap all database operations in a transaction for data integrity
+    return await db.transaction(async (tx) => {
+      // Get the PO line item details
+      const [poLineItem] = await tx
+        .select({
+          id: vendorPOItems.id,
+          agPartNumber: vendorPOItems.agPartNumber,
+          unitPrice: vendorPOItems.unitPrice,
+          vendorPoId: vendorPOItems.vendorPoId,
+        })
+        .from(vendorPOItems)
+        .where(eq(vendorPOItems.id, poLineItemId));
+
+      if (!poLineItem) {
+        throw new Error(`PO line item ${poLineItemId} not found`);
+      }
+
+      if (!poLineItem.agPartNumber) {
+        throw new Error('Cannot calculate COGS for ad-hoc items without AG Part Number');
+      }
+
+      // Validate unit price
+      if (!poLineItem.unitPrice || poLineItem.unitPrice <= 0) {
+        throw new Error(
+          `Invalid unit price ${poLineItem.unitPrice} for PO line item ${poLineItemId}. Must be positive.`
+        );
+      }
+
+      // Get the vendor PO to get vendorId
+      const [vendorPO] = await tx
+        .select({ vendorId: vendorPOs.vendorId })
+        .from(vendorPOs)
+        .where(eq(vendorPOs.id, poLineItem.vendorPoId));
+
+      if (!vendorPO) {
+        throw new Error(`Vendor PO ${poLineItem.vendorPoId} not found`);
+      }
+
+      // Get the inventory item's UOM conversion data
+      const [inventoryItem] = await tx
+        .select({
+          id: inventoryItems.id,
+          agPartNumber: inventoryItems.agPartNumber,
+          usageQuantityPerUnit: inventoryItems.usageQuantityPerUnit,
+          purchaseUnit: inventoryItems.purchaseUnit,
+          usageUnit: inventoryItems.usageUnit,
+        })
+        .from(inventoryItems)
+        .where(eq(inventoryItems.agPartNumber, poLineItem.agPartNumber));
+
+      if (!inventoryItem) {
+        throw new Error(`Inventory item ${poLineItem.agPartNumber} not found`);
+      }
+
+      // Require valid conversion factor (no defaults - must be configured)
+      if (!inventoryItem.usageQuantityPerUnit || inventoryItem.usageQuantityPerUnit <= 0) {
+        throw new Error(
+          `Conversion factor not configured for ${poLineItem.agPartNumber}. Please set usageQuantityPerUnit to a positive value before receiving PO items.`
+        );
+      }
+
+      const conversionFactor = inventoryItem.usageQuantityPerUnit;
+
+      // Calculate COGS per usage unit
+      // usageUnitCost = purchaseUnitCost / usageQuantityPerUnit
+      // Example: $320 per box / 80 lbs per box = $4/lb
+      const purchaseUnitCost = poLineItem.unitPrice;
+      const usageUnitCost = purchaseUnitCost / conversionFactor;
+
+      console.log(`💰 COGS Calculation for ${poLineItem.agPartNumber}:`);
+      console.log(`   Purchase Unit Cost: $${purchaseUnitCost} per ${inventoryItem.purchaseUnit || 'unit'}`);
+      console.log(`   Conversion Factor: ${conversionFactor} ${inventoryItem.usageUnit || 'units'} per ${inventoryItem.purchaseUnit || 'unit'}`);
+      console.log(`   Usage Unit Cost: $${usageUnitCost.toFixed(4)} per ${inventoryItem.usageUnit || 'unit'}`);
+
+      // Insert into cost history
+      const [costHistory] = await tx
+        .insert(inventoryItemCostHistory)
+        .values({
+          inventoryItemId: inventoryItem.id,
+          vendorId: vendorPO.vendorId,
+          receivedDate,
+          purchaseUnitCost,
+          usageUnitCost,
+          currency: 'USD',
+          poLineItemId,
+          notes,
+          createdBy,
+        })
+        .returning();
+
+      // Update the inventory item's latest cost
+      await tx
+        .update(inventoryItems)
+        .set({
+          latestCost: usageUnitCost,
+          updatedAt: new Date(),
+        })
+        .where(eq(inventoryItems.id, inventoryItem.id));
+
+      // Update the PO line item's received quantity and date
+      await tx
+        .update(vendorPOItems)
+        .set({
+          receivedQuantity,
+          receivedDate,
+          updatedAt: new Date(),
+        })
+        .where(eq(vendorPOItems.id, poLineItemId));
+
+      console.log(`✅ Cost history recorded for ${poLineItem.agPartNumber}, latest cost updated to $${usageUnitCost.toFixed(4)}/${inventoryItem.usageUnit || 'unit'}`);
+
+      return {
+        costHistory,
+        inventoryItem: {
+          agPartNumber: inventoryItem.agPartNumber,
+          latestCost: usageUnitCost,
+        },
+        calculation: {
+          purchaseUnitCost,
+          usageUnitCost,
+          conversionFactor,
+          purchaseUnit: inventoryItem.purchaseUnit,
+          usageUnit: inventoryItem.usageUnit,
+        },
+      };
+    });
   }
 
   // Vendor PO Settings

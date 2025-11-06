@@ -233,4 +233,47 @@ router.delete('/items/:itemId', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/vendor-pos/items/:itemId/receive - Record PO item receipt and auto-calculate COGS
+router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
+  try {
+    const itemId = parseInt(req.params.itemId);
+    if (isNaN(itemId)) {
+      return res.status(400).json({ error: 'Invalid vendor PO item ID' });
+    }
+
+    // Validate request body
+    const receiveSchema = z.object({
+      receivedQuantity: z.number().positive('Received quantity must be positive'),
+      receivedDate: z.string().optional(), // ISO date string, defaults to now
+      notes: z.string().optional(),
+      createdBy: z.number().int().positive().optional(), // Employee ID
+    });
+
+    const { receivedQuantity, receivedDate, notes, createdBy } = receiveSchema.parse(req.body);
+
+    // Record PO receipt and calculate COGS
+    const result = await storage.recordVendorPOReceipt({
+      poLineItemId: itemId,
+      receivedQuantity,
+      receivedDate: receivedDate ? new Date(receivedDate) : new Date(),
+      notes,
+      createdBy,
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Record PO receipt error:', error);
+    if (error instanceof z.ZodError) {
+      return res
+        .status(400)
+        .json({ error: 'Invalid receipt data', details: error.errors });
+    }
+    // Pass business logic errors (like validation failures) to the client with 400
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to record PO receipt' });
+  }
+});
+
 export default router;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
   FileText,
   Plus,
   Search,
@@ -30,14 +40,20 @@ import {
   AlertCircle,
   Clock,
   History,
+  Upload,
 } from 'lucide-react';
 import type { ControlledDocument } from '@shared/schema';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 export default function MasterDocumentRegister() {
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const { toast } = useToast();
 
   // Fetch controlled documents
   const { data: documents = [], isLoading } = useQuery<ControlledDocument[]>({
@@ -137,6 +153,44 @@ export default function MasterDocumentRegister() {
     return new Date(dateString).toLocaleDateString();
   };
 
+  // Create document mutation
+  const createDocumentMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      return await apiRequest('/api/controlled-documents', {
+        method: 'POST',
+        body: formData,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/controlled-documents'] });
+      setIsCreateDialogOpen(false);
+      setSelectedFile(null);
+      toast({
+        title: 'Success',
+        description: 'Document created successfully',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create document',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleCreateDocument = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formElement = e.currentTarget;
+    const formData = new FormData(formElement);
+
+    if (selectedFile) {
+      formData.append('file', selectedFile);
+    }
+
+    createDocumentMutation.mutate(formData);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto ml-16">
@@ -156,6 +210,7 @@ export default function MasterDocumentRegister() {
               <Button
                 className="flex items-center gap-2"
                 data-testid="button-create-document"
+                onClick={() => setIsCreateDialogOpen(true)}
               >
                 <Plus className="h-4 w-4" />
                 New Document
@@ -349,6 +404,167 @@ export default function MasterDocumentRegister() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Create Document Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Controlled Document</DialogTitle>
+            <DialogDescription>
+              Upload a new controlled document for P1 or P2 operations
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleCreateDocument} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="documentNumber">Document Number *</Label>
+                <Input
+                  id="documentNumber"
+                  name="documentNumber"
+                  required
+                  placeholder="e.g., P1-001"
+                  data-testid="input-document-number"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="documentName">Document Name *</Label>
+                <Input
+                  id="documentName"
+                  name="documentName"
+                  required
+                  placeholder="e.g., Safety Procedure"
+                  data-testid="input-document-name"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="documentType">Document Type *</Label>
+                <Select name="documentType" required>
+                  <SelectTrigger data-testid="select-document-type">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SOP">SOP - Standard Operating Procedure</SelectItem>
+                    <SelectItem value="WI">WI - Work Instruction</SelectItem>
+                    <SelectItem value="FORM">Form</SelectItem>
+                    <SelectItem value="POLICY">Policy</SelectItem>
+                    <SelectItem value="PROCEDURE">Procedure</SelectItem>
+                    <SelectItem value="PLAN">Plan</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="department">Department *</Label>
+                <Select name="department" required>
+                  <SelectTrigger data-testid="select-department">
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="P1 Operations">P1 Operations</SelectItem>
+                    <SelectItem value="P2 Operations">P2 Operations</SelectItem>
+                    <SelectItem value="Quality Control">Quality Control</SelectItem>
+                    <SelectItem value="Manufacturing">Manufacturing</SelectItem>
+                    <SelectItem value="Engineering">Engineering</SelectItem>
+                    <SelectItem value="Safety">Safety</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <Input
+                id="category"
+                name="category"
+                placeholder="e.g., Safety, Quality, Production"
+                data-testid="input-category"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                name="description"
+                placeholder="Brief description of the document"
+                rows={3}
+                data-testid="textarea-description"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="retentionLength">Retention Period</Label>
+                <Input
+                  id="retentionLength"
+                  name="retentionLength"
+                  placeholder="e.g., 1 year, 5 years, Permanent"
+                  defaultValue="1 year"
+                  data-testid="input-retention-length"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="documentOwner">Document Owner</Label>
+                <Input
+                  id="documentOwner"
+                  name="documentOwner"
+                  placeholder="e.g., Quality Manager"
+                  data-testid="input-document-owner"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="file">Upload File</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="file"
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx"
+                  onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                  data-testid="input-file-upload"
+                />
+                {selectedFile && (
+                  <div className="text-sm text-green-600 flex items-center gap-1">
+                    <Upload className="h-4 w-4" />
+                    {selectedFile.name}
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-500">
+                Accepted formats: PDF, Word, Excel (max 50MB)
+              </p>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsCreateDialogOpen(false);
+                  setSelectedFile(null);
+                }}
+                data-testid="button-cancel-create"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={createDocumentMutation.isPending}
+                data-testid="button-submit-create"
+              >
+                {createDocumentMutation.isPending ? 'Creating...' : 'Create Document'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

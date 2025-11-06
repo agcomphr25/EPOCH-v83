@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Package, Plus, Trash2, Edit2, Eye } from 'lucide-react';
+import { Package, Plus, Trash2, Edit2, Eye, Barcode } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { AveryLabelPrint } from '@/components/AveryLabelPrint';
 
 interface POItem {
   id: number;
@@ -53,17 +54,20 @@ interface POProduct {
 
 interface POItemsManagerProps {
   poId: number;
+  poNumber?: string;
   customerName: string;
   onAddItem: () => void;
 }
 
 export default function POItemsManager({
   poId,
+  poNumber,
   customerName,
   onAddItem,
 }: POItemsManagerProps) {
   const [selectedItem, setSelectedItem] = useState<POItem | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [barcodeItemId, setBarcodeItemId] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Fetch PO items
@@ -121,6 +125,17 @@ export default function POItemsManager({
     if (confirm('Are you sure you want to delete this item?')) {
       deleteMutation.mutate(itemId);
     }
+  };
+
+  const handlePrintBarcode = (item: POItem) => {
+    // Generate a unique barcode ID for this PO item
+    const barcodeId = `PO-${poNumber || poId}-ITEM-${item.id}`;
+    setBarcodeItemId(barcodeId);
+    
+    toast({
+      title: 'Generating Barcode',
+      description: 'Preparing barcode label for printing...',
+    });
   };
 
   const handleCloseDialog = () => {
@@ -252,8 +267,18 @@ export default function POItemsManager({
                     <Button
                       variant="ghost"
                       size="sm"
+                      onClick={() => handlePrintBarcode(item)}
+                      className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700"
+                      data-testid={`button-print-barcode-${item.id}`}
+                    >
+                      <Barcode className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleViewItem(item)}
                       className="h-8 w-8 p-0"
+                      data-testid={`button-view-item-${item.id}`}
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
@@ -263,6 +288,7 @@ export default function POItemsManager({
                       onClick={() => handleDeleteItem(item.id)}
                       className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
                       disabled={deleteMutation.isPending}
+                      data-testid={`button-delete-item-${item.id}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -365,6 +391,30 @@ export default function POItemsManager({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Hidden Barcode Label Printer */}
+      {barcodeItemId && (() => {
+        const itemToPrint = poItems.find(item => `PO-${poNumber || poId}-ITEM-${item.id}` === barcodeItemId);
+        if (!itemToPrint) return null;
+
+        const specs = itemToPrint.specifications || {};
+        const stockModel = poProducts.find(p => p.id.toString() === itemToPrint.itemId)?.stockModel || specs.stockModel || 'Stock Item';
+
+        return (
+          <div style={{ position: 'absolute', left: '-9999px' }}>
+            <AveryLabelPrint
+              barcode={barcodeItemId}
+              orderId={`PO ${poNumber || poId}`}
+              customerName={customerName}
+              stockModel={stockModel}
+              actionLength={specs.actionLength || specs.action_length}
+              features={specs}
+              labelType="detailed"
+              copies={6}
+            />
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -424,6 +424,227 @@ export default function ProductionQueueManager() {
     progressToBarcodeMutation.mutate(Array.from(selectedQueueOrders));
   };
 
+  // Function to print barcode labels for multiple orders
+  const printBarcodeLabelsForOrders = (orders: any[]) => {
+    if (!orders || orders.length === 0) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({
+        title: 'Pop-up Blocked',
+        description: 'Please allow pop-ups to print labels',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Generate HTML for all labels
+    const labelsHTML = orders.map((order) => {
+      const barcode = order.orderId || 'UNKNOWN';
+      const customerName = order.customerName || 'No Customer';
+      const stockModel = order.stockModelId || order.modelId || '';
+      const dueDate = order.dueDate || '';
+
+      return `
+        <div class="avery-label">
+          <div class="label-content">
+            <div class="line1">${barcode}</div>
+            <div class="line2">${customerName}</div>
+            ${stockModel ? `<div class="line3">${stockModel}</div>` : ''}
+            ${dueDate ? `<div class="line4">Due: ${new Date(dueDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}</div>` : ''}
+            <div class="line5">
+              <canvas class="barcode-canvas" data-barcode="${barcode}"></canvas>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Barcode Labels</title>
+          <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+          <style>
+            body {
+              margin: 0;
+              padding: 0;
+              font-family: Arial, sans-serif;
+            }
+
+            .avery-label {
+              width: 2.625in;
+              height: 1in;
+              border: 1px solid #ddd;
+              margin: 0;
+              padding: 0.03in;
+              display: inline-block;
+              vertical-align: top;
+              box-sizing: border-box;
+              page-break-inside: avoid;
+              background: white;
+            }
+
+            .label-content {
+              height: 100%;
+              display: flex;
+              flex-direction: column;
+              justify-content: space-between;
+              text-align: center;
+              padding: 2px;
+              box-sizing: border-box;
+            }
+
+            .line1 {
+              font-size: 8pt;
+              font-weight: bold;
+              color: #000;
+              margin-bottom: 2px;
+              text-overflow: ellipsis;
+              overflow: hidden;
+              white-space: nowrap;
+            }
+
+            .line2 {
+              font-size: 6pt;
+              color: #000;
+              margin: 1px 0;
+              text-overflow: ellipsis;
+              overflow: hidden;
+              white-space: nowrap;
+            }
+
+            .line3 {
+              font-size: 6pt;
+              color: #000;
+              margin: 1px 0;
+            }
+
+            .line4 {
+              font-size: 5pt;
+              color: #000;
+              margin: 1px 0;
+            }
+
+            .line5 {
+              text-align: center;
+            }
+
+            .barcode-canvas {
+              max-width: 100%;
+              height: auto;
+            }
+
+            @media print {
+              body {
+                margin: 0;
+                padding: 0;
+              }
+              .avery-label {
+                border: none;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          ${labelsHTML}
+          <script>
+            window.addEventListener('load', function() {
+              const canvases = document.querySelectorAll('.barcode-canvas');
+              canvases.forEach(canvas => {
+                const barcode = canvas.getAttribute('data-barcode');
+                try {
+                  JsBarcode(canvas, barcode, {
+                    format: 'CODE39',
+                    width: 2,
+                    height: 40,
+                    displayValue: false,
+                    fontSize: 10,
+                    textAlign: 'center',
+                    textPosition: 'bottom',
+                    textMargin: 2,
+                    fontOptions: '',
+                    font: 'monospace',
+                    background: '#ffffff',
+                    lineColor: '#000000',
+                    margin: 5,
+                  });
+                } catch (e) {
+                  console.error('Barcode generation error:', e);
+                }
+              });
+              
+              // Auto-print after barcodes are generated
+              setTimeout(() => {
+                window.print();
+              }, 500);
+            });
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  // Handler for progressing P1 PO items to Barcode
+  const handleProgressToBarcode = async () => {
+    if (selectedPOItems.size === 0) {
+      toast({
+        title: 'No Items Selected',
+        description: 'Please select items to progress to Barcode',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Convert selected PO items to the format expected by the API
+    const selections: Array<{ poProductId: number; quantity: number }> = [];
+    selectedPOItems.forEach((itemMap, poNumber) => {
+      itemMap.forEach((quantity, itemId) => {
+        selections.push({ poProductId: itemId, quantity });
+      });
+    });
+
+    try {
+      const response = await apiRequest('/api/p1-po-queue/progress', {
+        method: 'POST',
+        body: JSON.stringify({ selections }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      toast({
+        title: 'Success',
+        description: `Progressed ${selections.length} items to Barcode`,
+      });
+
+      // Clear selections
+      setSelectedPOItems(new Map());
+
+      // Refetch data
+      refetchPOs();
+
+      // Print barcode labels for the progressed items
+      if (response.orderIds && response.orderIds.length > 0) {
+        // Fetch order details for label printing
+        const orderDetails = await Promise.all(
+          response.orderIds.map((orderId: string) =>
+            apiRequest(`/api/orders/${orderId}`)
+          )
+        );
+
+        // Print labels for all progressed orders
+        printBarcodeLabelsForOrders(orderDetails);
+      }
+    } catch (error) {
+      console.error('Error progressing to Barcode:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to progress items to Barcode',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Handlers for P1 PO item selection with quantity support
   const handlePOItemQuantityChange = (poNumber: string, itemId: number, quantity: number, maxQuantity: number) => {
     const validQuantity = Math.max(0, Math.min(quantity, maxQuantity));
@@ -907,15 +1128,12 @@ export default function ProductionQueueManager() {
                           className="bg-green-600 hover:bg-green-700 text-white"
                           size="sm"
                           onClick={() => {
-                            toast({
-                              title: 'Action Pending',
-                              description: `Ready to process ${totalSelected} selected items`,
-                            });
+                            handleProgressToBarcode();
                           }}
-                          data-testid="button-process-selected"
+                          data-testid="button-progress-to-barcode"
                         >
                           <ArrowRight className="w-4 h-4 mr-2" />
-                          Process Selected Items
+                          Progress to Barcode
                         </Button>
                       </div>
                     </div>

@@ -15,6 +15,7 @@ import {
   CheckSquare,
   Square,
   CheckCircle,
+  Wrench,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -23,6 +24,7 @@ import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { toast } from 'react-hot-toast';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
 import { apiRequest } from '@/lib/queryClient';
+import { useRepairOrders } from '@/hooks/useRepairOrders';
 
 export default function FinishQCQueuePage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,6 +34,9 @@ export default function FinishQCQueuePage() {
     null
   );
   const queryClient = useQueryClient();
+
+  // Get repair order information
+  const { isRepairOrder, repairNotesMap } = useRepairOrders();
 
   // Get orders in Finish QC department directly
   const { data: finishQCOrders = [] } = useQuery<any[]>({
@@ -403,6 +408,8 @@ export default function FinishQCQueuePage() {
                         showHoverText={false}
                         disableHoverPopup={true}
                         showTechnician={true}
+                        isRepair={isRepairOrder(order.orderId)}
+                        repairNotes={repairNotesMap.get(order.orderId)}
                         className={`border-l-purple-500 cursor-pointer ${
                           isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                         }`}

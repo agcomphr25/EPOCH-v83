@@ -21,6 +21,7 @@ import {
   Eye,
   TrendingDown,
   Zap,
+  Wrench,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
@@ -31,6 +32,7 @@ import { useLocation } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
+import { useRepairOrders } from '@/hooks/useRepairOrders';
 
 export default function PaintQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -42,6 +44,9 @@ export default function PaintQueuePage() {
   );
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+
+  // Get repair order information
+  const { isRepairOrder, repairNotesMap } = useRepairOrders();
 
   // Get all orders from production pipeline
   const { data: allOrders = [] } = useQuery({
@@ -526,6 +531,23 @@ export default function PaintQueuePage() {
                                 <Zap className="w-3 h-3" />
                                 URGENT!!!
                               </Badge>
+                            )}
+                            {isRepairOrder(order.orderId) && (
+                              <div className="relative group">
+                                <Badge 
+                                  className="bg-blue-500 text-white flex items-center gap-1 px-2 py-0.5 font-bold text-xs cursor-help"
+                                >
+                                  <Wrench className="w-3 h-3" />
+                                  REPAIR
+                                </Badge>
+                                {repairNotesMap.get(order.orderId) && (
+                                  <div className="absolute bottom-full left-0 mb-1 hidden group-hover:block z-50 w-64">
+                                    <div className="bg-gray-900 text-white text-sm px-3 py-2 rounded shadow-lg">
+                                      {repairNotesMap.get(order.orderId)}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             )}
                             {order.fbOrderNumber && (
                               <Badge

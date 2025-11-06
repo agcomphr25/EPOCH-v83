@@ -718,7 +718,7 @@ export default function BarcodeQueuePage() {
                         new Date(order.dueDate)
                       );
                       const actionLength =
-                        order.features?.action_length || 'unknown';
+                        order.features?.action_length || order.features?.actionLength || order.actionLength || 'unknown';
                       // Determine material type from stock model ID
                       const materialType = order.modelId?.startsWith('cf_')
                         ? 'Carbon Fiber'
@@ -983,7 +983,7 @@ export default function BarcodeQueuePage() {
                               new Date(order.dueDate)
                             );
                             const actionLength =
-                              order.features?.action_length || 'unknown';
+                              order.features?.action_length || order.features?.actionLength || order.actionLength || 'unknown';
                             // Determine material type from stock model ID
                             const materialType = order.modelId?.startsWith(
                               'cf_'

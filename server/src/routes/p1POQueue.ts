@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
+import { pool } from '../../db';
 import { insertPOProductSelectionSchema } from '@shared/schema';
 import { nanoid } from 'nanoid';
 
@@ -158,16 +159,109 @@ router.post('/progress', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No selections to progress' });
     }
 
-    // TODO: Implement order creation and progression to Barcode
-    // This will:
-    // 1. Create production orders for each selected PO item (or link to existing orders)
-    // 2. Set currentDepartment to 'Barcode'
-    // 3. Update PO product status to 'scheduled' or 'released'
-    // For now, return a placeholder response
+    // Process each purchase order item: update orderCount and create production orders
+    const progressedOrders: string[] = [];
+    const errors: Array<{ poProductId: number; error: string }> = [];
+
+    for (const selection of selectionsToProgress) {
+      try {
+        const poItemId = selection.poProductId; // Actually purchase_order_items.id
+        const quantity = selection.quantity || 1;
+
+        // Get the purchase order item details
+        const poItem = await pool.query`
+          SELECT poi.*, po.id as po_id, po.po_number, po.customer_name, po.customer_id
+          FROM purchase_order_items poi
+          JOIN purchase_orders po ON poi.po_id = po.id
+          WHERE poi.id = ${poItemId}
+        `;
+
+        if (!poItem || poItem.length === 0) {
+          errors.push({ poProductId: poItemId, error: 'Purchase order item not found' });
+          continue;
+        }
+
+        const item = poItem[0];
+        const specs = item.specifications || {};
+        
+        // Use a default due date if none is provided (30 days from now)
+        const dueDate = item.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        
+        // Create production orders for the selected quantity
+        for (let i = 0; i < quantity; i++) {
+          const currentOrderCount = (item.order_count || 0) + i + 1;
+          const orderId = `P1-${item.po_number}-${poItemId}-${currentOrderCount}`;
+          
+          await pool.query`
+            INSERT INTO production_orders (
+              order_id,
+              po_id,
+              po_item_id,
+              customer_id,
+              customer_name,
+              po_number,
+              item_type,
+              item_id,
+              item_name,
+              specifications,
+              order_date,
+              due_date,
+              production_status,
+              current_department,
+              created_at,
+              updated_at
+            ) VALUES (
+              ${orderId},
+              ${item.po_id},
+              ${poItemId},
+              ${item.customer_id || ''},
+              ${item.customer_name},
+              ${item.po_number},
+              'stock',
+              ${item.item_id || ''},
+              ${item.item_name || ''},
+              ${JSON.stringify(specs)},
+              NOW(),
+              ${dueDate},
+              'LAID_UP',
+              'Barcode',
+              NOW(),
+              NOW()
+            )
+            ON CONFLICT (order_id) DO UPDATE
+            SET current_department = 'Barcode',
+                production_status = 'LAID_UP',
+                updated_at = NOW()
+          `;
+
+          progressedOrders.push(orderId);
+        }
+
+        // Update the orderCount in purchase_order_items to reflect scheduled quantity
+        const newOrderCount = (item.order_count || 0) + quantity;
+        await pool.query`
+          UPDATE purchase_order_items
+          SET order_count = ${newOrderCount},
+              updated_at = NOW()
+          WHERE id = ${poItemId}
+        `;
+        
+      } catch (error) {
+        console.error(`Error progressing PO item ${selection.poProductId}:`, error);
+        errors.push({
+          poProductId: selection.poProductId,
+          error: (error as Error).message,
+        });
+      }
+    }
+
     res.json({
-      message: 'Order progression will be implemented in next phase',
-      itemsProgressed: selectionsToProgress.length,
+      success: true,
+      message: `Progressed ${progressedOrders.length} items to Barcode`,
+      itemsProgressed: progressedOrders.length,
       targetDepartment: 'Barcode',
+      orderIds: progressedOrders,
+      errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {
     console.error('Error progressing orders:', error);

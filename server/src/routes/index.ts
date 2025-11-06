@@ -3775,12 +3775,55 @@ export function registerRoutes(app: Express): Server {
       const orderDetails = [];
       
       for (const orderId of orderIds) {
-        // Try to get order from finalized orders first, then drafts
+        // Try to get order from finalized orders first, then drafts, then production_orders
         let order: any = null;
         try {
           order = await storage.getFinalizedOrderById(orderId);
           if (!order) {
             order = await storage.getOrderDraft(orderId);
+          }
+          
+          // If not found in regular orders, check production_orders table (P1 orders)
+          if (!order && orderId.startsWith('P1-')) {
+            console.log(`🔍 P1 order detected: ${orderId}, querying production_orders table`);
+            const productionOrderResult = await pool.query`
+              SELECT 
+                order_id,
+                customer_id,
+                customer_name,
+                po_number,
+                item_name,
+                specifications,
+                order_date,
+                due_date,
+                production_status,
+                current_department,
+                created_at,
+                updated_at
+              FROM production_orders
+              WHERE order_id = ${orderId}
+              LIMIT 1
+            `;
+            
+            if (productionOrderResult && productionOrderResult.length > 0) {
+              const po = productionOrderResult[0];
+              console.log(`✅ Found P1 production order:`, po);
+              order = {
+                orderId: po.order_id,
+                customerId: po.customer_id,
+                customerName: po.customer_name,
+                currentDepartment: po.current_department,
+                orderDate: po.order_date,
+                dueDate: po.due_date,
+                status: 'in_production',
+                stockModelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
+                modelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
+                fbOrderNumber: po.po_number,
+                isP1Order: true,
+                features: po.specifications || {},
+                actionLength: po.specifications?.actionLength || po.specifications?.action_length,
+              };
+            }
           }
         } catch (_error) {
           console.warn(`Could not find order ${orderId}:`, _error);
@@ -3852,15 +3895,15 @@ export function registerRoutes(app: Express): Server {
           // Calculate label position (3x10 grid) - Avery 5160 format with correct margins
           const col = labelIndex % 3;
           const row = Math.floor(labelIndex / 3);
-          // Avery 5160 specifications: 0.25" margin between columns, reduced top margin, Label size 2.625" x 1"
+          // Avery 5160 specifications: 0.25" margin between columns, adjusted vertical position for alignment
           const leftMargin = 18; // 0.25" * 72 points/inch (left margin)
-          const topMargin = 0; // 0 points - no top margin
+          const verticalOffset = 18; // 0.25" * 72 points/inch - shift labels UP by quarter inch
           const bottomMargin = 36; // 0.5" * 72 points/inch
           const labelWidth = 189; // 2.625" * 72 points/inch
           const labelHeight = 72; // 1" * 72 points/inch
           const columnGap = 9; // 0.125" * 72 points/inch (reduced gap between columns)
           const x = leftMargin + col * (labelWidth + columnGap);
-          const y = 792 - labelHeight - row * labelHeight; // Position labels properly from top
+          const y = 792 - labelHeight - row * labelHeight + verticalOffset; // Shift up by 0.25"
 
           // Draw label border with clear separation
           page.drawRectangle({

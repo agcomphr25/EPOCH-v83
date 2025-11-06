@@ -244,14 +244,31 @@ const InventoryForm = ({
         </div>
         <div>
           <Label htmlFor="purchaseUnit">Purchase Unit</Label>
-          <Input
-            id="purchaseUnit"
-            name="purchaseUnit"
+          <Select
             value={formData.purchaseUnit}
-            onChange={onChange}
-            placeholder="BOX"
-            data-testid="input-purchaseUnit"
-          />
+            onValueChange={(value) => onSelectChange('purchaseUnit', value)}
+          >
+            <SelectTrigger id="purchaseUnit" data-testid="select-purchaseUnit">
+              <SelectValue placeholder="Select unit" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="BOX">BOX</SelectItem>
+              <SelectItem value="CASE">CASE</SelectItem>
+              <SelectItem value="PALLET">PALLET</SelectItem>
+              <SelectItem value="ROLL">ROLL</SelectItem>
+              <SelectItem value="SHEET">SHEET</SelectItem>
+              <SelectItem value="BAG">BAG</SelectItem>
+              <SelectItem value="DRUM">DRUM</SelectItem>
+              <SelectItem value="PAIL">PAIL</SelectItem>
+              <SelectItem value="TUBE">TUBE</SelectItem>
+              <SelectItem value="GAL">GAL</SelectItem>
+              <SelectItem value="LB">LB</SelectItem>
+              <SelectItem value="KG">KG</SelectItem>
+              <SelectItem value="EA">EA</SelectItem>
+              <SelectItem value="FT">FT</SelectItem>
+              <SelectItem value="M">M</SelectItem>
+            </SelectContent>
+          </Select>
           <p className="text-xs text-gray-500 mt-1">Machine-friendly unit (e.g., "BOX", "GAL", "EA")</p>
         </div>
         <div>
@@ -282,15 +299,36 @@ const InventoryForm = ({
         </div>
         <div>
           <Label htmlFor="usageUnit">Usage Unit</Label>
-          <Input
-            id="usageUnit"
-            name="usageUnit"
+          <Select
             value={formData.usageUnit}
-            onChange={onChange}
-            placeholder="grams"
-            data-testid="input-usageUnit"
-          />
-          <p className="text-xs text-gray-500 mt-1">Unit of measurement (e.g., "grams", "each")</p>
+            onValueChange={(value) => onSelectChange('usageUnit', value)}
+          >
+            <SelectTrigger id="usageUnit" data-testid="select-usageUnit">
+              <SelectValue placeholder="Select unit" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="oz">oz (ounce)</SelectItem>
+              <SelectItem value="lb">lb (pound)</SelectItem>
+              <SelectItem value="g">g (gram)</SelectItem>
+              <SelectItem value="kg">kg (kilogram)</SelectItem>
+              <SelectItem value="ml">ml (milliliter)</SelectItem>
+              <SelectItem value="L">L (liter)</SelectItem>
+              <SelectItem value="gal">gal (gallon)</SelectItem>
+              <SelectItem value="qt">qt (quart)</SelectItem>
+              <SelectItem value="pt">pt (pint)</SelectItem>
+              <SelectItem value="fl oz">fl oz (fluid ounce)</SelectItem>
+              <SelectItem value="ft">ft (foot)</SelectItem>
+              <SelectItem value="in">in (inch)</SelectItem>
+              <SelectItem value="m">m (meter)</SelectItem>
+              <SelectItem value="cm">cm (centimeter)</SelectItem>
+              <SelectItem value="mm">mm (millimeter)</SelectItem>
+              <SelectItem value="ea">ea (each)</SelectItem>
+              <SelectItem value="pc">pc (piece)</SelectItem>
+              <SelectItem value="sq ft">sq ft (square foot)</SelectItem>
+              <SelectItem value="sq in">sq in (square inch)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-500 mt-1">Unit of measurement (e.g., "g", "oz", "ea")</p>
         </div>
         <div>
           <Label htmlFor="cogsPerUnit">COGS per Unit ($)</Label>

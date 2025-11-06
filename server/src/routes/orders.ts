@@ -696,17 +696,57 @@ router.delete('/draft/:id', async (req: Request, res: Response) => {
 // Order Management (duplicate removed)
 // Specific routes must come before parameterized routes
 
-// Get all orders endpoint (backward compatibility)
+// Get all orders endpoint (backward compatibility) - includes both regular and P1 production orders
 router.get('/all', async (req: Request, res: Response) => {
   try {
-    const orders = await storage.getAllOrders();
-    res.json(orders);
+    const { pool } = await import('../../db');
+    
+    // Get regular orders from all_orders table
+    const regularOrders = await storage.getAllOrders();
+    
+    // Get P1 production orders from production_orders table
+    const productionOrdersResult = await pool.query`
+      SELECT 
+        order_id as "orderId",
+        customer_id as "customerId",
+        customer_name as "customerName",
+        po_number as "poNumber",
+        item_name as "itemName",
+        specifications,
+        order_date as "orderDate",
+        due_date as "dueDate",
+        production_status as "productionStatus",
+        current_department as "currentDepartment",
+        created_at as "createdAt",
+        updated_at as "updatedAt"
+      FROM production_orders
+      WHERE current_department IS NOT NULL
+    `;
+    
+    const productionOrders = productionOrdersResult.map((po: any) => ({
+      orderId: po.orderId,
+      customerId: po.customerId,
+      customerName: po.customerName,
+      currentDepartment: po.currentDepartment,
+      orderDate: po.orderDate,
+      dueDate: po.dueDate,
+      status: 'in_production',
+      // Add additional fields for compatibility
+      stockModelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
+      modelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
+      fbOrderNumber: po.poNumber,
+      isP1Order: true, // Flag to identify P1 orders
+    }));
+    
+    // Combine and return both types of orders
+    const allOrders = [...regularOrders, ...productionOrders];
+    res.json(allOrders);
   } catch (error) {
     console.error('Error retrieving all orders:', error);
     res
       .status(500)
       .json({
-        error: 'Failed to fetch order',
+        error: 'Failed to fetch orders',
         details: (error as any).message,
       });
   }
@@ -2266,7 +2306,47 @@ router.get('/:orderId', async (req: Request, res: Response) => {
     console.log(`📋 GET /${orderId} - Fetching order details`);
 
     // Try to find the order in both drafts and finalized tables
-    const order = await storage.getOrderById(orderId);
+    let order = await storage.getOrderById(orderId);
+
+    // If not found in regular orders, check production_orders table (P1 orders)
+    if (!order && orderId.startsWith('P1-')) {
+      const { pool } = await import('../../db');
+      const productionOrderResult = await pool.query`
+        SELECT 
+          order_id as "orderId",
+          customer_id as "customerId",
+          customer_name as "customerName",
+          po_number as "poNumber",
+          item_name as "itemName",
+          specifications,
+          order_date as "orderDate",
+          due_date as "dueDate",
+          production_status as "productionStatus",
+          current_department as "currentDepartment",
+          created_at as "createdAt",
+          updated_at as "updatedAt"
+        FROM production_orders
+        WHERE order_id = ${orderId}
+        LIMIT 1
+      `;
+      
+      if (productionOrderResult.length > 0) {
+        const po = productionOrderResult[0];
+        order = {
+          orderId: po.orderId,
+          customerId: po.customerId,
+          customerName: po.customerName,
+          currentDepartment: po.currentDepartment,
+          orderDate: po.orderDate,
+          dueDate: po.dueDate,
+          status: 'in_production',
+          stockModelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
+          modelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
+          fbOrderNumber: po.poNumber,
+          isP1Order: true,
+        };
+      }
+    }
 
     if (!order) {
       console.log(`❌ Order ${orderId} not found`);

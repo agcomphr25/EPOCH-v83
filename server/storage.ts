@@ -49,6 +49,7 @@ import {
   layupSchedule,
   bomDefinitions,
   bomItems,
+  bomLines,
   orderIdReservations,
   orderIdSequences,
   purchaseReviewChecklists,
@@ -3670,6 +3671,22 @@ export class DatabaseStorage implements IStorage {
 
   async replaceAllInventoryItems(newItems: InsertInventoryItem[]): Promise<void> {
     console.log(`🔄 Storage: Replacing all inventory items with ${newItems.length} new items...`);
+    
+    // Check if any parts are referenced by BOMs before attempting deletion
+    console.log('  🔍 Checking for BOM references...');
+    const referencedParts = await db
+      .selectDistinct({ agPartNumber: bomLines.childPartAgNumber })
+      .from(bomLines);
+    
+    if (referencedParts.length > 0) {
+      const partNumbers = referencedParts.map(p => p.agPartNumber).sort();
+      console.log(`❌ Cannot replace items: ${partNumbers.length} parts are referenced in BOMs`);
+      throw new Error(
+        `Cannot replace all inventory items because ${partNumbers.length} part(s) are used in Bill of Materials (BOMs). ` +
+        `Parts in use: ${partNumbers.slice(0, 10).join(', ')}${partNumbers.length > 10 ? `, and ${partNumbers.length - 10} more` : ''}. ` +
+        `Please remove these parts from all BOMs first, or uncheck "Replace all existing items" to update items instead.`
+      );
+    }
     
     // Note: Neon HTTP driver doesn't support transactions, so we do this sequentially
     // Step 1: Delete all existing items

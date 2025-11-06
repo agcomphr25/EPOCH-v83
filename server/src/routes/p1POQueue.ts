@@ -184,6 +184,9 @@ router.post('/progress', async (req: Request, res: Response) => {
         const item = poItem[0];
         const specs = item.specifications || {};
         
+        // Use a default due date if none is provided (30 days from now)
+        const dueDate = item.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        
         // Create production orders for the selected quantity
         for (let i = 0; i < quantity; i++) {
           const currentOrderCount = (item.order_count || 0) + i + 1;
@@ -219,7 +222,7 @@ router.post('/progress', async (req: Request, res: Response) => {
               ${item.item_name || ''},
               ${JSON.stringify(specs)},
               NOW(),
-              ${item.due_date || null},
+              ${dueDate},
               'LAID_UP',
               'Barcode',
               NOW(),

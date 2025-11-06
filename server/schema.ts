@@ -153,7 +153,7 @@ export const allOrders = pgTable('all_orders', {
   isRtsOrder: boolean('is_rts_order').default(false), // True if this order was created from RTS inventory sale
   rtsSaleId: uuid('rts_sale_id'), // Reference to RTS sale if applicable
   // BOM Reference for Costing and MRP
-  bomDefinitionId: integer('bom_definition_id').references(() => bomDefinitions.id), // Links order to BOM for costing/MRP
+  bomDefinitionId: uuid('bom_definition_id').references(() => bomDefinitions.id), // Links order to BOM for costing/MRP
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -1357,7 +1357,7 @@ export const insertAllOrderSchema = createInsertSchema(allOrders)
     // Verification field
     isVerified: z.boolean().default(false),
     // BOM Reference
-    bomDefinitionId: z.number().optional().nullable(),
+    bomDefinitionId: z.string().uuid().optional().nullable(),
   });
 
 export const insertLinkedOrderGroupSchema = createInsertSchema(linkedOrderGroups)
@@ -3641,7 +3641,7 @@ export const orderStatusEnum = pgEnum('order_status', [
 
 // BOM (Bill of Materials) Management Tables for P2
 export const bomDefinitions = pgTable('bom_definitions', {
-  id: serial('id').primaryKey(),
+  id: uuid('id').defaultRandom().primaryKey(),
   sku: text('sku'),
   modelName: text('model_name').notNull(),
   revision: text('revision').notNull().default('A'),
@@ -3652,8 +3652,8 @@ export const bomDefinitions = pgTable('bom_definitions', {
 });
 
 export const bomItems = pgTable('bom_items', {
-  id: serial('id').primaryKey(),
-  bomId: integer('bom_id')
+  id: uuid('id').defaultRandom().primaryKey(),
+  bomId: uuid('bom_id')
     .references(() => bomDefinitions.id)
     .notNull(),
   partName: text('part_name').notNull(),
@@ -3661,7 +3661,7 @@ export const bomItems = pgTable('bom_items', {
   firstDept: text('first_dept').notNull().default('Layup'),
   itemType: text('item_type').notNull().default('manufactured'), // 'manufactured', 'material', 'sub_assembly', or 'labor'
   // Multi-Level Hierarchy Support
-  referenceBomId: integer('reference_bom_id').references(
+  referenceBomId: uuid('reference_bom_id').references(
     () => bomDefinitions.id
   ), // Points to another BOM if this item is a sub-assembly
   assemblyLevel: integer('assembly_level').default(0), // 0=top level, 1=sub-assembly, 2=component, etc.
@@ -3699,7 +3699,7 @@ export const insertBomItemSchema = createInsertSchema(bomItems)
     updatedAt: true,
   })
   .extend({
-    bomId: z.number().min(1, 'BOM ID is required'),
+    bomId: z.string().uuid('BOM ID must be a valid UUID'),
     partName: z.string().min(1, 'Part name is required'),
     quantity: z.number().min(1, 'Quantity must be at least 1').default(1),
     firstDept: z
@@ -3945,10 +3945,10 @@ export const p2ProductionOrders = pgTable('p2_production_orders', {
   p2PoItemId: integer('p2_po_item_id')
     .references(() => p2PurchaseOrderItems.id)
     .notNull(),
-  bomDefinitionId: integer('bom_definition_id')
+  bomDefinitionId: uuid('bom_definition_id')
     .references(() => bomDefinitions.id)
     .notNull(),
-  bomItemId: integer('bom_item_id')
+  bomItemId: uuid('bom_item_id')
     .references(() => bomItems.id)
     .notNull(),
   sku: text('sku').notNull(), // From BOM definition
@@ -3977,8 +3977,8 @@ export const insertP2ProductionOrderSchema = createInsertSchema(
     orderId: z.string().min(1, 'Order ID is required'),
     p2PoId: z.number().min(1, 'P2 PO ID is required'),
     p2PoItemId: z.number().min(1, 'P2 PO Item ID is required'),
-    bomDefinitionId: z.number().min(1, 'BOM Definition ID is required'),
-    bomItemId: z.number().min(1, 'BOM Item ID is required'),
+    bomDefinitionId: z.string().uuid('BOM Definition ID must be a valid UUID'),
+    bomItemId: z.string().uuid('BOM Item ID must be a valid UUID'),
     sku: z.string().min(1, 'SKU is required'),
     partName: z.string().min(1, 'Part name is required'),
     quantity: z.number().min(1, 'Quantity must be at least 1'),

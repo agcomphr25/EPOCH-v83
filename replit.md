@@ -76,11 +76,16 @@ import { serial } from 'drizzle-orm/pg-core';
 id: serial('id').primaryKey()  // This will cause migration issues
 ```
 
+**UUID Tables (CONVERTED):**
+The following tables were converted from `serial` to `uuid` to resolve deployment issues:
+- `bomDefinitions`, `bomItems` (converted 2025-01-08)
+
 **Legacy Tables (DO NOT MODIFY):**
 Many existing tables use `serial` IDs and should remain unchanged to avoid data loss:
 - `allOrders`, `orders`, `orderStatusTypes`, `orderDepartmentTypes`
 - `inventoryItems`, `employees`, `certifications`, `vendors`
 - `payments`, `customers`, `linked_order_groups`, `followup_orders`
+- `p2ProductionOrders` (references BOMs with UUID FKs)
 - All other tables with integer IDs
 
 **Migration Safety:**

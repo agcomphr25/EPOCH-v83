@@ -3829,8 +3829,10 @@ export class DatabaseStorage implements IStorage {
         supplierPartNumber: inventoryItems.supplierPartNumber,
         secondarySupplierPartNumber: inventoryItems.secondarySupplierPartNumber,
         costPer: inventoryItems.costPer,
+        vendorUnit: inventoryItems.vendorUnit,
         purchaseUnit: inventoryItems.purchaseUnit,
-        usageQuantityPerUnit: inventoryItems.usageQuantityPerUnit,
+        purchaseQuantity: inventoryItems.purchaseQuantity,
+        consumptionRate: inventoryItems.consumptionRate,
         usageUnit: inventoryItems.usageUnit,
         cogsPerUnit: inventoryItems.cogsPerUnit,
         orderDate: inventoryItems.orderDate,
@@ -3956,8 +3958,10 @@ export class DatabaseStorage implements IStorage {
         supplierPartNumber: inventoryItems.supplierPartNumber,
         secondarySupplierPartNumber: inventoryItems.secondarySupplierPartNumber,
         costPer: inventoryItems.costPer,
+        vendorUnit: inventoryItems.vendorUnit,
         purchaseUnit: inventoryItems.purchaseUnit,
-        usageQuantityPerUnit: inventoryItems.usageQuantityPerUnit,
+        purchaseQuantity: inventoryItems.purchaseQuantity,
+        consumptionRate: inventoryItems.consumptionRate,
         usageUnit: inventoryItems.usageUnit,
         cogsPerUnit: inventoryItems.cogsPerUnit,
         orderDate: inventoryItems.orderDate,
@@ -5951,9 +5955,11 @@ export class DatabaseStorage implements IStorage {
         createdAt: vendorPOItems.createdAt,
         updatedAt: vendorPOItems.updatedAt,
         // Include UOM conversion data from inventory items
+        vendorUnit: inventoryItems.vendorUnit,
         purchaseUnit: inventoryItems.purchaseUnit,
+        purchaseQuantity: inventoryItems.purchaseQuantity,
+        consumptionRate: inventoryItems.consumptionRate,
         usageUnit: inventoryItems.usageUnit,
-        usageQuantityPerUnit: inventoryItems.usageQuantityPerUnit,
         purchaseUnitLabel: inventoryItems.purchaseUnitLabel,
       })
       .from(vendorPOItems)
@@ -6165,11 +6171,14 @@ export class DatabaseStorage implements IStorage {
 
   // Get cost history for an inventory item by AG Part Number
   async getInventoryItemCostHistory(agPartNumber: string): Promise<any[]> {
-    // First get the inventory item to get its ID
+    // First get the inventory item to get its ID and unit information
     const [inventoryItem] = await db
       .select({
         id: inventoryItems.id,
+        vendorUnit: inventoryItems.vendorUnit,
         purchaseUnit: inventoryItems.purchaseUnit,
+        purchaseQuantity: inventoryItems.purchaseQuantity,
+        consumptionRate: inventoryItems.consumptionRate,
         usageUnit: inventoryItems.usageUnit,
       })
       .from(inventoryItems)
@@ -6193,7 +6202,10 @@ export class DatabaseStorage implements IStorage {
         poLineItemId: inventoryItemCostHistory.poLineItemId,
         notes: inventoryItemCostHistory.notes,
         createdAt: inventoryItemCostHistory.createdAt,
+        vendorUnit: inventoryItem.vendorUnit,
         purchaseUnit: inventoryItem.purchaseUnit,
+        purchaseQuantity: inventoryItem.purchaseQuantity,
+        consumptionRate: inventoryItem.consumptionRate,
         usageUnit: inventoryItem.usageUnit,
       })
       .from(inventoryItemCostHistory)

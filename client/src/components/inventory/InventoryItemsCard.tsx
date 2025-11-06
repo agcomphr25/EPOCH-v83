@@ -43,13 +43,16 @@ interface InventoryFormData {
   supplierPartNumber: string;
   secondarySupplierPartNumber: string;
   costPer: string;
-  purchaseUnit: string;
+  vendorUnit: string;
   purchaseUnitLabel: string;
-  usageQuantityPerUnit: string;
+  purchaseUnit: string;
+  purchaseQuantity: string;
+  consumptionRate: string;
   usageUnit: string;
   cogsPerUnit: string;
   orderDate: string;
   department: string;
+  leadTimeDays: string;
   secondarySource: string;
   notes: string;
   isStockItem: boolean;
@@ -243,12 +246,12 @@ const InventoryForm = ({
           <p className="text-xs text-gray-500 mt-1">Cost from vendor (e.g., $491.20 for 80lb box)</p>
         </div>
         <div>
-          <Label htmlFor="purchaseUnit">Purchase Unit</Label>
+          <Label htmlFor="vendorUnit">Vendor Unit</Label>
           <Select
-            value={formData.purchaseUnit}
-            onValueChange={(value) => onSelectChange('purchaseUnit', value)}
+            value={formData.vendorUnit}
+            onValueChange={(value) => onSelectChange('vendorUnit', value)}
           >
-            <SelectTrigger id="purchaseUnit" data-testid="select-purchaseUnit">
+            <SelectTrigger id="vendorUnit" data-testid="select-vendorUnit">
               <SelectValue placeholder="Select unit" />
             </SelectTrigger>
             <SelectContent>
@@ -272,30 +275,65 @@ const InventoryForm = ({
           <p className="text-xs text-gray-500 mt-1">Machine-friendly unit (e.g., "BOX", "GAL", "EA")</p>
         </div>
         <div>
-          <Label htmlFor="purchaseUnitLabel">Purchase Unit Label</Label>
-          <Input
-            id="purchaseUnitLabel"
-            name="purchaseUnitLabel"
-            value={formData.purchaseUnitLabel}
-            onChange={onChange}
-            placeholder="80 lb box"
-            data-testid="input-purchaseUnitLabel"
-          />
-          <p className="text-xs text-gray-500 mt-1">Human-readable description (e.g., "80 lb box", "5 gallon pail")</p>
+          <Label htmlFor="purchaseUnit">Purchase Unit</Label>
+          <Select
+            value={formData.purchaseUnit}
+            onValueChange={(value) => onSelectChange('purchaseUnit', value)}
+          >
+            <SelectTrigger id="purchaseUnit" data-testid="select-purchaseUnit">
+              <SelectValue placeholder="Select unit" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="oz">oz (ounce)</SelectItem>
+              <SelectItem value="lb">lb (pound)</SelectItem>
+              <SelectItem value="g">g (gram)</SelectItem>
+              <SelectItem value="kg">kg (kilogram)</SelectItem>
+              <SelectItem value="ml">ml (milliliter)</SelectItem>
+              <SelectItem value="L">L (liter)</SelectItem>
+              <SelectItem value="gal">gal (gallon)</SelectItem>
+              <SelectItem value="qt">qt (quart)</SelectItem>
+              <SelectItem value="pt">pt (pint)</SelectItem>
+              <SelectItem value="fl oz">fl oz (fluid ounce)</SelectItem>
+              <SelectItem value="ft">ft (foot)</SelectItem>
+              <SelectItem value="in">in (inch)</SelectItem>
+              <SelectItem value="m">m (meter)</SelectItem>
+              <SelectItem value="cm">cm (centimeter)</SelectItem>
+              <SelectItem value="mm">mm (millimeter)</SelectItem>
+              <SelectItem value="ea">ea (each)</SelectItem>
+              <SelectItem value="pc">pc (piece)</SelectItem>
+              <SelectItem value="sq ft">sq ft (square foot)</SelectItem>
+              <SelectItem value="sq in">sq in (square inch)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-500 mt-1">Unit of measurement (e.g., "g", "oz", "ea")</p>
         </div>
         <div>
-          <Label htmlFor="usageQuantityPerUnit">Usage Qty per Unit</Label>
+          <Label htmlFor="purchaseQuantity">Purchase Quantity</Label>
           <Input
-            id="usageQuantityPerUnit"
-            name="usageQuantityPerUnit"
+            id="purchaseQuantity"
+            name="purchaseQuantity"
             type="number"
             step="0.01"
-            value={formData.usageQuantityPerUnit}
+            value={formData.purchaseQuantity}
+            onChange={onChange}
+            placeholder="80"
+            data-testid="input-purchaseQuantity"
+          />
+          <p className="text-xs text-gray-500 mt-1">Quantity per vendor unit (e.g., 80)</p>
+        </div>
+        <div>
+          <Label htmlFor="consumptionRate">Consumption Rate</Label>
+          <Input
+            id="consumptionRate"
+            name="consumptionRate"
+            type="number"
+            step="0.01"
+            value={formData.consumptionRate}
             onChange={onChange}
             placeholder="50"
-            data-testid="input-usageQuantityPerUnit"
+            data-testid="input-consumptionRate"
           />
-          <p className="text-xs text-gray-500 mt-1">Amount used per manufactured unit (e.g., 50)</p>
+          <p className="text-xs text-gray-500 mt-1">Amount per item</p>
         </div>
         <div>
           <Label htmlFor="usageUnit">Usage Unit</Label>
@@ -423,19 +461,40 @@ const InventoryForm = ({
     {/* Additional Information Section */}
     <div className="space-y-4">
       <h4 className="text-md font-semibold border-b pb-2">Additional Information</h4>
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="department">Department</Label>
-          <Input
-            id="department"
-            name="department"
+          <Select
             value={formData.department}
-            onChange={onChange}
-            placeholder="Enter department"
-            data-testid="input-department"
-          />
+            onValueChange={(value) => onSelectChange('department', value)}
+          >
+            <SelectTrigger id="department" data-testid="select-department">
+              <SelectValue placeholder="Select department" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Layup/Plugging">Layup/Plugging</SelectItem>
+              <SelectItem value="CNC">CNC</SelectItem>
+              <SelectItem value="Finish">Finish</SelectItem>
+              <SelectItem value="Gunsmith">Gunsmith</SelectItem>
+              <SelectItem value="Paint">Paint</SelectItem>
+              <SelectItem value="Shipping">Shipping</SelectItem>
+              <SelectItem value="Office">Office</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div>
+          <Label htmlFor="leadTimeDays">Lead Time</Label>
+          <Input
+            id="leadTimeDays"
+            name="leadTimeDays"
+            value={formData.leadTimeDays}
+            onChange={onChange}
+            placeholder="e.g., 3 days, 4 weeks, 2 months"
+            data-testid="input-leadTimeDays"
+          />
+          <p className="text-xs text-gray-500 mt-1">Lead time for forecasting/MRP calculations</p>
+        </div>
+        <div className="md:col-span-2">
           <Label htmlFor="notes">Notes</Label>
           <Textarea
             id="notes"
@@ -499,13 +558,16 @@ export default function InventoryItemsCard() {
     supplierPartNumber: '',
     secondarySupplierPartNumber: '',
     costPer: '',
-    purchaseUnit: '',
+    vendorUnit: '',
     purchaseUnitLabel: '',
-    usageQuantityPerUnit: '',
+    purchaseUnit: '',
+    purchaseQuantity: '',
+    consumptionRate: '',
     usageUnit: '',
     cogsPerUnit: '',
     orderDate: '',
     department: '',
+    leadTimeDays: '',
     secondarySource: '',
     notes: '',
     isStockItem: false,
@@ -797,13 +859,16 @@ export default function InventoryItemsCard() {
       supplierPartNumber: '',
       secondarySupplierPartNumber: '',
       costPer: '',
-      purchaseUnit: '',
+      vendorUnit: '',
       purchaseUnitLabel: '',
-      usageQuantityPerUnit: '',
+      purchaseUnit: '',
+      purchaseQuantity: '',
+      consumptionRate: '',
       usageUnit: '',
       cogsPerUnit: '',
       orderDate: '',
       department: '',
+      leadTimeDays: '',
       secondarySource: '',
       notes: '',
       isStockItem: false,
@@ -850,13 +915,16 @@ export default function InventoryItemsCard() {
         supplierPartNumber: formData.supplierPartNumber || null,
         secondarySupplierPartNumber: formData.secondarySupplierPartNumber || null,
         costPer: formData.costPer ? parseFloat(formData.costPer) : null,
-        purchaseUnit: formData.purchaseUnit || null,
+        vendorUnit: formData.vendorUnit || null,
         purchaseUnitLabel: formData.purchaseUnitLabel || null,
-        usageQuantityPerUnit: formData.usageQuantityPerUnit ? parseFloat(formData.usageQuantityPerUnit) : null,
+        purchaseUnit: formData.purchaseUnit || null,
+        purchaseQuantity: formData.purchaseQuantity ? parseFloat(formData.purchaseQuantity) : null,
+        consumptionRate: formData.consumptionRate ? parseFloat(formData.consumptionRate) : null,
         usageUnit: formData.usageUnit || null,
         cogsPerUnit: formData.cogsPerUnit ? parseFloat(formData.cogsPerUnit) : null,
         orderDate: formData.orderDate || null,
         department: formData.department || null,
+        leadTimeDays: formData.leadTimeDays || null,
         secondarySource: formData.secondarySource || null,
         notes: formData.notes || null,
         isStockItem: formData.isStockItem,
@@ -888,15 +956,18 @@ export default function InventoryItemsCard() {
       supplierPartNumber: item.supplierPartNumber || '',
       secondarySupplierPartNumber: item.secondarySupplierPartNumber || '',
       costPer: item.costPer ? item.costPer.toString() : '',
-      purchaseUnit: item.purchaseUnit || '',
+      vendorUnit: (item as any).vendorUnit || '',
       purchaseUnitLabel: item.purchaseUnitLabel || '',
-      usageQuantityPerUnit: item.usageQuantityPerUnit ? item.usageQuantityPerUnit.toString() : '',
+      purchaseUnit: item.purchaseUnit || '',
+      purchaseQuantity: (item as any).purchaseQuantity ? (item as any).purchaseQuantity.toString() : '',
+      consumptionRate: (item as any).consumptionRate ? (item as any).consumptionRate.toString() : '',
       usageUnit: item.usageUnit || '',
       cogsPerUnit: item.cogsPerUnit ? item.cogsPerUnit.toString() : '',
       orderDate: item.orderDate
         ? new Date(item.orderDate).toISOString().split('T')[0]
         : '',
       department: item.department || '',
+      leadTimeDays: (item as any).leadTimeDays || '',
       secondarySource: item.secondarySource || '',
       notes: item.notes || '',
       isStockItem: item.isStockItem || false,

@@ -1,0 +1,28 @@
+Your branch is behind 'origin/main' by 13 commits, and can be fast-forwarded.
+  (use "git pull" to update your local branch)
+Updating eddacdf5..254a3a4f
+Fast-forward
+ ...al use only) - Glenn to EPOCH_1762443970937.csv | 764 +++++++++++++++++++++
+ ...al use only) - Glenn to EPOCH_1762443990049.csv | 764 +++++++++++++++++++++
+ ...ter Document List - Documents_1762447229154.csv | 152 ++++
+ attached_assets/image_1762443985534.png            | Bin 0 -> 152213 bytes
+ attached_assets/image_1762444911228.png            | Bin 0 -> 115107 bytes
+ attached_assets/image_1762448006830.png            | Bin 0 -> 108729 bytes
+ attached_assets/image_1762452194169.png            | Bin 0 -> 81042 bytes
+ client/src/components/Navigation.tsx               |   6 +
+ .../components/inventory/InventoryItemsCard.tsx    |  10 +-
+ client/src/pages/MasterDocumentRegister.tsx        | 133 +++-
+ push_log_20251106-153802.txt                       |   3 +
+ push_log_20251106-181308.txt                       |   3 +
+ server/src/routes/controlledDocuments.ts           | 185 +++++
+ server/storage.ts                                  |  67 +-
+ 14 files changed, 2058 insertions(+), 29 deletions(-)
+ create mode 100644 attached_assets/Inventory Sheet (internal use only) - Glenn to EPOCH_1762443970937.csv
+ create mode 100644 attached_assets/Inventory Sheet (internal use only) - Glenn to EPOCH_1762443990049.csv
+ create mode 100644 attached_assets/Master Document List - Documents_1762447229154.csv
+ create mode 100644 attached_assets/image_1762443985534.png
+ create mode 100644 attached_assets/image_1762444911228.png
+ create mode 100644 attached_assets/image_1762448006830.png
+ create mode 100644 attached_assets/image_1762452194169.png
+ create mode 100644 push_log_20251106-153802.txt
+ create mode 100644 push_log_20251106-181308.txt

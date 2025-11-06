@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Copy, Save, X, ChevronDown, Package, CheckCircle2, Power, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Copy, Save, X, ChevronDown, Package, CheckCircle2, Power, Loader2, FileEdit } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -1666,6 +1666,18 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                         disabled={!bom.revisions || bom.revisions.length === 0}
                       >
                         <Package className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedBom(bom);
+                          setIsEditDialogOpen(true);
+                        }}
+                        data-testid={`button-edit-metadata-${bom.id}`}
+                        title="Edit BOM Metadata (Code & Description)"
+                      >
+                        <FileEdit className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"

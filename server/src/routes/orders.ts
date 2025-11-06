@@ -375,10 +375,10 @@ router.post('/finalized', async (req: Request, res: Response) => {
     const noStockIdentifiers = ['', 'no_stock', 'no stock', 'none'];
     const hasStock: boolean = !noStockIdentifiers.includes(normalizedModelId);
     
-    // If no stock, create as FINALIZED and skip signature requirement
+    // If no stock, create as FINALIZED and skip signature requirement, send directly to shipping
     // If has stock, create as PENDING_SIGNATURE and require customer confirmation
     const orderStatus = hasStock ? 'PENDING_SIGNATURE' : 'FINALIZED';
-    const orderDepartment = hasStock ? 'Awaiting Customer Signature' : 'Order Entry';
+    const orderDepartment = hasStock ? 'Awaiting Customer Signature' : 'Shipping Management';
     
     const order = await storage.createFinalizedOrder({
       ...orderData,

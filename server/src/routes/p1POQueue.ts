@@ -189,6 +189,15 @@ router.post('/progress', async (req: Request, res: Response) => {
                 updated_at = NOW()
             WHERE order_id = ${product.order_id}
           `;
+          
+          // Update PO product status to prevent re-queueing
+          await pool.query`
+            UPDATE po_products
+            SET status = 'scheduled',
+                updated_at = NOW()
+            WHERE id = ${poProductId}
+          `;
+          
           progressedOrders.push(product.order_id);
         } else {
           // Create new order(s) for this PO product

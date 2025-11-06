@@ -1078,7 +1078,7 @@ export default function InventoryItemsCard() {
               </p>
             )}
             
-            <div className="flex items-start space-x-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded">
+            <div className="flex items-start space-x-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
               <Checkbox
                 id="replaceAllItems"
                 checked={replaceAllItems}
@@ -1086,11 +1086,11 @@ export default function InventoryItemsCard() {
                 data-testid="checkbox-replace-all"
               />
               <div className="flex-1">
-                <Label htmlFor="replaceAllItems" className="cursor-pointer font-semibold text-yellow-800 dark:text-yellow-200">
-                  Replace all existing items
+                <Label htmlFor="replaceAllItems" className="cursor-pointer font-semibold text-blue-800 dark:text-blue-200">
+                  Update all items from CSV
                 </Label>
-                <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                  ⚠️ Warning: This will delete all current inventory items before importing. Use this to avoid duplicates.
+                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                  ℹ️ This will update existing items (matched by AG Part#) and add new ones. Nothing will be deleted, so BOMs and other references remain intact.
                 </p>
               </div>
             </div>

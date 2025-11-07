@@ -3903,15 +3903,16 @@ export function registerRoutes(app: Express): Server {
           // Calculate label position (3x10 grid) - Avery 5160 format with correct margins
           const col = labelIndex % 3;
           const row = Math.floor(labelIndex / 3);
-          // Avery 5160 specifications: 0.25" margin between columns, adjusted vertical position for alignment
-          const leftMargin = 18; // 0.25" * 72 points/inch (left margin)
-          const verticalOffset = -18; // 0.25" * 72 points/inch - shift labels DOWN by quarter inch to prevent top cutoff
-          const bottomMargin = 36; // 0.5" * 72 points/inch
+          // Avery 5160 specifications per official template
+          const pageHeight = 792; // 11" * 72 points/inch
+          const topMargin = 36; // 0.5" * 72 points/inch - required top margin for Avery 5160
+          const leftMargin = 13.5; // ~0.1875" * 72 points/inch - left margin for Avery 5160
           const labelWidth = 189; // 2.625" * 72 points/inch
           const labelHeight = 72; // 1" * 72 points/inch
-          const columnGap = 9; // 0.125" * 72 points/inch (reduced gap between columns)
+          const columnGap = 9; // 0.125" * 72 points/inch (horizontal gap between columns)
           const x = leftMargin + col * (labelWidth + columnGap);
-          const y = 792 - labelHeight - row * labelHeight + verticalOffset; // Shift down by 0.25"
+          // PDF coordinates: origin at bottom-left, so subtract from page height
+          const y = pageHeight - topMargin - labelHeight - (row * labelHeight);
 
           // Draw label border with clear separation
           page.drawRectangle({
@@ -4162,11 +4163,15 @@ export function registerRoutes(app: Express): Server {
             : '';
 
           // Add stock model, action length, and paint option with subcategory on same line below barcode
+          // Only include action length if it's not 'unknown'
+          const hasActionLength = actionLength && actionLength.toLowerCase() !== 'unknown';
+          const actionPart = hasActionLength ? ` - ${actionLength.toUpperCase()}` : '';
+          
           const labelLine = paintDisplayName
             ? subcategory
-              ? `${modelDisplayName} - ${actionLength.toUpperCase()} - ${subcategory}: ${paintDisplayName}`
-              : `${modelDisplayName} - ${actionLength.toUpperCase()} - PAINT: ${paintDisplayName}`
-            : `${modelDisplayName} - ${actionLength.toUpperCase()}`;
+              ? `${modelDisplayName}${actionPart} - ${subcategory}: ${paintDisplayName}`
+              : `${modelDisplayName}${actionPart} - PAINT: ${paintDisplayName}`
+            : `${modelDisplayName}${actionPart}`;
 
           page.drawText(labelLine, {
             x: x + 8,

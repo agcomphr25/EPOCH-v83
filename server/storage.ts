@@ -5938,28 +5938,7 @@ export class DatabaseStorage implements IStorage {
   // Vendor PO Items CRUD
   async getVendorPOItems(vendorPoId: number): Promise<any[]> {
     const items = await db
-      .select({
-        id: vendorPOItems.id,
-        vendorPoId: vendorPOItems.vendorPoId,
-        lineNumber: vendorPOItems.lineNumber,
-        agPartNumber: vendorPOItems.agPartNumber,
-        description: vendorPOItems.description,
-        quantity: vendorPOItems.quantity,
-        receivedQuantity: vendorPOItems.receivedQuantity,
-        receivedDate: vendorPOItems.receivedDate,
-        unitPrice: vendorPOItems.unitPrice,
-        lineTotal: vendorPOItems.lineTotal,
-        notes: vendorPOItems.notes,
-        createdAt: vendorPOItems.createdAt,
-        updatedAt: vendorPOItems.updatedAt,
-        // Include UOM conversion data from inventory items
-        vendorUnit: inventoryItems.vendorUnit,
-        purchaseUnit: inventoryItems.purchaseUnit,
-        purchaseQuantity: inventoryItems.purchaseQuantity,
-        consumptionRate: inventoryItems.consumptionRate,
-        usageUnit: inventoryItems.usageUnit,
-        purchaseUnitLabel: inventoryItems.purchaseUnitLabel,
-      })
+      .select()
       .from(vendorPOItems)
       .leftJoin(
         inventoryItems,
@@ -6200,18 +6179,21 @@ export class DatabaseStorage implements IStorage {
         poLineItemId: inventoryItemCostHistory.poLineItemId,
         notes: inventoryItemCostHistory.notes,
         createdAt: inventoryItemCostHistory.createdAt,
-        vendorUnit: inventoryItem.vendorUnit,
-        purchaseUnit: inventoryItem.purchaseUnit,
-        purchaseQuantity: inventoryItem.purchaseQuantity,
-        consumptionRate: inventoryItem.consumptionRate,
-        usageUnit: inventoryItem.usageUnit,
       })
       .from(inventoryItemCostHistory)
       .leftJoin(vendors, eq(inventoryItemCostHistory.vendorId, vendors.id))
       .where(eq(inventoryItemCostHistory.inventoryItemId, inventoryItem.id))
       .orderBy(desc(inventoryItemCostHistory.receivedDate));
 
-    return history;
+    // Add unit information to each history record
+    return history.map(record => ({
+      ...record,
+      vendorUnit: inventoryItem.vendorUnit,
+      purchaseUnit: inventoryItem.purchaseUnit,
+      purchaseQuantity: inventoryItem.purchaseQuantity,
+      consumptionRate: inventoryItem.consumptionRate,
+      usageUnit: inventoryItem.usageUnit,
+    }));
   }
 
   // Vendor PO Settings

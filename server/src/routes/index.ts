@@ -3905,13 +3905,13 @@ export function registerRoutes(app: Express): Server {
           const row = Math.floor(labelIndex / 3);
           // Avery 5160 specifications: 0.25" margin between columns, adjusted vertical position for alignment
           const leftMargin = 18; // 0.25" * 72 points/inch (left margin)
-          const verticalOffset = 18; // 0.25" * 72 points/inch - shift labels UP by quarter inch
+          const verticalOffset = -18; // 0.25" * 72 points/inch - shift labels DOWN by quarter inch to prevent top cutoff
           const bottomMargin = 36; // 0.5" * 72 points/inch
           const labelWidth = 189; // 2.625" * 72 points/inch
           const labelHeight = 72; // 1" * 72 points/inch
           const columnGap = 9; // 0.125" * 72 points/inch (reduced gap between columns)
           const x = leftMargin + col * (labelWidth + columnGap);
-          const y = 792 - labelHeight - row * labelHeight + verticalOffset; // Shift up by 0.25"
+          const y = 792 - labelHeight - row * labelHeight + verticalOffset; // Shift down by 0.25"
 
           // Draw label border with clear separation
           page.drawRectangle({
@@ -4047,7 +4047,11 @@ export function registerRoutes(app: Express): Server {
           // For regular orders, show order ID
           let labelText = order.orderId;
           if ((order as any).isPOItem) {
-            const customerName = (order as any).poCustomerName || 'Customer';
+            let customerName = (order as any).poCustomerName;
+            // Handle null, undefined, empty, or "unknown" customer names
+            if (!customerName || customerName.toLowerCase() === 'unknown' || customerName.trim() === '') {
+              customerName = order.customerName || order.customerId || order.orderId;
+            }
             const poNumber = (order as any).poNumber || 'N/A';
             const unitNum = (order as any).poUnitNumber || 1;
             const totalQty = (order as any).poTotalQuantity || 1;

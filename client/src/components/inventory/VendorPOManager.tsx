@@ -140,17 +140,17 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
         {items.slice(0, 3).map((item) => (
           <div
             key={item.id}
-            className="text-xs bg-gray-50 dark:bg-gray-800 rounded p-2"
+            className="text-xs bg-gray-50 dark:bg-gray-800 rounded p-2 overflow-hidden"
           >
             <div className="flex justify-between items-start gap-2">
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
-                  {item.agPartNumber && (
-                    <span className="text-blue-600">#{item.agPartNumber}</span>
-                  )}{' '}
-                  <span className="truncate inline-block max-w-[90%] align-bottom">
-                    {item.description}
-                  </span>
+              <div className="flex-1 min-w-0 space-y-0.5 overflow-hidden">
+                {item.agPartNumber && (
+                  <div className="text-blue-600 font-medium truncate">
+                    #{item.agPartNumber}
+                  </div>
+                )}
+                <div className="font-medium text-gray-900 dark:text-gray-100 break-words line-clamp-2">
+                  {item.description}
                 </div>
                 {item.vendorPartNumber && (
                   <div className="text-gray-500 text-xs truncate">
@@ -158,9 +158,9 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
                   </div>
                 )}
               </div>
-              <div className="text-right ml-2 flex-shrink-0">
+              <div className="text-right ml-2 flex-shrink-0 whitespace-nowrap">
                 <div className="font-medium text-gray-900 dark:text-gray-100">
-                  {item.quantity.toFixed(2)} {item.uom}
+                  {item.quantity.toFixed(2)}
                 </div>
                 <div className="text-gray-500 text-xs">
                   $
@@ -181,6 +181,30 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
         )}
       </div>
     </div>
+  );
+}
+
+// Component to display calculated total cost from line items
+function VendorPOTotalCost({ vendorPoId }: { vendorPoId: number }) {
+  const { data: items = [], isLoading } = useQuery<VendorPOItem[]>({
+    queryKey: ['/api/vendor-pos', vendorPoId, 'items'],
+    queryFn: () => apiRequest(`/api/vendor-pos/${vendorPoId}/items`),
+  });
+
+  const totalCost = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+
+  if (isLoading) {
+    return <span className="text-gray-500">Calculating...</span>;
+  }
+
+  return (
+    <>
+      $
+      {totalCost.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}
+    </>
   );
 }
 
@@ -208,11 +232,13 @@ function VendorPOCard({
   onEdit,
   onDelete,
   onViewItems,
+  onIssuePO,
 }: {
   vendorPo: VendorPO;
   onEdit: (vendorPo: VendorPO) => void;
   onDelete: (id: number) => void;
   onViewItems: (vendorPo: VendorPO) => void;
+  onIssuePO: (id: number) => void;
 }) {
   return (
     <Card
@@ -260,11 +286,7 @@ function VendorPOCard({
               className="font-medium"
               data-testid={`text-total-cost-${vendorPo.id}`}
             >
-              $
-              {vendorPo.totalCost.toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
+              <VendorPOTotalCost vendorPoId={vendorPo.id} />
             </p>
           </div>
           {vendorPo.expectedDeliveryDate && (
@@ -291,8 +313,20 @@ function VendorPOCard({
             data-testid={`button-view-items-${vendorPo.id}`}
           >
             <Eye className="w-4 h-4 mr-1" />
-            View Items
+            Manage Items
           </Button>
+          {vendorPo.status === 'Draft' && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => onIssuePO(vendorPo.id)}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              data-testid={`button-issue-po-${vendorPo.id}`}
+            >
+              <Send className="w-4 h-4 mr-1" />
+              Issue PO
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -357,6 +391,8 @@ function VendorPOForm({
       : undefined
   );
 
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+
   // Fetch vendors for the dropdown
   const { data: vendorsResponse } = useQuery({
     queryKey: ['/api/vendors'],
@@ -417,7 +453,7 @@ function VendorPOForm({
 
       <div>
         <Label htmlFor="expectedDeliveryDate">Expected Delivery Date</Label>
-        <Popover>
+        <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
@@ -435,7 +471,10 @@ function VendorPOForm({
             <Calendar
               mode="single"
               selected={deliveryDate}
-              onSelect={setDeliveryDate}
+              onSelect={(date) => {
+                setDeliveryDate(date);
+                setIsDatePickerOpen(false);
+              }}
               initialFocus
             />
           </PopoverContent>
@@ -653,6 +692,14 @@ export default function VendorPOManager() {
       confirm('Are you sure you want to delete this vendor purchase order?')
     ) {
       deleteMutation.mutate(id);
+    }
+  };
+
+  const handleIssuePO = (id: number) => {
+    if (
+      confirm('Are you sure you want to issue this purchase order? This will change its status to "Sent".')
+    ) {
+      changeStatusMutation.mutate({ id, status: 'Sent' });
     }
   };
 
@@ -932,7 +979,7 @@ export default function VendorPOManager() {
                 {nextStatus === 'Sent' && <Send className="w-4 h-4 mr-2" />}
                 {nextStatus === 'Partially Received' && <Package className="w-4 h-4 mr-2" />}
                 {nextStatus === 'Fully Received' && <CheckCircle className="w-4 h-4 mr-2" />}
-                Mark as {nextStatus}
+                {nextStatus === 'Sent' ? 'Issue PO' : `Mark as ${nextStatus}`}
               </Button>
             )}
             
@@ -1116,6 +1163,7 @@ export default function VendorPOManager() {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onViewItems={handleViewItems}
+              onIssuePO={handleIssuePO}
             />
           ))}
         </div>

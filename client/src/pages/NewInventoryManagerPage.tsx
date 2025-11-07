@@ -14,6 +14,7 @@ import {
   Plus,
   Import,
   Download,
+  X,
 } from 'lucide-react';
 import InventoryItemsCard from '../components/inventory/InventoryItemsCard';
 import PartsRequestsCard from '../components/inventory/PartsRequestsCard';
@@ -137,24 +138,24 @@ export default function NewInventoryManagerPage() {
       {/* Expanded Card Content */}
       {activeCard && (
         <div className="mt-8">
-          <Card className="border-t-4 border-t-blue-500">
+          <Card className="border-t-4 border-t-blue-500 relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setActiveCard(null)}
+              data-testid="button-close-inventory"
+              className="absolute top-4 right-4 z-10"
+            >
+              <X className="h-5 w-5" />
+            </Button>
             <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-xl">
-                  {activeCard === 'inventory' && 'Inventory Items Management'}
-                  {activeCard === 'parts-requests' &&
-                    'Parts Requests Management'}
-                  {activeCard === 'outstanding-orders' && 'Outstanding Orders'}
-                  {activeCard === 'order-placement' && 'Order Placement'}
-                </CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setActiveCard(null)}
-                >
-                  Close
-                </Button>
-              </div>
+              <CardTitle className="text-xl">
+                {activeCard === 'inventory' && 'Inventory Items Management'}
+                {activeCard === 'parts-requests' &&
+                  'Parts Requests Management'}
+                {activeCard === 'outstanding-orders' && 'Outstanding Orders'}
+                {activeCard === 'order-placement' && 'Order Placement'}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {activeCard === 'inventory' && <InventoryItemsCard />}

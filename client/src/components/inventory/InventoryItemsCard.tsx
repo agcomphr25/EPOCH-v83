@@ -33,6 +33,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import InventoryItemCostHistory from './InventoryItemCostHistory';
 import { calculateCOGS } from '@/lib/unitConversion';
+import { parseLeadTimeToDays } from '@/utils/leadTimeUtils';
 
 interface InventoryFormData {
   agPartNumber: string;
@@ -59,6 +60,7 @@ interface InventoryFormData {
   isStockItem: boolean;
   utilizedInPL1: boolean;
   utilizedInPL2: boolean;
+  traceabilityRequired: boolean;
   utilizedInFacilities: boolean;
   utilizedInAdmin: boolean;
   utilizedInServices: boolean;
@@ -435,6 +437,19 @@ const InventoryForm = ({
             PL2
           </Label>
         </div>
+        {formData.utilizedInPL2 && (
+          <div className="flex items-center space-x-2 ml-6">
+            <Checkbox
+              id="traceabilityRequired"
+              checked={formData.traceabilityRequired}
+              onCheckedChange={(checked) => onCheckboxChange('traceabilityRequired', checked as boolean)}
+              data-testid="checkbox-traceabilityRequired"
+            />
+            <Label htmlFor="traceabilityRequired" className="cursor-pointer">
+              Traceability Required
+            </Label>
+          </div>
+        )}
         <div className="flex items-center space-x-2">
           <Checkbox
             id="utilizedInFacilities"
@@ -586,6 +601,7 @@ export default function InventoryItemsCard() {
     isStockItem: false,
     utilizedInPL1: false,
     utilizedInPL2: false,
+    traceabilityRequired: false,
     utilizedInFacilities: false,
     utilizedInAdmin: false,
     utilizedInServices: false,
@@ -914,6 +930,7 @@ export default function InventoryItemsCard() {
       isStockItem: false,
       utilizedInPL1: false,
       utilizedInPL2: false,
+      traceabilityRequired: false,
       utilizedInFacilities: false,
       utilizedInAdmin: false,
       utilizedInServices: false,
@@ -964,12 +981,13 @@ export default function InventoryItemsCard() {
         cogsPerUnit: formData.cogsPerUnit ? parseFloat(formData.cogsPerUnit) : null,
         orderDate: formData.orderDate || null,
         department: formData.department || null,
-        leadTimeDays: formData.leadTimeDays || null,
+        leadTimeDays: parseLeadTimeToDays(formData.leadTimeDays),
         secondarySource: formData.secondarySource || null,
         notes: formData.notes || null,
         isStockItem: formData.isStockItem,
         utilizedInPL1: formData.utilizedInPL1,
         utilizedInPL2: formData.utilizedInPL2,
+        traceabilityRequired: formData.traceabilityRequired,
         utilizedInFacilities: formData.utilizedInFacilities,
         utilizedInAdmin: formData.utilizedInAdmin,
         utilizedInServices: formData.utilizedInServices,
@@ -1013,6 +1031,7 @@ export default function InventoryItemsCard() {
       isStockItem: item.isStockItem || false,
       utilizedInPL1: item.utilizedInPL1 || false,
       utilizedInPL2: item.utilizedInPL2 || false,
+      traceabilityRequired: item.traceabilityRequired || false,
       utilizedInFacilities: item.utilizedInFacilities || false,
       utilizedInAdmin: item.utilizedInAdmin || false,
       utilizedInServices: item.utilizedInServices || false,

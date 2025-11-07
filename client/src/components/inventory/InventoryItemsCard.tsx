@@ -33,6 +33,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import InventoryItemCostHistory from './InventoryItemCostHistory';
 import { calculateCOGS } from '@/lib/unitConversion';
+import { parseLeadTimeToDays } from '@/utils/leadTimeUtils';
 
 interface InventoryFormData {
   agPartNumber: string;
@@ -964,7 +965,7 @@ export default function InventoryItemsCard() {
         cogsPerUnit: formData.cogsPerUnit ? parseFloat(formData.cogsPerUnit) : null,
         orderDate: formData.orderDate || null,
         department: formData.department || null,
-        leadTimeDays: formData.leadTimeDays || null,
+        leadTimeDays: parseLeadTimeToDays(formData.leadTimeDays),
         secondarySource: formData.secondarySource || null,
         notes: formData.notes || null,
         isStockItem: formData.isStockItem,

@@ -3905,7 +3905,7 @@ export function registerRoutes(app: Express): Server {
           const row = Math.floor(labelIndex / 3);
           // Avery 5160 specifications per official template
           const pageHeight = 792; // 11" * 72 points/inch
-          const topMargin = 36; // 0.5" * 72 points/inch - required top margin for Avery 5160
+          const topMargin = 54; // 0.75" * 72 points/inch - increased to account for printer margins
           const leftMargin = 13.5; // ~0.1875" * 72 points/inch - left margin for Avery 5160
           const labelWidth = 189; // 2.625" * 72 points/inch
           const labelHeight = 72; // 1" * 72 points/inch

@@ -3905,7 +3905,7 @@ export function registerRoutes(app: Express): Server {
           const row = Math.floor(labelIndex / 3);
           // Avery 5160 specifications per official template
           const pageHeight = 792; // 11" * 72 points/inch
-          const topMargin = 36; // 0.5" - adjusted to achieve 9/16" physical margin (compensating for 4.5pt offset)
+          const topMargin = 40.5; // 9/16" * 72 points/inch - exact Avery 5160 top margin specification
           const leftMargin = 13.5; // ~0.1875" * 72 points/inch - left margin for Avery 5160
           const labelWidth = 189; // 2.625" * 72 points/inch
           const labelHeight = 72; // 1" * 72 points/inch
@@ -4361,6 +4361,17 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
+      // Set PDF viewer preferences to disable print scaling
+      // This ensures the labels print at exactly 100% scale without automatic fitting
+      pdfDoc.catalog.set(
+        pdfDoc.context.obj({
+          Type: 'Catalog',
+          ViewerPreferences: pdfDoc.context.obj({
+            PrintScaling: 'None',
+          }),
+        })
+      );
+
       const pdfBytes = await pdfDoc.save();
 
       // Return PDF for inline viewing (opens in new tab/popup)
@@ -4369,7 +4380,7 @@ export function registerRoutes(app: Express): Server {
         'Content-Disposition',
         'inline; filename="barcode-labels.pdf"'
       );
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
       res.send(Buffer.from(pdfBytes));
 
       console.log(

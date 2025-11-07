@@ -3905,14 +3905,16 @@ export function registerRoutes(app: Express): Server {
           const row = Math.floor(labelIndex / 3);
           // Avery 5160 specifications per official template
           const pageHeight = 792; // 11" * 72 points/inch
-          const topMargin = 4.5; // Compensated value to achieve 9/16" physical margin (40.5pt target - 36pt printer offset)
+          const topMargin = 36; // 0.5" - adjusted to achieve 9/16" physical margin (compensating for 4.5pt offset)
           const leftMargin = 13.5; // ~0.1875" * 72 points/inch - left margin for Avery 5160
           const labelWidth = 189; // 2.625" * 72 points/inch
           const labelHeight = 72; // 1" * 72 points/inch
+          const rowSpacing = 0; // No gap between rows on Avery 5160
           const columnGap = 9; // 0.125" * 72 points/inch (horizontal gap between columns)
           const x = leftMargin + col * (labelWidth + columnGap);
           // PDF coordinates: origin at bottom-left, so subtract from page height
-          const y = pageHeight - topMargin - labelHeight - (row * labelHeight);
+          // Only apply rowSpacing for rows after the first one
+          const y = pageHeight - topMargin - labelHeight - (row * (labelHeight + rowSpacing));
 
           // Draw label border with clear separation
           page.drawRectangle({

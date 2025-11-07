@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Copy, Save, X, ChevronDown, Package, CheckCircle2, Power, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, FileText, ChevronRight, Check, ChevronsUpDown, Copy, Save, X, ChevronDown, Package, CheckCircle2, Power, Loader2, FileEdit } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -43,7 +43,6 @@ const bomLineSchema = z.object({
   childPartAgNumber: z.string().min(1, 'Child part is required'),
   quantityPer: z.number().min(0.001, 'Quantity must be greater than 0'),
   scrapPercent: z.number().min(0).max(100).optional(),
-  uom: z.string().optional(),
   referenceDesignator: z.string().optional(),
   operationSequence: z.number().int().min(1).optional(),
 });
@@ -106,7 +105,6 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
     step2: null, // Initial revision
     step3: [], // BOM lines
   });
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isViewDrawerOpen, setIsViewDrawerOpen] = useState(false);
   const [selectedBom, setSelectedBom] = useState<any>(null);
   const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
@@ -122,6 +120,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
   const [isExplosionDialogOpen, setIsExplosionDialogOpen] = useState(false);
   const [explosionBom, setExplosionBom] = useState<any>(null); // BOM being exploded
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set()); // Track expanded tree nodes
+  const [editSheetTab, setEditSheetTab] = useState('metadata'); // Tab for edit sheet
 
   const bomsQueryUrl = `/api/robust-boms/boms?${searchTerm ? `search=${encodeURIComponent(searchTerm)}` : ''}`;
   const { data: bomsData, isLoading } = useQuery({
@@ -175,7 +174,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
           query.queryKey[0].startsWith('/api/robust-boms/boms')
       });
       toast({ title: 'Success', description: 'BOM updated successfully' });
-      setIsEditDialogOpen(false);
+      setIsViewDrawerOpen(false);
       setSelectedBom(null);
     },
     onError: () => {
@@ -299,7 +298,6 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
       childPartAgNumber: '',
       quantityPer: 1,
       scrapPercent: 0,
-      uom: '',
       referenceDesignator: '',
       operationSequence: undefined,
     },
@@ -314,7 +312,6 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
         childPartAgNumber: line.childPartAgNumber,
         quantityPer: line.quantityPer,
         scrapPercent: line.scrapPercent || 0,
-        uom: line.uom || '',
         referenceDesignator: line.referenceDesignator || '',
         operationSequence: line.operationSeq,
       })));
@@ -379,7 +376,6 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
           childPartAgNumber: '',
           quantityPer: 1,
           scrapPercent: 0,
-          uom: '',
           referenceDesignator: '',
           operationSequence: undefined,
         });
@@ -469,14 +465,14 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
 
   // Populate edit form when a BOM is selected
   useEffect(() => {
-    if (selectedBom && isEditDialogOpen) {
+    if (selectedBom && isViewDrawerOpen) {
       editForm.reset({
         parentPartAgNumber: selectedBom.parentPartAgNumber || '',
         code: selectedBom.code || '',
         description: selectedBom.description || '',
       });
     }
-  }, [selectedBom, isEditDialogOpen, editForm]);
+  }, [selectedBom, isViewDrawerOpen, editForm]);
 
   // Restore wizard Step 1 data when navigating back
   useEffect(() => {
@@ -869,22 +865,6 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                               )}
                             />
 
-                            {/* UOM */}
-                            <FormField
-                              control={lineForm.control}
-                              name="uom"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Unit of Measure (Optional)</FormLabel>
-                                  <FormControl>
-                                    <Input {...field} placeholder="e.g., EA, FT, LB" data-testid="input-uom" />
-                                  </FormControl>
-                                  <FormDescription>Unit of measure (EA, FT, LB, etc.)</FormDescription>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-
                             {/* Reference Designator */}
                             <FormField
                               control={lineForm.control}
@@ -972,7 +952,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                                         </TableCell>
                                         <TableCell>{line.quantityPer}</TableCell>
                                         <TableCell>{line.scrapPercent || '-'}</TableCell>
-                                        <TableCell>{line.uom || '-'}</TableCell>
+                                        <TableCell>{parts.find((p: any) => p.agPartNumber === line.childPartAgNumber)?.usageUnit || 'EA'}</TableCell>
                                         <TableCell>{line.referenceDesignator || '-'}</TableCell>
                                         <TableCell>{line.operationSequence || '-'}</TableCell>
                                         <TableCell>
@@ -1053,107 +1033,6 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
               </DialogContent>
             </Dialog>
 
-            {/* Edit BOM Dialog */}
-            <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-              setIsEditDialogOpen(open);
-              if (!open) setSelectedBom(null);
-            }}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Edit BOM</DialogTitle>
-                  <DialogDescription>
-                    Update BOM metadata (parent part, code, description)
-                  </DialogDescription>
-                </DialogHeader>
-                <Form {...editForm}>
-                  <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
-                    <FormField
-                      control={editForm.control}
-                      name="parentPartAgNumber"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                          <FormLabel>Parent Part (Inventory Item)</FormLabel>
-                          <FormControl>
-                            <Input
-                              value={field.value ? `${field.value} - ${parts.find((p: any) => p.agPartNumber === field.value)?.name || ''}` : ''}
-                              disabled
-                              data-testid="input-edit-parent-part"
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Parent part cannot be changed after BOM creation
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={editForm.control}
-                      name="code"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>BOM Code</FormLabel>
-                          <FormControl>
-                            <Input {...field} disabled data-testid="input-edit-bom-code" />
-                          </FormControl>
-                          <FormDescription>
-                            BOM Code cannot be changed after creation (immutable identifier)
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={editForm.control}
-                      name="description"
-                      render={({ field }) => {
-                        const hasReleasedRevisions = selectedBom?.revisions?.some((rev: any) => rev.isReleased);
-                        return (
-                          <FormItem>
-                            <FormLabel>Description</FormLabel>
-                            <FormControl>
-                              <Textarea 
-                                {...field} 
-                                disabled={hasReleasedRevisions}
-                                data-testid="input-edit-bom-description" 
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              {hasReleasedRevisions 
-                                ? 'Description locked - BOM has released revisions' 
-                                : 'You can edit the description while in draft status'
-                              }
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        );
-                      }}
-                    />
-                    <DialogFooter>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setIsEditDialogOpen(false);
-                          setSelectedBom(null);
-                          editForm.reset();
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="submit"
-                        disabled={updateBOMMutation.isPending}
-                        data-testid="button-update-bom"
-                      >
-                        {updateBOMMutation.isPending ? 'Updating...' : 'Update BOM'}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
-
             {/* View/Edit BOM Details Drawer */}
             <Sheet open={isViewDrawerOpen} onOpenChange={(open) => {
               setIsViewDrawerOpen(open);
@@ -1161,63 +1040,137 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                 setSelectedBom(null);
                 setSelectedRevisionId(null);
                 setEditingLines([]);
+                setEditSheetTab('metadata');
               }
             }}>
               <SheetContent side="right" className="w-full sm:max-w-4xl overflow-y-auto">
                 <SheetHeader>
-                  <SheetTitle>BOM Details & Line Items</SheetTitle>
+                  <SheetTitle>Edit BOM</SheetTitle>
                   <SheetDescription>
-                    View and edit BOM revisions and their line items
+                    Edit BOM metadata and manage revisions & line items
                   </SheetDescription>
                 </SheetHeader>
                 {selectedBom && (
-                  <div className="mt-6 space-y-6">
-                    {/* BOM Metadata */}
-                    <div className="space-y-3">
-                      <h3 className="font-semibold text-lg">BOM Information</h3>
-                      <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-                        <div>
-                          <label className="text-xs font-medium text-muted-foreground">BOM Code</label>
-                          <p className="text-sm font-mono mt-1">{selectedBom.code}</p>
-                        </div>
-                        <div>
-                          <label className="text-xs font-medium text-muted-foreground">Parent Part</label>
-                          <p className="text-sm mt-1">
-                            {selectedBom.parentInventoryItem 
-                              ? `${selectedBom.parentInventoryItem.agPartNumber} - ${selectedBom.parentInventoryItem.name}` 
-                              : selectedBom.parentPartAgNumber || 'N/A'}
-                          </p>
-                        </div>
-                        <div className="col-span-2">
-                          <label className="text-xs font-medium text-muted-foreground">Description</label>
-                          <p className="text-sm mt-1">{selectedBom.description || 'No description'}</p>
-                        </div>
-                        <div className="col-span-2 flex items-center justify-between pt-2 border-t">
-                          <div>
-                            <label className="text-xs font-medium text-muted-foreground">BOM Status</label>
-                            <p className="text-sm mt-1">
-                              {selectedBom.isActive ? 'Active - In use for production' : 'Inactive - Not used for production'}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground">
-                              {selectedBom.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                            <Switch
-                              checked={selectedBom.isActive}
-                              onCheckedChange={() => toggleBomActiveMutation.mutate(selectedBom.id)}
-                              disabled={toggleBomActiveMutation.isPending}
-                              data-testid="switch-bom-active"
+                  <div className="mt-6">
+                    <Tabs value={editSheetTab} onValueChange={setEditSheetTab}>
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="metadata">Metadata</TabsTrigger>
+                        <TabsTrigger value="revisions">Revisions & Lines</TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="metadata" className="space-y-6 mt-6">
+                        <Form {...editForm}>
+                          <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4">
+                            <FormField
+                              control={editForm.control}
+                              name="parentPartAgNumber"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-col">
+                                  <FormLabel>Parent Part (Inventory Item)</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      value={field.value ? `${field.value} - ${parts.find((p: any) => p.agPartNumber === field.value)?.name || ''}` : ''}
+                                      disabled
+                                      data-testid="input-edit-parent-part"
+                                    />
+                                  </FormControl>
+                                  <FormDescription>
+                                    Parent part cannot be changed after BOM creation
+                                  </FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
                             />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                            <FormField
+                              control={editForm.control}
+                              name="code"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>BOM Code</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} disabled data-testid="input-edit-bom-code" />
+                                  </FormControl>
+                                  <FormDescription>
+                                    BOM Code cannot be changed after creation (immutable identifier)
+                                  </FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={editForm.control}
+                              name="description"
+                              render={({ field }) => {
+                                const hasReleasedRevisions = selectedBom?.revisions?.some((rev: any) => rev.isReleased);
+                                return (
+                                  <FormItem>
+                                    <FormLabel>Description</FormLabel>
+                                    <FormControl>
+                                      <Textarea 
+                                        {...field} 
+                                        disabled={hasReleasedRevisions}
+                                        data-testid="input-edit-bom-description" 
+                                      />
+                                    </FormControl>
+                                    <FormDescription>
+                                      {hasReleasedRevisions 
+                                        ? 'Description locked - BOM has released revisions' 
+                                        : 'You can edit the description while in draft status'
+                                      }
+                                    </FormDescription>
+                                    <FormMessage />
+                                  </FormItem>
+                                );
+                              }}
+                            />
+                            <div className="space-y-4 pt-4 border-t">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <label className="text-sm font-medium">BOM Status</label>
+                                  <p className="text-sm text-muted-foreground">
+                                    {selectedBom.isActive ? 'Active - In use for production' : 'Inactive - Not used for production'}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-muted-foreground">
+                                    {selectedBom.isActive ? 'Active' : 'Inactive'}
+                                  </span>
+                                  <Switch
+                                    checked={selectedBom.isActive}
+                                    onCheckedChange={() => toggleBomActiveMutation.mutate(selectedBom.id)}
+                                    disabled={toggleBomActiveMutation.isPending}
+                                    data-testid="switch-bom-active"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex justify-end gap-2 pt-4">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  setIsViewDrawerOpen(false);
+                                  setSelectedBom(null);
+                                  editForm.reset();
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                type="submit"
+                                disabled={updateBOMMutation.isPending}
+                                data-testid="button-update-bom"
+                              >
+                                {updateBOMMutation.isPending ? 'Updating...' : 'Update BOM'}
+                              </Button>
+                            </div>
+                          </form>
+                        </Form>
+                      </TabsContent>
 
-                    <Separator />
+                      <TabsContent value="revisions" className="space-y-6 mt-6">
 
-                    {/* Revisions List */}
-                    <div className="space-y-3">
+                        <div className="space-y-3">
                       <h3 className="font-semibold text-lg">Revisions</h3>
                       {selectedBom.revisions && selectedBom.revisions.length > 0 ? (
                         <div className="space-y-2">
@@ -1268,7 +1221,6 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                                             childPartAgNumber: '',
                                             quantityPer: 1,
                                             scrapPercent: 0,
-                                            uom: 'EA',
                                             referenceDesignator: '',
                                             operationSequence: (editingLines.length + 1) * 10,
                                           };
@@ -1403,16 +1355,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                                                 />
                                               </TableCell>
                                               <TableCell>
-                                                <Input
-                                                  value={line.uom || ''}
-                                                  onChange={(e) => {
-                                                    const newLines = [...editingLines];
-                                                    newLines[index].uom = e.target.value;
-                                                    setEditingLines(newLines);
-                                                  }}
-                                                  className="w-20"
-                                                  data-testid={`input-uom-${index}`}
-                                                />
+                                                {parts.find((p: any) => p.agPartNumber === line.childPartAgNumber)?.usageUnit || 'EA'}
                                               </TableCell>
                                               <TableCell>
                                                 <Input
@@ -1469,7 +1412,6 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                                                 childPartAgNumber: line.childPartAgNumber,
                                                 quantityPer: line.quantityPer,
                                                 scrapPercent: line.scrapPercent || 0,
-                                                uom: line.uom || '',
                                                 referenceDesignator: line.referenceDesignator || '',
                                                 operationSequence: line.operationSeq,
                                               })));
@@ -1486,7 +1428,6 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                                                 childPartAgNumber: line.childPartAgNumber,
                                                 qtyPer: line.quantityPer,
                                                 scrapPct: line.scrapPercent,
-                                                uom: line.uom,
                                                 reference: line.referenceDesignator,
                                                 operationSeq: line.operationSequence,
                                               }))
@@ -1514,6 +1455,8 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                         <p className="text-sm text-muted-foreground">No revisions yet</p>
                       )}
                     </div>
+                      </TabsContent>
+                    </Tabs>
                   </div>
                 )}
               </SheetContent>
@@ -1672,6 +1615,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                         size="sm"
                         onClick={() => {
                           setSelectedBom(bom);
+                          setEditSheetTab('metadata');
                           setIsViewDrawerOpen(true);
                           // Auto-select first revision if available
                           if (bom.revisions && bom.revisions.length > 0) {
@@ -1679,7 +1623,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                           }
                         }}
                         data-testid={`button-edit-bom-${bom.id}`}
-                        title="Edit BOM & Line Items"
+                        title="Edit BOM"
                       >
                         <Edit className="h-4 w-4" />
                       </Button>

@@ -437,6 +437,59 @@ router.post('/finalized', async (req: Request, res: Response) => {
       if (order.features && typeof order.features === 'object') {
         for (const [featureKey, featureValue] of Object.entries(order.features)) {
           if (featureValue && featureValue !== false && featureValue !== '') {
+            // Special handling for paint_options_combined (format: "feature_category:option_value")
+            if (featureKey === 'paint_options_combined' && typeof featureValue === 'string') {
+              const [paintCategory, paintValue] = featureValue.split(':');
+              const paintFeature = allFeatures.find((f: any) => f.id === paintCategory);
+              
+              if (paintFeature) {
+                // Use the actual category's display name
+                featureDisplayNames[featureKey] = paintFeature.displayName || paintFeature.name || 'Paint Options';
+                const paintOptions = (paintFeature as any).options || [];
+                const paintOption = paintOptions.find((opt: any) => opt.value === paintValue);
+                
+                if (paintOption) {
+                  featureSelectionDisplayNames[featureValue] = paintOption.displayName || paintOption.label || paintValue;
+                  const paintPrice = paintOption.price || 0;
+                  featureSelectionPrices[featureValue] = paintPrice;
+                  featurePrices[featureKey] = paintPrice;
+                } else {
+                  // Fallback
+                  featureSelectionDisplayNames[featureValue] = createFallbackDisplayName(paintValue);
+                  featurePrices[featureKey] = 0;
+                }
+              }
+              continue;
+            }
+            
+            // Special handling for simple paint_options (just the option value)
+            if (featureKey === 'paint_options' && typeof featureValue === 'string') {
+              // Try to find this paint option across all paint feature categories
+              let paintPrice = 0;
+              let paintDisplayName = createFallbackDisplayName(featureValue);
+              let categoryDisplayName = 'Paint Options';
+              
+              for (const paintFeatureId of ['base_colors', 'camo_patterns', 'custom_graphics', 'special_effects', 'premium_patterns']) {
+                const paintFeature = allFeatures.find((f: any) => f.id === paintFeatureId);
+                if (paintFeature) {
+                  const paintOptions = (paintFeature as any).options || [];
+                  const paintOption = paintOptions.find((opt: any) => opt.value === featureValue);
+                  if (paintOption) {
+                    paintDisplayName = paintOption.displayName || paintOption.label || featureValue;
+                    paintPrice = paintOption.price || 0;
+                    categoryDisplayName = paintFeature.displayName || paintFeature.name || 'Paint Options';
+                    break;
+                  }
+                }
+              }
+              
+              featureDisplayNames[featureKey] = categoryDisplayName;
+              featureSelectionDisplayNames[featureValue] = paintDisplayName;
+              featureSelectionPrices[featureValue] = paintPrice;
+              featurePrices[featureKey] = paintPrice;
+              continue;
+            }
+            
             const featureDetail = allFeatures.find((f: any) => f.id === featureKey);
             if (featureDetail) {
               // Store feature-level display name
@@ -1826,7 +1879,7 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
       'Shipping'
     ];
     
-    const isInProduction = productionDepartments.includes(order.currentDepartment);
+    const isInProduction = productionDepartments.includes(order.currentDepartment || '');
     let rtsInventoryCreated = false;
 
     // If order is already in production and user chose to send to RTS, move it to RTS inventory
@@ -1851,8 +1904,8 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
             `SELECT base_price FROM stock_models WHERE model_id = $1`,
             [order.modelId]
           );
-          if (stockPriceQuery.rows && stockPriceQuery.rows.length > 0) {
-            estimatedPrice = stockPriceQuery.rows[0].base_price;
+          if (stockPriceQuery && stockPriceQuery.length > 0) {
+            estimatedPrice = stockPriceQuery[0].base_price;
             console.log(`🔧 Found base price for ${order.modelId}: $${estimatedPrice}`);
           }
         } catch (priceError) {
@@ -1895,7 +1948,7 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
             rtsItem.status,
           ]);
 
-          const rtsInventoryId = result.rows?.[0]?.id;
+          const rtsInventoryId = result?.[0]?.id;
 
           if (rtsInventoryId) {
             // Create history entry for RTS inventory

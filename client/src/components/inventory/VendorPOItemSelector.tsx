@@ -13,8 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Trash2, Pencil, Check, X } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, Info } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 type VendorPOItemSelectorProps = {
   vendorPoId: number;
@@ -33,6 +39,13 @@ type VendorPOItem = {
   unitPrice: number;
   lineTotal: number;
   notes?: string;
+  // Extended with inventory item UOM data
+  vendorUnit?: string;
+  purchaseUnit?: string;
+  purchaseQuantity?: number;
+  consumptionRate?: number;
+  usageUnit?: string;
+  purchaseUnitLabel?: string;
 };
 
 type VendorPart = {
@@ -49,6 +62,56 @@ type VendorPart = {
   itemCategory?: string;
   itemUom?: string;
 };
+
+// Helper component to display quantity with conversion info
+function QuantityDisplay({ item }: { item: VendorPOItem }) {
+  // If no conversion data available, just show simple quantity
+  if (!item.vendorUnit) {
+    return <span>{item.quantity}</span>;
+  }
+
+  // Build conversion chain display
+  const conversionChain: string[] = [];
+  if (item.vendorUnit) {
+    conversionChain.push(`${item.quantity} ${item.vendorUnit}`);
+  }
+  if (item.purchaseQuantity && item.purchaseUnit) {
+    conversionChain.push(`${item.purchaseQuantity} ${item.purchaseUnit} per ${item.vendorUnit}`);
+  }
+  if (item.consumptionRate && item.usageUnit) {
+    conversionChain.push(`${item.consumptionRate} ${item.usageUnit} per item`);
+  }
+  
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex items-center gap-1 cursor-help">
+            <div>
+              <div className="font-medium">
+                {item.quantity} {item.vendorUnit}
+              </div>
+              {item.purchaseQuantity && item.purchaseUnit && (
+                <div className="text-xs text-muted-foreground">
+                  = {(item.quantity * item.purchaseQuantity).toFixed(2)} {item.purchaseUnit}
+                </div>
+              )}
+            </div>
+            <Info className="w-3 h-3 text-muted-foreground" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <div className="space-y-1 text-xs">
+            <p><strong>Conversion Chain:</strong></p>
+            {conversionChain.map((chain, idx) => (
+              <p key={idx} className="ml-2">→ {chain}</p>
+            ))}
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, onTotalChange }: VendorPOItemSelectorProps) {
   const queryClient = useQueryClient();
@@ -350,7 +413,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                         data-testid={`input-edit-quantity-${item.id}`}
                       />
                     ) : (
-                      item.quantity
+                      <QuantityDisplay item={item} />
                     )}
                   </TableCell>
                   <TableCell>

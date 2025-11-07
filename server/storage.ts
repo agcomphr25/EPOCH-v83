@@ -13,6 +13,7 @@ import {
   forms,
   formSubmissions,
   inventoryItems,
+  inventoryItemCostHistory,
   inventoryScans,
   itemGroups,
   inventoryItemGroups,
@@ -1427,6 +1428,14 @@ export interface IStorage {
   createVendorPOItem(data: any): Promise<any>;
   updateVendorPOItem(id: number, data: any): Promise<any>;
   deleteVendorPOItem(id: number): Promise<void>;
+  recordVendorPOReceipt(params: {
+    poLineItemId: number;
+    receivedQuantity: number;
+    receivedDate: Date;
+    notes?: string;
+    createdBy?: number;
+  }): Promise<any>;
+  getInventoryItemCostHistory(agPartNumber: string): Promise<any[]>;
 
   // Vendor PO Settings
   getVendorPOSettings(): Promise<any | undefined>;
@@ -3820,8 +3829,10 @@ export class DatabaseStorage implements IStorage {
         supplierPartNumber: inventoryItems.supplierPartNumber,
         secondarySupplierPartNumber: inventoryItems.secondarySupplierPartNumber,
         costPer: inventoryItems.costPer,
+        vendorUnit: inventoryItems.vendorUnit,
         purchaseUnit: inventoryItems.purchaseUnit,
-        usageQuantityPerUnit: inventoryItems.usageQuantityPerUnit,
+        purchaseQuantity: inventoryItems.purchaseQuantity,
+        consumptionRate: inventoryItems.consumptionRate,
         usageUnit: inventoryItems.usageUnit,
         cogsPerUnit: inventoryItems.cogsPerUnit,
         orderDate: inventoryItems.orderDate,
@@ -3947,8 +3958,10 @@ export class DatabaseStorage implements IStorage {
         supplierPartNumber: inventoryItems.supplierPartNumber,
         secondarySupplierPartNumber: inventoryItems.secondarySupplierPartNumber,
         costPer: inventoryItems.costPer,
+        vendorUnit: inventoryItems.vendorUnit,
         purchaseUnit: inventoryItems.purchaseUnit,
-        usageQuantityPerUnit: inventoryItems.usageQuantityPerUnit,
+        purchaseQuantity: inventoryItems.purchaseQuantity,
+        consumptionRate: inventoryItems.consumptionRate,
         usageUnit: inventoryItems.usageUnit,
         cogsPerUnit: inventoryItems.cogsPerUnit,
         orderDate: inventoryItems.orderDate,
@@ -5924,11 +5937,40 @@ export class DatabaseStorage implements IStorage {
 
   // Vendor PO Items CRUD
   async getVendorPOItems(vendorPoId: number): Promise<any[]> {
-    return await db
-      .select()
+    const items = await db
+      .select({
+        id: vendorPOItems.id,
+        vendorPoId: vendorPOItems.vendorPoId,
+        lineNumber: vendorPOItems.lineNumber,
+        agPartNumber: vendorPOItems.agPartNumber,
+        vendorPartNumber: vendorPOItems.vendorPartNumber,
+        description: vendorPOItems.description,
+        quantity: vendorPOItems.quantity,
+        receivedQuantity: vendorPOItems.receivedQuantity,
+        receivedDate: vendorPOItems.receivedDate,
+        unitPrice: vendorPOItems.unitPrice,
+        lineTotal: vendorPOItems.totalPrice, // Alias totalPrice as lineTotal for frontend compatibility
+        uom: vendorPOItems.uom,
+        notes: vendorPOItems.notes,
+        createdAt: vendorPOItems.createdAt,
+        updatedAt: vendorPOItems.updatedAt,
+        // Include UOM conversion data from inventory items
+        vendorUnit: inventoryItems.vendorUnit,
+        purchaseUnit: inventoryItems.purchaseUnit,
+        purchaseQuantity: inventoryItems.purchaseQuantity,
+        consumptionRate: inventoryItems.consumptionRate,
+        usageUnit: inventoryItems.usageUnit,
+        purchaseUnitLabel: inventoryItems.purchaseUnitLabel,
+      })
       .from(vendorPOItems)
+      .leftJoin(
+        inventoryItems,
+        eq(vendorPOItems.agPartNumber, inventoryItems.agPartNumber)
+      )
       .where(eq(vendorPOItems.vendorPoId, vendorPoId))
       .orderBy(vendorPOItems.lineNumber);
+    
+    return items;
   }
 
   async createVendorPOItem(data: any): Promise<any> {
@@ -5947,6 +5989,231 @@ export class DatabaseStorage implements IStorage {
 
   async deleteVendorPOItem(id: number): Promise<void> {
     await db.delete(vendorPOItems).where(eq(vendorPOItems.id, id));
+  }
+
+  async recordVendorPOReceipt(params: {
+    poLineItemId: number;
+    receivedQuantity: number;
+    receivedDate: Date;
+    notes?: string;
+    createdBy?: number;
+  }): Promise<any> {
+    const { poLineItemId, receivedQuantity, receivedDate, notes, createdBy } = params;
+
+    // Validate received date is valid and not in the future
+    if (isNaN(receivedDate.getTime())) {
+      throw new Error(`Invalid received date provided: ${receivedDate}`);
+    }
+    
+    const now = new Date();
+    if (receivedDate > now) {
+      throw new Error(`Received date cannot be in the future. Received: ${receivedDate.toISOString()}, Current: ${now.toISOString()}`);
+    }
+
+    // Wrap all database operations in a transaction for data integrity
+    return await db.transaction(async (tx) => {
+      // Get the PO line item details
+      const [poLineItem] = await tx
+        .select({
+          id: vendorPOItems.id,
+          agPartNumber: vendorPOItems.agPartNumber,
+          unitPrice: vendorPOItems.unitPrice,
+          vendorPoId: vendorPOItems.vendorPoId,
+        })
+        .from(vendorPOItems)
+        .where(eq(vendorPOItems.id, poLineItemId));
+
+      if (!poLineItem) {
+        throw new Error(`PO line item ${poLineItemId} not found`);
+      }
+
+      if (!poLineItem.agPartNumber) {
+        throw new Error('Cannot calculate COGS for ad-hoc items without AG Part Number');
+      }
+
+      // Validate unit price
+      if (!poLineItem.unitPrice || poLineItem.unitPrice <= 0) {
+        throw new Error(
+          `Invalid unit price ${poLineItem.unitPrice} for PO line item ${poLineItemId}. Must be positive.`
+        );
+      }
+
+      // Get the vendor PO to get vendorId
+      const [vendorPO] = await tx
+        .select({ vendorId: vendorPOs.vendorId })
+        .from(vendorPOs)
+        .where(eq(vendorPOs.id, poLineItem.vendorPoId));
+
+      if (!vendorPO) {
+        throw new Error(`Vendor PO ${poLineItem.vendorPoId} not found`);
+      }
+
+      // Get the inventory item's UOM conversion data
+      const [inventoryItem] = await tx
+        .select({
+          id: inventoryItems.id,
+          agPartNumber: inventoryItems.agPartNumber,
+          vendorUnit: inventoryItems.vendorUnit,
+          purchaseUnit: inventoryItems.purchaseUnit,
+          purchaseQuantity: inventoryItems.purchaseQuantity,
+          consumptionRate: inventoryItems.consumptionRate,
+          usageUnit: inventoryItems.usageUnit,
+        })
+        .from(inventoryItems)
+        .where(eq(inventoryItems.agPartNumber, poLineItem.agPartNumber));
+
+      if (!inventoryItem) {
+        throw new Error(`Inventory item ${poLineItem.agPartNumber} not found`);
+      }
+
+      // Require valid purchase quantity and consumption rate (no defaults - must be configured)
+      if (!inventoryItem.purchaseQuantity || inventoryItem.purchaseQuantity <= 0) {
+        throw new Error(
+          `Purchase quantity not configured for ${poLineItem.agPartNumber}. Please set purchaseQuantity before receiving PO items.`
+        );
+      }
+
+      if (!inventoryItem.consumptionRate || inventoryItem.consumptionRate <= 0) {
+        throw new Error(
+          `Consumption rate not configured for ${poLineItem.agPartNumber}. Please set consumptionRate before receiving PO items.`
+        );
+      }
+
+      if (!inventoryItem.purchaseUnit || !inventoryItem.usageUnit) {
+        throw new Error(
+          `Units not configured for ${poLineItem.agPartNumber}. Please set purchaseUnit and usageUnit before receiving PO items.`
+        );
+      }
+
+      // Import unit conversion utility
+      const { calculateCOGS } = await import('./src/utils/unitConversion.js');
+
+      // Calculate COGS per item using automatic unit conversion
+      // Example: $491.20 per BOX, 80 lbs per BOX, 50g consumption rate
+      // Result: $491.20 / 80 = $6.14/lb = $0.0135/g * 50g = $0.68 per item
+      const cogsPerItem = calculateCOGS(
+        poLineItem.unitPrice, // $491.20
+        inventoryItem.purchaseQuantity, // 80 lbs
+        inventoryItem.purchaseUnit, // "lb"
+        inventoryItem.consumptionRate, // 50g
+        inventoryItem.usageUnit // "g"
+      );
+
+      const costPerPurchaseUnit = poLineItem.unitPrice / inventoryItem.purchaseQuantity;
+
+      console.log(`💰 COGS Calculation for ${poLineItem.agPartNumber}:`);
+      console.log(`   Vendor Unit Cost: $${poLineItem.unitPrice} per ${inventoryItem.vendorUnit || 'unit'}`);
+      console.log(`   Purchase Quantity: ${inventoryItem.purchaseQuantity} ${inventoryItem.purchaseUnit} per ${inventoryItem.vendorUnit || 'unit'}`);
+      console.log(`   Cost per Purchase Unit: $${costPerPurchaseUnit.toFixed(4)} per ${inventoryItem.purchaseUnit}`);
+      console.log(`   Consumption Rate: ${inventoryItem.consumptionRate} ${inventoryItem.usageUnit} per item`);
+      console.log(`   COGS per Item: $${cogsPerItem.toFixed(4)}`);
+
+      // Insert into cost history
+      const [costHistory] = await tx
+        .insert(inventoryItemCostHistory)
+        .values({
+          inventoryItemId: inventoryItem.id,
+          vendorId: vendorPO.vendorId,
+          receivedDate,
+          purchaseUnitCost: costPerPurchaseUnit,
+          usageUnitCost: cogsPerItem,
+          currency: 'USD',
+          poLineItemId,
+          notes,
+          createdBy,
+        })
+        .returning();
+
+      // Update the inventory item's latest cost and COGS
+      await tx
+        .update(inventoryItems)
+        .set({
+          latestCost: costPerPurchaseUnit,
+          cogsPerUnit: cogsPerItem,
+          updatedAt: new Date(),
+        })
+        .where(eq(inventoryItems.id, inventoryItem.id));
+
+      // Update the PO line item's received quantity and date
+      await tx
+        .update(vendorPOItems)
+        .set({
+          receivedQuantity,
+          receivedDate,
+          updatedAt: new Date(),
+        })
+        .where(eq(vendorPOItems.id, poLineItemId));
+
+      console.log(`✅ Cost history recorded for ${poLineItem.agPartNumber}`);
+      console.log(`   Latest cost: $${costPerPurchaseUnit.toFixed(4)}/${inventoryItem.purchaseUnit}`);
+      console.log(`   COGS per item: $${cogsPerItem.toFixed(4)}`);
+
+      return {
+        costHistory,
+        inventoryItem: {
+          agPartNumber: inventoryItem.agPartNumber,
+          latestCost: costPerPurchaseUnit,
+          cogsPerUnit: cogsPerItem,
+        },
+        calculation: {
+          vendorUnitCost: poLineItem.unitPrice,
+          purchaseUnitCost: costPerPurchaseUnit,
+          cogsPerItem,
+          vendorUnit: inventoryItem.vendorUnit,
+          purchaseUnit: inventoryItem.purchaseUnit,
+          purchaseQuantity: inventoryItem.purchaseQuantity,
+          consumptionRate: inventoryItem.consumptionRate,
+          usageUnit: inventoryItem.usageUnit,
+        },
+      };
+    });
+  }
+
+  // Get cost history for an inventory item by AG Part Number
+  async getInventoryItemCostHistory(agPartNumber: string): Promise<any[]> {
+    // First get the inventory item to get its ID and unit information
+    const [inventoryItem] = await db
+      .select({
+        id: inventoryItems.id,
+        vendorUnit: inventoryItems.vendorUnit,
+        purchaseUnit: inventoryItems.purchaseUnit,
+        purchaseQuantity: inventoryItems.purchaseQuantity,
+        consumptionRate: inventoryItems.consumptionRate,
+        usageUnit: inventoryItems.usageUnit,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.agPartNumber, agPartNumber));
+
+    if (!inventoryItem) {
+      return [];
+    }
+
+    // Get cost history with vendor names
+    const history = await db
+      .select({
+        id: inventoryItemCostHistory.id,
+        inventoryItemId: inventoryItemCostHistory.inventoryItemId,
+        vendorId: inventoryItemCostHistory.vendorId,
+        vendorName: vendors.name,
+        receivedDate: inventoryItemCostHistory.receivedDate,
+        purchaseUnitCost: inventoryItemCostHistory.purchaseUnitCost,
+        usageUnitCost: inventoryItemCostHistory.usageUnitCost,
+        currency: inventoryItemCostHistory.currency,
+        poLineItemId: inventoryItemCostHistory.poLineItemId,
+        notes: inventoryItemCostHistory.notes,
+        createdAt: inventoryItemCostHistory.createdAt,
+        vendorUnit: inventoryItem.vendorUnit,
+        purchaseUnit: inventoryItem.purchaseUnit,
+        purchaseQuantity: inventoryItem.purchaseQuantity,
+        consumptionRate: inventoryItem.consumptionRate,
+        usageUnit: inventoryItem.usageUnit,
+      })
+      .from(inventoryItemCostHistory)
+      .leftJoin(vendors, eq(inventoryItemCostHistory.vendorId, vendors.id))
+      .where(eq(inventoryItemCostHistory.inventoryItemId, inventoryItem.id))
+      .orderBy(desc(inventoryItemCostHistory.receivedDate));
+
+    return history;
   }
 
   // Vendor PO Settings

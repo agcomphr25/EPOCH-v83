@@ -140,16 +140,16 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
         {items.slice(0, 3).map((item) => (
           <div
             key={item.id}
-            className="text-xs bg-gray-50 dark:bg-gray-800 rounded p-2"
+            className="text-xs bg-gray-50 dark:bg-gray-800 rounded p-2 overflow-hidden"
           >
             <div className="flex justify-between items-start gap-2">
-              <div className="flex-1 min-w-0 space-y-0.5">
+              <div className="flex-1 min-w-0 space-y-0.5 overflow-hidden">
                 {item.agPartNumber && (
-                  <div className="text-blue-600 font-medium">
+                  <div className="text-blue-600 font-medium truncate">
                     #{item.agPartNumber}
                   </div>
                 )}
-                <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                <div className="font-medium text-gray-900 dark:text-gray-100 break-words line-clamp-2">
                   {item.description}
                 </div>
                 {item.vendorPartNumber && (

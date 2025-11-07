@@ -291,7 +291,7 @@ function VendorPOCard({
             data-testid={`button-view-items-${vendorPo.id}`}
           >
             <Eye className="w-4 h-4 mr-1" />
-            View Items
+            Manage Items
           </Button>
           <Button
             variant="outline"
@@ -357,6 +357,8 @@ function VendorPOForm({
       : undefined
   );
 
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+
   // Fetch vendors for the dropdown
   const { data: vendorsResponse } = useQuery({
     queryKey: ['/api/vendors'],
@@ -417,7 +419,7 @@ function VendorPOForm({
 
       <div>
         <Label htmlFor="expectedDeliveryDate">Expected Delivery Date</Label>
-        <Popover>
+        <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
@@ -435,7 +437,10 @@ function VendorPOForm({
             <Calendar
               mode="single"
               selected={deliveryDate}
-              onSelect={setDeliveryDate}
+              onSelect={(date) => {
+                setDeliveryDate(date);
+                setIsDatePickerOpen(false);
+              }}
               initialFocus
             />
           </PopoverContent>
@@ -932,7 +937,7 @@ export default function VendorPOManager() {
                 {nextStatus === 'Sent' && <Send className="w-4 h-4 mr-2" />}
                 {nextStatus === 'Partially Received' && <Package className="w-4 h-4 mr-2" />}
                 {nextStatus === 'Fully Received' && <CheckCircle className="w-4 h-4 mr-2" />}
-                Mark as {nextStatus}
+                {nextStatus === 'Sent' ? 'Issue PO' : `Mark as ${nextStatus}`}
               </Button>
             )}
             

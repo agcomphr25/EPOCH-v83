@@ -5947,7 +5947,17 @@ export class DatabaseStorage implements IStorage {
       .where(eq(vendorPOItems.vendorPoId, vendorPoId))
       .orderBy(vendorPOItems.lineNumber);
     
-    return items;
+    // Flatten the joined data structure
+    return items.map(row => ({
+      ...row.vendor_po_items,
+      // Include UOM conversion data from inventory items if available
+      vendorUnit: row.inventory_items?.vendorUnit,
+      purchaseUnit: row.inventory_items?.purchaseUnit,
+      purchaseQuantity: row.inventory_items?.purchaseQuantity,
+      consumptionRate: row.inventory_items?.consumptionRate,
+      usageUnit: row.inventory_items?.usageUnit,
+      purchaseUnitLabel: row.inventory_items?.purchaseUnitLabel,
+    }));
   }
 
   async createVendorPOItem(data: any): Promise<any> {

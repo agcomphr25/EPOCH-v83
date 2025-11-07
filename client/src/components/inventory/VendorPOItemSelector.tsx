@@ -40,9 +40,11 @@ type VendorPOItem = {
   lineTotal: number;
   notes?: string;
   // Extended with inventory item UOM data
+  vendorUnit?: string;
   purchaseUnit?: string;
+  purchaseQuantity?: number;
+  consumptionRate?: number;
   usageUnit?: string;
-  usageQuantityPerUnit?: number;
   purchaseUnitLabel?: string;
 };
 
@@ -64,12 +66,21 @@ type VendorPart = {
 // Helper component to display quantity with conversion info
 function QuantityDisplay({ item }: { item: VendorPOItem }) {
   // If no conversion data available, just show simple quantity
-  if (!item.usageQuantityPerUnit || !item.purchaseUnit || !item.usageUnit) {
+  if (!item.vendorUnit) {
     return <span>{item.quantity}</span>;
   }
 
-  // Calculate implied usage quantity
-  const usageQty = item.quantity * item.usageQuantityPerUnit;
+  // Build conversion chain display
+  const conversionChain: string[] = [];
+  if (item.vendorUnit) {
+    conversionChain.push(`${item.quantity} ${item.vendorUnit}`);
+  }
+  if (item.purchaseQuantity && item.purchaseUnit) {
+    conversionChain.push(`${item.purchaseQuantity} ${item.purchaseUnit} per ${item.vendorUnit}`);
+  }
+  if (item.consumptionRate && item.usageUnit) {
+    conversionChain.push(`${item.consumptionRate} ${item.usageUnit} per item`);
+  }
   
   return (
     <TooltipProvider>
@@ -78,20 +89,23 @@ function QuantityDisplay({ item }: { item: VendorPOItem }) {
           <div className="flex items-center gap-1 cursor-help">
             <div>
               <div className="font-medium">
-                {item.quantity} {item.purchaseUnit}
+                {item.quantity} {item.vendorUnit}
               </div>
-              <div className="text-xs text-muted-foreground">
-                = {usageQty.toFixed(2)} {item.usageUnit}
-              </div>
+              {item.purchaseQuantity && item.purchaseUnit && (
+                <div className="text-xs text-muted-foreground">
+                  = {(item.quantity * item.purchaseQuantity).toFixed(2)} {item.purchaseUnit}
+                </div>
+              )}
             </div>
             <Info className="w-3 h-3 text-muted-foreground" />
           </div>
         </TooltipTrigger>
         <TooltipContent>
           <div className="space-y-1 text-xs">
-            <p><strong>Purchase Quantity:</strong> {item.quantity} {item.purchaseUnitLabel || item.purchaseUnit}</p>
-            <p><strong>Conversion:</strong> {item.usageQuantityPerUnit} {item.usageUnit} per {item.purchaseUnit}</p>
-            <p><strong>Usage Quantity:</strong> {usageQty.toFixed(2)} {item.usageUnit}</p>
+            <p><strong>Conversion Chain:</strong></p>
+            {conversionChain.map((chain, idx) => (
+              <p key={idx} className="ml-2">→ {chain}</p>
+            ))}
           </div>
         </TooltipContent>
       </Tooltip>

@@ -18,21 +18,30 @@ type CostHistoryEntry = {
   poLineItemId?: number | null;
   notes?: string | null;
   createdAt: string;
+  vendorUnit?: string;
   purchaseUnit?: string;
+  purchaseQuantity?: number;
+  consumptionRate?: number;
   usageUnit?: string;
 };
 
 interface InventoryItemCostHistoryProps {
   agPartNumber: string;
   currentCost?: number | null;
+  vendorUnit?: string | null;
   purchaseUnit?: string | null;
+  purchaseQuantity?: number | null;
+  consumptionRate?: number | null;
   usageUnit?: string | null;
 }
 
 export default function InventoryItemCostHistory({
   agPartNumber,
   currentCost,
+  vendorUnit,
   purchaseUnit,
+  purchaseQuantity,
+  consumptionRate,
   usageUnit,
 }: InventoryItemCostHistoryProps) {
   const { data: costHistory = [], isLoading } = useQuery<CostHistoryEntry[]>({
@@ -112,7 +121,8 @@ export default function InventoryItemCostHistory({
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Vendor</TableHead>
-                <TableHead>Purchase Cost</TableHead>
+                <TableHead>Vendor Unit Cost</TableHead>
+                <TableHead>Conversion Chain</TableHead>
                 <TableHead>Usage Cost</TableHead>
                 <TableHead>Trend</TableHead>
                 <TableHead>Notes</TableHead>
@@ -124,6 +134,14 @@ export default function InventoryItemCostHistory({
                 const trend = getCostTrend(entry.usageUnitCost, previousEntry?.usageUnitCost);
                 const TrendIcon = trend?.icon;
                 
+                const conversionChain = [];
+                if (entry.vendorUnit && entry.purchaseQuantity && entry.purchaseUnit) {
+                  conversionChain.push(`${entry.vendorUnit} → ${entry.purchaseQuantity} ${entry.purchaseUnit}`);
+                }
+                if (entry.consumptionRate && entry.usageUnit) {
+                  conversionChain.push(`${entry.consumptionRate} ${entry.usageUnit}`);
+                }
+
                 return (
                   <TableRow key={entry.id}>
                     <TableCell className="text-xs">
@@ -138,9 +156,20 @@ export default function InventoryItemCostHistory({
                           ${entry.purchaseUnitCost.toFixed(2)}
                         </div>
                         <div className="text-muted-foreground">
-                          per {purchaseUnit || 'unit'}
+                          per {entry.vendorUnit || vendorUnit || 'vendor unit'}
                         </div>
                       </div>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {conversionChain.length > 0 ? (
+                        <div className="text-muted-foreground">
+                          {conversionChain.join(' → ')}
+                        </div>
+                      ) : (
+                        <div className="text-muted-foreground italic">
+                          No conversion data
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-xs">
                       <div>
@@ -148,7 +177,7 @@ export default function InventoryItemCostHistory({
                           ${entry.usageUnitCost.toFixed(4)}
                         </div>
                         <div className="text-muted-foreground">
-                          per {usageUnit || 'unit'}
+                          per {entry.usageUnit || usageUnit || 'item'}
                         </div>
                       </div>
                     </TableCell>

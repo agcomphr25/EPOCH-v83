@@ -956,18 +956,18 @@ export default function InventoryItemsCard() {
       supplierPartNumber: item.supplierPartNumber || '',
       secondarySupplierPartNumber: item.secondarySupplierPartNumber || '',
       costPer: item.costPer ? item.costPer.toString() : '',
-      vendorUnit: (item as any).vendorUnit || '',
+      vendorUnit: item.vendorUnit || '',
       purchaseUnitLabel: item.purchaseUnitLabel || '',
       purchaseUnit: item.purchaseUnit || '',
-      purchaseQuantity: (item as any).purchaseQuantity ? (item as any).purchaseQuantity.toString() : '',
-      consumptionRate: (item as any).consumptionRate ? (item as any).consumptionRate.toString() : '',
+      purchaseQuantity: item.purchaseQuantity ? item.purchaseQuantity.toString() : '',
+      consumptionRate: item.consumptionRate ? item.consumptionRate.toString() : '',
       usageUnit: item.usageUnit || '',
       cogsPerUnit: item.cogsPerUnit ? item.cogsPerUnit.toString() : '',
       orderDate: item.orderDate
         ? new Date(item.orderDate).toISOString().split('T')[0]
         : '',
       department: item.department || '',
-      leadTimeDays: (item as any).leadTimeDays || '',
+      leadTimeDays: item.leadTimeDays ? item.leadTimeDays.toString() : '',
       secondarySource: item.secondarySource || '',
       notes: item.notes || '',
       isStockItem: item.isStockItem || false,
@@ -1624,7 +1624,10 @@ export default function InventoryItemsCard() {
               <InventoryItemCostHistory 
                 agPartNumber={editingItem.agPartNumber}
                 currentCost={editingItem.latestCost || undefined}
+                vendorUnit={editingItem.vendorUnit || undefined}
                 purchaseUnit={editingItem.purchaseUnit || undefined}
+                purchaseQuantity={editingItem.purchaseQuantity || undefined}
+                consumptionRate={editingItem.consumptionRate || undefined}
                 usageUnit={editingItem.usageUnit || undefined}
               />
             </div>

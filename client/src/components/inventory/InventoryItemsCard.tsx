@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Download, Upload, Search, Package, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Edit, Trash2, Download, Upload, Search, Package, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown, Calculator } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'wouter';
 import type { InventoryItem, ItemGroup } from '@shared/schema';
@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import InventoryItemCostHistory from './InventoryItemCostHistory';
+import { calculateCOGS } from '@/lib/unitConversion';
 
 interface InventoryFormData {
   agPartNumber: string;
@@ -369,7 +370,19 @@ const InventoryForm = ({
           <p className="text-xs text-gray-500 mt-1">Unit of measurement (e.g., "g", "oz", "ea")</p>
         </div>
         <div>
-          <Label htmlFor="cogsPerUnit">COGS per Unit ($)</Label>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="cogsPerUnit">COGS per Unit ($)</Label>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Calculator className="w-4 h-4 text-blue-500" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Auto-calculated from conversion data</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <Input
             id="cogsPerUnit"
             name="cogsPerUnit"
@@ -380,7 +393,7 @@ const InventoryForm = ({
             placeholder="0.68"
             data-testid="input-cogsPerUnit"
           />
-          <p className="text-xs text-gray-500 mt-1">Calculated or manual COGS per manufactured unit</p>
+          <p className="text-xs text-gray-500 mt-1">Auto-calculated or manually editable</p>
         </div>
         <div>
           <Label htmlFor="orderDate">Order Date</Label>
@@ -577,6 +590,33 @@ export default function InventoryItemsCard() {
     utilizedInAdmin: false,
     utilizedInServices: false,
   });
+
+  // Auto-calculate COGS per unit when conversion data changes
+  useEffect(() => {
+    const { costPer, purchaseQuantity, purchaseUnit, consumptionRate, usageUnit } = formData;
+    
+    // Only calculate if we have all required fields
+    if (costPer && purchaseQuantity && purchaseUnit && consumptionRate && usageUnit) {
+      const vendorPrice = parseFloat(costPer);
+      const purQty = parseFloat(purchaseQuantity);
+      const consRate = parseFloat(consumptionRate);
+      
+      const calculatedCOGS = calculateCOGS(vendorPrice, purQty, purchaseUnit, consRate, usageUnit);
+      
+      if (calculatedCOGS !== null && !isNaN(calculatedCOGS)) {
+        // Only update if the calculated value is different (to avoid infinite loops)
+        const currentCOGS = formData.cogsPerUnit ? parseFloat(formData.cogsPerUnit) : 0;
+        const roundedCOGS = Math.round(calculatedCOGS * 100) / 100; // Round to 2 decimal places
+        
+        if (Math.abs(currentCOGS - roundedCOGS) > 0.001) {
+          setFormData(prev => ({
+            ...prev,
+            cogsPerUnit: roundedCOGS.toFixed(2)
+          }));
+        }
+      }
+    }
+  }, [formData.costPer, formData.purchaseQuantity, formData.purchaseUnit, formData.consumptionRate, formData.usageUnit]);
 
   const { data: allItems = [], isLoading } = useQuery<InventoryItem[]>({
     queryKey: ['/api/enhanced/inventory/items'],

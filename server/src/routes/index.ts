@@ -3903,15 +3903,18 @@ export function registerRoutes(app: Express): Server {
           // Calculate label position (3x10 grid) - Avery 5160 format with correct margins
           const col = labelIndex % 3;
           const row = Math.floor(labelIndex / 3);
-          // Avery 5160 specifications: 0.25" margin between columns, adjusted vertical position for alignment
-          const leftMargin = 18; // 0.25" * 72 points/inch (left margin)
-          const verticalOffset = 18; // 0.25" * 72 points/inch - shift labels UP by quarter inch
-          const bottomMargin = 36; // 0.5" * 72 points/inch
+          // Avery 5160 specifications per official template
+          const pageHeight = 792; // 11" * 72 points/inch
+          const topMargin = 40.5; // 9/16" * 72 points/inch - exact Avery 5160 top margin specification
+          const leftMargin = 13.5; // ~0.1875" * 72 points/inch - left margin for Avery 5160
           const labelWidth = 189; // 2.625" * 72 points/inch
           const labelHeight = 72; // 1" * 72 points/inch
-          const columnGap = 9; // 0.125" * 72 points/inch (reduced gap between columns)
+          const rowSpacing = 0; // No gap between rows on Avery 5160
+          const columnGap = 9; // 0.125" * 72 points/inch (horizontal gap between columns)
           const x = leftMargin + col * (labelWidth + columnGap);
-          const y = 792 - labelHeight - row * labelHeight + verticalOffset; // Shift up by 0.25"
+          // PDF coordinates: origin at bottom-left, so subtract from page height
+          // Only apply rowSpacing for rows after the first one
+          const y = pageHeight - topMargin - labelHeight - (row * (labelHeight + rowSpacing));
 
           // Draw label border with clear separation
           page.drawRectangle({
@@ -4036,7 +4039,9 @@ export function registerRoutes(app: Express): Server {
 
           // Get model and action length (using display names) - need these early for display
           const actionLength =
-            (order as any).features?.action_length || 'unknown';
+            (order as any).specifications?.actionLength || 
+            (order as any).features?.action_length || 
+            'unknown';
           const modelDisplayName =
             stockModelMap.get((order as any).modelId) ||
             (order as any).modelId ||
@@ -4047,7 +4052,11 @@ export function registerRoutes(app: Express): Server {
           // For regular orders, show order ID
           let labelText = order.orderId;
           if ((order as any).isPOItem) {
-            const customerName = (order as any).poCustomerName || 'Customer';
+            let customerName = (order as any).poCustomerName;
+            // Handle null, undefined, empty, or "unknown" customer names
+            if (!customerName || customerName.toLowerCase() === 'unknown' || customerName.trim() === '') {
+              customerName = order.customerName || order.customerId || order.orderId;
+            }
             const poNumber = (order as any).poNumber || 'N/A';
             const unitNum = (order as any).poUnitNumber || 1;
             const totalQty = (order as any).poTotalQuantity || 1;
@@ -4158,11 +4167,15 @@ export function registerRoutes(app: Express): Server {
             : '';
 
           // Add stock model, action length, and paint option with subcategory on same line below barcode
+          // Only include action length if it's not 'unknown'
+          const hasActionLength = actionLength && actionLength.toLowerCase() !== 'unknown';
+          const actionPart = hasActionLength ? ` - ${actionLength.toUpperCase()}` : '';
+          
           const labelLine = paintDisplayName
             ? subcategory
-              ? `${modelDisplayName} - ${actionLength.toUpperCase()} - ${subcategory}: ${paintDisplayName}`
-              : `${modelDisplayName} - ${actionLength.toUpperCase()} - PAINT: ${paintDisplayName}`
-            : `${modelDisplayName} - ${actionLength.toUpperCase()}`;
+              ? `${modelDisplayName}${actionPart} - ${subcategory}: ${paintDisplayName}`
+              : `${modelDisplayName}${actionPart} - PAINT: ${paintDisplayName}`
+            : `${modelDisplayName}${actionPart}`;
 
           page.drawText(labelLine, {
             x: x + 8,
@@ -4348,6 +4361,17 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
+      // Set PDF viewer preferences to disable print scaling
+      // This ensures the labels print at exactly 100% scale without automatic fitting
+      pdfDoc.catalog.set(
+        pdfDoc.context.obj({
+          Type: 'Catalog',
+          ViewerPreferences: pdfDoc.context.obj({
+            PrintScaling: 'None',
+          }),
+        })
+      );
+
       const pdfBytes = await pdfDoc.save();
 
       // Return PDF for inline viewing (opens in new tab/popup)
@@ -4356,7 +4380,7 @@ export function registerRoutes(app: Express): Server {
         'Content-Disposition',
         'inline; filename="barcode-labels.pdf"'
       );
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
       res.send(Buffer.from(pdfBytes));
 
       console.log(

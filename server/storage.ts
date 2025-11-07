@@ -305,6 +305,10 @@ import {
   vendorPOSettings,
   type VendorPOSettings,
   type InsertVendorPOSettings,
+  // PDF Template types
+  pdfTemplates,
+  type PdfTemplate,
+  type InsertPdfTemplate,
   // Cutting Table types
   cuttingMaterials,
   type CuttingMaterial,
@@ -1440,6 +1444,15 @@ export interface IStorage {
   // Vendor PO Settings
   getVendorPOSettings(): Promise<any | undefined>;
   updateVendorPOSettings(data: any): Promise<any>;
+
+  // PDF Templates CRUD
+  getAllPdfTemplates(): Promise<PdfTemplate[]>;
+  getPdfTemplate(id: string): Promise<PdfTemplate | undefined>;
+  getPdfTemplatesByType(type: string): Promise<PdfTemplate[]>;
+  getActivePdfTemplateByType(type: string): Promise<PdfTemplate | undefined>;
+  createPdfTemplate(data: InsertPdfTemplate): Promise<PdfTemplate>;
+  updatePdfTemplate(id: string, data: Partial<InsertPdfTemplate>): Promise<PdfTemplate>;
+  deletePdfTemplate(id: string): Promise<void>;
 
   // Cutting Table - Materials CRUD
   getAllCuttingMaterials(): Promise<CuttingMaterial[]>;
@@ -6238,6 +6251,77 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return newSettings;
     }
+  }
+
+  // PDF Templates CRUD
+  async getAllPdfTemplates(): Promise<PdfTemplate[]> {
+    return await db
+      .select()
+      .from(pdfTemplates)
+      .orderBy(desc(pdfTemplates.createdAt));
+  }
+
+  async getPdfTemplate(id: string): Promise<PdfTemplate | undefined> {
+    const [template] = await db
+      .select()
+      .from(pdfTemplates)
+      .where(eq(pdfTemplates.id, id))
+      .limit(1);
+    return template;
+  }
+
+  async getPdfTemplatesByType(type: string): Promise<PdfTemplate[]> {
+    return await db
+      .select()
+      .from(pdfTemplates)
+      .where(eq(pdfTemplates.type, type))
+      .orderBy(desc(pdfTemplates.isDefault), desc(pdfTemplates.createdAt));
+  }
+
+  async getActivePdfTemplateByType(type: string): Promise<PdfTemplate | undefined> {
+    const [template] = await db
+      .select()
+      .from(pdfTemplates)
+      .where(and(
+        eq(pdfTemplates.type, type),
+        eq(pdfTemplates.isActive, true),
+        eq(pdfTemplates.isDefault, true)
+      ))
+      .limit(1);
+    
+    if (!template) {
+      // If no default template, return the first active one
+      const [firstActive] = await db
+        .select()
+        .from(pdfTemplates)
+        .where(and(
+          eq(pdfTemplates.type, type),
+          eq(pdfTemplates.isActive, true)
+        ))
+        .orderBy(desc(pdfTemplates.createdAt))
+        .limit(1);
+      return firstActive;
+    }
+    
+    return template;
+  }
+
+  async createPdfTemplate(data: InsertPdfTemplate): Promise<PdfTemplate> {
+    const [template] = await db.insert(pdfTemplates).values(data).returning();
+    return template;
+  }
+
+  async updatePdfTemplate(id: string, data: Partial<InsertPdfTemplate>): Promise<PdfTemplate> {
+    const [template] = await db
+      .update(pdfTemplates)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(pdfTemplates.id, id))
+      .returning();
+    return template;
+  }
+
+  async deletePdfTemplate(id: string): Promise<void> {
+    await db.delete(pdfTemplates).where(eq(pdfTemplates.id, id));
   }
 
   // Enhanced Inventory MRP - Inventory Balances CRUD

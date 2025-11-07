@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { PdfTemplate } from '@shared/schema';
+import { Upload, Download, FileJson } from 'lucide-react';
 
 const defaultTemplate: Template = {
   basePdf: { width: 210, height: 297, padding: [10, 10, 10, 10] },
@@ -178,6 +179,124 @@ export default function PDFTemplateDesigner() {
     }
   };
 
+  const handleImportJson = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const importedTemplate = JSON.parse(text) as Template;
+        
+        if (designerInstanceRef.current) {
+          designerInstanceRef.current.destroy();
+          designerInstanceRef.current = null;
+        }
+
+        if (designerRef.current) {
+          designerInstanceRef.current = new Designer({
+            domContainer: designerRef.current,
+            template: importedTemplate,
+            plugins: {
+              text,
+              image,
+              qrcode: barcodes.qrcode,
+            },
+          });
+        }
+
+        toast({
+          title: 'Template Imported',
+          description: 'JSON template has been loaded successfully.',
+        });
+      } catch (error) {
+        toast({
+          title: 'Import Error',
+          description: 'Failed to parse JSON file. Please check the file format.',
+          variant: 'destructive',
+        });
+      }
+    };
+    input.click();
+  };
+
+  const handleExportJson = () => {
+    if (!designerInstanceRef.current) return;
+
+    const template = designerInstanceRef.current.getTemplate();
+    const json = JSON.stringify(template, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${templateName || 'template'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: 'Template Exported',
+      description: 'JSON template has been downloaded.',
+    });
+  };
+
+  const handleImportBasePdf = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const base64 = btoa(
+          new Uint8Array(arrayBuffer).reduce(
+            (data, byte) => data + String.fromCharCode(byte),
+            ''
+          )
+        );
+
+        const currentTemplate = designerInstanceRef.current?.getTemplate() || defaultTemplate;
+        const newTemplate: Template = {
+          ...currentTemplate,
+          basePdf: `data:application/pdf;base64,${base64}`,
+        };
+
+        if (designerInstanceRef.current) {
+          designerInstanceRef.current.destroy();
+          designerInstanceRef.current = null;
+        }
+
+        if (designerRef.current) {
+          designerInstanceRef.current = new Designer({
+            domContainer: designerRef.current,
+            template: newTemplate,
+            plugins: {
+              text,
+              image,
+              qrcode: barcodes.qrcode,
+            },
+          });
+        }
+
+        toast({
+          title: 'Base PDF Imported',
+          description: 'PDF has been loaded as the base template.',
+        });
+      } catch (error) {
+        toast({
+          title: 'Import Error',
+          description: 'Failed to load PDF file.',
+          variant: 'destructive',
+        });
+      }
+    };
+    input.click();
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-white dark:bg-black text-black dark:text-white">
@@ -193,7 +312,34 @@ export default function PDFTemplateDesigner() {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white" data-testid="text-page-title">
             {id ? 'Edit' : 'Create'} PDF Template
           </h1>
-          <div className="space-x-2">
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handleImportJson}
+              data-testid="button-import-json"
+              className="bg-white dark:bg-gray-800 text-black dark:text-white"
+            >
+              <FileJson className="w-4 h-4 mr-2" />
+              Import JSON
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleExportJson}
+              data-testid="button-export-json"
+              className="bg-white dark:bg-gray-800 text-black dark:text-white"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export JSON
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleImportBasePdf}
+              data-testid="button-import-pdf"
+              className="bg-white dark:bg-gray-800 text-black dark:text-white"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Import Base PDF
+            </Button>
             <Button
               variant="outline"
               onClick={() => navigate('/pdf-templates')}

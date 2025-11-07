@@ -305,6 +305,10 @@ import {
   vendorPOSettings,
   type VendorPOSettings,
   type InsertVendorPOSettings,
+  // PDF Template types
+  pdfTemplates,
+  type PdfTemplate,
+  type InsertPdfTemplate,
   // Cutting Table types
   cuttingMaterials,
   type CuttingMaterial,
@@ -1440,6 +1444,15 @@ export interface IStorage {
   // Vendor PO Settings
   getVendorPOSettings(): Promise<any | undefined>;
   updateVendorPOSettings(data: any): Promise<any>;
+
+  // PDF Templates CRUD
+  getAllPdfTemplates(): Promise<PdfTemplate[]>;
+  getPdfTemplate(id: string): Promise<PdfTemplate | undefined>;
+  getPdfTemplatesByType(type: string): Promise<PdfTemplate[]>;
+  getActivePdfTemplateByType(type: string): Promise<PdfTemplate | undefined>;
+  createPdfTemplate(data: InsertPdfTemplate): Promise<PdfTemplate>;
+  updatePdfTemplate(id: string, data: Partial<InsertPdfTemplate>): Promise<PdfTemplate>;
+  deletePdfTemplate(id: string): Promise<void>;
 
   // Cutting Table - Materials CRUD
   getAllCuttingMaterials(): Promise<CuttingMaterial[]>;
@@ -5938,28 +5951,7 @@ export class DatabaseStorage implements IStorage {
   // Vendor PO Items CRUD
   async getVendorPOItems(vendorPoId: number): Promise<any[]> {
     const items = await db
-      .select({
-        id: vendorPOItems.id,
-        vendorPoId: vendorPOItems.vendorPoId,
-        lineNumber: vendorPOItems.lineNumber,
-        agPartNumber: vendorPOItems.agPartNumber,
-        description: vendorPOItems.description,
-        quantity: vendorPOItems.quantity,
-        receivedQuantity: vendorPOItems.receivedQuantity,
-        receivedDate: vendorPOItems.receivedDate,
-        unitPrice: vendorPOItems.unitPrice,
-        lineTotal: vendorPOItems.lineTotal,
-        notes: vendorPOItems.notes,
-        createdAt: vendorPOItems.createdAt,
-        updatedAt: vendorPOItems.updatedAt,
-        // Include UOM conversion data from inventory items
-        vendorUnit: inventoryItems.vendorUnit,
-        purchaseUnit: inventoryItems.purchaseUnit,
-        purchaseQuantity: inventoryItems.purchaseQuantity,
-        consumptionRate: inventoryItems.consumptionRate,
-        usageUnit: inventoryItems.usageUnit,
-        purchaseUnitLabel: inventoryItems.purchaseUnitLabel,
-      })
+      .select()
       .from(vendorPOItems)
       .leftJoin(
         inventoryItems,
@@ -5968,7 +5960,17 @@ export class DatabaseStorage implements IStorage {
       .where(eq(vendorPOItems.vendorPoId, vendorPoId))
       .orderBy(vendorPOItems.lineNumber);
     
-    return items;
+    // Flatten the joined data structure
+    return items.map(row => ({
+      ...row.vendor_po_items,
+      // Include UOM conversion data from inventory items if available
+      vendorUnit: row.inventory_items?.vendorUnit,
+      purchaseUnit: row.inventory_items?.purchaseUnit,
+      purchaseQuantity: row.inventory_items?.purchaseQuantity,
+      consumptionRate: row.inventory_items?.consumptionRate,
+      usageUnit: row.inventory_items?.usageUnit,
+      purchaseUnitLabel: row.inventory_items?.purchaseUnitLabel,
+    }));
   }
 
   async createVendorPOItem(data: any): Promise<any> {
@@ -6200,18 +6202,21 @@ export class DatabaseStorage implements IStorage {
         poLineItemId: inventoryItemCostHistory.poLineItemId,
         notes: inventoryItemCostHistory.notes,
         createdAt: inventoryItemCostHistory.createdAt,
-        vendorUnit: inventoryItem.vendorUnit,
-        purchaseUnit: inventoryItem.purchaseUnit,
-        purchaseQuantity: inventoryItem.purchaseQuantity,
-        consumptionRate: inventoryItem.consumptionRate,
-        usageUnit: inventoryItem.usageUnit,
       })
       .from(inventoryItemCostHistory)
       .leftJoin(vendors, eq(inventoryItemCostHistory.vendorId, vendors.id))
       .where(eq(inventoryItemCostHistory.inventoryItemId, inventoryItem.id))
       .orderBy(desc(inventoryItemCostHistory.receivedDate));
 
-    return history;
+    // Add unit information to each history record
+    return history.map(record => ({
+      ...record,
+      vendorUnit: inventoryItem.vendorUnit,
+      purchaseUnit: inventoryItem.purchaseUnit,
+      purchaseQuantity: inventoryItem.purchaseQuantity,
+      consumptionRate: inventoryItem.consumptionRate,
+      usageUnit: inventoryItem.usageUnit,
+    }));
   }
 
   // Vendor PO Settings
@@ -6246,6 +6251,77 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return newSettings;
     }
+  }
+
+  // PDF Templates CRUD
+  async getAllPdfTemplates(): Promise<PdfTemplate[]> {
+    return await db
+      .select()
+      .from(pdfTemplates)
+      .orderBy(desc(pdfTemplates.createdAt));
+  }
+
+  async getPdfTemplate(id: string): Promise<PdfTemplate | undefined> {
+    const [template] = await db
+      .select()
+      .from(pdfTemplates)
+      .where(eq(pdfTemplates.id, id))
+      .limit(1);
+    return template;
+  }
+
+  async getPdfTemplatesByType(type: string): Promise<PdfTemplate[]> {
+    return await db
+      .select()
+      .from(pdfTemplates)
+      .where(eq(pdfTemplates.type, type))
+      .orderBy(desc(pdfTemplates.isDefault), desc(pdfTemplates.createdAt));
+  }
+
+  async getActivePdfTemplateByType(type: string): Promise<PdfTemplate | undefined> {
+    const [template] = await db
+      .select()
+      .from(pdfTemplates)
+      .where(and(
+        eq(pdfTemplates.type, type),
+        eq(pdfTemplates.isActive, true),
+        eq(pdfTemplates.isDefault, true)
+      ))
+      .limit(1);
+    
+    if (!template) {
+      // If no default template, return the first active one
+      const [firstActive] = await db
+        .select()
+        .from(pdfTemplates)
+        .where(and(
+          eq(pdfTemplates.type, type),
+          eq(pdfTemplates.isActive, true)
+        ))
+        .orderBy(desc(pdfTemplates.createdAt))
+        .limit(1);
+      return firstActive;
+    }
+    
+    return template;
+  }
+
+  async createPdfTemplate(data: InsertPdfTemplate): Promise<PdfTemplate> {
+    const [template] = await db.insert(pdfTemplates).values(data).returning();
+    return template;
+  }
+
+  async updatePdfTemplate(id: string, data: Partial<InsertPdfTemplate>): Promise<PdfTemplate> {
+    const [template] = await db
+      .update(pdfTemplates)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(pdfTemplates.id, id))
+      .returning();
+    return template;
+  }
+
+  async deletePdfTemplate(id: string): Promise<void> {
+    await db.delete(pdfTemplates).where(eq(pdfTemplates.id, id));
   }
 
   // Enhanced Inventory MRP - Inventory Balances CRUD

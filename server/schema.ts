@@ -5177,4 +5177,30 @@ export type InsertControlledDocument = z.infer<typeof insertControlledDocumentSc
 export type DocumentVersionHistory = typeof documentVersionHistory.$inferSelect;
 export type InsertDocumentVersionHistory = z.infer<typeof insertDocumentVersionHistorySchema>;
 
+// PDF Templates - Visual template designer for PDF generation
+export const pdfTemplates = pgTable('pdf_templates', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(), // e.g., "Vendor Purchase Order", "Sales Order"
+  type: text('type').notNull(), // vendor_po, sales_order, invoice, packing_slip, etc.
+  description: text('description'),
+  templateJson: jsonb('template_json').notNull(), // pdfme template structure
+  basePdfUrl: text('base_pdf_url'), // Optional: URL to base PDF if using existing template
+  isActive: boolean('is_active').default(true),
+  isDefault: boolean('is_default').default(false), // Default template for this type
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert Schema
+export const insertPdfTemplateSchema = createInsertSchema(pdfTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types
+export type PdfTemplate = typeof pdfTemplates.$inferSelect;
+export type InsertPdfTemplate = z.infer<typeof insertPdfTemplateSchema>;
+
 export * from './calendar.schema';

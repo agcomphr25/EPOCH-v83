@@ -11,6 +11,8 @@ import rtsSalesRoutes from './rtsSales';
 import customersRoutes from './customers';
 import vendorsRoutes from './vendors';
 import vendorPOsRoutes from './vendorPOs';
+import pdfTemplatesRoutes from './pdfTemplates';
+import pdfGenerationRoutes from './pdfGeneration';
 import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
@@ -124,6 +126,12 @@ export function registerRoutes(app: Express): Server {
   
   // Vendor purchase orders routes
   app.use('/api/vendor-pos', vendorPOsRoutes);
+
+  // PDF Templates routes
+  app.use('/api/pdf-templates', pdfTemplatesRoutes);
+
+  // PDF Generation routes
+  app.use('/api/generate-pdf', pdfGenerationRoutes);
 
   // Quality control and maintenance routes
   app.use('/api/quality', qualityRoutes);

@@ -518,6 +518,7 @@ export const inventoryItems = pgTable('inventory_items', {
   isStockItem: boolean('is_stock_item').default(false), // Used in stock models
   utilizedInPL1: boolean('utilized_in_pl1').default(false), // Used in Production Line 1
   utilizedInPL2: boolean('utilized_in_pl2').default(false), // Used in Production Line 2
+  traceabilityRequired: boolean('traceability_required').default(false), // Traceability required for P2 items
   utilizedInFacilities: boolean('utilized_in_facilities').default(false), // Used in Facilities
   utilizedInAdmin: boolean('utilized_in_admin').default(false), // Used in Admin
   utilizedInServices: boolean('utilized_in_services').default(false), // Used in Services

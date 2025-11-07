@@ -143,14 +143,14 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
             className="text-xs bg-gray-50 dark:bg-gray-800 rounded p-2"
           >
             <div className="flex justify-between items-start gap-2">
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900 dark:text-gray-100">
-                  {item.agPartNumber && (
-                    <span className="text-blue-600">#{item.agPartNumber}</span>
-                  )}{' '}
-                  <span className="truncate block">
-                    {item.description}
-                  </span>
+              <div className="flex-1 min-w-0 space-y-0.5">
+                {item.agPartNumber && (
+                  <div className="text-blue-600 font-medium">
+                    #{item.agPartNumber}
+                  </div>
+                )}
+                <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                  {item.description}
                 </div>
                 {item.vendorPartNumber && (
                   <div className="text-gray-500 text-xs truncate">

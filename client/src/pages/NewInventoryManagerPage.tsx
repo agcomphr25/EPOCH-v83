@@ -14,6 +14,7 @@ import {
   Plus,
   Import,
   Download,
+  X,
 } from 'lucide-react';
 import InventoryItemsCard from '../components/inventory/InventoryItemsCard';
 import PartsRequestsCard from '../components/inventory/PartsRequestsCard';
@@ -148,11 +149,12 @@ export default function NewInventoryManagerPage() {
                   {activeCard === 'order-placement' && 'Order Placement'}
                 </CardTitle>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  variant="ghost"
+                  size="icon"
                   onClick={() => setActiveCard(null)}
+                  data-testid="button-close-inventory"
                 >
-                  Close
+                  <X className="h-5 w-5" />
                 </Button>
               </div>
             </CardHeader>

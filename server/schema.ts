@@ -1,7 +1,6 @@
 import {
   pgTable,
   text,
-  serial,
   integer,
   timestamp,
   jsonb,
@@ -21,7 +20,7 @@ import { relations } from 'drizzle-orm';
 
 // Order Department Types Reference Table (separate from order_departments tracking table)
 export const orderDepartmentTypes = pgTable('order_department_types', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull().unique(),
   displayName: text('display_name').notNull(),
   sortOrder: integer('sort_order').default(0),
@@ -32,7 +31,7 @@ export const orderDepartmentTypes = pgTable('order_department_types', {
 
 // Order Status Types Reference Table
 export const orderStatusTypes = pgTable('order_status_types', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull().unique(),
   displayName: text('display_name').notNull(),
   sortOrder: integer('sort_order').default(0),
@@ -43,7 +42,7 @@ export const orderStatusTypes = pgTable('order_status_types', {
 
 // All finalized orders - production table
 export const allOrders = pgTable('all_orders', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id').notNull().unique(),
   orderDate: timestamp('order_date').notNull(),
   dueDate: timestamp('due_date').notNull(),
@@ -160,7 +159,7 @@ export const allOrders = pgTable('all_orders', {
 
 // Legacy orders table - keeping for compatibility
 export const orders = pgTable('orders', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id').notNull().unique(),
   customer: text('customer').notNull(),
   product: text('product').notNull(),
@@ -208,7 +207,7 @@ export const orders = pgTable('orders', {
 
 // Linked Orders - Groups of orders that must be processed/shipped together
 export const linkedOrderGroups = pgTable('linked_order_groups', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name'),
   requiresApprovalToSeparate: boolean('requires_approval_to_separate').default(true),
   approvalCode: text('approval_code'),
@@ -219,7 +218,7 @@ export const linkedOrderGroups = pgTable('linked_order_groups', {
 });
 
 export const linkedOrders = pgTable('linked_orders', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   linkGroupId: integer('link_group_id').references(() => linkedOrderGroups.id, { onDelete: 'cascade' }).notNull(),
   orderId: text('order_id').notNull().unique(),
   addedAt: timestamp('added_at').defaultNow(),
@@ -227,7 +226,7 @@ export const linkedOrders = pgTable('linked_orders', {
 
 // Follow-up Orders - New orders that require customer signature before production
 export const followupOrders = pgTable('followup_orders', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id').notNull().unique(),
   customerId: text('customer_id').notNull(),
   customerEmail: text('customer_email').notNull(),
@@ -259,7 +258,7 @@ export const followupOrders = pgTable('followup_orders', {
 
 // Order Filter Presets - Save custom filter combinations for reporting
 export const orderFilterPresets = pgTable('order_filter_presets', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
   filters: jsonb('filters').notNull(), // Stores filter criteria
@@ -270,21 +269,21 @@ export const orderFilterPresets = pgTable('order_filter_presets', {
 });
 
 export const csvData = pgTable('csv_data', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   fileName: text('file_name').notNull(),
   data: jsonb('data').notNull(),
   uploadedAt: timestamp('uploaded_at').defaultNow().notNull(),
 });
 
 export const customerTypes = pgTable('customer_types', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull().unique(),
   description: text('description'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
 export const persistentDiscounts = pgTable('persistent_discounts', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   customerTypeId: integer('customer_type_id')
     .references(() => customerTypes.id)
     .notNull(),
@@ -299,7 +298,7 @@ export const persistentDiscounts = pgTable('persistent_discounts', {
 });
 
 export const shortTermSales = pgTable('short_term_sales', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull(),
   percent: integer('percent').notNull(),
   startDate: timestamp('start_date').notNull(),
@@ -364,7 +363,7 @@ export const stockModels = pgTable('stock_models', {
 
 // Customer-specific pricing overrides (for future use)
 export const customerStockModelPrices = pgTable('customer_stock_model_prices', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   customerId: text('customer_id').notNull(), // Customer identifier
   stockModelId: text('stock_model_id')
     .references(() => stockModels.id)
@@ -378,7 +377,7 @@ export const customerStockModelPrices = pgTable('customer_stock_model_prices', {
 
 // Payments table for multiple payments per order
 export const payments = pgTable('payments', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id')
     .references(() => allOrders.orderId)
     .notNull(),
@@ -392,7 +391,7 @@ export const payments = pgTable('payments', {
 
 // Credit card transactions table for Authorize.Net integration
 export const creditCardTransactions = pgTable('credit_card_transactions', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   paymentId: integer('payment_id')
     .references(() => payments.id)
     .notNull(),
@@ -430,7 +429,7 @@ export const creditCardTransactions = pgTable('credit_card_transactions', {
 
 // Refund requests table for two-tiered refund system
 export const refundRequests = pgTable('refund_requests', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id').notNull(), // Reference to order
   refundType: text('refund_type'), // ORDER_TIME or POST_DELIVERY
   amount: real('amount'), // Alternative amount field
@@ -455,7 +454,7 @@ export const refundRequests = pgTable('refund_requests', {
 });
 
 export const forms = pgTable('forms', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
   fields: jsonb('fields').notNull().default('[]'),
@@ -464,7 +463,7 @@ export const forms = pgTable('forms', {
 });
 
 export const formSubmissions = pgTable('form_submissions', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   formId: integer('form_id')
     .references(() => forms.id)
     .notNull(),
@@ -528,7 +527,7 @@ export const inventoryItems = pgTable('inventory_items', {
 
 // Inventory Item Cost History - Tracks price changes over time
 export const inventoryItemCostHistory = pgTable('inventory_item_cost_history', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   inventoryItemId: integer('inventory_item_id')
     .references(() => inventoryItems.id, { onDelete: 'cascade' })
     .notNull(),
@@ -545,7 +544,7 @@ export const inventoryItemCostHistory = pgTable('inventory_item_cost_history', {
 
 // Item Groups for inventory categorization
 export const itemGroups = pgTable('item_groups', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull().unique(),
   description: text('description'),
   notes: text('notes'),
@@ -556,7 +555,7 @@ export const itemGroups = pgTable('item_groups', {
 
 // Junction table for inventory items and groups (many-to-many)
 export const inventoryItemGroups = pgTable('inventory_item_groups', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   itemId: integer('item_id')
     .references(() => inventoryItems.id, { onDelete: 'cascade' })
     .notNull(),
@@ -570,7 +569,7 @@ export const inventoryItemGroups = pgTable('inventory_item_groups', {
 
 // Vendor scope - individual items
 export const vendorScopeItems = pgTable('vendor_scope_items', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   vendorId: integer('vendor_id')
     .references(() => vendors.id, { onDelete: 'cascade' })
     .notNull(),
@@ -584,7 +583,7 @@ export const vendorScopeItems = pgTable('vendor_scope_items', {
 
 // Vendor scope - item groups
 export const vendorScopeGroups = pgTable('vendor_scope_groups', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   vendorId: integer('vendor_id')
     .references(() => vendors.id, { onDelete: 'cascade' })
     .notNull(),
@@ -597,7 +596,7 @@ export const vendorScopeGroups = pgTable('vendor_scope_groups', {
 }));
 
 export const inventoryScans = pgTable('inventory_scans', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   itemCode: text('item_code').notNull(),
   quantity: integer('quantity').default(1).notNull(),
   expirationDate: date('expiration_date'),
@@ -612,7 +611,7 @@ export const inventoryScans = pgTable('inventory_scans', {
 });
 
 export const partsRequests = pgTable('parts_requests', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   partNumber: text('part_number').notNull(),
   partName: text('part_name').notNull(),
   requestedBy: text('requested_by').notNull(),
@@ -739,7 +738,7 @@ export const rtsSaleItems = pgTable('rts_sale_items', {
 
 // Enhanced Employee Management System
 export const employees = pgTable('employees', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   employeeCode: text('employee_code').unique(),
   name: text('name').notNull(),
   email: text('email').unique(),
@@ -767,7 +766,7 @@ export const employees = pgTable('employees', {
 
 // Employee Certifications Management
 export const certifications = pgTable('certifications', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
   issuingOrganization: text('issuing_organization'),
@@ -781,7 +780,7 @@ export const certifications = pgTable('certifications', {
 
 // Employee-Certification Junction Table
 export const employeeCertifications = pgTable('employee_certifications', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   employeeId: integer('employee_id')
     .references(() => employees.id)
     .notNull(),
@@ -800,7 +799,7 @@ export const employeeCertifications = pgTable('employee_certifications', {
 
 // Employee Evaluations
 export const evaluations = pgTable('evaluations', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   employeeId: integer('employee_id')
     .references(() => employees.id)
     .notNull(),
@@ -826,7 +825,7 @@ export const evaluations = pgTable('evaluations', {
 
 // Document Storage for Employee Files
 export const employeeDocuments = pgTable('employee_documents', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   employeeId: integer('employee_id')
     .references(() => employees.id)
     .notNull(),
@@ -848,7 +847,7 @@ export const employeeDocuments = pgTable('employee_documents', {
 
 // Audit Trail for Employee Actions
 export const employeeAuditLog = pgTable('employee_audit_log', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   employeeId: integer('employee_id')
     .references(() => employees.id)
     .notNull(),
@@ -863,7 +862,7 @@ export const employeeAuditLog = pgTable('employee_audit_log', {
 
 // Training Modules - Store training content
 export const trainingModules = pgTable('training_modules', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   title: text('title').notNull(),
   description: text('description'),
   content: text('content'), // Rich text content or markdown
@@ -885,7 +884,7 @@ export const trainingModules = pgTable('training_modules', {
 
 // Training Questions - Quiz questions for modules
 export const trainingQuestions = pgTable('training_questions', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   moduleId: integer('module_id')
     .references(() => trainingModules.id)
     .notNull(),
@@ -902,7 +901,7 @@ export const trainingQuestions = pgTable('training_questions', {
 
 // Training Question Options - Multiple choice options
 export const trainingQuestionOptions = pgTable('training_question_options', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   questionId: integer('question_id')
     .references(() => trainingQuestions.id)
     .notNull(),
@@ -915,7 +914,7 @@ export const trainingQuestionOptions = pgTable('training_question_options', {
 
 // Employee Training Records - Track completed training
 export const employeeTrainingRecords = pgTable('employee_training_records', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   employeeId: integer('employee_id')
     .references(() => employees.id)
     .notNull(),
@@ -938,7 +937,7 @@ export const employeeTrainingRecords = pgTable('employee_training_records', {
 
 // Employee Quiz Attempts - Detailed quiz attempt records
 export const employeeQuizAttempts = pgTable('employee_quiz_attempts', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   trainingRecordId: integer('training_record_id')
     .references(() => employeeTrainingRecords.id)
     .notNull(),
@@ -960,7 +959,7 @@ export const employeeQuizAttempts = pgTable('employee_quiz_attempts', {
 
 // Training Matrix - Legacy training matrix and requirements
 export const trainingMatrix = pgTable('training_matrix', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   employeeId: integer('employee_id').references(() => employees.id),
   employeeName: text('employee_name'), // For legacy data without employee_id
   jobTitle: text('job_title'),
@@ -981,7 +980,7 @@ export const trainingMatrix = pgTable('training_matrix', {
 
 // User Authentication Table
 export const users = pgTable('users', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   username: text('username').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   role: text('role').notNull().default('EMPLOYEE'), // ADMIN, EMPLOYEE, OWNER
@@ -1000,7 +999,7 @@ export const users = pgTable('users', {
 
 // User Sessions Table
 export const userSessions = pgTable('user_sessions', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   sessionToken: text('session_token').notNull().unique(),
   userId: integer('user_id')
     .references(() => users.id)
@@ -1014,7 +1013,7 @@ export const userSessions = pgTable('user_sessions', {
 
 // User Integrations Table - OAuth connections for Google and Outlook
 export const userIntegrations = pgTable('user_integrations', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   userId: integer('user_id')
     .references(() => users.id)
     .notNull(),
@@ -1033,7 +1032,7 @@ export const userIntegrations = pgTable('user_integrations', {
 
 // Capability-Based Permission System
 export const capabilities = pgTable('capabilities', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull().unique(), // e.g., "VIEW_ORDERS", "EDIT_INVENTORY", "APPROVE_PARTS_REQUESTS"
   displayName: text('display_name').notNull(), // e.g., "View Orders", "Edit Inventory"
   category: text('category').notNull(), // e.g., "ORDERS", "INVENTORY", "EMPLOYEES", "REPORTS"
@@ -1047,7 +1046,7 @@ export const capabilities = pgTable('capabilities', {
 export const employeeCapabilities = pgTable(
   'employee_capabilities',
   {
-    id: serial('id').primaryKey(),
+    id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
     employeeId: integer('employee_id')
       .references(() => employees.id)
       .notNull(),
@@ -1071,7 +1070,7 @@ export const employeeCapabilities = pgTable(
 export const userCapabilities = pgTable(
   'user_capabilities',
   {
-    id: serial('id').primaryKey(),
+    id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
     userId: integer('user_id')
       .references(() => users.id)
       .notNull(),
@@ -1093,7 +1092,7 @@ export const userCapabilities = pgTable(
 
 // QC and Preventive Maintenance Tables
 export const qcDefinitions = pgTable('qc_definitions', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   line: text('line').notNull(), // P1, P2
   department: text('department').notNull(),
   final: boolean('final').default(false),
@@ -1107,7 +1106,7 @@ export const qcDefinitions = pgTable('qc_definitions', {
 });
 
 export const qcSubmissions = pgTable('qc_submissions', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id').notNull(),
   line: text('line').notNull(),
   department: text('department').notNull(),
@@ -1123,7 +1122,7 @@ export const qcSubmissions = pgTable('qc_submissions', {
 });
 
 export const maintenanceSchedules = pgTable('maintenance_schedules', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   equipment: text('equipment').notNull(),
   frequency: text('frequency').notNull(), // ANNUAL, SEMIANNUAL, QUARTERLY, BIWEEKLY
   startDate: timestamp('start_date').notNull(),
@@ -1133,7 +1132,7 @@ export const maintenanceSchedules = pgTable('maintenance_schedules', {
 });
 
 export const maintenanceLogs = pgTable('maintenance_logs', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   scheduleId: integer('schedule_id')
     .references(() => maintenanceSchedules.id)
     .notNull(),
@@ -1146,7 +1145,7 @@ export const maintenanceLogs = pgTable('maintenance_logs', {
 
 // Employee Portal & Time Keeping Tables
 export const timeClockEntries = pgTable('time_clock_entries', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   employeeId: text('employee_id').notNull(),
   clockIn: timestamp('clock_in'),
   clockOut: timestamp('clock_out'),
@@ -1155,7 +1154,7 @@ export const timeClockEntries = pgTable('time_clock_entries', {
 });
 
 export const checklistItems = pgTable('checklist_items', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   employeeId: text('employee_id').notNull(),
   date: date('date').notNull(),
   label: text('label').notNull(),
@@ -1167,7 +1166,7 @@ export const checklistItems = pgTable('checklist_items', {
 });
 
 export const onboardingDocs = pgTable('onboarding_docs', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   employeeId: text('employee_id').notNull(),
   title: text('title').notNull(),
   url: text('url').notNull(), // PDF URL
@@ -2217,7 +2216,7 @@ export type PartsRequest = typeof partsRequests.$inferSelect;
 
 // Purchase Review Checklist Table
 export const purchaseReviewChecklists = pgTable('purchase_review_checklists', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   customerId: text('customer_id'),
   formData: jsonb('form_data').notNull(),
   createdBy: text('created_by'),
@@ -2251,7 +2250,7 @@ export type PurchaseReviewChecklist =
 
 // Manufacturer's Certificate of Conformance Table
 export const manufacturersCertificates = pgTable('manufacturers_certificates', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   customerId: text('customer_id'),
   customerName: text('customer_name'),
   customerAddress: text('customer_address'),
@@ -2295,7 +2294,7 @@ export type ManufacturersCertificate =
 
 // Layup Scheduler Tables
 export const molds = pgTable('molds', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   moldId: text('mold_id').notNull().unique(),
   modelName: text('model_name').notNull(),
   stockModels: text('stock_models').array().default([]), // Array of associated stock model IDs
@@ -2308,7 +2307,7 @@ export const molds = pgTable('molds', {
 });
 
 export const employeeLayupSettings = pgTable('employee_layup_settings', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   employeeId: text('employee_id')
     .references(() => employees.employeeCode)
     .notNull(),
@@ -2321,7 +2320,7 @@ export const employeeLayupSettings = pgTable('employee_layup_settings', {
 });
 
 export const productionQueue = pgTable('production_queue', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id').notNull().unique(),
   orderDate: timestamp('order_date').notNull(),
   dueDate: timestamp('due_date').notNull(),
@@ -2345,7 +2344,7 @@ export const productionQueue = pgTable('production_queue', {
 });
 
 export const layupSchedule = pgTable('layup_schedule', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id')
     .references(() => productionQueue.orderId)
     .notNull(),
@@ -2465,7 +2464,7 @@ export type LayupSchedule = typeof layupSchedule.$inferSelect;
 
 // Module 8: API Integrations & Communications
 export const customers = pgTable('customers', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull(),
   email: text('email'),
   phone: text('phone'),
@@ -2480,7 +2479,7 @@ export const customers = pgTable('customers', {
 });
 
 export const customerAddresses = pgTable('customer_addresses', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   customerId: text('customer_id').notNull(),
   street: text('street').notNull(),
   street2: text('street2'), // Suite, Apt, Unit number
@@ -2497,7 +2496,7 @@ export const customerAddresses = pgTable('customer_addresses', {
 
 // Vendors table for supplier management
 export const vendors = pgTable('vendors', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull(),
   contactPerson: text('contact_person'),
   email: text('email'),
@@ -2529,7 +2528,7 @@ export const vendors = pgTable('vendors', {
 });
 
 export const vendorContacts = pgTable('vendor_contacts', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   vendorId: integer('vendor_id')
     .references(() => vendors.id)
     .notNull(),
@@ -2545,7 +2544,7 @@ export const vendorContacts = pgTable('vendor_contacts', {
 });
 
 export const vendorMonthlyEvaluations = pgTable('vendor_monthly_evaluations', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   vendorId: integer('vendor_id')
     .references(() => vendors.id, { onDelete: 'cascade' })
     .notNull(),
@@ -2566,7 +2565,7 @@ export const vendorMonthlyEvaluations = pgTable('vendor_monthly_evaluations', {
 
 // Inventory Balances - Real-time stock levels by location
 export const inventoryBalances = pgTable('inventory_balances', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   agPartNumber: text('ag_part_number')
     .references(() => inventoryItems.agPartNumber, { onDelete: 'cascade' })
     .notNull(),
@@ -2584,7 +2583,7 @@ export const inventoryBalances = pgTable('inventory_balances', {
 
 // Inventory Transactions - Movement audit trail
 export const inventoryTransactions = pgTable('inventory_transactions', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   agPartNumber: text('ag_part_number')
     .references(() => inventoryItems.agPartNumber, { onDelete: 'cascade' })
     .notNull(),
@@ -2606,7 +2605,7 @@ export const inventoryTransactions = pgTable('inventory_transactions', {
 
 // Vendor Parts - Links parts to vendors with pricing and lead times
 export const vendorParts = pgTable('vendor_parts', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   agPartNumber: text('ag_part_number')
     .references(() => inventoryItems.agPartNumber, { onDelete: 'cascade' })
     .notNull(),
@@ -2627,7 +2626,7 @@ export const vendorParts = pgTable('vendor_parts', {
 
 // Vendor Purchase Orders
 export const vendorPOs = pgTable('vendor_pos', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   poNumber: text('po_number').notNull().unique(),
   vendorId: integer('vendor_id')
     .references(() => vendors.id)
@@ -2650,7 +2649,7 @@ export const vendorPOs = pgTable('vendor_pos', {
 
 // Vendor PO Line Items
 export const vendorPOItems = pgTable('vendor_po_items', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   vendorPoId: integer('vendor_po_id')
     .references(() => vendorPOs.id, { onDelete: 'cascade' })
     .notNull(),
@@ -2672,7 +2671,7 @@ export const vendorPOItems = pgTable('vendor_po_items', {
 
 // Vendor PO Settings (singleton table for global PO settings)
 export const vendorPOSettings = pgTable('vendor_po_settings', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   termsAndConditions: text('terms_and_conditions'),
   paymentTerms: text('payment_terms'),
   shippingInstructions: text('shipping_instructions'),
@@ -2681,7 +2680,7 @@ export const vendorPOSettings = pgTable('vendor_po_settings', {
 });
 
 export const communicationLogs = pgTable('communication_logs', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id'), // Made nullable for general communications
   messageType: text('message_type').notNull().default('transactional'), // transactional, marketing, notification
   customerId: text('customer_id').notNull(),
@@ -2703,7 +2702,7 @@ export const communicationLogs = pgTable('communication_logs', {
 
 // New table for customer communications to record both incoming and outgoing messages
 export const customerCommunications = pgTable('customer_communications', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   customerId: text('customer_id').notNull(),
   communicationLogId: integer('communication_log_id').references(
     () => communicationLogs.id
@@ -2722,7 +2721,7 @@ export const customerCommunications = pgTable('customer_communications', {
 });
 
 export const pdfDocuments = pgTable('pdf_documents', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id').notNull(),
   type: text('type').notNull(), // order-confirmation, packing-slip, invoice
   filename: text('filename').notNull(),
@@ -2972,7 +2971,7 @@ export type VendorPOSettings = typeof vendorPOSettings.$inferSelect;
 
 // Order Attachments Table
 export const orderAttachments = pgTable('order_attachments', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id').notNull(), // References orders.id
   fileName: text('file_name').notNull(), // Stored filename (unique)
   originalFileName: text('original_file_name').notNull(), // User's original filename
@@ -3131,7 +3130,7 @@ export type PdfDocument = typeof pdfDocuments.$inferSelect;
 
 // Enhanced Forms Schema
 export const enhancedFormCategories = pgTable('enhanced_form_categories', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -3139,7 +3138,7 @@ export const enhancedFormCategories = pgTable('enhanced_form_categories', {
 });
 
 export const enhancedForms = pgTable('enhanced_forms', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
   categoryId: integer('category_id').references(
@@ -3153,7 +3152,7 @@ export const enhancedForms = pgTable('enhanced_forms', {
 });
 
 export const enhancedFormVersions = pgTable('enhanced_form_versions', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   formId: integer('form_id')
     .references(() => enhancedForms.id)
     .notNull(),
@@ -3164,7 +3163,7 @@ export const enhancedFormVersions = pgTable('enhanced_form_versions', {
 });
 
 export const enhancedFormSubmissions = pgTable('enhanced_form_submissions', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   formId: integer('form_id')
     .references(() => enhancedForms.id)
     .notNull(),
@@ -3175,7 +3174,7 @@ export const enhancedFormSubmissions = pgTable('enhanced_form_submissions', {
 
 // Purchase Order Management Tables
 export const purchaseOrders = pgTable('purchase_orders', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   poNumber: text('po_number').notNull().unique(),
   customerId: text('customer_id').notNull(),
   customerName: text('customer_name').notNull(), // Denormalized for performance
@@ -3189,7 +3188,7 @@ export const purchaseOrders = pgTable('purchase_orders', {
 });
 
 export const purchaseOrderItems = pgTable('purchase_order_items', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   poId: integer('po_id')
     .references(() => purchaseOrders.id)
     .notNull(),
@@ -3218,7 +3217,7 @@ export const purchaseOrderItems = pgTable('purchase_order_items', {
 
 // P2 Customer Management - separate customer database for P2 operations
 export const p2Customers = pgTable('p2_customers', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   customerId: text('customer_id').notNull().unique(),
   customerName: text('customer_name').notNull(),
   contactEmail: text('contact_email'),
@@ -3237,7 +3236,7 @@ export const p2Customers = pgTable('p2_customers', {
 
 // P2 Purchase Order Management Tables
 export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   poNumber: text('po_number').notNull().unique(),
   customerId: text('customer_id')
     .references(() => p2Customers.customerId)
@@ -3252,7 +3251,7 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
 });
 
 export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   poId: integer('po_id')
     .references(() => p2PurchaseOrders.id)
     .notNull(),
@@ -3269,7 +3268,7 @@ export const p2PurchaseOrderItems = pgTable('p2_purchase_order_items', {
 
 // RFQ Risk Assessments - stores RFQ risk assessment records
 export const rfqRiskAssessments = pgTable('rfq_risk_assessments', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   rfqNumber: text('rfq_number').notNull().unique(),
   customerId: text('customer_id')
     .references(() => p2Customers.customerId)
@@ -3290,7 +3289,7 @@ export const rfqRiskAssessments = pgTable('rfq_risk_assessments', {
 
 // P2 Part Certification Requirements - defines which certifications are required for parts by department
 export const p2PartCertifications = pgTable('p2_part_certifications', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   partNumber: text('part_number').notNull(), // Composite # from P2 PO items
   partName: text('part_name'), // Display name for reference
   departments: text('departments').array().notNull(), // Departments where certification is required
@@ -3301,7 +3300,7 @@ export const p2PartCertifications = pgTable('p2_part_certifications', {
 
 // P2 Employee Part Certifications - tracks employee completion of certifications for specific parts
 export const p2EmployeePartCertifications = pgTable('p2_employee_part_certifications', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   partCertificationId: integer('part_certification_id')
     .references(() => p2PartCertifications.id, { onDelete: 'cascade' })
     .notNull(),
@@ -3324,7 +3323,7 @@ export const p2EmployeePartCertifications = pgTable('p2_employee_part_certificat
 
 // Production Orders - separate from regular orders for PO tracking
 export const productionOrders = pgTable('production_orders', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id').notNull().unique(), // Customer-based format: ABC00199-0001
   poId: integer('po_id')
     .references(() => purchaseOrders.id, { onDelete: 'cascade' })
@@ -3927,7 +3926,7 @@ export type InsertBomLine = z.infer<typeof insertBomLineSchema>;
 
 // Order ID Reservation System - Eliminates race conditions for concurrent order creation
 export const orderIdReservations = pgTable('order_id_reservations', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id').notNull().unique(), // The reserved Order ID (e.g., AG003)
   yearMonthPrefix: text('year_month_prefix').notNull(), // Year-month prefix (e.g., AG)
   sequenceNumber: integer('sequence_number').notNull(), // Sequential number (e.g., 3 for AG003)
@@ -3957,7 +3956,7 @@ export type OrderIdReservation = typeof orderIdReservations.$inferSelect;
 // Order ID Sequence System - Database-level atomic sequence for guaranteed unique order IDs
 // Replaces the reservation system with a simpler, faster, and 100% reliable approach
 export const orderIdSequences = pgTable('order_id_sequences', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   yearMonthPrefix: text('year_month_prefix').notNull().unique(), // Year-month prefix (e.g., EH for Aug 2025)
   currentSequence: integer('current_sequence').notNull().default(0), // Current sequence number
   lastUsedAt: timestamp('last_used_at').defaultNow().notNull(), // Last time this prefix was used
@@ -3978,7 +3977,7 @@ export type OrderIdSequence = typeof orderIdSequences.$inferSelect;
 
 // P2 Production Orders - Generated from P2 Purchase Orders based on BOM
 export const p2ProductionOrders = pgTable('p2_production_orders', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id').notNull().unique(), // P2-PO123-001, P2-PO123-002, etc.
   p2PoId: integer('p2_po_id')
     .references(() => p2PurchaseOrders.id)
@@ -4046,7 +4045,7 @@ export type P2ProductionOrder = typeof p2ProductionOrders.$inferSelect;
 
 // Task Tracker - Collaborative task management system
 export const taskItems = pgTable('task_items', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   title: text('title').notNull(), // Item description/title
   description: text('description'), // Optional detailed description
   category: text('category'), // Optional category/project grouping
@@ -4114,7 +4113,7 @@ export type TaskItem = typeof taskItems.$inferSelect;
 
 // Kickback Tracking Table
 export const kickbacks = pgTable('kickbacks', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   orderId: text('order_id').notNull(),
   kickbackDept: text('kickback_dept').notNull(), // Department where kickback occurred
   reasonCode: text('reason_code').notNull(), // MATERIAL_DEFECT, OPERATOR_ERROR, MACHINE_FAILURE, etc.
@@ -4172,7 +4171,7 @@ export type Kickback = typeof kickbacks.$inferSelect;
 
 // Document Management System Tables
 export const documents = pgTable('documents', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   title: text('title').notNull(),
   description: text('description'),
   fileName: text('file_name').notNull(),
@@ -4189,7 +4188,7 @@ export const documents = pgTable('documents', {
 });
 
 export const documentTags = pgTable('document_tags', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull().unique(),
   category: text('category'), // 'project', 'customer', 'po_number', 'status', 'document_type'
   color: text('color').default('#3B82F6'), // Hex color for UI
@@ -4215,7 +4214,7 @@ export const documentTagRelations = pgTable(
 );
 
 export const documentCollections = pgTable('document_collections', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
   collectionType: text('collection_type').notNull(), // 'purchase_order', 'customer_project', 'quote_process', 'form_workflow'
@@ -4378,7 +4377,7 @@ export const orderAttachmentsRelations = relations(
 export const customerSatisfactionSurveys = pgTable(
   'customer_satisfaction_surveys',
   {
-    id: serial('id').primaryKey(),
+    id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
     title: text('title').notNull(),
     description: text('description'),
     isActive: boolean('is_active').default(true),
@@ -4395,7 +4394,7 @@ export const customerSatisfactionSurveys = pgTable(
 export const customerSatisfactionResponses = pgTable(
   'customer_satisfaction_responses',
   {
-    id: serial('id').primaryKey(),
+    id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
     surveyId: integer('survey_id')
       .references(() => customerSatisfactionSurveys.id)
       .notNull(),
@@ -4512,7 +4511,7 @@ export type CustomerSatisfactionResponse =
 
 // PO Products table for Purchase Order product configurations - Updated for P1 PO Queue System
 export const poProducts = pgTable('po_products', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   customerName: text('customer_name').notNull(),
   productName: text('product_name').notNull(),
   material: text('material'),
@@ -4546,7 +4545,7 @@ export const poProducts = pgTable('po_products', {
 
 // PO Product Selections table for tracking selection batches
 export const poProductSelections = pgTable('po_product_selections', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   poProductId: integer('po_product_id').notNull().references(() => poProducts.id, { onDelete: 'cascade' }),
   selectionBatchId: text('selection_batch_id').notNull(),
   quantitySelected: integer('quantity_selected').notNull().default(1),
@@ -4556,7 +4555,7 @@ export const poProductSelections = pgTable('po_product_selections', {
 
 // Weekly Schedule Assignments table for tracking layup scheduling
 export const weeklyScheduleAssignments = pgTable('weekly_schedule_assignments', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   weekStartDate: date('week_start_date').notNull(),
   dayOfWeek: text('day_of_week').notNull(),
   itemType: text('item_type').notNull(),
@@ -4647,7 +4646,7 @@ export type RefundRequest = typeof refundRequests.$inferSelect;
 
 // OEM Priority Settings table for storing priority configurations
 export const oemPrioritySettings = pgTable('oem_priority_settings', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   vendorId: text('vendor_id').notNull(), // The vendor (customer) ID from purchase orders
   vendorName: text('vendor_name').notNull(), // Vendor display name for reference
   poId: integer('po_id').notNull(), // Purchase order ID
@@ -4696,7 +4695,7 @@ export type OemPrioritySettings = typeof oemPrioritySettings.$inferSelect;
 
 // Departments table for internal messaging
 export const departments = pgTable('departments', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
   isActive: boolean('is_active').default(true),
@@ -4706,7 +4705,7 @@ export const departments = pgTable('departments', {
 
 // Internal messages table
 export const internalMessages = pgTable('internal_messages', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   subject: text('subject').notNull(),
   message: text('message').notNull(),
   senderId: integer('sender_id').notNull(),
@@ -4725,7 +4724,7 @@ export const internalMessages = pgTable('internal_messages', {
 
 // Message recipients table (for tracking read/accomplished status)
 export const messageRecipients = pgTable('message_recipients', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   messageId: integer('message_id').notNull(),
   userId: integer('user_id').notNull(),
   isRead: boolean('is_read').default(false),
@@ -4738,7 +4737,7 @@ export const messageRecipients = pgTable('message_recipients', {
 
 // Message attachments table
 export const messageAttachments = pgTable('message_attachments', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   messageId: integer('message_id').notNull(),
   fileName: text('file_name').notNull(),
   fileType: text('file_type').notNull(),
@@ -4798,7 +4797,7 @@ export type InsertMessageAttachment = z.infer<
 
 // Metal Accessories Tracker
 export const metalAccessories = pgTable('metal_accessories', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   name: text('name').notNull(),
   category: text('category').notNull(),
   inventory: integer('inventory').notNull().default(0), // Can be negative to account for uncommitted orders
@@ -4822,7 +4821,7 @@ export type InsertMetalAccessory = z.infer<typeof insertMetalAccessorySchema>;
 
 // Feature Selection Tracking - AI-powered smart sorting
 export const featureSelections = pgTable('feature_selections', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   featureName: text('feature_name').notNull(), // e.g., 'action_inlet'
   optionValue: text('option_value').notNull(), // e.g., 'impact'
   optionLabel: text('option_label').notNull(), // e.g., 'Impact'
@@ -4847,7 +4846,7 @@ export type InsertFeatureSelection = z.infer<
 
 // Magic Link Tokens - Passwordless authentication and secure actions
 export const magicLinkTokens = pgTable('magic_link_tokens', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   token: text('token').notNull().unique(), // Unique cryptographic token
   email: text('email').notNull(), // Email address to send link to
   purpose: text('purpose').notNull(), // e.g., 'login', 'order_confirmation', 'password_reset', 'customer_action'
@@ -4871,7 +4870,7 @@ export type InsertMagicLinkToken = z.infer<typeof insertMagicLinkTokenSchema>;
 
 // OAuth State Tokens - Secure OAuth CSRF protection
 export const oauthStates = pgTable('oauth_states', {
-  id: serial('id').primaryKey(),
+  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
   state: text('state').notNull().unique(), // Cryptographically random state token
   userId: integer('user_id').references(() => users.id).notNull(),
   integrationType: text('integration_type').notNull(), // e.g., 'google-gmail', 'google-calendar'

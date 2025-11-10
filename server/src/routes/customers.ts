@@ -246,6 +246,28 @@ router.put('/rfq-assessments/:id', async (req: Request, res: Response) => {
   }
 });
 
+router.put('/rfq-assessments/:id/submit', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { username } = req.body;
+    
+    if (!username) {
+      return res.status(400).json({ error: 'Username is required for submission' });
+    }
+    
+    const submittedAssessment = await storage.submitRFQRiskAssessment(id, username);
+    
+    if (!submittedAssessment) {
+      return res.status(404).json({ error: 'RFQ risk assessment not found' });
+    }
+    
+    res.json(submittedAssessment);
+  } catch (error) {
+    console.error('Submit RFQ risk assessment error:', error);
+    res.status(500).json({ error: 'Failed to submit RFQ risk assessment' });
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);

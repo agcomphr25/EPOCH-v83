@@ -17,6 +17,7 @@ import {
   FileText,
   TrendingDown,
   Zap,
+  FileWarning,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
@@ -26,6 +27,7 @@ import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
+import KickbackReportModal from '@/components/KickbackReportModal';
 
 export default function CNCQueuePage() {
   const [selectedGunsimthOrders, setSelectedGunsimthOrders] = useState<
@@ -43,6 +45,8 @@ export default function CNCQueuePage() {
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
     null
   );
+  const [kickbackModalOpen, setKickbackModalOpen] = useState(false);
+  const [selectedOrderForKickback, setSelectedOrderForKickback] = useState<{orderId: string, department: string} | null>(null);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const { toast } = useToast();

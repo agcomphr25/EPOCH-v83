@@ -913,14 +913,45 @@ export interface IStorage {
         unitNumber: number;
         poItemId: number;
         currentDepartment: string;
-        flatTop: boolean | null;
+        flatTop: string | null;
         description: string | null;
         totalQuantity: number;
-        actionLength: number | null;
+        actionLength: string | null;
         material: string | null;
         finishType: string | null;
         stockModel: string | null;
         caliber: string | null;
+      }[];
+    }[];
+  }[]>;
+  
+  // All P1 PO Orders with full item status (for Shipping QC comprehensive view)
+  getAllP1POOrdersWithStatus(): Promise<{
+    customerName: string;
+    customerId: string;
+    earliestDueDate: string | null;
+    pos: {
+      poNumber: string;
+      poDate: string | null;
+      expectedDelivery: string | null;
+      totalUnits: number;
+      completedUnits: number;
+      items: {
+        orderId: string | null;
+        unitNumber: number;
+        poItemId: number;
+        currentDepartment: string | null;
+        productionStatus: string | null;
+        flatTop: string | null;
+        description: string | null;
+        totalQuantity: number;
+        actionLength: string | null;
+        material: string | null;
+        finishType: string | null;
+        stockModel: string | null;
+        caliber: string | null;
+        dueDate: string | null;
+        isReadyToShip: boolean;
       }[];
     }[];
   }[]>;
@@ -6838,10 +6869,10 @@ export class DatabaseStorage implements IStorage {
         unitNumber: number;
         poItemId: number;
         currentDepartment: string;
-        flatTop: boolean | null;
+        flatTop: string | null;
         description: string | null;
         totalQuantity: number;
-        actionLength: number | null;
+        actionLength: string | null;
         material: string | null;
         finishType: string | null;
         stockModel: string | null;
@@ -6934,6 +6965,235 @@ export class DatabaseStorage implements IStorage {
         items: po.items.sort((a: any, b: any) => a.unitNumber - b.unitNumber), // Sort by unit number
       })),
     }));
+
+    return customers;
+  }
+
+  async getAllP1POOrdersWithStatus(): Promise<{
+    customerName: string;
+    customerId: string;
+    earliestDueDate: string | null;
+    pos: {
+      poNumber: string;
+      poDate: string | null;
+      expectedDelivery: string | null;
+      totalUnits: number;
+      completedUnits: number;
+      items: {
+        orderId: string | null;
+        unitNumber: number;
+        poItemId: number;
+        currentDepartment: string | null;
+        productionStatus: string | null;
+        flatTop: string | null;
+        description: string | null;
+        totalQuantity: number;
+        actionLength: string | null;
+        material: string | null;
+        finishType: string | null;
+        stockModel: string | null;
+        caliber: string | null;
+        dueDate: string | null;
+        isReadyToShip: boolean;
+      }[];
+    }[];
+  }[]> {
+    // Use raw SQL query due to Drizzle ORM issues with LEFT JOIN and nullable fields
+    // Note: "P1" purchase orders = ALL orders in purchase_orders table (vs P2 which has separate tables)
+    const result = await db.execute(sql`
+      SELECT 
+        po.id as "poId",
+        po.po_number as "poNumber",
+        po.customer_id as "customerId",
+        po.customer_name as "customerName",
+        po.po_date as "poDate",
+        po.expected_delivery as "expectedDelivery",
+        poi.id as "poItemId",
+        poi.item_name as "itemName",
+        poi.stock_model_name as "stockModelName",
+        poi.quantity,
+        poi.specifications,
+        poi.stock_model_id as "stockModelId",
+        poi.due_date as "dueDate",
+        prod.order_id as "orderId",
+        prod.current_department as "currentDepartment",
+        prod.production_status as "productionStatus"
+      FROM purchase_orders po
+      INNER JOIN purchase_order_items poi ON po.id = poi.po_id
+      LEFT JOIN production_orders prod ON poi.id = prod.po_item_id
+      WHERE po.status = 'OPEN'
+      ORDER BY po.customer_name ASC, po.po_number ASC, poi.id ASC
+    `);
+    
+    const rows = result.rows || [];
+
+    // Group results in memory
+    const customerMap = new Map<string, any>();
+
+    for (const row of rows) {
+      const customerId = row.customerId || row.customerName;
+      const customerName = row.customerName;
+
+      // Get or create customer group
+      if (!customerMap.has(customerId)) {
+        customerMap.set(customerId, {
+          customerId,
+          customerName,
+          earliestDueDate: null,
+          posMap: new Map<string, any>(),
+        });
+      }
+
+      const customer = customerMap.get(customerId);
+
+      // Get or create PO group
+      if (!customer.posMap.has(row.poNumber)) {
+        customer.posMap.set(row.poNumber, {
+          poNumber: row.poNumber,
+          poDate: row.poDate?.toString() || null,
+          expectedDelivery: row.expectedDelivery?.toString() || null,
+          itemsMap: new Map<number, any>(),
+        });
+      }
+
+      const po = customer.posMap.get(row.poNumber);
+
+      // Get or create PO item group (track unscheduled units)
+      if (!po.itemsMap.has(row.poItemId)) {
+        // Extract specifications from JSONB
+        const specs = (row.specifications as any) || {};
+        
+        po.itemsMap.set(row.poItemId, {
+          poItemId: row.poItemId,
+          description: row.itemName || row.stockModelName || 'Unknown',
+          quantity: row.quantity,
+          actionLength: specs.actionLength || null,
+          material: specs.material || null,
+          finishType: specs.finishType || null,
+          stockModel: row.stockModelId,
+          caliber: specs.caliber || null,
+          flatTop: specs.flatTop || null,
+          dueDate: row.dueDate?.toString() || null,
+          productionOrders: [],
+        });
+      }
+
+      const poItem = po.itemsMap.get(row.poItemId);
+
+      // Add production order if it exists
+      if (row.orderId) {
+        const unitMatch = row.orderId.match(/-(\d+)$/);
+        const unitNumber = unitMatch ? parseInt(unitMatch[1]) : 1;
+
+        poItem.productionOrders.push({
+          orderId: row.orderId,
+          unitNumber,
+          currentDepartment: row.currentDepartment,
+          productionStatus: row.productionStatus,
+          isReadyToShip: row.currentDepartment === 'Shipping QC' || row.currentDepartment === 'Shipping',
+        });
+      }
+    }
+
+    // Convert maps to arrays and add unscheduled units
+    const customers = Array.from(customerMap.values()).map((customer) => {
+      let earliestDueDate: string | null = null;
+
+      const pos = Array.from(customer.posMap.values()).map((po) => {
+        const allItems: any[] = [];
+
+        Array.from(po.itemsMap.values()).forEach((poItem) => {
+          if (poItem.productionOrders.length === 0) {
+            // No production orders - determine if this should go to Shipping QC or remain NOT_SCHEDULED
+            // Business rule: PO items WITHOUT stock models go straight to Shipping QC (no production needed)
+            const hasStockModel = poItem.stockModel && poItem.stockModel !== 'no stock' && poItem.stockModel.trim() !== '';
+            const department = hasStockModel ? null : 'Shipping QC';
+            const status = hasStockModel ? 'NOT_SCHEDULED' : 'IN_SHIPPING_QC';
+            const readyToShip = !hasStockModel; // Non-stock items are ready for Shipping QC immediately
+            
+            for (let i = 1; i <= poItem.quantity; i++) {
+              allItems.push({
+                orderId: null,
+                unitNumber: i,
+                poItemId: poItem.poItemId,
+                currentDepartment: department,
+                productionStatus: status,
+                flatTop: poItem.flatTop,
+                description: poItem.description,
+                totalQuantity: poItem.quantity,
+                actionLength: poItem.actionLength,
+                material: poItem.material,
+                finishType: poItem.finishType,
+                stockModel: poItem.stockModel,
+                caliber: poItem.caliber,
+                dueDate: poItem.dueDate,
+                isReadyToShip: readyToShip,
+              });
+            }
+          } else {
+            // Add all production orders
+            poItem.productionOrders.forEach((prodOrder: any) => {
+              allItems.push({
+                orderId: prodOrder.orderId,
+                unitNumber: prodOrder.unitNumber,
+                poItemId: poItem.poItemId,
+                currentDepartment: prodOrder.currentDepartment,
+                productionStatus: prodOrder.productionStatus,
+                flatTop: poItem.flatTop,
+                description: poItem.description,
+                totalQuantity: poItem.quantity,
+                actionLength: poItem.actionLength,
+                material: poItem.material,
+                finishType: poItem.finishType,
+                stockModel: poItem.stockModel,
+                caliber: poItem.caliber,
+                dueDate: poItem.dueDate,
+                isReadyToShip: prodOrder.isReadyToShip,
+              });
+            });
+          }
+
+          // Track earliest due date
+          if (poItem.dueDate) {
+            if (!earliestDueDate || poItem.dueDate < earliestDueDate) {
+              earliestDueDate = poItem.dueDate;
+            }
+          }
+        });
+
+        // Sort items by unit number
+        allItems.sort((a, b) => a.unitNumber - b.unitNumber);
+
+        const totalUnits = allItems.length;
+        const completedUnits = allItems.filter(
+          (item) => item.currentDepartment === 'Shipping QC' || item.currentDepartment === 'Shipping'
+        ).length;
+
+        return {
+          poNumber: po.poNumber,
+          poDate: po.poDate,
+          expectedDelivery: po.expectedDelivery,
+          totalUnits,
+          completedUnits,
+          items: allItems,
+        };
+      });
+
+      return {
+        customerId: customer.customerId,
+        customerName: customer.customerName,
+        earliestDueDate,
+        pos,
+      };
+    });
+
+    // Sort customers by earliest due date
+    customers.sort((a, b) => {
+      if (!a.earliestDueDate && !b.earliestDueDate) return 0;
+      if (!a.earliestDueDate) return 1;
+      if (!b.earliestDueDate) return -1;
+      return a.earliestDueDate.localeCompare(b.earliestDueDate);
+    });
 
     return customers;
   }

@@ -4,6 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
   TrendingUp,
   ArrowLeft,
   CheckCircle,
@@ -77,10 +82,10 @@ export default function QCShippingQueuePage() {
     queryKey: ['/api/orders/all'],
   });
 
-  // Get PO orders in Shipping QC (customer → PO → items grouped)
+  // Get ALL P1 PO orders with full item status (for comprehensive view)
+  // Fetch immediately to populate the tab count badge
   const { data: poOrders = [] } = useQuery({
-    queryKey: ['/api/po-orders/shipping-qc'],
-    enabled: activeTab === 'po', // Only fetch when PO tab is active
+    queryKey: ['/api/po-orders/all-p1-with-status'],
   });
 
   // Get features for order customization display
@@ -293,6 +298,25 @@ export default function QCShippingQueuePage() {
     const models = stockModels as any[];
     const model = models.find((m: any) => m.id === modelId);
     return model?.displayName || model?.name || modelId;
+  };
+
+  // Helper function to get department badge styling
+  const getDepartmentBadge = (department: string | null) => {
+    if (!department) {
+      return { label: 'Not Scheduled', variant: 'outline' as const, className: 'border-gray-300 text-gray-600' };
+    }
+    
+    const badgeMap: Record<string, { label: string; variant: any; className: string }> = {
+      'Barcode': { label: 'Barcode', variant: 'default', className: 'bg-blue-100 text-blue-800 border-blue-300' },
+      'CNC': { label: 'CNC', variant: 'default', className: 'bg-purple-100 text-purple-800 border-purple-300' },
+      'Finish': { label: 'Finish', variant: 'default', className: 'bg-orange-100 text-orange-800 border-orange-300' },
+      'Paint': { label: 'Paint', variant: 'default', className: 'bg-pink-100 text-pink-800 border-pink-300' },
+      'Gunsmith': { label: 'Gunsmith', variant: 'default', className: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
+      'Shipping QC': { label: 'Shipping QC', variant: 'default', className: 'bg-green-100 text-green-800 border-green-300' },
+      'Shipping': { label: 'Shipped', variant: 'default', className: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+    };
+
+    return badgeMap[department] || { label: department, variant: 'secondary' as const, className: '' };
   };
 
   // Helper function to get feature display name
@@ -1283,12 +1307,12 @@ export default function QCShippingQueuePage() {
       )}
         </TabsContent>
 
-        {/* PO Orders Tab */}
+        {/* PO Orders Tab - Comprehensive Status Tracking */}
         <TabsContent value="po" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>PO Orders in Shipping QC</span>
+                <span>P1 Purchase Orders - Pipeline Status</span>
                 <div className="flex items-center gap-2">
                   {selectedPOItems.size > 0 && (
                     <Button
@@ -1304,7 +1328,14 @@ export default function QCShippingQueuePage() {
                     </Button>
                   )}
                   <Badge variant="outline">
-                    {(poOrders as any[]).reduce((total, customer) => total + customer.pos.reduce((sum: number, po: any) => sum + po.items.length, 0), 0)} Items
+                    {(poOrders as any[]).reduce((total, customer) => {
+                      return total + customer.pos.reduce((sum: number, po: any) => {
+                        return sum + po.items.filter((item: any) => item.isReadyToShip).length;
+                      }, 0);
+                    }, 0)} Ready to Ship
+                  </Badge>
+                  <Badge variant="secondary">
+                    {(poOrders as any[]).reduce((total, customer) => total + customer.pos.reduce((sum: number, po: any) => sum + po.items.length, 0), 0)} Total Items
                   </Badge>
                 </div>
               </CardTitle>
@@ -1312,107 +1343,170 @@ export default function QCShippingQueuePage() {
             <CardContent>
               {(poOrders as any[]).length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
-                  No PO orders in Shipping QC queue
+                  No open P1 purchase orders
                 </div>
               ) : (
                 <div className="space-y-6">
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    PO Orders grouped by customer. Select items from the same customer to generate packing slips and progress to shipping.
+                    All P1 PO items tracked across departments. Only items in <strong>Shipping QC</strong> can be selected for shipping progression. <strong>You can select individual items from different POs of the same customer to ship together.</strong> Sorted by earliest due date.
                   </p>
                   
                   {/* Customer Groups */}
-                  {(poOrders as any[]).map((customer: any) => (
-                    <Card key={customer.customerName} className="border-2">
-                      <CardHeader className="pb-3 bg-blue-50 dark:bg-blue-900/20">
-                        <CardTitle className="text-lg flex items-center justify-between">
-                          <span className="text-blue-700 dark:text-blue-300">
-                            {customer.customerName}
-                          </span>
-                          <Badge variant="outline" className="border-blue-300 text-blue-700 dark:text-blue-300">
-                            {customer.pos.reduce((sum: number, po: any) => sum + po.items.length, 0)} Items
-                          </Badge>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="pt-4 space-y-4">
-                        {/* PO Sections */}
-                        {customer.pos.map((po: any) => (
-                          <div key={po.poNumber} className="border rounded-lg p-4 space-y-3 bg-gray-50 dark:bg-gray-800/50">
-                            <div className="flex items-center justify-between">
-                              <h4 className="font-semibold text-gray-700 dark:text-gray-300">
-                                PO #{po.poNumber}
-                              </h4>
-                              <Badge variant="secondary">
-                                {po.items.length} Units
-                              </Badge>
-                            </div>
-                            
-                            {/* Item Rows */}
-                            <div className="space-y-2">
-                              {po.items.map((item: any) => {
-                                const isSelected = selectedPOItems.has(item.orderId);
-                                const isDisabled = !!(selectedCustomer && selectedCustomer !== customer.customerName);
+                  {(poOrders as any[]).map((customer: any) => {
+                    const readyToShipCount = customer.pos.reduce((sum: number, po: any) => 
+                      sum + po.items.filter((item: any) => item.isReadyToShip).length, 0
+                    );
+                    const totalCount = customer.pos.reduce((sum: number, po: any) => sum + po.items.length, 0);
+                    
+                    return (
+                      <Collapsible key={customer.customerName} defaultOpen={readyToShipCount > 0}>
+                        <Card className="border-2">
+                          <CollapsibleTrigger className="w-full">
+                            <CardHeader className="pb-3 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors cursor-pointer">
+                              <CardTitle className="text-lg flex items-center justify-between">
+                                <span className="text-blue-700 dark:text-blue-300">
+                                  {customer.customerName}
+                                  {customer.earliestDueDate && (
+                                    <span className="text-sm font-normal text-gray-600 dark:text-gray-400 ml-3">
+                                      Due: {new Date(customer.earliestDueDate).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="default" className="bg-green-600">
+                                    {readyToShipCount} Ready
+                                  </Badge>
+                                  <Badge variant="outline" className="border-blue-300 text-blue-700 dark:text-blue-300">
+                                    {totalCount} Total
+                                  </Badge>
+                                </div>
+                              </CardTitle>
+                            </CardHeader>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <CardContent className="pt-4 space-y-4">
+                              {/* PO Sections */}
+                              {customer.pos.map((po: any) => {
+                                const poReadyCount = po.items.filter((item: any) => item.isReadyToShip).length;
+                                const completionPercentage = Math.round((po.completedUnits / po.totalUnits) * 100);
                                 
                                 return (
-                                  <div
-                                    key={item.orderId}
-                                    className={`
-                                      flex items-center gap-3 p-3 rounded border
-                                      ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-400' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700'}
-                                      ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800'}
-                                    `}
-                                    data-testid={`po-item-${item.orderId}`}
-                                  >
-                                    <Checkbox
-                                      checked={isSelected}
-                                      disabled={isDisabled}
-                                      onCheckedChange={(checked) => {
-                                        const newSelected = new Set(selectedPOItems);
-                                        if (checked) {
-                                          newSelected.add(item.orderId);
-                                          setSelectedCustomer(customer.customerName);
-                                        } else {
-                                          newSelected.delete(item.orderId);
-                                          if (newSelected.size === 0) {
-                                            setSelectedCustomer(null);
-                                          }
-                                        }
-                                        setSelectedPOItems(newSelected);
-                                      }}
-                                      data-testid={`checkbox-po-item-${item.orderId}`}
-                                    />
-                                    <div className="flex-1 grid grid-cols-4 gap-2 text-sm">
-                                      <div>
-                                        <span className="font-semibold text-gray-700 dark:text-gray-300">
-                                          {item.orderId}
-                                        </span>
-                                        <span className="text-gray-500 ml-2">
-                                          Unit {item.unitNumber} of {item.totalQuantity}
-                                        </span>
-                                      </div>
-                                      <div className="text-gray-600 dark:text-gray-400">
-                                        {item.description || 'No description'}
-                                      </div>
-                                      <div className="text-gray-600 dark:text-gray-400">
-                                        {item.actionLength ? `${item.actionLength}"` : '—'} | {item.caliber || '—'}
-                                      </div>
-                                      <div className="text-gray-600 dark:text-gray-400">
-                                        {item.material || '—'} | {item.finishType || '—'}
-                                      </div>
+                                  <Collapsible key={po.poNumber} defaultOpen={poReadyCount > 0}>
+                                    <div className="border rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                                      <CollapsibleTrigger className="w-full">
+                                        <div className="p-4 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer">
+                                          <div className="flex items-center justify-between mb-2">
+                                            <h4 className="font-semibold text-gray-700 dark:text-gray-300">
+                                              PO #{po.poNumber}
+                                            </h4>
+                                            <div className="flex items-center gap-2">
+                                              <Badge variant="default" className="bg-green-600">
+                                                {poReadyCount} Ready
+                                              </Badge>
+                                              <Badge variant="secondary">
+                                                {po.totalUnits} Units
+                                              </Badge>
+                                            </div>
+                                          </div>
+                                          {/* Progress Bar */}
+                                          <div className="space-y-1">
+                                            <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
+                                              <span>Production Progress</span>
+                                              <span>{completionPercentage}% complete</span>
+                                            </div>
+                                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                              <div 
+                                                className="bg-blue-600 h-2 rounded-full transition-all"
+                                                style={{ width: `${completionPercentage}%` }}
+                                              />
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </CollapsibleTrigger>
+                                      <CollapsibleContent>
+                                        <div className="px-4 pb-4 space-y-2">
+                                          {po.items.map((item: any) => {
+                                            const isSelected = selectedPOItems.has(item.orderId);
+                                            const isDisabled = !item.isReadyToShip || !!(selectedCustomer && selectedCustomer !== customer.customerName);
+                                            const departmentBadge = getDepartmentBadge(item.currentDepartment, item.productionStatus);
+                                            
+                                            return (
+                                              <div
+                                                key={item.orderId || `unscheduled-${item.poItemId}-${item.unitNumber}`}
+                                                className={`
+                                                  flex items-center gap-3 p-3 rounded border
+                                                  ${isSelected ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-400' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700'}
+                                                  ${!item.isReadyToShip ? 'opacity-60' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800'}
+                                                  ${isDisabled && item.isReadyToShip ? 'opacity-50 cursor-not-allowed' : ''}
+                                                `}
+                                                data-testid={item.orderId ? `po-item-${item.orderId}` : `po-item-unscheduled-${item.poItemId}-${item.unitNumber}`}
+                                              >
+                                                {item.isReadyToShip && (
+                                                  <Checkbox
+                                                    checked={isSelected}
+                                                    disabled={isDisabled}
+                                                    onCheckedChange={(checked) => {
+                                                      const newSelected = new Set(selectedPOItems);
+                                                      if (checked) {
+                                                        newSelected.add(item.orderId);
+                                                        setSelectedCustomer(customer.customerName);
+                                                      } else {
+                                                        newSelected.delete(item.orderId);
+                                                        if (newSelected.size === 0) {
+                                                          setSelectedCustomer(null);
+                                                        }
+                                                      }
+                                                      setSelectedPOItems(newSelected);
+                                                    }}
+                                                    data-testid={`checkbox-po-item-${item.orderId}`}
+                                                  />
+                                                )}
+                                                {!item.isReadyToShip && <div className="w-6" />}
+                                                
+                                                <div className="flex-1 grid grid-cols-5 gap-2 text-sm items-center">
+                                                  <div>
+                                                    <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                                      {item.orderId || `Unit ${item.unitNumber}`}
+                                                    </span>
+                                                    <span className="text-gray-500 ml-2 text-xs">
+                                                      {item.unitNumber}/{item.totalQuantity}
+                                                    </span>
+                                                  </div>
+                                                  <div className="text-gray-600 dark:text-gray-400">
+                                                    {item.description || 'No description'}
+                                                  </div>
+                                                  <div className="text-gray-600 dark:text-gray-400">
+                                                    {item.stockModel || '—'}
+                                                  </div>
+                                                  <div className="text-gray-600 dark:text-gray-400">
+                                                    {item.actionLength ? `${item.actionLength}"` : '—'} | {item.caliber || '—'}
+                                                  </div>
+                                                  <div className="flex items-center gap-2 justify-end">
+                                                    <Badge variant={departmentBadge.variant} className={departmentBadge.className}>
+                                                      {departmentBadge.label}
+                                                    </Badge>
+                                                    {item.flatTop && (
+                                                      <Badge variant="outline" className="border-purple-300 text-purple-700 dark:text-purple-300 text-xs">
+                                                        Flat Top
+                                                      </Badge>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </CollapsibleContent>
                                     </div>
-                                    {item.flatTop && (
-                                      <Badge variant="outline" className="border-purple-300 text-purple-700 dark:text-purple-300">
-                                        Flat Top
-                                      </Badge>
-                                    )}
-                                  </div>
+                                  </Collapsible>
                                 );
                               })}
-                            </div>
-                          </div>
-                        ))}
-                      </CardContent>
-                    </Card>
-                  ))}
+                            </CardContent>
+                          </CollapsibleContent>
+                        </Card>
+                      </Collapsible>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

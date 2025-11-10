@@ -1,0 +1,18 @@
+Application Error
+An error occurred while loading the application:
+
+Objects are not valid as a React child (found: object with keys {label, variant, className}). If you meant to render a collection of children, use an array instead.
+
+Stack trace:
+Error: Objects are not valid as a React child (found: object with keys {label, variant, className}). If you meant to render a collection of children, use an array instead.
+    at throwOnInvalidObjectType (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=2aa3cf21:9934:17)
+    at createChild (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=2aa3cf21:10110:15)
+    at reconcileChildrenArray (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=2aa3cf21:10282:33)
+    at reconcileChildFibers2 (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=2aa3cf21:10559:24)
+    at reconcileChildren (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=2aa3cf21:14290:37)
+    at updateHostComponent (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=2aa3cf21:14807:11)
+    at beginWork (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=2aa3cf21:15935:22)
+    at beginWork$1 (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=2aa3cf21:19753:22)
+    at performUnitOfWork (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=2aa3cf21:19198:20)
+    at workLoopSync (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=2aa3cf21:19137:13)
+Reload Application

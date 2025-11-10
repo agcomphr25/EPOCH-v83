@@ -797,7 +797,7 @@ export default function ProductionQueueManager() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto pb-32">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
@@ -841,49 +841,64 @@ export default function ProductionQueueManager() {
         </div>
       </div>
 
-      {/* Schedule Selected Items Button */}
+      {/* Floating Sticky Action Bar - Shows when items are selected */}
       {(selectedQueueOrders.size > 0 || Array.from(selectedPOItems.values()).some(map => map.size > 0)) && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-blue-900">
-                {(() => {
-                  const regularCount = selectedQueueOrders.size;
-                  const poCount = Array.from(selectedPOItems.values()).reduce((sum, map) => {
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-600 to-blue-700 border-t-4 border-blue-400 shadow-2xl">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="text-white">
+                <h3 className="font-bold text-lg">
+                  {(() => {
+                    const regularCount = selectedQueueOrders.size;
+                    const poCount = Array.from(selectedPOItems.values()).reduce((sum, map) => {
+                      return sum + Array.from(map.values()).reduce((qtySum, qty) => qtySum + qty, 0);
+                    }, 0);
+                    const total = regularCount + poCount;
+                    return `${total} Item${total !== 1 ? 's' : ''} Selected`;
+                  })()}
+                </h3>
+                <p className="text-sm text-blue-100">
+                  {selectedQueueOrders.size} from Regular Queue • {' '}
+                  {Array.from(selectedPOItems.values()).reduce((sum, map) => {
                     return sum + Array.from(map.values()).reduce((qtySum, qty) => qtySum + qty, 0);
-                  }, 0);
-                  const total = regularCount + poCount;
-                  return `${total} Item${total !== 1 ? 's' : ''} Selected`;
-                })()}
-              </h3>
-              <p className="text-sm text-blue-700">
-                {selectedQueueOrders.size} from Regular Queue, {' '}
-                {Array.from(selectedPOItems.values()).reduce((sum, map) => {
-                  return sum + Array.from(map.values()).reduce((qtySum, qty) => qtySum + qty, 0);
-                }, 0)} from Purchase Orders
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSelectedQueueOrders(new Set());
-                  setSelectedPOItems(new Map());
-                }}
-                data-testid="button-clear-all-selections"
-              >
-                Clear All
-              </Button>
-              <Button
-                onClick={() => setDaySelectionDialogOpen(true)}
-                disabled={generateScheduleMutation.isPending}
-                className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
-                data-testid="button-generate-schedule"
-              >
-                <CalendarCheck className="w-4 h-4" />
-                Generate Layup Schedule
-              </Button>
+                  }, 0)} from Purchase Orders
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  size="default"
+                  onClick={() => {
+                    setSelectedQueueOrders(new Set());
+                    setSelectedPOItems(new Map());
+                  }}
+                  className="bg-white text-gray-700 hover:bg-gray-100 border-2 border-white font-medium"
+                  data-testid="button-clear-all-selections"
+                >
+                  Clear All
+                </Button>
+                {selectedQueueOrders.size > 0 && (
+                  <Button
+                    onClick={handleProgressSelectedToBarcode}
+                    disabled={progressToBarcodeMutation.isPending}
+                    className="bg-green-600 hover:bg-green-700 text-white border-2 border-green-400 font-medium shadow-lg flex items-center gap-2"
+                    size="default"
+                    data-testid="button-progress-barcode-sticky"
+                  >
+                    <ArrowRight className="h-5 w-5" />
+                    Progress to Barcode ({selectedQueueOrders.size})
+                  </Button>
+                )}
+                <Button
+                  onClick={() => setDaySelectionDialogOpen(true)}
+                  disabled={generateScheduleMutation.isPending}
+                  className="bg-purple-600 hover:bg-purple-700 text-white border-2 border-purple-400 font-medium shadow-lg flex items-center gap-2"
+                  data-testid="button-generate-schedule-sticky"
+                >
+                  <CalendarCheck className="w-5 h-5" />
+                  Generate Schedule
+                </Button>
+              </div>
             </div>
           </div>
         </div>

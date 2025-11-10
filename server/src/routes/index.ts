@@ -3340,6 +3340,75 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
+      // If still not found, try searching for PO items by barcode/item ID
+      if (!order) {
+        try {
+          console.log(`🔍 Searching for PO item with barcode/ID: ${barcode}`);
+          const { pool } = await import('../../db');
+          
+          // Try to find PO item by ID or item_id
+          const poItemSearchQuery = `
+            SELECT 
+              poi.id,
+              poi.po_number as "poNumber",
+              poi.customer_name as "customerName",
+              poi.item_name as "itemName",
+              poi.product_type as "productType",
+              poi.material,
+              poi.handedness,
+              poi.stock_model_id as "stockModelId",
+              poi.action_length as "actionLength",
+              poi.action_inlet as "actionInlet",
+              poi.bottom_metal as "bottomMetal",
+              poi.barrel_inlet as "barrelInlet",
+              poi.qds,
+              poi.swivel_studs as "swivelStuds",
+              poi.paint_options as "paintOptions",
+              poi.texture,
+              poi.flat_top as "flatTop",
+              poi.unit_price as "unitPrice",
+              poi.quantity,
+              poi.due_date as "dueDate"
+            FROM purchase_order_items poi
+            WHERE poi.id::text = $1 OR poi.item_id = $1 OR poi.po_number = $1
+            LIMIT 1
+          `;
+          
+          const poItemSearchResult = await pool.query(poItemSearchQuery, [barcode]);
+          const poItemRows = Array.isArray(poItemSearchResult) ? poItemSearchResult : poItemSearchResult.rows || [];
+          
+          if (poItemRows.length > 0) {
+            poItemData = poItemRows[0];
+            console.log(`✅ Found PO item by barcode: ${poItemData.itemName}`);
+            
+            // Now find the production order for this PO item
+            const productionOrderQuery = `
+              SELECT * FROM production_orders 
+              WHERE po_item_id = $1 
+              ORDER BY created_at DESC 
+              LIMIT 1
+            `;
+            const prodOrderResult = await pool.query(productionOrderQuery, [poItemData.id]);
+            const prodOrderRows = Array.isArray(prodOrderResult) ? prodOrderResult : prodOrderResult.rows || [];
+            
+            if (prodOrderRows.length > 0) {
+              const prodOrder = prodOrderRows[0];
+              console.log(`✅ Found production order for PO item: ${prodOrder.order_id}`);
+              
+              // Search for this production order in all_orders
+              const allOrders = await storage.getAllOrders();
+              order = allOrders.find((o) => o.orderId === prodOrder.order_id);
+              if (order) {
+                orderSource = 'all_orders';
+                orderId = prodOrder.order_id; // Update orderId to use the production order ID
+              }
+            }
+          }
+        } catch (poSearchError) {
+          console.error('Error searching for PO item:', poSearchError);
+        }
+      }
+
       if (!order) {
         return res.status(404).json({ _error: 'Order not found' });
       }
@@ -3592,6 +3661,75 @@ export function registerRoutes(app: Express): Server {
           if (order) orderSource = 'production';
         } catch (_e) {
           // Continue searching
+        }
+      }
+
+      // If still not found, try searching for PO items by barcode/item ID
+      if (!order) {
+        try {
+          console.log(`🔍 Searching for PO item with barcode/ID: ${barcode}`);
+          const { pool } = await import('../../db');
+          
+          // Try to find PO item by ID or item_id
+          const poItemSearchQuery = `
+            SELECT 
+              poi.id,
+              poi.po_number as "poNumber",
+              poi.customer_name as "customerName",
+              poi.item_name as "itemName",
+              poi.product_type as "productType",
+              poi.material,
+              poi.handedness,
+              poi.stock_model_id as "stockModelId",
+              poi.action_length as "actionLength",
+              poi.action_inlet as "actionInlet",
+              poi.bottom_metal as "bottomMetal",
+              poi.barrel_inlet as "barrelInlet",
+              poi.qds,
+              poi.swivel_studs as "swivelStuds",
+              poi.paint_options as "paintOptions",
+              poi.texture,
+              poi.flat_top as "flatTop",
+              poi.unit_price as "unitPrice",
+              poi.quantity,
+              poi.due_date as "dueDate"
+            FROM purchase_order_items poi
+            WHERE poi.id::text = $1 OR poi.item_id = $1 OR poi.po_number = $1
+            LIMIT 1
+          `;
+          
+          const poItemSearchResult = await pool.query(poItemSearchQuery, [barcode]);
+          const poItemRows = Array.isArray(poItemSearchResult) ? poItemSearchResult : poItemSearchResult.rows || [];
+          
+          if (poItemRows.length > 0) {
+            poItemData = poItemRows[0];
+            console.log(`✅ Found PO item by barcode: ${poItemData.itemName}`);
+            
+            // Now find the production order for this PO item
+            const productionOrderQuery = `
+              SELECT * FROM production_orders 
+              WHERE po_item_id = $1 
+              ORDER BY created_at DESC 
+              LIMIT 1
+            `;
+            const prodOrderResult = await pool.query(productionOrderQuery, [poItemData.id]);
+            const prodOrderRows = Array.isArray(prodOrderResult) ? prodOrderResult : prodOrderResult.rows || [];
+            
+            if (prodOrderRows.length > 0) {
+              const prodOrder = prodOrderRows[0];
+              console.log(`✅ Found production order for PO item: ${prodOrder.order_id}`);
+              
+              // Search for this production order in all_orders
+              const allOrders = await storage.getAllOrders();
+              order = allOrders.find((o) => o.orderId === prodOrder.order_id);
+              if (order) {
+                orderSource = 'all_orders';
+                orderId = prodOrder.order_id; // Update orderId to use the production order ID
+              }
+            }
+          }
+        } catch (poSearchError) {
+          console.error('Error searching for PO item:', poSearchError);
         }
       }
 

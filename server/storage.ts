@@ -913,10 +913,10 @@ export interface IStorage {
         unitNumber: number;
         poItemId: number;
         currentDepartment: string;
-        flatTop: boolean | null;
+        flatTop: string | null;
         description: string | null;
         totalQuantity: number;
-        actionLength: number | null;
+        actionLength: string | null;
         material: string | null;
         finishType: string | null;
         stockModel: string | null;
@@ -942,10 +942,10 @@ export interface IStorage {
         poItemId: number;
         currentDepartment: string | null;
         productionStatus: string | null;
-        flatTop: boolean | null;
+        flatTop: string | null;
         description: string | null;
         totalQuantity: number;
-        actionLength: number | null;
+        actionLength: string | null;
         material: string | null;
         finishType: string | null;
         stockModel: string | null;
@@ -6869,10 +6869,10 @@ export class DatabaseStorage implements IStorage {
         unitNumber: number;
         poItemId: number;
         currentDepartment: string;
-        flatTop: boolean | null;
+        flatTop: string | null;
         description: string | null;
         totalQuantity: number;
-        actionLength: number | null;
+        actionLength: string | null;
         material: string | null;
         finishType: string | null;
         stockModel: string | null;
@@ -6985,10 +6985,10 @@ export class DatabaseStorage implements IStorage {
         poItemId: number;
         currentDepartment: string | null;
         productionStatus: string | null;
-        flatTop: boolean | null;
+        flatTop: string | null;
         description: string | null;
         totalQuantity: number;
-        actionLength: number | null;
+        actionLength: string | null;
         material: string | null;
         finishType: string | null;
         stockModel: string | null;
@@ -7009,14 +7009,14 @@ export class DatabaseStorage implements IStorage {
         poDate: purchaseOrders.poDate,
         expectedDelivery: purchaseOrders.expectedDelivery,
         poItemId: purchaseOrderItems.id,
-        description: purchaseOrderItems.description,
+        description: sql<string>`COALESCE(${purchaseOrderItems.itemName}, ${purchaseOrderItems.stockModelName})`,
         quantity: purchaseOrderItems.quantity,
-        actionLength: purchaseOrderItems.actionLength,
-        material: purchaseOrderItems.material,
-        finishType: purchaseOrderItems.finishType,
-        stockModel: purchaseOrderItems.stockModel,
-        caliber: purchaseOrderItems.caliber,
-        flatTop: purchaseOrderItems.flatTop,
+        actionLength: sql<string>`${purchaseOrderItems.specifications}->>'actionLength'`,
+        material: sql<string>`${purchaseOrderItems.specifications}->>'material'`,
+        finishType: sql<string>`${purchaseOrderItems.specifications}->>'finishType'`,
+        stockModel: purchaseOrderItems.stockModelId,
+        caliber: sql<string>`${purchaseOrderItems.specifications}->>'caliber'`,
+        flatTop: sql<string>`${purchaseOrderItems.specifications}->>'flatTop'`,
         dueDate: purchaseOrderItems.dueDate,
         orderId: productionOrders.orderId,
         currentDepartment: productionOrders.currentDepartment,

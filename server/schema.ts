@@ -3193,15 +3193,25 @@ export const purchaseOrderItems = pgTable('purchase_order_items', {
   poId: integer('po_id')
     .references(() => purchaseOrders.id)
     .notNull(),
-  itemType: text('item_type').notNull(), // 'stock_model', 'custom_model', 'feature_item'
-  itemId: text('item_id').notNull(), // References stockModels.id, features.id, or custom identifier
-  itemName: text('item_name').notNull(), // Display name for the item
+  stockModelId: text('stock_model_id'),
+  stockModelName: text('stock_model_name'),
   quantity: integer('quantity').notNull(),
-  unitPrice: real('unit_price').default(0), // Price per unit
-  totalPrice: real('total_price').default(0), // quantity * unitPrice
-  specifications: jsonb('specifications'), // Custom specifications for custom models
+  unitPrice: numeric('unit_price').default('0'),
+  totalPrice: numeric('total_price').default('0'),
+  handedness: text('handedness'),
+  features: jsonb('features'),
+  customOptions: jsonb('custom_options'),
+  dueDate: date('due_date'),
+  productionNotes: text('production_notes'),
+  itemType: text('item_type'),
+  itemId: text('item_id'),
+  itemName: text('item_name'),
+  specifications: jsonb('specifications'),
   notes: text('notes'),
-  orderCount: integer('order_count').default(0), // Number of orders generated from this item
+  orderCount: integer('order_count').default(0),
+  overrideP1Priority: boolean('override_p1_priority'),
+  itemPipelineConfig: jsonb('item_pipeline_config'),
+  stockStatus: text('stock_status'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

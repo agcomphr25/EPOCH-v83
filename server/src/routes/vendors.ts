@@ -49,6 +49,50 @@ const vendorApprovalUpload = multer({
   },
 });
 
+// Helper function to sync vendor-level scores from monthly evaluations
+async function syncVendorScoresFromEvaluations(vendorId: number) {
+  // Get all evaluations for this vendor
+  const allEvaluations = await storage.getVendorMonthlyEvaluations(vendorId);
+  
+  // Filter to only evaluations with at least one score, then sort by year/month descending
+  const evaluationsWithScores = allEvaluations.filter(ev => 
+    ev.qualityScore !== null || 
+    ev.costScore !== null || 
+    ev.deliveryScore !== null || 
+    ev.responseScore !== null
+  ).sort((a, b) => {
+    if (a.year !== b.year) return b.year - a.year;
+    return b.month - a.month;
+  });
+  
+  if (evaluationsWithScores.length > 0) {
+    const latestEval = evaluationsWithScores[0];
+    
+    // Format evaluation date as YYYY-MM-DD
+    const evalDate = `${latestEval.year}-${String(latestEval.month).padStart(2, '0')}-01`;
+    
+    // Update vendor with latest evaluation scores
+    await storage.updateVendor(vendorId, {
+      qualityScore: latestEval.qualityScore,
+      costScore: latestEval.costScore,
+      deliveryScore: latestEval.deliveryScore,
+      responseScore: latestEval.responseScore,
+      evaluated: true,
+      evaluationDate: evalDate,
+    });
+  } else {
+    // No evaluations with scores, clear vendor scores
+    await storage.updateVendor(vendorId, {
+      qualityScore: null,
+      costScore: null,
+      deliveryScore: null,
+      responseScore: null,
+      evaluated: false,
+      evaluationDate: null,
+    });
+  }
+}
+
 // Query params schema for list vendors
 const listVendorsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -409,6 +453,9 @@ router.post('/:vendorId/evaluations', async (req: Request, res: Response) => {
     
     const totalScore = scores.length > 0 ? scores.reduce((sum, score) => sum + score, 0) : 0;
 
+    // Update vendor record with the latest evaluation scores so they show on the vendor list
+    await syncVendorScoresFromEvaluations(vendorId);
+
     res.json({
       ...evaluation,
       totalScore
@@ -422,16 +469,55 @@ router.post('/:vendorId/evaluations', async (req: Request, res: Response) => {
 // DELETE /api/vendors/:vendorId/evaluations/:evaluationId - Delete a monthly evaluation
 router.delete('/:vendorId/evaluations/:evaluationId', async (req: Request, res: Response) => {
   try {
+    const vendorId = parseInt(req.params.vendorId);
     const evaluationId = parseInt(req.params.evaluationId);
-    if (!Number.isInteger(evaluationId)) {
-      return res.status(400).json({ error: 'Invalid evaluation ID' });
+    
+    if (!Number.isInteger(evaluationId) || !Number.isInteger(vendorId)) {
+      return res.status(400).json({ error: 'Invalid evaluation ID or vendor ID' });
     }
 
     await storage.deleteVendorMonthlyEvaluation(evaluationId);
+    
+    // Update vendor scores after deletion to reflect remaining evaluations
+    await syncVendorScoresFromEvaluations(vendorId);
+    
     res.json({ success: true, message: 'Evaluation deleted successfully' });
   } catch (error) {
     console.error('Delete vendor monthly evaluation error:', error);
     res.status(500).json({ error: 'Failed to delete vendor monthly evaluation' });
+  }
+});
+
+// POST /api/vendors/sync-all-scores - Backfill vendor scores from evaluations (one-time or as needed)
+router.post('/sync-all-scores', async (req: Request, res: Response) => {
+  try {
+    // Get all vendors
+    const vendorsResult = await storage.getAllVendors({ pageSize: 10000 });
+    const vendors = vendorsResult.data;
+    
+    let updated = 0;
+    const errors: string[] = [];
+    
+    for (const vendor of vendors) {
+      try {
+        await syncVendorScoresFromEvaluations(vendor.id);
+        updated++;
+      } catch (error) {
+        console.error(`Failed to sync scores for vendor ${vendor.name}:`, error);
+        errors.push(`${vendor.name}: ${(error as Error).message}`);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: 'Vendor scores synchronized from evaluations',
+      updated,
+      total: vendors.length,
+      errors: errors.length > 0 ? errors : undefined,
+    });
+  } catch (error) {
+    console.error('Sync all vendor scores error:', error);
+    res.status(500).json({ error: 'Failed to sync vendor scores' });
   }
 });
 

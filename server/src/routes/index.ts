@@ -3244,11 +3244,8 @@ export function registerRoutes(app: Express): Server {
       const { barcode } = req.params;
       console.log(`🔍 Barcode scan requested: ${barcode}`);
 
-      // Extract order ID from barcode (handle various formats)
-      let orderId = barcode;
-      if (barcode.startsWith('P1-')) {
-        orderId = barcode.substring(3); // Remove 'P1-' prefix
-      }
+      // Keep original barcode value - don't strip prefixes
+      const orderId = barcode;
 
       const { storage } = await import('../../storage');
 
@@ -3260,7 +3257,7 @@ export function registerRoutes(app: Express): Server {
       // Check all_orders table FIRST - this is the single source of truth for current department
       try {
         const allOrders = await storage.getAllOrders();
-        order = allOrders.find((o) => o.orderId === orderId);
+        order = allOrders.find((o) => o.orderId === orderId || o.orderId === barcode);
         if (order) {
           orderSource = 'all_orders';
           

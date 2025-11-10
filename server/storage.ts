@@ -7009,14 +7009,11 @@ export class DatabaseStorage implements IStorage {
         poDate: purchaseOrders.poDate,
         expectedDelivery: purchaseOrders.expectedDelivery,
         poItemId: purchaseOrderItems.id,
-        description: sql<string>`COALESCE(${purchaseOrderItems.itemName}, ${purchaseOrderItems.stockModelName})`,
+        itemName: purchaseOrderItems.itemName,
+        stockModelName: purchaseOrderItems.stockModelName,
         quantity: purchaseOrderItems.quantity,
-        actionLength: sql<string>`${purchaseOrderItems.specifications}->>'actionLength'`,
-        material: sql<string>`${purchaseOrderItems.specifications}->>'material'`,
-        finishType: sql<string>`${purchaseOrderItems.specifications}->>'finishType'`,
-        stockModel: purchaseOrderItems.stockModelId,
-        caliber: sql<string>`${purchaseOrderItems.specifications}->>'caliber'`,
-        flatTop: sql<string>`${purchaseOrderItems.specifications}->>'flatTop'`,
+        specifications: purchaseOrderItems.specifications,
+        stockModelId: purchaseOrderItems.stockModelId,
         dueDate: purchaseOrderItems.dueDate,
         orderId: productionOrders.orderId,
         currentDepartment: productionOrders.currentDepartment,
@@ -7029,8 +7026,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(
         asc(purchaseOrders.customerName),
         asc(purchaseOrders.poNumber),
-        asc(purchaseOrderItems.id),
-        asc(productionOrders.orderId)
+        asc(purchaseOrderItems.id)
       );
 
     // Group results in memory
@@ -7066,16 +7062,19 @@ export class DatabaseStorage implements IStorage {
 
       // Get or create PO item group (track unscheduled units)
       if (!po.itemsMap.has(row.poItemId)) {
+        // Extract specifications from JSONB
+        const specs = (row.specifications as any) || {};
+        
         po.itemsMap.set(row.poItemId, {
           poItemId: row.poItemId,
-          description: row.description,
+          description: row.itemName || row.stockModelName || 'Unknown',
           quantity: row.quantity,
-          actionLength: row.actionLength,
-          material: row.material,
-          finishType: row.finishType,
-          stockModel: row.stockModel,
-          caliber: row.caliber,
-          flatTop: row.flatTop,
+          actionLength: specs.actionLength || null,
+          material: specs.material || null,
+          finishType: specs.finishType || null,
+          stockModel: row.stockModelId,
+          caliber: specs.caliber || null,
+          flatTop: specs.flatTop || null,
           dueDate: row.dueDate?.toString() || null,
           productionOrders: [],
         });

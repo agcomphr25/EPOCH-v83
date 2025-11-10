@@ -1348,7 +1348,7 @@ export default function QCShippingQueuePage() {
               ) : (
                 <div className="space-y-6">
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    All P1 PO items tracked across departments. Only items in <strong>Shipping QC</strong> can be selected for shipping progression. Sorted by earliest due date.
+                    All P1 PO items tracked across departments. Only items in <strong>Shipping QC</strong> can be selected for shipping progression. <strong>You can select individual items from different POs of the same customer to ship together.</strong> Sorted by earliest due date.
                   </p>
                   
                   {/* Customer Groups */}

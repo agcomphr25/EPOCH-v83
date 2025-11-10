@@ -1482,7 +1482,9 @@ export default function QCShippingQueuePage() {
                                                     {item.actionLength ? `${item.actionLength}"` : '—'} | {item.caliber || '—'}
                                                   </div>
                                                   <div className="flex items-center gap-2 justify-end">
-                                                    {departmentBadge}
+                                                    <Badge variant={departmentBadge.variant} className={departmentBadge.className}>
+                                                      {departmentBadge.label}
+                                                    </Badge>
                                                     {item.flatTop && (
                                                       <Badge variant="outline" className="border-purple-300 text-purple-700 dark:text-purple-300 text-xs">
                                                         Flat Top

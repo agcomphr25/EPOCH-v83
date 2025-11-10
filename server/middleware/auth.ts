@@ -21,21 +21,12 @@ declare global {
 
 /**
  * Check if we're running in deployment environment
+ * Simplified to rely solely on NODE_ENV for consistent behavior
  */
 function isDeploymentEnvironment(req: Request): boolean {
-  // Prioritize NODE_ENV for development - always bypass auth in development
-  if (process.env.NODE_ENV === 'development') {
-    return false;
-  }
-
-  const host = req.get('host') || '';
-
-  // Check for production deployment domains
-  return (
-    host.includes('.replit.app') ||
-    host.includes('.repl.co') ||
-    process.env.NODE_ENV === 'production'
-  );
+  // Only consider production when NODE_ENV is explicitly set to 'production'
+  // This ensures development mode works correctly even on .repl.co preview domains
+  return process.env.NODE_ENV === 'production';
 }
 
 /**

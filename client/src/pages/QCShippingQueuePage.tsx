@@ -83,9 +83,9 @@ export default function QCShippingQueuePage() {
   });
 
   // Get ALL P1 PO orders with full item status (for comprehensive view)
+  // Fetch immediately to populate the tab count badge
   const { data: poOrders = [] } = useQuery({
     queryKey: ['/api/po-orders/all-p1-with-status'],
-    enabled: activeTab === 'po', // Only fetch when PO tab is active
   });
 
   // Get features for order customization display

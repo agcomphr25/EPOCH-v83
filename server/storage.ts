@@ -7000,7 +7000,7 @@ export class DatabaseStorage implements IStorage {
   }[]> {
     // Use raw SQL query due to Drizzle ORM issues with LEFT JOIN and nullable fields
     // Note: "P1" purchase orders = ALL orders in purchase_orders table (vs P2 which has separate tables)
-    const rows: any[] = await db.execute(sql`
+    const result = await db.execute(sql`
       SELECT 
         po.id as "poId",
         po.po_number as "poNumber",
@@ -7023,7 +7023,9 @@ export class DatabaseStorage implements IStorage {
       LEFT JOIN production_orders prod ON poi.id = prod.po_item_id
       WHERE po.status = 'OPEN'
       ORDER BY po.customer_name ASC, po.po_number ASC, poi.id ASC
-    `) as any;
+    `);
+    
+    const rows = result.rows || [];
 
     // Group results in memory
     const customerMap = new Map<string, any>();
@@ -7102,14 +7104,20 @@ export class DatabaseStorage implements IStorage {
 
         Array.from(po.itemsMap.values()).forEach((poItem) => {
           if (poItem.productionOrders.length === 0) {
-            // No production orders - create entries for all unscheduled units
+            // No production orders - determine if this should go to Shipping QC or remain NOT_SCHEDULED
+            // Business rule: PO items WITHOUT stock models go straight to Shipping QC (no production needed)
+            const hasStockModel = poItem.stockModel && poItem.stockModel !== 'no stock' && poItem.stockModel.trim() !== '';
+            const department = hasStockModel ? null : 'Shipping QC';
+            const status = hasStockModel ? 'NOT_SCHEDULED' : 'IN_SHIPPING_QC';
+            const readyToShip = !hasStockModel; // Non-stock items are ready for Shipping QC immediately
+            
             for (let i = 1; i <= poItem.quantity; i++) {
               allItems.push({
                 orderId: null,
                 unitNumber: i,
                 poItemId: poItem.poItemId,
-                currentDepartment: null,
-                productionStatus: 'NOT_SCHEDULED',
+                currentDepartment: department,
+                productionStatus: status,
                 flatTop: poItem.flatTop,
                 description: poItem.description,
                 totalQuantity: poItem.quantity,
@@ -7119,7 +7127,7 @@ export class DatabaseStorage implements IStorage {
                 stockModel: poItem.stockModel,
                 caliber: poItem.caliber,
                 dueDate: poItem.dueDate,
-                isReadyToShip: false,
+                isReadyToShip: readyToShip,
               });
             }
           } else {

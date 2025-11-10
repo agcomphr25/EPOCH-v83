@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { pool } from '../../db';
+import { authenticateToken } from '../../middleware/auth';
 
 const router = Router();
 
 // GET /api/po-orders/shipping-qc
 // Returns PO orders in Shipping QC department, grouped by customer → PO → items
-router.get('/shipping-qc', async (req, res) => {
+router.get('/shipping-qc', authenticateToken, async (req, res) => {
   try {
     console.log('📦 Fetching PO orders in Shipping QC...');
     const { storage } = await import('../../storage');
@@ -33,7 +34,7 @@ router.get('/shipping-qc', async (req, res) => {
 
 // GET /api/po-orders/all-p1-with-status
 // Returns ALL P1 PO orders with full item status tracking across all departments
-router.get('/all-p1-with-status', async (req, res) => {
+router.get('/all-p1-with-status', authenticateToken, async (req, res) => {
   try {
     console.log('📦 Fetching all P1 PO orders with department statuses...');
     const { storage } = await import('../../storage');
@@ -60,7 +61,7 @@ router.get('/all-p1-with-status', async (req, res) => {
 
 // POST /api/po-orders/packing-slips
 // Generate packing slips for selected PO items (one PDF per PO)
-router.post('/packing-slips', async (req, res) => {
+router.post('/packing-slips', authenticateToken, async (req, res) => {
   try {
     const { orderIds } = req.body;
 

@@ -3345,6 +3345,10 @@ export const productionOrders = pgTable('production_orders', {
   productionStatus: text('production_status').notNull().default('PENDING'), // PENDING, LAID_UP, SHIPPED
   laidUpAt: timestamp('laid_up_at'),
   shippedAt: timestamp('shipped_at'),
+  // External fulfillment tracking (shipped through another system)
+  isFulfilled: boolean('is_fulfilled').default(false).notNull(),
+  fulfilledDate: timestamp('fulfilled_date'),
+  fulfilledBy: text('fulfilled_by'), // Username who marked as fulfilled
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

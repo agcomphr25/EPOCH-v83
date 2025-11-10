@@ -427,13 +427,14 @@ export default function RFQRiskAssessment() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            username: session?.username || 'unknown',
-          }),
         });
 
         if (!submitResponse.ok) {
-          throw new Error('Failed to submit RFQ Risk Assessment');
+          const error = await submitResponse.json();
+          if (submitResponse.status === 401) {
+            throw new Error('You must be logged in to submit assessments');
+          }
+          throw new Error(error.error || 'Failed to submit RFQ Risk Assessment');
         }
 
         alert('RFQ Risk Assessment saved and submitted successfully!');
@@ -442,7 +443,7 @@ export default function RFQRiskAssessment() {
         setActiveTab('view');
       } catch (error) {
         console.error('Error submitting RFQ Risk Assessment:', error);
-        alert('Failed to submit RFQ Risk Assessment. Please try again.');
+        alert(`Failed to submit RFQ Risk Assessment: ${error instanceof Error ? error.message : 'Please try again.'}`);
       }
     } else {
       // Assessment already exists, just submit it
@@ -452,13 +453,14 @@ export default function RFQRiskAssessment() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            username: session?.username || 'unknown',
-          }),
         });
 
         if (!response.ok) {
-          throw new Error('Failed to submit RFQ Risk Assessment');
+          const error = await response.json();
+          if (response.status === 401) {
+            throw new Error('You must be logged in to submit assessments');
+          }
+          throw new Error(error.error || 'Failed to submit RFQ Risk Assessment');
         }
 
         alert('RFQ Risk Assessment submitted successfully!');
@@ -467,7 +469,7 @@ export default function RFQRiskAssessment() {
         setActiveTab('view');
       } catch (error) {
         console.error('Error submitting RFQ Risk Assessment:', error);
-        alert('Failed to submit RFQ Risk Assessment. Please try again.');
+        alert(`Failed to submit RFQ Risk Assessment: ${error instanceof Error ? error.message : 'Please try again.'}`);
       }
     }
   };

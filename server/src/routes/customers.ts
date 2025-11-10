@@ -249,12 +249,35 @@ router.put('/rfq-assessments/:id', async (req: Request, res: Response) => {
 router.put('/rfq-assessments/:id/submit', async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
-    const { username } = req.body;
     
-    if (!username) {
-      return res.status(400).json({ error: 'Username is required for submission' });
+    // Extract session token from cookies or authorization header
+    const sessionToken =
+      req.cookies?.sessionToken ||
+      req.headers.authorization?.replace('Bearer ', '');
+
+    if (!sessionToken) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Query database for session to get authenticated username
+    const { pool } = await import('../../db');
+    const result: any = await pool.query(
+      'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1',
+      [sessionToken]
+    );
+
+    if (!result.rows || result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
+    }
+
+    const { username, expires_at } = result.rows[0];
+
+    // Check if session has expired
+    if (new Date(expires_at) < new Date()) {
+      return res.status(401).json({ error: 'Session expired' });
     }
     
+    // Submit the assessment with the authenticated username
     const submittedAssessment = await storage.submitRFQRiskAssessment(id, username);
     
     if (!submittedAssessment) {

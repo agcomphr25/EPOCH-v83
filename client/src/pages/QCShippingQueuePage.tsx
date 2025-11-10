@@ -1481,7 +1481,7 @@ export default function QCShippingQueuePage() {
                                                   <div className="text-gray-600 dark:text-gray-400">
                                                     {item.actionLength ? `${item.actionLength}"` : '—'} | {item.caliber || '—'}
                                                   </div>
-                                                  <div className="flex items-center gap-2 justify-end">
+                                                  <div className="flex items-center gap-2 justify-end flex-wrap">
                                                     <Badge variant={departmentBadge.variant} className={departmentBadge.className}>
                                                       {departmentBadge.label}
                                                     </Badge>
@@ -1489,6 +1489,43 @@ export default function QCShippingQueuePage() {
                                                       <Badge variant="outline" className="border-purple-300 text-purple-700 dark:text-purple-300 text-xs">
                                                         Flat Top
                                                       </Badge>
+                                                    )}
+                                                    {item.isFulfilled && (
+                                                      <Badge variant="outline" className="border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-xs">
+                                                        ✓ Fulfilled
+                                                      </Badge>
+                                                    )}
+                                                    {item.orderId && (
+                                                      <Button
+                                                        size="sm"
+                                                        variant={item.isFulfilled ? "outline" : "secondary"}
+                                                        onClick={async () => {
+                                                          try {
+                                                            await apiRequest(`/api/po-orders/toggle-fulfilled`, {
+                                                              method: 'POST',
+                                                              body: JSON.stringify({
+                                                                orderId: item.orderId,
+                                                                isFulfilled: !item.isFulfilled,
+                                                              }),
+                                                            });
+                                                            toast({
+                                                              title: item.isFulfilled ? "Unmarked as fulfilled" : "Marked as fulfilled",
+                                                              description: `${item.orderId} ${item.isFulfilled ? 'can now be shipped through the system' : 'has been marked as shipped externally'}`,
+                                                            });
+                                                            queryClient.invalidateQueries({ queryKey: ['/api/po-orders/all-p1-with-status'] });
+                                                          } catch (error: any) {
+                                                            toast({
+                                                              title: "Error",
+                                                              description: error.message || "Failed to update fulfilled status",
+                                                              variant: "destructive",
+                                                            });
+                                                          }
+                                                        }}
+                                                        className="text-xs h-7"
+                                                        data-testid={`toggle-fulfilled-${item.orderId}`}
+                                                      >
+                                                        {item.isFulfilled ? "Unmark Fulfilled" : "Mark Fulfilled"}
+                                                      </Button>
                                                     )}
                                                   </div>
                                                 </div>

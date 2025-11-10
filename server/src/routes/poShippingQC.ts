@@ -501,4 +501,52 @@ router.get('/oem-shipments', async (req, res) => {
   }
 });
 
+// POST /api/po-orders/toggle-fulfilled
+// Mark PO item as fulfilled (shipped through another system) or unfulfilled
+router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
+  try {
+    const { orderId, isFulfilled } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({ _error: 'orderId is required' });
+    }
+
+    if (typeof isFulfilled !== 'boolean') {
+      return res.status(400).json({ _error: 'isFulfilled must be a boolean' });
+    }
+
+    console.log(`📦 ${isFulfilled ? 'Marking' : 'Unmarking'} ${orderId} as fulfilled...`);
+
+    const { storage } = await import('../../storage');
+    const order = await storage.getProductionOrderByOrderId(orderId);
+
+    if (!order) {
+      return res.status(404).json({ _error: 'Order not found' });
+    }
+
+    // Get username from session
+    const username = (req as any).user?.username || 'system';
+
+    // Update fulfillment status
+    await storage.updateProductionOrder(order.id, {
+      isFulfilled,
+      fulfilledDate: isFulfilled ? new Date().toISOString() : null,
+      fulfilledBy: isFulfilled ? username : null,
+    });
+
+    console.log(`✅ ${orderId} fulfillment status updated: ${isFulfilled}`);
+
+    res.json({
+      success: true,
+      orderId,
+      isFulfilled,
+      fulfilledDate: isFulfilled ? new Date().toISOString() : null,
+      fulfilledBy: isFulfilled ? username : null,
+    });
+  } catch (error: any) {
+    console.error('❌ Error toggling fulfilled status:', error);
+    res.status(500).json({ _error: 'Failed to update fulfilled status', details: error.message });
+  }
+});
+
 export default router;

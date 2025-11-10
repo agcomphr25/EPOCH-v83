@@ -1,3 +1,5 @@
+// PDFME SYSTEM COMMENTED OUT - NOT IN USE
+/*
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { Designer } from '@pdfme/ui';
@@ -435,6 +437,15 @@ export default function PDFTemplateDesigner() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+*/
+
+export default function PDFTemplateDesigner() {
+  return (
+    <div className="flex items-center justify-center h-screen bg-white dark:bg-black text-black dark:text-white">
+      <p>PDF Template Designer is currently disabled.</p>
     </div>
   );
 }

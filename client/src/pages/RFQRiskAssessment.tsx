@@ -8,10 +8,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Save, Printer, Download } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Save, Printer, Download, List, Plus, Eye, Search } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import type { P2Customer } from '@shared/schema';
 import { COMPANY_INFO } from '@shared/company-config';
+import { format } from 'date-fns';
 
 interface SessionUser {
   id: number;
@@ -20,7 +24,26 @@ interface SessionUser {
   employeeId?: number | null;
 }
 
+interface RFQAssessment {
+  id: number;
+  rfqNumber: string;
+  customerId: string;
+  customerName?: string;
+  description: string | null;
+  totalOverallPoints: number;
+  adjustedRiskLevel: number;
+  riskDetermination: string | null;
+  bidDecision: string | null;
+  formData: any;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function RFQRiskAssessment() {
+  // Tab and search state
+  const [activeTab, setActiveTab] = useState('create');
+  const [searchTerm, setSearchTerm] = useState('');
+  
   // Signature canvas reference
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
 
@@ -77,6 +100,12 @@ export default function RFQRiskAssessment() {
   // Fetch current user session for authorization
   const { data: session } = useQuery<SessionUser>({
     queryKey: ['/api/auth/session'],
+  });
+
+  // Fetch all RFQ assessments for list view
+  const { data: assessments = [], refetch: refetchAssessments } = useQuery<RFQAssessment[]>({
+    queryKey: ['/api/customers/rfq-assessments'],
+    enabled: activeTab === 'view',
   });
 
   // Check if user is authorized to sign high-risk RFQs (score > 16)
@@ -457,6 +486,12 @@ export default function RFQRiskAssessment() {
       const savedAssessment = await response.json();
       console.log('Form data saved:', savedAssessment);
       alert('RFQ Risk Assessment saved successfully!');
+      
+      // Refresh the assessments list
+      await refetchAssessments();
+      
+      // Switch to view tab to show the saved assessment
+      setActiveTab('view');
     } catch (error) {
       console.error('Error saving RFQ Risk Assessment:', error);
       alert('Failed to save RFQ Risk Assessment. Please try again.');
@@ -480,9 +515,28 @@ export default function RFQRiskAssessment() {
     window.print();
   };
 
+  // Helper function to get risk badge color
+  const getRiskBadgeColor = (riskDetermination: string | null) => {
+    if (!riskDetermination) return 'secondary';
+    if (riskDetermination.toLowerCase().includes('high')) return 'destructive';
+    if (riskDetermination.toLowerCase().includes('medium')) return 'default';
+    return 'secondary';
+  };
+
+  // Filter assessments based on search term
+  const filteredAssessments = assessments.filter(assessment => {
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      assessment.rfqNumber.toLowerCase().includes(searchLower) ||
+      assessment.customerName?.toLowerCase().includes(searchLower) ||
+      assessment.description?.toLowerCase().includes(searchLower)
+    );
+  });
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-4xl mx-auto ml-16">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-6 text-center">
           <div className="mb-4">
@@ -490,42 +544,57 @@ export default function RFQRiskAssessment() {
             <p className="text-sm text-gray-600">
               Responsive • Reliable • Supportive
             </p>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex justify-center gap-3 mb-6">
-            <Button 
-              onClick={handleSave} 
-              className="flex items-center gap-2"
-              disabled={!canSign}
-              data-testid="button-save-form"
-            >
-              <Save className="h-4 w-4" />
-              Save Form
-            </Button>
-            <Button
-              onClick={handlePrint}
-              variant="outline"
-              className="flex items-center gap-2"
-              disabled={!canSign}
-              data-testid="button-print-form"
-            >
-              <Printer className="h-4 w-4" />
-              Print
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex items-center gap-2"
-              disabled={!canSign}
-              data-testid="button-export-pdf"
-            >
-              <Download className="h-4 w-4" />
-              Export PDF
-            </Button>
+            <h2 className="text-xl font-semibold text-gray-800 mt-2">RFQ Risk Assessment</h2>
           </div>
         </div>
 
-        {/* RFQ Number */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-6">
+            <TabsTrigger value="create" className="flex items-center gap-2" data-testid="tab-create-rfq">
+              <Plus className="h-4 w-4" />
+              Create New
+            </TabsTrigger>
+            <TabsTrigger value="view" className="flex items-center gap-2" data-testid="tab-view-rfqs">
+              <List className="h-4 w-4" />
+              View Submissions
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Create New Tab */}
+          <TabsContent value="create" className="max-w-4xl mx-auto ml-16">
+            {/* Action Buttons */}
+            <div className="flex justify-center gap-3 mb-6">
+              <Button 
+                onClick={handleSave} 
+                className="flex items-center gap-2"
+                disabled={!canSign}
+                data-testid="button-save-form"
+              >
+                <Save className="h-4 w-4" />
+                Save Form
+              </Button>
+              <Button
+                onClick={handlePrint}
+                variant="outline"
+                className="flex items-center gap-2"
+                disabled={!canSign}
+                data-testid="button-print-form"
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </Button>
+              <Button 
+                variant="outline" 
+                className="flex items-center gap-2"
+                disabled={!canSign}
+                data-testid="button-export-pdf"
+              >
+                <Download className="h-4 w-4" />
+                Export PDF
+              </Button>
+            </div>
+
+            {/* RFQ Number */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-center">RFQ Risk Assessment</CardTitle>
@@ -1087,10 +1156,106 @@ export default function RFQRiskAssessment() {
           </Button>
         </div>
 
-        {/* Footer */}
-        <div className="text-center text-sm text-gray-500 mb-8">
-          <p>FO Form 11 • Version 1.4 10/23/2024</p>
-        </div>
+            {/* Footer */}
+            <div className="text-center text-sm text-gray-500 mb-8">
+              <p>FO Form 11 • Version 1.4 10/23/2024</p>
+            </div>
+          </TabsContent>
+
+          {/* View Submissions Tab */}
+          <TabsContent value="view" className="w-full">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>RFQ Risk Assessment Submissions</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        type="text"
+                        placeholder="Search by RFQ#, Customer, or Description..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10 w-80"
+                        data-testid="input-search-rfq"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {filteredAssessments.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    {searchTerm ? 'No assessments match your search.' : 'No RFQ assessments found.'}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>RFQ Number</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="text-center">Risk Level</TableHead>
+                        <TableHead>Risk Determination</TableHead>
+                        <TableHead>Bid Decision</TableHead>
+                        <TableHead>Date Created</TableHead>
+                        <TableHead className="text-center">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredAssessments.map((assessment) => (
+                        <TableRow key={assessment.id} data-testid={`row-assessment-${assessment.id}`}>
+                          <TableCell className="font-medium" data-testid={`text-rfq-number-${assessment.id}`}>
+                            {assessment.rfqNumber}
+                          </TableCell>
+                          <TableCell data-testid={`text-customer-${assessment.id}`}>
+                            {assessment.customerName || 'N/A'}
+                          </TableCell>
+                          <TableCell data-testid={`text-description-${assessment.id}`}>
+                            {assessment.description ? (
+                              assessment.description.length > 50 
+                                ? `${assessment.description.substring(0, 50)}...` 
+                                : assessment.description
+                            ) : 'N/A'}
+                          </TableCell>
+                          <TableCell className="text-center" data-testid={`text-risk-level-${assessment.id}`}>
+                            <Badge variant="outline">{assessment.adjustedRiskLevel}</Badge>
+                          </TableCell>
+                          <TableCell data-testid={`text-risk-determination-${assessment.id}`}>
+                            <Badge variant={getRiskBadgeColor(assessment.riskDetermination)}>
+                              {assessment.riskDetermination || 'N/A'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell data-testid={`text-bid-decision-${assessment.id}`}>
+                            {assessment.bidDecision || 'N/A'}
+                          </TableCell>
+                          <TableCell data-testid={`text-date-${assessment.id}`}>
+                            {format(new Date(assessment.createdAt), 'MM/dd/yyyy')}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex items-center gap-1"
+                              data-testid={`button-view-${assessment.id}`}
+                              onClick={() => {
+                                // TODO: Implement view functionality
+                                alert(`View details for RFQ ${assessment.rfqNumber}`);
+                              }}
+                            >
+                              <Eye className="h-3 w-3" />
+                              View
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

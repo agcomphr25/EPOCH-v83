@@ -6998,36 +6998,32 @@ export class DatabaseStorage implements IStorage {
       }[];
     }[];
   }[]> {
-    // Single joined query to get all data at once (performance optimization)
+    // Use raw SQL query due to Drizzle ORM issues with LEFT JOIN and nullable fields
     // Note: "P1" purchase orders = ALL orders in purchase_orders table (vs P2 which has separate tables)
-    const rows = await db
-      .select({
-        poId: purchaseOrders.id,
-        poNumber: purchaseOrders.poNumber,
-        customerId: purchaseOrders.customerId,
-        customerName: purchaseOrders.customerName,
-        poDate: purchaseOrders.poDate,
-        expectedDelivery: purchaseOrders.expectedDelivery,
-        poItemId: purchaseOrderItems.id,
-        itemName: purchaseOrderItems.itemName,
-        stockModelName: purchaseOrderItems.stockModelName,
-        quantity: purchaseOrderItems.quantity,
-        specifications: purchaseOrderItems.specifications,
-        stockModelId: purchaseOrderItems.stockModelId,
-        dueDate: purchaseOrderItems.dueDate,
-        orderId: productionOrders.orderId,
-        currentDepartment: productionOrders.currentDepartment,
-        productionStatus: productionOrders.productionStatus,
-      })
-      .from(purchaseOrders)
-      .innerJoin(purchaseOrderItems, eq(purchaseOrders.id, purchaseOrderItems.poId))
-      .leftJoin(productionOrders, eq(purchaseOrderItems.id, productionOrders.poItemId))
-      .where(eq(purchaseOrders.status, 'OPEN'))
-      .orderBy(
-        asc(purchaseOrders.customerName),
-        asc(purchaseOrders.poNumber),
-        asc(purchaseOrderItems.id)
-      );
+    const rows: any[] = await db.execute(sql`
+      SELECT 
+        po.id as "poId",
+        po.po_number as "poNumber",
+        po.customer_id as "customerId",
+        po.customer_name as "customerName",
+        po.po_date as "poDate",
+        po.expected_delivery as "expectedDelivery",
+        poi.id as "poItemId",
+        poi.item_name as "itemName",
+        poi.stock_model_name as "stockModelName",
+        poi.quantity,
+        poi.specifications,
+        poi.stock_model_id as "stockModelId",
+        poi.due_date as "dueDate",
+        prod.order_id as "orderId",
+        prod.current_department as "currentDepartment",
+        prod.production_status as "productionStatus"
+      FROM purchase_orders po
+      INNER JOIN purchase_order_items poi ON po.id = poi.po_id
+      LEFT JOIN production_orders prod ON poi.id = prod.po_item_id
+      WHERE po.status = 'OPEN'
+      ORDER BY po.customer_name ASC, po.po_number ASC, poi.id ASC
+    `) as any;
 
     // Group results in memory
     const customerMap = new Map<string, any>();

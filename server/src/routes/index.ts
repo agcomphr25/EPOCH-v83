@@ -3271,26 +3271,28 @@ export function registerRoutes(app: Express): Server {
               const poItemQuery = `
                 SELECT 
                   poi.id,
-                  poi.po_number as "poNumber",
-                  poi.customer_name as "customerName",
+                  po.po_number as "poNumber",
+                  po.customer_name as "customerName",
                   poi.item_name as "itemName",
-                  poi.product_type as "productType",
-                  poi.material,
+                  poi.item_type as "productType",
+                  poi.specifications->>'material' as "material",
                   poi.handedness,
                   poi.stock_model_id as "stockModelId",
-                  poi.action_length as "actionLength",
-                  poi.action_inlet as "actionInlet",
-                  poi.bottom_metal as "bottomMetal",
-                  poi.barrel_inlet as "barrelInlet",
-                  poi.qds,
-                  poi.swivel_studs as "swivelStuds",
-                  poi.paint_options as "paintOptions",
-                  poi.texture,
-                  poi.flat_top as "flatTop",
+                  poi.specifications->>'action_length' as "actionLength",
+                  poi.specifications->>'action_inlet' as "actionInlet",
+                  poi.specifications->>'bottom_metal' as "bottomMetal",
+                  poi.specifications->>'barrel_inlet' as "barrelInlet",
+                  poi.specifications->>'qds' as "qds",
+                  poi.specifications->>'swivel_studs' as "swivelStuds",
+                  poi.specifications->>'paint_options' as "paintOptions",
+                  poi.specifications->>'texture' as "texture",
+                  poi.specifications->>'flat_top' as "flatTop",
                   poi.unit_price as "unitPrice",
                   poi.quantity,
-                  poi.due_date as "dueDate"
+                  poi.due_date as "dueDate",
+                  poi.specifications as "specifications"
                 FROM purchase_order_items poi
+                JOIN purchase_orders po ON poi.po_id = po.id
                 WHERE poi.id = $1
               `;
               const { pool } = await import('../../db');
@@ -3350,27 +3352,29 @@ export function registerRoutes(app: Express): Server {
           const poItemSearchQuery = `
             SELECT 
               poi.id,
-              poi.po_number as "poNumber",
-              poi.customer_name as "customerName",
+              po.po_number as "poNumber",
+              po.customer_name as "customerName",
               poi.item_name as "itemName",
-              poi.product_type as "productType",
-              poi.material,
+              poi.item_type as "productType",
+              poi.specifications->>'material' as "material",
               poi.handedness,
               poi.stock_model_id as "stockModelId",
-              poi.action_length as "actionLength",
-              poi.action_inlet as "actionInlet",
-              poi.bottom_metal as "bottomMetal",
-              poi.barrel_inlet as "barrelInlet",
-              poi.qds,
-              poi.swivel_studs as "swivelStuds",
-              poi.paint_options as "paintOptions",
-              poi.texture,
-              poi.flat_top as "flatTop",
+              poi.specifications->>'action_length' as "actionLength",
+              poi.specifications->>'action_inlet' as "actionInlet",
+              poi.specifications->>'bottom_metal' as "bottomMetal",
+              poi.specifications->>'barrel_inlet' as "barrelInlet",
+              poi.specifications->>'qds' as "qds",
+              poi.specifications->>'swivel_studs' as "swivelStuds",
+              poi.specifications->>'paint_options' as "paintOptions",
+              poi.specifications->>'texture' as "texture",
+              poi.specifications->>'flat_top' as "flatTop",
               poi.unit_price as "unitPrice",
               poi.quantity,
-              poi.due_date as "dueDate"
+              poi.due_date as "dueDate",
+              poi.specifications as "specifications"
             FROM purchase_order_items poi
-            WHERE poi.id::text = $1 OR poi.item_id = $1 OR poi.po_number = $1
+            JOIN purchase_orders po ON poi.po_id = po.id
+            WHERE poi.id::text = $1 OR poi.item_id = $1 OR po.po_number = $1
             LIMIT 1
           `;
           
@@ -3505,8 +3509,40 @@ export function registerRoutes(app: Express): Server {
               id: (order as any).modelId || (order as any).itemId || '',
               price: 0,
             },
-        features: (order as any).features || {},
-        specifications: (order as any).specifications || {},
+        features: poItemData
+          ? (() => {
+              // Helper function to convert camelCase to snake_case
+              const camelToSnake = (str: string): string => {
+                return str
+                  .replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
+                  .replace(/^_/, ''); // Remove leading underscore
+              };
+              
+              // Extract and normalize PO specifications to snake_case keys
+              const specs = poItemData.specifications || {};
+              const normalized: Record<string, any> = {
+                ...((order as any).features || {}),
+              };
+              
+              // Convert all camelCase keys from PO specs to snake_case, preserving types
+              for (const [key, value] of Object.entries(specs)) {
+                if (value !== null && value !== undefined && value !== '') {
+                  const snakeKey = camelToSnake(key);
+                  // Special mapping for qds -> qd_accessory
+                  const finalKey = snakeKey === 'qds' ? 'qd_accessory' : snakeKey;
+                  normalized[finalKey] = value;
+                }
+              }
+              
+              return normalized;
+            })()
+          : (order as any).features || {},
+        specifications: poItemData
+          ? {
+              ...((order as any).specifications || {}),
+              ...poItemData.specifications,
+            }
+          : (order as any).specifications || {},
         lineItems: [],
         pricing: {
           subtotal: (order as any).subtotal || 0,
@@ -3674,27 +3710,29 @@ export function registerRoutes(app: Express): Server {
           const poItemSearchQuery = `
             SELECT 
               poi.id,
-              poi.po_number as "poNumber",
-              poi.customer_name as "customerName",
+              po.po_number as "poNumber",
+              po.customer_name as "customerName",
               poi.item_name as "itemName",
-              poi.product_type as "productType",
-              poi.material,
+              poi.item_type as "productType",
+              poi.specifications->>'material' as "material",
               poi.handedness,
               poi.stock_model_id as "stockModelId",
-              poi.action_length as "actionLength",
-              poi.action_inlet as "actionInlet",
-              poi.bottom_metal as "bottomMetal",
-              poi.barrel_inlet as "barrelInlet",
-              poi.qds,
-              poi.swivel_studs as "swivelStuds",
-              poi.paint_options as "paintOptions",
-              poi.texture,
-              poi.flat_top as "flatTop",
+              poi.specifications->>'action_length' as "actionLength",
+              poi.specifications->>'action_inlet' as "actionInlet",
+              poi.specifications->>'bottom_metal' as "bottomMetal",
+              poi.specifications->>'barrel_inlet' as "barrelInlet",
+              poi.specifications->>'qds' as "qds",
+              poi.specifications->>'swivel_studs' as "swivelStuds",
+              poi.specifications->>'paint_options' as "paintOptions",
+              poi.specifications->>'texture' as "texture",
+              poi.specifications->>'flat_top' as "flatTop",
               poi.unit_price as "unitPrice",
               poi.quantity,
-              poi.due_date as "dueDate"
+              poi.due_date as "dueDate",
+              poi.specifications as "specifications"
             FROM purchase_order_items poi
-            WHERE poi.id::text = $1 OR poi.item_id = $1 OR poi.po_number = $1
+            JOIN purchase_orders po ON poi.po_id = po.id
+            WHERE poi.id::text = $1 OR poi.item_id = $1 OR po.po_number = $1
             LIMIT 1
           `;
           
@@ -3798,8 +3836,40 @@ export function registerRoutes(app: Express): Server {
               id: (order as any).modelId || (order as any).itemId || '',
               price: 0,
             },
-        features: (order as any).features || {},
-        specifications: (order as any).specifications || {},
+        features: poItemData
+          ? (() => {
+              // Helper function to convert camelCase to snake_case
+              const camelToSnake = (str: string): string => {
+                return str
+                  .replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
+                  .replace(/^_/, ''); // Remove leading underscore
+              };
+              
+              // Extract and normalize PO specifications to snake_case keys
+              const specs = poItemData.specifications || {};
+              const normalized: Record<string, any> = {
+                ...((order as any).features || {}),
+              };
+              
+              // Convert all camelCase keys from PO specs to snake_case, preserving types
+              for (const [key, value] of Object.entries(specs)) {
+                if (value !== null && value !== undefined && value !== '') {
+                  const snakeKey = camelToSnake(key);
+                  // Special mapping for qds -> qd_accessory
+                  const finalKey = snakeKey === 'qds' ? 'qd_accessory' : snakeKey;
+                  normalized[finalKey] = value;
+                }
+              }
+              
+              return normalized;
+            })()
+          : (order as any).features || {},
+        specifications: poItemData
+          ? {
+              ...((order as any).specifications || {}),
+              ...poItemData.specifications,
+            }
+          : (order as any).specifications || {},
         lineItems: [],
         pricing: {
           subtotal: (order as any).subtotal || 0,

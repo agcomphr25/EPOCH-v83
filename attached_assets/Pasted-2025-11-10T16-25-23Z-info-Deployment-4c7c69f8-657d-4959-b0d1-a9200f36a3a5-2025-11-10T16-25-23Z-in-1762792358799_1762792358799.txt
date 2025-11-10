@@ -1,0 +1,158 @@
+2025-11-10T16:25:23Z info: Deployment: 4c7c69f8-657d-4959-b0d1-a9200f36a3a5
+2025-11-10T16:25:23Z info: Build: 5e8568f5-0444-4b07-b499-fbbee61dc00b
+2025-11-10T16:25:23Z info: Connecting to builder
+2025-11-10T16:25:23Z info: Builder connected
+2025-11-10T16:25:24Z info: Installing packages
+--> npm install
+
+npm warn ERESOLVE overriding peer dependency
+
+npm warn While resolving: rc-color-picker@1.2.6
+npm warn Found: react@18.3.1
+npm warn node_modules/react
+npm warn   react@"^18.3.1" from the root project
+npm warn   154 more (@ant-design/cssinjs, @ant-design/cssinjs-utils, ...)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer react@"16.x" from rc-color-picker@1.2.6
+npm warn node_modules/form-render/node_modules/rc-color-picker
+npm warn   rc-color-picker@"^1.2.6" from form-render@2.5.6
+npm warn   node_modules/form-render
+npm warn
+npm warn Conflicting peer dependency: react@16.14.0
+npm warn node_modules/react
+npm warn   peer react@"16.x" from rc-color-picker@1.2.6
+npm warn   node_modules/form-render/node_modules/rc-color-picker
+npm warn     rc-color-picker@"^1.2.6" from form-render@2.5.6
+npm warn     node_modules/form-render
+
+npm warn ERESOLVE overriding peer dependency
+npm warn While resolving: rc-color-picker@1.2.6
+npm warn Found: react-dom@18.3.1
+npm warn node_modules/react-dom
+npm warn   react-dom@"^18.3.1" from the root project
+npm warn   110 more (@ant-design/cssinjs, @ant-design/cssinjs-utils, ...)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer react-dom@"16.x" from rc-color-picker@1.2.6
+npm warn node_modules/form-render/node_modules/rc-color-picker
+npm warn   rc-color-picker@"^1.2.6" from form-render@2.5.6
+npm warn   node_modules/form-render
+npm warn
+npm warn Conflicting peer dependency: react-dom@16.14.0
+npm warn node_modules/react-dom
+npm warn   peer react-dom@"16.x" from rc-color-picker@1.2.6
+npm warn   node_modules/form-render/node_modules/rc-color-picker
+npm warn     rc-color-picker@"^1.2.6" from form-render@2.5.6
+npm warn     node_modules/form-render
+
+npm warn deprecated npmlog@5.0.1: This package is no longer supported.
+
+npm warn deprecated are-we-there-yet@2.0.0: This package is no longer supported.
+
+npm warn deprecated intersection-observer@0.12.2: The Intersection Observer polyfill is no longer needed and can safely be removed. Intersection Observer has been Baseline since 2019.
+
+npm warn deprecated gauge@3.0.2: This package is no longer supported.
+
+npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+
+npm warn deprecated core-js@2.6.12: core-js@<3.23.3 is no longer maintained and not recommended for usage due to the number of issues. Because of the V8 engine whims, feature detection in old core-js versions could cause a slowdown up to 100x even if nothing is polyfilled. Some versions have web compatibility issues. Please, upgrade your dependencies to the actual version of core-js.
+
+
+> rest-express@1.0.0 prepare
+> husky
+
+
+
+added 185 packages, changed 1 package, and audited 1498 packages in 19s
+
+
+243 packages are looking for funding
+  run `npm fund` for details
+
+
+15 vulnerabilities (2 low, 5 moderate, 8 high)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues possible (including breaking changes), run:
+  npm audit fix --force
+
+Some issues need review, and may require choosing
+a different dependency.
+
+Run `npm audit` for details.
+
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.6.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.6.2
+npm notice To update run: npm install -g npm@11.6.2
+npm notice
+
+2025-11-10T16:25:44Z info: Starting Build
+
+> rest-express@1.0.0 build
+> vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && mkdir -p dist/attached_assets dist/assets dist/public && ( [ -d attached_assets ] && cp -r attached_assets dist/attached_assets || true ) && ( [ -d server/src/assets ] && cp -r server/src/assets/* dist/assets || [ -d server/assets ] && cp -r server/assets/* dist/assets || true ) && ( [ -f client/public/logo_updated.png ] && cp client/public/logo_updated.png dist/public/logo_updated.png || [ -f server/src/assets/logo_updated.png ] && cp server/src/assets/logo_updated.png dist/public/logo_updated.png || true )
+
+
+vite v5.4.19 building for production...
+
+transforming...
+
+✓ 5004 modules transformed.
+
+rendering chunks...
+
+computing gzip size...
+
+../dist/public/index.html                            2.74 kB │ gzip:     0.99 kB
+
+../dist/public/assets/logo_updated-CxB2_yGF.png     60.10 kB
+
+../dist/public/assets/index-Tep-Kmub.css           152.12 kB │ gzip:    23.82 kB
+
+../dist/public/assets/html2canvas-l65_rkxI.js        0.46 kB │ gzip:     0.34 kB
+
+../dist/public/assets/purify.es-B6FQ9oRL.js         22.57 kB │ gzip:     8.71 kB
+
+../dist/public/assets/index.es-BQqfHkGz.js         149.98 kB │ gzip:    51.10 kB
+
+../dist/public/assets/index-wnoQUj3Z.js          6,333.42 kB │ gzip: 1,686.06 kB
+
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+✓ built in 28.92s
+
+✘ [ERROR] Cannot assign to "orderId" because it is a constant
+
+    server/src/routes/index.ts:3404:16:
+      3404 │                 orderId = prodOrder.order_id; // Update orderId ...
+           ╵                 ~~~~~~~
+
+  The symbol "orderId" was declared a constant here:
+
+    server/src/routes/index.ts:3248:12:
+      3248 │       const orderId = barcode;
+           ╵             ~~~~~~~
+
+✘ [ERROR] Cannot assign to "orderId" because it is a constant
+
+    server/src/routes/index.ts:3762:16:
+      3762 │                 orderId = prodOrder.order_id; // Update orderId ...
+           ╵                 ~~~~~~~
+
+  The symbol "orderId" was declared a constant here:
+
+    server/src/routes/index.ts:3664:14:
+      3664 │       const { orderId } = req.params;
+           ╵               ~~~~~~~
+
+
+2 errors

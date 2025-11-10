@@ -3245,7 +3245,7 @@ export function registerRoutes(app: Express): Server {
       console.log(`🔍 Barcode scan requested: ${barcode}`);
 
       // Keep original barcode value - don't strip prefixes
-      const orderId = barcode;
+      let orderId = barcode;
 
       const { storage } = await import('../../storage');
 
@@ -3661,7 +3661,7 @@ export function registerRoutes(app: Express): Server {
   // Complete order summary endpoint for barcode scanning
   app.get('/api/orders/:orderId/complete-summary', async (req, res) => {
     try {
-      const { orderId } = req.params;
+      let { orderId } = req.params;
       const { storage } = await import('../../storage');
 
       // Try to find the order in various tables

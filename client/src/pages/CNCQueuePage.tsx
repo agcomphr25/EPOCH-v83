@@ -704,18 +704,6 @@ export default function CNCQueuePage() {
             </div>
             <div className="flex items-center gap-2">
               <Button
-                variant="destructive"
-                onClick={() => {
-                  toast({
-                    title: 'Test Button',
-                    description: 'Red test button clicked!',
-                  });
-                }}
-                data-testid="red-test-button"
-              >
-                Test
-              </Button>
-              <Button
                 onClick={handleProgressToGunsmith}
                 disabled={
                   selectedGunsimthOrders.size === 0 ||

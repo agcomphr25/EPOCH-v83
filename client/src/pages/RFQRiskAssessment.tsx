@@ -1235,7 +1235,7 @@ export default function RFQRiskAssessment() {
           <CardContent className="space-y-6">
             <div>
               <Label className="font-medium mb-3 block">
-                Risk Level (automatically calculated with mitigations):
+                Risk Score (automatically calculated with mitigations):
               </Label>
               <div className="p-3 bg-blue-50 border border-blue-200 rounded">
                 <span className="font-medium text-blue-800">
@@ -1432,7 +1432,7 @@ export default function RFQRiskAssessment() {
                         <TableHead>RFQ Number</TableHead>
                         <TableHead>Customer</TableHead>
                         <TableHead>Description</TableHead>
-                        <TableHead className="text-center">Risk Level</TableHead>
+                        <TableHead className="text-center">Risk Score</TableHead>
                         <TableHead>Risk Determination</TableHead>
                         <TableHead>Bid Decision</TableHead>
                         <TableHead className="text-center">Status</TableHead>

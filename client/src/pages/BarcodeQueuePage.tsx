@@ -999,16 +999,21 @@ export default function BarcodeQueuePage() {
                                       ? 'APR'
                                       : 'Standard';
 
+                            // Check if this is a PO order (no label printing needed)
+                            const isPOOrder = order.orderId.startsWith('PO-');
+
                             return (
                               <Card
                                 key={order.orderId}
-                                className={`cursor-pointer transition-all duration-200 border-l-4 hover:shadow-md ${
-                                  isOverdue
+                                className={`transition-all duration-200 border-l-4 hover:shadow-md ${
+                                  isPOOrder
+                                    ? 'border-l-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                    : isOverdue
                                     ? 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
-                                    : 'border-l-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/10'
+                                    : 'border-l-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/10 cursor-pointer'
                                 }`}
                                 onClick={() =>
-                                  handlePrintLabels([order.orderId])
+                                  !isPOOrder && handlePrintLabels([order.orderId])
                                 }
                               >
                                 <CardContent className="p-3">

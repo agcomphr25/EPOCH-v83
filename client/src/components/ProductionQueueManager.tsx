@@ -614,7 +614,7 @@ export default function ProductionQueueManager() {
 
       toast({
         title: 'Success',
-        description: `Progressed ${selections.length} items to Barcode`,
+        description: `Progressed ${selections.length} items to Barcode (no labels needed for PO orders)`,
       });
 
       // Clear selections
@@ -623,18 +623,8 @@ export default function ProductionQueueManager() {
       // Refetch data
       refetchPOs();
 
-      // Print barcode labels for the progressed items
-      if (response.orderIds && response.orderIds.length > 0) {
-        // Fetch order details for label printing
-        const orderDetails = await Promise.all(
-          response.orderIds.map((orderId: string) =>
-            apiRequest(`/api/orders/${orderId}`)
-          )
-        );
-
-        // Print labels for all progressed orders
-        printBarcodeLabelsForOrders(orderDetails);
-      }
+      // PO orders do not need labels printed when progressed to Barcode
+      // Labels are only required for regular production orders
     } catch (error) {
       console.error('Error progressing to Barcode:', error);
       toast({

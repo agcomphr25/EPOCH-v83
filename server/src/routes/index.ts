@@ -3244,25 +3244,68 @@ export function registerRoutes(app: Express): Server {
       const { barcode } = req.params;
       console.log(`🔍 Barcode scan requested: ${barcode}`);
 
-      // Extract order ID from barcode (handle various formats)
-      let orderId = barcode;
-      if (barcode.startsWith('P1-')) {
-        orderId = barcode.substring(3); // Remove 'P1-' prefix
-      }
+      // Keep original barcode value - don't strip prefixes
+      const orderId = barcode;
 
       const { storage } = await import('../../storage');
 
       // Try to find the order in various tables
       let order = null;
       let orderSource = 'unknown';
+      let poItemData = null;
 
       // Check all_orders table FIRST - this is the single source of truth for current department
       try {
         const allOrders = await storage.getAllOrders();
-        order = allOrders.find((o) => o.orderId === orderId);
-        if (order) orderSource = 'all_orders';
+        order = allOrders.find((o) => o.orderId === orderId || o.orderId === barcode);
+        if (order) {
+          orderSource = 'all_orders';
+          
+          // Check if this is a PO order and fetch PO item details
+          const orderFeatures = (order as any).features;
+          if (orderFeatures && typeof orderFeatures === 'object' && 'po_item_id' in orderFeatures) {
+            try {
+              const poItemQuery = `
+                SELECT 
+                  poi.id,
+                  po.po_number as "poNumber",
+                  po.customer_name as "customerName",
+                  poi.item_name as "itemName",
+                  poi.item_type as "productType",
+                  poi.specifications->>'material' as "material",
+                  poi.handedness,
+                  poi.stock_model_id as "stockModelId",
+                  poi.specifications->>'action_length' as "actionLength",
+                  poi.specifications->>'action_inlet' as "actionInlet",
+                  poi.specifications->>'bottom_metal' as "bottomMetal",
+                  poi.specifications->>'barrel_inlet' as "barrelInlet",
+                  poi.specifications->>'qds' as "qds",
+                  poi.specifications->>'swivel_studs' as "swivelStuds",
+                  poi.specifications->>'paint_options' as "paintOptions",
+                  poi.specifications->>'texture' as "texture",
+                  poi.specifications->>'flat_top' as "flatTop",
+                  poi.unit_price as "unitPrice",
+                  poi.quantity,
+                  poi.due_date as "dueDate",
+                  poi.specifications as "specifications"
+                FROM purchase_order_items poi
+                JOIN purchase_orders po ON poi.po_id = po.id
+                WHERE poi.id = $1
+              `;
+              const { pool } = await import('../../db');
+              const poItemResult = await pool.query(poItemQuery, [orderFeatures.po_item_id]);
+              const rows = Array.isArray(poItemResult) ? poItemResult : poItemResult.rows || [];
+              if (rows.length > 0) {
+                poItemData = rows[0];
+                console.log(`✅ Found PO item data for order ${orderId}:`, poItemData.itemname);
+              }
+            } catch (poError) {
+              console.error('Error fetching PO item data:', poError);
+            }
+          }
+        }
       } catch (_e) {
-        console.error('Error checking all_orders:', e);
+        console.error('Error checking all_orders:', _e);
       }
 
       // Check finalized orders if not found
@@ -3296,6 +3339,77 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
+      // If still not found, try searching for PO items by barcode/item ID
+      if (!order) {
+        try {
+          console.log(`🔍 Searching for PO item with barcode/ID: ${barcode}`);
+          const { pool } = await import('../../db');
+          
+          // Try to find PO item by ID or item_id
+          const poItemSearchQuery = `
+            SELECT 
+              poi.id,
+              po.po_number as "poNumber",
+              po.customer_name as "customerName",
+              poi.item_name as "itemName",
+              poi.item_type as "productType",
+              poi.specifications->>'material' as "material",
+              poi.handedness,
+              poi.stock_model_id as "stockModelId",
+              poi.specifications->>'action_length' as "actionLength",
+              poi.specifications->>'action_inlet' as "actionInlet",
+              poi.specifications->>'bottom_metal' as "bottomMetal",
+              poi.specifications->>'barrel_inlet' as "barrelInlet",
+              poi.specifications->>'qds' as "qds",
+              poi.specifications->>'swivel_studs' as "swivelStuds",
+              poi.specifications->>'paint_options' as "paintOptions",
+              poi.specifications->>'texture' as "texture",
+              poi.specifications->>'flat_top' as "flatTop",
+              poi.unit_price as "unitPrice",
+              poi.quantity,
+              poi.due_date as "dueDate",
+              poi.specifications as "specifications"
+            FROM purchase_order_items poi
+            JOIN purchase_orders po ON poi.po_id = po.id
+            WHERE poi.id::text = $1 OR poi.item_id = $1 OR po.po_number = $1
+            LIMIT 1
+          `;
+          
+          const poItemSearchResult = await pool.query(poItemSearchQuery, [barcode]);
+          const poItemRows = Array.isArray(poItemSearchResult) ? poItemSearchResult : poItemSearchResult.rows || [];
+          
+          if (poItemRows.length > 0) {
+            poItemData = poItemRows[0];
+            console.log(`✅ Found PO item by barcode: ${poItemData.itemName}`);
+            
+            // Now find the production order for this PO item
+            const productionOrderQuery = `
+              SELECT * FROM production_orders 
+              WHERE po_item_id = $1 
+              ORDER BY created_at DESC 
+              LIMIT 1
+            `;
+            const prodOrderResult = await pool.query(productionOrderQuery, [poItemData.id]);
+            const prodOrderRows = Array.isArray(prodOrderResult) ? prodOrderResult : prodOrderResult.rows || [];
+            
+            if (prodOrderRows.length > 0) {
+              const prodOrder = prodOrderRows[0];
+              console.log(`✅ Found production order for PO item: ${prodOrder.order_id}`);
+              
+              // Search for this production order in all_orders
+              const allOrders = await storage.getAllOrders();
+              order = allOrders.find((o) => o.orderId === prodOrder.order_id);
+              if (order) {
+                orderSource = 'all_orders';
+                orderId = prodOrder.order_id; // Update orderId to use the production order ID
+              }
+            }
+          }
+        } catch (poSearchError) {
+          console.error('Error searching for PO item:', poSearchError);
+        }
+      }
+
       if (!order) {
         return res.status(404).json({ _error: 'Order not found' });
       }
@@ -3318,21 +3432,27 @@ export function registerRoutes(app: Express): Server {
       // Get stock model details and extract color information
       let baseModel = null;
       let color = null;
-      if ((order as any).modelId || (order as any).itemId) {
+      
+      // Use PO item stock model if available, otherwise use order model
+      const stockModelId = poItemData?.stockModelId || (order as any).modelId || (order as any).itemId;
+      
+      if (stockModelId) {
         try {
           const stockModels = await storage.getAllStockModels();
           baseModel = stockModels.find(
             (sm) =>
-              sm.id === ((order as any).modelId || (order as any).itemId) ||
-              sm.name === ((order as any).modelId || (order as any).itemId)
+              sm.id === stockModelId ||
+              sm.name === stockModelId
           );
         } catch (_e) {
           console.error('Error fetching stock model:', e);
         }
       }
 
-      // Extract color from features or specifications
-      if ((order as any).features) {
+      // Extract color from PO item data or features/specifications
+      if (poItemData?.paintOptions) {
+        color = poItemData.paintOptions;
+      } else if ((order as any).features) {
         if ((order as any).features.color)
           color = (order as any).features.color;
         if ((order as any).features.paintOption)
@@ -3340,7 +3460,7 @@ export function registerRoutes(app: Express): Server {
         if ((order as any).features.finish)
           color = (order as any).features.finish;
       }
-      if ((order as any).specifications) {
+      if (!color && (order as any).specifications) {
         if ((order as any).specifications.color)
           color = (order as any).specifications.color;
         if ((order as any).specifications.paintOption)
@@ -3349,7 +3469,7 @@ export function registerRoutes(app: Express): Server {
           color = (order as any).specifications.finish;
       }
 
-      // Build comprehensive order summary
+      // Build comprehensive order summary with PO item data priority
       const orderSummary = {
         orderId: order.orderId,
         barcode: barcode,
@@ -3363,6 +3483,7 @@ export function registerRoutes(app: Express): Server {
             }
           : {
               name:
+                poItemData?.customerName ||
                 order.customerId ||
                 (order as any).customerName ||
                 'Unknown Customer',
@@ -3385,8 +3506,40 @@ export function registerRoutes(app: Express): Server {
               id: (order as any).modelId || (order as any).itemId || '',
               price: 0,
             },
-        features: (order as any).features || {},
-        specifications: (order as any).specifications || {},
+        features: poItemData
+          ? (() => {
+              // Helper function to convert camelCase to snake_case
+              const camelToSnake = (str: string): string => {
+                return str
+                  .replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
+                  .replace(/^_/, ''); // Remove leading underscore
+              };
+              
+              // Extract and normalize PO specifications to snake_case keys
+              const specs = poItemData.specifications || {};
+              const normalized: Record<string, any> = {
+                ...((order as any).features || {}),
+              };
+              
+              // Convert all camelCase keys from PO specs to snake_case, preserving types
+              for (const [key, value] of Object.entries(specs)) {
+                if (value !== null && value !== undefined && value !== '') {
+                  const snakeKey = camelToSnake(key);
+                  // Special mapping for qds -> qd_accessory
+                  const finalKey = snakeKey === 'qds' ? 'qd_accessory' : snakeKey;
+                  normalized[finalKey] = value;
+                }
+              }
+              
+              return normalized;
+            })()
+          : (order as any).features || {},
+        specifications: poItemData
+          ? {
+              ...((order as any).specifications || {}),
+              ...poItemData.specifications,
+            }
+          : (order as any).specifications || {},
         lineItems: [],
         pricing: {
           subtotal: (order as any).subtotal || 0,
@@ -3403,8 +3556,9 @@ export function registerRoutes(app: Express): Server {
         notes: order.notes || '',
         source: orderSource,
 
-        // Additional fields for barcode display (using display names)
+        // Additional fields for barcode display (using PO item data or display names)
         customerName:
+          poItemData?.customerName ||
           customer?.name ||
           order.customerId ||
           (order as any).customerName ||
@@ -3412,29 +3566,33 @@ export function registerRoutes(app: Express): Server {
         stockModel:
           baseModel?.displayName ||
           baseModel?.name ||
+          poItemData?.stockModelId ||
           (order as any).modelId ||
           (order as any).itemId ||
           (order as any).itemName,
         color: color || 'Not specified',
         actionLength:
+          poItemData?.actionLength ||
           (order as any).features?.action_length ||
           (order as any).specifications?.action_length ||
           '',
         paintOption:
+          poItemData?.paintOptions ||
           (order as any).features?.paintOption ||
           (order as any).specifications?.paintOption ||
           color,
 
-        // Enhanced feature display with user-friendly names
+        // Enhanced feature display with user-friendly names and PO item data
         displayFeatures: {
           model:
             baseModel?.displayName ||
             baseModel?.name ||
+            poItemData?.stockModelId ||
             (order as any).modelId ||
             (order as any).itemId ||
             'Unknown Model',
-          actionLength: (order as any).features?.action_length
-            ? (order as any).features.action_length
+          actionLength: poItemData?.actionLength || (order as any).features?.action_length
+            ? (poItemData?.actionLength || (order as any).features.action_length)
                 .toString()
                 .replace(/_/g, ' ')
                 .replace(/\b\w/g, (l) => l.toUpperCase())
@@ -3459,11 +3617,32 @@ export function registerRoutes(app: Express): Server {
         },
       };
 
+      // Add PO item specific details if available
+      if (poItemData) {
+        (orderSummary as any).poItemDetails = {
+          poNumber: poItemData.poNumber,
+          itemName: poItemData.itemName,
+          productType: poItemData.productType,
+          material: poItemData.material,
+          handedness: poItemData.handedness,
+          actionInlet: poItemData.actionInlet,
+          bottomMetal: poItemData.bottomMetal,
+          barrelInlet: poItemData.barrelInlet,
+          qds: poItemData.qds,
+          swivelStuds: poItemData.swivelStuds,
+          texture: poItemData.texture,
+          flatTop: poItemData.flatTop,
+          unitPrice: poItemData.unitPrice,
+          quantity: poItemData.quantity,
+        };
+        console.log(`📦 Added PO item details for PO #${poItemData.poNumber}`);
+      }
+
       // Add production-specific details if applicable
       if (orderSource === 'production') {
         (orderSummary as any).productionDetails = {
-          partName: (order as any).partName || (order as any).itemName,
-          quantity: (order as any).quantity || 1,
+          partName: (order as any).partName || (order as any).itemName || poItemData?.itemName,
+          quantity: (order as any).quantity || poItemData?.quantity || 1,
           department: (order as any).department,
           priority: (order as any).priority || 3,
           productionStatus:
@@ -3515,6 +3694,77 @@ export function registerRoutes(app: Express): Server {
           if (order) orderSource = 'production';
         } catch (_e) {
           // Continue searching
+        }
+      }
+
+      // If still not found, try searching for PO items by barcode/item ID
+      if (!order) {
+        try {
+          console.log(`🔍 Searching for PO item with barcode/ID: ${barcode}`);
+          const { pool } = await import('../../db');
+          
+          // Try to find PO item by ID or item_id
+          const poItemSearchQuery = `
+            SELECT 
+              poi.id,
+              po.po_number as "poNumber",
+              po.customer_name as "customerName",
+              poi.item_name as "itemName",
+              poi.item_type as "productType",
+              poi.specifications->>'material' as "material",
+              poi.handedness,
+              poi.stock_model_id as "stockModelId",
+              poi.specifications->>'action_length' as "actionLength",
+              poi.specifications->>'action_inlet' as "actionInlet",
+              poi.specifications->>'bottom_metal' as "bottomMetal",
+              poi.specifications->>'barrel_inlet' as "barrelInlet",
+              poi.specifications->>'qds' as "qds",
+              poi.specifications->>'swivel_studs' as "swivelStuds",
+              poi.specifications->>'paint_options' as "paintOptions",
+              poi.specifications->>'texture' as "texture",
+              poi.specifications->>'flat_top' as "flatTop",
+              poi.unit_price as "unitPrice",
+              poi.quantity,
+              poi.due_date as "dueDate",
+              poi.specifications as "specifications"
+            FROM purchase_order_items poi
+            JOIN purchase_orders po ON poi.po_id = po.id
+            WHERE poi.id::text = $1 OR poi.item_id = $1 OR po.po_number = $1
+            LIMIT 1
+          `;
+          
+          const poItemSearchResult = await pool.query(poItemSearchQuery, [barcode]);
+          const poItemRows = Array.isArray(poItemSearchResult) ? poItemSearchResult : poItemSearchResult.rows || [];
+          
+          if (poItemRows.length > 0) {
+            poItemData = poItemRows[0];
+            console.log(`✅ Found PO item by barcode: ${poItemData.itemName}`);
+            
+            // Now find the production order for this PO item
+            const productionOrderQuery = `
+              SELECT * FROM production_orders 
+              WHERE po_item_id = $1 
+              ORDER BY created_at DESC 
+              LIMIT 1
+            `;
+            const prodOrderResult = await pool.query(productionOrderQuery, [poItemData.id]);
+            const prodOrderRows = Array.isArray(prodOrderResult) ? prodOrderResult : prodOrderResult.rows || [];
+            
+            if (prodOrderRows.length > 0) {
+              const prodOrder = prodOrderRows[0];
+              console.log(`✅ Found production order for PO item: ${prodOrder.order_id}`);
+              
+              // Search for this production order in all_orders
+              const allOrders = await storage.getAllOrders();
+              order = allOrders.find((o) => o.orderId === prodOrder.order_id);
+              if (order) {
+                orderSource = 'all_orders';
+                orderId = prodOrder.order_id; // Update orderId to use the production order ID
+              }
+            }
+          }
+        } catch (poSearchError) {
+          console.error('Error searching for PO item:', poSearchError);
         }
       }
 
@@ -3583,8 +3833,40 @@ export function registerRoutes(app: Express): Server {
               id: (order as any).modelId || (order as any).itemId || '',
               price: 0,
             },
-        features: (order as any).features || {},
-        specifications: (order as any).specifications || {},
+        features: poItemData
+          ? (() => {
+              // Helper function to convert camelCase to snake_case
+              const camelToSnake = (str: string): string => {
+                return str
+                  .replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
+                  .replace(/^_/, ''); // Remove leading underscore
+              };
+              
+              // Extract and normalize PO specifications to snake_case keys
+              const specs = poItemData.specifications || {};
+              const normalized: Record<string, any> = {
+                ...((order as any).features || {}),
+              };
+              
+              // Convert all camelCase keys from PO specs to snake_case, preserving types
+              for (const [key, value] of Object.entries(specs)) {
+                if (value !== null && value !== undefined && value !== '') {
+                  const snakeKey = camelToSnake(key);
+                  // Special mapping for qds -> qd_accessory
+                  const finalKey = snakeKey === 'qds' ? 'qd_accessory' : snakeKey;
+                  normalized[finalKey] = value;
+                }
+              }
+              
+              return normalized;
+            })()
+          : (order as any).features || {},
+        specifications: poItemData
+          ? {
+              ...((order as any).specifications || {}),
+              ...poItemData.specifications,
+            }
+          : (order as any).specifications || {},
         lineItems: [],
         pricing: {
           subtotal: (order as any).subtotal || 0,

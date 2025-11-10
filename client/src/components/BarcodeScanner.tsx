@@ -575,7 +575,15 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
                               let displayValue = value;
                               if (typeof value === 'string') {
                                 const optionDisplay = getFeatureOptionDisplay(features, key, value);
-                                displayValue = optionDisplay.label;
+                                // If no feature option found, format the value nicely
+                                if (optionDisplay.label === value) {
+                                  displayValue = value
+                                    .toString()
+                                    .replace(/_/g, ' ')
+                                    .replace(/\b\w/g, (l) => l.toUpperCase());
+                                } else {
+                                  displayValue = optionDisplay.label;
+                                }
                               } else if (Array.isArray(value)) {
                                 // Handle array values (like other_options, rail_accessory)
                                 displayValue = value
@@ -623,7 +631,15 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
                               let displayValue = value;
                               if (typeof value === 'string') {
                                 const optionDisplay = getFeatureOptionDisplay(features, key, value);
-                                displayValue = optionDisplay.label;
+                                // If no feature option found, format the value nicely
+                                if (optionDisplay.label === value) {
+                                  displayValue = value
+                                    .toString()
+                                    .replace(/_/g, ' ')
+                                    .replace(/\b\w/g, (l) => l.toUpperCase());
+                                } else {
+                                  displayValue = optionDisplay.label;
+                                }
                               } else if (Array.isArray(value)) {
                                 // Handle array values
                                 displayValue = value

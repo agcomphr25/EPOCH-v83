@@ -4101,7 +4101,7 @@ export type TaskItem = typeof taskItems.$inferSelect;
 
 // Kickback Tracking Table
 export const kickbacks = pgTable('kickbacks', {
-  id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
+  id: serial('id').primaryKey(),
   orderId: text('order_id').notNull(),
   kickbackDept: text('kickback_dept').notNull(), // Department where kickback occurred
   reasonCode: text('reason_code').notNull(), // MATERIAL_DEFECT, OPERATOR_ERROR, MACHINE_FAILURE, etc.

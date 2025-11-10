@@ -1,3 +1,24 @@
 Your branch is ahead of 'origin/main' by 6 commits.
   (use "git push" to publish your local commits)
 Already up to date.
+[feature-20251110-1554-my-change 6ae4b751] feat: my-change
+ 1 file changed, 3 insertions(+)
+ create mode 100644 push_log_20251110-155428.txt
+branch 'feature-20251110-1554-my-change' set up to track 'origin/feature-20251110-1554-my-change'.
+> 6ae4b751 (HEAD -> feature-20251110-1554-my-change, origin/feature-20251110-1554-my-change) feat: my-change
+> b393ac8f (main) Update display names for configuration details
+> 065e8abd Improve display of configuration details in barcode scanner
+> bca3c465 Improve order identification by including purchase order numbers
+> 46f31c6f Update order item queries to fetch data from related purchase orders
+> 0ddc963b Improve barcode scanning to include purchase order items
+> 87a1069f Add ability to retrieve purchase order item details for label printing
+ client/src/components/BarcodeScanner.tsx         |  20 +-
+ client/src/components/ProductionQueueManager.tsx |  16 +-
+ client/src/pages/BarcodeQueuePage.tsx            |  13 +-
+ package-lock.json                                |  28 +-
+ package.json                                     |   2 +-
+ push_log_20251110-155202.txt                     |   0
+ push_log_20251110-155428.txt                     |   3 +
+ server/src/routes/index.ts                       | 332 +++++++++++++++++++++--
+ 8 files changed, 355 insertions(+), 59 deletions(-)
+Open PR: https://github.com/agcomphr25/EPOCH-v83/compare/feature-20251110-1554-my-change?expand=1

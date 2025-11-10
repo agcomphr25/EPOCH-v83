@@ -35,6 +35,9 @@ interface RFQAssessment {
   riskDetermination: string | null;
   bidDecision: string | null;
   formData: any;
+  status: string;
+  submittedBy: string | null;
+  submittedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -363,7 +366,7 @@ export default function RFQRiskAssessment() {
   };
 
   // Handle form submission
-  const handleSubmitAssessment = () => {
+  const handleSubmitAssessment = async () => {
     // Check authorization for high-risk RFQs
     if (requiresExecutiveApproval && !canApprove) {
       alert(
@@ -381,10 +384,92 @@ export default function RFQRiskAssessment() {
       return;
     }
 
-    // TODO: Implement form submission logic
-    // For now, just show a placeholder message
-    console.log('RFQ Risk Assessment submitted:', formData);
-    alert('Assessment submission functionality will be implemented soon.');
+    // Validate form fields
+    if (!validateForm()) return;
+
+    // Check if assessment exists (needs to be saved first)
+    if (!editingAssessmentId) {
+      const proceed = confirm(
+        'This assessment has not been saved yet.\n\n' +
+        'Would you like to save and submit it now?'
+      );
+      if (!proceed) return;
+      
+      // Save first, then submit
+      try {
+        const saveResponse = await fetch('/api/customers/rfq-assessments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            rfqNumber: formData.rfqNumber,
+            customerId: formData.customerId,
+            description: formData.description,
+            formData: formData,
+            totalOverallPoints: formData.totalOverallPoints,
+            adjustedRiskLevel: formData.adjustedRiskLevel,
+            riskDetermination: formData.riskDetermination,
+            bidDecision: formData.bidDecision,
+          }),
+        });
+
+        if (!saveResponse.ok) {
+          throw new Error('Failed to save RFQ Risk Assessment');
+        }
+
+        const savedAssessment = await saveResponse.json();
+        setEditingAssessmentId(savedAssessment.id);
+        
+        // Now submit it
+        const submitResponse = await fetch(`/api/customers/rfq-assessments/${savedAssessment.id}/submit`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: session?.username || 'unknown',
+          }),
+        });
+
+        if (!submitResponse.ok) {
+          throw new Error('Failed to submit RFQ Risk Assessment');
+        }
+
+        alert('RFQ Risk Assessment saved and submitted successfully!');
+        clearForm();
+        await refetchAssessments();
+        setActiveTab('view');
+      } catch (error) {
+        console.error('Error submitting RFQ Risk Assessment:', error);
+        alert('Failed to submit RFQ Risk Assessment. Please try again.');
+      }
+    } else {
+      // Assessment already exists, just submit it
+      try {
+        const response = await fetch(`/api/customers/rfq-assessments/${editingAssessmentId}/submit`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: session?.username || 'unknown',
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to submit RFQ Risk Assessment');
+        }
+
+        alert('RFQ Risk Assessment submitted successfully!');
+        clearForm();
+        await refetchAssessments();
+        setActiveTab('view');
+      } catch (error) {
+        console.error('Error submitting RFQ Risk Assessment:', error);
+        alert('Failed to submit RFQ Risk Assessment. Please try again.');
+      }
+    }
   };
 
   const RiskRadioGroup = ({
@@ -570,6 +655,16 @@ export default function RFQRiskAssessment() {
       }
       
       const assessment = await response.json();
+      
+      // Check if assessment is already submitted
+      if (assessment.status === 'submitted') {
+        alert(
+          `This assessment has already been submitted and cannot be edited.\n\n` +
+          `Submitted by: ${assessment.submittedBy || 'Unknown'}\n` +
+          `Submitted on: ${assessment.submittedAt ? format(new Date(assessment.submittedAt), 'MM/dd/yyyy') : 'Unknown'}`
+        );
+        return;
+      }
       
       // Populate form with saved data
       if (assessment.formData) {
@@ -1338,54 +1433,76 @@ export default function RFQRiskAssessment() {
                         <TableHead className="text-center">Risk Level</TableHead>
                         <TableHead>Risk Determination</TableHead>
                         <TableHead>Bid Decision</TableHead>
+                        <TableHead className="text-center">Status</TableHead>
                         <TableHead>Date Created</TableHead>
                         <TableHead className="text-center">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredAssessments.map((assessment) => (
-                        <TableRow key={assessment.id} data-testid={`row-assessment-${assessment.id}`}>
-                          <TableCell className="font-medium" data-testid={`text-rfq-number-${assessment.id}`}>
-                            {assessment.rfqNumber}
-                          </TableCell>
-                          <TableCell data-testid={`text-customer-${assessment.id}`}>
-                            {assessment.customerName || 'N/A'}
-                          </TableCell>
-                          <TableCell data-testid={`text-description-${assessment.id}`}>
-                            {assessment.description ? (
-                              assessment.description.length > 50 
-                                ? `${assessment.description.substring(0, 50)}...` 
-                                : assessment.description
-                            ) : 'N/A'}
-                          </TableCell>
-                          <TableCell className="text-center" data-testid={`text-risk-level-${assessment.id}`}>
-                            <Badge variant="outline">{assessment.adjustedRiskLevel}</Badge>
-                          </TableCell>
-                          <TableCell data-testid={`text-risk-determination-${assessment.id}`}>
-                            <Badge variant={getRiskBadgeColor(assessment.riskDetermination)}>
-                              {assessment.riskDetermination || 'N/A'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell data-testid={`text-bid-decision-${assessment.id}`}>
-                            {assessment.bidDecision || 'N/A'}
-                          </TableCell>
-                          <TableCell data-testid={`text-date-${assessment.id}`}>
-                            {format(new Date(assessment.createdAt), 'MM/dd/yyyy')}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="flex items-center gap-1"
-                              data-testid={`button-view-${assessment.id}`}
-                              onClick={() => loadAssessmentForEditing(assessment.rfqNumber)}
-                            >
-                              <Eye className="h-3 w-3" />
-                              Edit
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {filteredAssessments.map((assessment) => {
+                        const isSubmitted = assessment.status === 'submitted';
+                        return (
+                          <TableRow key={assessment.id} data-testid={`row-assessment-${assessment.id}`}>
+                            <TableCell className="font-medium" data-testid={`text-rfq-number-${assessment.id}`}>
+                              {assessment.rfqNumber}
+                            </TableCell>
+                            <TableCell data-testid={`text-customer-${assessment.id}`}>
+                              {assessment.customerName || 'N/A'}
+                            </TableCell>
+                            <TableCell data-testid={`text-description-${assessment.id}`}>
+                              {assessment.description ? (
+                                assessment.description.length > 50 
+                                  ? `${assessment.description.substring(0, 50)}...` 
+                                  : assessment.description
+                              ) : 'N/A'}
+                            </TableCell>
+                            <TableCell className="text-center" data-testid={`text-risk-level-${assessment.id}`}>
+                              <Badge variant="outline">{assessment.adjustedRiskLevel}</Badge>
+                            </TableCell>
+                            <TableCell data-testid={`text-risk-determination-${assessment.id}`}>
+                              <Badge variant={getRiskBadgeColor(assessment.riskDetermination)}>
+                                {assessment.riskDetermination || 'N/A'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell data-testid={`text-bid-decision-${assessment.id}`}>
+                              {assessment.bidDecision || 'N/A'}
+                            </TableCell>
+                            <TableCell className="text-center" data-testid={`text-status-${assessment.id}`}>
+                              <div className="flex flex-col items-center gap-1">
+                                <Badge variant={isSubmitted ? 'default' : 'secondary'}>
+                                  {isSubmitted ? 'Submitted' : 'Draft'}
+                                </Badge>
+                                {isSubmitted && assessment.submittedBy && (
+                                  <span className="text-xs text-gray-500">
+                                    by {assessment.submittedBy}
+                                  </span>
+                                )}
+                                {isSubmitted && assessment.submittedAt && (
+                                  <span className="text-xs text-gray-500">
+                                    {format(new Date(assessment.submittedAt), 'MM/dd/yyyy')}
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell data-testid={`text-date-${assessment.id}`}>
+                              {format(new Date(assessment.createdAt), 'MM/dd/yyyy')}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex items-center gap-1"
+                                data-testid={`button-view-${assessment.id}`}
+                                onClick={() => loadAssessmentForEditing(assessment.rfqNumber)}
+                                disabled={isSubmitted}
+                              >
+                                <Eye className="h-3 w-3" />
+                                {isSubmitted ? 'View' : 'Edit'}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 )}

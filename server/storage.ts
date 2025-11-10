@@ -983,6 +983,7 @@ export interface IStorage {
   getAllRFQRiskAssessments(): Promise<RFQRiskAssessment[]>;
   getRFQRiskAssessment(rfqNumber: string): Promise<RFQRiskAssessment | undefined>;
   updateRFQRiskAssessment(id: number, data: Partial<InsertRFQRiskAssessment>): Promise<RFQRiskAssessment | undefined>;
+  submitRFQRiskAssessment(id: number, username: string): Promise<RFQRiskAssessment | undefined>;
 
   // P2 Purchase Orders CRUD
   getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]>;
@@ -9137,6 +9138,23 @@ export class DatabaseStorage implements IStorage {
       .where(eq(rfqRiskAssessments.id, id))
       .returning();
     return updated;
+  }
+
+  async submitRFQRiskAssessment(
+    id: number,
+    username: string
+  ): Promise<RFQRiskAssessment | undefined> {
+    const [submitted] = await db
+      .update(rfqRiskAssessments)
+      .set({ 
+        status: 'submitted',
+        submittedBy: username,
+        submittedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(rfqRiskAssessments.id, id))
+      .returning();
+    return submitted;
   }
 
   // P2 Purchase Orders CRUD

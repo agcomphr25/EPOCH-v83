@@ -149,6 +149,148 @@ router.get('/search', async (req: Request, res: Response) => {
   }
 });
 
+// RFQ Risk Assessment Routes (must come before /:id route to avoid conflicts)
+router.post('/rfq-assessments', async (req: Request, res: Response) => {
+  try {
+    const assessmentData = req.body;
+    
+    // Validate that rfqNumber is provided (it should have been generated via GET /:customerId/rfq-next-number)
+    if (!assessmentData.rfqNumber) {
+      return res.status(400).json({ error: 'RFQ number is required' });
+    }
+    
+    const customer = await storage.getP2CustomerByCustomerId(assessmentData.customerId);
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    
+    // Use the RFQ number that was already generated and reserved
+    const newAssessment = await storage.createRFQRiskAssessment({
+      rfqNumber: assessmentData.rfqNumber,
+      customerId: assessmentData.customerId,
+      customerName: customer.customerName,
+      description: assessmentData.description,
+      formData: assessmentData.formData,
+      totalOverallPoints: assessmentData.totalOverallPoints,
+      adjustedRiskLevel: assessmentData.adjustedRiskLevel,
+      riskDetermination: assessmentData.riskDetermination,
+      bidDecision: assessmentData.bidDecision,
+    });
+    
+    res.status(201).json(newAssessment);
+  } catch (error) {
+    console.error('Create RFQ risk assessment error:', error);
+    res.status(500).json({ error: 'Failed to create RFQ risk assessment' });
+  }
+});
+
+router.get('/rfq-assessments', async (req: Request, res: Response) => {
+  try {
+    const assessments = await storage.getAllRFQRiskAssessments();
+    res.json(assessments);
+  } catch (error) {
+    console.error('Get RFQ risk assessments error:', error);
+    res.status(500).json({ error: 'Failed to fetch RFQ risk assessments' });
+  }
+});
+
+router.get('/rfq-assessments/:rfqNumber', async (req: Request, res: Response) => {
+  try {
+    const { rfqNumber } = req.params;
+    const assessment = await storage.getRFQRiskAssessment(rfqNumber);
+    
+    if (!assessment) {
+      return res.status(404).json({ error: 'RFQ risk assessment not found' });
+    }
+    
+    res.json(assessment);
+  } catch (error) {
+    console.error('Get RFQ risk assessment error:', error);
+    res.status(500).json({ error: 'Failed to fetch RFQ risk assessment' });
+  }
+});
+
+router.put('/rfq-assessments/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const assessmentData = req.body;
+    
+    // Get the customer name if customerId is provided
+    let customerName = assessmentData.customerName;
+    if (assessmentData.customerId && !customerName) {
+      const customer = await storage.getP2CustomerByCustomerId(assessmentData.customerId);
+      if (customer) {
+        customerName = customer.customerName;
+      }
+    }
+    
+    const updatedAssessment = await storage.updateRFQRiskAssessment(id, {
+      customerId: assessmentData.customerId,
+      customerName: customerName,
+      description: assessmentData.description,
+      formData: assessmentData.formData,
+      totalOverallPoints: assessmentData.totalOverallPoints,
+      adjustedRiskLevel: assessmentData.adjustedRiskLevel,
+      riskDetermination: assessmentData.riskDetermination,
+      bidDecision: assessmentData.bidDecision,
+    });
+    
+    if (!updatedAssessment) {
+      return res.status(404).json({ error: 'RFQ risk assessment not found' });
+    }
+    
+    res.json(updatedAssessment);
+  } catch (error) {
+    console.error('Update RFQ risk assessment error:', error);
+    res.status(500).json({ error: 'Failed to update RFQ risk assessment' });
+  }
+});
+
+router.put('/rfq-assessments/:id/submit', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    
+    // Extract session token from cookies or authorization header
+    const sessionToken =
+      req.cookies?.sessionToken ||
+      req.headers.authorization?.replace('Bearer ', '');
+
+    if (!sessionToken) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Query database for session to get authenticated username
+    const { pool } = await import('../../db');
+    const result: any = await pool.query(
+      'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1',
+      [sessionToken]
+    );
+
+    if (!result.rows || result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
+    }
+
+    const { username, expires_at } = result.rows[0];
+
+    // Check if session has expired
+    if (new Date(expires_at) < new Date()) {
+      return res.status(401).json({ error: 'Session expired' });
+    }
+    
+    // Submit the assessment with the authenticated username
+    const submittedAssessment = await storage.submitRFQRiskAssessment(id, username);
+    
+    if (!submittedAssessment) {
+      return res.status(404).json({ error: 'RFQ risk assessment not found' });
+    }
+    
+    res.json(submittedAssessment);
+  } catch (error) {
+    console.error('Submit RFQ risk assessment error:', error);
+    res.status(500).json({ error: 'Failed to submit RFQ risk assessment' });
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);
@@ -391,103 +533,6 @@ router.get('/:customerId/rfq-next-number', async (req: Request, res: Response) =
   } catch (error) {
     console.error('Get next RFQ number error:', error);
     res.status(500).json({ error: 'Failed to generate RFQ number' });
-  }
-});
-
-// RFQ Risk Assessment Routes
-router.post('/rfq-assessments', async (req: Request, res: Response) => {
-  try {
-    const assessmentData = req.body;
-    
-    // Validate that rfqNumber is provided (it should have been generated via GET /:customerId/rfq-next-number)
-    if (!assessmentData.rfqNumber) {
-      return res.status(400).json({ error: 'RFQ number is required' });
-    }
-    
-    const customer = await storage.getP2CustomerByCustomerId(assessmentData.customerId);
-    if (!customer) {
-      return res.status(404).json({ error: 'Customer not found' });
-    }
-    
-    // Use the RFQ number that was already generated and reserved
-    const newAssessment = await storage.createRFQRiskAssessment({
-      rfqNumber: assessmentData.rfqNumber,
-      customerId: assessmentData.customerId,
-      customerName: customer.customerName,
-      description: assessmentData.description,
-      formData: assessmentData.formData,
-      totalOverallPoints: assessmentData.totalOverallPoints,
-      adjustedRiskLevel: assessmentData.adjustedRiskLevel,
-      riskDetermination: assessmentData.riskDetermination,
-      bidDecision: assessmentData.bidDecision,
-    });
-    
-    res.status(201).json(newAssessment);
-  } catch (error) {
-    console.error('Create RFQ risk assessment error:', error);
-    res.status(500).json({ error: 'Failed to create RFQ risk assessment' });
-  }
-});
-
-router.get('/rfq-assessments', async (req: Request, res: Response) => {
-  try {
-    const assessments = await storage.getAllRFQRiskAssessments();
-    res.json(assessments);
-  } catch (error) {
-    console.error('Get RFQ risk assessments error:', error);
-    res.status(500).json({ error: 'Failed to fetch RFQ risk assessments' });
-  }
-});
-
-router.get('/rfq-assessments/:rfqNumber', async (req: Request, res: Response) => {
-  try {
-    const { rfqNumber } = req.params;
-    const assessment = await storage.getRFQRiskAssessment(rfqNumber);
-    
-    if (!assessment) {
-      return res.status(404).json({ error: 'RFQ risk assessment not found' });
-    }
-    
-    res.json(assessment);
-  } catch (error) {
-    console.error('Get RFQ risk assessment error:', error);
-    res.status(500).json({ error: 'Failed to fetch RFQ risk assessment' });
-  }
-});
-
-router.put('/rfq-assessments/:id', async (req: Request, res: Response) => {
-  try {
-    const id = parseInt(req.params.id);
-    const assessmentData = req.body;
-    
-    // Get the customer name if customerId is provided
-    let customerName = assessmentData.customerName;
-    if (assessmentData.customerId && !customerName) {
-      const customer = await storage.getP2CustomerByCustomerId(assessmentData.customerId);
-      if (customer) {
-        customerName = customer.customerName;
-      }
-    }
-    
-    const updatedAssessment = await storage.updateRFQRiskAssessment(id, {
-      customerId: assessmentData.customerId,
-      customerName: customerName,
-      description: assessmentData.description,
-      formData: assessmentData.formData,
-      totalOverallPoints: assessmentData.totalOverallPoints,
-      adjustedRiskLevel: assessmentData.adjustedRiskLevel,
-      riskDetermination: assessmentData.riskDetermination,
-      bidDecision: assessmentData.bidDecision,
-    });
-    
-    if (!updatedAssessment) {
-      return res.status(404).json({ error: 'RFQ risk assessment not found' });
-    }
-    
-    res.json(updatedAssessment);
-  } catch (error) {
-    console.error('Update RFQ risk assessment error:', error);
-    res.status(500).json({ error: 'Failed to update RFQ risk assessment' });
   }
 });
 

@@ -3281,6 +3281,9 @@ export const rfqRiskAssessments = pgTable('rfq_risk_assessments', {
   adjustedRiskLevel: integer('adjusted_risk_level').default(0),
   riskDetermination: text('risk_determination'),
   bidDecision: text('bid_decision'),
+  status: text('status').notNull().default('draft'), // draft or submitted
+  submittedBy: text('submitted_by'), // Username who submitted
+  submittedAt: timestamp('submitted_at'), // When it was submitted
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

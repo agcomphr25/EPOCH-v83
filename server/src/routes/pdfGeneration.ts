@@ -1,3 +1,5 @@
+// PDFME SYSTEM COMMENTED OUT - NOT IN USE
+/*
 import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
 import { generatePdf, prepareVendorPOData } from '../utils/pdfGenerator';
@@ -105,4 +107,9 @@ router.post('/by-template/:templateId', async (req: Request, res: Response) => {
   }
 });
 
+export default router;
+*/
+
+import { Router } from 'express';
+const router = Router();
 export default router;

@@ -125,8 +125,9 @@ import SimplifiedLayupScheduler from './components/SimplifiedLayupScheduler';
 import CustomerSatisfaction from './pages/CustomerSatisfaction';
 import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
-import PDFTemplateManager from './pages/PDFTemplateManager';
-import PDFTemplateDesigner from './pages/PDFTemplateDesigner';
+// PDFME SYSTEM COMMENTED OUT - NOT IN USE
+// import PDFTemplateManager from './pages/PDFTemplateManager';
+// import PDFTemplateDesigner from './pages/PDFTemplateDesigner';
 import CuttingTable from './pages/CuttingTable';
 import MetalAccessoriesTracker from './pages/MetalAccessoriesTracker';
 import DocumentIntelligence from './pages/DocumentIntelligence';
@@ -312,10 +313,11 @@ function App() {
                   <Route path="/vendors" component={VendorManagement} />
                   <Route path="/vendor-pos" component={VendorPOPage} />
                   
+                  {/* PDFME SYSTEM COMMENTED OUT - NOT IN USE */}
                   {/* PDF Template Routes */}
-                  <Route path="/pdf-templates" component={PDFTemplateManager} />
-                  <Route path="/pdf-template-designer" component={PDFTemplateDesigner} />
-                  <Route path="/pdf-template-designer/:id" component={PDFTemplateDesigner} />
+                  {/* <Route path="/pdf-templates" component={PDFTemplateManager} /> */}
+                  {/* <Route path="/pdf-template-designer" component={PDFTemplateDesigner} /> */}
+                  {/* <Route path="/pdf-template-designer/:id" component={PDFTemplateDesigner} /> */}
                   
                   {/* Item Groups Management */}
                   <Route path="/manage-groups" component={ManageGroups} />

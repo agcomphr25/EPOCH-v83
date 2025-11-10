@@ -1,3 +1,5 @@
+// PDFME SYSTEM COMMENTED OUT - NOT IN USE
+/*
 import { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -194,6 +196,15 @@ export default function PDFTemplateManager() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+*/
+
+export default function PDFTemplateManager() {
+  return (
+    <div className="flex items-center justify-center h-screen bg-white dark:bg-black text-black dark:text-white">
+      <p>PDF Template Manager is currently disabled.</p>
     </div>
   );
 }

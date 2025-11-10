@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Search,
   X,
+  FileWarning,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -21,13 +22,16 @@ import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
+import KickbackReportModal from '@/components/KickbackReportModal';
 
 export default function LayupPluggingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [kickbackModalOpen, setKickbackModalOpen] = useState(false);
+  const [selectedOrderForKickback, setSelectedOrderForKickback] = useState<{orderId: string, department: string} | null>(null);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const { toast} = useToast();
 
   // Fetch all kickbacks
   const { data: allKickbacks = [] } = useQuery({
@@ -557,6 +561,24 @@ export default function LayupPluggingQueuePage() {
                             Kickback
                           </Badge>
                         )}
+                        
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full mt-2 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedOrderForKickback({
+                              orderId: order.orderId,
+                              department: 'Layup/Plugging'
+                            });
+                            setKickbackModalOpen(true);
+                          }}
+                          data-testid={`button-report-kickback-${order.orderId}`}
+                        >
+                          <FileWarning className="w-3 h-3 mr-1" />
+                          Report Kickback
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -566,6 +588,17 @@ export default function LayupPluggingQueuePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Kickback Report Modal */}
+      <KickbackReportModal
+        open={kickbackModalOpen}
+        onOpenChange={(open) => {
+          setKickbackModalOpen(open);
+          if (!open) setSelectedOrderForKickback(null);
+        }}
+        orderId={selectedOrderForKickback?.orderId || ''}
+        department={selectedOrderForKickback?.department || ''}
+      />
     </div>
   );
 }

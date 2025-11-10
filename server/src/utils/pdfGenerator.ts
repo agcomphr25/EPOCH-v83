@@ -1,3 +1,5 @@
+// PDFME SYSTEM COMMENTED OUT - NOT IN USE
+/*
 import { generate } from '@pdfme/generator';
 import { Template } from '@pdfme/common';
 import { text, image, barcodes } from '@pdfme/schemas';
@@ -70,3 +72,4 @@ export function prepareVendorPOData(poData: any): Record<string, string> {
     total: poData.total?.toString() || '0.00',
   };
 }
+*/

@@ -1184,7 +1184,7 @@ export default function RFQRiskAssessment() {
             <CardTitle>Signature</CardTitle>
           </CardHeader>
           <CardContent>
-            {isHighRisk && !canSign && (
+            {requiresExecutiveApproval && !canApprove && (
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
                 <p className="text-red-700 font-medium">
                   ⚠️ Authorization Required
@@ -1205,7 +1205,7 @@ export default function RFQRiskAssessment() {
                   value={formData.date}
                   onChange={(e) => handleInputChange('date', e.target.value)}
                   className="mt-1"
-                  disabled={!canSign}
+                  disabled={!canEditSignature}
                   data-testid="input-signature-date"
                 />
               </div>
@@ -1219,7 +1219,7 @@ export default function RFQRiskAssessment() {
                     handleInputChange('printedName', e.target.value)
                   }
                   className="mt-1"
-                  disabled={!canSign}
+                  disabled={!canEditSignature}
                   data-testid="input-printed-name"
                 />
               </div>

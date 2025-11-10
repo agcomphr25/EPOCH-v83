@@ -455,6 +455,42 @@ router.get('/rfq-assessments/:rfqNumber', async (req: Request, res: Response) =>
   }
 });
 
+router.put('/rfq-assessments/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const assessmentData = req.body;
+    
+    // Get the customer name if customerId is provided
+    let customerName = assessmentData.customerName;
+    if (assessmentData.customerId && !customerName) {
+      const customer = await storage.getP2CustomerByCustomerId(assessmentData.customerId);
+      if (customer) {
+        customerName = customer.customerName;
+      }
+    }
+    
+    const updatedAssessment = await storage.updateRFQRiskAssessment(id, {
+      customerId: assessmentData.customerId,
+      customerName: customerName,
+      description: assessmentData.description,
+      formData: assessmentData.formData,
+      totalOverallPoints: assessmentData.totalOverallPoints,
+      adjustedRiskLevel: assessmentData.adjustedRiskLevel,
+      riskDetermination: assessmentData.riskDetermination,
+      bidDecision: assessmentData.bidDecision,
+    });
+    
+    if (!updatedAssessment) {
+      return res.status(404).json({ error: 'RFQ risk assessment not found' });
+    }
+    
+    res.json(updatedAssessment);
+  } catch (error) {
+    console.error('Update RFQ risk assessment error:', error);
+    res.status(500).json({ error: 'Failed to update RFQ risk assessment' });
+  }
+});
+
 // Address autocomplete bypass route (to avoid monolithic route conflicts)
 router.post(
   '/address-autocomplete-bypass',

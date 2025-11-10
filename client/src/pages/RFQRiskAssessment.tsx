@@ -43,6 +43,7 @@ export default function RFQRiskAssessment() {
   // Tab and search state
   const [activeTab, setActiveTab] = useState('create');
   const [searchTerm, setSearchTerm] = useState('');
+  const [editingAssessmentId, setEditingAssessmentId] = useState<number | null>(null);
   
   // Signature canvas reference
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
@@ -462,22 +463,37 @@ export default function RFQRiskAssessment() {
     if (!validateForm()) return;
 
     try {
-      const response = await fetch('/api/customers/rfq-assessments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          rfqNumber: formData.rfqNumber,
-          customerId: formData.customerId,
-          description: formData.description,
-          formData: formData,
-          totalOverallPoints: formData.totalOverallPoints,
-          adjustedRiskLevel: formData.adjustedRiskLevel,
-          riskDetermination: formData.riskDetermination,
-          bidDecision: formData.bidDecision,
-        }),
-      });
+      let response;
+      const payload = {
+        rfqNumber: formData.rfqNumber,
+        customerId: formData.customerId,
+        description: formData.description,
+        formData: formData,
+        totalOverallPoints: formData.totalOverallPoints,
+        adjustedRiskLevel: formData.adjustedRiskLevel,
+        riskDetermination: formData.riskDetermination,
+        bidDecision: formData.bidDecision,
+      };
+
+      if (editingAssessmentId) {
+        // Update existing assessment
+        response = await fetch(`/api/customers/rfq-assessments/${editingAssessmentId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        // Create new assessment
+        response = await fetch('/api/customers/rfq-assessments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+      }
 
       if (!response.ok) {
         throw new Error('Failed to save RFQ Risk Assessment');
@@ -485,7 +501,15 @@ export default function RFQRiskAssessment() {
 
       const savedAssessment = await response.json();
       console.log('Form data saved:', savedAssessment);
-      alert('RFQ Risk Assessment saved successfully!');
+      
+      if (editingAssessmentId) {
+        alert('RFQ Risk Assessment updated successfully!');
+      } else {
+        alert('RFQ Risk Assessment saved successfully!');
+      }
+      
+      // Clear the form
+      clearForm();
       
       // Refresh the assessments list
       await refetchAssessments();
@@ -534,6 +558,81 @@ export default function RFQRiskAssessment() {
     );
   });
 
+  // Function to load an assessment into the form for editing
+  const loadAssessmentForEditing = async (rfqNumber: string) => {
+    try {
+      const response = await fetch(`/api/customers/rfq-assessments/${rfqNumber}`);
+      if (!response.ok) {
+        throw new Error('Failed to load assessment');
+      }
+      
+      const assessment = await response.json();
+      
+      // Populate form with saved data
+      if (assessment.formData) {
+        setFormData(assessment.formData);
+        setEditingAssessmentId(assessment.id);
+        
+        // Load signature if it exists
+        if (assessment.formData.signature && signatureCanvasRef.current) {
+          const canvas = signatureCanvasRef.current;
+          canvas.fromDataURL(assessment.formData.signature);
+        }
+        
+        // Switch to create tab to show the loaded form
+        setActiveTab('create');
+        
+        alert(`Loaded RFQ ${rfqNumber} for editing. Make your changes and click "Save Form" to update.`);
+      }
+    } catch (error) {
+      console.error('Error loading assessment:', error);
+      alert('Failed to load assessment. Please try again.');
+    }
+  };
+
+  // Function to clear the form and start fresh
+  const clearForm = () => {
+    setFormData({
+      customerId: '',
+      customerName: '',
+      rfqNumber: '',
+      description: '',
+      trainedStaff: '',
+      equipmentRequirements: '',
+      manufacturingSpace: '',
+      regulatoryRequirements: '',
+      conflictingPriorities: '',
+      customerConcentration: '',
+      climateEnvironmental: '',
+      internalSubtotal: 0,
+      supplyChainDisruptions: '',
+      supplierVariability: '',
+      contractProvisions: '',
+      timelines: '',
+      qualityExpectations: '',
+      externalSubtotal: 0,
+      mitigationActionA: '',
+      mitigationActionB: '',
+      mitigationActionC: '',
+      mitigationReductionA: '0',
+      mitigationReductionB: '0',
+      mitigationReductionC: '0',
+      totalOverallPoints: 0,
+      adjustedRiskLevel: 0,
+      riskDetermination: '',
+      bidDecision: '',
+      date: '',
+      printedName: '',
+      signature: '',
+    });
+    setEditingAssessmentId(null);
+    
+    // Clear signature canvas
+    if (signatureCanvasRef.current) {
+      signatureCanvasRef.current.clear();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-6xl mx-auto">
@@ -562,8 +661,28 @@ export default function RFQRiskAssessment() {
 
           {/* Create New Tab */}
           <TabsContent value="create" className="max-w-4xl mx-auto ml-16">
+            {/* Editing indicator and action buttons */}
+            {editingAssessmentId && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-center">
+                <p className="text-blue-800 font-medium">
+                  ✏️ Editing RFQ {formData.rfqNumber} - Make changes and click "Save Form" to update
+                </p>
+              </div>
+            )}
+            
             {/* Action Buttons */}
             <div className="flex justify-center gap-3 mb-6">
+              {editingAssessmentId && (
+                <Button 
+                  onClick={clearForm} 
+                  variant="secondary"
+                  className="flex items-center gap-2"
+                  data-testid="button-new-assessment"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Assessment
+                </Button>
+              )}
               <Button 
                 onClick={handleSave} 
                 className="flex items-center gap-2"
@@ -571,7 +690,7 @@ export default function RFQRiskAssessment() {
                 data-testid="button-save-form"
               >
                 <Save className="h-4 w-4" />
-                Save Form
+                {editingAssessmentId ? 'Update Form' : 'Save Form'}
               </Button>
               <Button
                 onClick={handlePrint}
@@ -1238,13 +1357,10 @@ export default function RFQRiskAssessment() {
                               variant="outline"
                               className="flex items-center gap-1"
                               data-testid={`button-view-${assessment.id}`}
-                              onClick={() => {
-                                // TODO: Implement view functionality
-                                alert(`View details for RFQ ${assessment.rfqNumber}`);
-                              }}
+                              onClick={() => loadAssessmentForEditing(assessment.rfqNumber)}
                             >
                               <Eye className="h-3 w-3" />
-                              View
+                              Edit
                             </Button>
                           </TableCell>
                         </TableRow>

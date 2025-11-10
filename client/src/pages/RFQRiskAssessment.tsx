@@ -109,10 +109,12 @@ export default function RFQRiskAssessment() {
     enabled: activeTab === 'view',
   });
 
-  // Check if user is authorized to sign high-risk RFQs (score > 16)
+  // Authorization logic for high-risk RFQs (score > 16)
   const isHighRisk = formData.totalOverallPoints > 16;
   const isAuthorizedSigner = session?.username === 'tandyd' || session?.username === 'tandym';
-  const canSign = !isHighRisk || isAuthorizedSigner;
+  const requiresExecutiveApproval = isHighRisk;
+  const canApprove = !requiresExecutiveApproval || isAuthorizedSigner;
+  const canEditSignature = !requiresExecutiveApproval || isAuthorizedSigner;
 
   const handleCustomerChange = async (customerId: string) => {
     const selectedCustomer = customers.find(c => c.customerId === customerId);
@@ -363,11 +365,11 @@ export default function RFQRiskAssessment() {
   // Handle form submission
   const handleSubmitAssessment = () => {
     // Check authorization for high-risk RFQs
-    if (isHighRisk && !canSign) {
+    if (requiresExecutiveApproval && !canApprove) {
       alert(
         `Authorization Required\n\n` +
         `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n` +
-        `Only Dave Tandy or Matt Tandy are authorized to sign high-risk RFQs.\n\n` +
+        `Only Dave Tandy or Matt Tandy are authorized to approve and submit high-risk RFQs.\n\n` +
         `Current user: ${session?.username || 'Not logged in'}`
       );
       return;
@@ -449,18 +451,19 @@ export default function RFQRiskAssessment() {
   };
 
   const handleSave = async () => {
-    // Check authorization for high-risk RFQs
-    if (isHighRisk && !canSign) {
-      alert(
-        `Authorization Required\n\n` +
-        `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n` +
-        `Only Dave Tandy or Matt Tandy are authorized to save high-risk RFQs.\n\n` +
-        `Current user: ${session?.username || 'Not logged in'}`
-      );
-      return;
-    }
-
     if (!validateForm()) return;
+    
+    // Show warning for high-risk RFQs being saved by non-authorized users
+    if (requiresExecutiveApproval && !isAuthorizedSigner) {
+      const proceed = confirm(
+        `⚠️ High-Risk Assessment Warning\n\n` +
+        `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n\n` +
+        `You can save this assessment as a draft, but only Dave Tandy or Matt Tandy can sign and approve it.\n\n` +
+        `Current user: ${session?.username || 'Not logged in'}\n\n` +
+        `Click OK to save as draft, or Cancel to go back.`
+      );
+      if (!proceed) return;
+    }
 
     try {
       let response;
@@ -524,7 +527,7 @@ export default function RFQRiskAssessment() {
 
   const handlePrint = () => {
     // Check authorization for high-risk RFQs
-    if (isHighRisk && !canSign) {
+    if (requiresExecutiveApproval && !canApprove) {
       alert(
         `Authorization Required\n\n` +
         `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n` +
@@ -661,6 +664,18 @@ export default function RFQRiskAssessment() {
 
           {/* Create New Tab */}
           <TabsContent value="create" className="max-w-4xl mx-auto ml-16">
+            {/* High-Risk Warning Banner */}
+            {requiresExecutiveApproval && (
+              <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4 text-center">
+                <p className="text-red-800 font-bold text-lg">
+                  ⚠️ HIGH-RISK ASSESSMENT (Score: {formData.totalOverallPoints})
+                </p>
+                <p className="text-red-700 mt-1">
+                  Executive approval required - Only Dave Tandy or Matt Tandy can sign and approve this assessment
+                </p>
+              </div>
+            )}
+
             {/* Editing indicator and action buttons */}
             {editingAssessmentId && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-center">
@@ -686,7 +701,6 @@ export default function RFQRiskAssessment() {
               <Button 
                 onClick={handleSave} 
                 className="flex items-center gap-2"
-                disabled={!canSign}
                 data-testid="button-save-form"
               >
                 <Save className="h-4 w-4" />
@@ -696,7 +710,6 @@ export default function RFQRiskAssessment() {
                 onClick={handlePrint}
                 variant="outline"
                 className="flex items-center gap-2"
-                disabled={!canSign}
                 data-testid="button-print-form"
               >
                 <Printer className="h-4 w-4" />
@@ -705,7 +718,6 @@ export default function RFQRiskAssessment() {
               <Button 
                 variant="outline" 
                 className="flex items-center gap-2"
-                disabled={!canSign}
                 data-testid="button-export-pdf"
               >
                 <Download className="h-4 w-4" />
@@ -1214,10 +1226,17 @@ export default function RFQRiskAssessment() {
             </div>
 
             <div className="mt-6">
-              <Label className="block mb-2">Digital Signature</Label>
+              <Label className="block mb-2">
+                Digital Signature
+                {!canEditSignature && (
+                  <span className="ml-2 text-sm text-red-600 font-normal">
+                    (Executive approval required for high-risk assessments)
+                  </span>
+                )}
+              </Label>
               <div
                 className={`border border-gray-300 rounded-md p-2 ${
-                  canSign ? 'bg-white' : 'bg-gray-100'
+                  canEditSignature ? 'bg-white' : 'bg-gray-100'
                 }`}
                 style={{ width: '100%', maxWidth: '500px' }}
               >
@@ -1232,8 +1251,8 @@ export default function RFQRiskAssessment() {
                       height: '200px',
                       border: '1px solid #e5e7eb',
                       borderRadius: '4px',
-                      opacity: canSign ? 1 : 0.5,
-                      pointerEvents: canSign ? 'auto' : 'none',
+                      opacity: canEditSignature ? 1 : 0.5,
+                      pointerEvents: canEditSignature ? 'auto' : 'none',
                     },
                   }}
                   onEnd={saveSignature}
@@ -1244,7 +1263,7 @@ export default function RFQRiskAssessment() {
                   size="sm" 
                   variant="outline" 
                   onClick={clearSignature}
-                  disabled={!canSign}
+                  disabled={!canEditSignature}
                   data-testid="button-clear-signature"
                 >
                   Clear
@@ -1253,7 +1272,7 @@ export default function RFQRiskAssessment() {
                   size="sm" 
                   variant="outline" 
                   onClick={saveSignature}
-                  disabled={!canSign}
+                  disabled={!canEditSignature}
                   data-testid="button-save-signature"
                 >
                   Save Signature
@@ -1269,9 +1288,11 @@ export default function RFQRiskAssessment() {
             onClick={handleSubmitAssessment}
             className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg font-medium"
             size="lg"
+            disabled={!canApprove}
             data-testid="button-submit-assessment"
           >
             Submit Assessment
+            {!canApprove && ' (Executive Approval Required)'}
           </Button>
         </div>
 

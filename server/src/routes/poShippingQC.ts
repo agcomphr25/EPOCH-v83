@@ -31,6 +31,33 @@ router.get('/shipping-qc', async (req, res) => {
   }
 });
 
+// GET /api/po-orders/all-p1-with-status
+// Returns ALL P1 PO orders with full item status tracking across all departments
+router.get('/all-p1-with-status', async (req, res) => {
+  try {
+    console.log('📦 Fetching all P1 PO orders with department statuses...');
+    const { storage } = await import('../../storage');
+
+    const customers = await storage.getAllP1POOrdersWithStatus();
+    
+    const totalPOs = customers.reduce((sum, customer) => sum + customer.pos.length, 0);
+    const totalItems = customers.reduce(
+      (sum, customer) =>
+        sum + customer.pos.reduce((poSum, po) => poSum + po.items.length, 0),
+      0
+    );
+    
+    console.log(`📊 Found ${totalItems} PO items across ${totalPOs} POs from ${customers.length} customers`);
+
+    res.json(customers);
+  } catch (error: any) {
+    console.error('❌ Error fetching all P1 PO orders:', error);
+    res
+      .status(500)
+      .json({ _error: 'Failed to fetch P1 PO orders', details: error.message });
+  }
+});
+
 // POST /api/po-orders/packing-slips
 // Generate packing slips for selected PO items (one PDF per PO)
 router.post('/packing-slips', async (req, res) => {

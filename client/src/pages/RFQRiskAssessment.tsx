@@ -8,10 +8,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Save, Printer, Download } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Save, Printer, Download, List, Plus, Eye, Search } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import type { P2Customer } from '@shared/schema';
 import { COMPANY_INFO } from '@shared/company-config';
+import { format } from 'date-fns';
 
 interface SessionUser {
   id: number;
@@ -20,7 +24,27 @@ interface SessionUser {
   employeeId?: number | null;
 }
 
+interface RFQAssessment {
+  id: number;
+  rfqNumber: string;
+  customerId: string;
+  customerName?: string;
+  description: string | null;
+  totalOverallPoints: number;
+  adjustedRiskLevel: number;
+  riskDetermination: string | null;
+  bidDecision: string | null;
+  formData: any;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function RFQRiskAssessment() {
+  // Tab and search state
+  const [activeTab, setActiveTab] = useState('create');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingAssessmentId, setEditingAssessmentId] = useState<number | null>(null);
+  
   // Signature canvas reference
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
 
@@ -79,10 +103,18 @@ export default function RFQRiskAssessment() {
     queryKey: ['/api/auth/session'],
   });
 
-  // Check if user is authorized to sign high-risk RFQs (score > 16)
+  // Fetch all RFQ assessments for list view
+  const { data: assessments = [], refetch: refetchAssessments } = useQuery<RFQAssessment[]>({
+    queryKey: ['/api/customers/rfq-assessments'],
+    enabled: activeTab === 'view',
+  });
+
+  // Authorization logic for high-risk RFQs (score > 16)
   const isHighRisk = formData.totalOverallPoints > 16;
   const isAuthorizedSigner = session?.username === 'tandyd' || session?.username === 'tandym';
-  const canSign = !isHighRisk || isAuthorizedSigner;
+  const requiresExecutiveApproval = isHighRisk;
+  const canApprove = !requiresExecutiveApproval || isAuthorizedSigner;
+  const canEditSignature = !requiresExecutiveApproval || isAuthorizedSigner;
 
   const handleCustomerChange = async (customerId: string) => {
     const selectedCustomer = customers.find(c => c.customerId === customerId);
@@ -333,11 +365,11 @@ export default function RFQRiskAssessment() {
   // Handle form submission
   const handleSubmitAssessment = () => {
     // Check authorization for high-risk RFQs
-    if (isHighRisk && !canSign) {
+    if (requiresExecutiveApproval && !canApprove) {
       alert(
         `Authorization Required\n\n` +
         `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n` +
-        `Only Dave Tandy or Matt Tandy are authorized to sign high-risk RFQs.\n\n` +
+        `Only Dave Tandy or Matt Tandy are authorized to approve and submit high-risk RFQs.\n\n` +
         `Current user: ${session?.username || 'Not logged in'}`
       );
       return;
@@ -419,36 +451,52 @@ export default function RFQRiskAssessment() {
   };
 
   const handleSave = async () => {
-    // Check authorization for high-risk RFQs
-    if (isHighRisk && !canSign) {
-      alert(
-        `Authorization Required\n\n` +
-        `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n` +
-        `Only Dave Tandy or Matt Tandy are authorized to save high-risk RFQs.\n\n` +
-        `Current user: ${session?.username || 'Not logged in'}`
+    if (!validateForm()) return;
+    
+    // Show warning for high-risk RFQs being saved by non-authorized users
+    if (requiresExecutiveApproval && !isAuthorizedSigner) {
+      const proceed = confirm(
+        `⚠️ High-Risk Assessment Warning\n\n` +
+        `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n\n` +
+        `You can save this assessment as a draft, but only Dave Tandy or Matt Tandy can sign and approve it.\n\n` +
+        `Current user: ${session?.username || 'Not logged in'}\n\n` +
+        `Click OK to save as draft, or Cancel to go back.`
       );
-      return;
+      if (!proceed) return;
     }
 
-    if (!validateForm()) return;
-
     try {
-      const response = await fetch('/api/customers/rfq-assessments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          rfqNumber: formData.rfqNumber,
-          customerId: formData.customerId,
-          description: formData.description,
-          formData: formData,
-          totalOverallPoints: formData.totalOverallPoints,
-          adjustedRiskLevel: formData.adjustedRiskLevel,
-          riskDetermination: formData.riskDetermination,
-          bidDecision: formData.bidDecision,
-        }),
-      });
+      let response;
+      const payload = {
+        rfqNumber: formData.rfqNumber,
+        customerId: formData.customerId,
+        description: formData.description,
+        formData: formData,
+        totalOverallPoints: formData.totalOverallPoints,
+        adjustedRiskLevel: formData.adjustedRiskLevel,
+        riskDetermination: formData.riskDetermination,
+        bidDecision: formData.bidDecision,
+      };
+
+      if (editingAssessmentId) {
+        // Update existing assessment
+        response = await fetch(`/api/customers/rfq-assessments/${editingAssessmentId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        // Create new assessment
+        response = await fetch('/api/customers/rfq-assessments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+      }
 
       if (!response.ok) {
         throw new Error('Failed to save RFQ Risk Assessment');
@@ -456,7 +504,21 @@ export default function RFQRiskAssessment() {
 
       const savedAssessment = await response.json();
       console.log('Form data saved:', savedAssessment);
-      alert('RFQ Risk Assessment saved successfully!');
+      
+      if (editingAssessmentId) {
+        alert('RFQ Risk Assessment updated successfully!');
+      } else {
+        alert('RFQ Risk Assessment saved successfully!');
+      }
+      
+      // Clear the form
+      clearForm();
+      
+      // Refresh the assessments list
+      await refetchAssessments();
+      
+      // Switch to view tab to show the saved assessment
+      setActiveTab('view');
     } catch (error) {
       console.error('Error saving RFQ Risk Assessment:', error);
       alert('Failed to save RFQ Risk Assessment. Please try again.');
@@ -465,7 +527,7 @@ export default function RFQRiskAssessment() {
 
   const handlePrint = () => {
     // Check authorization for high-risk RFQs
-    if (isHighRisk && !canSign) {
+    if (requiresExecutiveApproval && !canApprove) {
       alert(
         `Authorization Required\n\n` +
         `This RFQ has a risk score of ${formData.totalOverallPoints} (exceeds threshold of 16).\n` +
@@ -480,9 +542,103 @@ export default function RFQRiskAssessment() {
     window.print();
   };
 
+  // Helper function to get risk badge color
+  const getRiskBadgeColor = (riskDetermination: string | null) => {
+    if (!riskDetermination) return 'secondary';
+    if (riskDetermination.toLowerCase().includes('high')) return 'destructive';
+    if (riskDetermination.toLowerCase().includes('medium')) return 'default';
+    return 'secondary';
+  };
+
+  // Filter assessments based on search term
+  const filteredAssessments = assessments.filter(assessment => {
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      assessment.rfqNumber.toLowerCase().includes(searchLower) ||
+      assessment.customerName?.toLowerCase().includes(searchLower) ||
+      assessment.description?.toLowerCase().includes(searchLower)
+    );
+  });
+
+  // Function to load an assessment into the form for editing
+  const loadAssessmentForEditing = async (rfqNumber: string) => {
+    try {
+      const response = await fetch(`/api/customers/rfq-assessments/${rfqNumber}`);
+      if (!response.ok) {
+        throw new Error('Failed to load assessment');
+      }
+      
+      const assessment = await response.json();
+      
+      // Populate form with saved data
+      if (assessment.formData) {
+        setFormData(assessment.formData);
+        setEditingAssessmentId(assessment.id);
+        
+        // Load signature if it exists
+        if (assessment.formData.signature && signatureCanvasRef.current) {
+          const canvas = signatureCanvasRef.current;
+          canvas.fromDataURL(assessment.formData.signature);
+        }
+        
+        // Switch to create tab to show the loaded form
+        setActiveTab('create');
+        
+        alert(`Loaded RFQ ${rfqNumber} for editing. Make your changes and click "Save Form" to update.`);
+      }
+    } catch (error) {
+      console.error('Error loading assessment:', error);
+      alert('Failed to load assessment. Please try again.');
+    }
+  };
+
+  // Function to clear the form and start fresh
+  const clearForm = () => {
+    setFormData({
+      customerId: '',
+      customerName: '',
+      rfqNumber: '',
+      description: '',
+      trainedStaff: '',
+      equipmentRequirements: '',
+      manufacturingSpace: '',
+      regulatoryRequirements: '',
+      conflictingPriorities: '',
+      customerConcentration: '',
+      climateEnvironmental: '',
+      internalSubtotal: 0,
+      supplyChainDisruptions: '',
+      supplierVariability: '',
+      contractProvisions: '',
+      timelines: '',
+      qualityExpectations: '',
+      externalSubtotal: 0,
+      mitigationActionA: '',
+      mitigationActionB: '',
+      mitigationActionC: '',
+      mitigationReductionA: '0',
+      mitigationReductionB: '0',
+      mitigationReductionC: '0',
+      totalOverallPoints: 0,
+      adjustedRiskLevel: 0,
+      riskDetermination: '',
+      bidDecision: '',
+      date: '',
+      printedName: '',
+      signature: '',
+    });
+    setEditingAssessmentId(null);
+    
+    // Clear signature canvas
+    if (signatureCanvasRef.current) {
+      signatureCanvasRef.current.clear();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-4xl mx-auto ml-16">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-6 text-center">
           <div className="mb-4">
@@ -490,42 +646,86 @@ export default function RFQRiskAssessment() {
             <p className="text-sm text-gray-600">
               Responsive • Reliable • Supportive
             </p>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex justify-center gap-3 mb-6">
-            <Button 
-              onClick={handleSave} 
-              className="flex items-center gap-2"
-              disabled={!canSign}
-              data-testid="button-save-form"
-            >
-              <Save className="h-4 w-4" />
-              Save Form
-            </Button>
-            <Button
-              onClick={handlePrint}
-              variant="outline"
-              className="flex items-center gap-2"
-              disabled={!canSign}
-              data-testid="button-print-form"
-            >
-              <Printer className="h-4 w-4" />
-              Print
-            </Button>
-            <Button 
-              variant="outline" 
-              className="flex items-center gap-2"
-              disabled={!canSign}
-              data-testid="button-export-pdf"
-            >
-              <Download className="h-4 w-4" />
-              Export PDF
-            </Button>
+            <h2 className="text-xl font-semibold text-gray-800 mt-2">RFQ Risk Assessment</h2>
           </div>
         </div>
 
-        {/* RFQ Number */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-6">
+            <TabsTrigger value="create" className="flex items-center gap-2" data-testid="tab-create-rfq">
+              <Plus className="h-4 w-4" />
+              Create New
+            </TabsTrigger>
+            <TabsTrigger value="view" className="flex items-center gap-2" data-testid="tab-view-rfqs">
+              <List className="h-4 w-4" />
+              View Submissions
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Create New Tab */}
+          <TabsContent value="create" className="max-w-4xl mx-auto ml-16">
+            {/* High-Risk Warning Banner */}
+            {requiresExecutiveApproval && (
+              <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4 text-center">
+                <p className="text-red-800 font-bold text-lg">
+                  ⚠️ HIGH-RISK ASSESSMENT (Score: {formData.totalOverallPoints})
+                </p>
+                <p className="text-red-700 mt-1">
+                  Executive approval required - Only Dave Tandy or Matt Tandy can sign and approve this assessment
+                </p>
+              </div>
+            )}
+
+            {/* Editing indicator and action buttons */}
+            {editingAssessmentId && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-center">
+                <p className="text-blue-800 font-medium">
+                  ✏️ Editing RFQ {formData.rfqNumber} - Make changes and click "Save Form" to update
+                </p>
+              </div>
+            )}
+            
+            {/* Action Buttons */}
+            <div className="flex justify-center gap-3 mb-6">
+              {editingAssessmentId && (
+                <Button 
+                  onClick={clearForm} 
+                  variant="secondary"
+                  className="flex items-center gap-2"
+                  data-testid="button-new-assessment"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Assessment
+                </Button>
+              )}
+              <Button 
+                onClick={handleSave} 
+                className="flex items-center gap-2"
+                data-testid="button-save-form"
+              >
+                <Save className="h-4 w-4" />
+                {editingAssessmentId ? 'Update Form' : 'Save Form'}
+              </Button>
+              <Button
+                onClick={handlePrint}
+                variant="outline"
+                className="flex items-center gap-2"
+                data-testid="button-print-form"
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </Button>
+              <Button 
+                variant="outline" 
+                className="flex items-center gap-2"
+                data-testid="button-export-pdf"
+              >
+                <Download className="h-4 w-4" />
+                Export PDF
+              </Button>
+            </div>
+
+            {/* RFQ Number */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-center">RFQ Risk Assessment</CardTitle>
@@ -984,7 +1184,7 @@ export default function RFQRiskAssessment() {
             <CardTitle>Signature</CardTitle>
           </CardHeader>
           <CardContent>
-            {isHighRisk && !canSign && (
+            {requiresExecutiveApproval && !canApprove && (
               <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
                 <p className="text-red-700 font-medium">
                   ⚠️ Authorization Required
@@ -1005,7 +1205,7 @@ export default function RFQRiskAssessment() {
                   value={formData.date}
                   onChange={(e) => handleInputChange('date', e.target.value)}
                   className="mt-1"
-                  disabled={!canSign}
+                  disabled={!canEditSignature}
                   data-testid="input-signature-date"
                 />
               </div>
@@ -1019,17 +1219,24 @@ export default function RFQRiskAssessment() {
                     handleInputChange('printedName', e.target.value)
                   }
                   className="mt-1"
-                  disabled={!canSign}
+                  disabled={!canEditSignature}
                   data-testid="input-printed-name"
                 />
               </div>
             </div>
 
             <div className="mt-6">
-              <Label className="block mb-2">Digital Signature</Label>
+              <Label className="block mb-2">
+                Digital Signature
+                {!canEditSignature && (
+                  <span className="ml-2 text-sm text-red-600 font-normal">
+                    (Executive approval required for high-risk assessments)
+                  </span>
+                )}
+              </Label>
               <div
                 className={`border border-gray-300 rounded-md p-2 ${
-                  canSign ? 'bg-white' : 'bg-gray-100'
+                  canEditSignature ? 'bg-white' : 'bg-gray-100'
                 }`}
                 style={{ width: '100%', maxWidth: '500px' }}
               >
@@ -1044,8 +1251,8 @@ export default function RFQRiskAssessment() {
                       height: '200px',
                       border: '1px solid #e5e7eb',
                       borderRadius: '4px',
-                      opacity: canSign ? 1 : 0.5,
-                      pointerEvents: canSign ? 'auto' : 'none',
+                      opacity: canEditSignature ? 1 : 0.5,
+                      pointerEvents: canEditSignature ? 'auto' : 'none',
                     },
                   }}
                   onEnd={saveSignature}
@@ -1056,7 +1263,7 @@ export default function RFQRiskAssessment() {
                   size="sm" 
                   variant="outline" 
                   onClick={clearSignature}
-                  disabled={!canSign}
+                  disabled={!canEditSignature}
                   data-testid="button-clear-signature"
                 >
                   Clear
@@ -1065,7 +1272,7 @@ export default function RFQRiskAssessment() {
                   size="sm" 
                   variant="outline" 
                   onClick={saveSignature}
-                  disabled={!canSign}
+                  disabled={!canEditSignature}
                   data-testid="button-save-signature"
                 >
                   Save Signature
@@ -1081,16 +1288,111 @@ export default function RFQRiskAssessment() {
             onClick={handleSubmitAssessment}
             className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg font-medium"
             size="lg"
+            disabled={!canApprove}
             data-testid="button-submit-assessment"
           >
             Submit Assessment
+            {!canApprove && ' (Executive Approval Required)'}
           </Button>
         </div>
 
-        {/* Footer */}
-        <div className="text-center text-sm text-gray-500 mb-8">
-          <p>FO Form 11 • Version 1.4 10/23/2024</p>
-        </div>
+            {/* Footer */}
+            <div className="text-center text-sm text-gray-500 mb-8">
+              <p>FO Form 11 • Version 1.4 10/23/2024</p>
+            </div>
+          </TabsContent>
+
+          {/* View Submissions Tab */}
+          <TabsContent value="view" className="w-full">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>RFQ Risk Assessment Submissions</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        type="text"
+                        placeholder="Search by RFQ#, Customer, or Description..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10 w-80"
+                        data-testid="input-search-rfq"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {filteredAssessments.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    {searchTerm ? 'No assessments match your search.' : 'No RFQ assessments found.'}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>RFQ Number</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="text-center">Risk Level</TableHead>
+                        <TableHead>Risk Determination</TableHead>
+                        <TableHead>Bid Decision</TableHead>
+                        <TableHead>Date Created</TableHead>
+                        <TableHead className="text-center">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredAssessments.map((assessment) => (
+                        <TableRow key={assessment.id} data-testid={`row-assessment-${assessment.id}`}>
+                          <TableCell className="font-medium" data-testid={`text-rfq-number-${assessment.id}`}>
+                            {assessment.rfqNumber}
+                          </TableCell>
+                          <TableCell data-testid={`text-customer-${assessment.id}`}>
+                            {assessment.customerName || 'N/A'}
+                          </TableCell>
+                          <TableCell data-testid={`text-description-${assessment.id}`}>
+                            {assessment.description ? (
+                              assessment.description.length > 50 
+                                ? `${assessment.description.substring(0, 50)}...` 
+                                : assessment.description
+                            ) : 'N/A'}
+                          </TableCell>
+                          <TableCell className="text-center" data-testid={`text-risk-level-${assessment.id}`}>
+                            <Badge variant="outline">{assessment.adjustedRiskLevel}</Badge>
+                          </TableCell>
+                          <TableCell data-testid={`text-risk-determination-${assessment.id}`}>
+                            <Badge variant={getRiskBadgeColor(assessment.riskDetermination)}>
+                              {assessment.riskDetermination || 'N/A'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell data-testid={`text-bid-decision-${assessment.id}`}>
+                            {assessment.bidDecision || 'N/A'}
+                          </TableCell>
+                          <TableCell data-testid={`text-date-${assessment.id}`}>
+                            {format(new Date(assessment.createdAt), 'MM/dd/yyyy')}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex items-center gap-1"
+                              data-testid={`button-view-${assessment.id}`}
+                              onClick={() => loadAssessmentForEditing(assessment.rfqNumber)}
+                            >
+                              <Eye className="h-3 w-3" />
+                              Edit
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

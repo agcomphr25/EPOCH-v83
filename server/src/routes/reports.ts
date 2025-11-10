@@ -205,6 +205,14 @@ router.get('/filter-options', authenticateToken, requireRole('ADMIN'), async (re
     const railAccessory = allFeatures.find((f) => f.id === 'rail_accessory');
     const railOptions = railAccessory?.options as any[] || [];
 
+    // Extract bottom metal options
+    const bottomMetal = allFeatures.find((f) => f.id === 'bottom_metal');
+    const bottomMetalOptions = bottomMetal?.options as any[] || [];
+
+    // Extract other options
+    const otherOptions = allFeatures.find((f) => f.id === 'other_options');
+    const otherOptionsOptions = otherOptions?.options as any[] || [];
+
     // Extract paint options by category
     const paintFeatures = allFeatures.filter((f) =>
       ['base_colors', 'custom_graphics', 'special_effects', 'camo_patterns', 'premium_patterns', 'protective_coatings'].includes(f.id)
@@ -245,6 +253,8 @@ router.get('/filter-options', authenticateToken, requireRole('ADMIN'), async (re
       actionLengths: actionLengthOptions,
       paintOptions,
       railAccessories: railOptions,
+      bottomMetalOptions: bottomMetalOptions,
+      otherOptions: otherOptionsOptions,
       departments,
       statuses,
     });
@@ -264,6 +274,8 @@ router.post('/query', authenticateToken, requireRole('ADMIN'), async (req, res) 
       actionLengths,
       paintOptions: selectedPaints,
       railAccessories,
+      bottomMetalOptions,
+      otherOptions,
       departments,
       statuses,
       dateRange,
@@ -339,6 +351,22 @@ router.post('/query', authenticateToken, requireRole('ADMIN'), async (req, res) 
       railAccessories.forEach((rail: string) => {
         featureConditions.push(
           sql`${allOrders.features}->'rail_accessory' ? ${rail}`
+        );
+      });
+    }
+
+    if (bottomMetalOptions && bottomMetalOptions.length > 0) {
+      bottomMetalOptions.forEach((bottom: string) => {
+        featureConditions.push(
+          sql`${allOrders.features}->>'bottom_metal' = ${bottom}`
+        );
+      });
+    }
+
+    if (otherOptions && otherOptions.length > 0) {
+      otherOptions.forEach((option: string) => {
+        featureConditions.push(
+          sql`${allOrders.features}->'other_options' ? ${option}`
         );
       });
     }

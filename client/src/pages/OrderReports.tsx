@@ -69,6 +69,8 @@ interface FilterOptions {
     options: { value: string; label: string; price?: number }[];
   }[];
   railAccessories: { value: string; label: string }[];
+  bottomMetalOptions: { value: string; label: string }[];
+  otherOptions: { value: string; label: string }[];
   departments: string[];
   statuses: string[];
 }
@@ -80,6 +82,8 @@ interface Filters {
   actionLengths: string[];
   paintOptions: string[];
   railAccessories: string[];
+  bottomMetalOptions: string[];
+  otherOptions: string[];
   departments: string[];
   statuses: string[];
   dateRange: { start: string; end: string };
@@ -106,6 +110,8 @@ export default function OrderReports() {
     actionLengths: [],
     paintOptions: [],
     railAccessories: [],
+    bottomMetalOptions: [],
+    otherOptions: [],
     departments: [],
     statuses: [],
     dateRange: { start: '', end: '' },
@@ -259,7 +265,11 @@ export default function OrderReports() {
   };
 
   const handleLoadPreset = (preset: Preset) => {
-    setFilters(preset.filters);
+    setFilters({
+      ...preset.filters,
+      bottomMetalOptions: preset.filters.bottomMetalOptions ?? [],
+      otherOptions: preset.filters.otherOptions ?? [],
+    });
     toast({
       title: 'Preset Loaded',
       description: `Filter preset "${preset.name}" has been applied.`,
@@ -274,6 +284,8 @@ export default function OrderReports() {
       actionLengths: [],
       paintOptions: [],
       railAccessories: [],
+      bottomMetalOptions: [],
+      otherOptions: [],
       departments: [],
       statuses: [],
       dateRange: { start: '', end: '' },
@@ -296,6 +308,8 @@ export default function OrderReports() {
     filters.actionLengths.length > 0 ||
     filters.paintOptions.length > 0 ||
     filters.railAccessories.length > 0 ||
+    filters.bottomMetalOptions.length > 0 ||
+    filters.otherOptions.length > 0 ||
     filters.departments.length > 0 ||
     filters.statuses.length > 0 ||
     filters.dateRange.start ||
@@ -548,6 +562,76 @@ export default function OrderReports() {
                 {filters.railAccessories.length > 0 && (
                   <div className="text-xs text-gray-600">
                     {filters.railAccessories.length} selected
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Metal */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Bottom Metal</Label>
+                <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
+                  {filterOptions?.bottomMetalOptions.map((bottom) => (
+                    <label
+                      key={bottom.value}
+                      className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={filters.bottomMetalOptions.includes(bottom.value)}
+                        onChange={() =>
+                          setFilters({
+                            ...filters,
+                            bottomMetalOptions: toggleArrayValue(
+                              filters.bottomMetalOptions,
+                              bottom.value
+                            ),
+                          })
+                        }
+                        className="rounded"
+                        data-testid={`checkbox-bottom-metal-${bottom.value}`}
+                      />
+                      <span className="text-sm">{bottom.label}</span>
+                    </label>
+                  ))}
+                </div>
+                {filters.bottomMetalOptions.length > 0 && (
+                  <div className="text-xs text-gray-600">
+                    {filters.bottomMetalOptions.length} selected
+                  </div>
+                )}
+              </div>
+
+              {/* Other Options */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Other Options</Label>
+                <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
+                  {filterOptions?.otherOptions.map((option) => (
+                    <label
+                      key={option.value}
+                      className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={filters.otherOptions.includes(option.value)}
+                        onChange={() =>
+                          setFilters({
+                            ...filters,
+                            otherOptions: toggleArrayValue(
+                              filters.otherOptions,
+                              option.value
+                            ),
+                          })
+                        }
+                        className="rounded"
+                        data-testid={`checkbox-other-option-${option.value}`}
+                      />
+                      <span className="text-sm">{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+                {filters.otherOptions.length > 0 && (
+                  <div className="text-xs text-gray-600">
+                    {filters.otherOptions.length} selected
                   </div>
                 )}
               </div>

@@ -4113,7 +4113,7 @@ export const kickbacks = pgTable('kickbacks', {
   resolutionNotes: text('resolution_notes'), // Notes about the resolution
   status: text('status').default('OPEN').notNull(), // OPEN, IN_PROGRESS, RESOLVED, CLOSED
   priority: text('priority').default('MEDIUM').notNull(), // LOW, MEDIUM, HIGH, CRITICAL
-  impactedDepartments: text('impacted_departments').array().default(['?']), // Other departments affected
+  impactedDepartments: text('impacted_departments').array(), // Other departments affected
   rootCause: text('root_cause'), // Identified root cause
   correctiveAction: text('corrective_action'), // Actions taken to prevent recurrence
   createdAt: timestamp('created_at').defaultNow(),

@@ -3255,14 +3255,58 @@ export function registerRoutes(app: Express): Server {
       // Try to find the order in various tables
       let order = null;
       let orderSource = 'unknown';
+      let poItemData = null;
 
       // Check all_orders table FIRST - this is the single source of truth for current department
       try {
         const allOrders = await storage.getAllOrders();
         order = allOrders.find((o) => o.orderId === orderId);
-        if (order) orderSource = 'all_orders';
+        if (order) {
+          orderSource = 'all_orders';
+          
+          // Check if this is a PO order and fetch PO item details
+          const orderFeatures = (order as any).features;
+          if (orderFeatures && typeof orderFeatures === 'object' && 'po_item_id' in orderFeatures) {
+            try {
+              const poItemQuery = `
+                SELECT 
+                  poi.id,
+                  poi.po_number as "poNumber",
+                  poi.customer_name as "customerName",
+                  poi.item_name as "itemName",
+                  poi.product_type as "productType",
+                  poi.material,
+                  poi.handedness,
+                  poi.stock_model_id as "stockModelId",
+                  poi.action_length as "actionLength",
+                  poi.action_inlet as "actionInlet",
+                  poi.bottom_metal as "bottomMetal",
+                  poi.barrel_inlet as "barrelInlet",
+                  poi.qds,
+                  poi.swivel_studs as "swivelStuds",
+                  poi.paint_options as "paintOptions",
+                  poi.texture,
+                  poi.flat_top as "flatTop",
+                  poi.unit_price as "unitPrice",
+                  poi.quantity,
+                  poi.due_date as "dueDate"
+                FROM purchase_order_items poi
+                WHERE poi.id = $1
+              `;
+              const { pool } = await import('../../db');
+              const poItemResult = await pool.query(poItemQuery, [orderFeatures.po_item_id]);
+              const rows = Array.isArray(poItemResult) ? poItemResult : poItemResult.rows || [];
+              if (rows.length > 0) {
+                poItemData = rows[0];
+                console.log(`✅ Found PO item data for order ${orderId}:`, poItemData.itemname);
+              }
+            } catch (poError) {
+              console.error('Error fetching PO item data:', poError);
+            }
+          }
+        }
       } catch (_e) {
-        console.error('Error checking all_orders:', e);
+        console.error('Error checking all_orders:', _e);
       }
 
       // Check finalized orders if not found
@@ -3318,21 +3362,27 @@ export function registerRoutes(app: Express): Server {
       // Get stock model details and extract color information
       let baseModel = null;
       let color = null;
-      if ((order as any).modelId || (order as any).itemId) {
+      
+      // Use PO item stock model if available, otherwise use order model
+      const stockModelId = poItemData?.stockModelId || (order as any).modelId || (order as any).itemId;
+      
+      if (stockModelId) {
         try {
           const stockModels = await storage.getAllStockModels();
           baseModel = stockModels.find(
             (sm) =>
-              sm.id === ((order as any).modelId || (order as any).itemId) ||
-              sm.name === ((order as any).modelId || (order as any).itemId)
+              sm.id === stockModelId ||
+              sm.name === stockModelId
           );
         } catch (_e) {
           console.error('Error fetching stock model:', e);
         }
       }
 
-      // Extract color from features or specifications
-      if ((order as any).features) {
+      // Extract color from PO item data or features/specifications
+      if (poItemData?.paintOptions) {
+        color = poItemData.paintOptions;
+      } else if ((order as any).features) {
         if ((order as any).features.color)
           color = (order as any).features.color;
         if ((order as any).features.paintOption)
@@ -3340,7 +3390,7 @@ export function registerRoutes(app: Express): Server {
         if ((order as any).features.finish)
           color = (order as any).features.finish;
       }
-      if ((order as any).specifications) {
+      if (!color && (order as any).specifications) {
         if ((order as any).specifications.color)
           color = (order as any).specifications.color;
         if ((order as any).specifications.paintOption)
@@ -3349,7 +3399,7 @@ export function registerRoutes(app: Express): Server {
           color = (order as any).specifications.finish;
       }
 
-      // Build comprehensive order summary
+      // Build comprehensive order summary with PO item data priority
       const orderSummary = {
         orderId: order.orderId,
         barcode: barcode,
@@ -3363,6 +3413,7 @@ export function registerRoutes(app: Express): Server {
             }
           : {
               name:
+                poItemData?.customerName ||
                 order.customerId ||
                 (order as any).customerName ||
                 'Unknown Customer',
@@ -3403,8 +3454,9 @@ export function registerRoutes(app: Express): Server {
         notes: order.notes || '',
         source: orderSource,
 
-        // Additional fields for barcode display (using display names)
+        // Additional fields for barcode display (using PO item data or display names)
         customerName:
+          poItemData?.customerName ||
           customer?.name ||
           order.customerId ||
           (order as any).customerName ||
@@ -3412,29 +3464,33 @@ export function registerRoutes(app: Express): Server {
         stockModel:
           baseModel?.displayName ||
           baseModel?.name ||
+          poItemData?.stockModelId ||
           (order as any).modelId ||
           (order as any).itemId ||
           (order as any).itemName,
         color: color || 'Not specified',
         actionLength:
+          poItemData?.actionLength ||
           (order as any).features?.action_length ||
           (order as any).specifications?.action_length ||
           '',
         paintOption:
+          poItemData?.paintOptions ||
           (order as any).features?.paintOption ||
           (order as any).specifications?.paintOption ||
           color,
 
-        // Enhanced feature display with user-friendly names
+        // Enhanced feature display with user-friendly names and PO item data
         displayFeatures: {
           model:
             baseModel?.displayName ||
             baseModel?.name ||
+            poItemData?.stockModelId ||
             (order as any).modelId ||
             (order as any).itemId ||
             'Unknown Model',
-          actionLength: (order as any).features?.action_length
-            ? (order as any).features.action_length
+          actionLength: poItemData?.actionLength || (order as any).features?.action_length
+            ? (poItemData?.actionLength || (order as any).features.action_length)
                 .toString()
                 .replace(/_/g, ' ')
                 .replace(/\b\w/g, (l) => l.toUpperCase())
@@ -3459,11 +3515,32 @@ export function registerRoutes(app: Express): Server {
         },
       };
 
+      // Add PO item specific details if available
+      if (poItemData) {
+        (orderSummary as any).poItemDetails = {
+          poNumber: poItemData.poNumber,
+          itemName: poItemData.itemName,
+          productType: poItemData.productType,
+          material: poItemData.material,
+          handedness: poItemData.handedness,
+          actionInlet: poItemData.actionInlet,
+          bottomMetal: poItemData.bottomMetal,
+          barrelInlet: poItemData.barrelInlet,
+          qds: poItemData.qds,
+          swivelStuds: poItemData.swivelStuds,
+          texture: poItemData.texture,
+          flatTop: poItemData.flatTop,
+          unitPrice: poItemData.unitPrice,
+          quantity: poItemData.quantity,
+        };
+        console.log(`📦 Added PO item details for PO #${poItemData.poNumber}`);
+      }
+
       // Add production-specific details if applicable
       if (orderSource === 'production') {
         (orderSummary as any).productionDetails = {
-          partName: (order as any).partName || (order as any).itemName,
-          quantity: (order as any).quantity || 1,
+          partName: (order as any).partName || (order as any).itemName || poItemData?.itemName,
+          quantity: (order as any).quantity || poItemData?.quantity || 1,
           department: (order as any).department,
           priority: (order as any).priority || 3,
           productionStatus:

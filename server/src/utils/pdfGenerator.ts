@@ -1,51 +1,21 @@
-// PDFME SYSTEM COMMENTED OUT - NOT IN USE
-/*
-import { generate } from '@pdfme/generator';
-import { Template } from '@pdfme/common';
-import { text, image, barcodes } from '@pdfme/schemas';
-
-const plugins = {
-  text,
-  image,
-  qrcode: barcodes.qrcode,
-};
+// PDFME PDF Generation System - DISABLED
+// This file is a stub. The actual implementation using @pdfme/generator has been disabled.
+// To re-enable, install @pdfme packages and restore the original implementation.
 
 export interface PdfGenerationInput {
-  template: Template;
+  template: any;
   inputs: Record<string, any>[];
 }
 
 export async function generatePdf(input: PdfGenerationInput): Promise<Buffer> {
-  try {
-    const pdf = await generate({
-      template: input.template as any,
-      inputs: input.inputs,
-      plugins,
-    });
-
-    return Buffer.from(pdf);
-  } catch (error) {
-    console.error('PDF generation error:', error);
-    throw new Error(`Failed to generate PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
+  throw new Error('PDF generation is currently disabled. Install @pdfme packages to enable.');
 }
 
 export async function generateMultiPagePdf(
-  template: Template,
+  template: any,
   dataRecords: Record<string, any>[]
 ): Promise<Buffer> {
-  try {
-    const pdf = await generate({
-      template: template as any,
-      inputs: dataRecords,
-      plugins,
-    });
-
-    return Buffer.from(pdf);
-  } catch (error) {
-    console.error('Multi-page PDF generation error:', error);
-    throw new Error(`Failed to generate multi-page PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
+  throw new Error('PDF generation is currently disabled. Install @pdfme packages to enable.');
 }
 
 export function prepareVendorPOData(poData: any): Record<string, string> {
@@ -72,4 +42,3 @@ export function prepareVendorPOData(poData: any): Record<string, string> {
     total: poData.total?.toString() || '0.00',
   };
 }
-*/

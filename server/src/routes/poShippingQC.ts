@@ -171,48 +171,128 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+      // Get customer ID and fetch address
+      const customerId = items[0].order.customer_id || items[0].po.customerId;
+      const customerName = items[0].order.customer_name || items[0].order.customerName || 'Unknown Customer';
+      
+      const customerAddress = customerId ? await storage.getCustomerDefaultAddress(parseInt(customerId)) : null;
+      
+      // Generate invoice number
+      const invoiceNumber = await storage.getNextInvoiceNumber(customerId || '0', customerName);
+
       let currentY = height - margin;
 
-      // Header
+      // ========== HEADER ==========
       currentPage.drawText('AG COMPOSITES', {
         x: margin,
         y: currentY,
-        size: 20,
+        size: 18,
         font: boldFont,
         color: rgb(0, 0, 0),
       });
 
-      currentY -= 30;
+      // AG Composites Address (Ship From) - Right aligned
+      const agAddress = [
+        '375 Hwy 55 South',
+        'Mt. Vernon, AR 72111',
+        'Phone: (501) 849-2266'
+      ];
+      let agAddressY = currentY;
+      agAddress.forEach((line) => {
+        const textWidth = font.widthOfTextAtSize(line, 9);
+        currentPage.drawText(line, {
+          x: width - margin - textWidth,
+          y: agAddressY,
+          size: 9,
+          font: font,
+        });
+        agAddressY -= 12;
+      });
+
+      currentY -= 35;
       currentPage.drawText('PACKING SLIP', {
         x: margin,
         y: currentY,
-        size: 16,
+        size: 14,
         font: boldFont,
         color: rgb(0, 0, 0),
       });
 
-      // PO Information
-      currentY -= 40;
-      currentPage.drawText(`Purchase Order: ${poNumber}`, {
+      // ========== INVOICE & DATE INFO ==========
+      currentY -= 30;
+      currentPage.drawText(`Invoice #: ${invoiceNumber}`, {
         x: margin,
         y: currentY,
-        size: 12,
+        size: 11,
         font: boldFont,
       });
 
-      currentY -= 20;
-      currentPage.drawText(`Customer: ${items[0].order.customerName}`, {
-        x: margin,
+      currentPage.drawText(`Date: ${new Date().toLocaleDateString()}`, {
+        x: width - margin - 150,
         y: currentY,
-        size: 12,
+        size: 11,
         font: font,
       });
 
       currentY -= 20;
-      currentPage.drawText(`Date: ${new Date().toLocaleDateString()}`, {
+      currentPage.drawText(`PO Number: ${poNumber}`, {
         x: margin,
         y: currentY,
-        size: 12,
+        size: 11,
+        font: boldFont,
+      });
+
+      // ========== SHIP TO ADDRESS ==========
+      currentY -= 30;
+      currentPage.drawText('SHIP TO:', {
+        x: margin,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+      });
+
+      currentY -= 15;
+      currentPage.drawText(customerName, {
+        x: margin,
+        y: currentY,
+        size: 10,
+        font: font,
+      });
+
+      if (customerAddress) {
+        currentY -= 15;
+        currentPage.drawText(customerAddress.street, {
+          x: margin,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+
+        if (customerAddress.street2) {
+          currentY -= 15;
+          currentPage.drawText(customerAddress.street2, {
+            x: margin,
+            y: currentY,
+            size: 10,
+            font: font,
+          });
+        }
+
+        currentY -= 15;
+        currentPage.drawText(`${customerAddress.city}, ${customerAddress.state} ${customerAddress.zipCode}`, {
+          x: margin,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+      }
+
+      // ========== TRACKING NUMBER (placeholder) ==========
+      currentY -= 25;
+      currentPage.drawText('Tracking #: _________________________', {
+        x: margin,
+        y: currentY,
+        size: 10,
         font: font,
       });
 

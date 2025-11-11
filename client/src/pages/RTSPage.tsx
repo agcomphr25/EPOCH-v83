@@ -595,11 +595,11 @@ export default function RTSPage() {
 
       {/* Add New Item Dialog */}
       <Dialog open={addItemDialog} onOpenChange={setAddItemDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[calc(100vh-4rem)] flex flex-col">
           <DialogHeader>
             <DialogTitle>Add New RTS Inventory Item</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="flex-1 overflow-y-auto space-y-4 py-4">
             <div>
               <Label htmlFor="stockModel">Stock Model *</Label>
               <Input
@@ -739,11 +739,11 @@ export default function RTSPage() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[calc(100vh-4rem)] flex flex-col">
           <DialogHeader>
             <DialogTitle>Edit RTS Inventory Item</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="flex-1 overflow-y-auto space-y-4 py-4">
             <div>
               <Label htmlFor="edit-stockModel">Stock Model *</Label>
               <Input

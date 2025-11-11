@@ -95,27 +95,39 @@ async function embedCompanyLogo(pdfDoc: PDFDocument) {
 
 // Helper function to wrap text
 function wrapText(text: string, maxWidth: number, fontSize: number, font: any): string[] {
-  const words = text.split(' ');
-  const lines: string[] = [];
-  let currentLine = '';
+  // First, split by newlines to preserve intentional line breaks
+  const paragraphs = text.split(/\r?\n/);
+  const allLines: string[] = [];
 
-  for (const word of words) {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+  for (const paragraph of paragraphs) {
+    // Skip empty paragraphs but preserve them as blank lines
+    if (!paragraph.trim()) {
+      allLines.push('');
+      continue;
+    }
+
+    // Wrap each paragraph
+    const words = paragraph.split(' ');
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+      
+      if (testWidth > maxWidth && currentLine) {
+        allLines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
     
-    if (testWidth > maxWidth && currentLine) {
-      lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = testLine;
+    if (currentLine) {
+      allLines.push(currentLine);
     }
   }
   
-  if (currentLine) {
-    lines.push(currentLine);
-  }
-  
-  return lines;
+  return allLines;
 }
 
 export async function generateSalesOrderPDF(

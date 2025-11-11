@@ -22,6 +22,8 @@ interface AveryLabelPrintProps {
   isLate?: boolean; // Late order flag
   labelType?: 'basic' | 'detailed';
   copies?: number;
+  material?: string; // Material type (for P1 PO orders)
+  poNumber?: string; // PO number (for P1 PO orders)
 }
 
 export function AveryLabelPrint({
@@ -42,6 +44,8 @@ export function AveryLabelPrint({
   isLate,
   labelType = 'detailed',
   copies = 6,
+  material,
+  poNumber,
 }: AveryLabelPrintProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [barcodeGenerated, setBarcodeGenerated] = useState(false);
@@ -137,14 +141,43 @@ export function AveryLabelPrint({
         });
 
         const generateLabelContent = (index: number) => {
+          // Check if this is a P1 PO order
+          const isPOOrder = orderId.startsWith('PO-') || orderId.startsWith('P1-');
+
+          // Get texture text for display
+          const textureText = getTextureText();
+
+          // P1 PO Order Label Layout
+          if (isPOOrder) {
+            // Extract PO number from orderId (format: PO-P18261-18-1)
+            const displayPO = poNumber || orderId;
+            
+            // Material and stock model display
+            const materialAndModel = material && stockModel 
+              ? `${material} - ${stockModel}`
+              : material || stockModel || '';
+
+            return `
+              <div class="avery-label">
+                <div class="label-content">
+                  <div class="line1">${displayPO}</div>
+                  <div class="line5">
+                    <canvas id="barcode-${index}" width="180" height="25"></canvas>
+                  </div>
+                  ${materialAndModel ? `<div class="line3">${materialAndModel}</div>` : ''}
+                  ${customerName ? `<div class="line2">${customerName}</div>` : ''}
+                  ${textureText ? `<div class="line4">${textureText}</div>` : ''}
+                </div>
+              </div>
+            `;
+          }
+
+          // Regular Order Label Layout
           // Format: "SA CF Chalkbranch" (Action Length + Stock Model)
           const actionLengthModel =
             actionLength && stockModel
               ? `${actionLength} ${stockModel}`
               : actionLength || stockModel || orderId;
-
-          // Get texture text for display
-          const textureText = getTextureText();
 
           return `
             <div class="avery-label">

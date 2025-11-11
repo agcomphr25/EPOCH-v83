@@ -123,6 +123,7 @@ import RefundQueue from './pages/RefundQueue';
 import ProductionQueuePage from './pages/ProductionQueuePage';
 import SimplifiedLayupScheduler from './components/SimplifiedLayupScheduler';
 import CustomerSatisfaction from './pages/CustomerSatisfaction';
+import AdminPanelPage from './pages/AdminPanelPage';
 import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
 // PDFME SYSTEM COMMENTED OUT - NOT IN USE
@@ -307,6 +308,9 @@ function App() {
                     path="/customer-satisfaction"
                     component={CustomerSatisfaction}
                   />
+
+                  {/* Admin Panel Routes */}
+                  <Route path="/admin/orders" component={AdminPanelPage} />
 
                   {/* Vendor Management Routes */}
                   <Route path="/vendor-management" component={VendorManagement} />

@@ -72,7 +72,6 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
 
     console.log(`📄 Generating packing slips for ${orderIds.length} PO items...`);
     const { storage } = await import('../../storage');
-    const pool = (await import('../../db')).default;
 
     // Fetch order details - handle both Order IDs and poItemId-unitNumber format
     const orderDetails = await Promise.all(

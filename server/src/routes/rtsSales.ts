@@ -65,6 +65,7 @@ const createSaleSchema = z.object({
     unitPrice: z.number(),
     quantity: z.number().default(1),
   })).min(1),
+  department: z.string().default('QC & Shipping'), // Department to send order to
   shipTo: z.object({
     name: z.string(),
     company: z.string().optional(),
@@ -207,7 +208,7 @@ router.post('/', async (req, res) => {
       customerId: data.customerId,
       modelId: firstItem.stockModel, // Use stock model as modelId
       status: 'IN_PROGRESS',
-      currentDepartment: 'Shipping QC', // Goes directly to Shipping QC
+      currentDepartment: data.department, // Send to selected department
       notes: `RTS Sale: ${saleNumber}. ${modelDescription}`,
       isRtsOrder: true, // Mark as RTS order
       rtsSaleId: sale.id, // Link to RTS sale

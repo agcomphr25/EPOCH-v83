@@ -4065,6 +4065,7 @@ export function registerRoutes(app: Express): Server {
       // Get order details for label generation
       const { pool } = await import('../../db');
       const orderDetails = [];
+      const notFoundOrders: string[] = [];
       
       for (const orderId of orderIds) {
         // Try to get order from finalized orders first, then drafts, then production_orders
@@ -4122,6 +4123,11 @@ export function registerRoutes(app: Express): Server {
         }
 
         if (order) {
+          // Validate that the order has a due date
+          if (!order.dueDate) {
+            console.warn(`⚠️ Order ${orderId} has no due date, setting to current date`);
+            order.dueDate = new Date().toISOString();
+          }
           // Check if this is a production order (PO item)
           // Production orders don't have poNumber field in all_orders, so check production_orders table
           try {
@@ -4161,7 +4167,22 @@ export function registerRoutes(app: Express): Server {
           console.log(`✅ Found order for barcode: ${orderId}`);
         } else {
           console.warn(`❌ Order ${orderId} not found for barcode generation`);
+          notFoundOrders.push(orderId);
         }
+      }
+
+      // Check if any orders were found
+      if (orderDetails.length === 0) {
+        const errorMsg = notFoundOrders.length > 0 
+          ? `No orders found. The following order IDs could not be located: ${notFoundOrders.join(', ')}`
+          : 'No valid orders found for label generation';
+        console.error(`🏷️ ${errorMsg}`);
+        return res.status(404).json({ error: errorMsg });
+      }
+
+      console.log(`🏷️ Successfully found ${orderDetails.length} of ${orderIds.length} orders for label generation`);
+      if (notFoundOrders.length > 0) {
+        console.warn(`⚠️ ${notFoundOrders.length} orders not found: ${notFoundOrders.join(', ')}`);
       }
 
       // Generate Avery label document (PDF format)
@@ -4632,10 +4653,15 @@ export function registerRoutes(app: Express): Server {
           }
 
           // Add due date
-          const dueDate = new Date(order.dueDate).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-          });
+          let dueDate = 'N/A';
+          try {
+            dueDate = new Date(order.dueDate).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+            });
+          } catch (dateError) {
+            console.warn(`⚠️ Invalid due date for order ${order.orderId}, using N/A`);
+          }
           page.drawText(`Due: ${dueDate}`, {
             x: x + 8,
             y: y + 10,
@@ -4671,8 +4697,15 @@ export function registerRoutes(app: Express): Server {
         `✅ Generated barcode labels PDF for ${orderDetails.length} orders`
       );
     } catch (_error) {
-      console.error('🏷️ Create barcode labels _error:', _error);
-      res.status(500).json({ _error: 'Failed to create barcode labels' });
+      console.error('🏷️ Create barcode labels error:', _error);
+      const errorMessage = _error instanceof Error ? _error.message : 'Unknown error';
+      const errorStack = _error instanceof Error ? _error.stack : '';
+      console.error('🏷️ Error stack trace:', errorStack);
+      res.status(500).json({ 
+        error: 'Failed to create barcode labels', 
+        details: errorMessage,
+        timestamp: new Date().toISOString()
+      });
     }
   });
 

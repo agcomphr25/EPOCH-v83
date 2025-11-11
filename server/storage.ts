@@ -103,6 +103,9 @@ import {
   followupOrders,
   // Invoice numbers tracking table
   invoiceNumbers,
+  // Shipment tracking tables
+  shipmentRecords,
+  shipmentItems,
 
   // Types
   type Order,
@@ -290,6 +293,9 @@ import {
   type InsertVendorContact,
   type VendorMonthlyEvaluation,
   type InsertVendorMonthlyEvaluation,
+  type ShipmentRecord,
+  type InsertShipmentRecord,
+  type ShipmentItem,
   // Magic link token types
   magicLinkTokens,
   type MagicLinkToken,
@@ -1025,6 +1031,24 @@ export interface IStorage {
   deleteP2ProductionOrder(id: number): Promise<void>;
   generateP2ProductionOrders(poId: number): Promise<P2ProductionOrder[]>;
   getP2MaterialRequirements(poId: number): Promise<any[]>;
+
+  // Shipment Records CRUD
+  createShipment(data: {
+    shipment: InsertShipmentRecord;
+    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null }[];
+  }): Promise<ShipmentRecord>;
+  getShipment(id: string): Promise<ShipmentRecord | undefined>;
+  getAllShipments(filters?: {
+    customerId?: string;
+    startDate?: Date;
+    endDate?: Date;
+    search?: string;
+  }): Promise<(ShipmentRecord & { items: ShipmentItem[] })[]>;
+  updateShipmentTracking(
+    id: string,
+    trackingNumber: string,
+    trackingUrl?: string
+  ): Promise<ShipmentRecord>;
 
   // Purchase Order Items CRUD
   getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]>;
@@ -9562,6 +9586,110 @@ export class DatabaseStorage implements IStorage {
     }
 
     return materialRequirements;
+  }
+
+  // Shipment Records CRUD
+  async createShipment(data: {
+    shipment: InsertShipmentRecord;
+    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null }[];
+  }): Promise<ShipmentRecord> {
+    return await db.transaction(async (tx) => {
+      // Create the shipment record
+      const [shipment] = await tx
+        .insert(shipmentRecords)
+        .values(data.shipment)
+        .returning();
+
+      // Create shipment items
+      if (data.items.length > 0) {
+        const shipmentItemsData = data.items.map(item => ({
+          shipmentId: shipment.id,
+          poItemId: item.poItemId,
+          orderId: item.orderId,
+          quantity: item.quantity,
+          weightLbs: item.weightLbs,
+        }));
+
+        await tx.insert(shipmentItems).values(shipmentItemsData);
+      }
+
+      return shipment;
+    });
+  }
+
+  async getShipment(id: string): Promise<ShipmentRecord | undefined> {
+    const shipments = await db
+      .select()
+      .from(shipmentRecords)
+      .where(eq(shipmentRecords.id, id));
+    
+    return shipments[0];
+  }
+
+  async getAllShipments(filters?: {
+    customerId?: string;
+    startDate?: Date;
+    endDate?: Date;
+    search?: string;
+  }): Promise<(ShipmentRecord & { items: ShipmentItem[] })[]> {
+    let query = db.select().from(shipmentRecords);
+
+    // Apply filters
+    const conditions = [];
+    if (filters?.customerId) {
+      conditions.push(eq(shipmentRecords.customerId, filters.customerId));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(shipmentRecords.shippedAt, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(shipmentRecords.shippedAt, filters.endDate));
+    }
+    if (filters?.search) {
+      conditions.push(
+        or(
+          like(shipmentRecords.trackingNumber, `%${filters.search}%`),
+          like(shipmentRecords.customerId, `%${filters.search}%`)
+        )
+      );
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
+    const shipments = await query.orderBy(desc(shipmentRecords.shippedAt));
+
+    // Fetch items for each shipment
+    const shipmentsWithItems = await Promise.all(
+      shipments.map(async (shipment) => {
+        const items = await db
+          .select()
+          .from(shipmentItems)
+          .where(eq(shipmentItems.shipmentId, shipment.id));
+        
+        return { ...shipment, items };
+      })
+    );
+
+    return shipmentsWithItems;
+  }
+
+  async updateShipmentTracking(
+    id: string,
+    trackingNumber: string,
+    trackingUrl?: string
+  ): Promise<ShipmentRecord> {
+    const [shipment] = await db
+      .update(shipmentRecords)
+      .set({ 
+        trackingNumber,
+        trackingUrl: trackingUrl || null,
+      })
+      .where(eq(shipmentRecords.id, id))
+      .returning();
+    
+    return shipment;
   }
 
   // Authentication methods

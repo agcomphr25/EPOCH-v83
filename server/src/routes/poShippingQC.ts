@@ -665,32 +665,77 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
 });
 
 // POST /api/po-orders/process-shipment
-// Comprehensive shipment processing: validates items, generates 1 UPS label + multiple packing slips, updates status
+// Comprehensive shipment processing: validates items, generates 1 UPS label + multiple packing slips, updates status, persists shipment
 router.post('/process-shipment', authenticateToken, async (req, res) => {
   try {
-    const { orderIds, serviceCode = '03', weightPerItemLbs = 5 } = req.body;
+    // Handle both legacy (orderIds) and new (items) payload formats
+    const {
+      orderIds,
+      items,
+      serviceCode = '03',
+      weightPerItemLbs = 5,
+      billingOption = 'sender',
+      thirdPartyAccountNumber,
+      thirdPartyPostalCode,
+      thirdPartyCountryCode,
+    } = req.body;
 
-    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
-      return res.status(400).json({ _error: 'orderIds array is required' });
+    // Validate billing third-party requirements
+    if (billingOption === 'third-party') {
+      if (!thirdPartyAccountNumber || !thirdPartyPostalCode || !thirdPartyCountryCode) {
+        return res.status(400).json({
+          _error: 'Third-party billing requires accountNumber, postalCode, and countryCode',
+        });
+      }
     }
 
-    console.log(`📦 Processing shipment for ${orderIds.length} items...`);
+    // Normalize payload to items format
+    let normalizedItems: Array<{ poItemId: number; orderId: string; quantity: number }>;
+    
+    if (items && Array.isArray(items)) {
+      // New format from ShipmentDialog
+      normalizedItems = items;
+    } else if (orderIds && Array.isArray(orderIds)) {
+      // Legacy format - fetch order details to get real poItemId and quantity
+      const legacyOrders = await Promise.all(
+        orderIds.map(async (orderId: string) => {
+          const order = await storage.getProductionOrderByOrderId(orderId);
+          if (!order || !order.poItemId) {
+            throw new Error(`Order ${orderId} not found or missing PO item ID`);
+          }
+          return {
+            poItemId: order.poItemId,
+            orderId,
+            quantity: 1, // Legacy assumes 1 unit per order
+          };
+        })
+      );
+      normalizedItems = legacyOrders;
+    } else {
+      return res.status(400).json({ _error: 'Either items array or orderIds array is required' });
+    }
+
+    if (normalizedItems.length === 0) {
+      return res.status(400).json({ _error: 'No items to ship' });
+    }
+
+    console.log(`📦 Processing shipment for ${normalizedItems.length} items...`);
     const { storage } = await import('../../storage');
 
     // 1. VALIDATE: Fetch all orders and ensure they exist + are in Shipping QC
     const orderDetails = await Promise.all(
-      orderIds.map(async (orderId) => {
-        const order = await storage.getProductionOrderByOrderId(orderId);
+      normalizedItems.map(async (item) => {
+        const order = await storage.getProductionOrderByOrderId(item.orderId);
         if (!order) {
-          throw new Error(`Order ${orderId} not found`);
+          throw new Error(`Order ${item.orderId} not found`);
         }
         if (order.currentDepartment !== 'Shipping QC') {
-          throw new Error(`Order ${orderId} is in ${order.currentDepartment}, not Shipping QC`);
+          throw new Error(`Order ${item.orderId} is in ${order.currentDepartment}, not Shipping QC`);
         }
 
         // Get PO item details
         if (!order.poItemId) {
-          throw new Error(`Order ${orderId} has no PO item ID`);
+          throw new Error(`Order ${item.orderId} has no PO item ID`);
         }
         const poItem = await storage.getPurchaseOrderItem(order.poItemId);
         if (!poItem) {
@@ -709,7 +754,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           throw new Error(`Customer ${order.customerId} not found`);
         }
 
-        return { order, poItem, po, customer };
+        return { order, poItem, po, customer, quantity: item.quantity };
       })
     );
 
@@ -735,11 +780,11 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     console.log(`📊 Grouped ${orderDetails.length} items into ${poGroups.size} PO(s)`);
     console.log(`📋 PO Numbers: ${Array.from(poGroups.keys()).join(', ')}`);
 
-    // 4. CALCULATE TOTAL WEIGHT
+    // 4. CALCULATE TOTAL WEIGHT (multiply by quantity)
     let totalWeight = 0;
     for (const detail of orderDetails) {
       const itemWeight = detail.poItem.weightLb || weightPerItemLbs;
-      totalWeight += itemWeight;
+      totalWeight += itemWeight * detail.quantity;
     }
     console.log(`⚖️  Total weight: ${totalWeight} lbs (${orderDetails.length} items)`);
 
@@ -780,6 +825,10 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         serviceCode,
         weightLbs: Math.max(totalWeight, 1),
         referenceNumber,
+        billingOption,
+        thirdPartyAccountNumber,
+        thirdPartyPostalCode,
+        thirdPartyCountryCode,
       });
 
       trackingNumber = shipmentResult.trackingNumber;
@@ -796,6 +845,92 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         _error: 'UPS shipping label generation failed',
         details: upsError.message,
         suggestion: 'Check UPS credentials and try again, or process manually',
+      });
+    }
+
+    // 8. PERSIST SHIPMENT TO DATABASE
+    let shipmentId: string;
+    const shippedAt = new Date();
+    try {
+      const crypto = await import('crypto');
+      shipmentId = crypto.randomUUID();
+
+      const shipmentRecord = {
+        id: shipmentId,
+        customerId: orderDetails[0].order.customerId,
+        poNumbers: poNumbers.join(', '),
+        shippedAt,
+        carrier: 'UPS',
+        serviceLevel: serviceCode,
+        trackingNumber,
+        trackingUrl: `https://www.ups.com/track?tracknum=${trackingNumber}`,
+        billingType: billingOption,
+        thirdPartyAccountNumber: thirdPartyAccountNumber || null,
+        shipFromAddress: {
+          name: process.env.SHIP_FROM_NAME || 'AG Composites',
+          street: process.env.SHIP_FROM_ADDRESS1 || '',
+          city: process.env.SHIP_FROM_CITY || '',
+          state: process.env.SHIP_FROM_STATE || '',
+          postalCode: process.env.SHIP_FROM_POSTAL || '',
+          country: process.env.SHIP_FROM_COUNTRY || 'US',
+        },
+        shipToAddress: {
+          name: shipTo.name,
+          street: shipTo.address1,
+          street2: shipTo.address2 || null,
+          city: shipTo.city,
+          state: shipTo.state,
+          postalCode: shipTo.postalCode,
+          country: shipTo.country || 'US',
+        },
+        totalWeightLbs: totalWeight,
+        documents: {
+          label: labelBase64 ? { type: 'label', fileName: `Label-${trackingNumber}.gif`, data: labelBase64 } : null,
+          packingSlips: [], // Will be populated after packing slip generation
+        },
+        notificationSent: false,
+        notificationEmail: null,
+        notificationSms: null,
+      };
+
+      const shipmentItemsData = orderDetails.map((detail) => ({
+        poItemId: detail.order.poItemId!,
+        orderId: detail.order.orderId,
+        quantity: detail.quantity,
+        weightLbs: (detail.poItem.weightLb || weightPerItemLbs) * detail.quantity,
+      }));
+
+      await storage.createShipment({
+        shipment: shipmentRecord,
+        items: shipmentItemsData,
+      });
+
+      console.log(`✅ Shipment persisted to database: ${shipmentId}`);
+
+      // Update production order statuses to SHIPPED
+      for (const detail of orderDetails) {
+        try {
+          await storage.updateProductionOrder(detail.order.id, {
+            currentDepartment: 'Shipping',
+            productionStatus: 'SHIPPED',
+            shippedAt,
+            trackingNumber,
+          });
+          console.log(`✅ Order ${detail.order.orderId} marked as SHIPPED`);
+        } catch (updateError: any) {
+          console.error(`⚠️ Failed to update order ${detail.order.orderId}:`, updateError.message);
+        }
+      }
+    } catch (persistError: any) {
+      console.error('❌ Shipment persistence failed:', persistError.message);
+      return res.status(500).json({
+        _error: 'Shipment created but failed to save to database',
+        details: persistError.message,
+        suggestion: 'UPS label was generated successfully. IMPORTANT: The tracking number below must be manually recorded or the UPS label should be voided to prevent orphaned shipments.',
+        trackingNumber,
+        shipmentId: null,
+        requiresManualAction: true,
+        upsLabelGenerated: true,
       });
     }
 
@@ -1039,49 +1174,20 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
 
     console.log(`📄 Generated ${packingSlips.length} packing slip(s)`);
 
-    // 9. UPDATE ALL ORDERS TO SHIPPED STATUS (Transaction-safe approach)
-    const updateResults = {
-      success: [] as string[],
-      failed: [] as { orderId: string; reason: string }[],
-    };
-
-    const shippedAt = new Date().toISOString();
-    const username = (req as any).user?.username || 'system';
-
-    for (const detail of orderDetails) {
-      try {
-        await storage.updateProductionOrder(detail.order.id, {
-          currentDepartment: 'Shipping',
-          productionStatus: 'SHIPPED',
-          shippedAt,
-          trackingNumber,
-        });
-        updateResults.success.push(detail.order.orderId);
-        console.log(`✅ ${detail.order.orderId} marked as SHIPPED`);
-      } catch (error: any) {
-        console.error(`❌ Failed to update ${detail.order.orderId}:`, error.message);
-        updateResults.failed.push({ orderId: detail.order.orderId, reason: error.message });
-      }
-    }
-
-    console.log(`✅ Shipment processed successfully`);
-    console.log(`   - Tracking: ${trackingNumber}`);
-    console.log(`   - Updated: ${updateResults.success.length}/${orderIds.length} items`);
-
-    // Return comprehensive response
+    // Return comprehensive response (production orders already updated in persistence block)
     res.json({
       success: true,
+      shipmentId,
       trackingNumber,
+      shippedAt: shippedAt.toISOString(),
       shippingLabel: {
         format: 'GIF',
         data: labelBase64,
       },
       packingSlips,
-      itemsShipped: updateResults.success.length,
-      itemsFailed: updateResults.failed.length,
+      itemsShipped: orderDetails.length,
       poNumbers: Array.from(poGroups.keys()),
       totalWeight: totalWeight,
-      updateResults,
     });
   } catch (error: any) {
     console.error('❌ Error processing shipment:', error);

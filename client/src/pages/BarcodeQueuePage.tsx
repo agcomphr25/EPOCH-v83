@@ -330,7 +330,20 @@ export default function BarcodeQueuePage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create labels');
+        let errorMessage = 'Failed to create labels';
+        try {
+          const errorData = await response.json();
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+          if (errorData.details) {
+            errorMessage += `: ${errorData.details}`;
+          }
+        } catch (e) {
+          // If response is not JSON, use status text
+          errorMessage = `Failed to create labels (${response.status}: ${response.statusText})`;
+        }
+        throw new Error(errorMessage);
       }
 
       // Open PDF in new tab/popup for viewing and printing
@@ -370,7 +383,7 @@ export default function BarcodeQueuePage() {
       console.error('Label creation error:', error);
       toast({
         title: 'Error creating labels',
-        description: `Failed to create barcode labels: ${error.message}`,
+        description: error.message || 'Failed to create barcode labels. Please try again or contact support if the issue persists.',
         variant: 'destructive',
       });
     },

@@ -12058,46 +12058,76 @@ export class DatabaseStorage implements IStorage {
     return `${customerCode}${yearShort}-${nextNumber.toString().padStart(3, '0')}`;
   }
 
-  async getCustomerDefaultAddress(customerId: number): Promise<{
+  async getCustomerDefaultAddress(customerId: string): Promise<{
     street: string;
     street2: string | null;
     city: string;
     state: string;
     zipCode: string;
   } | null> {
-    const [address] = await db
-      .select()
-      .from(customerAddresses)
-      .where(and(
-        eq(customerAddresses.customerId, customerId),
-        eq(customerAddresses.isDefault, true)
-      ));
+    // Try to parse as number, otherwise lookup by customer code
+    const numericId = parseInt(customerId);
+    let actualCustomerId: number | null = null;
 
-    if (address) {
-      return {
-        street: address.street,
-        street2: address.street2 || null,
-        city: address.city,
-        state: address.state,
-        zipCode: address.zipCode,
+    if (!isNaN(numericId)) {
+      actualCustomerId = numericId;
+    } else {
+      // Map customer codes to company names and lookup customer ID
+      const customerCodeMap: Record<string, string> = {
+        'RH': 'Red Hawk LLC',
+        'PP': 'Pure Precision',
       };
+
+      const companyName = customerCodeMap[customerId.toUpperCase()];
+      if (companyName) {
+        const [customer] = await db
+          .select()
+          .from(customers)
+          .where(eq(customers.companyName, companyName))
+          .limit(1);
+
+        if (customer) {
+          actualCustomerId = customer.id;
+        }
+      }
     }
 
-    // If no default, get first address
-    const [firstAddress] = await db
-      .select()
-      .from(customerAddresses)
-      .where(eq(customerAddresses.customerId, customerId))
-      .limit(1);
+    // If we found a customer ID (numeric or code-mapped), fetch address
+    if (actualCustomerId !== null) {
+      const [address] = await db
+        .select()
+        .from(customerAddresses)
+        .where(and(
+          eq(customerAddresses.customerId, actualCustomerId),
+          eq(customerAddresses.isDefault, true)
+        ));
 
-    if (firstAddress) {
-      return {
-        street: firstAddress.street,
-        street2: firstAddress.street2 || null,
-        city: firstAddress.city,
-        state: firstAddress.state,
-        zipCode: firstAddress.zipCode,
-      };
+      if (address) {
+        return {
+          street: address.street,
+          street2: address.street2 || null,
+          city: address.city,
+          state: address.state,
+          zipCode: address.zipCode,
+        };
+      }
+
+      // If no default, get first address
+      const [firstAddress] = await db
+        .select()
+        .from(customerAddresses)
+        .where(eq(customerAddresses.customerId, actualCustomerId))
+        .limit(1);
+
+      if (firstAddress) {
+        return {
+          street: firstAddress.street,
+          street2: firstAddress.street2 || null,
+          city: firstAddress.city,
+          state: firstAddress.state,
+          zipCode: firstAddress.zipCode,
+        };
+      }
     }
 
     return null;

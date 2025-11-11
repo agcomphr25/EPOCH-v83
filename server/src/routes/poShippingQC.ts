@@ -175,10 +175,10 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       const customerId = items[0].order.customer_id || items[0].po.customerId;
       const customerName = items[0].order.customer_name || items[0].order.customerName || 'Unknown Customer';
       
-      const customerAddress = customerId ? await storage.getCustomerDefaultAddress(parseInt(customerId)) : null;
+      const customerAddress = customerId ? await storage.getCustomerDefaultAddress(String(customerId)) : null;
       
       // Generate invoice number
-      const invoiceNumber = await storage.getNextInvoiceNumber(customerId || '0', customerName);
+      const invoiceNumber = await storage.getNextInvoiceNumber(String(customerId || '0'), customerName);
 
       let currentY = height - margin;
 
@@ -344,8 +344,12 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
           currentY = height - margin;
         }
 
-        const unitMatch = item.order.orderId.match(/-(\d+)$/);
-        const unitNumber = unitMatch ? parseInt(unitMatch[1]) : 1;
+        // Use explicit unitNumber from order object if available, otherwise try regex extraction
+        const unitNumber = item.order.unitNumber || 
+          (() => {
+            const unitMatch = item.order.orderId.match(/-(\d+)$/);
+            return unitMatch ? parseInt(unitMatch[1]) : 1;
+          })();
 
         currentPage.drawText(`${idx + 1}`, {
           x: margin,

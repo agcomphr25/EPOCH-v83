@@ -98,7 +98,7 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
           // Try to find associated production order
           const query = `
             SELECT * FROM production_orders 
-            WHERE "poItemId" = $1 AND "unitNumber" = $2 
+            WHERE po_item_id = $1 AND unit_number = $2 
             LIMIT 1
           `;
           const result = await pool.query(query, [poItemId, unitNumber]);

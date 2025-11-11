@@ -56,6 +56,7 @@ export default function QCShippingQueuePage() {
   const [showLabelViewer, setShowLabelViewer] = useState(false);
   
   // State for PO order selection (customer-level selection)
+  // Using unique key format: orderId or poItemId-unitNumber for items without orderId
   const [selectedPOItems, setSelectedPOItems] = useState<Set<string>>(new Set());
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   
@@ -1524,9 +1525,25 @@ export default function QCShippingQueuePage() {
                                       <CollapsibleContent>
                                         <div className="px-4 pb-4 space-y-2">
                                           {po.items.map((item: any) => {
-                                            const isSelected = selectedPOItems.has(item.orderId);
-                                            const isDisabled = !item.isReadyToShip || !!(selectedCustomer && selectedCustomer !== customer.customerName);
+                                            // Create unique key for selection - must use orderId if exists, fallback to poItemId-unitNumber
+                                            const itemKey = item.orderId || `${item.poItemId}-${item.unitNumber}`;
+                                            const isSelected = selectedPOItems.has(itemKey);
+                                            // Disable if: not ready to ship, no orderId (can't be shipped yet), or different customer selected
+                                            const isDisabled = !item.isReadyToShip || !item.orderId || !!(selectedCustomer && selectedCustomer !== customer.customerName);
                                             const departmentBadge = getDepartmentBadge(item.currentDepartment, item.productionStatus);
+                                            
+                                            // Debug logging
+                                            if (item.isReadyToShip) {
+                                              console.log('Item render:', {
+                                                orderId: item.orderId,
+                                                itemKey,
+                                                poItemId: item.poItemId,
+                                                unitNumber: item.unitNumber,
+                                                isSelected,
+                                                selectedPOItems: Array.from(selectedPOItems),
+                                                hasCheck: selectedPOItems.has(itemKey)
+                                              });
+                                            }
                                             
                                             return (
                                               <div
@@ -1539,27 +1556,37 @@ export default function QCShippingQueuePage() {
                                                 `}
                                                 data-testid={item.orderId ? `po-item-${item.orderId}` : `po-item-unscheduled-${item.poItemId}-${item.unitNumber}`}
                                               >
-                                                {item.isReadyToShip && (
+                                                {item.isReadyToShip && item.orderId && (
                                                   <Checkbox
                                                     checked={isSelected}
                                                     disabled={isDisabled}
                                                     onCheckedChange={(checked) => {
+                                                      console.log('Checkbox clicked:', {
+                                                        orderId: item.orderId,
+                                                        itemKey,
+                                                        checked,
+                                                        currentSelected: Array.from(selectedPOItems),
+                                                        customerName: customer.customerName
+                                                      });
+                                                      
                                                       const newSelected = new Set(selectedPOItems);
                                                       if (checked) {
-                                                        newSelected.add(item.orderId);
+                                                        newSelected.add(itemKey);
                                                         setSelectedCustomer(customer.customerName);
                                                       } else {
-                                                        newSelected.delete(item.orderId);
+                                                        newSelected.delete(itemKey);
                                                         if (newSelected.size === 0) {
                                                           setSelectedCustomer(null);
                                                         }
                                                       }
+                                                      
+                                                      console.log('New selected:', Array.from(newSelected));
                                                       setSelectedPOItems(newSelected);
                                                     }}
-                                                    data-testid={`checkbox-po-item-${item.orderId}`}
+                                                    data-testid={`checkbox-po-item-${itemKey}`}
                                                   />
                                                 )}
-                                                {!item.isReadyToShip && <div className="w-6" />}
+                                                {(!item.isReadyToShip || !item.orderId) && <div className="w-6" />}
                                                 
                                                 <div className="flex-1 grid grid-cols-5 gap-2 text-sm items-center">
                                                   <div>

@@ -1022,7 +1022,7 @@ router.get('/:id', async (req: Request, res: Response) => {
             // Include full features/specifications for barcode labels
             features: po.specifications || {},
             actionLength: po.specifications?.actionLength || po.specifications?.action_length,
-          };
+          } as any; // Custom response object with fields from production_orders table
         } else {
           console.log(`❌ No production order found for ${orderId}`);
         }

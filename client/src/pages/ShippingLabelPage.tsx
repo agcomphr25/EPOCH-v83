@@ -7,7 +7,34 @@ import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
-export default function ShippingLabelPage() {
+interface OrderDetailsResponse {
+  orderId: string;
+  customerId: string;
+  orderDate: string;
+  dueDate?: string;
+  customer?: {
+    name: string;
+    email?: string;
+    phone?: string;
+  };
+  addresses?: Array<{
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    country?: string;
+  }>;
+  shippingAddress?: {
+    name: string;
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    country?: string;
+  };
+}
+
+export default function ShippingLabelPage(): JSX.Element {
   const [location, setLocation] = useLocation();
   const [match, params] = useRoute('/shipping/label/:orderId');
   const { toast } = useToast();
@@ -41,7 +68,7 @@ export default function ShippingLabelPage() {
   const [loadingRates, setLoadingRates] = useState(false);
 
   // Get order details with customer data in single request for better performance
-  const { data: orderDetails, isLoading: orderLoading } = useQuery({
+  const { data: orderDetails, isLoading: orderLoading } = useQuery<OrderDetailsResponse>({
     queryKey: [`/api/shipping/order/${orderId}`],
     enabled: !!orderId,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes to reduce API calls

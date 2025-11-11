@@ -876,12 +876,16 @@ function truncateText(
 
 // Generate Sales Order PDF
 router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
+  const { orderId } = req.params;
+  console.log(`📄 [Route] Sales order PDF requested for: ${orderId}`);
+  console.log(`📄 [Route] Environment: ${process.env.NODE_ENV}`);
+  
   try {
-    const { orderId } = req.params;
-
     // Get comprehensive order data from storage with payment status
     const { storage } = await import('../../storage');
     const { generateSalesOrderPDF } = await import('../../utils/pdf/salesOrderPdf.js');
+    
+    console.log(`📄 [Route] Loading order data for: ${orderId}`);
     
     // Check if there's a signed PDF for this order
     const followupOrder = await storage.getFollowupOrderByOrderId(orderId);
@@ -1050,7 +1054,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     };
 
     // Generate PDF using centralized generator
+    console.log(`📄 [Route] Calling generateSalesOrderPDF for ${orderId}`);
     const pdfBuffer = await generateSalesOrderPDF(pdfOrderData, false);
+    console.log(`✅ [Route] PDF generated successfully (${pdfBuffer.length} bytes)`);
 
     // Set response headers for PDF inline display
     res.setHeader('Content-Type', 'application/pdf');
@@ -1058,11 +1064,26 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     res.setHeader('Content-Length', pdfBuffer.length);
 
     // Send PDF
+    console.log(`📄 [Route] Sending PDF response to client`);
     res.send(pdfBuffer);
+    console.log(`✅ [Route] PDF sent successfully`);
 
   } catch (error: unknown) {
-    console.error('Error generating sales order PDF:', error);
-    res.status(500).json({ error: 'Failed to generate sales order PDF' });
+    console.error('❌ [Route] Error generating sales order PDF:', error);
+    console.error('❌ [Route] Error details:', {
+      orderId,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      type: typeof error,
+    });
+    
+    // Send detailed error response
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    res.status(500).json({ 
+      error: 'Failed to generate sales order PDF',
+      details: errorMessage,
+      orderId: orderId
+    });
   }
 });
 

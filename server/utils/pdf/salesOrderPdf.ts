@@ -58,16 +58,38 @@ interface OrderData {
 
 async function embedCompanyLogo(pdfDoc: PDFDocument) {
   try {
+    console.log('🖼️ [PDF] Attempting to embed company logo...');
     const logoPath = resolveAssetPath('logo_updated.png');
+    console.log(`🖼️ [PDF] Logo path resolved to: ${logoPath}`);
+    
     if (fs.existsSync(logoPath)) {
+      console.log('✅ [PDF] Logo file exists, reading...');
       const logoImageBytes = fs.readFileSync(logoPath);
-      return await pdfDoc.embedPng(logoImageBytes);
+      console.log(`✅ [PDF] Logo loaded (${logoImageBytes.length} bytes), embedding in PDF...`);
+      const embeddedLogo = await pdfDoc.embedPng(logoImageBytes);
+      console.log('✅ [PDF] Logo successfully embedded');
+      return embeddedLogo;
     } else {
-      console.warn('Logo file not found at:', logoPath);
+      console.warn('⚠️ [PDF] Logo file not found at:', logoPath);
+      console.warn('⚠️ [PDF] Checking if file exists elsewhere...');
+      
+      // List directory contents for debugging
+      const dirname = path.dirname(logoPath);
+      try {
+        const files = fs.readdirSync(dirname);
+        console.warn(`⚠️ [PDF] Files in ${dirname}:`, files);
+      } catch (dirError) {
+        console.warn(`⚠️ [PDF] Could not read directory ${dirname}:`, dirError);
+      }
     }
   } catch (error) {
-    console.warn('Could not load company logo:', error);
+    console.error('❌ [PDF] Error loading company logo:', error);
+    console.error('❌ [PDF] Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
   }
+  console.log('⚠️ [PDF] Continuing without logo');
   return null;
 }
 
@@ -100,9 +122,28 @@ export async function generateSalesOrderPDF(
   orderData: OrderData,
   includeSignatureBox: boolean = true
 ): Promise<Buffer> {
-  const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([612, 792]); // Letter size
-  const { width, height } = page.getSize();
+  console.log('📄 [PDF] Starting sales order PDF generation...');
+  console.log(`📄 [PDF] Order ID: ${orderData.orderId}`);
+  console.log(`📄 [PDF] Environment: ${process.env.NODE_ENV}`);
+  console.log(`📄 [PDF] Include signature box: ${includeSignatureBox}`);
+  
+  let pdfDoc: PDFDocument;
+  let page: any;
+  let width: number;
+  let height: number;
+  
+  try {
+    pdfDoc = await PDFDocument.create();
+    page = pdfDoc.addPage([612, 792]); // Letter size
+    const size = page.getSize();
+    width = size.width;
+    height = size.height;
+    
+    console.log(`📄 [PDF] PDF document created (${width}x${height})`);
+  } catch (createError) {
+    console.error('❌ [PDF] Failed to create PDF document:', createError);
+    throw createError;
+  }
 
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -945,8 +986,15 @@ export async function generateSalesOrderPDF(
     color: rgb(0.5, 0.5, 0.5),
   });
 
-  const pdfBytes = await pdfDoc.save();
-  return Buffer.from(pdfBytes);
+  try {
+    console.log('📄 [PDF] Saving PDF document...');
+    const pdfBytes = await pdfDoc.save();
+    console.log(`✅ [PDF] PDF saved successfully (${pdfBytes.length} bytes)`);
+    return Buffer.from(pdfBytes);
+  } catch (saveError) {
+    console.error('❌ [PDF] Failed to save PDF:', saveError);
+    throw saveError;
+  }
 }
 
 export async function embedSignatureInPDF(

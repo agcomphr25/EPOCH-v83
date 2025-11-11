@@ -722,15 +722,16 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     console.log(`📦 Processing shipment for ${normalizedItems.length} items...`);
     const { storage } = await import('../../storage');
 
-    // 1. VALIDATE: Fetch all orders and ensure they exist + are in Shipping QC
+    // 1. VALIDATE: Fetch all orders and ensure they exist + are ready to ship
     const orderDetails = await Promise.all(
       normalizedItems.map(async (item) => {
         const order = await storage.getProductionOrderByOrderId(item.orderId);
         if (!order) {
           throw new Error(`Order ${item.orderId} not found`);
         }
-        if (order.currentDepartment !== 'Shipping QC') {
-          throw new Error(`Order ${item.orderId} is in ${order.currentDepartment}, not Shipping QC`);
+        // P1 PO orders use productionStatus (PENDING, LAID_UP, SHIPPED) not currentDepartment
+        if (order.productionStatus === 'SHIPPED') {
+          throw new Error(`Order ${item.orderId} has already been shipped`);
         }
 
         // Get PO item details
@@ -781,10 +782,10 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     console.log(`📋 PO Numbers: ${Array.from(poGroups.keys()).join(', ')}`);
 
     // 4. CALCULATE TOTAL WEIGHT (multiply by quantity)
+    // Note: purchaseOrderItems don't have a weight field, so use default
     let totalWeight = 0;
     for (const detail of orderDetails) {
-      const itemWeight = detail.poItem.weightLb || weightPerItemLbs;
-      totalWeight += itemWeight * detail.quantity;
+      totalWeight += weightPerItemLbs * detail.quantity;
     }
     console.log(`⚖️  Total weight: ${totalWeight} lbs (${orderDetails.length} items)`);
 
@@ -855,16 +856,26 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       const crypto = await import('crypto');
       shipmentId = crypto.randomUUID();
 
+      // Map billingOption to billType enum
+      const billType: 'SENDER' | 'RECEIVER' | 'THIRD_PARTY' = 
+        billingOption === 'prepaid' ? 'SENDER' :
+        billingOption === 'collect' ? 'RECEIVER' :
+        'THIRD_PARTY';
+
       const shipmentRecord = {
         id: shipmentId,
+        createdBy: req.user?.username || 'system',
+        reference: referenceNumber,
         customerId: orderDetails[0].order.customerId,
         poNumbers: poNumbers.join(', '),
         shippedAt,
         carrier: 'UPS',
         serviceLevel: serviceCode,
+        billType,
+        masterTrackingNumber: trackingNumber,
+        packageCount: 1, // Default to single package
         trackingNumber,
         trackingUrl: `https://www.ups.com/track?tracknum=${trackingNumber}`,
-        billingType: billingOption,
         thirdPartyAccountNumber: thirdPartyAccountNumber || null,
         shipFromAddress: {
           name: process.env.SHIP_FROM_NAME || 'AG Composites',
@@ -897,7 +908,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         poItemId: detail.order.poItemId!,
         orderId: detail.order.orderId,
         quantity: detail.quantity,
-        weightLbs: (detail.poItem.weightLb || weightPerItemLbs) * detail.quantity,
+        weightLbs: weightPerItemLbs * detail.quantity,
       }));
 
       await storage.createShipment({
@@ -911,10 +922,8 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       for (const detail of orderDetails) {
         try {
           await storage.updateProductionOrder(detail.order.id, {
-            currentDepartment: 'Shipping',
             productionStatus: 'SHIPPED',
             shippedAt,
-            trackingNumber,
           });
           console.log(`✅ Order ${detail.order.orderId} marked as SHIPPED`);
         } catch (updateError: any) {

@@ -4098,7 +4098,7 @@ export const insertShipmentRecordSchema = createInsertSchema(shipmentRecords)
 export type InsertShipmentRecord = z.infer<typeof insertShipmentRecordSchema>;
 export type ShipmentRecord = typeof shipmentRecords.$inferSelect;
 
-// Shipment Items - Join table linking shipments to production orders
+// Shipment Items - Join table linking shipments to PO items and production orders
 export const shipmentItems = pgTable(
   'shipment_items',
   {
@@ -4106,16 +4106,17 @@ export const shipmentItems = pgTable(
     shipmentId: uuid('shipment_id')
       .references(() => shipmentRecords.id, { onDelete: 'cascade' })
       .notNull(),
-    productionOrderId: integer('production_order_id')
-      .references(() => p2ProductionOrders.id)
+    poItemId: integer('po_item_id')
+      .references(() => purchaseOrderItems.id)
       .notNull(),
+    orderId: text('order_id').notNull(), // Production order ID (e.g., "AG123-1")
     quantity: integer('quantity').notNull().default(1),
     weightLbs: numeric('weight_lbs', { precision: 10, scale: 2 }),
     notes: text('notes'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => ({
-    uniqueShipmentOrder: unique().on(table.shipmentId, table.productionOrderId),
+    uniqueShipmentItem: unique().on(table.shipmentId, table.orderId),
   })
 );
 
@@ -4126,7 +4127,8 @@ export const insertShipmentItemSchema = createInsertSchema(shipmentItems)
   })
   .extend({
     shipmentId: z.string().uuid('Shipment ID must be a valid UUID'),
-    productionOrderId: z.number().min(1, 'Production order ID is required'),
+    poItemId: z.number().min(1, 'PO item ID is required'),
+    orderId: z.string().min(1, 'Order ID is required'),
     quantity: z.number().min(1).default(1),
     weightLbs: z.number().min(0).optional(),
     notes: z.string().optional(),

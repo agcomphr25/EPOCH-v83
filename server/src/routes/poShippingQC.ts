@@ -320,14 +320,7 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       });
 
       currentPage.drawText('Unit #', {
-        x: margin + 320,
-        y: currentY,
-        size: 11,
-        font: boldFont,
-      });
-
-      currentPage.drawText('Action Length', {
-        x: margin + 380,
+        x: margin + 350,
         y: currentY,
         size: 11,
         font: boldFont,
@@ -377,14 +370,7 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
         });
 
         currentPage.drawText(`${unitNumber}`, {
-          x: margin + 320,
-          y: currentY,
-          size: 10,
-          font: font,
-        });
-
-        currentPage.drawText(item.poItem.actionLength?.toString() || 'N/A', {
-          x: margin + 380,
+          x: margin + 350,
           y: currentY,
           size: 10,
           font: font,
@@ -895,14 +881,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       });
 
       currentPage.drawText('Unit #', {
-        x: margin + 320,
-        y: currentY,
-        size: 11,
-        font: boldFont,
-      });
-
-      currentPage.drawText('Action Length', {
-        x: margin + 380,
+        x: margin + 350,
         y: currentY,
         size: 11,
         font: boldFont,
@@ -948,14 +927,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         });
 
         currentPage.drawText(`${unitNumber}`, {
-          x: margin + 320,
-          y: currentY,
-          size: 10,
-          font: font,
-        });
-
-        currentPage.drawText(item.poItem.actionLength?.toString() || 'N/A', {
-          x: margin + 380,
+          x: margin + 350,
           y: currentY,
           size: 10,
           font: font,

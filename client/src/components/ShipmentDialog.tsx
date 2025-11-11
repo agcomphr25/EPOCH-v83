@@ -106,9 +106,10 @@ interface ShipmentDialogProps {
     customerName: string;
     poNumber: string;
   }>;
+  onSuccess?: (data: any) => void;
 }
 
-export function ShipmentDialog({ open, onClose, selectedItems }: ShipmentDialogProps) {
+export function ShipmentDialog({ open, onClose, selectedItems, onSuccess }: ShipmentDialogProps) {
   const [state, dispatch] = useReducer(shipmentReducer, initialState);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -127,6 +128,12 @@ export function ShipmentDialog({ open, onClose, selectedItems }: ShipmentDialogP
       });
       queryClient.invalidateQueries({ queryKey: ['/api/po-orders/all-p1-with-status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/po-orders/oem-shipments'] });
+      
+      // Call parent onSuccess handler if provided
+      if (onSuccess) {
+        onSuccess(data);
+      }
+      
       dispatch({ type: 'RESET' });
       onClose();
     },

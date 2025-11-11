@@ -16,6 +16,12 @@ import {
   insertP2ProductionOrderSchema,
   insertPaymentSchema,
 } from '@shared/schema';
+import { authenticateToken, requireRole } from '../../middleware/auth';
+import { 
+  adminFieldUpdateSchema, 
+  adminBulkUpdateSchema,
+  ADMIN_FIELD_CONFIG 
+} from '../../../shared/adminConfig';
 
 const router = Router();
 
@@ -2416,5 +2422,232 @@ router.put('/:orderId/urgency', async (req: Request, res: Response) => {
     });
   }
 });
+
+// Admin Panel - Single field update with audit logging
+router.patch(
+  '/:id/field',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const { id: orderId } = req.params;
+      const validatedData = adminFieldUpdateSchema.parse(req.body);
+      const { fieldName, newValue } = validatedData;
+
+      // Get field configuration
+      const fieldConfig = ADMIN_FIELD_CONFIG[fieldName];
+      if (!fieldConfig) {
+        return res.status(400).json({ 
+          error: `Invalid field: ${fieldName}` 
+        });
+      }
+
+      // Check if user has permission to edit this field
+      const userRole = (req as any).user?.role || 'EMPLOYEE';
+      const allowedRoles = Array.isArray(fieldConfig.requiredRole)
+        ? fieldConfig.requiredRole
+        : [fieldConfig.requiredRole];
+      
+      if (!allowedRoles.includes(userRole)) {
+        return res.status(403).json({ 
+          error: 'Insufficient permissions to edit this field',
+          requiredRoles: allowedRoles,
+          userRole,
+        });
+      }
+
+      // Validate field-specific value if validation schema exists
+      if (fieldConfig.validation) {
+        try {
+          fieldConfig.validation.parse(newValue);
+        } catch (validationError) {
+          return res.status(400).json({
+            error: 'Field validation failed',
+            field: fieldConfig.label,
+            details: validationError instanceof Error ? (validationError as any).errors : 'Invalid value',
+          });
+        }
+      }
+
+      // Get current order to capture old value
+      const currentOrder = await storage.getOrderById(orderId);
+      if (!currentOrder) {
+        return res.status(404).json({ 
+          error: `Order ${orderId} not found` 
+        });
+      }
+
+      // Get the database field name from config
+      const dbField = fieldConfig.dbField;
+      const oldValue = (currentOrder as any)[dbField];
+
+      // Update the order
+      await db
+        .update(allOrders)
+        .set({ 
+          [dbField]: newValue,
+          updatedAt: new Date(),
+        })
+        .where(eq(allOrders.orderId, orderId));
+
+      // Create audit log entry
+      await storage.createAdminAuditLog({
+        orderId,
+        fieldName,
+        fieldLabel: fieldConfig.label,
+        oldValue: oldValue !== null && oldValue !== undefined ? oldValue : null,
+        newValue,
+        changedBy: (req as any).user?.username || 'unknown',
+        userRole: (req as any).user?.role || 'ADMIN',
+        changeType: 'INLINE',
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+
+      // Fetch updated order
+      const updatedOrder = await storage.getOrderById(orderId);
+
+      res.json({
+        success: true,
+        order: updatedOrder,
+        message: `${fieldConfig.label} updated successfully`,
+      });
+    } catch (error) {
+      console.error('Admin field update error:', error);
+      
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ 
+          error: 'Validation failed',
+          details: (error as any).errors,
+        });
+      }
+
+      res.status(500).json({ 
+        error: 'Failed to update field',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
+// Admin Panel - Bulk field updates with audit logging
+router.patch(
+  '/batch',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const validatedData = adminBulkUpdateSchema.parse(req.body);
+      const { orderIds, fieldName, newValue } = validatedData;
+
+      // Get field configuration
+      const fieldConfig = ADMIN_FIELD_CONFIG[fieldName];
+      if (!fieldConfig) {
+        return res.status(400).json({ 
+          error: `Invalid field: ${fieldName}` 
+        });
+      }
+
+      // Check if user has permission to edit this field
+      const userRole = (req as any).user?.role || 'EMPLOYEE';
+      const allowedRoles = Array.isArray(fieldConfig.requiredRole)
+        ? fieldConfig.requiredRole
+        : [fieldConfig.requiredRole];
+      
+      if (!allowedRoles.includes(userRole)) {
+        return res.status(403).json({ 
+          error: 'Insufficient permissions to edit this field',
+          requiredRoles: allowedRoles,
+          userRole,
+        });
+      }
+
+      // Validate field-specific value if validation schema exists
+      if (fieldConfig.validation) {
+        try {
+          fieldConfig.validation.parse(newValue);
+        } catch (validationError) {
+          return res.status(400).json({
+            error: 'Field validation failed',
+            field: fieldConfig.label,
+            details: validationError instanceof Error ? (validationError as any).errors : 'Invalid value',
+          });
+        }
+      }
+
+      const dbField = fieldConfig.dbField;
+      const results = {
+        success: [] as string[],
+        failed: [] as { orderId: string; error: string }[],
+      };
+
+      // Process each order
+      for (const orderId of orderIds) {
+        try {
+          // Get current order to capture old value
+          const currentOrder = await storage.getOrderById(orderId);
+          if (!currentOrder) {
+            results.failed.push({ 
+              orderId, 
+              error: 'Order not found' 
+            });
+            continue;
+          }
+
+          const oldValue = (currentOrder as any)[dbField];
+
+          // Update the order
+          await db
+            .update(allOrders)
+            .set({ 
+              [dbField]: newValue,
+              updatedAt: new Date(),
+            })
+            .where(eq(allOrders.orderId, orderId));
+
+          // Create audit log entry
+          await storage.createAdminAuditLog({
+            orderId,
+            fieldName,
+            fieldLabel: fieldConfig.label,
+            oldValue: oldValue !== null && oldValue !== undefined ? oldValue : null,
+            newValue,
+            changedBy: (req as any).user?.username || 'unknown',
+            userRole: (req as any).user?.role || 'ADMIN',
+            changeType: 'BULK',
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent'),
+          });
+
+          results.success.push(orderId);
+        } catch (error) {
+          console.error(`Error updating order ${orderId}:`, error);
+          results.failed.push({ 
+            orderId, 
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        results,
+        message: `Bulk update completed: ${results.success.length} succeeded, ${results.failed.length} failed`,
+      });
+    } catch (error) {
+      console.error('Bulk update error:', error);
+      
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ 
+          error: 'Validation failed',
+          details: (error as any).errors,
+        });
+      }
+
+      res.status(500).json({ 
+        error: 'Failed to perform bulk update',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
 
 export default router;

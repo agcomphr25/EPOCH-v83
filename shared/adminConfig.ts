@@ -365,3 +365,35 @@ export function canEditField(
 
   return requiredRoles.includes(userRole);
 }
+
+// Zod validation schemas for API endpoints
+
+/**
+ * Schema for single field updates
+ */
+export const adminFieldUpdateSchema = z.object({
+  fieldName: z.string().refine(
+    (name) => name in adminFieldConfigs,
+    { message: 'Invalid field name' }
+  ),
+  newValue: z.any(), // Type depends on field, validated at field level
+});
+
+export type AdminFieldUpdate = z.infer<typeof adminFieldUpdateSchema>;
+
+/**
+ * Schema for bulk updates
+ */
+export const adminBulkUpdateSchema = z.object({
+  orderIds: z.array(z.string()).min(1, 'At least one order must be selected'),
+  fieldName: z.string().refine(
+    (name) => name in adminFieldConfigs,
+    { message: 'Invalid field name' }
+  ),
+  newValue: z.any(), // Type depends on field, validated at field level
+});
+
+export type AdminBulkUpdate = z.infer<typeof adminBulkUpdateSchema>;
+
+// Export alias for consistency
+export const ADMIN_FIELD_CONFIG = adminFieldConfigs;

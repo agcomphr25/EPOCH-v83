@@ -27,23 +27,15 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Truck,
   Search,
   Package,
   CheckCircle,
   AlertCircle,
-  Factory,
   Plus,
   DollarSign,
   Edit,
+  Truck,
+  Factory,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import RTSSalesDialog from '@/components/RTSSalesDialog';
@@ -66,36 +58,8 @@ interface RTSInventoryItem {
   price: number | null;
 }
 
-const departments = [
-  'Layup/Plugging',
-  'CNC',
-  'Gunsmith',
-  'Finish',
-  'Finish QC',
-  'Paint',
-  'QC & Shipping',
-  'Shipping',
-];
-
-const returnReasons = [
-  'Quality Issue',
-  'Missing Components',
-  'Finish Defect',
-  'Paint Touch-Up Needed',
-  'Customer Customization Request',
-  'Measurement Error',
-  'Other',
-];
-
 export default function RTSPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [sendToProductionDialog, setSendToProductionDialog] = useState<{
-    isOpen: boolean;
-    item: RTSInventoryItem | null;
-  }>({ isOpen: false, item: null });
-  const [selectedDepartment, setSelectedDepartment] = useState('');
-  const [selectedReason, setSelectedReason] = useState('');
-  const [productionNotes, setProductionNotes] = useState('');
   const [addItemDialog, setAddItemDialog] = useState(false);
   const [editItemDialog, setEditItemDialog] = useState<{
     isOpen: boolean;
@@ -214,84 +178,6 @@ export default function RTSPage() {
     },
   });
 
-  // Send to shipping mutation
-  const sendToShippingMutation = useMutation({
-    mutationFn: async (itemId: string) => {
-      return apiRequest(`/api/rts-inventory/${itemId}/ship`, {
-        method: 'POST',
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/rts-inventory'] });
-      toast({
-        title: 'Sent to Shipping',
-        description: 'The item has been sent to the Shipping department.',
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to send item to shipping',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  // Send to production mutation
-  const sendToProductionMutation = useMutation({
-    mutationFn: async ({
-      itemId,
-      department,
-      reason,
-      notes,
-    }: {
-      itemId: string;
-      department: string;
-      reason: string;
-      notes: string;
-    }) => {
-      return apiRequest(`/api/rts-inventory/${itemId}/send-to-production`, {
-        method: 'POST',
-        body: JSON.stringify({ department, reason, notes }),
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/rts-inventory'] });
-      setSendToProductionDialog({ isOpen: false, item: null });
-      setSelectedDepartment('');
-      setSelectedReason('');
-      setProductionNotes('');
-      toast({
-        title: 'Sent to Production',
-        description: 'The item has been sent back to production.',
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to send item to production',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const handleSendToProduction = () => {
-    if (!sendToProductionDialog.item || !selectedDepartment || !selectedReason) {
-      toast({
-        title: 'Missing Information',
-        description: 'Please select both department and reason.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    sendToProductionMutation.mutate({
-      itemId: sendToProductionDialog.item.id,
-      department: selectedDepartment,
-      reason: selectedReason,
-      notes: productionNotes,
-    });
-  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -466,32 +352,6 @@ export default function RTSPage() {
                             <Edit className="h-3 w-3" />
                             Edit
                           </Button>
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => sendToShippingMutation.mutate(item.id)}
-                            disabled={sendToShippingMutation.isPending}
-                            className="bg-green-600 hover:bg-green-700 flex items-center gap-1"
-                            data-testid={`button-ship-${item.id}`}
-                          >
-                            <Truck className="h-3 w-3" />
-                            Send to Shipping
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSendToProductionDialog({ isOpen: true, item });
-                              setSelectedDepartment('');
-                              setSelectedReason('');
-                              setProductionNotes('');
-                            }}
-                            className="flex items-center gap-1"
-                            data-testid={`button-production-${item.id}`}
-                          >
-                            <Factory className="h-3 w-3" />
-                            Send to Production
-                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -502,96 +362,6 @@ export default function RTSPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* Send to Production Dialog */}
-      <Dialog
-        open={sendToProductionDialog.isOpen}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) {
-            setSendToProductionDialog({ isOpen: false, item: null });
-            setSelectedDepartment('');
-            setSelectedReason('');
-            setProductionNotes('');
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Send to Production</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {sendToProductionDialog.item && (
-              <div className="text-sm text-gray-600">
-                <strong>Item:</strong> {sendToProductionDialog.item.stockModel}
-              </div>
-            )}
-
-            <div>
-              <Label htmlFor="department">Department *</Label>
-              <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                <SelectTrigger data-testid="select-department">
-                  <SelectValue placeholder="Select department" />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments.map((dept) => (
-                    <SelectItem key={dept} value={dept}>
-                      {dept}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="reason">Reason for Return *</Label>
-              <Select value={selectedReason} onValueChange={setSelectedReason}>
-                <SelectTrigger data-testid="select-reason">
-                  <SelectValue placeholder="Select reason" />
-                </SelectTrigger>
-                <SelectContent>
-                  {returnReasons.map((reason) => (
-                    <SelectItem key={reason} value={reason}>
-                      {reason}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                placeholder="Explain what changes are needed..."
-                value={productionNotes}
-                onChange={(e) => setProductionNotes(e.target.value)}
-                rows={4}
-                data-testid="textarea-notes"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSendToProductionDialog({ isOpen: false, item: null });
-                setSelectedDepartment('');
-                setSelectedReason('');
-                setProductionNotes('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSendToProduction}
-              disabled={sendToProductionMutation.isPending || !selectedDepartment || !selectedReason}
-              data-testid="button-confirm-production"
-            >
-              {sendToProductionMutation.isPending ? 'Sending...' : 'Send to Production'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Add New Item Dialog */}
       <Dialog open={addItemDialog} onOpenChange={setAddItemDialog}>

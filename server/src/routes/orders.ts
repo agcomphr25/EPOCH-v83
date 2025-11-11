@@ -2650,4 +2650,25 @@ router.patch(
   }
 );
 
+// Reference Data Endpoints for Admin Panel
+router.get('/reference/status-types', async (req: Request, res: Response) => {
+  try {
+    const statusTypes = await storage.getOrderStatusTypes();
+    res.json(statusTypes);
+  } catch (error) {
+    console.error('Error fetching order status types:', error);
+    res.status(500).json({ error: 'Failed to fetch order status types' });
+  }
+});
+
+router.get('/reference/department-types', async (req: Request, res: Response) => {
+  try {
+    const departmentTypes = await storage.getOrderDepartmentTypes();
+    res.json(departmentTypes);
+  } catch (error) {
+    console.error('Error fetching order department types:', error);
+    res.status(500).json({ error: 'Failed to fetch order department types' });
+  }
+});
+
 export default router;

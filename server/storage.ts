@@ -9,6 +9,8 @@ import {
   stockModels,
   orders,
   allOrders as orderDrafts,
+  orderStatusTypes,
+  orderDepartmentTypes,
   payments,
   forms,
   formSubmissions,
@@ -82,9 +84,6 @@ import {
   userIntegrations,
   // allOrders table as the finalized orders table
   allOrders,
-  // Order reference tables
-  orderStatusTypes,
-  orderDepartmentTypes,
   // Order attachments table
   orderAttachments,
   // Gateway reports table - temporarily removed
@@ -12134,6 +12133,15 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCuttingFabricInventory(id: string): Promise<void> {
     await db.delete(cuttingFabricInventory).where(eq(cuttingFabricInventory.id, id));
+  }
+
+  // Order Reference Data
+  async getOrderStatusTypes(): Promise<any[]> {
+    return await db.select().from(orderStatusTypes).where(eq(orderStatusTypes.isActive, true)).orderBy(orderStatusTypes.sortOrder);
+  }
+
+  async getOrderDepartmentTypes(): Promise<any[]> {
+    return await db.select().from(orderDepartmentTypes).where(eq(orderDepartmentTypes.isActive, true)).orderBy(orderDepartmentTypes.sortOrder);
   }
 }
 

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   useReactTable,
   getCoreRowModel,
@@ -12,6 +12,8 @@ import {
   ColumnFiltersState,
   VisibilityState,
 } from '@tanstack/react-table';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -53,9 +55,10 @@ interface Order {
   customerName: string;
   modelId: string;
   currentDepartment: string;
-  currentStatus: string;
-  assignedTechnician: string | null;
-  urgency: string | null;
+  currentStatus: string; // Display value
+  status: string | null; // Raw database value for status
+  assignedTechnician: string | null; // Raw database value (username)
+  urgency: string | null; // Raw database value (lowercase)
   totalPrice: number;
   amountPaid: number;
   balanceDue: number;
@@ -68,10 +71,48 @@ export default function AdminPanelPage() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
   const [globalFilter, setGlobalFilter] = useState('');
+  const { toast } = useToast();
 
   // Fetch orders
   const { data: orders = [], isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders/with-payment-status'],
+  });
+
+  // Fetch reference data for inline editing
+  const { data: employees = [] } = useQuery<any[]>({
+    queryKey: ['/api/employees'],
+  });
+
+  const { data: statusTypes = [] } = useQuery<any[]>({
+    queryKey: ['/api/orders/reference/status-types'],
+  });
+
+  const { data: departmentTypes = [] } = useQuery<any[]>({
+    queryKey: ['/api/orders/reference/department-types'],
+  });
+
+  // Mutation for updating individual fields
+  const updateFieldMutation = useMutation({
+    mutationFn: async ({ orderId, fieldName, value }: { orderId: number; fieldName: string; value: any }) => {
+      return await apiRequest(`/api/orders/${orderId}/field`, {
+        method: 'PATCH',
+        body: JSON.stringify({ fieldName, value }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      toast({
+        title: 'Success',
+        description: 'Order field updated successfully',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update order field',
+        variant: 'destructive',
+      });
+    },
   });
 
   // Define columns
@@ -175,38 +216,103 @@ export default function AdminPanelPage() {
       {
         accessorKey: 'currentStatus',
         header: 'Status',
-        cell: ({ row }) => (
-          <Badge variant="secondary" data-testid={`badge-status-${row.original.orderId}`}>
-            {row.getValue('currentStatus')}
-          </Badge>
-        ),
+        cell: ({ row }) => {
+          const statusValue = row.original.status; // Use raw database value
+          return (
+            <Select
+              value={statusValue || ''}
+              onValueChange={(value) =>
+                updateFieldMutation.mutate({
+                  orderId: row.original.id,
+                  fieldName: 'status',
+                  value,
+                })
+              }
+              disabled={updateFieldMutation.isPending}
+            >
+              <SelectTrigger 
+                className="w-[150px] h-8" 
+                data-testid={`select-status-${row.original.orderId}`}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {statusTypes.map((status: any) => (
+                  <SelectItem key={status.id} value={status.name}>
+                    {status.displayName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          );
+        },
       },
       {
         accessorKey: 'assignedTechnician',
         header: 'Technician',
-        cell: ({ row }) => (
-          <div data-testid={`text-technician-${row.original.orderId}`}>
-            {row.getValue('assignedTechnician') || 'Unassigned'}
-          </div>
-        ),
+        cell: ({ row }) => {
+          const technicianValue = row.original.assignedTechnician; // Use raw database value (username)
+          return (
+            <Select
+              value={technicianValue || 'unassigned'}
+              onValueChange={(value) =>
+                updateFieldMutation.mutate({
+                  orderId: row.original.id,
+                  fieldName: 'assignedTechnician',
+                  value: value === 'unassigned' ? null : value,
+                })
+              }
+              disabled={updateFieldMutation.isPending}
+            >
+              <SelectTrigger 
+                className="w-[150px] h-8" 
+                data-testid={`select-technician-${row.original.orderId}`}
+              >
+                <SelectValue placeholder="Unassigned" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {employees.map((employee: any) => (
+                  <SelectItem key={employee.id} value={employee.username}>
+                    {employee.firstName} {employee.lastName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          );
+        },
       },
       {
         accessorKey: 'urgency',
         header: 'Priority',
         cell: ({ row }) => {
-          const urgency = row.getValue('urgency') as string | null;
-          if (!urgency || urgency === 'none') return <span>-</span>;
-          
-          const variant = urgency === 'critical' || urgency === 'high' 
-            ? 'destructive' 
-            : urgency === 'medium' 
-            ? 'default' 
-            : 'secondary';
-          
+          const urgencyValue = row.original.urgency; // Use raw database value (lowercase)
           return (
-            <Badge variant={variant} data-testid={`badge-urgency-${row.original.orderId}`}>
-              {urgency}
-            </Badge>
+            <Select
+              value={urgencyValue || 'none'}
+              onValueChange={(value) =>
+                updateFieldMutation.mutate({
+                  orderId: row.original.id,
+                  fieldName: 'urgency',
+                  value: value === 'none' ? null : value,
+                })
+              }
+              disabled={updateFieldMutation.isPending}
+            >
+              <SelectTrigger 
+                className="w-[130px] h-8" 
+                data-testid={`select-urgency-${row.original.orderId}`}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="critical">Critical</SelectItem>
+              </SelectContent>
+            </Select>
           );
         },
       },

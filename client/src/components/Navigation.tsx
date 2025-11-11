@@ -244,6 +244,12 @@ export default function Navigation() {
       description:
         'Scan order barcodes to view pricing summary and payment status',
     },
+    {
+      path: '/admin/orders',
+      label: 'Admin Panel',
+      icon: Shield,
+      description: 'Advanced order management and editing for administrators',
+    },
 
     // Documentation button disabled per user request - was causing problems
     // {
@@ -770,7 +776,8 @@ export default function Navigation() {
   // Helper function to filter navigation items based on user permissions
   const filterByPermissions = <T extends { path: string }>(
     items: T[],
-    username: string | undefined
+    username: string | undefined,
+    userRole?: string
   ): T[] => {
     if (!username) {
       return []; // No user logged in = no nav items
@@ -780,61 +787,64 @@ export default function Navigation() {
       return items; // Admin users see everything
     }
 
-    return items.filter((item) => hasRouteAccess(username, item.path));
+    return items.filter((item) => hasRouteAccess(username, item.path, userRole));
   };
+
+  // Get current user's role for permission checks
+  const userRole = (currentUser as any)?.role;
 
   // Apply permission filtering to all navigation arrays
   const filteredNavItems = useMemo(
-    () => filterByPermissions(navItems, currentUser?.username),
-    [navItems, currentUser?.username]
+    () => filterByPermissions(navItems, currentUser?.username, userRole),
+    [navItems, currentUser?.username, userRole]
   );
   const filteredOrderManagementItems = useMemo(
-    () => filterByPermissions(orderManagementItems, currentUser?.username),
-    [orderManagementItems, currentUser?.username]
+    () => filterByPermissions(orderManagementItems, currentUser?.username, userRole),
+    [orderManagementItems, currentUser?.username, userRole]
   );
   const filteredInventoryItems = useMemo(
-    () => filterByPermissions(inventoryItems, currentUser?.username),
-    [inventoryItems, currentUser?.username]
+    () => filterByPermissions(inventoryItems, currentUser?.username, userRole),
+    [inventoryItems, currentUser?.username, userRole]
   );
   const filteredFormsReportsItems = useMemo(
-    () => filterByPermissions(formsReportsItems, currentUser?.username),
-    [formsReportsItems, currentUser?.username]
+    () => filterByPermissions(formsReportsItems, currentUser?.username, userRole),
+    [formsReportsItems, currentUser?.username, userRole]
   );
   const filteredQcMaintenanceItems = useMemo(
-    () => filterByPermissions(qcMaintenanceItems, currentUser?.username),
-    [qcMaintenanceItems, currentUser?.username]
+    () => filterByPermissions(qcMaintenanceItems, currentUser?.username, userRole),
+    [qcMaintenanceItems, currentUser?.username, userRole]
   );
   const filteredTrainingItems = useMemo(
-    () => filterByPermissions(trainingItems, currentUser?.username),
-    [trainingItems, currentUser?.username]
+    () => filterByPermissions(trainingItems, currentUser?.username, userRole),
+    [trainingItems, currentUser?.username, userRole]
   );
   const filteredEmployeesItems = useMemo(
-    () => filterByPermissions(employeesItems, currentUser?.username),
-    [employeesItems, currentUser?.username]
+    () => filterByPermissions(employeesItems, currentUser?.username, userRole),
+    [employeesItems, currentUser?.username, userRole]
   );
   const filteredFinanceItems = useMemo(
-    () => filterByPermissions(financeItems, currentUser?.username),
-    [financeItems, currentUser?.username]
+    () => filterByPermissions(financeItems, currentUser?.username, userRole),
+    [financeItems, currentUser?.username, userRole]
   );
   const filteredUserDashboardsItems = useMemo(
-    () => filterByPermissions(userDashboardsItems, currentUser?.username),
-    [userDashboardsItems, currentUser?.username]
+    () => filterByPermissions(userDashboardsItems, currentUser?.username, userRole),
+    [userDashboardsItems, currentUser?.username, userRole]
   );
   const filteredPurchaseOrdersItems = useMemo(
-    () => filterByPermissions(purchaseOrdersItems, currentUser?.username),
-    [purchaseOrdersItems, currentUser?.username]
+    () => filterByPermissions(purchaseOrdersItems, currentUser?.username, userRole),
+    [purchaseOrdersItems, currentUser?.username, userRole]
   );
   const filteredVerifiedModulesItems = useMemo(
-    () => filterByPermissions(verifiedModulesItems, currentUser?.username),
-    [verifiedModulesItems, currentUser?.username]
+    () => filterByPermissions(verifiedModulesItems, currentUser?.username, userRole),
+    [verifiedModulesItems, currentUser?.username, userRole]
   );
   const filteredProductionSchedulingItems = useMemo(
-    () => filterByPermissions(productionSchedulingItems, currentUser?.username),
-    [productionSchedulingItems, currentUser?.username]
+    () => filterByPermissions(productionSchedulingItems, currentUser?.username, userRole),
+    [productionSchedulingItems, currentUser?.username, userRole]
   );
   const filteredDepartmentQueueItems = useMemo(
-    () => filterByPermissions(departmentQueueItems, currentUser?.username),
-    [departmentQueueItems, currentUser?.username]
+    () => filterByPermissions(departmentQueueItems, currentUser?.username, userRole),
+    [departmentQueueItems, currentUser?.username, userRole]
   );
 
   const isVerifiedModulesActive = verifiedModulesItems.some(

@@ -9,6 +9,8 @@ import {
   stockModels,
   orders,
   allOrders as orderDrafts,
+  orderStatusTypes,
+  orderDepartmentTypes,
   payments,
   forms,
   formSubmissions,
@@ -71,6 +73,7 @@ import {
   evaluations,
   employeeDocuments,
   employeeAuditLog,
+  adminAuditLog,
   // Capability-based permission system tables
   capabilities,
   employeeCapabilities,
@@ -81,9 +84,6 @@ import {
   userIntegrations,
   // allOrders table as the finalized orders table
   allOrders,
-  // Order reference tables
-  orderStatusTypes,
-  orderDepartmentTypes,
   // Order attachments table
   orderAttachments,
   // Gateway reports table - temporarily removed
@@ -169,6 +169,8 @@ import {
   type InsertEmployeeDocument,
   type EmployeeAuditLog,
   type InsertEmployeeAuditLog,
+  type AdminAuditLog,
+  type InsertAdminAuditLog,
   // Capability types
   type Capability,
   type InsertCapability,
@@ -723,6 +725,33 @@ export interface IStorage {
     endDate: Date,
     employeeId?: number
   ): Promise<EmployeeAuditLog[]>;
+
+  // Admin Panel Audit Log
+  createAdminAuditLog(data: InsertAdminAuditLog): Promise<AdminAuditLog>;
+  getAdminAuditLogs(filters?: {
+    orderId?: string;
+    fieldName?: string;
+    changeType?: string;
+    userRole?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<AdminAuditLog[]>;
+  getAdminAuditLogsByDateRange(
+    startDate: Date,
+    endDate: Date,
+    filters?: {
+      orderId?: string;
+      changeType?: string;
+      userRole?: string;
+      limit?: number;
+      offset?: number;
+    }
+  ): Promise<AdminAuditLog[]>;
+  getAdminAuditLogsByUser(
+    username: string,
+    limit?: number,
+    offset?: number
+  ): Promise<AdminAuditLog[]>;
 
   // QC Definitions CRUD
   getQCDefinitions(
@@ -4982,6 +5011,111 @@ export class DatabaseStorage implements IStorage {
     }
 
     return await query.orderBy(desc(employeeAuditLog.timestamp));
+  }
+
+  // Admin Panel Audit Log
+  async createAdminAuditLog(data: InsertAdminAuditLog): Promise<AdminAuditLog> {
+    const [auditLog] = await db
+      .insert(adminAuditLog)
+      .values(data)
+      .returning();
+    return auditLog;
+  }
+
+  async getAdminAuditLogs(filters?: {
+    orderId?: string;
+    fieldName?: string;
+    changeType?: string;
+    userRole?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<AdminAuditLog[]> {
+    let query = db.select().from(adminAuditLog);
+
+    const conditions = [];
+    if (filters?.orderId) conditions.push(eq(adminAuditLog.orderId, filters.orderId));
+    if (filters?.fieldName) conditions.push(eq(adminAuditLog.fieldName, filters.fieldName));
+    if (filters?.changeType) conditions.push(eq(adminAuditLog.changeType, filters.changeType));
+    if (filters?.userRole) conditions.push(eq(adminAuditLog.userRole, filters.userRole));
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    query = query.orderBy(desc(adminAuditLog.timestamp));
+
+    if (filters?.limit) {
+      query = query.limit(filters.limit);
+    }
+    if (filters?.offset) {
+      query = query.offset(filters.offset);
+    }
+
+    return await query;
+  }
+
+  async getAdminAuditLogsByDateRange(
+    startDate: Date,
+    endDate: Date,
+    filters?: {
+      orderId?: string;
+      changeType?: string;
+      userRole?: string;
+      limit?: number;
+      offset?: number;
+    }
+  ): Promise<AdminAuditLog[]> {
+    let query = db
+      .select()
+      .from(adminAuditLog)
+      .where(
+        and(
+          gte(adminAuditLog.timestamp, startDate),
+          lte(adminAuditLog.timestamp, endDate)
+        )
+      );
+
+    const conditions = [
+      gte(adminAuditLog.timestamp, startDate),
+      lte(adminAuditLog.timestamp, endDate),
+    ];
+
+    if (filters?.orderId) conditions.push(eq(adminAuditLog.orderId, filters.orderId));
+    if (filters?.changeType) conditions.push(eq(adminAuditLog.changeType, filters.changeType));
+    if (filters?.userRole) conditions.push(eq(adminAuditLog.userRole, filters.userRole));
+
+    query = query.where(and(...conditions));
+    query = query.orderBy(desc(adminAuditLog.timestamp));
+
+    if (filters?.limit) {
+      query = query.limit(filters.limit);
+    }
+    if (filters?.offset) {
+      query = query.offset(filters.offset);
+    }
+
+    return await query;
+  }
+
+  async getAdminAuditLogsByUser(
+    username: string,
+    limit?: number,
+    offset?: number
+  ): Promise<AdminAuditLog[]> {
+    let query = db
+      .select()
+      .from(adminAuditLog)
+      .where(eq(adminAuditLog.changedBy, username))
+      .orderBy(desc(adminAuditLog.timestamp));
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+    if (offset) {
+      query = query.offset(offset);
+    }
+
+    return await query;
   }
 
   // QC Definitions CRUD
@@ -11999,6 +12133,15 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCuttingFabricInventory(id: string): Promise<void> {
     await db.delete(cuttingFabricInventory).where(eq(cuttingFabricInventory.id, id));
+  }
+
+  // Order Reference Data
+  async getOrderStatusTypes(): Promise<any[]> {
+    return await db.select().from(orderStatusTypes).where(eq(orderStatusTypes.isActive, true)).orderBy(orderStatusTypes.sortOrder);
+  }
+
+  async getOrderDepartmentTypes(): Promise<any[]> {
+    return await db.select().from(orderDepartmentTypes).where(eq(orderDepartmentTypes.isActive, true)).orderBy(orderDepartmentTypes.sortOrder);
   }
 }
 

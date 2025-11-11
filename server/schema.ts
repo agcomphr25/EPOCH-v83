@@ -4048,6 +4048,93 @@ export type InsertP2ProductionOrder = z.infer<
 >;
 export type P2ProductionOrder = typeof p2ProductionOrders.$inferSelect;
 
+// Shipment Records - P1 PO Shipping Tracking System
+export const shipmentRecords = pgTable('shipment_records', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  reference: text('reference').notNull(), // Internal reference like "SHIP-RH-20251111-001"
+  poNumbers: text('po_numbers').notNull(), // Comma-separated PO numbers (for display)
+  carrier: text('carrier').notNull().default('UPS'), // UPS, FedEx, USPS, etc.
+  serviceLevel: text('service_level').notNull(), // Ground, 2-Day Air, Next Day Air, etc.
+  billType: text('bill_type').notNull().default('SENDER'), // SENDER, RECEIVER, THIRD_PARTY
+  thirdPartyAccount: text('third_party_account'), // UPS account if bill_type is THIRD_PARTY
+  masterTrackingNumber: text('master_tracking_number').notNull(), // Primary tracking number
+  packageCount: integer('package_count').notNull().default(1),
+  totalWeightLbs: numeric('total_weight_lbs', { precision: 10, scale: 2 }).notNull(),
+  shippedAt: timestamp('shipped_at').defaultNow().notNull(),
+  estimatedDelivery: timestamp('estimated_delivery'),
+  shipFromSnapshot: jsonb('ship_from_snapshot').notNull(), // AG Composites address
+  shipToSnapshot: jsonb('ship_to_snapshot').notNull(), // Customer shipping address
+  notificationMetadata: jsonb('notification_metadata').default({}), // { emailSentAt, smsSentAt, retries, channels }
+  documents: jsonb('documents').notNull().default([]), // Array of { type, fileName, mime, storagePath, bytes }
+  createdBy: text('created_by').notNull(), // Username who created the shipment
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const insertShipmentRecordSchema = createInsertSchema(shipmentRecords)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    reference: z.string().min(1, 'Reference is required'),
+    poNumbers: z.string().min(1, 'PO numbers are required'),
+    carrier: z.string().default('UPS'),
+    serviceLevel: z.string().min(1, 'Service level is required'),
+    billType: z.enum(['SENDER', 'RECEIVER', 'THIRD_PARTY']).default('SENDER'),
+    thirdPartyAccount: z.string().optional(),
+    masterTrackingNumber: z.string().min(1, 'Tracking number is required'),
+    packageCount: z.number().min(1).default(1),
+    totalWeightLbs: z.number().min(0.1),
+    estimatedDelivery: z.string().datetime().optional(),
+    shipFromSnapshot: z.any(),
+    shipToSnapshot: z.any(),
+    notificationMetadata: z.any().optional(),
+    documents: z.any(),
+    createdBy: z.string().min(1, 'Created by is required'),
+  });
+
+export type InsertShipmentRecord = z.infer<typeof insertShipmentRecordSchema>;
+export type ShipmentRecord = typeof shipmentRecords.$inferSelect;
+
+// Shipment Items - Join table linking shipments to production orders
+export const shipmentItems = pgTable(
+  'shipment_items',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    shipmentId: uuid('shipment_id')
+      .references(() => shipmentRecords.id, { onDelete: 'cascade' })
+      .notNull(),
+    productionOrderId: integer('production_order_id')
+      .references(() => p2ProductionOrders.id)
+      .notNull(),
+    quantity: integer('quantity').notNull().default(1),
+    weightLbs: numeric('weight_lbs', { precision: 10, scale: 2 }),
+    notes: text('notes'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    uniqueShipmentOrder: unique().on(table.shipmentId, table.productionOrderId),
+  })
+);
+
+export const insertShipmentItemSchema = createInsertSchema(shipmentItems)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    shipmentId: z.string().uuid('Shipment ID must be a valid UUID'),
+    productionOrderId: z.number().min(1, 'Production order ID is required'),
+    quantity: z.number().min(1).default(1),
+    weightLbs: z.number().min(0).optional(),
+    notes: z.string().optional(),
+  });
+
+export type InsertShipmentItem = z.infer<typeof insertShipmentItemSchema>;
+export type ShipmentItem = typeof shipmentItems.$inferSelect;
+
 // Task Tracker - Collaborative task management system
 export const taskItems = pgTable('task_items', {
   id: serial('id').primaryKey(),

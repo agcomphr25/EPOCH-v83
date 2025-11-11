@@ -95,27 +95,20 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
             return null;
           }
           
-          // Try to find associated production order
-          const query = `
-            SELECT * FROM production_orders 
-            WHERE po_item_id = $1 AND unit_number = $2 
-            LIMIT 1
-          `;
-          const result = await pool.query(query, [poItemId, unitNumber]);
-          order = result.rows?.[0] || null;
-          
-          if (!order) {
-            console.warn(`⚠️ No production order found for PO item ${poItemId}, unit ${unitNumber}`);
-            // Create a minimal order object for packing slip generation
-            order = {
-              poItemId,
-              unitNumber,
-              orderId: `Unit ${unitNumber}`,
-              itemId: poItem.stockModelId,
-              itemName: poItem.stockModelName,
-              specifications: poItem.specifications,
-            };
-          }
+          // For PO items without orderIds, create a minimal order object for packing slip generation
+          // The production_orders table doesn't track individual unit numbers
+          order = {
+            poItemId,
+            unitNumber,
+            orderId: `Unit ${unitNumber}`,
+            item_id: poItem.stockModelId,
+            item_name: poItem.stockModelName,
+            specifications: poItem.specifications,
+            customer_id: poItem.customerId,
+            customer_name: poItem.customerName || '',
+            po_number: poItem.poNumber || '',
+            due_date: poItem.dueDate,
+          };
         } else {
           // Standard Order ID format (e.g., "AG123", "EH456")
           order = await storage.getProductionOrderByOrderId(itemKey);

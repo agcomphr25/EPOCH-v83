@@ -182,10 +182,13 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       const customerId = items[0].po.customerId;
       const customerName = items[0].po.customerName || 'Unknown Customer';
       
+      console.log(`🔍 Fetching address for customer ID: ${customerId}, name: ${customerName}`);
       const customerAddress = customerId ? await storage.getCustomerDefaultAddress(String(customerId)) : null;
+      console.log(`📍 Customer address result:`, customerAddress);
       
       // Generate invoice number
       const invoiceNumber = await storage.getNextInvoiceNumber(String(customerId || '0'), customerName);
+      console.log(`📄 Generated invoice number: ${invoiceNumber}`);
 
       let currentY = height - margin;
 
@@ -200,9 +203,9 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
 
       // AG Composites Address (Ship From) - Right aligned
       const agAddress = [
-        '375 Hwy 55 South',
-        'Mt. Vernon, AR 72111',
-        'Phone: (501) 849-2266'
+        '230 Hamer Rd',
+        'Owens Cross Roads, AL 35763',
+        'Phone: (256) 723-8381'
       ];
       let agAddressY = currentY;
       agAddress.forEach((line) => {

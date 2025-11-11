@@ -4387,8 +4387,8 @@ export function registerRoutes(app: Express): Server {
           // Check for special features to add to label
           const features = (order as any).features || {};
 
-          // Get paint option for display with subcategory
-          const paintOption = features.paint_options || '';
+          // Get paint option for display with subcategory (handle both camelCase and snake_case)
+          const paintOption = features.paint_options || features.paintOptions || '';
 
           // Map paint values to their subcategories
           const paintSubcategoryMap: { [key: string]: string } = {
@@ -4548,10 +4548,10 @@ export function registerRoutes(app: Express): Server {
               : null;
 
           const textureText =
-            features.texture_options &&
-            features.texture_options !== 'no_texture' &&
-            features.texture_options !== 'none'
-              ? features.texture_options.replace(/_/g, ' ')
+            (features.texture_options || features.texture) &&
+            (features.texture_options || features.texture) !== 'no_texture' &&
+            (features.texture_options || features.texture) !== 'none'
+              ? (features.texture_options || features.texture).replace(/_/g, ' ')
               : null;
 
           // Check for NSNH (No Swivel Studs No Holes) - this should show as "NSNH"

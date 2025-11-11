@@ -138,6 +138,22 @@ export async function generateSalesOrderPDF(
   console.log(`📄 [PDF] Order ID: ${orderData.orderId}`);
   console.log(`📄 [PDF] Environment: ${process.env.NODE_ENV}`);
   console.log(`📄 [PDF] Include signature box: ${includeSignatureBox}`);
+  console.log('📄 [PDF] Order Data Summary:', {
+    modelPrice: orderData.modelPrice,
+    shipping: orderData.shipping,
+    subtotal: orderData.subtotal,
+    total: orderData.total,
+    discountCode: orderData.discountCode,
+    customDiscountType: orderData.customDiscountType,
+    customDiscountValue: orderData.customDiscountValue,
+    showCustomDiscount: orderData.showCustomDiscount,
+    paintOptions: {
+      paint_options: orderData.features?.paint_options,
+      metallic_finishes: orderData.features?.metallic_finishes,
+      paint_options_combined: orderData.features?.paint_options_combined,
+    },
+    featureCount: orderData.features ? Object.keys(orderData.features).length : 0,
+  });
   
   let pdfDoc: PDFDocument;
   let page: any;
@@ -396,7 +412,9 @@ export async function generateSalesOrderPDF(
     'texture_options',
     'swivel_studs',
     'other_options',
-    'paint_options'
+    'paint_options',
+    'metallic_finishes',
+    'paint_options_combined'
   ];
   
   let featureCount = 1; // Start with 1 for Stock Model
@@ -510,12 +528,22 @@ export async function generateSalesOrderPDF(
       'texture_options',
       'swivel_studs',
       'other_options',
-      'paint_options'
+      'paint_options',
+      'metallic_finishes',
+      'paint_options_combined'
     ];
 
     for (const featureKey of featureOrder) {
       const featureValue = orderData.features[featureKey];
       if (featureValue) {
+        console.log(`📄 [PDF] Processing feature: ${featureKey}`, {
+          value: featureValue,
+          displayName: orderData.featureDisplayNames?.[featureKey],
+          price: orderData.featurePrices?.[featureKey],
+          selectionDisplayName: typeof featureValue === 'string' ? orderData.featureSelectionDisplayNames?.[featureValue] : 'array',
+          selectionPrice: typeof featureValue === 'string' ? orderData.featureSelectionPrices?.[featureValue] : 'array',
+        });
+        
         // Special handling for other_options with quantities
         if (featureKey === 'other_options' && Array.isArray(featureValue)) {
           // Display "Other Options:" header
@@ -740,6 +768,17 @@ export async function generateSalesOrderPDF(
 
   // TOTAL
   const totalAmount = calculatedSubtotal - discountAmount + shippingAmount;
+  
+  // Log calculation details for debugging
+  console.log('📄 [PDF] Total Calculation:', {
+    orderId: orderData.orderId,
+    calculatedSubtotal: calculatedSubtotal.toFixed(2),
+    discountAmount: discountAmount.toFixed(2),
+    shippingAmount: shippingAmount.toFixed(2),
+    totalAmount: totalAmount.toFixed(2),
+    formula: `${calculatedSubtotal.toFixed(2)} - ${discountAmount.toFixed(2)} + ${shippingAmount.toFixed(2)} = ${totalAmount.toFixed(2)}`,
+  });
+  
   page.drawText('TOTAL:', {
     x: margin + 8,
     y: summaryLineY,

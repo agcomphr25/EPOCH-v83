@@ -539,10 +539,11 @@ export default function AdminPanelPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Statuses</SelectItem>
-                <SelectItem value="In Production">In Production</SelectItem>
-                <SelectItem value="On Hold">On Hold</SelectItem>
-                <SelectItem value="Completed">Completed</SelectItem>
-                <SelectItem value="Shipped">Shipped</SelectItem>
+                {statusTypes.map((status: any) => (
+                  <SelectItem key={status.id} value={status.name}>
+                    {status.displayName}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

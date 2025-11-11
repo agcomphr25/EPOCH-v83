@@ -4351,9 +4351,10 @@ export function registerRoutes(app: Express): Server {
             (order as any).specifications?.actionLength || 
             (order as any).features?.action_length || 
             'unknown';
+          const modelId = (order as any).modelId || '';
           const modelDisplayName =
-            stockModelMap.get((order as any).modelId) ||
-            (order as any).modelId ||
+            stockModelMap.get(modelId) ||
+            modelId ||
             'Unknown';
 
           // Add order information at top
@@ -4495,11 +4496,27 @@ export function registerRoutes(app: Express): Server {
             }
           }
 
-          // For P1 PO orders: show "Material - Stock Model" format
+          // For P1 PO orders: show "Material - Stock Model - Paint Color" format
           // For regular orders: show "Stock Model - Action Length - Paint" format
           let labelLine = '';
-          if (isPOItem && material) {
-            labelLine = `${material} - ${modelDisplayName}`;
+          if (isPOItem) {
+            // Build P1 PO label: Material - Stock Model - Paint Color
+            const parts = [];
+            if (material) {
+              parts.push(material);
+            }
+            parts.push(modelDisplayName);
+            
+            // Add paint color if available
+            if (paintDisplayName) {
+              if (subcategory) {
+                parts.push(`${subcategory}: ${paintDisplayName}`);
+              } else {
+                parts.push(paintDisplayName);
+              }
+            }
+            
+            labelLine = parts.join(' - ');
           } else {
             // Only include action length if it's not 'unknown'
             const hasActionLength = actionLength && actionLength.toLowerCase() !== 'unknown';
@@ -4568,9 +4585,6 @@ export function registerRoutes(app: Express): Server {
           ) {
             specialLabels.push('CARBON CAMO READY');
           }
-
-          // Determine barcode color based on specifications
-          const modelId = (order as any).modelId || '';
 
           // Check if this order is high priority or late (you can add this logic later)
           const isHighPriority = false; // TODO: Add high priority logic

@@ -1528,8 +1528,8 @@ export default function QCShippingQueuePage() {
                                             // Create unique key for selection - must use orderId if exists, fallback to poItemId-unitNumber
                                             const itemKey = item.orderId || `${item.poItemId}-${item.unitNumber}`;
                                             const isSelected = selectedPOItems.has(itemKey);
-                                            // Disable if: not ready to ship, no orderId (can't be shipped yet), or different customer selected
-                                            const isDisabled = !item.isReadyToShip || !item.orderId || !!(selectedCustomer && selectedCustomer !== customer.customerName);
+                                            // Disable if: not ready to ship, or different customer selected
+                                            const isDisabled = !item.isReadyToShip || !!(selectedCustomer && selectedCustomer !== customer.customerName);
                                             const departmentBadge = getDepartmentBadge(item.currentDepartment, item.productionStatus);
                                             
                                             // Debug logging
@@ -1556,7 +1556,7 @@ export default function QCShippingQueuePage() {
                                                 `}
                                                 data-testid={item.orderId ? `po-item-${item.orderId}` : `po-item-unscheduled-${item.poItemId}-${item.unitNumber}`}
                                               >
-                                                {item.isReadyToShip && item.orderId && (
+                                                {item.isReadyToShip && (
                                                   <Checkbox
                                                     checked={isSelected}
                                                     disabled={isDisabled}
@@ -1586,7 +1586,7 @@ export default function QCShippingQueuePage() {
                                                     data-testid={`checkbox-po-item-${itemKey}`}
                                                   />
                                                 )}
-                                                {(!item.isReadyToShip || !item.orderId) && <div className="w-6" />}
+                                                {!item.isReadyToShip && <div className="w-6" />}
                                                 
                                                 <div className="flex-1 grid grid-cols-5 gap-2 text-sm items-center">
                                                   <div>

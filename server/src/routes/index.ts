@@ -4186,8 +4186,12 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Generate Avery label document (PDF format)
-      const { PDFDocument, rgb } = await import('pdf-lib');
+      const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
       const pdfDoc = await PDFDocument.create();
+      
+      // Embed standard fonts for text rendering
+      const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
       // Add pages for labels (Avery 8160 format - 3 columns, 10 rows per page)
       const labelsPerPage = 30;
@@ -4372,6 +4376,7 @@ export function registerRoutes(app: Express): Server {
             x: x + 8,
             y: y + 50,
             size: (order as any).isPOItem ? 9 : 11, // Smaller font for longer PO text
+            font: helveticaFont,
             color: rgb(0, 0, 0),
           });
 
@@ -4486,6 +4491,7 @@ export function registerRoutes(app: Express): Server {
             x: x + 8,
             y: y + 22,
             size: 6, // Smaller to fit subcategory + paint name
+            font: helveticaFont,
             color: rgb(0, 0, 0),
           });
 
@@ -4645,6 +4651,7 @@ export function registerRoutes(app: Express): Server {
                 x: xOffset,
                 y: y + 16, // Move special labels higher
                 size: 5,
+                font: helveticaFont,
                 color: textColor,
               });
 
@@ -4666,21 +4673,11 @@ export function registerRoutes(app: Express): Server {
             x: x + 8,
             y: y + 10,
             size: 6,
+            font: helveticaFont,
             color: rgb(0, 0, 0),
           });
         }
       }
-
-      // Set PDF viewer preferences to disable print scaling
-      // This ensures the labels print at exactly 100% scale without automatic fitting
-      pdfDoc.catalog.set(
-        pdfDoc.context.obj({
-          Type: 'Catalog',
-          ViewerPreferences: pdfDoc.context.obj({
-            PrintScaling: 'None',
-          }),
-        })
-      );
 
       const pdfBytes = await pdfDoc.save();
 

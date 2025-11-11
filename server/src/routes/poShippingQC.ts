@@ -182,13 +182,10 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       const customerId = items[0].po.customerId;
       const customerName = items[0].po.customerName || 'Unknown Customer';
       
-      console.log(`🔍 Fetching address for customer ID: ${customerId}, name: ${customerName}`);
       const customerAddress = customerId ? await storage.getCustomerDefaultAddress(String(customerId)) : null;
-      console.log(`📍 Customer address result:`, customerAddress);
       
       // Generate invoice number
       const invoiceNumber = await storage.getNextInvoiceNumber(String(customerId || '0'), customerName);
-      console.log(`📄 Generated invoice number: ${invoiceNumber}`);
 
       let currentY = height - margin;
 
@@ -802,7 +799,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       });
     }
 
-    // 8. GENERATE PACKING SLIPS (one per PO)
+    // 8. GENERATE PACKING SLIPS (one per PO) - Using updated format with addresses and invoice numbers
     const packingSlips: Array<{ poNumber: string; filename: string; data: string }> = [];
 
     for (const [poNumber, items] of poGroups.entries()) {
@@ -814,15 +811,43 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+      // Get customer ID and name from first item's PO
+      const customerId = items[0].po.customerId;
+      const customerName = items[0].po.customerName || 'Unknown Customer';
+      
+      // Get customer address
+      const customerAddress = customerId ? await storage.getCustomerDefaultAddress(String(customerId)) : null;
+      
+      // Generate invoice number
+      const invoiceNumber = await storage.getNextInvoiceNumber(String(customerId || '0'), customerName);
+
       let currentY = height - margin;
 
-      // Header
+      // ========== HEADER ==========
       currentPage.drawText('AG COMPOSITES', {
         x: margin,
         y: currentY,
         size: 20,
         font: boldFont,
         color: rgb(0, 0, 0),
+      });
+
+      // AG Composites Address (Ship From) - Right aligned
+      const agAddress = [
+        '230 Hamer Rd',
+        'Owens Cross Roads, AL 35763',
+        'Phone: (256) 723-8381'
+      ];
+      let agAddressY = currentY;
+      agAddress.forEach((line) => {
+        const textWidth = font.widthOfTextAtSize(line, 9);
+        currentPage.drawText(line, {
+          x: width - margin - textWidth,
+          y: agAddressY,
+          size: 9,
+          font: font,
+        });
+        agAddressY -= 15;
       });
 
       currentY -= 30;
@@ -834,41 +859,95 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         color: rgb(0, 0, 0),
       });
 
-      // PO Information
-      currentY -= 40;
-      currentPage.drawText(`Purchase Order: ${poNumber}`, {
+      // ========== CUSTOMER SHIPPING ADDRESS (SHIP TO) ==========
+      currentY -= 30;
+      currentPage.drawText('SHIP TO:', {
         x: margin,
         y: currentY,
-        size: 12,
+        size: 11,
         font: boldFont,
       });
 
-      currentY -= 20;
-      currentPage.drawText(`Customer: ${firstCustomer.name}`, {
+      currentY -= 18;
+      currentPage.drawText(customerName, {
         x: margin,
         y: currentY,
-        size: 12,
+        size: 10,
         font: font,
       });
 
-      currentY -= 20;
+      if (customerAddress) {
+        currentY -= 15;
+        currentPage.drawText(customerAddress.street, {
+          x: margin,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+
+        if (customerAddress.street2) {
+          currentY -= 15;
+          currentPage.drawText(customerAddress.street2, {
+            x: margin,
+            y: currentY,
+            size: 10,
+            font: font,
+          });
+        }
+
+        currentY -= 15;
+        currentPage.drawText(`${customerAddress.city}, ${customerAddress.state} ${customerAddress.zipCode}`, {
+          x: margin,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+      } else {
+        currentY -= 15;
+        currentPage.drawText('(No address on file)', {
+          x: margin,
+          y: currentY,
+          size: 10,
+          font: font,
+          color: rgb(0.5, 0.5, 0.5),
+        });
+      }
+
+      // ========== PO INFORMATION ==========
+      currentY -= 30;
+      currentPage.drawText(`Invoice #: ${invoiceNumber}`, {
+        x: margin,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+      });
+
+      currentY -= 18;
+      currentPage.drawText(`PO Number: ${poNumber}`, {
+        x: margin,
+        y: currentY,
+        size: 11,
+        font: font,
+      });
+
+      currentY -= 18;
       currentPage.drawText(`Date: ${new Date().toLocaleDateString()}`, {
         x: margin,
         y: currentY,
-        size: 12,
+        size: 11,
         font: font,
       });
 
-      currentY -= 20;
+      currentY -= 18;
       currentPage.drawText(`Tracking #: ${trackingNumber}`, {
         x: margin,
         y: currentY,
-        size: 12,
+        size: 11,
         font: font,
       });
 
-      // Items table header
-      currentY -= 40;
+      // ========== ITEMS TABLE ==========
+      currentY -= 30;
       currentPage.drawText('Item', {
         x: margin,
         y: currentY,
@@ -877,7 +956,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       });
 
       currentPage.drawText('Description', {
-        x: margin + 80,
+        x: margin + 60,
         y: currentY,
         size: 11,
         font: boldFont,
@@ -908,8 +987,8 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           currentY = height - margin;
         }
 
-        const unitMatch = item.order.orderId.match(/-(\d+)$/);
-        const unitNumber = unitMatch ? parseInt(unitMatch[1]) : 1;
+        // Extract unit number from order ID
+        const unitNumber = item.order.unitNumber || 1;
 
         currentPage.drawText(`${idx + 1}`, {
           x: margin,
@@ -920,10 +999,10 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
 
         // Use itemName for the product identifier (e.g., AG-CRB-AHV205-ER)
         const itemName = item.poItem.itemName || item.poItem.stockModelName || 'N/A';
-        const truncatedName = itemName.length > 30 ? itemName.substring(0, 30) + '...' : itemName;
+        const truncatedName = itemName.length > 35 ? itemName.substring(0, 35) + '...' : itemName;
         
         currentPage.drawText(truncatedName, {
-          x: margin + 80,
+          x: margin + 60,
           y: currentY,
           size: 9,
           font: font,
@@ -939,7 +1018,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         currentY -= 20;
       });
 
-      // Footer
+      // Footer on last page
       const pages = pdfDoc.getPages();
       const lastPage = pages[pages.length - 1];
       const footerY = margin + 20;

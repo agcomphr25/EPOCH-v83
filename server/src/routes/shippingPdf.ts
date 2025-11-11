@@ -990,11 +990,118 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       }
     }
 
+    // FIX: Ensure paint options have proper display names and prices
+    const orderFeatures = order.features as any;
+    if (orderFeatures) {
+      // Get the paint selection, skipping 'none' values to find the actual paint choice
+      const currentPaint = 
+        (orderFeatures.metallic_finishes && orderFeatures.metallic_finishes !== 'none' ? orderFeatures.metallic_finishes : null) ||
+        (orderFeatures.paint_options && orderFeatures.paint_options !== 'none' ? orderFeatures.paint_options : null) ||
+        (orderFeatures.paint_options_combined && orderFeatures.paint_options_combined !== 'none' ? orderFeatures.paint_options_combined : null);
+
+      if (currentPaint) {
+        // Find the paint feature and option
+        const paintFeatures = allFeatures.filter(
+          (f: any) =>
+            f.displayName?.includes('Options') ||
+            f.displayName?.includes('Camo') ||
+            f.displayName?.includes('Cerakote') ||
+            f.displayName?.includes('Paint') ||
+            f.displayName?.includes('Terrain') ||
+            f.displayName?.includes('Rogue') ||
+            f.displayName?.includes('Standard') ||
+            f.id === 'metallic_finishes' ||
+            f.id === 'paint_options' ||
+            f.id === 'paint_options_combined' ||
+            f.category === 'paint'
+        );
+
+        for (const paintFeature of paintFeatures) {
+          const paintOptions = (paintFeature as any).options || [];
+          if (paintOptions.length > 0) {
+            const paintOption = paintOptions.find(
+              (opt: any) => opt.value === currentPaint
+            );
+            if (paintOption) {
+              // Set the display name and price for the paint selection
+              featureSelectionDisplayNames[currentPaint] = paintOption.displayName || paintOption.label || currentPaint;
+              featureSelectionPrices[currentPaint] = paintOption.price || 0;
+              
+              // Determine which paint key is being used (same logic as currentPaint to avoid 'none' values)
+              const paintKey = 
+                (orderFeatures.metallic_finishes && orderFeatures.metallic_finishes !== 'none' ? 'metallic_finishes' : null) ||
+                (orderFeatures.paint_options && orderFeatures.paint_options !== 'none' ? 'paint_options' : null) ||
+                (orderFeatures.paint_options_combined && orderFeatures.paint_options_combined !== 'none' ? 'paint_options_combined' : null) ||
+                'paint_options'; // Fallback
+              featurePrices[paintKey] = paintOption.price || 0;
+              
+              console.log(`📄 [Paint Fix] Paint option resolved: ${currentPaint} (key: ${paintKey}) -> ${paintOption.displayName || paintOption.label} ($${paintOption.price || 0})`);
+              break;
+            }
+          }
+        }
+      }
+    }
+
     // Extract miscellaneous items from features object
     const miscItems = (order.features as any)?.miscItems || [];
 
-    // Calculate payment status
+    // Calculate payment status and discount information
     const paymentTotal = payments.reduce((sum, p) => sum + (p.paymentAmount || 0), 0);
+    
+    // Calculate discount information dynamically
+    let calculatedDiscountType: string | undefined;
+    let calculatedDiscountValue: number | undefined;
+    let calculatedDiscountCode: string | undefined;
+    let shouldShowDiscount = false;
+
+    // Get persistent and seasonal discounts to check if this order has one
+    const persistentDiscounts = await storage.getAllPersistentDiscounts();
+    const seasonalDiscounts = await storage.getAllShortTermSales();
+    
+    if (order.discountCode && order.discountCode !== 'none') {
+      calculatedDiscountCode = order.discountCode;
+      
+      // Check if it's a persistent discount
+      let discount: any = null;
+      if (order.discountCode.startsWith('persistent_')) {
+        const discountId = parseInt(order.discountCode.replace('persistent_', ''));
+        discount = persistentDiscounts.find((d) => d.id === discountId);
+      } else if (order.discountCode.startsWith('short_term_')) {
+        // Check for seasonal/short-term discount
+        const discountId = parseInt(order.discountCode.replace('short_term_', ''));
+        discount = seasonalDiscounts.find((d) => d.id === discountId);
+      } else {
+        // Try finding by name in both persistent and seasonal
+        discount = persistentDiscounts.find((d) => d.name === order.discountCode) ||
+                   seasonalDiscounts.find((d) => d.name === order.discountCode);
+      }
+
+      if (discount && discount.isActive) {
+        shouldShowDiscount = true;
+        
+        if (discount.percent !== null && discount.percent > 0) {
+          calculatedDiscountType = 'percent';
+          calculatedDiscountValue = discount.percent;
+        } else if (discount.fixedAmount) {
+          calculatedDiscountType = 'fixed';
+          calculatedDiscountValue = Number(discount.fixedAmount) / 100; // Convert cents to dollars
+        }
+        
+        const discountType = order.discountCode.startsWith('short_term_') ? 'Seasonal' : 'Persistent';
+        console.log(`📄 [Discount Fix] ${discountType} discount found: ${order.discountCode} -> ${calculatedDiscountType} ${calculatedDiscountValue}`);
+      }
+    }
+    
+    // If custom discount is already set, use that instead
+    if (order.showCustomDiscount && order.customDiscountValue) {
+      shouldShowDiscount = true;
+      calculatedDiscountType = order.customDiscountType || 'percent';
+      calculatedDiscountValue = order.customDiscountValue;
+      calculatedDiscountCode = order.discountCode || undefined;
+      console.log(`📄 [Discount Fix] Using existing custom discount: ${calculatedDiscountType} ${calculatedDiscountValue}`);
+    }
+    
     const basePriceForPayment = stockModel?.price || 0;
     let featuresCostForPayment = 0;
 
@@ -1047,10 +1154,11 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       notes: order.notes || undefined,
       shipping: order.shipping || 0,
       paymentStatus: paymentStatus as 'PAID' | 'PENDING',
-      discountCode: order.discountCode || undefined,
-      customDiscountType: order.customDiscountType || undefined,
-      customDiscountValue: order.customDiscountValue || undefined,
-      showCustomDiscount: order.showCustomDiscount || undefined,
+      // Use calculated discount information
+      discountCode: calculatedDiscountCode || undefined,
+      customDiscountType: calculatedDiscountType || undefined,
+      customDiscountValue: calculatedDiscountValue || undefined,
+      showCustomDiscount: shouldShowDiscount,
     };
 
     // Generate PDF using centralized generator

@@ -5194,6 +5194,28 @@ export type InsertControlledDocument = z.infer<typeof insertControlledDocumentSc
 export type DocumentVersionHistory = typeof documentVersionHistory.$inferSelect;
 export type InsertDocumentVersionHistory = z.infer<typeof insertDocumentVersionHistorySchema>;
 
+// Invoice Number Tracking - Sequential invoice numbers per customer per year
+export const invoiceNumbers = pgTable('invoice_numbers', {
+  id: serial('id').primaryKey(),
+  customerId: text('customer_id').notNull(),
+  customerCode: text('customer_code').notNull(), // RH, PP, etc.
+  year: integer('year').notNull(), // 2025, 2026, etc.
+  lastNumber: integer('last_number').notNull().default(199), // Starts at 199, first will be 200
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert Schema
+export const insertInvoiceNumberSchema = createInsertSchema(invoiceNumbers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types
+export type InvoiceNumber = typeof invoiceNumbers.$inferSelect;
+export type InsertInvoiceNumber = z.infer<typeof insertInvoiceNumberSchema>;
+
 // PDFME SYSTEM COMMENTED OUT - NOT IN USE
 // PDF Templates - Visual template designer for PDF generation
 export const pdfTemplates = pgTable('pdf_templates', {

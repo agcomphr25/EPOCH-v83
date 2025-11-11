@@ -334,7 +334,7 @@ import {
   type CuttingFabricInventory,
   type InsertCuttingFabricInventory,
 } from './schema';
-import { db } from './db';
+import { db, pool } from './db';
 import {
   eq,
   desc,
@@ -6776,6 +6776,49 @@ export class DatabaseStorage implements IStorage {
       .where(eq(purchaseOrders.status, 'OPEN'))
       .orderBy(asc(purchaseOrders.customerName), asc(purchaseOrders.poNumber));
 
+    if (openPOs.length === 0) {
+      return [];
+    }
+
+    // Get all production orders for all open POs in a single query
+    const poIds = openPOs.map(po => po.id);
+    
+    // Only query if there are PO IDs
+    let productionOrdersResult: any[] = [];
+    if (poIds.length > 0) {
+      // Build IN clause manually (Neon SQL doesn't support array parameters well)
+      const poIdsList = poIds.join(',');
+      const queryResult = await pool.query(`
+        SELECT po_id, po_item_id, is_fulfilled
+        FROM production_orders
+        WHERE po_id IN (${poIdsList})
+      `);
+      productionOrdersResult = Array.isArray(queryResult) 
+        ? queryResult 
+        : queryResult.rows || [];
+    }
+    
+    // Map of po_id -> po_item_id -> fulfillment stats
+    const poFulfillmentMap = new Map<number, Map<number, { total: number; fulfilled: number }>>();
+    for (const prodOrder of productionOrdersResult) {
+      const poId = prodOrder.po_id;
+      const poItemId = prodOrder.po_item_id;
+      
+      if (!poFulfillmentMap.has(poId)) {
+        poFulfillmentMap.set(poId, new Map());
+      }
+      const itemMap = poFulfillmentMap.get(poId)!;
+      
+      if (!itemMap.has(poItemId)) {
+        itemMap.set(poItemId, { total: 0, fulfilled: 0 });
+      }
+      const stats = itemMap.get(poItemId)!;
+      stats.total++;
+      if (prodOrder.is_fulfilled) {
+        stats.fulfilled++;
+      }
+    }
+
     // Group by customer
     const customerMap = new Map<string, P1POQueueCustomer>();
 
@@ -6798,6 +6841,9 @@ export class DatabaseStorage implements IStorage {
         .from(purchaseOrderItems)
         .where(eq(purchaseOrderItems.poId, po.id))
         .orderBy(purchaseOrderItems.createdAt);
+
+      // Get the fulfillment map for this PO
+      const itemFulfillmentMap = poFulfillmentMap.get(po.id) || new Map();
 
       const poItems: P1POQueueItem[] = items
         .map((item) => {
@@ -6837,7 +6883,9 @@ export class DatabaseStorage implements IStorage {
         .filter((item) => {
           // Only include items with:
           // 1. Valid stockModel (exclude "no stock", "no_stock", "None", or null/empty)
-          // 2. Remaining quantity > 0 (not fully scheduled)
+          // 2. Remaining quantity > 0 (not fully scheduled) OR has unfulfilled production orders
+          // 3. NOT all production orders are fulfilled
+          
           if (!item.stockModel || item.stockModel.trim() === '') {
             return false;
           }
@@ -6846,19 +6894,39 @@ export class DatabaseStorage implements IStorage {
                  lowerStockModel !== 'no_stock' && 
                  lowerStockModel !== 'none';
           
-          return hasValidStockModel && item.quantity > 0;
+          if (!hasValidStockModel) {
+            return false;
+          }
+          
+          // Check if this item has production orders and if all are fulfilled
+          const fulfillmentStats = itemFulfillmentMap.get(item.id);
+          if (fulfillmentStats && fulfillmentStats.total > 0) {
+            // If all production orders are fulfilled, exclude this item
+            if (fulfillmentStats.fulfilled === fulfillmentStats.total) {
+              return false;
+            }
+          }
+          
+          // Include if there's remaining quantity to schedule
+          return item.quantity > 0;
         });
 
-      customer.purchaseOrders.push({
-        poNumber: po.poNumber,
-        poDate: po.poDate?.toString() || null,
-        expectedDelivery: po.expectedDelivery?.toString() || null,
-        totalItems: poItems.reduce((sum, item) => sum + item.quantity, 0),
-        items: poItems,
-      });
+      // Only add this PO if it has items remaining after filtering
+      if (poItems.length > 0) {
+        customer.purchaseOrders.push({
+          poNumber: po.poNumber,
+          poDate: po.poDate?.toString() || null,
+          expectedDelivery: po.expectedDelivery?.toString() || null,
+          totalItems: poItems.reduce((sum, item) => sum + item.quantity, 0),
+          items: poItems,
+        });
+      }
     }
 
-    return Array.from(customerMap.values());
+    // Filter out customers with no purchase orders remaining
+    return Array.from(customerMap.values()).filter(
+      customer => customer.purchaseOrders.length > 0
+    );
   }
 
   async getPOOrdersInShippingQC(): Promise<{

@@ -95,8 +95,15 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
             return null;
           }
           
+          // Get PO to access customer information
+          const tempPo = await storage.getPurchaseOrder(poItem.poId);
+          if (!tempPo) {
+            console.warn(`⚠️ PO ${poItem.poId} not found`);
+            return null;
+          }
+          
           // For PO items without orderIds, create a minimal order object for packing slip generation
-          // The production_orders table doesn't track individual unit numbers
+          // Customer info comes from the PO, not the PO item
           order = {
             poItemId,
             unitNumber,
@@ -104,9 +111,9 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
             item_id: poItem.stockModelId,
             item_name: poItem.stockModelName,
             specifications: poItem.specifications,
-            customer_id: poItem.customerId,
-            customer_name: poItem.customerName || '',
-            po_number: poItem.poNumber || '',
+            customer_id: tempPo.customerId,
+            customer_name: tempPo.customerName || '',
+            po_number: tempPo.poNumber || '',
             due_date: poItem.dueDate,
           };
         } else {
@@ -171,9 +178,9 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-      // Get customer ID and fetch address
-      const customerId = items[0].order.customer_id || items[0].po.customerId;
-      const customerName = items[0].order.customer_name || items[0].order.customerName || 'Unknown Customer';
+      // Get customer ID and name from PO (Purchase Order has the customer info)
+      const customerId = items[0].po.customerId;
+      const customerName = items[0].po.customerName || 'Unknown Customer';
       
       const customerAddress = customerId ? await storage.getCustomerDefaultAddress(String(customerId)) : null;
       
@@ -358,13 +365,14 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
           font: font,
         });
 
-        const description = item.poItem.description || 'N/A';
-        const truncatedDesc = description.length > 25 ? description.substring(0, 25) + '...' : description;
+        // Use itemName for the product identifier (e.g., AG-CRB-AHV205-ER)
+        const itemName = item.poItem.itemName || item.poItem.stockModelName || 'N/A';
+        const truncatedName = itemName.length > 30 ? itemName.substring(0, 30) + '...' : itemName;
         
-        currentPage.drawText(truncatedDesc, {
+        currentPage.drawText(truncatedName, {
           x: margin + 80,
           y: currentY,
-          size: 10,
+          size: 9,
           font: font,
         });
 
@@ -928,13 +936,14 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           font: font,
         });
 
-        const description = item.poItem.description || 'N/A';
-        const truncatedDesc = description.length > 25 ? description.substring(0, 25) + '...' : description;
+        // Use itemName for the product identifier (e.g., AG-CRB-AHV205-ER)
+        const itemName = item.poItem.itemName || item.poItem.stockModelName || 'N/A';
+        const truncatedName = itemName.length > 30 ? itemName.substring(0, 30) + '...' : itemName;
         
-        currentPage.drawText(truncatedDesc, {
+        currentPage.drawText(truncatedName, {
           x: margin + 80,
           y: currentY,
-          size: 10,
+          size: 9,
           font: font,
         });
 

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { pool } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
+import { createShipment, ShipTo } from '../utils/upsShipping';
 
 const router = Router();
 
@@ -546,6 +547,365 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
   } catch (error: any) {
     console.error('❌ Error toggling fulfilled status:', error);
     res.status(500).json({ _error: 'Failed to update fulfilled status', details: error.message });
+  }
+});
+
+// POST /api/po-orders/process-shipment
+// Comprehensive shipment processing: validates items, generates 1 UPS label + multiple packing slips, updates status
+router.post('/process-shipment', authenticateToken, async (req, res) => {
+  try {
+    const { orderIds, serviceCode = '03', weightPerItemLbs = 5 } = req.body;
+
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ _error: 'orderIds array is required' });
+    }
+
+    console.log(`📦 Processing shipment for ${orderIds.length} items...`);
+    const { storage } = await import('../../storage');
+
+    // 1. VALIDATE: Fetch all orders and ensure they exist + are in Shipping QC
+    const orderDetails = await Promise.all(
+      orderIds.map(async (orderId) => {
+        const order = await storage.getProductionOrderByOrderId(orderId);
+        if (!order) {
+          throw new Error(`Order ${orderId} not found`);
+        }
+        if (order.currentDepartment !== 'Shipping QC') {
+          throw new Error(`Order ${orderId} is in ${order.currentDepartment}, not Shipping QC`);
+        }
+
+        // Get PO item details
+        if (!order.poItemId) {
+          throw new Error(`Order ${orderId} has no PO item ID`);
+        }
+        const poItem = await storage.getPurchaseOrderItem(order.poItemId);
+        if (!poItem) {
+          throw new Error(`PO item ${order.poItemId} not found`);
+        }
+
+        // Get PO details
+        const po = await storage.getPurchaseOrder(poItem.poId);
+        if (!po) {
+          throw new Error(`PO ${poItem.poId} not found`);
+        }
+
+        // Get customer details
+        const customer = await storage.getCustomer(parseInt(order.customerId));
+        if (!customer) {
+          throw new Error(`Customer ${order.customerId} not found`);
+        }
+
+        return { order, poItem, po, customer };
+      })
+    );
+
+    // 2. VALIDATE: Ensure all orders from same customer
+    const uniqueCustomerIds = new Set(orderDetails.map(d => d.order.customerId));
+    if (uniqueCustomerIds.size > 1) {
+      return res.status(400).json({
+        _error: 'All items must be from the same customer',
+        customers: Array.from(uniqueCustomerIds),
+      });
+    }
+
+    // 3. GROUP BY PO NUMBER
+    const poGroups = new Map<string, typeof orderDetails>();
+    orderDetails.forEach((detail) => {
+      const poNumber = detail.po.poNumber;
+      if (!poGroups.has(poNumber)) {
+        poGroups.set(poNumber, []);
+      }
+      poGroups.get(poNumber)!.push(detail);
+    });
+
+    console.log(`📊 Grouped ${orderDetails.length} items into ${poGroups.size} PO(s)`);
+    console.log(`📋 PO Numbers: ${Array.from(poGroups.keys()).join(', ')}`);
+
+    // 4. CALCULATE TOTAL WEIGHT
+    let totalWeight = 0;
+    for (const detail of orderDetails) {
+      const itemWeight = detail.poItem.weightLb || weightPerItemLbs;
+      totalWeight += itemWeight;
+    }
+    console.log(`⚖️  Total weight: ${totalWeight} lbs (${orderDetails.length} items)`);
+
+    // 5. GET CUSTOMER SHIPPING ADDRESS
+    const firstCustomer = orderDetails[0].customer;
+    const addresses = await storage.getCustomerAddresses(orderDetails[0].order.customerId);
+    const primaryAddress = addresses[0];
+
+    if (!primaryAddress) {
+      return res.status(400).json({
+        _error: `No shipping address found for customer ${firstCustomer.name}`,
+      });
+    }
+
+    const shipTo: ShipTo = {
+      name: firstCustomer.name || '',
+      attention: firstCustomer.name || '',
+      phone: firstCustomer.phone || '0000000000',
+      address1: primaryAddress.street || '',
+      address2: primaryAddress.street2 || undefined,
+      city: primaryAddress.city || '',
+      state: primaryAddress.state || '',
+      postalCode: primaryAddress.zipCode || '',
+      country: primaryAddress.country || 'United States',
+    };
+
+    // 6. BUILD REFERENCE NUMBER (truncated to 35 chars for UPS)
+    const poNumbers = Array.from(poGroups.keys());
+    const referenceNumber = poNumbers.join(',').substring(0, 35);
+    console.log(`📝 Reference number: ${referenceNumber}`);
+
+    // 7. GENERATE UPS SHIPPING LABEL
+    let trackingNumber: string;
+    let labelBase64: string;
+    try {
+      const shipmentResult = await createShipment({
+        shipTo,
+        serviceCode,
+        weightLbs: Math.max(totalWeight, 1),
+        referenceNumber,
+      });
+
+      trackingNumber = shipmentResult.trackingNumber;
+      labelBase64 = shipmentResult.labelBase64 || '';
+
+      if (!trackingNumber) {
+        throw new Error('UPS did not return a tracking number');
+      }
+
+      console.log(`✅ UPS Label generated: ${trackingNumber}`);
+    } catch (upsError: any) {
+      console.error('❌ UPS API Error:', upsError.message);
+      return res.status(502).json({
+        _error: 'UPS shipping label generation failed',
+        details: upsError.message,
+        suggestion: 'Check UPS credentials and try again, or process manually',
+      });
+    }
+
+    // 8. GENERATE PACKING SLIPS (one per PO)
+    const packingSlips: Array<{ poNumber: string; filename: string; data: string }> = [];
+
+    for (const [poNumber, items] of poGroups.entries()) {
+      const pdfDoc = await PDFDocument.create();
+      let currentPage = pdfDoc.addPage([612, 792]); // US Letter
+      const { width, height } = currentPage.getSize();
+
+      const margin = 50;
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+      let currentY = height - margin;
+
+      // Header
+      currentPage.drawText('AG COMPOSITES', {
+        x: margin,
+        y: currentY,
+        size: 20,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+      });
+
+      currentY -= 30;
+      currentPage.drawText('PACKING SLIP', {
+        x: margin,
+        y: currentY,
+        size: 16,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+      });
+
+      // PO Information
+      currentY -= 40;
+      currentPage.drawText(`Purchase Order: ${poNumber}`, {
+        x: margin,
+        y: currentY,
+        size: 12,
+        font: boldFont,
+      });
+
+      currentY -= 20;
+      currentPage.drawText(`Customer: ${firstCustomer.name}`, {
+        x: margin,
+        y: currentY,
+        size: 12,
+        font: font,
+      });
+
+      currentY -= 20;
+      currentPage.drawText(`Date: ${new Date().toLocaleDateString()}`, {
+        x: margin,
+        y: currentY,
+        size: 12,
+        font: font,
+      });
+
+      currentY -= 20;
+      currentPage.drawText(`Tracking #: ${trackingNumber}`, {
+        x: margin,
+        y: currentY,
+        size: 12,
+        font: font,
+      });
+
+      // Items table header
+      currentY -= 40;
+      currentPage.drawText('Item', {
+        x: margin,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+      });
+
+      currentPage.drawText('Description', {
+        x: margin + 80,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+      });
+
+      currentPage.drawText('Unit #', {
+        x: margin + 320,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+      });
+
+      currentPage.drawText('Action Length', {
+        x: margin + 380,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+      });
+
+      // Draw line under header
+      currentY -= 5;
+      currentPage.drawLine({
+        start: { x: margin, y: currentY },
+        end: { x: width - margin, y: currentY },
+        thickness: 1,
+        color: rgb(0, 0, 0),
+      });
+
+      // Items
+      currentY -= 20;
+      items.forEach((item, idx) => {
+        // Add new page if needed
+        if (currentY < margin + 50) {
+          currentPage = pdfDoc.addPage([612, 792]);
+          currentY = height - margin;
+        }
+
+        const unitMatch = item.order.orderId.match(/-(\d+)$/);
+        const unitNumber = unitMatch ? parseInt(unitMatch[1]) : 1;
+
+        currentPage.drawText(`${idx + 1}`, {
+          x: margin,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+
+        const description = item.poItem.description || 'N/A';
+        const truncatedDesc = description.length > 25 ? description.substring(0, 25) + '...' : description;
+        
+        currentPage.drawText(truncatedDesc, {
+          x: margin + 80,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+
+        currentPage.drawText(`${unitNumber}`, {
+          x: margin + 320,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+
+        currentPage.drawText(item.poItem.actionLength?.toString() || 'N/A', {
+          x: margin + 380,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+
+        currentY -= 20;
+      });
+
+      // Footer
+      const pages = pdfDoc.getPages();
+      const lastPage = pages[pages.length - 1];
+      const footerY = margin + 20;
+      lastPage.drawText(`Total Items: ${items.length}`, {
+        x: margin,
+        y: footerY,
+        size: 11,
+        font: boldFont,
+      });
+
+      const pdfBytes = await pdfDoc.save();
+      packingSlips.push({
+        poNumber,
+        filename: `Packing-Slip-PO-${poNumber}.pdf`,
+        data: Buffer.from(pdfBytes).toString('base64'),
+      });
+    }
+
+    console.log(`📄 Generated ${packingSlips.length} packing slip(s)`);
+
+    // 9. UPDATE ALL ORDERS TO SHIPPED STATUS (Transaction-safe approach)
+    const updateResults = {
+      success: [] as string[],
+      failed: [] as { orderId: string; reason: string }[],
+    };
+
+    const shippedAt = new Date().toISOString();
+    const username = (req as any).user?.username || 'system';
+
+    for (const detail of orderDetails) {
+      try {
+        await storage.updateProductionOrder(detail.order.id, {
+          currentDepartment: 'Shipping',
+          productionStatus: 'SHIPPED',
+          shippedAt,
+          trackingNumber,
+        });
+        updateResults.success.push(detail.order.orderId);
+        console.log(`✅ ${detail.order.orderId} marked as SHIPPED`);
+      } catch (error: any) {
+        console.error(`❌ Failed to update ${detail.order.orderId}:`, error.message);
+        updateResults.failed.push({ orderId: detail.order.orderId, reason: error.message });
+      }
+    }
+
+    console.log(`✅ Shipment processed successfully`);
+    console.log(`   - Tracking: ${trackingNumber}`);
+    console.log(`   - Updated: ${updateResults.success.length}/${orderIds.length} items`);
+
+    // Return comprehensive response
+    res.json({
+      success: true,
+      trackingNumber,
+      shippingLabel: {
+        format: 'GIF',
+        data: labelBase64,
+      },
+      packingSlips,
+      itemsShipped: updateResults.success.length,
+      itemsFailed: updateResults.failed.length,
+      poNumbers: Array.from(poGroups.keys()),
+      totalWeight: totalWeight,
+      updateResults,
+    });
+  } catch (error: any) {
+    console.error('❌ Error processing shipment:', error);
+    res.status(500).json({
+      _error: 'Failed to process shipment',
+      details: error.message,
+    });
   }
 });
 

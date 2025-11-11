@@ -58,6 +58,12 @@ export default function QCShippingQueuePage() {
   // State for PO order selection (customer-level selection)
   const [selectedPOItems, setSelectedPOItems] = useState<Set<string>>(new Set());
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
+  
+  // State for shipment confirmation modal
+  const [showShipmentModal, setShowShipmentModal] = useState(false);
+  const [shipmentProcessing, setShipmentProcessing] = useState(false);
+  const [shipmentResult, setShipmentResult] = useState<any>(null);
+  const [weightPerItem, setWeightPerItem] = useState(5);
 
   // State for bulk printing modal
   const [showBulkPrintModal, setShowBulkPrintModal] = useState(false);
@@ -92,12 +98,90 @@ export default function QCShippingQueuePage() {
   const { data: features = [] } = useQuery({
     queryKey: ['/api/features'],
   });
+  
+  // Mutation for processing shipment
+  const processShipmentMutation = useMutation({
+    mutationFn: async ({ orderIds, weightPerItemLbs }: { orderIds: string[]; weightPerItemLbs: number }) => {
+      return await apiRequest('/api/po-orders/process-shipment', {
+        method: 'POST',
+        body: JSON.stringify({ orderIds, weightPerItemLbs }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    onSuccess: (data) => {
+      console.log('Shipment processed successfully:', data);
+      // Invalidate queries to refresh UI
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/shipping-qc'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/all-p1-with-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      
+      // Store result and show success state
+      setShipmentResult(data);
+      setShipmentProcessing(false);
+      
+      toast({
+        title: 'Shipment Processed Successfully',
+        description: `Tracking: ${data.trackingNumber}. ${data.packingSlips.length} packing slip(s) generated.`,
+      });
+    },
+    onError: (error: any) => {
+      console.error('Shipment processing failed:', error);
+      setShipmentProcessing(false);
+      toast({
+        title: 'Shipment Failed',
+        description: error.message || 'Failed to process shipment',
+        variant: 'destructive',
+      });
+    },
+  });
 
   // Fetch all kickbacks to determine which orders have kickbacks
   const { data: allKickbacks = [] } = useQuery({
     queryKey: ['/api/kickbacks'],
     refetchInterval: 30000, // Refresh every 30 seconds
   });
+
+  // Helper function to download shipment documents
+  const handleShipmentDocuments = (shipmentData: any) => {
+    try {
+      // Download shipping label (GIF base64)
+      if (shipmentData.shippingLabel?.data) {
+        const labelBlob = new Blob(
+          [Uint8Array.from(atob(shipmentData.shippingLabel.data), c => c.charCodeAt(0))],
+          { type: 'image/gif' }
+        );
+        const labelUrl = URL.createObjectURL(labelBlob);
+        const labelLink = document.createElement('a');
+        labelLink.href = labelUrl;
+        labelLink.download = `Shipping-Label-${shipmentData.trackingNumber}.gif`;
+        labelLink.click();
+        URL.revokeObjectURL(labelUrl);
+      }
+
+      // Download packing slips (PDF base64)
+      if (shipmentData.packingSlips && Array.isArray(shipmentData.packingSlips)) {
+        shipmentData.packingSlips.forEach((slip: any) => {
+          const slipBlob = new Blob(
+            [Uint8Array.from(atob(slip.data), c => c.charCodeAt(0))],
+            { type: 'application/pdf' }
+          );
+          const slipUrl = URL.createObjectURL(slipBlob);
+          const slipLink = document.createElement('a');
+          slipLink.href = slipUrl;
+          slipLink.download = slip.filename;
+          slipLink.click();
+          URL.revokeObjectURL(slipUrl);
+        });
+      }
+    } catch (error) {
+      console.error('Error downloading shipment documents:', error);
+      toast({
+        title: 'Download Error',
+        description: 'Some documents may not have downloaded correctly',
+        variant: 'destructive',
+      });
+    }
+  };
 
   // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
@@ -1315,17 +1399,31 @@ export default function QCShippingQueuePage() {
                 <span>P1 Purchase Orders - Pipeline Status</span>
                 <div className="flex items-center gap-2">
                   {selectedPOItems.size > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedPOItems(new Set());
-                        setSelectedCustomer(null);
-                      }}
-                      className="text-xs"
-                    >
-                      Clear Selection ({selectedPOItems.size})
-                    </Button>
+                    <>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => setShowShipmentModal(true)}
+                        className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                        data-testid="button-ship-selected"
+                      >
+                        <Truck className="h-4 w-4 mr-2" />
+                        Ship Selected ({selectedPOItems.size})
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedPOItems(new Set());
+                          setSelectedCustomer(null);
+                        }}
+                        className="text-xs"
+                        data-testid="button-clear-selection"
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Clear Selection
+                      </Button>
+                    </>
                   )}
                   <Badge variant="outline">
                     {(poOrders as any[]).reduce((total, customer) => {
@@ -1803,6 +1901,236 @@ export default function QCShippingQueuePage() {
           }}
           orderId={salesOrderId}
         />
+      )}
+
+      {/* Shipment Confirmation Modal */}
+      {showShipmentModal && (
+        <Dialog 
+          open={showShipmentModal} 
+          onOpenChange={(open) => {
+            if (!shipmentProcessing) {
+              setShowShipmentModal(open);
+              if (!open) {
+                setShipmentResult(null);
+                setWeightPerItem(5);
+                setSelectedPOItems(new Set());
+                setSelectedCustomer(null);
+              }
+            }
+          }}
+        >
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {shipmentResult ? (
+                  <>
+                    <CheckCircle className="h-6 w-6 text-green-600" />
+                    Shipment Created Successfully
+                  </>
+                ) : (
+                  <>
+                    <Truck className="h-6 w-6 text-blue-600" />
+                    Confirm Shipment
+                  </>
+                )}
+              </DialogTitle>
+            </DialogHeader>
+
+            {shipmentResult ? (
+              // SUCCESS STATE: Show tracking and download buttons
+              <div className="space-y-4">
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                  <h4 className="font-semibold text-green-800 dark:text-green-300 mb-2">Tracking Number</h4>
+                  <div className="flex items-center gap-2">
+                    <code className="text-lg font-mono bg-white dark:bg-gray-800 px-3 py-1 rounded border">
+                      {shipmentResult.trackingNumber}
+                    </code>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        navigator.clipboard.writeText(shipmentResult.trackingNumber);
+                        toast({ title: 'Copied to clipboard' });
+                      }}
+                    >
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="border rounded-lg p-4 space-y-3">
+                  <h4 className="font-semibold mb-2">Download Documents</h4>
+                  <Button
+                    className="w-full"
+                    onClick={() => handleShipmentDocuments(shipmentResult)}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download All ({1 + shipmentResult.packingSlips.length} files)
+                  </Button>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    • 1 Shipping Label (GIF)<br />
+                    • {shipmentResult.packingSlips.length} Packing Slip(s) (PDF)
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button
+                    onClick={() => {
+                      setShowShipmentModal(false);
+                      setShipmentResult(null);
+                      setWeightPerItem(5);
+                      setSelectedPOItems(new Set());
+                      setSelectedCustomer(null);
+                    }}
+                  >
+                    Done
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              // CONFIRMATION STATE: Show shipment summary
+              <div className="space-y-4">
+                {(() => {
+                  // Calculate shipment summary
+                  const selectedItems = Array.from(selectedPOItems);
+                  const poGroups = new Map<string, any[]>();
+                  
+                  // Group selected items by PO
+                  (poOrders as any[]).forEach(customer => {
+                    customer.pos.forEach((po: any) => {
+                      po.items.forEach((item: any) => {
+                        if (selectedItems.includes(item.orderId)) {
+                          if (!poGroups.has(po.poNumber)) {
+                            poGroups.set(po.poNumber, []);
+                          }
+                          poGroups.get(po.poNumber)!.push(item);
+                        }
+                      });
+                    });
+                  });
+
+                  const totalWeight = selectedItems.length * weightPerItem;
+
+                  return (
+                    <>
+                      {/* Summary Card */}
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                        <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">Shipment Summary</h4>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <span className="text-gray-600 dark:text-gray-400">Total Items:</span>
+                            <span className="ml-2 font-semibold">{selectedItems.length}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600 dark:text-gray-400">Purchase Orders:</span>
+                            <span className="ml-2 font-semibold">{poGroups.size}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600 dark:text-gray-400">Customer:</span>
+                            <span className="ml-2 font-semibold">{selectedCustomer}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600 dark:text-gray-400">Service:</span>
+                            <span className="ml-2 font-semibold">UPS Ground</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* PO Breakdown */}
+                      <div className="border rounded-lg p-4">
+                        <h4 className="font-semibold mb-2">Purchase Order Breakdown</h4>
+                        <div className="space-y-2">
+                          {Array.from(poGroups.entries()).map(([poNumber, items]) => (
+                            <div key={poNumber} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                              <span className="font-mono text-sm">PO #{poNumber}</span>
+                              <Badge variant="secondary">{items.length} items</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Weight Configuration */}
+                      <div className="border rounded-lg p-4">
+                        <h4 className="font-semibold mb-2">Shipping Weight</h4>
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1">
+                            <label className="text-sm text-gray-600 dark:text-gray-400">Weight per item (lbs)</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="150"
+                              value={weightPerItem}
+                              onChange={(e) => setWeightPerItem(Math.max(1, parseInt(e.target.value) || 5))}
+                              className="w-full px-3 py-2 border rounded-md"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-sm text-gray-600 dark:text-gray-400">Total weight</label>
+                            <div className="text-2xl font-bold text-blue-600">{totalWeight} lbs</div>
+                          </div>
+                        </div>
+                        {weightPerItem === 5 && (
+                          <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
+                            ⚠️ Using default 5 lbs per item. Adjust if needed for accurate shipping cost.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Documents Preview */}
+                      <div className="border rounded-lg p-4">
+                        <h4 className="font-semibold mb-2">Documents to Generate</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-blue-600" />
+                            <span>1 UPS Shipping Label (combined)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-green-600" />
+                            <span>{poGroups.size} Packing Slip(s) (one per PO)</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowShipmentModal(false)}
+                          disabled={shipmentProcessing}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => {
+                            setShipmentProcessing(true);
+                            processShipmentMutation.mutate({
+                              orderIds: Array.from(selectedPOItems),
+                              weightPerItemLbs: weightPerItem,
+                            });
+                          }}
+                          disabled={shipmentProcessing}
+                        >
+                          {shipmentProcessing ? (
+                            <>
+                              <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Confirm & Ship
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

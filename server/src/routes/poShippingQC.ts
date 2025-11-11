@@ -72,26 +72,70 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
 
     console.log(`📄 Generating packing slips for ${orderIds.length} PO items...`);
     const { storage } = await import('../../storage');
+    const pool = (await import('../../db')).default;
 
-    // Fetch order details
+    // Fetch order details - handle both Order IDs and poItemId-unitNumber format
     const orderDetails = await Promise.all(
-      orderIds.map(async (orderId) => {
-        const order = await storage.getProductionOrderByOrderId(orderId);
-        if (!order) {
-          console.warn(`⚠️ Order ${orderId} not found`);
-          return null;
-        }
+      orderIds.map(async (itemKey) => {
+        let order: any = null;
+        let poItem: any = null;
+        
+        // Check if this is in poItemId-unitNumber format (e.g., "92-1")
+        const match = itemKey.match(/^(\d+)-(\d+)$/);
+        
+        if (match) {
+          // Format: poItemId-unitNumber
+          const poItemId = parseInt(match[1]);
+          const unitNumber = parseInt(match[2]);
+          console.log(`🔍 Looking up by PO item ID ${poItemId}, unit ${unitNumber}`);
+          
+          // Get PO item directly
+          poItem = await storage.getPurchaseOrderItem(poItemId);
+          if (!poItem) {
+            console.warn(`⚠️ PO item ${poItemId} not found`);
+            return null;
+          }
+          
+          // Try to find associated production order
+          const query = `
+            SELECT * FROM production_orders 
+            WHERE po_item_id = $1 AND unit_number = $2 
+            LIMIT 1
+          `;
+          const result = await pool.query(query, [poItemId, unitNumber]);
+          order = result.rows?.[0] || null;
+          
+          if (!order) {
+            console.warn(`⚠️ No production order found for PO item ${poItemId}, unit ${unitNumber}`);
+            // Create a minimal order object for packing slip generation
+            order = {
+              poItemId,
+              unitNumber,
+              orderId: `Unit ${unitNumber}`,
+              itemId: poItem.stockModelId,
+              itemName: poItem.stockModelName,
+              specifications: poItem.specifications,
+            };
+          }
+        } else {
+          // Standard Order ID format (e.g., "AG123", "EH456")
+          order = await storage.getProductionOrderByOrderId(itemKey);
+          if (!order) {
+            console.warn(`⚠️ Order ${itemKey} not found`);
+            return null;
+          }
 
-        // Get PO item details
-        if (!order.poItemId) {
-          console.warn(`⚠️ Order ${orderId} has no PO item ID`);
-          return null;
-        }
+          // Get PO item details
+          if (!order.poItemId) {
+            console.warn(`⚠️ Order ${itemKey} has no PO item ID`);
+            return null;
+          }
 
-        const poItem = await storage.getPurchaseOrderItem(order.poItemId);
-        if (!poItem) {
-          console.warn(`⚠️ PO item ${order.poItemId} not found`);
-          return null;
+          poItem = await storage.getPurchaseOrderItem(order.poItemId);
+          if (!poItem) {
+            console.warn(`⚠️ PO item ${order.poItemId} not found`);
+            return null;
+          }
         }
 
         // Get PO details

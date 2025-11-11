@@ -65,6 +65,10 @@ export default function QCShippingQueuePage() {
   const [shipmentProcessing, setShipmentProcessing] = useState(false);
   const [shipmentResult, setShipmentResult] = useState<any>(null);
   const [weightPerItem, setWeightPerItem] = useState(5);
+  
+  // State for packing slip viewer modal
+  const [showPackingSlipModal, setShowPackingSlipModal] = useState(false);
+  const [packingSlipData, setPackingSlipData] = useState<any[]>([]);
 
   // State for bulk printing modal
   const [showBulkPrintModal, setShowBulkPrintModal] = useState(false);
@@ -575,30 +579,10 @@ export default function QCShippingQueuePage() {
       return response;
     },
     onSuccess: (data) => {
-      if (data.pdfs && Array.isArray(data.pdfs)) {
-        // Always an array - download each PDF
-        data.pdfs.forEach((pdf: any, index: number) => {
-          // Create blob from base64
-          const byteCharacters = atob(pdf.data);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: 'application/pdf' });
-          
-          // Create download link
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = pdf.filename;
-          
-          // Trigger download with small delay between files
-          setTimeout(() => {
-            link.click();
-            URL.revokeObjectURL(url);
-          }, index * 100);
-        });
+      if (data.pdfs && Array.isArray(data.pdfs) && data.pdfs.length > 0) {
+        // Show modal with packing slips
+        setPackingSlipData(data.pdfs);
+        setShowPackingSlipModal(true);
         
         toast({
           title: 'Packing Slips Generated',
@@ -606,8 +590,8 @@ export default function QCShippingQueuePage() {
         });
       } else {
         toast({
-          title: 'Error',
-          description: 'Invalid response format from server',
+          title: 'No Packing Slips Generated',
+          description: 'No valid items found to generate packing slips',
           variant: 'destructive',
         });
       }
@@ -1532,19 +1516,6 @@ export default function QCShippingQueuePage() {
                                             const isDisabled = !item.isReadyToShip || !!(selectedCustomer && selectedCustomer !== customer.customerName);
                                             const departmentBadge = getDepartmentBadge(item.currentDepartment, item.productionStatus);
                                             
-                                            // Debug logging
-                                            if (item.isReadyToShip) {
-                                              console.log('Item render:', {
-                                                orderId: item.orderId,
-                                                itemKey,
-                                                poItemId: item.poItemId,
-                                                unitNumber: item.unitNumber,
-                                                isSelected,
-                                                selectedPOItems: Array.from(selectedPOItems),
-                                                hasCheck: selectedPOItems.has(itemKey)
-                                              });
-                                            }
-                                            
                                             return (
                                               <div
                                                 key={item.orderId || `unscheduled-${item.poItemId}-${item.unitNumber}`}
@@ -1561,14 +1532,6 @@ export default function QCShippingQueuePage() {
                                                     checked={isSelected}
                                                     disabled={isDisabled}
                                                     onCheckedChange={(checked) => {
-                                                      console.log('Checkbox clicked:', {
-                                                        orderId: item.orderId,
-                                                        itemKey,
-                                                        checked,
-                                                        currentSelected: Array.from(selectedPOItems),
-                                                        customerName: customer.customerName
-                                                      });
-                                                      
                                                       const newSelected = new Set(selectedPOItems);
                                                       if (checked) {
                                                         newSelected.add(itemKey);
@@ -1579,8 +1542,6 @@ export default function QCShippingQueuePage() {
                                                           setSelectedCustomer(null);
                                                         }
                                                       }
-                                                      
-                                                      console.log('New selected:', Array.from(newSelected));
                                                       setSelectedPOItems(newSelected);
                                                     }}
                                                     data-testid={`checkbox-po-item-${itemKey}`}
@@ -1928,6 +1889,110 @@ export default function QCShippingQueuePage() {
           }}
           orderId={salesOrderId}
         />
+      )}
+
+      {/* Packing Slip Viewer Modal */}
+      {showPackingSlipModal && packingSlipData.length > 0 && (
+        <Dialog open={showPackingSlipModal} onOpenChange={setShowPackingSlipModal}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-6 w-6 text-blue-600" />
+                Packing Slips ({packingSlipData.length})
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto space-y-4 p-4">
+              {packingSlipData.map((pdf, index) => {
+                // Convert base64 to blob URL for preview
+                const byteCharacters = atob(pdf.data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                  byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+
+                return (
+                  <div key={index} className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-lg">
+                        {pdf.filename || `Packing Slip ${index + 1}`}
+                      </h4>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = pdf.filename || `packing-slip-${index + 1}.pdf`;
+                            link.click();
+                          }}
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Download
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            const printWindow = window.open(url, '_blank');
+                            if (printWindow) {
+                              printWindow.addEventListener('load', () => {
+                                printWindow.print();
+                              });
+                            }
+                          }}
+                        >
+                          <Printer className="h-4 w-4 mr-2" />
+                          Print
+                        </Button>
+                      </div>
+                    </div>
+                    <iframe
+                      src={url}
+                      className="w-full h-[600px] border rounded"
+                      title={pdf.filename || `Packing Slip ${index + 1}`}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-between items-center border-t pt-4 px-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // Download all
+                  packingSlipData.forEach((pdf, index) => {
+                    const byteCharacters = atob(pdf.data);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                      byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    const byteArray = new Uint8Array(byteNumbers);
+                    const blob = new Blob([byteArray], { type: 'application/pdf' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = pdf.filename || `packing-slip-${index + 1}.pdf`;
+                    setTimeout(() => {
+                      link.click();
+                      URL.revokeObjectURL(url);
+                    }, index * 100);
+                  });
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download All
+              </Button>
+              <Button onClick={() => setShowPackingSlipModal(false)}>
+                Close
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Shipment Confirmation Modal */}

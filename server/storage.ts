@@ -101,6 +101,8 @@ import {
   vendorPOItems,
   // Follow-up orders table
   followupOrders,
+  // Invoice numbers tracking table
+  invoiceNumbers,
 
   // Types
   type Order,

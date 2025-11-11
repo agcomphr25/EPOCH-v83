@@ -12000,6 +12000,108 @@ export class DatabaseStorage implements IStorage {
   async deleteCuttingFabricInventory(id: string): Promise<void> {
     await db.delete(cuttingFabricInventory).where(eq(cuttingFabricInventory.id, id));
   }
+
+  // Invoice Number Tracking
+  async getNextInvoiceNumber(customerId: string, customerName: string): Promise<string> {
+    const now = new Date();
+    const year = now.getFullYear();
+    const yearShort = year.toString().slice(-2); // "25" for 2025
+
+    // Map customer names to customer codes
+    const customerCodeMap: Record<string, string> = {
+      'Red Hawk LLC': 'RH',
+      'Pure Precision': 'PP',
+    };
+
+    let customerCode = customerCodeMap[customerName];
+    
+    // If no mapping found, try to extract initials from company name
+    if (!customerCode) {
+      const words = customerName.trim().split(/\s+/);
+      if (words.length >= 2) {
+        customerCode = words[0].charAt(0).toUpperCase() + words[1].charAt(0).toUpperCase();
+      } else {
+        customerCode = customerName.substring(0, 2).toUpperCase();
+      }
+    }
+
+    // Get or create invoice tracking record
+    const [record] = await db
+      .select()
+      .from(invoiceNumbers)
+      .where(and(
+        eq(invoiceNumbers.customerId, customerId),
+        eq(invoiceNumbers.year, year)
+      ));
+
+    let nextNumber: number;
+
+    if (record) {
+      // Increment existing record
+      nextNumber = record.lastNumber + 1;
+      await db
+        .update(invoiceNumbers)
+        .set({ lastNumber: nextNumber, updatedAt: new Date() })
+        .where(eq(invoiceNumbers.id, record.id));
+    } else {
+      // Create new record for this customer/year
+      nextNumber = 200; // Starting number
+      await db.insert(invoiceNumbers).values({
+        customerId,
+        customerCode,
+        year,
+        lastNumber: nextNumber,
+      });
+    }
+
+    // Format: PP25-200, RH25-201, etc.
+    return `${customerCode}${yearShort}-${nextNumber.toString().padStart(3, '0')}`;
+  }
+
+  async getCustomerDefaultAddress(customerId: number): Promise<{
+    street: string;
+    street2: string | null;
+    city: string;
+    state: string;
+    zipCode: string;
+  } | null> {
+    const [address] = await db
+      .select()
+      .from(customerAddresses)
+      .where(and(
+        eq(customerAddresses.customerId, customerId),
+        eq(customerAddresses.isDefault, true)
+      ));
+
+    if (address) {
+      return {
+        street: address.street,
+        street2: address.street2 || null,
+        city: address.city,
+        state: address.state,
+        zipCode: address.zipCode,
+      };
+    }
+
+    // If no default, get first address
+    const [firstAddress] = await db
+      .select()
+      .from(customerAddresses)
+      .where(eq(customerAddresses.customerId, customerId))
+      .limit(1);
+
+    if (firstAddress) {
+      return {
+        street: firstAddress.street,
+        street2: firstAddress.street2 || null,
+        city: firstAddress.city,
+        state: firstAddress.state,
+        zipCode: firstAddress.zipCode,
+      };
+    }
+
+    return null;
+  }
 }
 
 export const storage = new DatabaseStorage();

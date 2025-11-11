@@ -252,17 +252,22 @@ export default function AdminPanelPage() {
       {
         accessorKey: 'currentDepartment',
         header: 'Department',
-        cell: ({ row }) => (
-          <Badge variant="outline" data-testid={`badge-department-${row.original.orderId}`}>
-            {row.getValue('currentDepartment')}
-          </Badge>
-        ),
+        cell: ({ row }) => {
+          const deptValue = row.getValue('currentDepartment') as string;
+          const dept = departmentTypes.find((d: any) => d.name === deptValue);
+          return (
+            <Badge variant="outline" data-testid={`badge-department-${row.original.orderId}`}>
+              {dept?.displayName || deptValue}
+            </Badge>
+          );
+        },
       },
       {
         accessorKey: 'currentStatus',
         header: 'Status',
         cell: ({ row }) => {
           const statusValue = row.original.status; // Use raw database value
+          const currentStatus = statusTypes.find((s: any) => s.name === statusValue);
           return (
             <Select
               value={statusValue || ''}
@@ -279,7 +284,9 @@ export default function AdminPanelPage() {
                 className="w-[150px] h-8" 
                 data-testid={`select-status-${row.original.orderId}`}
               >
-                <SelectValue />
+                <SelectValue>
+                  {currentStatus?.displayName || statusValue}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {statusTypes.map((status: any) => (

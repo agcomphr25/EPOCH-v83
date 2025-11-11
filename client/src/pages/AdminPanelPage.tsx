@@ -509,16 +509,16 @@ export default function AdminPanelPage() {
             </div>
             
             <Select
-              value={(table.getColumn('currentDepartment')?.getFilterValue() as string) ?? ''}
+              value={(table.getColumn('currentDepartment')?.getFilterValue() as string) ?? 'ALL'}
               onValueChange={(value) =>
-                table.getColumn('currentDepartment')?.setFilterValue(value || undefined)
+                table.getColumn('currentDepartment')?.setFilterValue(value === 'ALL' ? undefined : value)
               }
             >
               <SelectTrigger className="w-[200px]" data-testid="select-department">
                 <SelectValue placeholder="Filter by Department" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Departments</SelectItem>
+                <SelectItem value="ALL">All Departments</SelectItem>
                 <SelectItem value="Layup">Layup</SelectItem>
                 <SelectItem value="Finish">Finish</SelectItem>
                 <SelectItem value="Gunsmith">Gunsmith</SelectItem>
@@ -529,16 +529,16 @@ export default function AdminPanelPage() {
             </Select>
 
             <Select
-              value={(table.getColumn('currentStatus')?.getFilterValue() as string) ?? ''}
+              value={(table.getColumn('currentStatus')?.getFilterValue() as string) ?? 'ALL'}
               onValueChange={(value) =>
-                table.getColumn('currentStatus')?.setFilterValue(value || undefined)
+                table.getColumn('currentStatus')?.setFilterValue(value === 'ALL' ? undefined : value)
               }
             >
               <SelectTrigger className="w-[200px]" data-testid="select-status">
                 <SelectValue placeholder="Filter by Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Statuses</SelectItem>
+                <SelectItem value="ALL">All Statuses</SelectItem>
                 <SelectItem value="In Production">In Production</SelectItem>
                 <SelectItem value="On Hold">On Hold</SelectItem>
                 <SelectItem value="Completed">Completed</SelectItem>

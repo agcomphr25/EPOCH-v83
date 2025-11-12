@@ -64,6 +64,7 @@ interface POProduct {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  otherOptions: string[];
 }
 
 interface POProductFormData {
@@ -83,6 +84,7 @@ interface POProductFormData {
   texture: string;
   flatTop: boolean;
   price: string;
+  otherOptions: string[];
 }
 
 export default function POProductsPage() {
@@ -108,6 +110,7 @@ export default function POProductsPage() {
     texture: '',
     flatTop: false,
     price: '',
+    otherOptions: [],
   });
 
   // Fetch PO Products
@@ -226,7 +229,7 @@ export default function POProductsPage() {
 
   const handleInputChange = (
     field: keyof POProductFormData,
-    value: string | boolean
+    value: string | boolean | string[]
   ) => {
     setFormData((prev) => ({
       ...prev,
@@ -277,6 +280,7 @@ export default function POProductsPage() {
       texture: '',
       flatTop: false,
       price: '',
+      otherOptions: [],
     });
     setEditingProduct(null);
   };
@@ -300,6 +304,7 @@ export default function POProductsPage() {
       texture: product.texture,
       flatTop: product.flatTop || false,
       price: product.price.toString(),
+      otherOptions: product.otherOptions || [],
     });
     setShowCreateForm(true);
   };
@@ -894,6 +899,61 @@ export default function POProductsPage() {
                         </Label>
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                {/* Other Options Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Other Options
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {(() => {
+                      const otherOptionsFeature = features.find(
+                        (f: any) =>
+                          f.id === 'other_options' || f.name === 'other_options'
+                      );
+
+                      if (!otherOptionsFeature || !otherOptionsFeature.options) {
+                        return null;
+                      }
+
+                      return otherOptionsFeature.options.map((option: any) => (
+                        <div key={option.value} className="flex items-start space-x-2">
+                          <Checkbox
+                            id={`other-option-${option.value}`}
+                            checked={formData.otherOptions.includes(option.value)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                handleInputChange('otherOptions', [
+                                  ...formData.otherOptions,
+                                  option.value,
+                                ]);
+                              } else {
+                                handleInputChange(
+                                  'otherOptions',
+                                  formData.otherOptions.filter(
+                                    (v) => v !== option.value
+                                  )
+                                );
+                              }
+                            }}
+                            data-testid={`checkbox-other-option-${option.value}`}
+                          />
+                          <Label
+                            htmlFor={`other-option-${option.value}`}
+                            className="text-sm font-normal cursor-pointer"
+                          >
+                            {option.label}
+                            {option.price > 0 && (
+                              <span className="text-gray-500 ml-1">
+                                (+${option.price})
+                              </span>
+                            )}
+                          </Label>
+                        </div>
+                      ));
+                    })()}
                   </div>
                 </div>
 

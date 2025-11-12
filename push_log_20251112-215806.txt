@@ -1,0 +1,42 @@
+Your branch and 'origin/main' have diverged,
+and have 16 and 5 different commits each, respectively.
+  (use "git pull" if you want to integrate the remote branch with yours)
+[feature-20251112-2158-my-change 489dbc30d] feat: my-change
+ 1 file changed, 3 insertions(+)
+ create mode 100644 push_log_20251112-215806.txt
+branch 'feature-20251112-2158-my-change' set up to track 'origin/feature-20251112-2158-my-change'.
+> 489dbc30d (HEAD -> feature-20251112-2158-my-change, origin/feature-20251112-2158-my-change) feat: my-change
+> 7c14596a0 (gitsafe-backup/main, gitsafe-backup/HEAD, main) Saved progress at the end of the loop
+> 31853378d Add an optional dropdown for other product options
+> a7a442320 Add other options to product details and editing forms
+> bce3fb473 Add a new dropdown for other product options to the orders
+> 7cf8ed86f Add detailed production order tracking and department progression
+> 699cc3ef5 commit
+> ddc2a3f39 Add detailed logging for production orders to aid debugging
+> 210fdd92b Improve order progress updates to handle production orders correctly
+> 5f87c9b0f Saved progress at the end of the loop
+> 8612f3b9e Improve order progression and error handling across departments
+> 263b20836 Saved progress at the end of the loop
+> 0bba67a9b Add direct progression for flattop PO orders to the Finish department
+> 633de790b Add action length to PO order barcode labels
+> b175d9666 Saved progress at the end of the loop
+> dde1ea13d Add failure reasons to order processing errors
+> 8c1f89c22 Improve order progression handling and error reporting for barcode department
+< bbb4d6047 (origin/main, origin/HEAD) Add production tracking for manufacturing departments and workflow history
+< bc19ba56d Ensure only completed or non-stock items appear in the shipping QC queue
+< cdc9b2b93 Published your App
+< 41d1e8ebf Published your App
+< 5bed6db8e Published your App
+ ...-the-Content-Se-1762982544985_1762982544986.txt | 158 ++++++++++++++++
+ ...-the-Content-Se-1762982835019_1762982835020.txt | 200 +++++++++++++++++++++
+ client/src/pages/BarcodeQueuePage.tsx              | 142 +++++++++++++--
+ client/src/pages/CNCQueuePage.tsx                  |  40 +++--
+ client/src/pages/FinishQCQueuePage.tsx             |  20 ++-
+ client/src/pages/POProductsPage.tsx                |  62 ++++++-
+ push_log_20251112-215806.txt                       |   3 +
+ replit.md                                          |  92 +++-------
+ server/schema.ts                                   |  16 ++
+ server/src/routes/index.ts                         | 122 +++++++++----
+ server/src/routes/poShippingQC.ts                  |  74 ++++++++
+ 11 files changed, 787 insertions(+), 142 deletions(-)
+Open PR: https://github.com/agcomphr25/EPOCH-v83/compare/feature-20251112-2158-my-change?expand=1

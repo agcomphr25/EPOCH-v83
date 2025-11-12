@@ -1,7 +1,9 @@
 # EPOCH v8 - Manufacturing ERP System
 
 ## Overview
-EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. Its primary goal is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The system aims to be a leading ERP solution by offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to both web and mobile platforms. Key capabilities include a robust Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System.
+
+EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. Its primary goal is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The system is a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. Key capabilities include a robust Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System. The business vision is to be the leading ERP solution for small-to-medium customizable product manufacturers.
+
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -25,34 +27,44 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 -   **Authentication**: Hybrid JWT + Session authentication with capability-based access control and a 3-role system (ADMIN, EMPLOYEE, OWNER).
 -   **Data Consistency**: A `features` object acts as the single source of truth for feature data.
 -   **Modular Routing**: Backend routes are organized into specialized modules.
--   **Atomic Order ID Reservation**: Database-based atomic reservation system for unique, sequential Order ID generation.
+
+-   **Atomic Order ID Reservation**: A database-based atomic reservation system ensures unique, sequential Order ID generation.
 -   **Asset Path Resolution**: Centralized asset path resolver ensures consistent file access.
--   **UI/UX**: ShadCN UI with Tailwind CSS and Framer Motion.
+-   **UI/UX**: Leverages ShadCN UI components with Tailwind CSS and Framer Motion for animations.
 -   **CI/CD**: Implemented with pre-commit hooks (Husky + lint-staged) and GitHub Actions.
--   **BOM System**: Robust Bill of Materials with UUID-based architecture, revision control, and recursive explosion/where-used analysis.
--   **Google OAuth Integration**: Production-ready OAuth 2.0 flow with CSRF protection and secure token storage.
--   **Global Search System**: Multi-entity search across Customers, Orders, Vendors, Employees, and Inventory.
--   **Vendor Evaluation System**: Question-based evaluation with 4 criteria, automatic status, and monthly reset.
--   **Linked Orders Management**: Functionality to link multiple orders for combined processing.
--   **Urgency/Priority System**: Manually flagged urgent orders with visual badges and production queue sorting.
--   **Rush Fee System**: Adjusts due dates for "Expedite" and "Rush" orders.
--   **P1 Purchase Orders Queue**: Displays open purchase orders with stock items needing layup, excluding "no stock" items.
--   **Vendor Purchase Order Management**: Full CRUD operations for vendor POs and line items.
--   **Inventory CSV Import**: Transactional "Replace All" with two-phase validation and batch inserts.
--   **Layup Schedule Enhancement**: Dual-view system with production-relevant data, print-friendly format, and barcode system. Includes interactive week/day selection with a round-robin algorithm.
--   **Parts List Management**: Enhanced inventory items with MRP/COGS fields and production line utilization flags; CSV import/export.
--   **Department Technician Assignment**: Employee profiles include department-specific assignment flags.
+-   **BOM System**: Robust Bill of Materials system with UUID-based architecture, revision control, and comprehensive CRUD operations.
+-   **Google OAuth Integration**: Production-ready OAuth 2.0 flow with CSRF protection, secure state management, and token storage.
+-   **Global Search System**: Multi-entity search across Customers, Orders, Vendors, Employees, and Inventory Items.
+-   **Vendor Evaluation System**: Question-based evaluation with 4 criteria, automatic status, auto-dating, and a monthly reset.
+-   **Linked Orders Management**: Functionality to link multiple orders for combined processing/shipping.
+-   **Urgency/Priority System**: Implemented for manually flagged urgent orders with visual badges and production queue sorting.
+-   **Rush Fee System**: Adjusts due dates for "Expedite" and "Rush" orders with visual badges and notifications.
+-   **P1 Purchase Orders Queue**: Displays open purchase orders with stock items needing layup, grouped by customer.
+-   **Vendor Purchase Order Management**: Full CRUD operations for vendor POs and line items with Zod validation.
+-   **Inventory CSV Import**: Transactional "Replace All" with two-phase validation and atomic database operations.
+-   **Layup Schedule Enhancement**: Dual-view system (screen/print), production-relevant data columns, print-friendly checklist format, schedule barcode system, and department workflow integration.
+-   **Layup Schedule Week & Day Selection**: Interactive week navigation and day selection with a balanced round-robin distribution algorithm.
+-   **PO Product Stock Model Validation**: Exclusion of non-stock model PO products from production queues and layup processes.
+-   **Parts List Management**: Enhanced inventory items with MRP/COGS fields, SKU, purchase/usage information, and production line utilization flags.
+-   **Department Technician Assignment**: Employee profiles include department-specific assignment flags to control technician visibility in dropdowns.
 -   **Follow-Up Order Signature Workflow**: Complete pricing calculation system for sign-order pages, mirroring OrderEntry logic.
--   **P1 PO Shipping QC Management**: Tracks P1 purchase orders through production; non-stock items bypass production to Shipping QC. Features authentication, optimized raw SQL, real-time status badges, and accordion-wrapped UI for cross-PO item selection for shipping. Includes fulfillment tracking for external shipments.
--   **P1 PO Shipping Workflow**: Complete UPS integration with multi-step shipping dialog, configurable service levels, and billing options. Floating "Ship Selected" button for combining items from different POs. Database schema includes `shipment_records` and `shipment_items` for tracking. OEM Shipments history page with comprehensive search/filtering and document downloads (labels, packing slips).
+-   **P1 PO Shipping QC Management**: Comprehensive tracking system for P1 purchase orders with department status tracking. Includes authentication middleware, optimized SQL queries, real-time status badges, cross-PO item selection, and fulfillment tracking.
+-   **P1 PO Shipping Workflow**: Complete UPS integration for creating labels with configurable service levels and billing options. Features a floating "Ship Selected" button and a comprehensive OEM Shipments history page with search/filtering, pagination, and document downloads.
+
+
 
 ### Technical Implementations
 -   **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.
 -   **Backend**: Express.js, TypeScript, TanStack Query, Zod, Axios.
 -   **Database**: PostgreSQL (Neon serverless), Drizzle ORM, Drizzle-kit.
 
+-   **Key Features**: Order Management (dynamic configuration, linked orders, rush fees, urgency), Layup Scheduler, Production Queue Manager, Department Manager, Customer Management (CRM, CSV import, address autocomplete), Inventory Management (BOM integration), Metal Accessories Tracker, Barcode System, Employee Management (CRUD, portal, time clock), Quality Control (digital signature, checklists), Reporting, Payment Tracking, Shipping Integration, Communications System (inbox, email, SMS), Personalized Dashboards, Training Management System, AI-Powered Smart Sorting, Calendar Integration, Magic Link Authentication, and Global Search.
+
 ### Database Schema Standards
--   **Primary Key Pattern**: All new tables must use `uuid('id').defaultRandom().primaryKey()` for `id` columns. `serial` is forbidden for new tables to prevent migration issues. Existing `serial` IDs in legacy tables (e.g., `allOrders`, `inventoryItems`) should not be modified.
+-   **Primary Key Pattern (CRITICAL)**: ALL new tables MUST use UUID for primary keys (`id: uuid('id').defaultRandom().primaryKey()`). `serial` data type is strictly forbidden for new tables to prevent migration failures.
+-   **Legacy Tables**: Existing tables using `serial` IDs (e.g., `allOrders`, `inventoryItems`) should not be modified.
+-   **Migration Safety**: Never change existing ID column types (serial to UUID or vice-versa). Use `npm run db:push` for schema sync.
+
 
 ## External Dependencies
 

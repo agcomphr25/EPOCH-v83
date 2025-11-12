@@ -404,18 +404,28 @@ export default function CNCQueuePage() {
   // Progress to Gunsmith mutation
   const progressToGunsmith = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      return await apiRequest('/api/orders/progress-department', {
+      const result = await apiRequest('/api/orders/progress-department', {
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           orderIds,
           toDepartment: 'Gunsmith',
-        }),
+          fromDepartment: 'CNC',
+        },
       });
+      
+      // Check for failures
+      if (result.failed && result.failed.length > 0) {
+        const failureDetails = result.failed.map((f: any) => `${f.orderId} (${f.reason})`).join(', ');
+        throw new Error(`Failed to progress ${result.failed.length} order(s): ${failureDetails}`);
+      }
+      
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      const successCount = result.success?.length || 0;
       toast({
         title: 'Success',
-        description: `Progressed ${selectedGunsimthOrders.size} orders to Gunsmith`,
+        description: `Progressed ${successCount} order${successCount !== 1 ? 's' : ''} to Gunsmith`,
       });
       setSelectedGunsimthOrders(new Set());
       setSelectAllGunsmith(false);
@@ -433,18 +443,28 @@ export default function CNCQueuePage() {
   // Progress to Finish mutation
   const progressToFinish = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      return await apiRequest('/api/orders/progress-department', {
+      const result = await apiRequest('/api/orders/progress-department', {
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           orderIds,
           toDepartment: 'Finish',
-        }),
+          fromDepartment: 'CNC',
+        },
       });
+      
+      // Check for failures
+      if (result.failed && result.failed.length > 0) {
+        const failureDetails = result.failed.map((f: any) => `${f.orderId} (${f.reason})`).join(', ');
+        throw new Error(`Failed to progress ${result.failed.length} order(s): ${failureDetails}`);
+      }
+      
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      const successCount = result.success?.length || 0;
       toast({
         title: 'Success',
-        description: `Progressed ${selectedFinishOrders.size} orders to Finish`,
+        description: `Progressed ${successCount} order${successCount !== 1 ? 's' : ''} to Finish`,
       });
       setSelectedFinishOrders(new Set());
       setSelectAllFinish(false);

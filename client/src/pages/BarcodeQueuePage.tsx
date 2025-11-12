@@ -185,8 +185,15 @@ export default function BarcodeQueuePage() {
         body: {
           orderIds: [orderId],
           toDepartment: formData.kickbackDept,
+          fromDepartment: 'Barcode',
         },
       });
+
+      // Check for failures in move response
+      if (moveResponse.failed && moveResponse.failed.length > 0) {
+        const failure = moveResponse.failed[0];
+        throw new Error(`Failed to move order: ${failure.reason || 'Unknown error'}`);
+      }
 
       return { kickback: await kickbackResponse.json(), move: moveResponse };
     },
@@ -484,15 +491,27 @@ export default function BarcodeQueuePage() {
       }
       
       // Progress flat tops to Finish department
+      let flatTopSuccessCount = 0;
       if (flatTopOrderIds.length > 0) {
         try {
-          await apiRequest('/api/orders/progress-department', {
+          const flatTopResult = await apiRequest('/api/orders/progress-department', {
             method: 'POST',
             body: {
               orderIds: flatTopOrderIds,
               toDepartment: 'Finish',
+              fromDepartment: 'Barcode',
             },
           });
+          flatTopSuccessCount = flatTopResult.success?.length || 0;
+          
+          // Check for failures in flat top progression
+          if (flatTopResult.failed && flatTopResult.failed.length > 0) {
+            failedOrders.push(...flatTopResult.failed.map((f: any) => ({
+              orderId: f.orderId ?? f,
+              reason: f.reason || 'Unknown error'
+            })));
+            console.error('❌ Failed to progress flat tops:', flatTopResult.failed);
+          }
         } catch (error) {
           console.error('❌ Failed to progress flat tops:', error);
           const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -501,15 +520,27 @@ export default function BarcodeQueuePage() {
       }
       
       // Progress others to CNC department
+      let cncSuccessCount = 0;
       if (cncOrderIds.length > 0) {
         try {
-          await apiRequest('/api/orders/progress-department', {
+          const cncResult = await apiRequest('/api/orders/progress-department', {
             method: 'POST',
             body: {
               orderIds: cncOrderIds,
               toDepartment: 'CNC',
+              fromDepartment: 'Barcode',
             },
           });
+          cncSuccessCount = cncResult.success?.length || 0;
+          
+          // Check for failures in CNC progression
+          if (cncResult.failed && cncResult.failed.length > 0) {
+            failedOrders.push(...cncResult.failed.map((f: any) => ({
+              orderId: f.orderId ?? f,
+              reason: f.reason || 'Unknown error'
+            })));
+            console.error('❌ Failed to progress CNC orders:', cncResult.failed);
+          }
         } catch (error) {
           console.error('❌ Failed to progress CNC orders:', error);
           const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -524,9 +555,9 @@ export default function BarcodeQueuePage() {
       }
       
       return { 
-        flatTopCount: flatTopOrderIds.length,
+        flatTopCount: flatTopSuccessCount,
         poFlatTopCount: poFlatTopSuccessCount,
-        cncCount: cncOrderIds.length,
+        cncCount: cncSuccessCount,
         poToShippingQC,
         poToCNC
       };

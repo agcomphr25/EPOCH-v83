@@ -212,16 +212,26 @@ export default function FinishQCQueuePage() {
   // Progress to Paint mutation
   const progressToPaint = useMutation({
     mutationFn: async (orderIds: string[]) => {
-      return await apiRequest('/api/orders/progress-department', {
+      const result = await apiRequest('/api/orders/progress-department', {
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           orderIds,
           toDepartment: 'Paint',
-        }),
+          fromDepartment: 'Finish QC',
+        },
       });
+      
+      // Check for failures
+      if (result.failed && result.failed.length > 0) {
+        const failureDetails = result.failed.map((f: any) => `${f.orderId} (${f.reason})`).join(', ');
+        throw new Error(`Failed to progress ${result.failed.length} order(s): ${failureDetails}`);
+      }
+      
+      return result;
     },
-    onSuccess: () => {
-      toast.success(`Progressed ${selectedOrders.size} order(s) to Paint`);
+    onSuccess: (result) => {
+      const successCount = result.success?.length || 0;
+      toast.success(`Progressed ${successCount} order${successCount !== 1 ? 's' : ''} to Paint`);
       setSelectedOrders(new Set());
       setSelectAll(false);
       queryClient.invalidateQueries({

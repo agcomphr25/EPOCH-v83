@@ -4768,15 +4768,21 @@ export function registerRoutes(app: Express): Server {
   // Progress orders to next department
   app.post('/api/orders/progress-department', async (req, res) => {
     try {
-      const { orderIds, toDepartment } = req.body;
+      const { orderIds, toDepartment, fromDepartment } = req.body;
       const { storage } = await import('../../storage');
 
       if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
-        return res.status(400).json({ _error: 'Order IDs required' });
+        return res.status(400).json({ 
+          success: [], 
+          failed: [{ orderId: 'N/A', reason: 'Order IDs required' }] 
+        });
       }
 
       if (!toDepartment) {
-        return res.status(400).json({ _error: 'Target department required' });
+        return res.status(400).json({ 
+          success: [], 
+          failed: [{ orderId: 'N/A', reason: 'Target department required' }] 
+        });
       }
 
       console.log(
@@ -4784,14 +4790,35 @@ export function registerRoutes(app: Express): Server {
         orderIds
       );
 
-      const updatedOrders = [];
+      const results = {
+        success: [] as string[],
+        failed: [] as { orderId: string; reason: string }[],
+      };
+      
       const currentTimestamp = new Date();
       const progressedBy = req.user?.username || 'System';
 
       for (const orderId of orderIds) {
-        const order = await storage.getOrderById(orderId);
-        if (order) {
-          const fromDepartment = (order as any).currentDepartment;
+        try {
+          const order = await storage.getOrderById(orderId);
+          
+          if (!order) {
+            results.failed.push({ orderId, reason: 'Order not found' });
+            console.warn(`⚠️ ${orderId}: Order not found`);
+            continue;
+          }
+
+          const currentDept = (order as any).currentDepartment;
+
+          // Validate order is in expected department if fromDepartment is specified
+          if (fromDepartment && currentDept !== fromDepartment) {
+            results.failed.push({
+              orderId,
+              reason: `Order is in ${currentDept}, not ${fromDepartment}`,
+            });
+            console.warn(`⚠️ ${orderId}: Wrong department (${currentDept})`);
+            continue;
+          }
           
           // Get existing department history or initialize empty array
           const existingHistory = (order as any).departmentHistory || [];
@@ -4799,7 +4826,7 @@ export function registerRoutes(app: Express): Server {
           
           // Add new history entry
           departmentHistory.push({
-            fromDepartment,
+            fromDepartment: currentDept,
             toDepartment,
             timestamp: currentTimestamp.toISOString(),
             progressedBy,
@@ -4814,52 +4841,55 @@ export function registerRoutes(app: Express): Server {
           };
 
           // Set completion timestamp for previous department
-          if (fromDepartment === 'Barcode') {
+          if (currentDept === 'Barcode') {
             updateData.barcodeCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'Layup') {
+          } else if (currentDept === 'Layup') {
             updateData.layupCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'CNC') {
+          } else if (currentDept === 'CNC') {
             updateData.cncCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'Finish' || fromDepartment === 'Finish Queue') {
+          } else if (currentDept === 'Finish' || currentDept === 'Finish Queue') {
             updateData.finishCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'Finish QC') {
+          } else if (currentDept === 'Finish QC') {
             updateData.finishCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'Gunsmith') {
+          } else if (currentDept === 'Gunsmith') {
             updateData.gunsmithCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'Paint') {
+          } else if (currentDept === 'Paint') {
             updateData.paintCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'QC' || fromDepartment === 'QC Shipping Queue') {
+          } else if (currentDept === 'QC' || currentDept === 'QC Shipping Queue') {
             updateData.qcCompletedAt = currentTimestamp;
-          } else if (fromDepartment === 'Shipping' || fromDepartment === 'Shipping Management') {
+          } else if (currentDept === 'Shipping' || currentDept === 'Shipping Management') {
             updateData.shippingCompletedAt = currentTimestamp;
           }
 
           // Try updating finalized order first, fall back to draft
-          let updatedOrder;
           try {
-            updatedOrder = await storage.updateFinalizedOrder(
-              orderId,
-              updateData
-            );
+            await storage.updateFinalizedOrder(orderId, updateData);
           } catch (_error) {
-            updatedOrder = await storage.updateOrderDraft(orderId, updateData);
+            await storage.updateOrderDraft(orderId, updateData);
           }
-          updatedOrders.push(updatedOrder);
-
+          
+          results.success.push(orderId);
           console.log(
-            `✅ Progressed ${orderId} from ${fromDepartment} to ${toDepartment} by ${progressedBy}`
+            `✅ Progressed ${orderId} from ${currentDept} to ${toDepartment} by ${progressedBy}`
           );
+        } catch (error: any) {
+          console.error(`❌ Failed to progress ${orderId}:`, error);
+          results.failed.push({ orderId, reason: error.message || 'Unknown error' });
         }
       }
 
-      res.json({
-        success: true,
-        message: `Progressed ${updatedOrders.length} orders to ${toDepartment}`,
-        updatedOrders: updatedOrders.length,
-      });
+      console.log(
+        `✅ Progression complete: ${results.success.length} to ${toDepartment}, ${results.failed.length} failed`
+      );
+
+      res.json(results);
     } catch (_error) {
-      console.error('🔄 Progress orders _error:', _error);
-      res.status(500).json({ _error: 'Failed to progress orders' });
+      console.error('🔄 Progress orders error:', _error);
+      const errorMessage = _error instanceof Error ? _error.message : 'Failed to progress orders';
+      res.status(500).json({ 
+        success: [], 
+        failed: [{ orderId: 'unknown', reason: errorMessage }] 
+      });
     }
   });
 

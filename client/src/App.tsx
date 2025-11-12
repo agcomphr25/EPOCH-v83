@@ -54,6 +54,7 @@ import BarcodeScannerPage from './pages/BarcodeScannerPage';
 import P2LayupSchedulerPage from './pages/P2LayupSchedulerPage';
 import AllOrdersPage from './pages/AllOrdersPage';
 import OrderReports from './pages/OrderReports';
+import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import AGTestDashboard from './pages/AGTestDashboard';
 import ADMINTestDashboard from './pages/GLENNTestDashboard';
 import JOHNLTestDashboard from './pages/JOHNLTestDashboard';
@@ -292,6 +293,7 @@ function App() {
                   <Route path="/orders-simple" component={OrdersListSimple} />
                   <Route path="/all-orders" component={AllOrdersPage} />
                   <Route path="/order-reports" component={OrderReports} />
+                  <Route path="/analytics" component={AnalyticsDashboard} />
                   <Route path="/finish-qc-completed-report" component={FinishQCCompletedReport} />
                   <Route path="/discounts" component={DiscountManagement} />
                   <Route path="/feature-manager" component={FeatureManager} />

@@ -2049,6 +2049,209 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
   }
 });
 
+// Single Field Update Endpoint for Admin Panel (MUST come before generic /:orderId route!)
+router.patch(
+  '/:orderId/field',
+  authenticateToken,
+  requireRole('ADMIN', 'OWNER'),
+  async (req: Request, res: Response) => {
+    try {
+      const orderIdParam = req.params.orderId;
+      const { fieldName, value } = req.body;
+
+      // DEBUG: Log the incoming request
+      console.log('🔍 PATCH /field request:', {
+        orderId: orderIdParam,
+        fieldName,
+        value,
+        valueType: typeof value,
+        body: req.body
+      });
+
+      if (!fieldName) {
+        return res.status(400).json({ error: 'Field name is required' });
+      }
+
+      // Determine if the param is a numeric ID (legacy) or string order_id (current)
+      const isNumericId = /^\d+$/.test(orderIdParam);
+      
+      // Validate field using imported admin config
+      const fieldConfig = ADMIN_FIELD_CONFIG[fieldName];
+
+      if (!fieldConfig) {
+        return res.status(400).json({ error: `Unknown field: ${fieldName}` });
+      }
+
+      // Check role permission for this field
+      const userRole = req.user?.role || 'EMPLOYEE';
+      const allowedRoles = Array.isArray(fieldConfig.requiredRole) 
+        ? fieldConfig.requiredRole 
+        : [fieldConfig.requiredRole];
+
+      if (!allowedRoles.includes(userRole as any)) {
+        return res.status(403).json({ 
+          error: `Insufficient permissions to edit ${fieldName}`,
+          requiredRole: allowedRoles,
+        });
+      }
+
+      // Fetch the existing order - check both tables
+      let order: any;
+      let isFinalized = true;
+      
+      if (isNumericId) {
+        // Legacy numeric ID lookup
+        const numericId = parseInt(orderIdParam, 10);
+        order = await db.select().from(allOrders).where(eq(allOrders.id, numericId)).limit(1);
+        
+        if (!order || order.length === 0) {
+          order = await db.select().from(orders).where(eq(orders.id, numericId)).limit(1);
+          isFinalized = false;
+        }
+      } else {
+        // String order_id lookup (AG100, EH051, etc.)
+        order = await db.select().from(allOrders).where(eq(allOrders.orderId, orderIdParam)).limit(1);
+        
+        if (!order || order.length === 0) {
+          order = await db.select().from(orders).where(eq(orders.orderId, orderIdParam)).limit(1);
+          isFinalized = false;
+        }
+      }
+
+      if (!order || order.length === 0) {
+        return res.status(404).json({ error: `Order ${orderIdParam} not found` });
+      }
+
+      order = order[0];
+      const orderStringId = order.orderId; // Always use the string order_id for logging
+
+      const dbField = fieldConfig.dbField;
+      const oldValue = (order as any)[dbField];
+
+      // Validate the value based on field config
+      let validatedValue = value;
+
+      if (fieldConfig.validation) {
+        const validationResult = fieldConfig.validation.safeParse(value);
+        if (!validationResult.success) {
+          return res.status(400).json({ 
+            error: 'Validation failed',
+            details: validationResult.error.errors,
+          });
+        }
+        validatedValue = validationResult.data;
+      }
+
+      // Handle null values for nullable fields
+      if (value === null || value === undefined || value === '') {
+        validatedValue = null;
+      }
+
+      // Type coercion based on field type
+      if (validatedValue !== null) {
+        switch (fieldConfig.type) {
+          case 'boolean':
+            validatedValue = Boolean(validatedValue);
+            break;
+          case 'number':
+            validatedValue = Number(validatedValue);
+            if (isNaN(validatedValue)) {
+              return res.status(400).json({ error: `Invalid number for ${fieldName}` });
+            }
+            break;
+          case 'date':
+            if (typeof validatedValue === 'string') {
+              const parsedDate = new Date(validatedValue);
+              if (isNaN(parsedDate.getTime())) {
+                return res.status(400).json({ error: `Invalid date for ${fieldName}` });
+              }
+              validatedValue = parsedDate.toISOString();
+            }
+            break;
+        }
+      }
+
+      // Build update data object
+      const updateData: any = {
+        [dbField]: validatedValue,
+        updatedAt: new Date(),
+      };
+
+      // Special handling for urgency - set isManualUrgency flag
+      if (fieldName === 'urgency') {
+        updateData.is_manual_urgency = true;
+      }
+
+      // Update the appropriate table using the correct identifier
+      if (isFinalized) {
+        if (isNumericId) {
+          await db
+            .update(allOrders)
+            .set(updateData)
+            .where(eq(allOrders.id, parseInt(orderIdParam, 10)));
+        } else {
+          await db
+            .update(allOrders)
+            .set(updateData)
+            .where(eq(allOrders.orderId, orderIdParam));
+        }
+      } else {
+        if (isNumericId) {
+          await db
+            .update(orders)
+            .set(updateData)
+            .where(eq(orders.id, parseInt(orderIdParam, 10)));
+        } else {
+          await db
+            .update(orders)
+            .set(updateData)
+            .where(eq(orders.orderId, orderIdParam));
+        }
+      }
+
+      // Log the change to audit logs
+      await storage.createAdminAuditLog({
+        orderId: orderStringId,
+        fieldName: fieldName,
+        fieldLabel: fieldConfig.label,
+        changeType: 'INLINE',
+        oldValue: oldValue !== null ? String(oldValue) : null,
+        newValue: validatedValue !== null ? String(validatedValue) : null,
+        userRole: (req.user?.role || 'EMPLOYEE') as 'ADMIN' | 'EMPLOYEE' | 'OWNER',
+        changedBy: req.user?.username || 'system',
+      });
+
+      // Fetch and return updated order using the correct identifier
+      let updatedOrder;
+      if (isFinalized) {
+        if (isNumericId) {
+          updatedOrder = await db.select().from(allOrders).where(eq(allOrders.id, parseInt(orderIdParam, 10))).limit(1);
+        } else {
+          updatedOrder = await db.select().from(allOrders).where(eq(allOrders.orderId, orderIdParam)).limit(1);
+        }
+      } else {
+        if (isNumericId) {
+          updatedOrder = await db.select().from(orders).where(eq(orders.id, parseInt(orderIdParam, 10))).limit(1);
+        } else {
+          updatedOrder = await db.select().from(orders).where(eq(orders.orderId, orderIdParam)).limit(1);
+        }
+      }
+
+      res.json({ 
+        success: true,
+        order: updatedOrder[0],
+      });
+
+    } catch (error) {
+      console.error('Error updating order field:', error);
+      res.status(500).json({ 
+        error: 'Failed to update order field',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
 // PATCH route for updating order department progression
 router.patch('/:orderId', async (req: Request, res: Response) => {
   try {
@@ -2675,209 +2878,6 @@ router.patch(
 
       res.status(500).json({ 
         error: 'Failed to perform bulk update',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  }
-);
-
-// Single Field Update Endpoint for Admin Panel
-router.patch(
-  '/:orderId/field',
-  authenticateToken,
-  requireRole('ADMIN', 'OWNER'),
-  async (req: Request, res: Response) => {
-    try {
-      const orderIdParam = req.params.orderId;
-      const { fieldName, value } = req.body;
-
-      // DEBUG: Log the incoming request
-      console.log('🔍 PATCH /field request:', {
-        orderId: orderIdParam,
-        fieldName,
-        value,
-        valueType: typeof value,
-        body: req.body
-      });
-
-      if (!fieldName) {
-        return res.status(400).json({ error: 'Field name is required' });
-      }
-
-      // Determine if the param is a numeric ID (legacy) or string order_id (current)
-      const isNumericId = /^\d+$/.test(orderIdParam);
-      
-      // Validate field using imported admin config
-      const fieldConfig = ADMIN_FIELD_CONFIG[fieldName];
-
-      if (!fieldConfig) {
-        return res.status(400).json({ error: `Unknown field: ${fieldName}` });
-      }
-
-      // Check role permission for this field
-      const userRole = req.user?.role || 'EMPLOYEE';
-      const allowedRoles = Array.isArray(fieldConfig.requiredRole) 
-        ? fieldConfig.requiredRole 
-        : [fieldConfig.requiredRole];
-
-      if (!allowedRoles.includes(userRole as any)) {
-        return res.status(403).json({ 
-          error: `Insufficient permissions to edit ${fieldName}`,
-          requiredRole: allowedRoles,
-        });
-      }
-
-      // Fetch the existing order - check both tables
-      let order: any;
-      let isFinalized = true;
-      
-      if (isNumericId) {
-        // Legacy numeric ID lookup
-        const numericId = parseInt(orderIdParam, 10);
-        order = await db.select().from(allOrders).where(eq(allOrders.id, numericId)).limit(1);
-        
-        if (!order || order.length === 0) {
-          order = await db.select().from(orders).where(eq(orders.id, numericId)).limit(1);
-          isFinalized = false;
-        }
-      } else {
-        // String order_id lookup (AG100, EH051, etc.)
-        order = await db.select().from(allOrders).where(eq(allOrders.orderId, orderIdParam)).limit(1);
-        
-        if (!order || order.length === 0) {
-          order = await db.select().from(orders).where(eq(orders.orderId, orderIdParam)).limit(1);
-          isFinalized = false;
-        }
-      }
-
-      if (!order || order.length === 0) {
-        return res.status(404).json({ error: `Order ${orderIdParam} not found` });
-      }
-
-      order = order[0];
-      const orderStringId = order.orderId; // Always use the string order_id for logging
-
-      const dbField = fieldConfig.dbField;
-      const oldValue = (order as any)[dbField];
-
-      // Validate the value based on field config
-      let validatedValue = value;
-
-      if (fieldConfig.validation) {
-        const validationResult = fieldConfig.validation.safeParse(value);
-        if (!validationResult.success) {
-          return res.status(400).json({ 
-            error: 'Validation failed',
-            details: validationResult.error.errors,
-          });
-        }
-        validatedValue = validationResult.data;
-      }
-
-      // Handle null values for nullable fields
-      if (value === null || value === undefined || value === '') {
-        validatedValue = null;
-      }
-
-      // Type coercion based on field type
-      if (validatedValue !== null) {
-        switch (fieldConfig.type) {
-          case 'boolean':
-            validatedValue = Boolean(validatedValue);
-            break;
-          case 'number':
-            validatedValue = Number(validatedValue);
-            if (isNaN(validatedValue)) {
-              return res.status(400).json({ error: `Invalid number for ${fieldName}` });
-            }
-            break;
-          case 'date':
-            if (typeof validatedValue === 'string') {
-              const parsedDate = new Date(validatedValue);
-              if (isNaN(parsedDate.getTime())) {
-                return res.status(400).json({ error: `Invalid date for ${fieldName}` });
-              }
-              validatedValue = parsedDate.toISOString();
-            }
-            break;
-        }
-      }
-
-      // Build update data object
-      const updateData: any = {
-        [dbField]: validatedValue,
-        updatedAt: new Date(),
-      };
-
-      // Special handling for urgency - set isManualUrgency flag
-      if (fieldName === 'urgency') {
-        updateData.is_manual_urgency = true;
-      }
-
-      // Update the appropriate table using the correct identifier
-      if (isFinalized) {
-        if (isNumericId) {
-          await db
-            .update(allOrders)
-            .set(updateData)
-            .where(eq(allOrders.id, parseInt(orderIdParam, 10)));
-        } else {
-          await db
-            .update(allOrders)
-            .set(updateData)
-            .where(eq(allOrders.orderId, orderIdParam));
-        }
-      } else {
-        if (isNumericId) {
-          await db
-            .update(orders)
-            .set(updateData)
-            .where(eq(orders.id, parseInt(orderIdParam, 10)));
-        } else {
-          await db
-            .update(orders)
-            .set(updateData)
-            .where(eq(orders.orderId, orderIdParam));
-        }
-      }
-
-      // Log the change to audit logs
-      await storage.createAdminAuditLog({
-        orderId: orderStringId,
-        fieldName: fieldName,
-        fieldLabel: fieldConfig.label,
-        changeType: 'INLINE',
-        oldValue: oldValue !== null ? String(oldValue) : null,
-        newValue: validatedValue !== null ? String(validatedValue) : null,
-        userRole: (req.user?.role || 'EMPLOYEE') as 'ADMIN' | 'EMPLOYEE' | 'OWNER',
-        changedBy: req.user?.username || 'system',
-      });
-
-      // Fetch and return updated order using the correct identifier
-      let updatedOrder;
-      if (isFinalized) {
-        if (isNumericId) {
-          updatedOrder = await db.select().from(allOrders).where(eq(allOrders.id, parseInt(orderIdParam, 10))).limit(1);
-        } else {
-          updatedOrder = await db.select().from(allOrders).where(eq(allOrders.orderId, orderIdParam)).limit(1);
-        }
-      } else {
-        if (isNumericId) {
-          updatedOrder = await db.select().from(orders).where(eq(orders.id, parseInt(orderIdParam, 10))).limit(1);
-        } else {
-          updatedOrder = await db.select().from(orders).where(eq(orders.orderId, orderIdParam)).limit(1);
-        }
-      }
-
-      res.json({ 
-        success: true,
-        order: updatedOrder[0],
-      });
-
-    } catch (error) {
-      console.error('Error updating order field:', error);
-      res.status(500).json({ 
-        error: 'Failed to update order field',
         details: error instanceof Error ? error.message : 'Unknown error',
       });
     }

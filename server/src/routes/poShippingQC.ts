@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { pool } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
+import { createShipment, ShipTo } from '../utils/upsShipping';
 
 const router = Router();
 
@@ -72,25 +73,68 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
     console.log(`📄 Generating packing slips for ${orderIds.length} PO items...`);
     const { storage } = await import('../../storage');
 
-    // Fetch order details
+    // Fetch order details - handle both Order IDs and poItemId-unitNumber format
     const orderDetails = await Promise.all(
-      orderIds.map(async (orderId) => {
-        const order = await storage.getProductionOrderByOrderId(orderId);
-        if (!order) {
-          console.warn(`⚠️ Order ${orderId} not found`);
-          return null;
-        }
+      orderIds.map(async (itemKey) => {
+        let order: any = null;
+        let poItem: any = null;
+        
+        // Check if this is in poItemId-unitNumber format (e.g., "92-1")
+        const match = itemKey.match(/^(\d+)-(\d+)$/);
+        
+        if (match) {
+          // Format: poItemId-unitNumber
+          const poItemId = parseInt(match[1]);
+          const unitNumber = parseInt(match[2]);
+          console.log(`🔍 Looking up by PO item ID ${poItemId}, unit ${unitNumber}`);
+          
+          // Get PO item directly
+          poItem = await storage.getPurchaseOrderItem(poItemId);
+          if (!poItem) {
+            console.warn(`⚠️ PO item ${poItemId} not found`);
+            return null;
+          }
+          
+          // Get PO to access customer information
+          const tempPo = await storage.getPurchaseOrder(poItem.poId);
+          if (!tempPo) {
+            console.warn(`⚠️ PO ${poItem.poId} not found`);
+            return null;
+          }
+          
+          // For PO items without orderIds, create a minimal order object for packing slip generation
+          // Customer info comes from the PO, not the PO item
+          order = {
+            poItemId,
+            unitNumber,
+            orderId: `Unit ${unitNumber}`,
+            item_id: poItem.stockModelId,
+            item_name: poItem.stockModelName,
+            specifications: poItem.specifications,
+            customer_id: tempPo.customerId,
+            customer_name: tempPo.customerName || '',
+            po_number: tempPo.poNumber || '',
+            due_date: poItem.dueDate,
+          };
+        } else {
+          // Standard Order ID format (e.g., "AG123", "EH456")
+          order = await storage.getProductionOrderByOrderId(itemKey);
+          if (!order) {
+            console.warn(`⚠️ Order ${itemKey} not found`);
+            return null;
+          }
 
-        // Get PO item details
-        if (!order.poItemId) {
-          console.warn(`⚠️ Order ${orderId} has no PO item ID`);
-          return null;
-        }
+          // Get PO item details
+          if (!order.poItemId) {
+            console.warn(`⚠️ Order ${itemKey} has no PO item ID`);
+            return null;
+          }
 
-        const poItem = await storage.getPurchaseOrderItem(order.poItemId);
-        if (!poItem) {
-          console.warn(`⚠️ PO item ${order.poItemId} not found`);
-          return null;
+          poItem = await storage.getPurchaseOrderItem(order.poItemId);
+          if (!poItem) {
+            console.warn(`⚠️ PO item ${order.poItemId} not found`);
+            return null;
+          }
         }
 
         // Get PO details
@@ -134,48 +178,128 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+      // Get customer ID and name from PO (Purchase Order has the customer info)
+      const customerId = items[0].po.customerId;
+      const customerName = items[0].po.customerName || 'Unknown Customer';
+      
+      const customerAddress = customerId ? await storage.getCustomerDefaultAddress(String(customerId)) : null;
+      
+      // Generate invoice number
+      const invoiceNumber = await storage.getNextInvoiceNumber(String(customerId || '0'), customerName);
+
       let currentY = height - margin;
 
-      // Header
+      // ========== HEADER ==========
       currentPage.drawText('AG COMPOSITES', {
         x: margin,
         y: currentY,
-        size: 20,
+        size: 18,
         font: boldFont,
         color: rgb(0, 0, 0),
       });
 
-      currentY -= 30;
+      // AG Composites Address (Ship From) - Right aligned
+      const agAddress = [
+        '230 Hamer Rd',
+        'Owens Cross Roads, AL 35763',
+        'Phone: (256) 723-8381'
+      ];
+      let agAddressY = currentY;
+      agAddress.forEach((line) => {
+        const textWidth = font.widthOfTextAtSize(line, 9);
+        currentPage.drawText(line, {
+          x: width - margin - textWidth,
+          y: agAddressY,
+          size: 9,
+          font: font,
+        });
+        agAddressY -= 12;
+      });
+
+      currentY -= 35;
       currentPage.drawText('PACKING SLIP', {
         x: margin,
         y: currentY,
-        size: 16,
+        size: 14,
         font: boldFont,
         color: rgb(0, 0, 0),
       });
 
-      // PO Information
-      currentY -= 40;
-      currentPage.drawText(`Purchase Order: ${poNumber}`, {
+      // ========== INVOICE & DATE INFO ==========
+      currentY -= 30;
+      currentPage.drawText(`Invoice #: ${invoiceNumber}`, {
         x: margin,
         y: currentY,
-        size: 12,
+        size: 11,
         font: boldFont,
       });
 
-      currentY -= 20;
-      currentPage.drawText(`Customer: ${items[0].order.customerName}`, {
-        x: margin,
+      currentPage.drawText(`Date: ${new Date().toLocaleDateString()}`, {
+        x: width - margin - 150,
         y: currentY,
-        size: 12,
+        size: 11,
         font: font,
       });
 
       currentY -= 20;
-      currentPage.drawText(`Date: ${new Date().toLocaleDateString()}`, {
+      currentPage.drawText(`PO Number: ${poNumber}`, {
         x: margin,
         y: currentY,
-        size: 12,
+        size: 11,
+        font: boldFont,
+      });
+
+      // ========== SHIP TO ADDRESS ==========
+      currentY -= 30;
+      currentPage.drawText('SHIP TO:', {
+        x: margin,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+      });
+
+      currentY -= 15;
+      currentPage.drawText(customerName, {
+        x: margin,
+        y: currentY,
+        size: 10,
+        font: font,
+      });
+
+      if (customerAddress) {
+        currentY -= 15;
+        currentPage.drawText(customerAddress.street, {
+          x: margin,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+
+        if (customerAddress.street2) {
+          currentY -= 15;
+          currentPage.drawText(customerAddress.street2, {
+            x: margin,
+            y: currentY,
+            size: 10,
+            font: font,
+          });
+        }
+
+        currentY -= 15;
+        currentPage.drawText(`${customerAddress.city}, ${customerAddress.state} ${customerAddress.zipCode}`, {
+          x: margin,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+      }
+
+      // ========== TRACKING NUMBER (placeholder) ==========
+      currentY -= 25;
+      currentPage.drawText('Tracking #: _________________________', {
+        x: margin,
+        y: currentY,
+        size: 10,
         font: font,
       });
 
@@ -196,14 +320,7 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       });
 
       currentPage.drawText('Unit #', {
-        x: margin + 320,
-        y: currentY,
-        size: 11,
-        font: boldFont,
-      });
-
-      currentPage.drawText('Action Length', {
-        x: margin + 380,
+        x: margin + 350,
         y: currentY,
         size: 11,
         font: boldFont,
@@ -227,8 +344,12 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
           currentY = height - margin;
         }
 
-        const unitMatch = item.order.orderId.match(/-(\d+)$/);
-        const unitNumber = unitMatch ? parseInt(unitMatch[1]) : 1;
+        // Use explicit unitNumber from order object if available, otherwise try regex extraction
+        const unitNumber = item.order.unitNumber || 
+          (() => {
+            const unitMatch = item.order.orderId.match(/-(\d+)$/);
+            return unitMatch ? parseInt(unitMatch[1]) : 1;
+          })();
 
         currentPage.drawText(`${idx + 1}`, {
           x: margin,
@@ -237,25 +358,19 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
           font: font,
         });
 
-        const description = item.poItem.description || 'N/A';
-        const truncatedDesc = description.length > 25 ? description.substring(0, 25) + '...' : description;
+        // Use itemName for the product identifier (e.g., AG-CRB-AHV205-ER)
+        const itemName = item.poItem.itemName || item.poItem.stockModelName || 'N/A';
+        const truncatedName = itemName.length > 30 ? itemName.substring(0, 30) + '...' : itemName;
         
-        currentPage.drawText(truncatedDesc, {
+        currentPage.drawText(truncatedName, {
           x: margin + 80,
           y: currentY,
-          size: 10,
+          size: 9,
           font: font,
         });
 
         currentPage.drawText(`${unitNumber}`, {
-          x: margin + 320,
-          y: currentY,
-          size: 10,
-          font: font,
-        });
-
-        currentPage.drawText(item.poItem.actionLength?.toString() || 'N/A', {
-          x: margin + 380,
+          x: margin + 350,
           y: currentY,
           size: 10,
           font: font,
@@ -458,46 +573,224 @@ router.post('/smart-progress', async (req, res) => {
 });
 
 // GET /api/po-orders/oem-shipments
-// Get shipped PO orders grouped as OEM shipments by customer
+// Get all shipments with tracking info, filters, and pagination (no base64 blobs)
 router.get('/oem-shipments', async (req, res) => {
   try {
-    console.log('📦 Fetching OEM shipments (shipped PO orders)...');
+    const {
+      customerId,
+      customerName,
+      startDate,
+      endDate,
+      search,
+      limit = '50',
+      offset = '0',
+    } = req.query;
 
-    // Query shipped production orders grouped by customer
+    console.log('📦 Fetching OEM shipments with filters:', {
+      customerId,
+      customerName,
+      startDate,
+      endDate,
+      search,
+      limit,
+      offset,
+    });
+
+    // Build WHERE conditions
+    const conditions: string[] = ['1=1'];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (customerId) {
+      conditions.push(`sr.customer_id = $${paramIndex}`);
+      params.push(customerId);
+      paramIndex++;
+    }
+
+    if (customerName) {
+      conditions.push(`sr.customer_name ILIKE $${paramIndex}`);
+      params.push(`%${customerName}%`);
+      paramIndex++;
+    }
+
+    if (startDate) {
+      conditions.push(`sr.created_at >= $${paramIndex}`);
+      params.push(startDate);
+      paramIndex++;
+    }
+
+    if (endDate) {
+      conditions.push(`sr.created_at <= $${paramIndex}`);
+      params.push(endDate);
+      paramIndex++;
+    }
+
+    if (search) {
+      conditions.push(`(
+        sr.customer_name ILIKE $${paramIndex} OR
+        sr.master_tracking_number ILIKE $${paramIndex} OR
+        sr.reference ILIKE $${paramIndex}
+      )`);
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    // Main query - lightweight, no base64 blobs
     const query = `
-      SELECT 
-        p.customer_id as customerId,
-        p.customer_name as customerName,
-        COUNT(DISTINCT p.po_number) as poCount,
-        COUNT(p.id) as itemCount,
-        MIN(p.shipped_at) as firstShipDate,
-        MAX(p.shipped_at) as lastShipDate,
-        json_agg(
-          json_build_object(
-            'orderId', p.order_id,
-            'poNumber', p.po_number,
-            'itemId', p.item_id,
-            'itemName', p.item_name,
-            'shippedAt', p.shipped_at,
-            'specifications', p.specifications
-          ) ORDER BY p.shipped_at DESC
-        ) as items
-      FROM production_orders p
-      WHERE p.current_department = 'Shipping'
-        AND p.production_status = 'SHIPPED'
-      GROUP BY p.customer_id, p.customer_name
-      ORDER BY MAX(p.shipped_at) DESC
+      WITH shipment_aggregates AS (
+        SELECT 
+          sr.id,
+          sr.customer_id,
+          sr.customer_name,
+          sr.customer_address,
+          sr.customer_city,
+          sr.customer_state,
+          sr.customer_zip,
+          sr.master_tracking_number,
+          sr.service_code,
+          sr.total_weight_lbs,
+          sr.package_count,
+          sr.bill_type,
+          sr.reference,
+          sr.created_at,
+          sr.created_by,
+          sr.shipping_label_base64 IS NOT NULL as has_shipping_label,
+          COUNT(si.id) as item_count,
+          COUNT(DISTINCT si.po_number) as po_count,
+          json_agg(
+            json_build_object(
+              'id', si.id,
+              'poItemId', si.po_item_id,
+              'orderId', si.order_id,
+              'quantity', si.quantity,
+              'description', si.description,
+              'poNumber', si.po_number,
+              'hasPackingSlip', si.packing_slip_base64 IS NOT NULL
+            ) ORDER BY si.po_number, si.order_id
+          ) as items
+        FROM shipment_records sr
+        LEFT JOIN shipment_items si ON sr.id = si.shipment_id
+        WHERE ${conditions.join(' AND ')}
+        GROUP BY sr.id
+        ORDER BY sr.created_at DESC
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      )
+      SELECT * FROM shipment_aggregates
     `;
 
-    const result = await pool.query(query);
+    params.push(parseInt(limit as string, 10));
+    params.push(parseInt(offset as string, 10));
+
+    const result = await pool.query(query, params);
     const shipments = Array.isArray(result) ? result : result.rows || [];
 
-    console.log(`📊 Found ${shipments.length} OEM shipments`);
+    // Get total count for pagination
+    const countQuery = `
+      SELECT COUNT(DISTINCT sr.id) as total
+      FROM shipment_records sr
+      WHERE ${conditions.join(' AND ')}
+    `;
+    const countResult = await pool.query(countQuery, params.slice(0, -2));
+    const total = parseInt((countResult.rows || countResult)[0]?.total || '0', 10);
 
-    res.json(shipments);
+    console.log(`📊 Found ${shipments.length} shipments (total: ${total})`);
+
+    res.json({
+      shipments,
+      pagination: {
+        total,
+        limit: parseInt(limit as string, 10),
+        offset: parseInt(offset as string, 10),
+        hasMore: parseInt(offset as string, 10) + shipments.length < total,
+      },
+    });
   } catch (error: any) {
     console.error('❌ Error fetching OEM shipments:', error);
     res.status(500).json({ _error: 'Failed to fetch OEM shipments', details: error.message });
+  }
+});
+
+// GET /api/po-orders/oem-shipments/:id/label
+// Download shipping label for a specific shipment
+router.get('/oem-shipments/:id/label', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`📄 Downloading shipping label for shipment ${id}...`);
+
+    const query = `
+      SELECT 
+        shipping_label_base64,
+        master_tracking_number,
+        customer_name
+      FROM shipment_records
+      WHERE id = $1
+    `;
+
+    const result = await pool.query(query, [parseInt(id, 10)]);
+    const shipment = (result.rows || result)[0];
+
+    if (!shipment) {
+      return res.status(404).json({ _error: 'Shipment not found' });
+    }
+
+    if (!shipment.shipping_label_base64) {
+      return res.status(404).json({ _error: 'Shipping label not available' });
+    }
+
+    // Decode base64 and send as GIF
+    const labelBuffer = Buffer.from(shipment.shipping_label_base64, 'base64');
+    const filename = `shipping-label-${shipment.master_tracking_number}.gif`;
+
+    res.setHeader('Content-Type', 'image/gif');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(labelBuffer);
+
+    console.log(`✅ Shipping label downloaded: ${filename}`);
+  } catch (error: any) {
+    console.error('❌ Error downloading shipping label:', error);
+    res.status(500).json({ _error: 'Failed to download shipping label', details: error.message });
+  }
+});
+
+// GET /api/po-orders/oem-shipments/packing-slip/:itemId
+// Download packing slip for a specific shipment item
+router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    console.log(`📄 Downloading packing slip for shipment item ${itemId}...`);
+
+    const query = `
+      SELECT 
+        packing_slip_base64,
+        po_number,
+        order_id
+      FROM shipment_items
+      WHERE id = $1
+    `;
+
+    const result = await pool.query(query, [parseInt(itemId, 10)]);
+    const item = (result.rows || result)[0];
+
+    if (!item) {
+      return res.status(404).json({ _error: 'Shipment item not found' });
+    }
+
+    if (!item.packing_slip_base64) {
+      return res.status(404).json({ _error: 'Packing slip not available' });
+    }
+
+    // Decode base64 and send as PDF
+    const slipBuffer = Buffer.from(item.packing_slip_base64, 'base64');
+    const filename = `packing-slip-PO${item.po_number}-${item.order_id}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(slipBuffer);
+
+    console.log(`✅ Packing slip downloaded: ${filename}`);
+  } catch (error: any) {
+    console.error('❌ Error downloading packing slip:', error);
+    res.status(500).json({ _error: 'Failed to download packing slip', details: error.message });
   }
 });
 
@@ -546,6 +839,549 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
   } catch (error: any) {
     console.error('❌ Error toggling fulfilled status:', error);
     res.status(500).json({ _error: 'Failed to update fulfilled status', details: error.message });
+  }
+});
+
+// POST /api/po-orders/process-shipment
+// Comprehensive shipment processing: validates items, generates 1 UPS label + multiple packing slips, updates status, persists shipment
+router.post('/process-shipment', authenticateToken, async (req, res) => {
+  try {
+    // Handle both legacy (orderIds) and new (items) payload formats
+    const {
+      orderIds,
+      items,
+      serviceCode = '03',
+      weightPerItemLbs = 5,
+      billingOption = 'sender',
+      thirdPartyAccountNumber,
+      thirdPartyPostalCode,
+      thirdPartyCountryCode,
+    } = req.body;
+
+    // Validate billing third-party requirements
+    if (billingOption === 'third-party') {
+      if (!thirdPartyAccountNumber || !thirdPartyPostalCode || !thirdPartyCountryCode) {
+        return res.status(400).json({
+          _error: 'Third-party billing requires accountNumber, postalCode, and countryCode',
+        });
+      }
+    }
+
+    // Normalize payload to items format
+    let normalizedItems: Array<{ poItemId: number; orderId: string; quantity: number }>;
+    
+    if (items && Array.isArray(items)) {
+      // New format from ShipmentDialog
+      normalizedItems = items;
+    } else if (orderIds && Array.isArray(orderIds)) {
+      // Legacy format - fetch order details to get real poItemId and quantity
+      const legacyOrders = await Promise.all(
+        orderIds.map(async (orderId: string) => {
+          const order = await storage.getProductionOrderByOrderId(orderId);
+          if (!order || !order.poItemId) {
+            throw new Error(`Order ${orderId} not found or missing PO item ID`);
+          }
+          return {
+            poItemId: order.poItemId,
+            orderId,
+            quantity: 1, // Legacy assumes 1 unit per order
+          };
+        })
+      );
+      normalizedItems = legacyOrders;
+    } else {
+      return res.status(400).json({ _error: 'Either items array or orderIds array is required' });
+    }
+
+    if (normalizedItems.length === 0) {
+      return res.status(400).json({ _error: 'No items to ship' });
+    }
+
+    console.log(`📦 Processing shipment for ${normalizedItems.length} items...`);
+    const { storage } = await import('../../storage');
+
+    // 1. VALIDATE: Fetch all orders and ensure they exist + are ready to ship
+    const orderDetails = await Promise.all(
+      normalizedItems.map(async (item) => {
+        const order = await storage.getProductionOrderByOrderId(item.orderId);
+        if (!order) {
+          throw new Error(`Order ${item.orderId} not found`);
+        }
+        // P1 PO orders use productionStatus (PENDING, LAID_UP, SHIPPED) not currentDepartment
+        if (order.productionStatus === 'SHIPPED') {
+          throw new Error(`Order ${item.orderId} has already been shipped`);
+        }
+
+        // Get PO item details
+        if (!order.poItemId) {
+          throw new Error(`Order ${item.orderId} has no PO item ID`);
+        }
+        const poItem = await storage.getPurchaseOrderItem(order.poItemId);
+        if (!poItem) {
+          throw new Error(`PO item ${order.poItemId} not found`);
+        }
+
+        // Get PO details
+        const po = await storage.getPurchaseOrder(poItem.poId);
+        if (!po) {
+          throw new Error(`PO ${poItem.poId} not found`);
+        }
+
+        // Get customer details
+        const customer = await storage.getCustomer(parseInt(order.customerId));
+        if (!customer) {
+          throw new Error(`Customer ${order.customerId} not found`);
+        }
+
+        return { order, poItem, po, customer, quantity: item.quantity };
+      })
+    );
+
+    // 2. VALIDATE: Ensure all orders from same customer
+    const uniqueCustomerIds = new Set(orderDetails.map(d => d.order.customerId));
+    if (uniqueCustomerIds.size > 1) {
+      return res.status(400).json({
+        _error: 'All items must be from the same customer',
+        customers: Array.from(uniqueCustomerIds),
+      });
+    }
+
+    // 3. GROUP BY PO NUMBER
+    const poGroups = new Map<string, typeof orderDetails>();
+    orderDetails.forEach((detail) => {
+      const poNumber = detail.po.poNumber;
+      if (!poGroups.has(poNumber)) {
+        poGroups.set(poNumber, []);
+      }
+      poGroups.get(poNumber)!.push(detail);
+    });
+
+    console.log(`📊 Grouped ${orderDetails.length} items into ${poGroups.size} PO(s)`);
+    console.log(`📋 PO Numbers: ${Array.from(poGroups.keys()).join(', ')}`);
+
+    // 4. CALCULATE TOTAL WEIGHT (multiply by quantity)
+    // Note: purchaseOrderItems don't have a weight field, so use default
+    let totalWeight = 0;
+    for (const detail of orderDetails) {
+      totalWeight += weightPerItemLbs * detail.quantity;
+    }
+    console.log(`⚖️  Total weight: ${totalWeight} lbs (${orderDetails.length} items)`);
+
+    // 5. GET CUSTOMER SHIPPING ADDRESS
+    const firstCustomer = orderDetails[0].customer;
+    const addresses = await storage.getCustomerAddresses(orderDetails[0].order.customerId);
+    const primaryAddress = addresses[0];
+
+    if (!primaryAddress) {
+      return res.status(400).json({
+        _error: `No shipping address found for customer ${firstCustomer.name}`,
+      });
+    }
+
+    const shipTo: ShipTo = {
+      name: firstCustomer.name || '',
+      attention: firstCustomer.name || '',
+      phone: firstCustomer.phone || '0000000000',
+      address1: primaryAddress.street || '',
+      address2: primaryAddress.street2 || undefined,
+      city: primaryAddress.city || '',
+      state: primaryAddress.state || '',
+      postalCode: primaryAddress.zipCode || '',
+      country: primaryAddress.country || 'United States',
+    };
+
+    // 6. BUILD REFERENCE NUMBER (truncated to 35 chars for UPS)
+    const poNumbers = Array.from(poGroups.keys());
+    const referenceNumber = poNumbers.join(',').substring(0, 35);
+    console.log(`📝 Reference number: ${referenceNumber}`);
+
+    // 7. GENERATE UPS SHIPPING LABEL
+    let trackingNumber: string;
+    let labelBase64: string;
+    try {
+      const shipmentResult = await createShipment({
+        shipTo,
+        serviceCode,
+        weightLbs: Math.max(totalWeight, 1),
+        referenceNumber,
+        billingOption,
+        thirdPartyAccountNumber,
+        thirdPartyPostalCode,
+        thirdPartyCountryCode,
+      });
+
+      trackingNumber = shipmentResult.trackingNumber;
+      labelBase64 = shipmentResult.labelBase64 || '';
+
+      if (!trackingNumber) {
+        throw new Error('UPS did not return a tracking number');
+      }
+
+      console.log(`✅ UPS Label generated: ${trackingNumber}`);
+    } catch (upsError: any) {
+      console.error('❌ UPS API Error:', upsError.message);
+      return res.status(502).json({
+        _error: 'UPS shipping label generation failed',
+        details: upsError.message,
+        suggestion: 'Check UPS credentials and try again, or process manually',
+      });
+    }
+
+    // 8. PERSIST SHIPMENT TO DATABASE
+    let shipmentId: string;
+    const shippedAt = new Date();
+    try {
+      const crypto = await import('crypto');
+      shipmentId = crypto.randomUUID();
+
+      // Map billingOption to billType enum
+      const billType: 'SENDER' | 'RECEIVER' | 'THIRD_PARTY' = 
+        billingOption === 'prepaid' ? 'SENDER' :
+        billingOption === 'collect' ? 'RECEIVER' :
+        'THIRD_PARTY';
+
+      const shipmentRecord = {
+        id: shipmentId,
+        createdBy: req.user?.username || 'system',
+        reference: referenceNumber,
+        customerId: orderDetails[0].order.customerId,
+        poNumbers: poNumbers.join(', '),
+        shippedAt,
+        carrier: 'UPS',
+        serviceLevel: serviceCode,
+        billType,
+        masterTrackingNumber: trackingNumber,
+        packageCount: 1, // Default to single package
+        trackingNumber,
+        trackingUrl: `https://www.ups.com/track?tracknum=${trackingNumber}`,
+        thirdPartyAccountNumber: thirdPartyAccountNumber || null,
+        shipFromAddress: {
+          name: process.env.SHIP_FROM_NAME || 'AG Composites',
+          street: process.env.SHIP_FROM_ADDRESS1 || '',
+          city: process.env.SHIP_FROM_CITY || '',
+          state: process.env.SHIP_FROM_STATE || '',
+          postalCode: process.env.SHIP_FROM_POSTAL || '',
+          country: process.env.SHIP_FROM_COUNTRY || 'US',
+        },
+        shipToAddress: {
+          name: shipTo.name,
+          street: shipTo.address1,
+          street2: shipTo.address2 || null,
+          city: shipTo.city,
+          state: shipTo.state,
+          postalCode: shipTo.postalCode,
+          country: shipTo.country || 'US',
+        },
+        totalWeightLbs: totalWeight,
+        documents: {
+          label: labelBase64 ? { type: 'label', fileName: `Label-${trackingNumber}.gif`, data: labelBase64 } : null,
+          packingSlips: [], // Will be populated after packing slip generation
+        },
+        notificationSent: false,
+        notificationEmail: null,
+        notificationSms: null,
+      };
+
+      const shipmentItemsData = orderDetails.map((detail) => ({
+        poItemId: detail.order.poItemId!,
+        orderId: detail.order.orderId,
+        quantity: detail.quantity,
+        weightLbs: weightPerItemLbs * detail.quantity,
+      }));
+
+      await storage.createShipment({
+        shipment: shipmentRecord,
+        items: shipmentItemsData,
+      });
+
+      console.log(`✅ Shipment persisted to database: ${shipmentId}`);
+
+      // Update production order statuses to SHIPPED
+      for (const detail of orderDetails) {
+        try {
+          await storage.updateProductionOrder(detail.order.id, {
+            productionStatus: 'SHIPPED',
+            shippedAt,
+          });
+          console.log(`✅ Order ${detail.order.orderId} marked as SHIPPED`);
+        } catch (updateError: any) {
+          console.error(`⚠️ Failed to update order ${detail.order.orderId}:`, updateError.message);
+        }
+      }
+    } catch (persistError: any) {
+      console.error('❌ Shipment persistence failed:', persistError.message);
+      return res.status(500).json({
+        _error: 'Shipment created but failed to save to database',
+        details: persistError.message,
+        suggestion: 'UPS label was generated successfully. IMPORTANT: The tracking number below must be manually recorded or the UPS label should be voided to prevent orphaned shipments.',
+        trackingNumber,
+        shipmentId: null,
+        requiresManualAction: true,
+        upsLabelGenerated: true,
+      });
+    }
+
+    // 8. GENERATE PACKING SLIPS (one per PO) - Using updated format with addresses and invoice numbers
+    const packingSlips: Array<{ poNumber: string; filename: string; data: string }> = [];
+
+    for (const [poNumber, items] of poGroups.entries()) {
+      const pdfDoc = await PDFDocument.create();
+      let currentPage = pdfDoc.addPage([612, 792]); // US Letter
+      const { width, height } = currentPage.getSize();
+
+      const margin = 50;
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+      // Get customer ID and name from first item's PO
+      const customerId = items[0].po.customerId;
+      const customerName = items[0].po.customerName || 'Unknown Customer';
+      
+      // Get customer address
+      const customerAddress = customerId ? await storage.getCustomerDefaultAddress(String(customerId)) : null;
+      
+      // Generate invoice number
+      const invoiceNumber = await storage.getNextInvoiceNumber(String(customerId || '0'), customerName);
+
+      let currentY = height - margin;
+
+      // ========== HEADER ==========
+      currentPage.drawText('AG COMPOSITES', {
+        x: margin,
+        y: currentY,
+        size: 20,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+      });
+
+      // AG Composites Address (Ship From) - Right aligned
+      const agAddress = [
+        '230 Hamer Rd',
+        'Owens Cross Roads, AL 35763',
+        'Phone: (256) 723-8381'
+      ];
+      let agAddressY = currentY;
+      agAddress.forEach((line) => {
+        const textWidth = font.widthOfTextAtSize(line, 9);
+        currentPage.drawText(line, {
+          x: width - margin - textWidth,
+          y: agAddressY,
+          size: 9,
+          font: font,
+        });
+        agAddressY -= 15;
+      });
+
+      currentY -= 30;
+      currentPage.drawText('PACKING SLIP', {
+        x: margin,
+        y: currentY,
+        size: 16,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+      });
+
+      // ========== CUSTOMER SHIPPING ADDRESS (SHIP TO) ==========
+      currentY -= 30;
+      currentPage.drawText('SHIP TO:', {
+        x: margin,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+      });
+
+      currentY -= 18;
+      currentPage.drawText(customerName, {
+        x: margin,
+        y: currentY,
+        size: 10,
+        font: font,
+      });
+
+      if (customerAddress) {
+        currentY -= 15;
+        currentPage.drawText(customerAddress.street, {
+          x: margin,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+
+        if (customerAddress.street2) {
+          currentY -= 15;
+          currentPage.drawText(customerAddress.street2, {
+            x: margin,
+            y: currentY,
+            size: 10,
+            font: font,
+          });
+        }
+
+        currentY -= 15;
+        currentPage.drawText(`${customerAddress.city}, ${customerAddress.state} ${customerAddress.zipCode}`, {
+          x: margin,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+      } else {
+        currentY -= 15;
+        currentPage.drawText('(No address on file)', {
+          x: margin,
+          y: currentY,
+          size: 10,
+          font: font,
+          color: rgb(0.5, 0.5, 0.5),
+        });
+      }
+
+      // ========== PO INFORMATION ==========
+      currentY -= 30;
+      currentPage.drawText(`Invoice #: ${invoiceNumber}`, {
+        x: margin,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+      });
+
+      currentY -= 18;
+      currentPage.drawText(`PO Number: ${poNumber}`, {
+        x: margin,
+        y: currentY,
+        size: 11,
+        font: font,
+      });
+
+      currentY -= 18;
+      currentPage.drawText(`Date: ${new Date().toLocaleDateString()}`, {
+        x: margin,
+        y: currentY,
+        size: 11,
+        font: font,
+      });
+
+      currentY -= 18;
+      currentPage.drawText(`Tracking #: ${trackingNumber}`, {
+        x: margin,
+        y: currentY,
+        size: 11,
+        font: font,
+      });
+
+      // ========== ITEMS TABLE ==========
+      currentY -= 30;
+      currentPage.drawText('Item', {
+        x: margin,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+      });
+
+      currentPage.drawText('Description', {
+        x: margin + 60,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+      });
+
+      currentPage.drawText('Unit #', {
+        x: margin + 350,
+        y: currentY,
+        size: 11,
+        font: boldFont,
+      });
+
+      // Draw line under header
+      currentY -= 5;
+      currentPage.drawLine({
+        start: { x: margin, y: currentY },
+        end: { x: width - margin, y: currentY },
+        thickness: 1,
+        color: rgb(0, 0, 0),
+      });
+
+      // Items
+      currentY -= 20;
+      items.forEach((item, idx) => {
+        // Add new page if needed
+        if (currentY < margin + 50) {
+          currentPage = pdfDoc.addPage([612, 792]);
+          currentY = height - margin;
+        }
+
+        // Extract unit number from order ID
+        const unitNumber = item.order.unitNumber || 1;
+
+        currentPage.drawText(`${idx + 1}`, {
+          x: margin,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+
+        // Use itemName for the product identifier (e.g., AG-CRB-AHV205-ER)
+        const itemName = item.poItem.itemName || item.poItem.stockModelName || 'N/A';
+        const truncatedName = itemName.length > 35 ? itemName.substring(0, 35) + '...' : itemName;
+        
+        currentPage.drawText(truncatedName, {
+          x: margin + 60,
+          y: currentY,
+          size: 9,
+          font: font,
+        });
+
+        currentPage.drawText(`${unitNumber}`, {
+          x: margin + 350,
+          y: currentY,
+          size: 10,
+          font: font,
+        });
+
+        currentY -= 20;
+      });
+
+      // Footer on last page
+      const pages = pdfDoc.getPages();
+      const lastPage = pages[pages.length - 1];
+      const footerY = margin + 20;
+      lastPage.drawText(`Total Items: ${items.length}`, {
+        x: margin,
+        y: footerY,
+        size: 11,
+        font: boldFont,
+      });
+
+      const pdfBytes = await pdfDoc.save();
+      packingSlips.push({
+        poNumber,
+        filename: `Packing-Slip-PO-${poNumber}.pdf`,
+        data: Buffer.from(pdfBytes).toString('base64'),
+      });
+    }
+
+    console.log(`📄 Generated ${packingSlips.length} packing slip(s)`);
+
+    // Return comprehensive response (production orders already updated in persistence block)
+    res.json({
+      success: true,
+      shipmentId,
+      trackingNumber,
+      shippedAt: shippedAt.toISOString(),
+      shippingLabel: {
+        format: 'GIF',
+        data: labelBase64,
+      },
+      packingSlips,
+      itemsShipped: orderDetails.length,
+      poNumbers: Array.from(poGroups.keys()),
+      totalWeight: totalWeight,
+    });
+  } catch (error: any) {
+    console.error('❌ Error processing shipment:', error);
+    res.status(500).json({
+      _error: 'Failed to process shipment',
+      details: error.message,
+    });
   }
 });
 

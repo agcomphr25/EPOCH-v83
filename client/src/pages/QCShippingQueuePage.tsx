@@ -43,6 +43,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useLocation } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
+import { ShipmentDialog } from '@/components/ShipmentDialog';
 
 export default function QCShippingQueuePage() {
   // State for tab selection
@@ -56,8 +57,13 @@ export default function QCShippingQueuePage() {
   const [showLabelViewer, setShowLabelViewer] = useState(false);
   
   // State for PO order selection (customer-level selection)
+  // Using unique key format: orderId or poItemId-unitNumber for items without orderId
   const [selectedPOItems, setSelectedPOItems] = useState<Set<string>>(new Set());
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
+  
+  // State for packing slip viewer modal
+  const [showPackingSlipModal, setShowPackingSlipModal] = useState(false);
+  const [packingSlipData, setPackingSlipData] = useState<any[]>([]);
 
   // State for bulk printing modal
   const [showBulkPrintModal, setShowBulkPrintModal] = useState(false);
@@ -72,6 +78,9 @@ export default function QCShippingQueuePage() {
   // State for RTS sales order modal
   const [showSalesOrderModal, setShowSalesOrderModal] = useState(false);
   const [salesOrderId, setSalesOrderId] = useState<string | null>(null);
+  
+  // State for new ShipmentDialog
+  const [showShipmentDialog, setShowShipmentDialog] = useState(false);
   
   const queryClient = useQueryClient();
   const { toast} = useToast();
@@ -98,6 +107,48 @@ export default function QCShippingQueuePage() {
     queryKey: ['/api/kickbacks'],
     refetchInterval: 30000, // Refresh every 30 seconds
   });
+
+  // Helper function to download shipment documents
+  const handleShipmentDocuments = (shipmentData: any) => {
+    try {
+      // Download shipping label (GIF base64)
+      if (shipmentData.shippingLabel?.data) {
+        const labelBlob = new Blob(
+          [Uint8Array.from(atob(shipmentData.shippingLabel.data), c => c.charCodeAt(0))],
+          { type: 'image/gif' }
+        );
+        const labelUrl = URL.createObjectURL(labelBlob);
+        const labelLink = document.createElement('a');
+        labelLink.href = labelUrl;
+        labelLink.download = `Shipping-Label-${shipmentData.trackingNumber}.gif`;
+        labelLink.click();
+        URL.revokeObjectURL(labelUrl);
+      }
+
+      // Download packing slips (PDF base64)
+      if (shipmentData.packingSlips && Array.isArray(shipmentData.packingSlips)) {
+        shipmentData.packingSlips.forEach((slip: any) => {
+          const slipBlob = new Blob(
+            [Uint8Array.from(atob(slip.data), c => c.charCodeAt(0))],
+            { type: 'application/pdf' }
+          );
+          const slipUrl = URL.createObjectURL(slipBlob);
+          const slipLink = document.createElement('a');
+          slipLink.href = slipUrl;
+          slipLink.download = slip.filename;
+          slipLink.click();
+          URL.revokeObjectURL(slipUrl);
+        });
+      }
+    } catch (error) {
+      console.error('Error downloading shipment documents:', error);
+      toast({
+        title: 'Download Error',
+        description: 'Some documents may not have downloaded correctly',
+        variant: 'destructive',
+      });
+    }
+  };
 
   // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
@@ -131,6 +182,81 @@ export default function QCShippingQueuePage() {
   const handleKickbackClick = (orderId: string) => {
     setLocation('/kickback-tracking');
   };
+
+  // Transform selectedPOItems into ShipmentDialog format
+  const transformedShipmentItems = useMemo(() => {
+    if (selectedPOItems.size === 0 || !poOrders || (poOrders as any[]).length === 0) {
+      return [];
+    }
+
+    // Build lookup maps for O(n) transformation
+    const orderIdMap = new Map<string, any>();
+    const compositeKeyMap = new Map<string, any>();
+
+    (poOrders as any[]).forEach((customer: any) => {
+      customer.pos?.forEach((po: any) => {
+        po.items?.forEach((item: any) => {
+          const metadata = {
+            item,
+            customerName: customer.customerName,
+            poNumber: po.poNumber,
+          };
+
+          // Map by orderId if it exists
+          if (item.orderId) {
+            orderIdMap.set(item.orderId, metadata);
+          }
+
+          // Always map by composite key
+          const compositeKey = `${item.poItemId}-${item.unitNumber}`;
+          compositeKeyMap.set(compositeKey, metadata);
+        });
+      });
+    });
+
+    // Transform selected keys to ShipmentDialog format
+    const items: Array<{
+      poItemId: number;
+      orderId: string;
+      quantity: number;
+      description: string;
+      customerName: string;
+      poNumber: string;
+    }> = [];
+
+    selectedPOItems.forEach((key) => {
+      // Try orderIdMap first, then compositeKeyMap
+      const metadata = orderIdMap.get(key) || compositeKeyMap.get(key);
+
+      if (metadata) {
+        const { item, customerName, poNumber } = metadata;
+        
+        // Only include items with valid order IDs
+        if (item.orderId) {
+          items.push({
+            poItemId: item.poItemId,
+            orderId: item.orderId,
+            quantity: item.quantity ?? 1,
+            description: item.itemName || item.stockModelName || 'Unknown Item',
+            customerName,
+            poNumber,
+          });
+        } else {
+          console.warn(`PO item ${item.poItemId} unit ${item.unitNumber} has no orderId - skipping`);
+        }
+      } else {
+        console.warn(`Selected key not found in poOrders: ${key}`);
+      }
+    });
+
+    // Sort by customer/PO for stable ordering
+    return items.sort((a, b) => {
+      if (a.customerName !== b.customerName) {
+        return a.customerName.localeCompare(b.customerName);
+      }
+      return a.poNumber.localeCompare(b.poNumber);
+    });
+  }, [selectedPOItems, poOrders]);
 
   // Auto-select order when scanned
   const handleOrderScanned = (orderId: string) => {
@@ -490,30 +616,10 @@ export default function QCShippingQueuePage() {
       return response;
     },
     onSuccess: (data) => {
-      if (data.pdfs && Array.isArray(data.pdfs)) {
-        // Always an array - download each PDF
-        data.pdfs.forEach((pdf: any, index: number) => {
-          // Create blob from base64
-          const byteCharacters = atob(pdf.data);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: 'application/pdf' });
-          
-          // Create download link
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = pdf.filename;
-          
-          // Trigger download with small delay between files
-          setTimeout(() => {
-            link.click();
-            URL.revokeObjectURL(url);
-          }, index * 100);
-        });
+      if (data.pdfs && Array.isArray(data.pdfs) && data.pdfs.length > 0) {
+        // Show modal with packing slips
+        setPackingSlipData(data.pdfs);
+        setShowPackingSlipModal(true);
         
         toast({
           title: 'Packing Slips Generated',
@@ -521,8 +627,8 @@ export default function QCShippingQueuePage() {
         });
       } else {
         toast({
-          title: 'Error',
-          description: 'Invalid response format from server',
+          title: 'No Packing Slips Generated',
+          description: 'No valid items found to generate packing slips',
           variant: 'destructive',
         });
       }
@@ -1315,17 +1421,32 @@ export default function QCShippingQueuePage() {
                 <span>P1 Purchase Orders - Pipeline Status</span>
                 <div className="flex items-center gap-2">
                   {selectedPOItems.size > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedPOItems(new Set());
-                        setSelectedCustomer(null);
-                      }}
-                      className="text-xs"
-                    >
-                      Clear Selection ({selectedPOItems.size})
-                    </Button>
+                    <>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => setShowShipmentDialog(true)}
+                        className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                        data-testid="button-ship-selected"
+                        disabled={transformedShipmentItems.length === 0}
+                      >
+                        <Truck className="h-4 w-4 mr-2" />
+                        Ship Selected ({selectedPOItems.size})
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedPOItems(new Set());
+                          setSelectedCustomer(null);
+                        }}
+                        className="text-xs"
+                        data-testid="button-clear-selection"
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Clear Selection
+                      </Button>
+                    </>
                   )}
                   <Badge variant="outline">
                     {(poOrders as any[]).reduce((total, customer) => {
@@ -1426,7 +1547,10 @@ export default function QCShippingQueuePage() {
                                       <CollapsibleContent>
                                         <div className="px-4 pb-4 space-y-2">
                                           {po.items.map((item: any) => {
-                                            const isSelected = selectedPOItems.has(item.orderId);
+                                            // Create unique key for selection - must use orderId if exists, fallback to poItemId-unitNumber
+                                            const itemKey = item.orderId || `${item.poItemId}-${item.unitNumber}`;
+                                            const isSelected = selectedPOItems.has(itemKey);
+                                            // Disable if: not ready to ship, or different customer selected
                                             const isDisabled = !item.isReadyToShip || !!(selectedCustomer && selectedCustomer !== customer.customerName);
                                             const departmentBadge = getDepartmentBadge(item.currentDepartment, item.productionStatus);
                                             
@@ -1448,17 +1572,17 @@ export default function QCShippingQueuePage() {
                                                     onCheckedChange={(checked) => {
                                                       const newSelected = new Set(selectedPOItems);
                                                       if (checked) {
-                                                        newSelected.add(item.orderId);
+                                                        newSelected.add(itemKey);
                                                         setSelectedCustomer(customer.customerName);
                                                       } else {
-                                                        newSelected.delete(item.orderId);
+                                                        newSelected.delete(itemKey);
                                                         if (newSelected.size === 0) {
                                                           setSelectedCustomer(null);
                                                         }
                                                       }
                                                       setSelectedPOItems(newSelected);
                                                     }}
-                                                    data-testid={`checkbox-po-item-${item.orderId}`}
+                                                    data-testid={`checkbox-po-item-${itemKey}`}
                                                   />
                                                 )}
                                                 {!item.isReadyToShip && <div className="w-6" />}
@@ -1590,7 +1714,7 @@ export default function QCShippingQueuePage() {
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-green-600 hover:bg-green-700 text-white"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
                   disabled={selectedPOItems.size === 0 || progressPOToShippingMutation.isPending}
                   onClick={handlePOProgressToShipping}
                   data-testid="button-progress-po-to-shipping"
@@ -1599,6 +1723,16 @@ export default function QCShippingQueuePage() {
                   {progressPOToShippingMutation.isPending
                     ? 'Progressing...'
                     : `Progress to Shipping (${selectedPOItems.size})`}
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => setShowShipmentDialog(true)}
+                  disabled={transformedShipmentItems.length === 0}
+                  data-testid="button-ship-selected-floating"
+                >
+                  <Truck className="h-4 w-4 mr-2" />
+                  Ship Selected ({selectedPOItems.size})
                 </Button>
               </div>
             </div>
@@ -1804,6 +1938,130 @@ export default function QCShippingQueuePage() {
           orderId={salesOrderId}
         />
       )}
+
+      {/* Packing Slip Viewer Modal */}
+      {showPackingSlipModal && packingSlipData.length > 0 && (
+        <Dialog open={showPackingSlipModal} onOpenChange={setShowPackingSlipModal}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-6 w-6 text-blue-600" />
+                Packing Slips ({packingSlipData.length})
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto space-y-4 p-4">
+              {packingSlipData.map((pdf, index) => {
+                // Convert base64 to blob URL for preview
+                const byteCharacters = atob(pdf.data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                  byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+
+                return (
+                  <div key={index} className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-lg">
+                        {pdf.filename || `Packing Slip ${index + 1}`}
+                      </h4>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = pdf.filename || `packing-slip-${index + 1}.pdf`;
+                            link.click();
+                          }}
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Download
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            const printWindow = window.open(url, '_blank');
+                            if (printWindow) {
+                              printWindow.addEventListener('load', () => {
+                                printWindow.print();
+                              });
+                            }
+                          }}
+                        >
+                          <Printer className="h-4 w-4 mr-2" />
+                          Print
+                        </Button>
+                      </div>
+                    </div>
+                    <iframe
+                      src={url}
+                      className="w-full h-[600px] border rounded"
+                      title={pdf.filename || `Packing Slip ${index + 1}`}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-between items-center border-t pt-4 px-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // Download all
+                  packingSlipData.forEach((pdf, index) => {
+                    const byteCharacters = atob(pdf.data);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                      byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    const byteArray = new Uint8Array(byteNumbers);
+                    const blob = new Blob([byteArray], { type: 'application/pdf' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = pdf.filename || `packing-slip-${index + 1}.pdf`;
+                    setTimeout(() => {
+                      link.click();
+                      URL.revokeObjectURL(url);
+                    }, index * 100);
+                  });
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download All
+              </Button>
+              <Button onClick={() => setShowPackingSlipModal(false)}>
+                Close
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ShipmentDialog for P1 PO Shipping */}
+      <ShipmentDialog
+        open={showShipmentDialog}
+        onClose={() => setShowShipmentDialog(false)}
+        selectedItems={transformedShipmentItems}
+        onSuccess={(data) => {
+          // Invalidate all required queries
+          queryClient.invalidateQueries({ queryKey: ['/api/po-orders/shipping-qc'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/po-orders/all-p1-with-status'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+          
+          // Download documents
+          handleShipmentDocuments(data);
+          
+          // Clear selection
+          setSelectedPOItems(new Set());
+          setSelectedCustomer(null);
+        }}
+      />
     </div>
   );
 }

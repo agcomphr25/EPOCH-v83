@@ -62,14 +62,50 @@ function getCountryCode(country?: string): string {
 
 export async function createShipment(opts: {
   shipTo: ShipTo;
-  serviceCode: string; // e.g. "03"
+  serviceCode: string; // e.g. "03" = Ground, "02" = 2nd Day, "01" = Next Day
   weightLbs: number;
   referenceNumber?: string;
+  billingOption?: 'sender' | 'receiver' | 'third-party'; // Default: 'sender'
+  thirdPartyAccountNumber?: string; // Required if billingOption is 'third-party'
+  thirdPartyPostalCode?: string; // Required for third-party
+  thirdPartyCountryCode?: string; // Required for third-party
 }) {
   const token = await getAccessToken();
 
   const labelFormatEnv = (process.env.UPS_LABEL_FORMAT ?? 'PDF').toUpperCase();
   const labelImageCode = labelFormatEnv === 'ZPL' ? 'ZPL' : 'GIF'; // UPS returns base64(ZPL or GIF). We'll wrap GIF into PDF later.
+
+  // Determine billing configuration
+  const billingOption = opts.billingOption || 'sender';
+  let paymentInformation: any = {
+    ShipmentCharge: {
+      Type: '01', // Transportation
+    },
+  };
+
+  if (billingOption === 'sender') {
+    paymentInformation.ShipmentCharge.BillShipper = {
+      AccountNumber: process.env.UPS_ACCOUNT_NUMBER,
+    };
+  } else if (billingOption === 'receiver') {
+    paymentInformation.ShipmentCharge.BillReceiver = {
+      AccountNumber: opts.thirdPartyAccountNumber, // Receiver provides their account
+      Address: {
+        PostalCode: opts.shipTo.postalCode,
+      },
+    };
+  } else if (billingOption === 'third-party') {
+    if (!opts.thirdPartyAccountNumber || !opts.thirdPartyPostalCode || !opts.thirdPartyCountryCode) {
+      throw new Error('Third-party billing requires accountNumber, postalCode, and countryCode');
+    }
+    paymentInformation.ShipmentCharge.BillThirdParty = {
+      AccountNumber: opts.thirdPartyAccountNumber,
+      Address: {
+        PostalCode: opts.thirdPartyPostalCode,
+        CountryCode: opts.thirdPartyCountryCode,
+      },
+    };
+  }
 
   const body = {
     ShipmentRequest: {
@@ -114,12 +150,7 @@ export async function createShipment(opts: {
             CountryCode: getCountryCode(process.env.SHIP_FROM_COUNTRY),
           },
         },
-        PaymentInformation: {
-          ShipmentCharge: {
-            Type: '01', // Transportation
-            BillShipper: { AccountNumber: process.env.UPS_ACCOUNT_NUMBER },
-          },
-        },
+        PaymentInformation: paymentInformation,
         Service: { Code: opts.serviceCode }, // "03" Ground
         Package: [
           {

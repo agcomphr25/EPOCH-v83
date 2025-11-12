@@ -101,6 +101,11 @@ import {
   vendorPOItems,
   // Follow-up orders table
   followupOrders,
+  // Invoice numbers tracking table
+  invoiceNumbers,
+  // Shipment tracking tables
+  shipmentRecords,
+  shipmentItems,
 
   // Types
   type Order,
@@ -290,6 +295,9 @@ import {
   type InsertVendorContact,
   type VendorMonthlyEvaluation,
   type InsertVendorMonthlyEvaluation,
+  type ShipmentRecord,
+  type InsertShipmentRecord,
+  type ShipmentItem,
   // Magic link token types
   magicLinkTokens,
   type MagicLinkToken,
@@ -1052,6 +1060,24 @@ export interface IStorage {
   deleteP2ProductionOrder(id: number): Promise<void>;
   generateP2ProductionOrders(poId: number): Promise<P2ProductionOrder[]>;
   getP2MaterialRequirements(poId: number): Promise<any[]>;
+
+  // Shipment Records CRUD
+  createShipment(data: {
+    shipment: InsertShipmentRecord;
+    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null }[];
+  }): Promise<ShipmentRecord>;
+  getShipment(id: string): Promise<ShipmentRecord | undefined>;
+  getAllShipments(filters?: {
+    customerId?: string;
+    startDate?: Date;
+    endDate?: Date;
+    search?: string;
+  }): Promise<(ShipmentRecord & { items: ShipmentItem[] })[]>;
+  updateShipmentTracking(
+    id: string,
+    trackingNumber: string,
+    trackingUrl?: string
+  ): Promise<ShipmentRecord>;
 
   // Purchase Order Items CRUD
   getPurchaseOrderItems(poId: number): Promise<PurchaseOrderItem[]>;
@@ -9696,6 +9722,110 @@ export class DatabaseStorage implements IStorage {
     return materialRequirements;
   }
 
+  // Shipment Records CRUD
+  async createShipment(data: {
+    shipment: InsertShipmentRecord;
+    items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null }[];
+  }): Promise<ShipmentRecord> {
+    return await db.transaction(async (tx) => {
+      // Create the shipment record
+      const [shipment] = await tx
+        .insert(shipmentRecords)
+        .values(data.shipment)
+        .returning();
+
+      // Create shipment items
+      if (data.items.length > 0) {
+        const shipmentItemsData = data.items.map(item => ({
+          shipmentId: shipment.id,
+          poItemId: item.poItemId,
+          orderId: item.orderId,
+          quantity: item.quantity,
+          weightLbs: item.weightLbs,
+        }));
+
+        await tx.insert(shipmentItems).values(shipmentItemsData);
+      }
+
+      return shipment;
+    });
+  }
+
+  async getShipment(id: string): Promise<ShipmentRecord | undefined> {
+    const shipments = await db
+      .select()
+      .from(shipmentRecords)
+      .where(eq(shipmentRecords.id, id));
+    
+    return shipments[0];
+  }
+
+  async getAllShipments(filters?: {
+    customerId?: string;
+    startDate?: Date;
+    endDate?: Date;
+    search?: string;
+  }): Promise<(ShipmentRecord & { items: ShipmentItem[] })[]> {
+    let query = db.select().from(shipmentRecords);
+
+    // Apply filters
+    const conditions = [];
+    if (filters?.customerId) {
+      conditions.push(eq(shipmentRecords.customerId, filters.customerId));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(shipmentRecords.shippedAt, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(shipmentRecords.shippedAt, filters.endDate));
+    }
+    if (filters?.search) {
+      conditions.push(
+        or(
+          like(shipmentRecords.trackingNumber, `%${filters.search}%`),
+          like(shipmentRecords.customerId, `%${filters.search}%`)
+        )
+      );
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+
+    const shipments = await query.orderBy(desc(shipmentRecords.shippedAt));
+
+    // Fetch items for each shipment
+    const shipmentsWithItems = await Promise.all(
+      shipments.map(async (shipment) => {
+        const items = await db
+          .select()
+          .from(shipmentItems)
+          .where(eq(shipmentItems.shipmentId, shipment.id));
+        
+        return { ...shipment, items };
+      })
+    );
+
+    return shipmentsWithItems;
+  }
+
+  async updateShipmentTracking(
+    id: string,
+    trackingNumber: string,
+    trackingUrl?: string
+  ): Promise<ShipmentRecord> {
+    const [shipment] = await db
+      .update(shipmentRecords)
+      .set({ 
+        trackingNumber,
+        trackingUrl: trackingUrl || null,
+      })
+      .where(eq(shipmentRecords.id, id))
+      .returning();
+    
+    return shipment;
+  }
+
   // Authentication methods
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users).orderBy(users.username);
@@ -12134,6 +12264,140 @@ export class DatabaseStorage implements IStorage {
   async deleteCuttingFabricInventory(id: string): Promise<void> {
     await db.delete(cuttingFabricInventory).where(eq(cuttingFabricInventory.id, id));
   }
+
+
+  // Invoice Number Tracking
+  async getNextInvoiceNumber(customerId: string, customerName: string): Promise<string> {
+    const now = new Date();
+    const year = now.getFullYear();
+    const yearShort = year.toString().slice(-2); // "25" for 2025
+
+    // Map customer names to customer codes
+    const customerCodeMap: Record<string, string> = {
+      'Red Hawk LLC': 'RH',
+      'Pure Precision': 'PP',
+    };
+
+    let customerCode = customerCodeMap[customerName];
+    
+    // If no mapping found, try to extract initials from company name
+    if (!customerCode) {
+      const words = customerName.trim().split(/\s+/);
+      if (words.length >= 2) {
+        customerCode = words[0].charAt(0).toUpperCase() + words[1].charAt(0).toUpperCase();
+      } else {
+        customerCode = customerName.substring(0, 2).toUpperCase();
+      }
+    }
+
+    // Get or create invoice tracking record
+    const [record] = await db
+      .select()
+      .from(invoiceNumbers)
+      .where(and(
+        eq(invoiceNumbers.customerId, customerId),
+        eq(invoiceNumbers.year, year)
+      ));
+
+    let nextNumber: number;
+
+    if (record) {
+      // Increment existing record
+      nextNumber = record.lastNumber + 1;
+      await db
+        .update(invoiceNumbers)
+        .set({ lastNumber: nextNumber, updatedAt: new Date() })
+        .where(eq(invoiceNumbers.id, record.id));
+    } else {
+      // Create new record for this customer/year
+      nextNumber = 200; // Starting number
+      await db.insert(invoiceNumbers).values({
+        customerId,
+        customerCode,
+        year,
+        lastNumber: nextNumber,
+      });
+    }
+
+    // Format: PP25-200, RH25-201, etc.
+    return `${customerCode}${yearShort}-${nextNumber.toString().padStart(3, '0')}`;
+  }
+
+  async getCustomerDefaultAddress(customerId: string): Promise<{
+    street: string;
+    street2: string | null;
+    city: string;
+    state: string;
+    zipCode: string;
+  } | null> {
+    // Try to parse as number, otherwise lookup by customer code
+    const numericId = parseInt(customerId);
+    let actualCustomerId: number | null = null;
+
+    if (!isNaN(numericId)) {
+      actualCustomerId = numericId;
+    } else {
+      // Map customer codes to company names and lookup customer ID
+      const customerCodeMap: Record<string, string> = {
+        'RH': 'Red Hawk LLC',
+        'PP': 'Pure Precision',
+      };
+
+      const companyName = customerCodeMap[customerId.toUpperCase()];
+      if (companyName) {
+        const [customer] = await db
+          .select()
+          .from(customers)
+          .where(eq(customers.companyName, companyName))
+          .limit(1);
+
+        if (customer) {
+          actualCustomerId = customer.id;
+        }
+      }
+    }
+
+    // If we found a customer ID (numeric or code-mapped), fetch address
+    if (actualCustomerId !== null) {
+      const [address] = await db
+        .select()
+        .from(customerAddresses)
+        .where(and(
+          eq(customerAddresses.customerId, actualCustomerId),
+          eq(customerAddresses.isDefault, true)
+        ));
+
+      if (address) {
+        return {
+          street: address.street,
+          street2: address.street2 || null,
+          city: address.city,
+          state: address.state,
+          zipCode: address.zipCode,
+        };
+      }
+
+      // If no default, get first address
+      const [firstAddress] = await db
+        .select()
+        .from(customerAddresses)
+        .where(eq(customerAddresses.customerId, actualCustomerId))
+        .limit(1);
+
+      if (firstAddress) {
+        return {
+          street: firstAddress.street,
+          street2: firstAddress.street2 || null,
+          city: firstAddress.city,
+          state: firstAddress.state,
+          zipCode: firstAddress.zipCode,
+        };
+      }
+    }
+
+    return null;
+  }
+
 
   // Order Reference Data
   async getOrderStatusTypes(): Promise<any[]> {

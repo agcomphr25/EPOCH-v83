@@ -3417,16 +3417,6 @@ export const productionOrders = pgTable('production_orders', {
   priorityScore: integer('priority_score'),
   currentPipelineConfig: jsonb('current_pipeline_config'),
   hasP1Priority: boolean('has_p1_priority').default(false),
-  currentDepartment: text('current_department'),
-  departmentHistory: jsonb('department_history').default('[]'),
-  barcodeCompletedAt: timestamp('barcode_completed_at'),
-  layupCompletedAt: timestamp('layup_completed_at'),
-  cncCompletedAt: timestamp('cnc_completed_at'),
-  finishCompletedAt: timestamp('finish_completed_at'),
-  gunsmithCompletedAt: timestamp('gunsmith_completed_at'),
-  paintCompletedAt: timestamp('paint_completed_at'),
-  qcCompletedAt: timestamp('qc_completed_at'),
-  shippingCompletedAt: timestamp('shipping_completed_at'),
 });
 
 // Enhanced Form Insert Schemas

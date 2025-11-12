@@ -2689,18 +2689,15 @@ router.patch(
   async (req: Request, res: Response) => {
     try {
       const orderIdParam = req.params.orderId;
-      const orderId = parseInt(orderIdParam, 10);
-
-      if (isNaN(orderId)) {
-        return res.status(400).json({ error: 'Invalid order ID - must be numeric' });
-      }
-
       const { fieldName, value } = req.body;
 
       if (!fieldName) {
         return res.status(400).json({ error: 'Field name is required' });
       }
 
+      // Determine if the param is a numeric ID (legacy) or string order_id (current)
+      const isNumericId = /^\d+$/.test(orderIdParam);
+      
       // Validate field using imported admin config
       const fieldConfig = ADMIN_FIELD_CONFIG[fieldName];
 
@@ -2721,20 +2718,35 @@ router.patch(
         });
       }
 
-      // Fetch the existing order - we need to check both tables
-      let order: any = await db.select().from(allOrders).where(eq(allOrders.id, orderId)).limit(1);
+      // Fetch the existing order - check both tables
+      let order: any;
       let isFinalized = true;
       
-      if (!order || order.length === 0) {
-        order = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
-        isFinalized = false;
+      if (isNumericId) {
+        // Legacy numeric ID lookup
+        const numericId = parseInt(orderIdParam, 10);
+        order = await db.select().from(allOrders).where(eq(allOrders.id, numericId)).limit(1);
+        
+        if (!order || order.length === 0) {
+          order = await db.select().from(orders).where(eq(orders.id, numericId)).limit(1);
+          isFinalized = false;
+        }
+      } else {
+        // String order_id lookup (AG100, EH051, etc.)
+        order = await db.select().from(allOrders).where(eq(allOrders.orderId, orderIdParam)).limit(1);
+        
+        if (!order || order.length === 0) {
+          order = await db.select().from(orders).where(eq(orders.orderId, orderIdParam)).limit(1);
+          isFinalized = false;
+        }
       }
 
       if (!order || order.length === 0) {
-        return res.status(404).json({ error: `Order ${orderId} not found` });
+        return res.status(404).json({ error: `Order ${orderIdParam} not found` });
       }
 
       order = order[0];
+      const orderStringId = order.orderId; // Always use the string order_id for logging
 
       const dbField = fieldConfig.dbField;
       const oldValue = (order as any)[dbField];
@@ -2793,22 +2805,36 @@ router.patch(
         updateData.is_manual_urgency = true;
       }
 
-      // Update the appropriate table
+      // Update the appropriate table using the correct identifier
       if (isFinalized) {
-        await db
-          .update(allOrders)
-          .set(updateData)
-          .where(eq(allOrders.id, orderId));
+        if (isNumericId) {
+          await db
+            .update(allOrders)
+            .set(updateData)
+            .where(eq(allOrders.id, parseInt(orderIdParam, 10)));
+        } else {
+          await db
+            .update(allOrders)
+            .set(updateData)
+            .where(eq(allOrders.orderId, orderIdParam));
+        }
       } else {
-        await db
-          .update(orders)
-          .set(updateData)
-          .where(eq(orders.id, orderId));
+        if (isNumericId) {
+          await db
+            .update(orders)
+            .set(updateData)
+            .where(eq(orders.id, parseInt(orderIdParam, 10)));
+        } else {
+          await db
+            .update(orders)
+            .set(updateData)
+            .where(eq(orders.orderId, orderIdParam));
+        }
       }
 
       // Log the change to audit logs
       await storage.createAdminAuditLog({
-        orderId: order.orderId,
+        orderId: orderStringId,
         fieldName: fieldName,
         fieldLabel: fieldConfig.label,
         changeType: 'INLINE',
@@ -2818,12 +2844,20 @@ router.patch(
         changedBy: req.user?.username || 'system',
       });
 
-      // Fetch and return updated order
+      // Fetch and return updated order using the correct identifier
       let updatedOrder;
       if (isFinalized) {
-        updatedOrder = await db.select().from(allOrders).where(eq(allOrders.id, orderId)).limit(1);
+        if (isNumericId) {
+          updatedOrder = await db.select().from(allOrders).where(eq(allOrders.id, parseInt(orderIdParam, 10))).limit(1);
+        } else {
+          updatedOrder = await db.select().from(allOrders).where(eq(allOrders.orderId, orderIdParam)).limit(1);
+        }
       } else {
-        updatedOrder = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+        if (isNumericId) {
+          updatedOrder = await db.select().from(orders).where(eq(orders.id, parseInt(orderIdParam, 10))).limit(1);
+        } else {
+          updatedOrder = await db.select().from(orders).where(eq(orders.orderId, orderIdParam)).limit(1);
+        }
       }
 
       res.json({ 

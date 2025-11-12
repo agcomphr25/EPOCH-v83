@@ -231,19 +231,15 @@ export default function QCShippingQueuePage() {
       if (metadata) {
         const { item, customerName, poNumber } = metadata;
         
-        // Only include items with valid order IDs
-        if (item.orderId) {
-          items.push({
-            poItemId: item.poItemId,
-            orderId: item.orderId,
-            quantity: item.quantity ?? 1,
-            description: item.itemName || item.stockModelName || 'Unknown Item',
-            customerName,
-            poNumber,
-          });
-        } else {
-          console.warn(`PO item ${item.poItemId} unit ${item.unitNumber} has no orderId - skipping`);
-        }
+        // Include items with or without orderIds (non-stock items bypass production)
+        items.push({
+          poItemId: item.poItemId,
+          orderId: item.orderId || `PO-${item.poItemId}-${item.unitNumber}`, // Use composite ID if no orderId
+          quantity: item.quantity ?? 1,
+          description: item.itemName || item.stockModelName || 'Unknown Item',
+          customerName,
+          poNumber,
+        });
       } else {
         console.warn(`Selected key not found in poOrders: ${key}`);
       }

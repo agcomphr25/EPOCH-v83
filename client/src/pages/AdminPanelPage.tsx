@@ -930,16 +930,26 @@ export default function AdminPanelPage() {
               <div className="flex gap-2 pt-4 border-t">
                 <Button
                   onClick={async () => {
-                    // Update all edited fields
-                    for (const [fieldKey, value] of Object.entries(editedFields)) {
-                      await updateFieldMutation.mutateAsync({
-                        orderId: selectedOrderIdString!,
-                        fieldName: fieldKey,
-                        value,
-                      });
+                    try {
+                      // Update all edited fields
+                      for (const [fieldKey, value] of Object.entries(editedFields)) {
+                        await updateFieldMutation.mutateAsync({
+                          orderId: selectedOrderIdString!,
+                          fieldName: fieldKey,
+                          value,
+                        });
+                      }
+                      
+                      // Force refresh the order list and full order data
+                      await queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+                      await queryClient.invalidateQueries({ queryKey: [`/api/orders/${selectedOrderIdString}`] });
+                      
+                      setIsPanelOpen(false);
+                      setEditedFields({});
+                    } catch (error) {
+                      // Error already handled by mutation onError
+                      console.error('Save failed:', error);
                     }
-                    setIsPanelOpen(false);
-                    setEditedFields({});
                   }}
                   disabled={Object.keys(editedFields).length === 0 || updateFieldMutation.isPending}
                   data-testid="button-save-changes"

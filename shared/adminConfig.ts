@@ -23,7 +23,8 @@ export type UserRole = 'ADMIN' | 'EMPLOYEE' | 'OWNER';
 export interface AdminFieldConfig {
   label: string;
   type: FieldType;
-  dbField: string; // Actual database column name
+  dbField: string; // Actual database column name (snake_case)
+  jsField?: string; // JavaScript property name returned by Drizzle (camelCase) - if different from dbField
   requiredRole: UserRole | UserRole[]; // Who can edit this field
   options?: string[] | 'employees' | 'departments' | 'statuses'; // Static or dynamic options
   validation?: z.ZodType; // Zod validation schema
@@ -50,6 +51,7 @@ export const adminFieldConfigs: Record<string, AdminFieldConfig> = {
     label: 'Current Department',
     type: 'select',
     dbField: 'current_department',
+    jsField: 'currentDepartment', // Drizzle returns this as camelCase
     requiredRole: ['ADMIN', 'OWNER'],
     options: 'departments',
     description: 'Current production department',

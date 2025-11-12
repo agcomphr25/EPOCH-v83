@@ -74,6 +74,9 @@ export default function RTSSalesDialog({
 
   // Shipping method
   const [shippingMethod, setShippingMethod] = useState('03'); // UPS Ground
+  
+  // Department to send order to
+  const [selectedDepartment, setSelectedDepartment] = useState('QC & Shipping');
 
   // Reset form when dialog opens
   useEffect(() => {
@@ -97,6 +100,7 @@ export default function RTSSalesDialog({
       setPackageWidth('12');
       setPackageHeight('6');
       setShippingMethod('03');
+      setSelectedDepartment('QC & Shipping');
     }
   }, [isOpen]);
 
@@ -262,6 +266,7 @@ export default function RTSSalesDialog({
         rtsInventoryId: itemId, // Correct field name
         unitPrice: itemPrices[itemId], // Correct field name
       })),
+      department: selectedDepartment, // Department to send order to
       shipTo: {
         name: shipToName,
         company: shipToCompany,
@@ -451,6 +456,36 @@ export default function RTSSalesDialog({
                   onChange={(e) => setShipToPhone(e.target.value)}
                   data-testid="input-ship-to-phone"
                 />
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Department Selection */}
+          <div>
+            <h3 className="font-semibold mb-3">Send Order To Department</h3>
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <Label htmlFor="department">Department *</Label>
+                <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                  <SelectTrigger data-testid="select-department">
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Layup/Plugging">Layup/Plugging</SelectItem>
+                    <SelectItem value="CNC">CNC</SelectItem>
+                    <SelectItem value="Gunsmith">Gunsmith</SelectItem>
+                    <SelectItem value="Finish">Finish</SelectItem>
+                    <SelectItem value="Finish QC">Finish QC</SelectItem>
+                    <SelectItem value="Paint">Paint</SelectItem>
+                    <SelectItem value="QC & Shipping">QC & Shipping</SelectItem>
+                    <SelectItem value="Shipping">Shipping</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Orders will be sent to the selected department after sale is created
+                </p>
               </div>
             </div>
           </div>

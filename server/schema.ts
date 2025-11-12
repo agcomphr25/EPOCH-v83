@@ -861,6 +861,35 @@ export const employeeAuditLog = pgTable('employee_audit_log', {
   timestamp: timestamp('timestamp').defaultNow().notNull(),
 });
 
+// Admin Panel Audit Log - Track all admin panel order changes
+export const adminAuditLog = pgTable(
+  'admin_audit_log',
+  {
+    id: serial('id').primaryKey(),
+    orderId: text('order_id').notNull(), // Order being modified
+    fieldName: text('field_name').notNull(), // Field that was changed (e.g., 'assigned_technician')
+    fieldLabel: text('field_label').notNull(), // Human-readable field name (e.g., 'Assigned Technician')
+    oldValue: jsonb('old_value'), // Previous value (preserves type)
+    newValue: jsonb('new_value'), // New value (preserves type)
+    changedBy: text('changed_by').notNull(), // Username of person who made the change
+    userRole: text('user_role').notNull(), // Role of person who made the change (ADMIN, OWNER, EMPLOYEE)
+    changeType: text('change_type').notNull(), // INLINE, SIDE_PANEL, BULK
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    timestamp: timestamp('timestamp').defaultNow().notNull(),
+  },
+  (table) => ({
+    // Indexes for query performance
+    orderIdIdx: index('admin_audit_order_id_idx').on(table.orderId),
+    changedByIdx: index('admin_audit_changed_by_idx').on(table.changedBy),
+    timestampIdx: index('admin_audit_timestamp_idx').on(table.timestamp),
+    orderTimeIdx: index('admin_audit_order_time_idx').on(
+      table.orderId,
+      table.timestamp
+    ),
+  })
+);
+
 // Training Modules - Store training content
 export const trainingModules = pgTable('training_modules', {
   id: serial('id').primaryKey(),
@@ -1749,6 +1778,25 @@ export const insertEmployeeAuditLogSchema = createInsertSchema(employeeAuditLog)
     userAgent: z.string().optional().nullable(),
   });
 
+// Admin Panel Audit Log schema
+export const insertAdminAuditLogSchema = createInsertSchema(adminAuditLog)
+  .omit({
+    id: true,
+    timestamp: true,
+  })
+  .extend({
+    orderId: z.string().min(1, 'Order ID is required'),
+    fieldName: z.string().min(1, 'Field name is required'),
+    fieldLabel: z.string().min(1, 'Field label is required'),
+    oldValue: z.any().nullable(), // JSONB can be any type
+    newValue: z.any().nullable(), // JSONB can be any type
+    changedBy: z.string().min(1, 'Changed by is required'),
+    userRole: z.enum(['ADMIN', 'OWNER', 'EMPLOYEE']),
+    changeType: z.enum(['INLINE', 'SIDE_PANEL', 'BULK']),
+    ipAddress: z.string().optional().nullable(),
+    userAgent: z.string().optional().nullable(),
+  });
+
 // Training Modules schemas
 export const insertTrainingModuleSchema = createInsertSchema(trainingModules)
   .omit({
@@ -2163,6 +2211,9 @@ export type InsertEmployeeAuditLog = z.infer<
   typeof insertEmployeeAuditLogSchema
 >;
 export type EmployeeAuditLog = typeof employeeAuditLog.$inferSelect;
+
+export type InsertAdminAuditLog = z.infer<typeof insertAdminAuditLogSchema>;
+export type AdminAuditLog = typeof adminAuditLog.$inferSelect;
 
 // Training system types
 export type InsertTrainingModule = z.infer<typeof insertTrainingModuleSchema>;

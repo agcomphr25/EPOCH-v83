@@ -4351,40 +4351,44 @@ export function registerRoutes(app: Express): Server {
             (order as any).specifications?.actionLength || 
             (order as any).features?.action_length || 
             'unknown';
+          const modelId = (order as any).modelId || '';
           const modelDisplayName =
-            stockModelMap.get((order as any).modelId) ||
-            (order as any).modelId ||
+            stockModelMap.get(modelId) ||
+            modelId ||
             'Unknown';
 
           // Add order information at top
-          // For PO items, show "Customer, PO#, X of Y" format
+          // For P1 PO items, show "PO#XXXXX" format at top
           // For regular orders, show order ID
           let labelText = order.orderId;
-          if ((order as any).isPOItem) {
-            let customerName = (order as any).poCustomerName;
+          let customerName = '';
+          const isPOItem = (order as any).isPOItem || order.orderId.startsWith('P1-');
+          
+          if (isPOItem) {
+            const poNumber = (order as any).poNumber || order.orderId;
+            labelText = `PO#${poNumber}`;
+            
+            // Extract customer name for separate line
+            customerName = (order as any).poCustomerName || order.customerName || (order as any).customerName;
             // Handle null, undefined, empty, or "unknown" customer names
             if (!customerName || customerName.toLowerCase() === 'unknown' || customerName.trim() === '') {
-              customerName = order.customerName || order.customerId || order.orderId;
+              customerName = order.customerId || '';
             }
-            const poNumber = (order as any).poNumber || 'N/A';
-            const unitNum = (order as any).poUnitNumber || 1;
-            const totalQty = (order as any).poTotalQuantity || 1;
-            labelText = `${customerName}, PO#${poNumber}, ${unitNum} of ${totalQty}`;
           }
           
           page.drawText(labelText, {
             x: x + 8,
             y: y + 50,
-            size: (order as any).isPOItem ? 9 : 11, // Smaller font for longer PO text
-            font: helveticaFont,
+            size: isPOItem ? 10 : 11,
+            font: helveticaBoldFont,
             color: rgb(0, 0, 0),
           });
 
           // Check for special features to add to label
           const features = (order as any).features || {};
 
-          // Get paint option for display with subcategory
-          const paintOption = features.paint_options || '';
+          // Get paint option for display with subcategory (handle both camelCase and snake_case)
+          const paintOption = features.paint_options || features.paintOptions || '';
 
           // Map paint values to their subcategories
           const paintSubcategoryMap: { [key: string]: string } = {
@@ -4476,16 +4480,54 @@ export function registerRoutes(app: Express): Server {
             ? paintOption.replace(/_/g, ' ').toUpperCase()
             : '';
 
-          // Add stock model, action length, and paint option with subcategory on same line below barcode
-          // Only include action length if it's not 'unknown'
-          const hasActionLength = actionLength && actionLength.toLowerCase() !== 'unknown';
-          const actionPart = hasActionLength ? ` - ${actionLength.toUpperCase()}` : '';
-          
-          const labelLine = paintDisplayName
-            ? subcategory
-              ? `${modelDisplayName}${actionPart} - ${subcategory}: ${paintDisplayName}`
-              : `${modelDisplayName}${actionPart} - PAINT: ${paintDisplayName}`
-            : `${modelDisplayName}${actionPart}`;
+          // Determine material type from model ID or specifications
+          let material = '';
+          if (isPOItem) {
+            const specs = (order as any).specifications || (order as any).features || {};
+            material = specs.material || '';
+            
+            // If no material in specs, infer from model ID
+            if (!material) {
+              if (modelId.startsWith('cf_') || modelId.includes('carbon')) {
+                material = 'Carbon Fiber';
+              } else if (modelId.startsWith('fg_') || modelId.includes('fiberglass')) {
+                material = 'Fiberglass';
+              }
+            }
+          }
+
+          // For P1 PO orders: show "Material - Stock Model - Paint Color" format
+          // For regular orders: show "Stock Model - Action Length - Paint" format
+          let labelLine = '';
+          if (isPOItem) {
+            // Build P1 PO label: Material - Stock Model - Paint Color
+            const parts = [];
+            if (material) {
+              parts.push(material);
+            }
+            parts.push(modelDisplayName);
+            
+            // Add paint color if available
+            if (paintDisplayName) {
+              if (subcategory) {
+                parts.push(`${subcategory}: ${paintDisplayName}`);
+              } else {
+                parts.push(paintDisplayName);
+              }
+            }
+            
+            labelLine = parts.join(' - ');
+          } else {
+            // Only include action length if it's not 'unknown'
+            const hasActionLength = actionLength && actionLength.toLowerCase() !== 'unknown';
+            const actionPart = hasActionLength ? ` - ${actionLength.toUpperCase()}` : '';
+            
+            labelLine = paintDisplayName
+              ? subcategory
+                ? `${modelDisplayName}${actionPart} - ${subcategory}: ${paintDisplayName}`
+                : `${modelDisplayName}${actionPart} - PAINT: ${paintDisplayName}`
+              : `${modelDisplayName}${actionPart}`;
+          }
 
           page.drawText(labelLine, {
             x: x + 8,
@@ -4506,10 +4548,10 @@ export function registerRoutes(app: Express): Server {
               : null;
 
           const textureText =
-            features.texture_options &&
-            features.texture_options !== 'no_texture' &&
-            features.texture_options !== 'none'
-              ? features.texture_options.replace(/_/g, ' ')
+            (features.texture_options || features.texture) &&
+            (features.texture_options || features.texture) !== 'no_texture' &&
+            (features.texture_options || features.texture) !== 'none'
+              ? (features.texture_options || features.texture).replace(/_/g, ' ')
               : null;
 
           // Check for NSNH (No Swivel Studs No Holes) - this should show as "NSNH"
@@ -4543,9 +4585,6 @@ export function registerRoutes(app: Express): Server {
           ) {
             specialLabels.push('CARBON CAMO READY');
           }
-
-          // Determine barcode color based on specifications
-          const modelId = (order as any).modelId || '';
 
           // Check if this order is high priority or late (you can add this logic later)
           const isHighPriority = false; // TODO: Add high priority logic
@@ -4629,9 +4668,21 @@ export function registerRoutes(app: Express): Server {
           // Draw the barcode with appropriate color (blue for terrain/premium/standard paint, black otherwise)
           redrawCode39Barcode(barcodeText, x + 8, y + 32, barcodeColor);
 
+          // For P1 PO orders: Show customer name on separate line
+          if (isPOItem && customerName) {
+            page.drawText(customerName, {
+              x: x + 8,
+              y: y + 16,
+              size: 6,
+              font: helveticaFont,
+              color: rgb(0, 0, 0),
+            });
+          }
+
           // Draw special labels with appropriate colors on separate line below stock model
           if (specialLabels.length > 0) {
             let xOffset = x + 8;
+            const yPosition = isPOItem ? y + 10 : y + 16; // Adjust position for P1 PO orders
 
             for (let i = 0; i < specialLabels.length; i++) {
               const label = specialLabels[i];
@@ -4649,7 +4700,7 @@ export function registerRoutes(app: Express): Server {
               const separator = i > 0 ? ' - ' : '';
               page.drawText(`${separator}${label}`, {
                 x: xOffset,
-                y: y + 16, // Move special labels higher
+                y: yPosition,
                 size: 5,
                 font: helveticaFont,
                 color: textColor,
@@ -4659,23 +4710,25 @@ export function registerRoutes(app: Express): Server {
             }
           }
 
-          // Add due date
-          let dueDate = 'N/A';
-          try {
-            dueDate = new Date(order.dueDate).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
+          // Add due date ONLY for non-PO orders
+          if (!isPOItem) {
+            let dueDate = 'N/A';
+            try {
+              dueDate = new Date(order.dueDate).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+              });
+            } catch (dateError) {
+              console.warn(`⚠️ Invalid due date for order ${order.orderId}, using N/A`);
+            }
+            page.drawText(`Due: ${dueDate}`, {
+              x: x + 8,
+              y: y + 10,
+              size: 6,
+              font: helveticaFont,
+              color: rgb(0, 0, 0),
             });
-          } catch (dateError) {
-            console.warn(`⚠️ Invalid due date for order ${order.orderId}, using N/A`);
           }
-          page.drawText(`Due: ${dueDate}`, {
-            x: x + 8,
-            y: y + 10,
-            size: 6,
-            font: helveticaFont,
-            color: rgb(0, 0, 0),
-          });
         }
       }
 

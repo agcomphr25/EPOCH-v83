@@ -174,19 +174,49 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
 
 /**
  * Check if a user has access to a specific route
+ * Now supports role-based access in addition to username-based access
  */
-export function hasRouteAccess(username: string, route: string): boolean {
+export function hasRouteAccess(
+  username: string, 
+  route: string, 
+  userRole?: string
+): boolean {
   const permissions = USER_PERMISSIONS[username.toLowerCase()];
 
   if (!permissions) {
-    return false; // No permissions defined = no access
+    // No username permissions defined, check role-based access
+    return hasRoleBasedAccess(route, userRole);
   }
 
   if (permissions.fullAccess) {
     return true; // Full access users can access everything
   }
 
-  return permissions.routes.includes(route);
+  // Check if route is in user's permission list
+  if (permissions.routes.includes(route)) {
+    return true;
+  }
+
+  // Fall back to role-based access
+  return hasRoleBasedAccess(route, userRole);
+}
+
+/**
+ * Check if a role has access to a specific route
+ */
+function hasRoleBasedAccess(route: string, userRole?: string): boolean {
+  if (!userRole) return false;
+
+  const role = userRole.toUpperCase();
+
+  // Admin Panel route requires ADMIN or OWNER role
+  if (route === '/admin/orders' && (role === 'ADMIN' || role === 'OWNER')) {
+    return true;
+  }
+
+  // Add more role-based route mappings here as needed
+
+  return false;
 }
 
 /**

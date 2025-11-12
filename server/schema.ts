@@ -4733,6 +4733,7 @@ export const insertPOProductSchema = createInsertSchema(poProducts, {
   productName: z.string().min(1, 'Product name is required'),
   price: z.number().min(0, 'Price must be positive').default(0),
   quantity: z.number().min(1, 'Quantity must be at least 1').default(1),
+  otherOptions: z.array(z.string()).optional().default([]),
 })
   .omit({
     id: true,

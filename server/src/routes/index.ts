@@ -4800,7 +4800,11 @@ export function registerRoutes(app: Express): Server {
 
       for (const orderId of orderIds) {
         try {
-          const order = await storage.getOrderById(orderId);
+          // Check if this is a P1/PO order (production order) or regular order
+          const isProductionOrder = orderId.startsWith('P1-') || orderId.startsWith('PO-');
+          const order = isProductionOrder
+            ? await storage.getProductionOrderByOrderId(orderId)
+            : await storage.getOrderById(orderId);
           
           if (!order) {
             results.failed.push({ orderId, reason: 'Order not found' });
@@ -4861,11 +4865,17 @@ export function registerRoutes(app: Express): Server {
             updateData.shippingCompletedAt = currentTimestamp;
           }
 
-          // Try updating finalized order first, fall back to draft
-          try {
-            await storage.updateFinalizedOrder(orderId, updateData);
-          } catch (_error) {
-            await storage.updateOrderDraft(orderId, updateData);
+          // Update the correct table based on order type
+          if (isProductionOrder) {
+            // Update production order
+            await storage.updateProductionOrder((order as any).id, updateData);
+          } else {
+            // Try updating finalized order first, fall back to draft for regular orders
+            try {
+              await storage.updateFinalizedOrder(orderId, updateData);
+            } catch (_error) {
+              await storage.updateOrderDraft(orderId, updateData);
+            }
           }
           
           results.success.push(orderId);

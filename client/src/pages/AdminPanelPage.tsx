@@ -267,12 +267,11 @@ export default function AdminPanelPage() {
         header: 'Status',
         cell: ({ row }) => {
           const statusValue = row.original.status; // Use raw database value
-          const currentStatus = statusTypes.find((s: any) => s.name === statusValue);
           return (
             <Select
               value={statusValue || ''}
               onValueChange={(value) => {
-                console.log('Status change:', { orderId: row.original.orderId, value });
+                console.log('Status change:', { orderId: row.original.orderId, oldValue: statusValue, newValue: value });
                 updateFieldMutation.mutate({
                   orderId: row.original.orderId,
                   fieldName: 'status',
@@ -285,9 +284,7 @@ export default function AdminPanelPage() {
                 className="w-[150px] h-8" 
                 data-testid={`select-status-${row.original.orderId}`}
               >
-                <SelectValue placeholder="Select status">
-                  {currentStatus?.displayName || statusValue || 'Select status'}
-                </SelectValue>
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {statusTypes.map((status: any) => (

@@ -1,0 +1,29 @@
+Your branch is behind 'origin/main' by 38 commits, and can be fast-forwarded.
+  (use "git pull" to update your local branch)
+Updating e57efc8f..d75bdb99
+Fast-forward
+ attached_assets/image_1762919410679.png | Bin 0 -> 93035 bytes
+ attached_assets/image_1762920020061.png | Bin 0 -> 78749 bytes
+ attached_assets/image_1762921270505.png | Bin 0 -> 79924 bytes
+ attached_assets/image_1762922053426.png | Bin 0 -> 34208 bytes
+ attached_assets/image_1762951702500.png | Bin 0 -> 73033 bytes
+ client/src/App.tsx                      |   2 +
+ client/src/components/Navigation.tsx    |   6 +
+ client/src/pages/AdminPanelPage.tsx     |  85 ++++---
+ client/src/pages/AnalyticsDashboard.tsx | 346 +++++++++++++++++++++++++++++
+ push_log_20251112-020328.txt            |   4 +
+ push_log_20251112-175405.txt            |   3 +
+ replit.md                               |   8 +
+ server/src/routes/orders.ts             | 378 ++++++++++++++++++--------------
+ server/src/routes/reports.ts            | 132 +++++++++++
+ server/storage.ts                       |   2 +
+ shared/adminConfig.ts                   |   4 +-
+ 16 files changed, 781 insertions(+), 189 deletions(-)
+ create mode 100644 attached_assets/image_1762919410679.png
+ create mode 100644 attached_assets/image_1762920020061.png
+ create mode 100644 attached_assets/image_1762921270505.png
+ create mode 100644 attached_assets/image_1762922053426.png
+ create mode 100644 attached_assets/image_1762951702500.png
+ create mode 100644 client/src/pages/AnalyticsDashboard.tsx
+ create mode 100644 push_log_20251112-020328.txt
+ create mode 100644 push_log_20251112-175405.txt

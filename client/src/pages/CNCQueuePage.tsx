@@ -160,6 +160,24 @@ export default function CNCQueuePage() {
     return model?.displayName || model?.name || modelId;
   };
 
+  // Helper to get product display name for both regular orders and P1 PO items
+  const getProductDisplayName = (order: any) => {
+    // For P1 PO items (production orders), use itemName or itemId
+    if (order.itemName) {
+      return order.itemName;
+    }
+    if (order.itemId) {
+      // If itemId is a stock model reference, look it up
+      const itemIdLower = (order.itemId || '').toLowerCase();
+      if (itemIdLower === 'no stock' || itemIdLower === 'none' || itemIdLower === '') {
+        return 'No Stock Model';
+      }
+      return getModelDisplayName(order.itemId);
+    }
+    // For regular orders, use modelId or stockModelId
+    return getModelDisplayName(order.modelId || order.stockModelId);
+  };
+
   // Helper function to convert feature values to display names
   const getFeatureDisplayValue = (featureType: string, value: string) => {
     if (!value) return '';
@@ -869,17 +887,13 @@ export default function CNCQueuePage() {
                             Due: {format(new Date(order.dueDate), 'M/d/yy')}
                           </div>
                           <div className="text-gray-700 dark:text-gray-300 font-medium">
-                            {getModelDisplayName(
-                              order.modelId || order.stockModelId
-                            )}
+                            {getProductDisplayName(order)}
                           </div>
 
                           {/* Order Details */}
                           <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
                             {(() => {
-                              const modelName = getModelDisplayName(
-                                order.modelId || order.stockModelId
-                              );
+                              const modelName = getProductDisplayName(order);
                               const isTikka = modelName
                                 .toLowerCase()
                                 .includes('tikka');

@@ -12265,6 +12265,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(cuttingFabricInventory).where(eq(cuttingFabricInventory.id, id));
   }
 
+
   // Invoice Number Tracking
   async getNextInvoiceNumber(customerId: string, customerName: string): Promise<string> {
     const now = new Date();
@@ -12396,6 +12397,7 @@ export class DatabaseStorage implements IStorage {
 
     return null;
   }
+
 
   // Order Reference Data
   async getOrderStatusTypes(): Promise<any[]> {

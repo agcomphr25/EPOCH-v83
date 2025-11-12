@@ -139,6 +139,7 @@ export default function AdminPanelPage() {
   // Mutation for updating individual fields
   const updateFieldMutation = useMutation({
     mutationFn: async ({ orderId, fieldName, value }: { orderId: string; fieldName: string; value: any }) => {
+      console.log('🚀 MUTATION CALLED:', { orderId, fieldName, value, valueType: typeof value });
       return await apiRequest(`/api/orders/${orderId}/field`, {
         method: 'PATCH',
         body: JSON.stringify({ fieldName, value }),

@@ -717,6 +717,12 @@ router.get('/oem-shipments/:id/label', authenticateToken, async (req, res) => {
     const { id } = req.params;
     console.log(`📄 Downloading shipping label for shipment ${id}...`);
 
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ _error: 'Invalid shipment ID format' });
+    }
+
     const query = `
       SELECT 
         shipping_label_base64,
@@ -726,7 +732,7 @@ router.get('/oem-shipments/:id/label', authenticateToken, async (req, res) => {
       WHERE id = $1
     `;
 
-    const result = await pool.query(query, [parseInt(id, 10)]);
+    const result = await pool.query(query, [id]);
     const shipment = (result.rows || result)[0];
 
     if (!shipment) {
@@ -759,6 +765,12 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
     const { itemId } = req.params;
     console.log(`📄 Downloading packing slip for shipment item ${itemId}...`);
 
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(itemId)) {
+      return res.status(400).json({ _error: 'Invalid item ID format' });
+    }
+
     const query = `
       SELECT 
         packing_slip_base64,
@@ -768,7 +780,7 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
       WHERE id = $1
     `;
 
-    const result = await pool.query(query, [parseInt(itemId, 10)]);
+    const result = await pool.query(query, [itemId]);
     const item = (result.rows || result)[0];
 
     if (!item) {

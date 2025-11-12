@@ -1548,7 +1548,7 @@ export default function QCShippingQueuePage() {
                                             const isSelected = selectedPOItems.has(itemKey);
                                             // Disable if: not ready to ship, or different customer selected
                                             const isDisabled = !item.isReadyToShip || !!(selectedCustomer && selectedCustomer !== customer.customerName);
-                                            const departmentBadge = getDepartmentBadge(item.currentDepartment, item.productionStatus);
+                                            const departmentBadge = getDepartmentBadge(item.currentDepartment);
                                             
                                             return (
                                               <div
@@ -1615,7 +1615,7 @@ export default function QCShippingQueuePage() {
                                                         ✓ Fulfilled
                                                       </Badge>
                                                     )}
-                                                    {item.orderId && (
+                                                    {item.orderId && item.isReadyToShip && (
                                                       <Button
                                                         size="sm"
                                                         variant={item.isFulfilled ? "outline" : "secondary"}

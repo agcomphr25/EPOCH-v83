@@ -7300,7 +7300,7 @@ export class DatabaseStorage implements IStorage {
         
         po.itemsMap.set(row.poItemId, {
           poItemId: row.poItemId,
-          description: row.itemName || row.stockModelName || 'Unknown',
+          description: row.itemName || row.stockModelName || row.stockModelId || 'Unknown Item',
           quantity: row.quantity,
           actionLength: specs.actionLength || null,
           material: specs.material || null,
@@ -7347,9 +7347,18 @@ export class DatabaseStorage implements IStorage {
             // No production orders - determine if this should go to Shipping QC or remain NOT_SCHEDULED
             // Business rule: PO items WITHOUT stock models go straight to Shipping QC (no production needed)
             const hasStockModel = poItem.stockModel && poItem.stockModel !== 'no stock' && poItem.stockModel.trim() !== '';
-            const department = hasStockModel ? null : 'Shipping QC';
-            const status = hasStockModel ? 'NOT_SCHEDULED' : 'IN_SHIPPING_QC';
-            const readyToShip = !hasStockModel; // Non-stock items are ready for Shipping QC immediately
+            
+            // CRITICAL FIX: Skip items with stock models that haven't entered production yet
+            // They should NOT appear in Shipping QC until they're scheduled to production
+            if (hasStockModel) {
+              // This item needs production but hasn't been scheduled yet - skip it entirely
+              return;
+            }
+            
+            // Only non-stock items (ready-to-sell) should proceed to Shipping QC without production
+            const department = 'Shipping QC';
+            const status = 'IN_SHIPPING_QC';
+            const readyToShip = true;
             
             for (let i = 1; i <= poItem.quantity; i++) {
               allItems.push({

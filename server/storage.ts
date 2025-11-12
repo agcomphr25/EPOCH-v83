@@ -12508,13 +12508,51 @@ export class DatabaseStorage implements IStorage {
   }
 
 
-  // Order Reference Data
+  // Order Reference Data - Dynamically pulls from actual orders
   async getOrderStatusTypes(): Promise<any[]> {
-    return await db.select().from(orderStatusTypes).where(eq(orderStatusTypes.isActive, true)).orderBy(orderStatusTypes.sortOrder);
+    // Query distinct status values from both orders tables
+    const statusRows = await pool.query(`
+      SELECT DISTINCT status
+      FROM (
+        SELECT status FROM orders WHERE status IS NOT NULL AND status != ''
+        UNION
+        SELECT status FROM all_orders WHERE status IS NOT NULL AND status != ''
+      ) AS combined_statuses
+      ORDER BY status
+    `);
+
+    // Format as reference data with id, name, and displayName
+    const statuses = Array.isArray(statusRows) ? statusRows : [];
+    return statuses.map((row: any, index: number) => ({
+      id: index + 1,
+      name: row.status,
+      displayName: row.status,
+      sortOrder: index + 1,
+      isActive: true
+    }));
   }
 
   async getOrderDepartmentTypes(): Promise<any[]> {
-    return await db.select().from(orderDepartmentTypes).where(eq(orderDepartmentTypes.isActive, true)).orderBy(orderDepartmentTypes.sortOrder);
+    // Query distinct current_department values from both orders tables
+    const deptRows = await pool.query(`
+      SELECT DISTINCT current_department
+      FROM (
+        SELECT current_department FROM orders WHERE current_department IS NOT NULL AND current_department != ''
+        UNION
+        SELECT current_department FROM all_orders WHERE current_department IS NOT NULL AND current_department != ''
+      ) AS combined_departments
+      ORDER BY current_department
+    `);
+
+    // Format as reference data with id, name, and displayName
+    const departments = Array.isArray(deptRows) ? deptRows : [];
+    return departments.map((row: any, index: number) => ({
+      id: index + 1,
+      name: row.current_department,
+      displayName: row.current_department,
+      sortOrder: index + 1,
+      isActive: true
+    }));
   }
 }
 

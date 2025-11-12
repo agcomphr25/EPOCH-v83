@@ -394,6 +394,7 @@ export default function BarcodeQueuePage() {
     mutationFn: async (orderIds: string[]) => {
       // Separate orders by type: PO items vs regular orders
       const poOrderIds: string[] = [];
+      const poFlatTopOrderIds: string[] = [];
       const flatTopOrderIds: string[] = [];
       const cncOrderIds: string[] = [];
       
@@ -404,7 +405,13 @@ export default function BarcodeQueuePage() {
           const isPOItem = orderId.startsWith('PO-');
           
           if (isPOItem) {
-            poOrderIds.push(orderId);
+            // Check if PO item has flattop option
+            const isFlattop = order.features?.flattop === true || order.features?.flattop === 'true';
+            if (isFlattop) {
+              poFlatTopOrderIds.push(orderId);
+            } else {
+              poOrderIds.push(orderId);
+            }
           } else {
             // Regular orders: check if flat top
             const isFlatTop = (order as any).isFlattop === true;
@@ -419,6 +426,7 @@ export default function BarcodeQueuePage() {
       
       console.log('🔀 Smart Routing:', {
         poItems: poOrderIds.length,
+        poFlattops: poFlatTopOrderIds.length,
         flatTops: flatTopOrderIds.length,
         cnc: cncOrderIds.length,
         totalOrders: orderIds.length
@@ -444,6 +452,34 @@ export default function BarcodeQueuePage() {
             reason: f.reason || 'Unknown error'
           })));
           console.error('❌ Failed to progress PO items:', poResult.failed);
+        }
+      }
+      
+      // Progress PO flattops directly to Finish department
+      let poFlatTopSuccessCount = 0;
+      if (poFlatTopOrderIds.length > 0) {
+        try {
+          const poFlatTopResult = await apiRequest('/api/po-orders/progress-to-department', {
+            method: 'POST',
+            body: {
+              orderIds: poFlatTopOrderIds,
+              toDepartment: 'Finish',
+            },
+          });
+          poFlatTopSuccessCount = poFlatTopResult.success?.length || 0;
+          
+          // Check for failures in PO flattop progression
+          if (poFlatTopResult.failed && poFlatTopResult.failed.length > 0) {
+            failedOrders.push(...poFlatTopResult.failed.map((f: any) => ({
+              orderId: f.orderId ?? f,
+              reason: f.reason || 'Unknown error'
+            })));
+            console.error('❌ Failed to progress PO flattops:', poFlatTopResult.failed);
+          }
+        } catch (error) {
+          console.error('❌ Failed to progress PO flattops:', error);
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          failedOrders.push(...poFlatTopOrderIds.map(id => ({ orderId: id, reason: errorMsg })));
         }
       }
       
@@ -488,7 +524,8 @@ export default function BarcodeQueuePage() {
       }
       
       return { 
-        flatTopCount: flatTopOrderIds.length, 
+        flatTopCount: flatTopOrderIds.length,
+        poFlatTopCount: poFlatTopSuccessCount,
         cncCount: cncOrderIds.length,
         poToShippingQC,
         poToCNC
@@ -501,6 +538,9 @@ export default function BarcodeQueuePage() {
       }
       if (data.poToCNC > 0) {
         messages.push(`${data.poToCNC} PO item${data.poToCNC > 1 ? 's' : ''} → CNC`);
+      }
+      if (data.poFlatTopCount > 0) {
+        messages.push(`${data.poFlatTopCount} PO Flattop${data.poFlatTopCount > 1 ? 's' : ''} → Finish`);
       }
       if (data.flatTopCount > 0) {
         messages.push(`${data.flatTopCount} Flat Top${data.flatTopCount > 1 ? 's' : ''} → Finish`);
@@ -1128,6 +1168,15 @@ export default function BarcodeQueuePage() {
                                                 : 'Unknown'}{' '}
                                           Action
                                         </Badge>
+                                        {/* Flattop badge for P1 PO orders */}
+                                        {isPOOrder && (order.features?.flattop === true || order.features?.flattop === 'true') && (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-xs border-teal-600 text-teal-700 bg-teal-50"
+                                          >
+                                            FLATTOP
+                                          </Badge>
+                                        )}
                                         <Link
                                           href={`/order-entry?draft=${order.orderId}`}
                                         >

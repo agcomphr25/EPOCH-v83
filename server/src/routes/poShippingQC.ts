@@ -572,6 +572,80 @@ router.post('/smart-progress', async (req, res) => {
   }
 });
 
+// POST /api/po-orders/progress-to-department
+// Progress PO items to a specific department (e.g., Finish for flattops)
+router.post('/progress-to-department', async (req, res) => {
+  try {
+    const { orderIds, toDepartment } = req.body;
+
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ _error: 'orderIds array is required' });
+    }
+
+    if (!toDepartment) {
+      return res.status(400).json({ _error: 'toDepartment is required' });
+    }
+
+    console.log(`🔄 Progressing ${orderIds.length} PO items to ${toDepartment}...`);
+    const { storage } = await import('../../storage');
+
+    const results = {
+      success: [] as string[],
+      failed: [] as { orderId: string; reason: string }[],
+    };
+
+    for (const orderId of orderIds) {
+      try {
+        const order = await storage.getProductionOrderByOrderId(orderId);
+
+        // Validate order exists
+        if (!order) {
+          results.failed.push({ orderId, reason: 'Order not found' });
+          console.warn(`⚠️ ${orderId}: Order not found`);
+          continue;
+        }
+
+        // Validate order is in Barcode department (prevent accidental cross-department jumps)
+        if (order.currentDepartment !== 'Barcode') {
+          results.failed.push({
+            orderId,
+            reason: `Order is in ${order.currentDepartment}, not Barcode`,
+          });
+          console.warn(`⚠️ ${orderId}: Wrong department (${order.currentDepartment})`);
+          continue;
+        }
+
+        // Progress to specified department
+        await storage.updateProductionOrder(order.id, {
+          currentDepartment: toDepartment,
+        });
+        results.success.push(orderId);
+        console.log(`✅ ${orderId} → ${toDepartment}`);
+      } catch (error: any) {
+        console.error(`❌ Failed to progress ${orderId}:`, error);
+        results.failed.push({ orderId, reason: error.message });
+      }
+    }
+
+    console.log(
+      `✅ Progression complete: ${results.success.length} to ${toDepartment}`
+    );
+    if (results.failed.length > 0) {
+      console.warn(`⚠️ Failed to progress ${results.failed.length} items:`, results.failed);
+    }
+
+    // Always return 200 with success/failed arrays
+    res.json({
+      success: results.success,
+      failed: results.failed,
+      message: `Progressed ${results.success.length}/${orderIds.length} items to ${toDepartment}`,
+    });
+  } catch (error: any) {
+    console.error('❌ Error progressing PO orders:', error);
+    res.status(500).json({ _error: 'Failed to progress orders', details: error.message });
+  }
+});
+
 // GET /api/po-orders/oem-shipments
 // Get all shipments with tracking info, filters, and pagination (no base64 blobs)
 router.get('/oem-shipments', async (req, res) => {

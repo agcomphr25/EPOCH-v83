@@ -142,7 +142,7 @@ export default function AdminPanelPage() {
       console.log('🚀 MUTATION CALLED:', { orderId, fieldName, value, valueType: typeof value });
       return await apiRequest(`/api/orders/${orderId}/field`, {
         method: 'PATCH',
-        body: JSON.stringify({ fieldName, value }),
+        body: { fieldName, value },
       });
     },
     onSuccess: () => {

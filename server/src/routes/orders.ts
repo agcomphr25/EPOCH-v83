@@ -2691,6 +2691,15 @@ router.patch(
       const orderIdParam = req.params.orderId;
       const { fieldName, value } = req.body;
 
+      // DEBUG: Log the incoming request
+      console.log('🔍 PATCH /field request:', {
+        orderId: orderIdParam,
+        fieldName,
+        value,
+        valueType: typeof value,
+        body: req.body
+      });
+
       if (!fieldName) {
         return res.status(400).json({ error: 'Field name is required' });
       }

@@ -3421,7 +3421,7 @@ export class DatabaseStorage implements IStorage {
         .orderBy(asc(allOrders.dueDate), asc(allOrders.createdAt));
 
       console.log(
-        `📋 getOrdersByDepartment: Found ${orders.length} orders in "${department}" department`
+        `📋 getOrdersByDepartment: Found ${orders.length} regular orders in "${department}" department`
       );
 
       // Get all customers to create a lookup map
@@ -3462,10 +3462,90 @@ export class DatabaseStorage implements IStorage {
         priority: 50, // Default priority
       })) as any;
 
+      // Also query production_orders table for P1 PO items in this department
+      const productionOrdersResults = await db
+        .select()
+        .from(productionOrders)
+        .where(eq(productionOrders.currentDepartment, department))
+        .orderBy(asc(productionOrders.dueDate), asc(productionOrders.createdAt));
+
+      // Normalize production orders to match AllOrder shape
+      const normalizedProductionOrders = productionOrdersResults.map((po) => ({
+        id: po.id,
+        orderId: po.orderId,
+        orderDate: po.orderDate,
+        dueDate: po.dueDate,
+        customerId: po.customerId,
+        customerName: po.customerName,
+        customer: po.customerName || customerMap.get(po.customerId) || 'Unknown Customer',
+        customerPO: po.poNumber,
+        fbOrderNumber: null,
+        agrOrderDetails: null,
+        isCustomOrder: null,
+        modelId: po.itemId, // Map itemId to modelId for consistency
+        itemId: po.itemId, // Keep itemId for P1 PO identification
+        itemName: po.itemName, // Keep itemName for display
+        productName: po.itemName || stockModelMap.get(po.itemId || '') || po.itemId || 'Unknown Product',
+        stockModelId: po.itemId,
+        handedness: null,
+        shankLength: null,
+        features: null,
+        featureQuantities: null,
+        discountCode: null,
+        notes: po.notes,
+        customDiscountType: null,
+        customDiscountValue: 0,
+        showCustomDiscount: false,
+        priceOverride: null,
+        shipping: 0,
+        tikkaOption: null,
+        status: po.productionStatus,
+        barcode: null,
+        currentDepartment: po.currentDepartment,
+        departmentHistory: po.departmentHistory || [],
+        scrappedQuantity: null,
+        totalProduced: null,
+        scrapDate: null,
+        scrapReason: null,
+        scrapDisposition: null,
+        scrapAuthorization: null,
+        isReplacement: false,
+        replacedOrderId: null,
+        isPaid: false,
+        paymentType: null,
+        paymentAmount: null,
+        paymentDate: null,
+        paymentTimestamp: null,
+        trackingNumber: null,
+        shippingCarrier: null,
+        shippingMethod: null,
+        shippedDate: po.shippedAt,
+        estimatedDelivery: null,
+        shippingLabelGenerated: false,
+        customerNotified: false,
+        notificationMethod: null,
+        notificationSentAt: null,
+        deliveryConfirmed: false,
+        deliveryConfirmedAt: null,
+        isCancelled: false,
+        cancelledAt: null,
+        cancelReason: null,
+        createdAt: po.createdAt,
+        updatedAt: po.updatedAt,
+        assignedTechnician: null,
+        urgency: null,
+        priorityScore: 50, // Default priority
+        isManualUrgency: false,
+        priority: 50,
+      })) as any;
+
+      // Merge regular orders and production orders
+      const allDepartmentOrders = [...enrichedOrders, ...normalizedProductionOrders];
+
       console.log(
-        `✅ getOrdersByDepartment: Enhanced ${enrichedOrders.length} orders with additional data`
+        `✅ getOrdersByDepartment: Enhanced ${enrichedOrders.length} regular orders + ${normalizedProductionOrders.length} P1 PO items = ${allDepartmentOrders.length} total orders`
       );
-      return enrichedOrders;
+      return allDepartmentOrders;
     } catch (error) {
       console.error(
         `Error in getOrdersByDepartment for "${department}":`,

@@ -255,11 +255,30 @@ export default function AdminPanelPage() {
         header: 'Department',
         cell: ({ row }) => {
           const deptValue = row.getValue('currentDepartment') as string;
-          const dept = departmentTypes.find((d: any) => d.name === deptValue);
           return (
-            <Badge variant="outline" data-testid={`badge-department-${row.original.orderId}`}>
-              {dept?.displayName || deptValue}
-            </Badge>
+            <Select
+              value={deptValue || ''}
+              onValueChange={(value) => {
+                updateFieldMutation.mutate({
+                  orderId: row.original.orderId,
+                  fieldName: 'currentDepartment',
+                  value: value,
+                });
+              }}
+              disabled={updateFieldMutation.isPending}
+              data-testid={`select-department-${row.original.orderId}`}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {departmentTypes.map((dept: any) => (
+                  <SelectItem key={dept.name} value={dept.name}>
+                    {dept.displayName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           );
         },
       },

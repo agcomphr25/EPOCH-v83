@@ -573,46 +573,224 @@ router.post('/smart-progress', async (req, res) => {
 });
 
 // GET /api/po-orders/oem-shipments
-// Get shipped PO orders grouped as OEM shipments by customer
+// Get all shipments with tracking info, filters, and pagination (no base64 blobs)
 router.get('/oem-shipments', async (req, res) => {
   try {
-    console.log('📦 Fetching OEM shipments (shipped PO orders)...');
+    const {
+      customerId,
+      customerName,
+      startDate,
+      endDate,
+      search,
+      limit = '50',
+      offset = '0',
+    } = req.query;
 
-    // Query shipped production orders grouped by customer
+    console.log('📦 Fetching OEM shipments with filters:', {
+      customerId,
+      customerName,
+      startDate,
+      endDate,
+      search,
+      limit,
+      offset,
+    });
+
+    // Build WHERE conditions
+    const conditions: string[] = ['1=1'];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (customerId) {
+      conditions.push(`sr.customer_id = $${paramIndex}`);
+      params.push(customerId);
+      paramIndex++;
+    }
+
+    if (customerName) {
+      conditions.push(`sr.customer_name ILIKE $${paramIndex}`);
+      params.push(`%${customerName}%`);
+      paramIndex++;
+    }
+
+    if (startDate) {
+      conditions.push(`sr.created_at >= $${paramIndex}`);
+      params.push(startDate);
+      paramIndex++;
+    }
+
+    if (endDate) {
+      conditions.push(`sr.created_at <= $${paramIndex}`);
+      params.push(endDate);
+      paramIndex++;
+    }
+
+    if (search) {
+      conditions.push(`(
+        sr.customer_name ILIKE $${paramIndex} OR
+        sr.master_tracking_number ILIKE $${paramIndex} OR
+        sr.reference ILIKE $${paramIndex}
+      )`);
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    // Main query - lightweight, no base64 blobs
     const query = `
-      SELECT 
-        p.customer_id as customerId,
-        p.customer_name as customerName,
-        COUNT(DISTINCT p.po_number) as poCount,
-        COUNT(p.id) as itemCount,
-        MIN(p.shipped_at) as firstShipDate,
-        MAX(p.shipped_at) as lastShipDate,
-        json_agg(
-          json_build_object(
-            'orderId', p.order_id,
-            'poNumber', p.po_number,
-            'itemId', p.item_id,
-            'itemName', p.item_name,
-            'shippedAt', p.shipped_at,
-            'specifications', p.specifications
-          ) ORDER BY p.shipped_at DESC
-        ) as items
-      FROM production_orders p
-      WHERE p.current_department = 'Shipping'
-        AND p.production_status = 'SHIPPED'
-      GROUP BY p.customer_id, p.customer_name
-      ORDER BY MAX(p.shipped_at) DESC
+      WITH shipment_aggregates AS (
+        SELECT 
+          sr.id,
+          sr.customer_id,
+          sr.customer_name,
+          sr.customer_address,
+          sr.customer_city,
+          sr.customer_state,
+          sr.customer_zip,
+          sr.master_tracking_number,
+          sr.service_code,
+          sr.total_weight_lbs,
+          sr.package_count,
+          sr.bill_type,
+          sr.reference,
+          sr.created_at,
+          sr.created_by,
+          sr.shipping_label_base64 IS NOT NULL as has_shipping_label,
+          COUNT(si.id) as item_count,
+          COUNT(DISTINCT si.po_number) as po_count,
+          json_agg(
+            json_build_object(
+              'id', si.id,
+              'poItemId', si.po_item_id,
+              'orderId', si.order_id,
+              'quantity', si.quantity,
+              'description', si.description,
+              'poNumber', si.po_number,
+              'hasPackingSlip', si.packing_slip_base64 IS NOT NULL
+            ) ORDER BY si.po_number, si.order_id
+          ) as items
+        FROM shipment_records sr
+        LEFT JOIN shipment_items si ON sr.id = si.shipment_id
+        WHERE ${conditions.join(' AND ')}
+        GROUP BY sr.id
+        ORDER BY sr.created_at DESC
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+      )
+      SELECT * FROM shipment_aggregates
     `;
 
-    const result = await pool.query(query);
+    params.push(parseInt(limit as string, 10));
+    params.push(parseInt(offset as string, 10));
+
+    const result = await pool.query(query, params);
     const shipments = Array.isArray(result) ? result : result.rows || [];
 
-    console.log(`📊 Found ${shipments.length} OEM shipments`);
+    // Get total count for pagination
+    const countQuery = `
+      SELECT COUNT(DISTINCT sr.id) as total
+      FROM shipment_records sr
+      WHERE ${conditions.join(' AND ')}
+    `;
+    const countResult = await pool.query(countQuery, params.slice(0, -2));
+    const total = parseInt((countResult.rows || countResult)[0]?.total || '0', 10);
 
-    res.json(shipments);
+    console.log(`📊 Found ${shipments.length} shipments (total: ${total})`);
+
+    res.json({
+      shipments,
+      pagination: {
+        total,
+        limit: parseInt(limit as string, 10),
+        offset: parseInt(offset as string, 10),
+        hasMore: parseInt(offset as string, 10) + shipments.length < total,
+      },
+    });
   } catch (error: any) {
     console.error('❌ Error fetching OEM shipments:', error);
     res.status(500).json({ _error: 'Failed to fetch OEM shipments', details: error.message });
+  }
+});
+
+// GET /api/po-orders/oem-shipments/:id/label
+// Download shipping label for a specific shipment
+router.get('/oem-shipments/:id/label', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`📄 Downloading shipping label for shipment ${id}...`);
+
+    const query = `
+      SELECT 
+        shipping_label_base64,
+        master_tracking_number,
+        customer_name
+      FROM shipment_records
+      WHERE id = $1
+    `;
+
+    const result = await pool.query(query, [parseInt(id, 10)]);
+    const shipment = (result.rows || result)[0];
+
+    if (!shipment) {
+      return res.status(404).json({ _error: 'Shipment not found' });
+    }
+
+    if (!shipment.shipping_label_base64) {
+      return res.status(404).json({ _error: 'Shipping label not available' });
+    }
+
+    // Decode base64 and send as GIF
+    const labelBuffer = Buffer.from(shipment.shipping_label_base64, 'base64');
+    const filename = `shipping-label-${shipment.master_tracking_number}.gif`;
+
+    res.setHeader('Content-Type', 'image/gif');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(labelBuffer);
+
+    console.log(`✅ Shipping label downloaded: ${filename}`);
+  } catch (error: any) {
+    console.error('❌ Error downloading shipping label:', error);
+    res.status(500).json({ _error: 'Failed to download shipping label', details: error.message });
+  }
+});
+
+// GET /api/po-orders/oem-shipments/packing-slip/:itemId
+// Download packing slip for a specific shipment item
+router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    console.log(`📄 Downloading packing slip for shipment item ${itemId}...`);
+
+    const query = `
+      SELECT 
+        packing_slip_base64,
+        po_number,
+        order_id
+      FROM shipment_items
+      WHERE id = $1
+    `;
+
+    const result = await pool.query(query, [parseInt(itemId, 10)]);
+    const item = (result.rows || result)[0];
+
+    if (!item) {
+      return res.status(404).json({ _error: 'Shipment item not found' });
+    }
+
+    if (!item.packing_slip_base64) {
+      return res.status(404).json({ _error: 'Packing slip not available' });
+    }
+
+    // Decode base64 and send as PDF
+    const slipBuffer = Buffer.from(item.packing_slip_base64, 'base64');
+    const filename = `packing-slip-PO${item.po_number}-${item.order_id}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(slipBuffer);
+
+    console.log(`✅ Packing slip downloaded: ${filename}`);
+  } catch (error: any) {
+    console.error('❌ Error downloading packing slip:', error);
+    res.status(500).json({ _error: 'Failed to download packing slip', details: error.message });
   }
 });
 

@@ -448,7 +448,7 @@ export default function AdminPanelPage() {
         },
       },
     ],
-    []
+    [statusTypes, employees, departmentTypes, updateFieldMutation]
   );
 
   const table = useReactTable({

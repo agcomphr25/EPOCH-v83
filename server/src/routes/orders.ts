@@ -2182,32 +2182,46 @@ router.patch(
         updateData.is_manual_urgency = true;
       }
 
+      // DEBUG: Log what we're about to update
+      console.log('💾 UPDATE DEBUG:', {
+        orderId: orderIdParam,
+        isFinalized,
+        isNumericId,
+        dbField,
+        oldValue,
+        newValue: validatedValue,
+        updateData,
+      });
+
       // Update the appropriate table using the correct identifier
+      let updateResult;
       if (isFinalized) {
         if (isNumericId) {
-          await db
+          updateResult = await db
             .update(allOrders)
             .set(updateData)
             .where(eq(allOrders.id, parseInt(orderIdParam, 10)));
         } else {
-          await db
+          updateResult = await db
             .update(allOrders)
             .set(updateData)
             .where(eq(allOrders.orderId, orderIdParam));
         }
       } else {
         if (isNumericId) {
-          await db
+          updateResult = await db
             .update(orders)
             .set(updateData)
             .where(eq(orders.id, parseInt(orderIdParam, 10)));
         } else {
-          await db
+          updateResult = await db
             .update(orders)
             .set(updateData)
             .where(eq(orders.orderId, orderIdParam));
         }
       }
+
+      console.log('💾 UPDATE RESULT:', updateResult);
 
       // Log the change to audit logs
       await storage.createAdminAuditLog({

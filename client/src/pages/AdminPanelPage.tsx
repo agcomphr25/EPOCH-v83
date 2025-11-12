@@ -145,8 +145,9 @@ export default function AdminPanelPage() {
         body: { fieldName, value },
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+    onSuccess: async () => {
+      // Force refetch instead of just invalidating
+      await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
       toast({
         title: 'Success',
         description: 'Order field updated successfully',

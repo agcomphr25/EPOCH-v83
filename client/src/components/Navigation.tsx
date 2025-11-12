@@ -664,6 +664,12 @@ export default function Navigation() {
       description: 'Advanced search with AND/OR logic for filtering orders',
     },
     {
+      path: '/analytics',
+      label: 'Analytics Dashboard',
+      icon: BarChart,
+      description: 'View metrics and reports over different time periods',
+    },
+    {
       path: '/module8-test',
       label: 'Module 8 Test',
       icon: TestTube,

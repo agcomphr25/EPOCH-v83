@@ -543,4 +543,136 @@ router.delete('/presets/:id', authenticateToken, requireRole('ADMIN'), async (re
   }
 });
 
+// Analytics metrics endpoint - Provides summary metrics for a date range
+router.get('/analytics/metrics', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'startDate and endDate are required' });
+    }
+
+    const start = new Date(startDate as string);
+    const end = new Date(endDate as string);
+    
+    // Add 1 day to end date to make it inclusive of the entire end day
+    // This ensures orders fulfilled any time on the end date are included
+    const endInclusive = new Date(end);
+    endInclusive.setDate(endInclusive.getDate() + 1);
+
+    // Get orders fulfilled in the date range
+    const orders = await db
+      .select({
+        orderId: allOrders.orderId,
+        customerId: allOrders.customerId,
+        orderDate: allOrders.orderDate,
+        updatedAt: allOrders.updatedAt,
+        basePrice: sql<number>`COALESCE(${allOrders.priceOverride}, ${stockModels.price}, 0)`.as('base_price'),
+        shipping: allOrders.shipping,
+        customDiscountType: allOrders.customDiscountType,
+        customDiscountValue: allOrders.customDiscountValue,
+        showCustomDiscount: allOrders.showCustomDiscount,
+        features: allOrders.features,
+        modelId: allOrders.modelId,
+        status: allOrders.status,
+      })
+      .from(allOrders)
+      .leftJoin(stockModels, eq(allOrders.modelId, stockModels.id))
+      .where(
+        and(
+          eq(allOrders.status, 'FULFILLED'),
+          gte(allOrders.updatedAt, start),
+          lt(allOrders.updatedAt, endInclusive)
+        )
+      )
+      .orderBy(allOrders.updatedAt);
+
+    // Get all feature definitions to calculate prices
+    const { storage } = await import('../../storage');
+    const allFeatures = await storage.getAllFeatures();
+
+    // Calculate totals for each order
+    let totalDiscounts = 0;
+    let totalRevenue = 0;
+    let totalOrderValue = 0;
+    const orderDetails: any[] = [];
+
+    orders.forEach((order) => {
+      let featuresTotal = 0;
+
+      if (order.features && typeof order.features === 'object') {
+        Object.entries(order.features).forEach(([featureCategory, selectedValue]) => {
+          const featureDef = allFeatures.find(
+            (f) => f.id === featureCategory || f.name === featureCategory
+          );
+
+          if (featureDef && featureDef.options) {
+            const values = Array.isArray(selectedValue) ? selectedValue : [selectedValue];
+            values.forEach((value) => {
+              if (value && value !== 'none') {
+                const options = featureDef.options as any[];
+                const option = options?.find((opt: any) => opt.value === value);
+                if (option && option.price) {
+                  featuresTotal += Number(option.price);
+                }
+              }
+            });
+          }
+        });
+      }
+
+      const basePrice = Number(order.basePrice) || 0;
+      const shipping = Number(order.shipping) || 0;
+      let orderTotal = basePrice + featuresTotal + shipping;
+      let discountAmount = 0;
+
+      // Apply discount if applicable
+      if (order.showCustomDiscount && order.customDiscountValue) {
+        if (order.customDiscountType === 'percent') {
+          discountAmount = (basePrice + featuresTotal) * (order.customDiscountValue / 100);
+          orderTotal = (basePrice + featuresTotal) * (1 - order.customDiscountValue / 100) + shipping;
+        } else if (order.customDiscountType === 'fixed' || order.customDiscountType === 'amount') {
+          discountAmount = order.customDiscountValue;
+          orderTotal = basePrice + featuresTotal - order.customDiscountValue + shipping;
+        }
+      }
+
+      totalDiscounts += discountAmount;
+      totalRevenue += orderTotal;
+      totalOrderValue += (basePrice + featuresTotal + shipping);
+
+      orderDetails.push({
+        orderId: order.orderId,
+        customerId: order.customerId,
+        orderDate: order.orderDate,
+        updatedAt: order.updatedAt,
+        basePrice,
+        featuresTotal,
+        shipping,
+        discountAmount,
+        orderTotal,
+      });
+    });
+
+    res.json({
+      summary: {
+        totalOrders: orders.length,
+        totalDiscounts: parseFloat(totalDiscounts.toFixed(2)),
+        totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+        totalOrderValue: parseFloat(totalOrderValue.toFixed(2)),
+        averageDiscount: orders.length > 0 ? parseFloat((totalDiscounts / orders.length).toFixed(2)) : 0,
+        averageOrderValue: orders.length > 0 ? parseFloat((totalRevenue / orders.length).toFixed(2)) : 0,
+      },
+      orders: orderDetails,
+      dateRange: {
+        start: startDate,
+        end: endDate,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching analytics metrics:', error);
+    res.status(500).json({ error: 'Failed to fetch analytics metrics', details: (error as any).message });
+  }
+});
+
 export default router;

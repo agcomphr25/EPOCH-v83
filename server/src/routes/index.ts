@@ -4496,16 +4496,22 @@ export function registerRoutes(app: Express): Server {
             }
           }
 
-          // For P1 PO orders: show "Material - Stock Model - Paint Color" format
+          // For P1 PO orders: show "Material - Stock Model - Action Length - Paint Color" format
           // For regular orders: show "Stock Model - Action Length - Paint" format
           let labelLine = '';
           if (isPOItem) {
-            // Build P1 PO label: Material - Stock Model - Paint Color
+            // Build P1 PO label: Material - Stock Model - Action Length - Paint Color
             const parts = [];
             if (material) {
               parts.push(material);
             }
             parts.push(modelDisplayName);
+            
+            // Add action length if available
+            const hasActionLength = actionLength && actionLength.toLowerCase() !== 'unknown';
+            if (hasActionLength) {
+              parts.push(actionLength.toUpperCase());
+            }
             
             // Add paint color if available
             if (paintDisplayName) {

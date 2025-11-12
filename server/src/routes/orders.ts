@@ -2126,7 +2126,10 @@ router.patch(
       const orderStringId = order.orderId; // Always use the string order_id for logging
 
       const dbField = fieldConfig.dbField;
-      const oldValue = (order as any)[dbField];
+      
+      // Convert snake_case db field to camelCase for reading from Drizzle result
+      const camelCaseField = dbField.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      const oldValue = (order as any)[camelCaseField];
 
       // Validate the value based on field config
       let validatedValue = value;
@@ -2171,15 +2174,15 @@ router.patch(
         }
       }
 
-      // Build update data object
+      // Build update data object using camelCase for Drizzle
       const updateData: any = {
-        [dbField]: validatedValue,
+        [camelCaseField]: validatedValue,
         updatedAt: new Date(),
       };
 
       // Special handling for urgency - set isManualUrgency flag
       if (fieldName === 'urgency') {
-        updateData.is_manual_urgency = true;
+        updateData.isManualUrgency = true;
       }
 
       // DEBUG: Log what we're about to update

@@ -61,11 +61,15 @@ import gmailRoutes from './gmail';
 import followupOrdersRoutes from './followupOrders';
 import cuttingTableRoutes from './cuttingTable';
 import controlledDocumentsRoutes from './controlledDocuments';
+import adminRoutes from './admin';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
   app.use('/api/auth', authRoutes);
+
+  // Admin routes
+  app.use('/api/admin', adminRoutes);
 
   // Magic Link routes
   app.use('/api/magic-link', magicLinkRoutes);

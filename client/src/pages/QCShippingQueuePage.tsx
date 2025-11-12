@@ -1708,7 +1708,7 @@ export default function QCShippingQueuePage() {
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-green-600 hover:bg-green-700 text-white"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
                   disabled={selectedPOItems.size === 0 || progressPOToShippingMutation.isPending}
                   onClick={handlePOProgressToShipping}
                   data-testid="button-progress-po-to-shipping"
@@ -1717,6 +1717,16 @@ export default function QCShippingQueuePage() {
                   {progressPOToShippingMutation.isPending
                     ? 'Progressing...'
                     : `Progress to Shipping (${selectedPOItems.size})`}
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => setShowShipmentDialog(true)}
+                  disabled={transformedShipmentItems.length === 0}
+                  data-testid="button-ship-selected-floating"
+                >
+                  <Truck className="h-4 w-4 mr-2" />
+                  Ship Selected ({selectedPOItems.size})
                 </Button>
               </div>
             </div>

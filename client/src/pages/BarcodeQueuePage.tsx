@@ -426,6 +426,7 @@ export default function BarcodeQueuePage() {
       
       let poToShippingQC = 0;
       let poToCNC = 0;
+      const failedOrders: string[] = [];
       
       // Smart progression for PO items (routes based on stock model)
       if (poOrderIds.length > 0) {
@@ -435,28 +436,49 @@ export default function BarcodeQueuePage() {
         });
         poToShippingQC = poResult.toShippingQC?.length || 0;
         poToCNC = poResult.toCNC?.length || 0;
+        
+        // Check for failures in PO smart-progress
+        if (poResult.failed && poResult.failed.length > 0) {
+          failedOrders.push(...poResult.failed.map((f: any) => f.orderId));
+          console.error('❌ Failed to progress PO items:', poResult.failed);
+        }
       }
       
       // Progress flat tops to Finish department
       if (flatTopOrderIds.length > 0) {
-        await apiRequest('/api/orders/progress-department', {
-          method: 'POST',
-          body: {
-            orderIds: flatTopOrderIds,
-            toDepartment: 'Finish',
-          },
-        });
+        try {
+          await apiRequest('/api/orders/progress-department', {
+            method: 'POST',
+            body: {
+              orderIds: flatTopOrderIds,
+              toDepartment: 'Finish',
+            },
+          });
+        } catch (error) {
+          console.error('❌ Failed to progress flat tops:', error);
+          failedOrders.push(...flatTopOrderIds);
+        }
       }
       
       // Progress others to CNC department
       if (cncOrderIds.length > 0) {
-        await apiRequest('/api/orders/progress-department', {
-          method: 'POST',
-          body: {
-            orderIds: cncOrderIds,
-            toDepartment: 'CNC',
-          },
-        });
+        try {
+          await apiRequest('/api/orders/progress-department', {
+            method: 'POST',
+            body: {
+              orderIds: cncOrderIds,
+              toDepartment: 'CNC',
+            },
+          });
+        } catch (error) {
+          console.error('❌ Failed to progress CNC orders:', error);
+          failedOrders.push(...cncOrderIds);
+        }
+      }
+      
+      // If any orders failed, throw an error to trigger onError handler
+      if (failedOrders.length > 0) {
+        throw new Error(`Failed to progress ${failedOrders.length} order(s): ${failedOrders.join(', ')}`);
       }
       
       return { 

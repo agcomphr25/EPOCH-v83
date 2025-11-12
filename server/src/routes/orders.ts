@@ -2125,11 +2125,9 @@ router.patch(
       order = order[0];
       const orderStringId = order.orderId; // Always use the string order_id for logging
 
-      const dbField = fieldConfig.dbField;
-      
-      // Convert snake_case db field to camelCase for reading from Drizzle result
-      const camelCaseField = dbField.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-      const oldValue = (order as any)[camelCaseField];
+      // Use jsField if specified, otherwise use the fieldName itself (which is already camelCase)
+      const jsField = fieldConfig.jsField || fieldName;
+      const oldValue = (order as any)[jsField];
 
       // Validate the value based on field config
       let validatedValue = value;
@@ -2174,9 +2172,9 @@ router.patch(
         }
       }
 
-      // Build update data object using camelCase for Drizzle
+      // Build update data object using JavaScript field name for Drizzle
       const updateData: any = {
-        [camelCaseField]: validatedValue,
+        [jsField]: validatedValue,
         updatedAt: new Date(),
       };
 
@@ -2190,7 +2188,7 @@ router.patch(
         orderId: orderIdParam,
         isFinalized,
         isNumericId,
-        dbField,
+        jsField,
         oldValue,
         newValue: validatedValue,
         updateData,

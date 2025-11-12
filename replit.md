@@ -3,6 +3,14 @@
 ## Overview
 EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. Its purpose is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The project aims to be a leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. The system incorporates robust features like a Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System to provide a complete and efficient solution. The business vision is to be the leading ERP solution for small-to-medium customizable product manufacturers.
 
+## Recent Changes
+### Admin Panel Field Update Fix (2025-11-12)
+- **Issue**: Admin panel side panel updates showed success toasts but changes didn't persist to database. Order AG100 status change from FINALIZED to FULFILLED failed silently.
+- **Root Cause**: PATCH `/api/orders/:orderId/field` endpoint tried to parse string order IDs (like "AG100") as integers using `parseInt()`, resulting in NaN. The route then queried using `WHERE id = NaN` which found no records, but still returned 200 success without actually updating anything.
+- **Fix**: Updated route handler to detect identifier type (numeric legacy IDs vs string order_ids) and query/update using appropriate column (id vs orderId). Maintains backward compatibility while supporting current admin panel string ID format.
+- **Audit Logging**: Created missing `admin_audit_log` table with indexes (schema existed but table was never created). All admin panel changes now properly logged with full audit trail.
+- **UI Refresh**: Added explicit cache invalidation to admin panel side panel save button to ensure order list refreshes immediately after updates.
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 Production constraints: Do not modify mold capacities or employee settings to unrealistic values. Use actual production capacity constraints for accurate scheduling.

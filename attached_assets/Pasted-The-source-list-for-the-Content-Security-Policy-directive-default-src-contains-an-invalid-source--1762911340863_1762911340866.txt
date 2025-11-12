@@ -1,0 +1,927 @@
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+stallwart.build.js:1 stallwart: failed ping 1
+agcomphr-11-07:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+agcomphr-11-07:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+agcomphr-11-07:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+0eb799b5cc89f147.js:2 [Coframe] Replit Enterprise watcher loaded
+0eb799b5cc89f147.js:2 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+0eb799b5cc89f147.js:2 Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+agcomphr-11-07:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+0eb799b5cc89f147.js:2 [LaunchDarkly] LaunchDarkly client initialized
+0eb799b5cc89f147.js:2 Cache data may be lost when replacing the dealContext field of a Org object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgDealContext have an ID or a custom merge function, or define a custom merge function for the Org.dealContext field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgDealContext","dealType":"default","salesContactEmail":null}
+  incoming: {"__typename":"OrgDealContext","dealType":"default"}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 0eb799b5cc89f147.js:2
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+ed1e693c96a75807.js:2 Unrecognized feature: 'ambient-light-sensor'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'battery'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'execution-while-not-rendered'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'execution-while-out-of-viewport'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'layout-animations'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'legacy-image-formats'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'navigation-override'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'oversized-images'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'publickey-credentials'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'speaker-selection'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'unoptimized-images'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'unsized-media'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'pointer-lock'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Allow attribute will take precedence over 'allowfullscreen'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Allow attribute will take precedence over 'allowpaymentrequest'.
+z @ ed1e693c96a75807.js:2
+0eb799b5cc89f147.js:2 Cache data may be lost when replacing the orgReplPresenceSessionEvents field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgPresenceSessionInitEvent and OrgPresenceSessionPingEvent have an ID or a custom merge function, or define a custom merge function for the Subscription.orgReplPresenceSessionEvents field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgPresenceSessionInitEvent","sessions":[{"__ref":"OrgPresenceSession:e97a4d8d-b70e-4815-8d46-e172010743bc"}]}
+  incoming: {"__typename":"OrgPresenceSessionPingEvent","session":{"__ref":"OrgPresenceSession:e97a4d8d-b70e-4815-8d46-e172010743bc"}}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 0eb799b5cc89f147.js:2
+logs.browser-intake-us5-datadoghq.com/api/v2/logs?ddsource=browser&ddtags=sdk_version%3A4.46.0%2Capi%3Abeacon%2Cenv%3Aproduction%2Cservice%3Awebsite%2Cversion%3Ae4a0f0d7&dd-api-key=pub31a5047a3a4692afb84a423db984dc57&dd-evp-origin-version=4.46.0&dd-evp-origin=browser&dd-request-id=83e86f90-8619-43b0-9643-cc85f873e244:1  Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED
+ingest.app.coframe.com/ingest/v2/batched_monitoring/68c9ad4d4cddb58cf3a1f93d/:1  Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED
+ingest.app.coframe.com/ingest/v2/batched_events/68c9ad4d4cddb58cf3a1f93d/:1  Failed to load resource: net::ERR_ADDRESS_UNREACHABLE
+stallwart.build.js:1 stallwart: failed ping 1
+stallwart.build.js:1 stallwart: failed ping 2
+48f324d39e922734.js:2 WebSocket connection to 'wss://eval.kirk.platform.replit.com/wsv2/v2.public.Q2dZSTg1N1B5QVlTQmdpU3U4L0lCaUlFYTJseWF6QUFPc2dCQ2lRM1pUSTFaREV3WlMwNU9XUmhMVFEyWW1RdE9XRmxNQzFtT0dZeFpqa3haREEyTVRJU0EyNXBlQm9XY21Wd2JHbDBMWEpsY0d3dFptbHNaWE10YTJseWF5SU9ZV2RqYjIxd2FISXRNVEV0TURjcUNHRm5ZMjl0Y0doeVFrNEtGM0psY0d4cGRDMXlaWEJzTFdKc2IyTnJjeTFyYVhKckVoVnlaWEJzYVhRdGNtVndiQzF0WlhSaExXdHBjbXNhSEhKbGNHeHBkQzF0WVhKbllYSnBibVV0WW14dlkydHpMV3RwY210S0J3amVtdXNVRUFGUUFISU1DZ1psZVc1M2VHc1FBaUFBZUFCU0pRZ0JFSUNBZ0lCQUdRQUFBQUFBQUNCQUlRQUFBQUFBQUNCQUtJQ0FnSUNBQ0RBQ09BQmdBR29QQ042YTZ4UVNDR0ZuWTI5dGNHaHlnZ0VDS2dDQ0FRSXlBSm9CQ2dvSU1DNHdMakl4TVRhZ0FRRT0mVrWN-uGXbrPH9_6WKUoh0vcszws-HDZqXn9ilYi3y6ol_2hY8WX4zWJ60o9a4y4gw5C4nyolbi3-MpHWsScK.Q2dad2NtOWtPak1pQ25KbGNHeHBkQzVqYjIwPQ' failed: WebSocket is closed before the connection is established.
+cleanupSocket @ 48f324d39e922734.js:2
+72b0659f280b5395.js:2 WebSocket connection to 'wss://production-chort.replit.com/api/river' failed: 
+(anonymous) @ 72b0659f280b5395.js:2
+7fa6125a6b2aaaa3.js:2 WebSocket connection to 'wss://replit.com/graphql_subscriptions' failed: 
+(anonymous) @ 7fa6125a6b2aaaa3.js:2
+ingest.app.coframe.com/ingest/v2/batched_events/68c9ad4d4cddb58cf3a1f93d/:1  Failed to load resource: net::ERR_NETWORK_CHANGED
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+72b0659f280b5395.js:2 WebSocket connection to 'wss://production-ai-chat.replit.com/river?auth_token=eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQzNjk5NTUwLCJ1c2VyVGltZUNyZWF0ZWQiOiIyMDI1LTA2LTEwVDE3OjQwOjQ3LjA4M1oiLCJyZXBsSWQiOiI3ZTI1ZDEwZS05OWRhLTQ2YmQtOWFlMC1mOGYxZjkxZDA2MTIiLCJtZW1iZXJzaGlwIjoidGVhbXMiLCJpc3N1ZXIiOiJodHRwczovL3JlcGxpdC13ZWItcHJvZC5wLnJlcGxpdC5jb20iLCJyb2xlcyI6W10sImNhbldyaXRlIjp0cnVlLCJoYXNSZXBsaXRBaVBybyI6dHJ1ZSwib3JnSWQiOiJleW53eGsiLCJmbGFnZ2luZ0NvbnRleHQiOiJ7XCJrZXlcIjpcInRlYW06ZXlud3hrXCIsXCJraW5kXCI6XCJvd25lclwiLFwicm9sZ...3BlbmFpRGlzYWJsZWQiOmZhbHNlLCJhbnRocm9waWNEaXNhYmxlZCI6ZmFsc2UsImdlbWluaURpc2FibGVkIjpmYWxzZSwiaXNFbnRlcnByaXNlIjpmYWxzZSwiaWF0IjoxNzYyOTEwMTE3LCJleHAiOjE3NjI5MTM3MTd9.Ib6cZkYmPPXAB3aS_uzHiwOU0f2dT4_LYX5ltkXrGXViNhi_x04fZuwEZktTO9qeL__D4fITsx2Brt2AmUOuFWksqhcOYiSeQettwejQh5btLAuBUurWADs-MSBw_2b_O-eqREa6DT4n4gVqTt8sty-oa5DxnOOlof5PJ4ys8cmrgceipylV1DR9PlkJSh7WrGYkzZVkKuw2jD3k2OYvBQ_G06Zi9v2AClK7S9vcrYrjwWVnpe3ZF5I1CtMu1-0GhbNUJ8KoUpLqOdzH90O7GuBv8-e9v2Mn_Cju7NVVLJPaWozHRUYUZ_Mt5SjgPNDOp6eCvr6IR9vCPegR87UglA' failed: 
+(anonymous) @ 72b0659f280b5395.js:2
+r.stripe.com/b:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+r.stripe.com/b:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+72b0659f280b5395.js:2 WebSocket connection to 'wss://production-chort.replit.com/api/river' failed: 
+(anonymous) @ 72b0659f280b5395.js:2
+shared-04564a592e362e8e144fd2f90efd73a8.js:1 Uncaught (in promise) FetchError: Error fetching https://r.stripe.com/b: Failed to fetch
+    at shared-04564a592e362e8e144fd2f90efd73a8.js:1:227349
+ingest.app.coframe.com/ingest/v2/batched_events/68c9ad4d4cddb58cf3a1f93d/:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+logs.browser-intake-us5-datadoghq.com/api/v2/logs?ddsource=browser&ddtags=sdk_version%3A4.46.0%2Capi%3Afetch%2Cenv%3Aproduction%2Cservice%3Awebsite%2Cversion%3Ae4a0f0d7&dd-api-key=pub31a5047a3a4692afb84a423db984dc57&dd-evp-origin-version=4.46.0&dd-evp-origin=browser&dd-request-id=5962e388-81ec-4b35-8ce0-a9a841d1af85:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+workspace_iframe.html?initialPath=%2F&id=%3Ar1l2%3A:32 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1l2%3A:32 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1l2%3A:32 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1l2%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1l2%3A:32 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1l2%3A:32 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1l2%3A:32 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1l2%3A:32 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1l2%3A:32 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1l2%3A:32 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1l2%3A:32 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1l2%3A:32 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1l2%3A:32 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar1l2%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.
+injected.js:27 [vite] connecting...
+injected.js:27 [vite] connected.
+injected.js:27 React initialized: Object
+injected.js:27 React hooks: Object
+injected.js:27 App component is rendering...
+injected.js:27 Environment: development
+injected.js:27 Base URL: /
+injected.js:27 App component is rendering...
+injected.js:27 Environment: development
+injected.js:27 Base URL: /
+injected.js:27 Redirecting tasham to /admin-dashboard
+injected.js:27 Redirecting tasham to /admin-dashboard
+injected.js:27 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+injected.js:27 🌐 API Request to /api/po-orders/process-shipment (timeout: 120000ms, deployment: false)
+7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/api/po-orders/process-shipment:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+injected.js:27 ✅ API Response from /api/po-orders/process-shipment: 500
+injected.js:27 💥 API Request failed for /api/po-orders/process-shipment: Error: HTTP error! status: 500
+    at apiRequest (queryClient.ts:82:13)
+    at async Object.mutationFn (ShipmentDialog.tsx:92:14)
+(anonymous) @ injected.js:27
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+u @ 6f76f51b398e0810.js:2
+c @ 6f76f51b398e0810.js:2
+(anonymous) @ 6f76f51b398e0810.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+u @ 6f76f51b398e0810.js:2
+c @ 6f76f51b398e0810.js:2
+(anonymous) @ 6f76f51b398e0810.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+u @ 6f76f51b398e0810.js:2
+c @ 6f76f51b398e0810.js:2
+(anonymous) @ 6f76f51b398e0810.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+u @ 6f76f51b398e0810.js:2
+c @ 6f76f51b398e0810.js:2
+(anonymous) @ 6f76f51b398e0810.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+u @ 6f76f51b398e0810.js:2
+c @ 6f76f51b398e0810.js:2
+(anonymous) @ 6f76f51b398e0810.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+u @ 6f76f51b398e0810.js:2
+c @ 6f76f51b398e0810.js:2
+(anonymous) @ 6f76f51b398e0810.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+u @ 6f76f51b398e0810.js:2
+c @ 6f76f51b398e0810.js:2
+(anonymous) @ 6f76f51b398e0810.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+u @ 6f76f51b398e0810.js:2
+c @ 6f76f51b398e0810.js:2
+(anonymous) @ 6f76f51b398e0810.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+u @ 6f76f51b398e0810.js:2
+c @ 6f76f51b398e0810.js:2
+(anonymous) @ 6f76f51b398e0810.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+u @ 6f76f51b398e0810.js:2
+c @ 6f76f51b398e0810.js:2
+(anonymous) @ 6f76f51b398e0810.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+0eb799b5cc89f147.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 0eb799b5cc89f147.js:2
+u @ 6f76f51b398e0810.js:2
+c @ 6f76f51b398e0810.js:2
+(anonymous) @ 6f76f51b398e0810.js:2
+am @ ed1e693c96a75807.js:2
+us @ ed1e693c96a75807.js:2
+o @ ed1e693c96a75807.js:2
+iV @ ed1e693c96a75807.js:2
+iU @ ed1e693c96a75807.js:2
+i_ @ ed1e693c96a75807.js:2
+C @ ed1e693c96a75807.js:2
+M @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 [Violation] 'message' handler took 255ms
+0eb799b5cc89f147.js:2 [Violation] 'setTimeout' handler took 94ms
+injected.js:27 [vite] hot updated: /src/pages/QCShippingQueuePage.tsx
+injected.js:27 [vite] hot updated: /src/index.css?v=kgb_ddO-1MY_3p8F4MSyL
+@react-refresh:584 [Violation] 'setTimeout' handler took 128ms
+injected.js:27 [vite] server connection lost. Polling for restart...
+workspace_iframe.html?initialPath=%2F&id=%3Ar22d%3A:32 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar22d%3A:32 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar22d%3A:32 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar22d%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar22d%3A:32 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar22d%3A:32 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar22d%3A:32 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar22d%3A:32 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar22d%3A:32 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar22d%3A:32 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar22d%3A:32 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar22d%3A:32 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar22d%3A:32 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2F&id=%3Ar22d%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.
+injected.js:27 [vite] connecting...
+injected.js:27 [vite] connected.
+injected.js:27 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+injected.js:27 React hooks: {useState: ƒ, useEffect: ƒ}
+injected.js:27 App component is rendering...
+injected.js:27 Environment: development
+injected.js:27 Base URL: /
+injected.js:27 App component is rendering...
+injected.js:27 Environment: development
+injected.js:27 Base URL: /
+injected.js:27 Redirecting tasham to /admin-dashboard
+injected.js:27 Redirecting tasham to /admin-dashboard
+0eb799b5cc89f147.js:2 [Violation] 'message' handler took 159ms
+injected.js:27 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+chunk-NFC5BX5N.js?v=2aa3cf21:18625 [Violation] 'setTimeout' handler took 78ms
+chunk-NFC5BX5N.js?v=2aa3cf21:18625 [Violation] 'mousedown' handler took 154ms
+[Violation] Forced reflow while executing JavaScript took 37ms
+ed1e693c96a75807.js:2 [Violation] 'message' handler took 302ms
+injected.js:27 Warning: Encountered two children with the same key, `93`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at div
+    at div
+    at div
+    at StepSelectionRecap (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ShipmentDialog.tsx:390:3)
+    at div
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-IGIH6I3W.js?v=2aa3cf21:57:7
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:79:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:56:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ODBS2NKD.js?v=2aa3cf21:34:5
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:238:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:161:58
+    at Presence (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ASRF5YTR.js?v=2aa3cf21:24:11)
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:152:64
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:79:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:56:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-6NFO7XJS.js?v=2aa3cf21:27:22
+    at Presence (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ASRF5YTR.js?v=2aa3cf21:24:11)
+    at Provider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=2aa3cf21:38:15)
+    at DialogPortal (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:114:11)
+    at _c3 (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ui/dialog.tsx:52:12)
+    at Provider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=2aa3cf21:38:15)
+    at Dialog (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:54:5)
+    at ShipmentDialog (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ShipmentDialog.tsx:85:34)
+    at div
+    at QCShippingQueuePage (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/pages/QCShippingQueuePage.tsx:64:37)
+    at Route (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:280:16)
+    at Switch (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:336:17)
+    at main
+    at div
+    at Router (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:235:17)
+    at DeploymentAuthWrapper (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=2aa3cf21:2934:3)
+    at App (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/App.tsx?v=MOa3nuw6Sf4h3lP6mmIt1:231:35)
+    at Router (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=2aa3cf21:6332:13)
+    at BrowserRouter (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=2aa3cf21:9416:3)
+    at QueryClientProvider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=2aa3cf21:2934:3)
+(anonymous) @ injected.js:27
+console.error @ main.tsx:33
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+printWarning @ chunk-NFC5BX5N.js?v=2aa3cf21:521
+error @ chunk-NFC5BX5N.js?v=2aa3cf21:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=2aa3cf21:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=2aa3cf21:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=2aa3cf21:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=2aa3cf21:14290
+updateHostComponent @ chunk-NFC5BX5N.js?v=2aa3cf21:14807
+beginWork @ chunk-NFC5BX5N.js?v=2aa3cf21:15935
+beginWork$1 @ chunk-NFC5BX5N.js?v=2aa3cf21:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=2aa3cf21:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=2aa3cf21:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=2aa3cf21:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=2aa3cf21:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=2aa3cf21:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=2aa3cf21:18627
+[Violation] Forced reflow while executing JavaScript took 54ms
+injected.js:27 Warning: Encountered two children with the same key, `93`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at div
+    at div
+    at div
+    at StepReviewPreview (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ShipmentDialog.tsx:773:3)
+    at div
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-IGIH6I3W.js?v=2aa3cf21:57:7
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:79:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:56:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ODBS2NKD.js?v=2aa3cf21:34:5
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:238:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:161:58
+    at Presence (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ASRF5YTR.js?v=2aa3cf21:24:11)
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:152:64
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:79:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:56:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-6NFO7XJS.js?v=2aa3cf21:27:22
+    at Presence (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ASRF5YTR.js?v=2aa3cf21:24:11)
+    at Provider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=2aa3cf21:38:15)
+    at DialogPortal (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:114:11)
+    at _c3 (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ui/dialog.tsx:52:12)
+    at Provider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=2aa3cf21:38:15)
+    at Dialog (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:54:5)
+    at ShipmentDialog (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ShipmentDialog.tsx:85:34)
+    at div
+    at QCShippingQueuePage (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/pages/QCShippingQueuePage.tsx:64:37)
+    at Route (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:280:16)
+    at Switch (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:336:17)
+    at main
+    at div
+    at Router (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:235:17)
+    at DeploymentAuthWrapper (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=2aa3cf21:2934:3)
+    at App (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/App.tsx?v=MOa3nuw6Sf4h3lP6mmIt1:231:35)
+    at Router (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=2aa3cf21:6332:13)
+    at BrowserRouter (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=2aa3cf21:9416:3)
+    at QueryClientProvider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=2aa3cf21:2934:3)
+(anonymous) @ injected.js:27
+console.error @ main.tsx:33
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+printWarning @ chunk-NFC5BX5N.js?v=2aa3cf21:521
+error @ chunk-NFC5BX5N.js?v=2aa3cf21:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=2aa3cf21:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=2aa3cf21:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=2aa3cf21:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=2aa3cf21:14290
+updateFragment @ chunk-NFC5BX5N.js?v=2aa3cf21:14522
+beginWork @ chunk-NFC5BX5N.js?v=2aa3cf21:15949
+beginWork$1 @ chunk-NFC5BX5N.js?v=2aa3cf21:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=2aa3cf21:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=2aa3cf21:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=2aa3cf21:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=2aa3cf21:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=2aa3cf21:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=2aa3cf21:18627
+injected.js:27 Warning: Encountered two children with the same key, `93`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at div
+    at div
+    at div
+    at StepReviewPreview (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ShipmentDialog.tsx:773:3)
+    at div
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-IGIH6I3W.js?v=2aa3cf21:57:7
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:79:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:56:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ODBS2NKD.js?v=2aa3cf21:34:5
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:238:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:161:58
+    at Presence (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ASRF5YTR.js?v=2aa3cf21:24:11)
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:152:64
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:79:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:56:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-6NFO7XJS.js?v=2aa3cf21:27:22
+    at Presence (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ASRF5YTR.js?v=2aa3cf21:24:11)
+    at Provider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=2aa3cf21:38:15)
+    at DialogPortal (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:114:11)
+    at _c3 (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ui/dialog.tsx:52:12)
+    at Provider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=2aa3cf21:38:15)
+    at Dialog (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:54:5)
+    at ShipmentDialog (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ShipmentDialog.tsx:85:34)
+    at div
+    at QCShippingQueuePage (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/pages/QCShippingQueuePage.tsx:64:37)
+    at Route (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:280:16)
+    at Switch (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:336:17)
+    at main
+    at div
+    at Router (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:235:17)
+    at DeploymentAuthWrapper (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=2aa3cf21:2934:3)
+    at App (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/App.tsx?v=MOa3nuw6Sf4h3lP6mmIt1:231:35)
+    at Router (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=2aa3cf21:6332:13)
+    at BrowserRouter (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=2aa3cf21:9416:3)
+    at QueryClientProvider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=2aa3cf21:2934:3)
+(anonymous) @ injected.js:27
+console.error @ main.tsx:33
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+printWarning @ chunk-NFC5BX5N.js?v=2aa3cf21:521
+error @ chunk-NFC5BX5N.js?v=2aa3cf21:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=2aa3cf21:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=2aa3cf21:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=2aa3cf21:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=2aa3cf21:14292
+updateFragment @ chunk-NFC5BX5N.js?v=2aa3cf21:14522
+beginWork @ chunk-NFC5BX5N.js?v=2aa3cf21:15949
+beginWork$1 @ chunk-NFC5BX5N.js?v=2aa3cf21:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=2aa3cf21:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=2aa3cf21:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=2aa3cf21:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=2aa3cf21:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=2aa3cf21:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=2aa3cf21:18627
+injected.js:27 🌐 API Request to /api/po-orders/process-shipment (timeout: 120000ms, deployment: false)
+injected.js:204  POST https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/api/po-orders/process-shipment 500 (Internal Server Error)
+apply @ injected.js:204
+apiRequest @ queryClient.ts:98
+mutationFn @ ShipmentDialog.tsx:119
+fn @ @tanstack_react-query.js?v=2aa3cf21:1234
+run @ @tanstack_react-query.js?v=2aa3cf21:507
+start @ @tanstack_react-query.js?v=2aa3cf21:550
+execute @ @tanstack_react-query.js?v=2aa3cf21:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=2aa3cf21:2692
+(anonymous) @ @tanstack_react-query.js?v=2aa3cf21:3415
+handleSubmit @ ShipmentDialog.tsx:211
+callCallback2 @ chunk-NFC5BX5N.js?v=2aa3cf21:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=2aa3cf21:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=2aa3cf21:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=2aa3cf21:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=2aa3cf21:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=2aa3cf21:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=2aa3cf21:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=2aa3cf21:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=2aa3cf21:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=2aa3cf21:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=2aa3cf21:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=2aa3cf21:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=2aa3cf21:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=2aa3cf21:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=2aa3cf21:5449
+injected.js:27 ✅ API Response from /api/po-orders/process-shipment: 500
+injected.js:27 💥 API Request failed for /api/po-orders/process-shipment: Error: HTTP error! status: 500
+    at apiRequest (queryClient.ts:124:13)
+    at async Object.mutationFn (ShipmentDialog.tsx:119:14)
+(anonymous) @ injected.js:27
+console.error @ main.tsx:33
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+apiRequest @ queryClient.ts:144
+await in apiRequest
+mutationFn @ ShipmentDialog.tsx:119
+fn @ @tanstack_react-query.js?v=2aa3cf21:1234
+run @ @tanstack_react-query.js?v=2aa3cf21:507
+start @ @tanstack_react-query.js?v=2aa3cf21:550
+execute @ @tanstack_react-query.js?v=2aa3cf21:1270
+await in execute
+mutate @ @tanstack_react-query.js?v=2aa3cf21:2692
+(anonymous) @ @tanstack_react-query.js?v=2aa3cf21:3415
+handleSubmit @ ShipmentDialog.tsx:211
+callCallback2 @ chunk-NFC5BX5N.js?v=2aa3cf21:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=2aa3cf21:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=2aa3cf21:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-NFC5BX5N.js?v=2aa3cf21:3736
+executeDispatch @ chunk-NFC5BX5N.js?v=2aa3cf21:7014
+processDispatchQueueItemsInOrder @ chunk-NFC5BX5N.js?v=2aa3cf21:7034
+processDispatchQueue @ chunk-NFC5BX5N.js?v=2aa3cf21:7043
+dispatchEventsForPlugins @ chunk-NFC5BX5N.js?v=2aa3cf21:7051
+(anonymous) @ chunk-NFC5BX5N.js?v=2aa3cf21:7174
+batchedUpdates$1 @ chunk-NFC5BX5N.js?v=2aa3cf21:18913
+batchedUpdates @ chunk-NFC5BX5N.js?v=2aa3cf21:3579
+dispatchEventForPluginEventSystem @ chunk-NFC5BX5N.js?v=2aa3cf21:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-NFC5BX5N.js?v=2aa3cf21:5478
+dispatchEvent @ chunk-NFC5BX5N.js?v=2aa3cf21:5472
+dispatchDiscreteEvent @ chunk-NFC5BX5N.js?v=2aa3cf21:5449
+injected.js:27 Warning: Encountered two children with the same key, `93`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at div
+    at div
+    at div
+    at StepReviewPreview (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ShipmentDialog.tsx:773:3)
+    at div
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-IGIH6I3W.js?v=2aa3cf21:57:7
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:79:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:56:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ODBS2NKD.js?v=2aa3cf21:34:5
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:238:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:161:58
+    at Presence (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ASRF5YTR.js?v=2aa3cf21:24:11)
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:152:64
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:79:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:56:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-6NFO7XJS.js?v=2aa3cf21:27:22
+    at Presence (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ASRF5YTR.js?v=2aa3cf21:24:11)
+    at Provider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=2aa3cf21:38:15)
+    at DialogPortal (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:114:11)
+    at _c3 (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ui/dialog.tsx:52:12)
+    at Provider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=2aa3cf21:38:15)
+    at Dialog (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:54:5)
+    at ShipmentDialog (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ShipmentDialog.tsx:85:34)
+    at div
+    at QCShippingQueuePage (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/pages/QCShippingQueuePage.tsx:64:37)
+    at Route (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:280:16)
+    at Switch (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:336:17)
+    at main
+    at div
+    at Router (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:235:17)
+    at DeploymentAuthWrapper (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=2aa3cf21:2934:3)
+    at App (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/App.tsx?v=MOa3nuw6Sf4h3lP6mmIt1:231:35)
+    at Router (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=2aa3cf21:6332:13)
+    at BrowserRouter (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=2aa3cf21:9416:3)
+    at QueryClientProvider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=2aa3cf21:2934:3)
+(anonymous) @ injected.js:27
+console.error @ main.tsx:33
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+printWarning @ chunk-NFC5BX5N.js?v=2aa3cf21:521
+error @ chunk-NFC5BX5N.js?v=2aa3cf21:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=2aa3cf21:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=2aa3cf21:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=2aa3cf21:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=2aa3cf21:14292
+updateFragment @ chunk-NFC5BX5N.js?v=2aa3cf21:14522
+beginWork @ chunk-NFC5BX5N.js?v=2aa3cf21:15949
+beginWork$1 @ chunk-NFC5BX5N.js?v=2aa3cf21:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=2aa3cf21:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=2aa3cf21:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=2aa3cf21:19116
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=2aa3cf21:18678
+workLoop @ chunk-NFC5BX5N.js?v=2aa3cf21:197
+flushWork @ chunk-NFC5BX5N.js?v=2aa3cf21:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=2aa3cf21:384
+injected.js:27 Warning: Encountered two children with the same key, `93`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+    at div
+    at div
+    at div
+    at div
+    at div
+    at StepReviewPreview (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ShipmentDialog.tsx:773:3)
+    at div
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-IGIH6I3W.js?v=2aa3cf21:57:7
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:79:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:56:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ODBS2NKD.js?v=2aa3cf21:34:5
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:238:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:161:58
+    at Presence (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ASRF5YTR.js?v=2aa3cf21:24:11)
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:152:64
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:79:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=2aa3cf21:56:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=2aa3cf21:43:13
+    at https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-6NFO7XJS.js?v=2aa3cf21:27:22
+    at Presence (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-ASRF5YTR.js?v=2aa3cf21:24:11)
+    at Provider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=2aa3cf21:38:15)
+    at DialogPortal (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:114:11)
+    at _c3 (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ui/dialog.tsx:52:12)
+    at Provider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=2aa3cf21:38:15)
+    at Dialog (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-TXPEQHTJ.js?v=2aa3cf21:54:5)
+    at ShipmentDialog (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/ShipmentDialog.tsx:85:34)
+    at div
+    at QCShippingQueuePage (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/pages/QCShippingQueuePage.tsx:64:37)
+    at Route (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:280:16)
+    at Switch (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:336:17)
+    at main
+    at div
+    at Router (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=2aa3cf21:235:17)
+    at DeploymentAuthWrapper (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=2aa3cf21:2934:3)
+    at App (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/src/App.tsx?v=MOa3nuw6Sf4h3lP6mmIt1:231:35)
+    at Router (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=2aa3cf21:6332:13)
+    at BrowserRouter (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/react-router-dom.js?v=2aa3cf21:9416:3)
+    at QueryClientProvider (https://7e25d10e-99da-46bd-9ae0-f8f1f91d0612-00-3pkfdals9vc65.kirk.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=2aa3cf21:2934:3)
+(anonymous) @ injected.js:27
+console.error @ main.tsx:33
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+(anonymous) @ injected.js:27
+printWarning @ chunk-NFC5BX5N.js?v=2aa3cf21:521
+error @ chunk-NFC5BX5N.js?v=2aa3cf21:505
+warnOnInvalidKey @ chunk-NFC5BX5N.js?v=2aa3cf21:10219
+reconcileChildrenArray @ chunk-NFC5BX5N.js?v=2aa3cf21:10235
+reconcileChildFibers2 @ chunk-NFC5BX5N.js?v=2aa3cf21:10559
+reconcileChildren @ chunk-NFC5BX5N.js?v=2aa3cf21:14292
+updateFragment @ chunk-NFC5BX5N.js?v=2aa3cf21:14522
+beginWork @ chunk-NFC5BX5N.js?v=2aa3cf21:15949
+beginWork$1 @ chunk-NFC5BX5N.js?v=2aa3cf21:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=2aa3cf21:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=2aa3cf21:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=2aa3cf21:19116
+performConcurrentWorkOnRoot @ chunk-NFC5BX5N.js?v=2aa3cf21:18678
+workLoop @ chunk-NFC5BX5N.js?v=2aa3cf21:197
+flushWork @ chunk-NFC5BX5N.js?v=2aa3cf21:176
+performWorkUntilDeadline @ chunk-NFC5BX5N.js?v=2aa3cf21:384

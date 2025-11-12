@@ -352,9 +352,9 @@ function StepSelectionRecap({
               <div key={poNumber} className="space-y-2">
                 <div className="text-sm font-medium text-muted-foreground">PO: {poNumber}</div>
                 <div className="space-y-1">
-                  {items.map((item) => (
-                    <div key={item.poItemId} className="flex justify-between text-sm pl-4">
-                      <span>{item.description} (Order: {item.orderId})</span>
+                  {items.map((item, idx) => (
+                    <div key={`${item.poItemId}-${item.orderId}-${idx}`} className="flex justify-between text-sm pl-4">
+                      <span>{item.description || 'Unknown Item'} (Order: {item.orderId})</span>
                       <span className="text-muted-foreground">Qty: {item.quantity}</span>
                     </div>
                   ))}
@@ -538,9 +538,9 @@ function StepReviewPreview({
               {Object.entries(pos).map(([poNumber, items]) => (
                 <div key={poNumber} className="pl-3 space-y-1">
                   <div className="text-muted-foreground text-xs">PO: {poNumber}</div>
-                  {items.map((item) => (
-                    <div key={item.poItemId} className="text-xs pl-2">
-                      • {item.description} - Qty: {item.quantity}
+                  {items.map((item, idx) => (
+                    <div key={`${item.poItemId}-${item.orderId}-${idx}`} className="text-xs pl-2">
+                      • {item.description || 'Unknown Item'} - Qty: {item.quantity}
                     </div>
                   ))}
                 </div>

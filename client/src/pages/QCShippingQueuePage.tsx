@@ -230,14 +230,20 @@ export default function QCShippingQueuePage() {
 
       if (metadata) {
         const { item, customerName, poNumber } = metadata;
-        items.push({
-          poItemId: item.poItemId,
-          orderId: item.orderId || `Unit ${item.unitNumber}`,
-          quantity: item.quantity ?? 1,
-          description: item.itemName || item.stockModelName || 'Unknown Item',
-          customerName,
-          poNumber,
-        });
+        
+        // Only include items with valid order IDs
+        if (item.orderId) {
+          items.push({
+            poItemId: item.poItemId,
+            orderId: item.orderId,
+            quantity: item.quantity ?? 1,
+            description: item.itemName || item.stockModelName || 'Unknown Item',
+            customerName,
+            poNumber,
+          });
+        } else {
+          console.warn(`PO item ${item.poItemId} unit ${item.unitNumber} has no orderId - skipping`);
+        }
       } else {
         console.warn(`Selected key not found in poOrders: ${key}`);
       }

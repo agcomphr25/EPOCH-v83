@@ -4812,6 +4812,12 @@ export function registerRoutes(app: Express): Server {
             continue;
           }
 
+          // Debug logging for production orders
+          if (isProductionOrder) {
+            console.log(`🔍 P1 Order ${orderId} fields:`, Object.keys(order));
+            console.log(`🔍 P1 Order currentDepartment:`, (order as any).currentDepartment);
+          }
+
           const currentDept = (order as any).currentDepartment;
 
           // Validate order is in expected department if fromDepartment is specified

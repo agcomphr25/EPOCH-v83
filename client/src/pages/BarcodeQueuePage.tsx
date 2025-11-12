@@ -426,7 +426,7 @@ export default function BarcodeQueuePage() {
       
       let poToShippingQC = 0;
       let poToCNC = 0;
-      const failedOrders: string[] = [];
+      const failedOrders: Array<{orderId: string, reason?: string}> = [];
       
       // Smart progression for PO items (routes based on stock model)
       if (poOrderIds.length > 0) {
@@ -439,7 +439,10 @@ export default function BarcodeQueuePage() {
         
         // Check for failures in PO smart-progress
         if (poResult.failed && poResult.failed.length > 0) {
-          failedOrders.push(...poResult.failed.map((f: any) => f.orderId));
+          failedOrders.push(...poResult.failed.map((f: any) => ({
+            orderId: f.orderId ?? f,
+            reason: f.reason || 'Unknown error'
+          })));
           console.error('❌ Failed to progress PO items:', poResult.failed);
         }
       }
@@ -456,7 +459,8 @@ export default function BarcodeQueuePage() {
           });
         } catch (error) {
           console.error('❌ Failed to progress flat tops:', error);
-          failedOrders.push(...flatTopOrderIds);
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          failedOrders.push(...flatTopOrderIds.map(id => ({ orderId: id, reason: errorMsg })));
         }
       }
       
@@ -472,13 +476,15 @@ export default function BarcodeQueuePage() {
           });
         } catch (error) {
           console.error('❌ Failed to progress CNC orders:', error);
-          failedOrders.push(...cncOrderIds);
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          failedOrders.push(...cncOrderIds.map(id => ({ orderId: id, reason: errorMsg })));
         }
       }
       
       // If any orders failed, throw an error to trigger onError handler
       if (failedOrders.length > 0) {
-        throw new Error(`Failed to progress ${failedOrders.length} order(s): ${failedOrders.join(', ')}`);
+        const failureDetails = failedOrders.map(f => `${f.orderId} (${f.reason})`).join(', ');
+        throw new Error(`Failed to progress ${failedOrders.length} order(s): ${failureDetails}`);
       }
       
       return { 

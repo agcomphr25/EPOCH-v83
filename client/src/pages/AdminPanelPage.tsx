@@ -271,21 +271,22 @@ export default function AdminPanelPage() {
           return (
             <Select
               value={statusValue || ''}
-              onValueChange={(value) =>
+              onValueChange={(value) => {
+                console.log('Status change:', { orderId: row.original.orderId, value });
                 updateFieldMutation.mutate({
                   orderId: row.original.orderId,
                   fieldName: 'status',
                   value,
-                })
-              }
+                });
+              }}
               disabled={updateFieldMutation.isPending}
             >
               <SelectTrigger 
                 className="w-[150px] h-8" 
                 data-testid={`select-status-${row.original.orderId}`}
               >
-                <SelectValue>
-                  {currentStatus?.displayName || statusValue}
+                <SelectValue placeholder="Select status">
+                  {currentStatus?.displayName || statusValue || 'Select status'}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>

@@ -7110,6 +7110,9 @@ export class DatabaseStorage implements IStorage {
     }[];
   }[]> {
     // Get all production orders in Shipping QC department
+    // Only include items that are either:
+    // 1. Non-stock items (bypass production), OR
+    // 2. Items that have completed production
     const rows = await db
       .select({
         orderId: productionOrders.orderId,
@@ -7125,13 +7128,30 @@ export class DatabaseStorage implements IStorage {
         finishType: purchaseOrderItems.finishType,
         stockModel: purchaseOrderItems.stockModel,
         caliber: purchaseOrderItems.caliber,
+        isReadyToShip: productionOrders.isReadyToShip,
+        productionStatus: productionOrders.productionStatus,
       })
       .from(productionOrders)
       .innerJoin(
         purchaseOrderItems,
         eq(productionOrders.poItemId, purchaseOrderItems.id)
       )
-      .where(eq(productionOrders.currentDepartment, 'Shipping QC'))
+      .where(
+        and(
+          eq(productionOrders.currentDepartment, 'Shipping QC'),
+          or(
+            // Non-stock items (bypass production)
+            or(
+              sql`LOWER(${purchaseOrderItems.stockModel}) LIKE '%no stock%'`,
+              sql`LOWER(${purchaseOrderItems.stockModel}) LIKE '%no_stock%'`,
+              sql`${purchaseOrderItems.stockModel} IS NULL`,
+              sql`${purchaseOrderItems.stockModel} = ''`
+            ),
+            // OR items that have completed production
+            eq(productionOrders.isReadyToShip, true)
+          )
+        )
+      )
       .orderBy(
         asc(productionOrders.customerName),
         asc(productionOrders.poNumber),

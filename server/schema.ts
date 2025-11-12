@@ -3394,6 +3394,16 @@ export const productionOrders = pgTable('production_orders', {
   dueDate: timestamp('due_date').notNull(),
   // Production tracking fields
   productionStatus: text('production_status').notNull().default('PENDING'), // PENDING, LAID_UP, SHIPPED
+  currentDepartment: text('current_department').default('Barcode'), // Department progression tracking
+  departmentHistory: jsonb('department_history').default('[]'), // History of department movements
+  barcodeCompletedAt: timestamp('barcode_completed_at'),
+  layupCompletedAt: timestamp('layup_completed_at'),
+  cncCompletedAt: timestamp('cnc_completed_at'),
+  finishCompletedAt: timestamp('finish_completed_at'),
+  gunsmithCompletedAt: timestamp('gunsmith_completed_at'),
+  paintCompletedAt: timestamp('paint_completed_at'),
+  qcCompletedAt: timestamp('qc_completed_at'),
+  shippingCompletedAt: timestamp('shipping_completed_at'),
   laidUpAt: timestamp('laid_up_at'),
   shippedAt: timestamp('shipped_at'),
   // External fulfillment tracking (shipped through another system)

@@ -1,7 +1,9 @@
 # EPOCH v8 - Manufacturing ERP System
 
 ## Overview
+
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. Its primary goal is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The system is a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. Key capabilities include a robust Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System. The business vision is to be the leading ERP solution for small-to-medium customizable product manufacturers.
+
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -17,15 +19,15 @@ Navigation dropdown behavior: All navbar dropdown menus close automatically afte
 Balance due access: Customer balance due tracking is restricted to username "glennj" only for security. Balance Due column appears in Customer Management only when glennj is logged in.
 
 ## System Architecture
-The application utilizes a monorepo structure with a full-stack TypeScript approach, emphasizing type safety and cross-platform deployment.
+The application uses a monorepo structure with a full-stack TypeScript approach, prioritizing type safety and cross-platform deployment.
 
 ### Core Architectural Decisions
--   **Type Safety**: Shared TypeScript schemas using Drizzle and Zod ensure type safety across the stack.
--   **Cross-Platform Deployment**: PWA capabilities with Capacitor enable deployment to web and mobile (iOS/Android).
--   **Dynamic Form Generation**: Includes a dynamic form builder with signature capture.
--   **Authentication**: Hybrid JWT + Session authentication with capability-based access control and account lockout, utilizing a simplified 3-role system (ADMIN, EMPLOYEE, OWNER).
--   **Data Consistency**: A `features` object acts as the single source of truth for all feature data in order entry.
+-   **Type Safety**: Shared TypeScript schemas (Drizzle, Zod) ensure type safety across the stack.
+-   **Cross-Platform Deployment**: PWA capabilities with Capacitor for web and mobile (iOS/Android).
+-   **Authentication**: Hybrid JWT + Session authentication with capability-based access control and a 3-role system (ADMIN, EMPLOYEE, OWNER).
+-   **Data Consistency**: A `features` object acts as the single source of truth for feature data.
 -   **Modular Routing**: Backend routes are organized into specialized modules.
+
 -   **Atomic Order ID Reservation**: A database-based atomic reservation system ensures unique, sequential Order ID generation.
 -   **Asset Path Resolution**: Centralized asset path resolver ensures consistent file access.
 -   **UI/UX**: Leverages ShadCN UI components with Tailwind CSS and Framer Motion for animations.
@@ -49,16 +51,20 @@ The application utilizes a monorepo structure with a full-stack TypeScript appro
 -   **P1 PO Shipping QC Management**: Comprehensive tracking system for P1 purchase orders with department status tracking. Includes authentication middleware, optimized SQL queries, real-time status badges, cross-PO item selection, and fulfillment tracking.
 -   **P1 PO Shipping Workflow**: Complete UPS integration for creating labels with configurable service levels and billing options. Features a floating "Ship Selected" button and a comprehensive OEM Shipments history page with search/filtering, pagination, and document downloads.
 
+
+
 ### Technical Implementations
 -   **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.
 -   **Backend**: Express.js, TypeScript, TanStack Query, Zod, Axios.
 -   **Database**: PostgreSQL (Neon serverless), Drizzle ORM, Drizzle-kit.
+
 -   **Key Features**: Order Management (dynamic configuration, linked orders, rush fees, urgency), Layup Scheduler, Production Queue Manager, Department Manager, Customer Management (CRM, CSV import, address autocomplete), Inventory Management (BOM integration), Metal Accessories Tracker, Barcode System, Employee Management (CRUD, portal, time clock), Quality Control (digital signature, checklists), Reporting, Payment Tracking, Shipping Integration, Communications System (inbox, email, SMS), Personalized Dashboards, Training Management System, AI-Powered Smart Sorting, Calendar Integration, Magic Link Authentication, and Global Search.
 
 ### Database Schema Standards
 -   **Primary Key Pattern (CRITICAL)**: ALL new tables MUST use UUID for primary keys (`id: uuid('id').defaultRandom().primaryKey()`). `serial` data type is strictly forbidden for new tables to prevent migration failures.
 -   **Legacy Tables**: Existing tables using `serial` IDs (e.g., `allOrders`, `inventoryItems`) should not be modified.
 -   **Migration Safety**: Never change existing ID column types (serial to UUID or vice-versa). Use `npm run db:push` for schema sync.
+
 
 ## External Dependencies
 

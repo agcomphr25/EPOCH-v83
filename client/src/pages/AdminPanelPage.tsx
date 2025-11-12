@@ -138,7 +138,7 @@ export default function AdminPanelPage() {
 
   // Mutation for updating individual fields
   const updateFieldMutation = useMutation({
-    mutationFn: async ({ orderId, fieldName, value }: { orderId: number; fieldName: string; value: any }) => {
+    mutationFn: async ({ orderId, fieldName, value }: { orderId: string; fieldName: string; value: any }) => {
       return await apiRequest(`/api/orders/${orderId}/field`, {
         method: 'PATCH',
         body: JSON.stringify({ fieldName, value }),
@@ -273,7 +273,7 @@ export default function AdminPanelPage() {
               value={statusValue || ''}
               onValueChange={(value) =>
                 updateFieldMutation.mutate({
-                  orderId: row.original.id,
+                  orderId: row.original.orderId,
                   fieldName: 'status',
                   value,
                 })
@@ -309,7 +309,7 @@ export default function AdminPanelPage() {
               value={technicianValue || 'unassigned'}
               onValueChange={(value) =>
                 updateFieldMutation.mutate({
-                  orderId: row.original.id,
+                  orderId: row.original.orderId,
                   fieldName: 'assignedTechnician',
                   value: value === 'unassigned' ? null : value,
                 })
@@ -344,7 +344,7 @@ export default function AdminPanelPage() {
               value={urgencyValue || 'none'}
               onValueChange={(value) =>
                 updateFieldMutation.mutate({
-                  orderId: row.original.id,
+                  orderId: row.original.orderId,
                   fieldName: 'urgency',
                   value: value === 'none' ? null : value,
                 })
@@ -933,7 +933,7 @@ export default function AdminPanelPage() {
                     // Update all edited fields
                     for (const [fieldKey, value] of Object.entries(editedFields)) {
                       await updateFieldMutation.mutateAsync({
-                        orderId: selectedOrderId!,
+                        orderId: selectedOrderIdString!,
                         fieldName: fieldKey,
                         value,
                       });

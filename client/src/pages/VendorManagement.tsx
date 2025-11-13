@@ -2039,8 +2039,8 @@ export default function VendorManagement() {
                         
                         if (scores.length === 0) return '—';
                         
-                        const average = scores.reduce((sum, score) => sum + score, 0) / scores.length;
-                        return average.toFixed(1);
+                        const total = scores.reduce((sum, score) => sum + score, 0);
+                        return total.toFixed(1);
                       })()}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">

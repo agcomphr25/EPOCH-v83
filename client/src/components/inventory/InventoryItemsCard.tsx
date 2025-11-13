@@ -858,7 +858,7 @@ export default function InventoryItemsCard() {
   const createMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: (data: any) =>
-      apiRequest('/api/enhanced/inventory/items', {
+      apiRequest('/api/inventory/items', {
         method: 'POST',
         body: data,
       }),

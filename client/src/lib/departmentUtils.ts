@@ -27,6 +27,7 @@ export const normalizeDepartmentName = (
 /**
  * Check if an order is in a specific department
  * Handles both currentDepartment and legacy department fields
+ * Also handles P1 PO items (production orders) that use productionStatus instead of status
  */
 export const isOrderInDepartment = (
   order: any,
@@ -39,7 +40,13 @@ export const isOrderInDepartment = (
 
   // Check currentDepartment field with status validation
   if (normalizedCurrent === normalizedTarget) {
-    // Only show orders that are FINALIZED or IN_PROGRESS
+    // P1 PO items (production orders) use productionStatus instead of status
+    // If this is a production order, show it as long as it's in the correct department
+    if (order?.productionStatus) {
+      return true;
+    }
+    
+    // For regular orders, only show orders that are FINALIZED or IN_PROGRESS
     return order?.status === 'FINALIZED' || order?.status === 'IN_PROGRESS';
   }
 

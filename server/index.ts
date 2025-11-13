@@ -262,18 +262,8 @@ app.use((req, res, next) => {
           console.log('✅ Production keep-alive interval started (server will run indefinitely)');
         }
 
-        // Defer database seeding to run after server is ready (non-blocking)
-        setImmediate(async () => {
-          try {
-            console.log('🌱 Starting background database seeding...');
-            const { seedOrderReferenceTables } = await import('./seeds/orderReferenceTables');
-            await seedOrderReferenceTables();
-            console.log('✅ Background database seeding completed');
-          } catch (error) {
-            console.error('❌ Background database seeding failed:', error);
-            // Don't crash the server - seeding can be done manually via admin endpoint
-          }
-        });
+        // Database seeding removed - order departments/statuses are managed via enums in schema
+        // If future requirements need reference tables, implement with proper schema/migration first
       }
     );
   } catch (error) {

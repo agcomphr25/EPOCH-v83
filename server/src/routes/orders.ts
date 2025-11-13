@@ -758,52 +758,8 @@ router.delete('/draft/:id', async (req: Request, res: Response) => {
 // Get all orders endpoint (backward compatibility) - includes both regular and P1 production orders
 router.get('/all', async (req: Request, res: Response) => {
   try {
-    const { pool } = await import('../../db');
-    
-    // Get regular orders from all_orders table
-    const regularOrders = await storage.getAllOrders();
-    
-    // Get P1 production orders from production_orders table
-    const productionOrdersResult = await pool.query`
-      SELECT 
-        order_id,
-        customer_id,
-        customer_name,
-        po_number,
-        item_name,
-        specifications,
-        order_date,
-        due_date,
-        production_status,
-        current_department,
-        created_at,
-        updated_at
-      FROM production_orders
-      WHERE current_department IS NOT NULL
-    `;
-    
-    const productionOrders = productionOrdersResult.map((po: any) => ({
-      orderId: po.order_id,
-      customerId: po.customer_id,
-      customerName: po.customer_name,
-      currentDepartment: po.current_department,
-      orderDate: po.order_date,
-      dueDate: po.due_date,
-      status: 'in_production',
-      // Add additional fields for compatibility
-      stockModelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
-      modelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
-      fbOrderNumber: po.po_number,
-      isP1Order: true, // Flag to identify P1 orders
-      // Include full features/specifications for barcode labels
-      features: po.specifications || {},
-      actionLength: po.specifications?.actionLength || po.specifications?.action_length,
-    }));
-    
-    console.log(`📦 Retrieved ${regularOrders.length} regular orders and ${productionOrders.length} P1 production orders`);
-    
-    // Combine and return both types of orders
-    const allOrders = [...regularOrders, ...productionOrders];
+    // getAllOrders() already includes both regular orders and P1 production orders
+    const allOrders = await storage.getAllOrders();
     res.json(allOrders);
   } catch (error) {
     console.error('Error retrieving all orders:', error);

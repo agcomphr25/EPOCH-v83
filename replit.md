@@ -4,6 +4,9 @@
 
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. Its primary goal is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The system is a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. Key capabilities include a robust Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System. The business vision is to be the leading ERP solution for small-to-medium customizable product manufacturers.
 
+## Recent Changes
+**2025-11-13**: Fixed P1 PO order duplication in /api/orders/all endpoint. The endpoint was querying production_orders table separately and merging with getAllOrders() results, causing all P1 PO items to appear twice in API responses. Resolved by removing redundant database query since getAllOrders() already includes both regular and production orders. Also removed abandoned orderReferenceTables seeding code that caused startup errors (departments/statuses are managed via enums, not database tables).
+
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.

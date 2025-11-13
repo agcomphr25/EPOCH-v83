@@ -6,12 +6,18 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 
 ## Recent Changes
 **2025-11-13**: 
+- **Nonconformance Disposition Workflow Restored**: Fully implemented disposition-specific workflows in nonconformance tracking.
+  - "Repair" disposition now shows blue-highlighted section with required Repair Department dropdown (Layup/CNC/Paint/Finish QC/Assembly/Hardware) and Repair Notes textarea. Department selection is required and enforced via client + server validation.
+  - "Use As Is" disposition shows green-highlighted section with "Add to RTS Inventory" checkbox. When checked, system automatically creates RTS inventory entry with status='AVAILABLE' and prevents duplicate entries.
+  - Backend creates RTS inventory entries on POST/PUT when addedToRts=true and disposition="Use As Is", setting rtsAddedAt timestamp.
+  - Repair notes are displayed in department queue order cards via existing useRepairOrders hook.
+  - Frontend validation prevents submission without repair department when required.
+  - Backend validation uses Zod .refine() to enforce repairDepartment requirement for "Repair" disposition.
+  
 - Fixed P1 PO order duplication in /api/orders/all endpoint. The endpoint was querying production_orders table separately and merging with getAllOrders() results, causing all P1 PO items to appear twice in API responses. Resolved by removing redundant database query since getAllOrders() already includes both regular and production orders.
 - Removed abandoned orderReferenceTables seeding code that caused startup errors (departments/statuses are managed via enums, not database tables).
 - Fixed vendor dropdown in Inventory Items form showing only 10 vendors instead of all 22. The /api/vendors endpoint has pagination (default pageSize=10, max=200), but the inventory form was calling it without parameters. Updated InventoryItemsCard to request pageSize=200 to display all vendors in the dropdown.
-
 - Added "Cutting Table" to department selection dropdown in Inventory Items form for better categorization of parts used in that department.
-
 - Enhanced Vendor Management modal: Dialog title now displays "Edit Vendor: [Vendor Name]" for clarity, while tab labels remain clean without vendor name to reduce crowding.
 - Fixed monthly vendor evaluation score validation: Changed from `if (numValue && ...)` to `if (numValue !== null && ...)` to properly reject scores of 0 (database constraint requires 1-5 range).
 - Implemented batch save for monthly vendor evaluations: Replaced immediate save-on-blur with pending changes tracking. Cells with unsaved changes show yellow highlight, and "Save All" and "Discard Changes" buttons appear when there are pending edits. This improves UX by reducing API calls and allowing multi-field editing before commit.

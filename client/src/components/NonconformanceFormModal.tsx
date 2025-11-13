@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   createRecord,
   updateRecord,
@@ -56,6 +57,15 @@ const authorizationOptions = [
   'Quality Manager',
 ];
 
+const repairDepartmentOptions = [
+  'Layup',
+  'CNC',
+  'Paint',
+  'Finish QC',
+  'Assembly',
+  'Hardware',
+];
+
 interface NonconformanceFormModalProps {
   open: boolean;
   onClose: () => void;
@@ -89,6 +99,9 @@ export default function NonconformanceFormModal({
     dispositionDate: new Date().toISOString().split('T')[0],
     notes: '',
     status: 'Open',
+    repairDepartment: '',
+    repairNotes: '',
+    addedToRts: false,
   });
 
   // Load record for edit
@@ -110,6 +123,9 @@ export default function NonconformanceFormModal({
           new Date().toISOString().split('T')[0],
         notes: recordToEdit.notes || '',
         status: recordToEdit.status || 'Open',
+        repairDepartment: recordToEdit.repairDepartment || '',
+        repairNotes: recordToEdit.repairNotes || '',
+        addedToRts: recordToEdit.addedToRts || false,
       });
     }
   }, [recordToEdit, isEdit]);
@@ -188,6 +204,16 @@ export default function NonconformanceFormModal({
       toast({
         title: 'Validation Error',
         description: 'Please provide either an Order ID or Serial Number',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate repair department when disposition is "Repair"
+    if (form.disposition === 'Repair' && !form.repairDepartment) {
+      toast({
+        title: 'Validation Error',
+        description: 'Repair Department is required when disposition is "Repair"',
         variant: 'destructive',
       });
       return;
@@ -448,6 +474,69 @@ export default function NonconformanceFormModal({
               </Select>
             </div>
           </div>
+
+          {/* Conditional Repair Fields */}
+          {form.disposition === 'Repair' && (
+            <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg space-y-4 border-2 border-blue-200 dark:border-blue-800">
+              <h3 className="font-semibold text-blue-900 dark:text-blue-100">
+                Repair Details
+              </h3>
+              <div className="space-y-2">
+                <Label>Repair Department *</Label>
+                <Select
+                  value={form.repairDepartment}
+                  onValueChange={(value) =>
+                    setForm({ ...form, repairDepartment: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select department..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {repairDepartmentOptions.map((dept) => (
+                      <SelectItem key={dept} value={dept}>
+                        {dept}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Repair Notes</Label>
+                <Textarea
+                  value={form.repairNotes}
+                  onChange={(e) =>
+                    setForm({ ...form, repairNotes: e.target.value })
+                  }
+                  placeholder="Describe what needs to be repaired..."
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Conditional Use As Is Fields */}
+          {form.disposition === 'Use As Is' && (
+            <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg space-y-4 border-2 border-green-200 dark:border-green-800">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="addToRts"
+                  checked={form.addedToRts}
+                  onCheckedChange={(checked) =>
+                    setForm({ ...form, addedToRts: checked === true })
+                  }
+                />
+                <Label htmlFor="addToRts" className="font-semibold text-green-900 dark:text-green-100">
+                  Add to RTS Inventory
+                </Label>
+              </div>
+              {form.addedToRts && (
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  This item will be added to Ready-To-Ship inventory as AVAILABLE
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Disposition Date</Label>

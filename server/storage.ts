@@ -3470,27 +3470,39 @@ export class DatabaseStorage implements IStorage {
         .orderBy(asc(productionOrders.dueDate), asc(productionOrders.createdAt));
 
       // Normalize production orders to match AllOrder shape
-      const normalizedProductionOrders = productionOrdersResults.map((po) => ({
-        id: po.id,
-        orderId: po.orderId,
-        orderDate: po.orderDate,
-        dueDate: po.dueDate,
-        customerId: po.customerId,
-        customerName: po.customerName,
-        customer: po.customerName || customerMap.get(po.customerId) || 'Unknown Customer',
-        customerPO: po.poNumber,
-        fbOrderNumber: null,
-        agrOrderDetails: null,
-        isCustomOrder: null,
-        modelId: po.itemId, // Map itemId to modelId for consistency
-        itemId: po.itemId, // Keep itemId for P1 PO identification
-        itemName: po.itemName, // Keep itemName for display
-        productName: po.itemName || stockModelMap.get(po.itemId || '') || po.itemId || 'Unknown Product',
-        stockModelId: po.itemId,
-        handedness: null,
-        shankLength: null,
-        features: null,
-        featureQuantities: null,
+      const normalizedProductionOrders = productionOrdersResults.map((po) => {
+        // Parse specifications JSON to extract features and other fields
+        let parsedSpecs = null;
+        try {
+          parsedSpecs = typeof po.specifications === 'string' 
+            ? JSON.parse(po.specifications) 
+            : po.specifications;
+        } catch (error) {
+          console.error(`Failed to parse specifications for production order ${po.orderId}:`, error);
+          parsedSpecs = null;
+        }
+        
+        return {
+          id: po.id,
+          orderId: po.orderId,
+          orderDate: po.orderDate,
+          dueDate: po.dueDate,
+          customerId: po.customerId,
+          customerName: po.customerName,
+          customer: po.customerName || customerMap.get(po.customerId) || 'Unknown Customer',
+          customerPO: po.poNumber,
+          fbOrderNumber: null,
+          agrOrderDetails: null,
+          isCustomOrder: null,
+          modelId: po.itemId, // Map itemId to modelId for consistency
+          itemId: po.itemId, // Keep itemId for P1 PO identification
+          itemName: po.itemName, // Keep itemName for display
+          productName: po.itemName || stockModelMap.get(po.itemId || '') || po.itemId || 'Unknown Product',
+          stockModelId: po.itemId,
+          handedness: parsedSpecs?.handedness ?? null,
+          shankLength: parsedSpecs?.shank_length ?? null,
+          features: parsedSpecs?.features ?? null,
+          featureQuantities: null,
         discountCode: null,
         notes: po.notes,
         customDiscountType: null,
@@ -3537,7 +3549,8 @@ export class DatabaseStorage implements IStorage {
         priorityScore: 50, // Default priority
         isManualUrgency: false,
         priority: 50,
-      })) as any;
+        };
+      }) as any;
 
       // Merge regular orders and production orders
       const allDepartmentOrders = [...enrichedOrders, ...normalizedProductionOrders];

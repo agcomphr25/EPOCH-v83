@@ -73,7 +73,8 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(import.meta.dirname, 'public');
+  // Production build output is in dist/ folder (created by vite build)
+  const distPath = path.resolve(process.cwd(), 'dist');
 
   if (!fs.existsSync(distPath)) {
     throw new Error(

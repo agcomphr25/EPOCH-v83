@@ -51,12 +51,11 @@ console.log('🔒 CORS Configuration:', {
 app.use(cors(corsOptions));
 
 // Serve attached assets (PDFs, documents, etc.) - Must be before other routes
-// In production, assets are copied to dist/attached_assets
+// In production, assets are copied to dist/attached_assets via build script
 // In development, assets are in the root attached_assets folder
-const assetsPath =
-  process.env.NODE_ENV === 'production'
-    ? path.join(import.meta.dirname, 'attached_assets')
-    : path.join(process.cwd(), 'attached_assets');
+const assetsPath = process.env.NODE_ENV === 'production'
+  ? path.join(process.cwd(), 'dist', 'attached_assets')
+  : path.join(process.cwd(), 'attached_assets');
 
 console.log('📁 Assets path configuration:', {
   NODE_ENV: process.env.NODE_ENV,

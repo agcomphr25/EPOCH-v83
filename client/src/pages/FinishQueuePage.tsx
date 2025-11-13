@@ -270,6 +270,9 @@ export default function FinishQueuePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
       queryClient.invalidateQueries({
+        queryKey: ['/api/orders/department/Finish'],
+      });
+      queryClient.invalidateQueries({
         queryKey: ['/api/orders/department', 'Finish QC'],
       });
       toast.success(
@@ -306,6 +309,9 @@ export default function FinishQueuePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/orders/department/Finish'],
+      });
       queryClient.invalidateQueries({
         queryKey: ['/api/orders/department', 'Finish QC'],
       });

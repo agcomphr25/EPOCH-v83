@@ -5,6 +5,7 @@ import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import importPlugin from 'eslint-plugin-import';
 import prettier from 'eslint-plugin-prettier';
+import globals from 'globals';
 
 export default [
   js.configs.recommended,
@@ -27,15 +28,8 @@ export default [
         },
       },
       globals: {
-        console: 'readonly',
-        process: 'readonly',
-        Buffer: 'readonly',
-        __dirname: 'readonly',
-        __filename: 'readonly',
-        global: 'readonly',
-        module: 'readonly',
-        require: 'readonly',
-        exports: 'readonly',
+        ...globals.browser,
+        ...globals.node,
       },
     },
     settings: {

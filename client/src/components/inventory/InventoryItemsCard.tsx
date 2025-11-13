@@ -1,5 +1,24 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Download,
+  Upload,
+  Search,
+  Package,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Calculator,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { Link } from 'wouter';
+import type { InventoryItem, ItemGroup } from '@shared/schema';
+
+import InventoryItemCostHistory from './InventoryItemCostHistory';
+
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,10 +39,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Download, Upload, Search, Package, MoreHorizontal, ArrowUpDown, ArrowUp, ArrowDown, Calculator } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { Link } from 'wouter';
-import type { InventoryItem, ItemGroup } from '@shared/schema';
 import {
   Tooltip,
   TooltipContent,
@@ -31,7 +46,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import InventoryItemCostHistory from './InventoryItemCostHistory';
 import { calculateCOGS } from '@/lib/unitConversion';
 import { parseLeadTimeToDays } from '@/utils/leadTimeUtils';
 
@@ -89,9 +103,13 @@ const InventoryForm = ({
   isCreatePending: boolean;
   isUpdatePending: boolean;
   onCancel: () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vendors: any[];
 }) => (
-  <form onSubmit={onSubmit} className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+  <form
+    onSubmit={onSubmit}
+    className="space-y-6 max-h-[70vh] overflow-y-auto pr-2"
+  >
     {/* Basic Information Section */}
     <div className="space-y-4">
       <h4 className="text-md font-semibold border-b pb-2">Basic Information</h4>
@@ -150,7 +168,9 @@ const InventoryForm = ({
           <Checkbox
             id="isStockItem"
             checked={formData.isStockItem}
-            onCheckedChange={(checked) => onCheckboxChange('isStockItem', checked as boolean)}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('isStockItem', checked as boolean)
+            }
             data-testid="checkbox-isStockItem"
           />
           <Label htmlFor="isStockItem" className="cursor-pointer">
@@ -162,7 +182,9 @@ const InventoryForm = ({
 
     {/* Supplier Information Section */}
     <div className="space-y-4">
-      <h4 className="text-md font-semibold border-b pb-2">Supplier Information</h4>
+      <h4 className="text-md font-semibold border-b pb-2">
+        Supplier Information
+      </h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="vendorId">Vendor</Label>
@@ -175,11 +197,12 @@ const InventoryForm = ({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">None</SelectItem>
-              {Array.isArray(vendors) && vendors.map((vendor) => (
-                <SelectItem key={vendor.id} value={vendor.id.toString()}>
-                  {vendor.name}
-                </SelectItem>
-              ))}
+              {Array.isArray(vendors) &&
+                vendors.map((vendor) => (
+                  <SelectItem key={vendor.id} value={vendor.id.toString()}>
+                    {vendor.name}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>
@@ -217,7 +240,9 @@ const InventoryForm = ({
           />
         </div>
         <div>
-          <Label htmlFor="secondarySupplierPartNumber">Secondary Supplier Part #</Label>
+          <Label htmlFor="secondarySupplierPartNumber">
+            Secondary Supplier Part #
+          </Label>
           <Input
             id="secondarySupplierPartNumber"
             name="secondarySupplierPartNumber"
@@ -232,7 +257,9 @@ const InventoryForm = ({
 
     {/* Cost & Quantity Information Section */}
     <div className="space-y-4">
-      <h4 className="text-md font-semibold border-b pb-2">Cost & Quantity (MRP/COGS)</h4>
+      <h4 className="text-md font-semibold border-b pb-2">
+        Cost & Quantity (MRP/COGS)
+      </h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="costPer">Purchase Cost ($)</Label>
@@ -246,7 +273,9 @@ const InventoryForm = ({
             placeholder="491.20"
             data-testid="input-costPer"
           />
-          <p className="text-xs text-gray-500 mt-1">Cost from vendor (e.g., $491.20 for 80lb box)</p>
+          <p className="text-xs text-gray-500 mt-1">
+            Cost from vendor (e.g., $491.20 for 80lb box)
+          </p>
         </div>
         <div>
           <Label htmlFor="vendorUnit">Vendor Unit</Label>
@@ -275,7 +304,9 @@ const InventoryForm = ({
               <SelectItem value="M">M</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-gray-500 mt-1">Machine-friendly unit (e.g., "BOX", "GAL", "EA")</p>
+          <p className="text-xs text-gray-500 mt-1">
+            Machine-friendly unit (e.g., "BOX", "GAL", "EA")
+          </p>
         </div>
         <div>
           <Label htmlFor="purchaseUnit">Purchase Unit</Label>
@@ -308,7 +339,9 @@ const InventoryForm = ({
               <SelectItem value="sq in">sq in (square inch)</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-gray-500 mt-1">Unit of measurement (e.g., "g", "oz", "ea")</p>
+          <p className="text-xs text-gray-500 mt-1">
+            Unit of measurement (e.g., "g", "oz", "ea")
+          </p>
         </div>
         <div>
           <Label htmlFor="purchaseQuantity">Purchase Quantity</Label>
@@ -322,7 +355,9 @@ const InventoryForm = ({
             placeholder="80"
             data-testid="input-purchaseQuantity"
           />
-          <p className="text-xs text-gray-500 mt-1">Quantity per vendor unit (e.g., 80)</p>
+          <p className="text-xs text-gray-500 mt-1">
+            Quantity per vendor unit (e.g., 80)
+          </p>
         </div>
         <div>
           <Label htmlFor="consumptionRate">Consumption Rate</Label>
@@ -369,7 +404,9 @@ const InventoryForm = ({
               <SelectItem value="sq in">sq in (square inch)</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-gray-500 mt-1">Unit of measurement (e.g., "g", "oz", "ea")</p>
+          <p className="text-xs text-gray-500 mt-1">
+            Unit of measurement (e.g., "g", "oz", "ea")
+          </p>
         </div>
         <div>
           <div className="flex items-center gap-2">
@@ -395,7 +432,9 @@ const InventoryForm = ({
             placeholder="0.68"
             data-testid="input-cogsPerUnit"
           />
-          <p className="text-xs text-gray-500 mt-1">Auto-calculated or manually editable</p>
+          <p className="text-xs text-gray-500 mt-1">
+            Auto-calculated or manually editable
+          </p>
         </div>
         <div>
           <Label htmlFor="orderDate">Order Date</Label>
@@ -413,13 +452,17 @@ const InventoryForm = ({
 
     {/* Production Line Utilization Section */}
     <div className="space-y-4">
-      <h4 className="text-md font-semibold border-b pb-2">Production Line Utilization</h4>
+      <h4 className="text-md font-semibold border-b pb-2">
+        Production Line Utilization
+      </h4>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div className="flex items-center space-x-2">
           <Checkbox
             id="utilizedInPL1"
             checked={formData.utilizedInPL1}
-            onCheckedChange={(checked) => onCheckboxChange('utilizedInPL1', checked as boolean)}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('utilizedInPL1', checked as boolean)
+            }
             data-testid="checkbox-utilizedInPL1"
           />
           <Label htmlFor="utilizedInPL1" className="cursor-pointer">
@@ -430,7 +473,9 @@ const InventoryForm = ({
           <Checkbox
             id="utilizedInPL2"
             checked={formData.utilizedInPL2}
-            onCheckedChange={(checked) => onCheckboxChange('utilizedInPL2', checked as boolean)}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('utilizedInPL2', checked as boolean)
+            }
             data-testid="checkbox-utilizedInPL2"
           />
           <Label htmlFor="utilizedInPL2" className="cursor-pointer">
@@ -442,7 +487,9 @@ const InventoryForm = ({
             <Checkbox
               id="traceabilityRequired"
               checked={formData.traceabilityRequired}
-              onCheckedChange={(checked) => onCheckboxChange('traceabilityRequired', checked as boolean)}
+              onCheckedChange={(checked) =>
+                onCheckboxChange('traceabilityRequired', checked as boolean)
+              }
               data-testid="checkbox-traceabilityRequired"
             />
             <Label htmlFor="traceabilityRequired" className="cursor-pointer">
@@ -454,7 +501,9 @@ const InventoryForm = ({
           <Checkbox
             id="utilizedInFacilities"
             checked={formData.utilizedInFacilities}
-            onCheckedChange={(checked) => onCheckboxChange('utilizedInFacilities', checked as boolean)}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('utilizedInFacilities', checked as boolean)
+            }
             data-testid="checkbox-utilizedInFacilities"
           />
           <Label htmlFor="utilizedInFacilities" className="cursor-pointer">
@@ -465,7 +514,9 @@ const InventoryForm = ({
           <Checkbox
             id="utilizedInAdmin"
             checked={formData.utilizedInAdmin}
-            onCheckedChange={(checked) => onCheckboxChange('utilizedInAdmin', checked as boolean)}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('utilizedInAdmin', checked as boolean)
+            }
             data-testid="checkbox-utilizedInAdmin"
           />
           <Label htmlFor="utilizedInAdmin" className="cursor-pointer">
@@ -476,7 +527,9 @@ const InventoryForm = ({
           <Checkbox
             id="utilizedInServices"
             checked={formData.utilizedInServices}
-            onCheckedChange={(checked) => onCheckboxChange('utilizedInServices', checked as boolean)}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('utilizedInServices', checked as boolean)
+            }
             data-testid="checkbox-utilizedInServices"
           />
           <Label htmlFor="utilizedInServices" className="cursor-pointer">
@@ -488,7 +541,9 @@ const InventoryForm = ({
 
     {/* Additional Information Section */}
     <div className="space-y-4">
-      <h4 className="text-md font-semibold border-b pb-2">Additional Information</h4>
+      <h4 className="text-md font-semibold border-b pb-2">
+        Additional Information
+      </h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="department">Department</Label>
@@ -521,7 +576,9 @@ const InventoryForm = ({
             placeholder="e.g., 3 days, 4 weeks, 2 months"
             data-testid="input-leadTimeDays"
           />
-          <p className="text-xs text-gray-500 mt-1">Lead time for forecasting/MRP calculations</p>
+          <p className="text-xs text-gray-500 mt-1">
+            Lead time for forecasting/MRP calculations
+          </p>
         </div>
         <div className="md:col-span-2">
           <Label htmlFor="notes">Notes</Label>
@@ -539,10 +596,19 @@ const InventoryForm = ({
     </div>
 
     <div className="flex justify-end space-x-2 pt-4 border-t">
-      <Button type="button" variant="outline" onClick={onCancel} data-testid="button-cancel">
+      <Button
+        type="button"
+        variant="outline"
+        onClick={onCancel}
+        data-testid="button-cancel"
+      >
         Cancel
       </Button>
-      <Button type="submit" disabled={isCreatePending || isUpdatePending} data-testid="button-submit">
+      <Button
+        type="submit"
+        disabled={isCreatePending || isUpdatePending}
+        data-testid="button-submit"
+      >
         {editingItem ? 'Update' : 'Create'} Item
       </Button>
     </div>
@@ -562,13 +628,14 @@ export default function InventoryItemsCard() {
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [isAddToGroupDialogOpen, setIsAddToGroupDialogOpen] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
-  
+
   // Sorting state
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  
+
   // Bulk update utilized fields state
-  const [isBulkUtilizedDialogOpen, setIsBulkUtilizedDialogOpen] = useState(false);
+  const [isBulkUtilizedDialogOpen, setIsBulkUtilizedDialogOpen] =
+    useState(false);
   const [bulkUtilizedFields, setBulkUtilizedFields] = useState({
     utilizedInPL1: false,
     utilizedInPL2: false,
@@ -610,41 +677,69 @@ export default function InventoryItemsCard() {
 
   // Auto-calculate COGS per unit when conversion data changes
   useEffect(() => {
-    const { costPer, purchaseQuantity, purchaseUnit, consumptionRate, usageUnit } = formData;
-    
+    const {
+      costPer,
+      purchaseQuantity,
+      purchaseUnit,
+      consumptionRate,
+      usageUnit,
+    } = formData;
+
     // Only calculate if we have all required fields
-    if (costPer && purchaseQuantity && purchaseUnit && consumptionRate && usageUnit) {
+    if (
+      costPer &&
+      purchaseQuantity &&
+      purchaseUnit &&
+      consumptionRate &&
+      usageUnit
+    ) {
       const vendorPrice = parseFloat(costPer);
       const purQty = parseFloat(purchaseQuantity);
       const consRate = parseFloat(consumptionRate);
-      
-      const calculatedCOGS = calculateCOGS(vendorPrice, purQty, purchaseUnit, consRate, usageUnit);
-      
+
+      const calculatedCOGS = calculateCOGS(
+        vendorPrice,
+        purQty,
+        purchaseUnit,
+        consRate,
+        usageUnit
+      );
+
       if (calculatedCOGS !== null && !isNaN(calculatedCOGS)) {
         // Only update if the calculated value is different (to avoid infinite loops)
-        const currentCOGS = formData.cogsPerUnit ? parseFloat(formData.cogsPerUnit) : 0;
+        const currentCOGS = formData.cogsPerUnit
+          ? parseFloat(formData.cogsPerUnit)
+          : 0;
         const roundedCOGS = Math.round(calculatedCOGS * 100) / 100; // Round to 2 decimal places
-        
+
         if (Math.abs(currentCOGS - roundedCOGS) > 0.001) {
-          setFormData(prev => ({
+          setFormData((prev) => ({
             ...prev,
-            cogsPerUnit: roundedCOGS.toFixed(2)
+            cogsPerUnit: roundedCOGS.toFixed(2),
           }));
         }
       }
     }
-  }, [formData.costPer, formData.purchaseQuantity, formData.purchaseUnit, formData.consumptionRate, formData.usageUnit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    formData.costPer,
+    formData.purchaseQuantity,
+    formData.purchaseUnit,
+    formData.consumptionRate,
+    formData.usageUnit,
+  ]);
 
   const { data: allItems = [], isLoading } = useQuery<InventoryItem[]>({
     queryKey: ['/api/enhanced/inventory/items'],
     queryFn: () => apiRequest('/api/enhanced/inventory/items'),
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: vendorsResponse } = useQuery<{ data: any[] }>({
     queryKey: ['/api/vendors'],
     queryFn: () => apiRequest('/api/vendors?pageSize=200'),
   });
-  
+
   const vendors = vendorsResponse?.data || [];
 
   // Fetch all item groups
@@ -675,23 +770,23 @@ export default function InventoryItemsCard() {
           // Search filter
           if (searchTerm.trim()) {
             const searchLower = searchTerm.toLowerCase();
-            const matchesSearch = (
+            const matchesSearch =
               item.agPartNumber.toLowerCase().includes(searchLower) ||
               item.name.toLowerCase().includes(searchLower) ||
               (item.sku && item.sku.toLowerCase().includes(searchLower)) ||
-              (item.source && item.source.toLowerCase().includes(searchLower)) ||
+              (item.source &&
+                item.source.toLowerCase().includes(searchLower)) ||
               (item.supplierPartNumber &&
                 item.supplierPartNumber.toLowerCase().includes(searchLower)) ||
               (item.department &&
                 item.department.toLowerCase().includes(searchLower)) ||
-              (item.notes && item.notes.toLowerCase().includes(searchLower))
-            );
+              (item.notes && item.notes.toLowerCase().includes(searchLower));
             if (!matchesSearch) return false;
           }
-          
+
           // Utilized filter
           if (utilizedFilter !== 'all') {
-            switch(utilizedFilter) {
+            switch (utilizedFilter) {
               case 'pl1':
                 return item.utilizedInPL1;
               case 'pl2':
@@ -706,15 +801,17 @@ export default function InventoryItemsCard() {
                 return true;
             }
           }
-          
+
           return true;
         })
         .sort((a, b) => {
           if (!sortColumn) return 0;
-          
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           let aValue: any;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           let bValue: any;
-          
+
           switch (sortColumn) {
             case 'agPartNumber':
               aValue = a.agPartNumber || '';
@@ -747,7 +844,7 @@ export default function InventoryItemsCard() {
             default:
               return 0;
           }
-          
+
           if (typeof aValue === 'string') {
             const comparison = aValue.localeCompare(bValue);
             return sortDirection === 'asc' ? comparison : -comparison;
@@ -759,6 +856,7 @@ export default function InventoryItemsCard() {
     : [];
 
   const createMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: (data: any) =>
       apiRequest('/api/enhanced/inventory/items', {
         method: 'POST',
@@ -776,6 +874,7 @@ export default function InventoryItemsCard() {
   });
 
   const updateMutation = useMutation({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       apiRequest(`/api/enhanced/inventory/items/${id}`, {
         method: 'PUT',
@@ -847,10 +946,13 @@ export default function InventoryItemsCard() {
     try {
       const csvData = await importFile.text();
 
-      const response = await apiRequest('/api/enhanced/inventory/import/csv?replaceAll=' + replaceAllItems, {
-        method: 'POST',
-        body: { csvData },
-      });
+      const response = await apiRequest(
+        '/api/enhanced/inventory/import/csv?replaceAll=' + replaceAllItems,
+        {
+          method: 'POST',
+          body: { csvData },
+        }
+      );
 
       if (response.success) {
         const message = `Successfully imported ${response.importedCount} items${response.skippedCount ? ` (${response.skippedCount} rows skipped)` : ''}`;
@@ -860,7 +962,9 @@ export default function InventoryItemsCard() {
           console.warn('Import errors:', response.errors);
           const errorMessage =
             response.errors.slice(0, 3).join(', ') +
-            (response.errors.length > 3 ? ` and ${response.errors.length - 3} more...` : '');
+            (response.errors.length > 3
+              ? ` and ${response.errors.length - 3} more...`
+              : '');
           toast.error(
             `${response.errors.length} rows had errors: ${errorMessage}`,
             { duration: 6000 }
@@ -887,7 +991,7 @@ export default function InventoryItemsCard() {
         // Handle validation errors from backend
         const errorMsg = response.error || 'Import failed';
         toast.error(errorMsg, { duration: 8000 });
-        
+
         if (response.validationErrors && response.validationErrors.length > 0) {
           console.error('Validation errors:', response.validationErrors);
           const details = response.validationErrors.slice(0, 5).join('\n');
@@ -969,17 +1073,27 @@ export default function InventoryItemsCard() {
         name: formData.name,
         type: formData.type || 'Purchased',
         source: formData.source || null,
-        vendorId: formData.vendorId && formData.vendorId !== 'none' ? parseInt(formData.vendorId) : null,
+        vendorId:
+          formData.vendorId && formData.vendorId !== 'none'
+            ? parseInt(formData.vendorId)
+            : null,
         supplierPartNumber: formData.supplierPartNumber || null,
-        secondarySupplierPartNumber: formData.secondarySupplierPartNumber || null,
+        secondarySupplierPartNumber:
+          formData.secondarySupplierPartNumber || null,
         costPer: formData.costPer ? parseFloat(formData.costPer) : null,
         vendorUnit: formData.vendorUnit || null,
         purchaseUnitLabel: formData.purchaseUnitLabel || null,
         purchaseUnit: formData.purchaseUnit || null,
-        purchaseQuantity: formData.purchaseQuantity ? parseFloat(formData.purchaseQuantity) : null,
-        consumptionRate: formData.consumptionRate ? parseFloat(formData.consumptionRate) : null,
+        purchaseQuantity: formData.purchaseQuantity
+          ? parseFloat(formData.purchaseQuantity)
+          : null,
+        consumptionRate: formData.consumptionRate
+          ? parseFloat(formData.consumptionRate)
+          : null,
         usageUnit: formData.usageUnit || null,
-        cogsPerUnit: formData.cogsPerUnit ? parseFloat(formData.cogsPerUnit) : null,
+        cogsPerUnit: formData.cogsPerUnit
+          ? parseFloat(formData.cogsPerUnit)
+          : null,
         orderDate: formData.orderDate || null,
         department: formData.department || null,
         leadTimeDays: parseLeadTimeToDays(formData.leadTimeDays),
@@ -1018,8 +1132,12 @@ export default function InventoryItemsCard() {
       vendorUnit: item.vendorUnit || '',
       purchaseUnitLabel: item.purchaseUnitLabel || '',
       purchaseUnit: item.purchaseUnit || '',
-      purchaseQuantity: item.purchaseQuantity ? item.purchaseQuantity.toString() : '',
-      consumptionRate: item.consumptionRate ? item.consumptionRate.toString() : '',
+      purchaseQuantity: item.purchaseQuantity
+        ? item.purchaseQuantity.toString()
+        : '',
+      consumptionRate: item.consumptionRate
+        ? item.consumptionRate.toString()
+        : '',
       usageUnit: item.usageUnit || '',
       cogsPerUnit: item.cogsPerUnit ? item.cogsPerUnit.toString() : '',
       orderDate: item.orderDate
@@ -1063,13 +1181,19 @@ export default function InventoryItemsCard() {
     if (selectedItems.size === items.length) {
       setSelectedItems(new Set());
     } else {
-      setSelectedItems(new Set(items.map(item => item.id)));
+      setSelectedItems(new Set(items.map((item) => item.id)));
     }
   };
 
   // Add items to group mutation
   const addToGroupMutation = useMutation({
-    mutationFn: async ({ groupId, itemIds }: { groupId: number; itemIds: number[] }) => {
+    mutationFn: async ({
+      groupId,
+      itemIds,
+    }: {
+      groupId: number;
+      itemIds: number[];
+    }) => {
       await apiRequest(`/api/inventory/groups/${groupId}/items`, {
         method: 'POST',
         body: JSON.stringify({ itemIds }),
@@ -1081,8 +1205,12 @@ export default function InventoryItemsCard() {
       setSelectedGroupId('');
       setSelectedItems(new Set());
       // Invalidate both the items-groups map and the base items query to update the UI
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/items-groups-map'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/inventory/items-groups-map'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/enhanced/inventory/items'],
+      });
     },
     onError: () => {
       toast.error('Failed to add items to group');
@@ -1094,7 +1222,7 @@ export default function InventoryItemsCard() {
       toast.error('Please select a group');
       return;
     }
-    
+
     if (selectedItems.size === 0) {
       toast.error('Please select at least one item');
       return;
@@ -1108,7 +1236,14 @@ export default function InventoryItemsCard() {
 
   // Bulk update utilized fields mutation
   const bulkUpdateUtilizedMutation = useMutation({
-    mutationFn: async ({ itemIds, utilizedFields }: { itemIds: number[]; utilizedFields: any }) => {
+    mutationFn: async ({
+      itemIds,
+      utilizedFields,
+    }: {
+      itemIds: number[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      utilizedFields: any;
+    }) => {
       await apiRequest('/api/enhanced/items/bulk-update-utilized', {
         method: 'POST',
         body: { itemIds, utilizedFields },
@@ -1125,7 +1260,9 @@ export default function InventoryItemsCard() {
         utilizedInServices: false,
       });
       setSelectedItems(new Set());
-      queryClient.invalidateQueries({ queryKey: ['/api/enhanced/inventory/items'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/enhanced/inventory/items'],
+      });
     },
     onError: () => {
       toast.error('Failed to update items');
@@ -1161,7 +1298,12 @@ export default function InventoryItemsCard() {
         <div className="flex items-center gap-4">
           <h3 className="text-lg font-semibold">Inventory Items</h3>
           <Link href="/manage-groups">
-            <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700" data-testid="link-manage-groups">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-blue-600 hover:text-blue-700"
+              data-testid="link-manage-groups"
+            >
               <Package className="h-4 w-4 mr-2" />
               Manage Groups
             </Button>
@@ -1179,7 +1321,7 @@ export default function InventoryItemsCard() {
                 <Package className="h-4 w-4" />
                 Add to Group ({selectedItems.size})
               </Button>
-              
+
               <Button
                 variant="secondary"
                 onClick={() => setIsBulkUtilizedDialogOpen(true)}
@@ -1190,7 +1332,7 @@ export default function InventoryItemsCard() {
               </Button>
             </>
           )}
-          
+
           <Button
             variant="outline"
             onClick={handleExportCSV}
@@ -1264,29 +1406,40 @@ export default function InventoryItemsCard() {
                 Selected file: {importFile.name}
               </p>
             )}
-            
+
             <div className="flex items-start space-x-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
               <Checkbox
                 id="replaceAllItems"
                 checked={replaceAllItems}
-                onCheckedChange={(checked) => setReplaceAllItems(checked as boolean)}
+                onCheckedChange={(checked) =>
+                  setReplaceAllItems(checked as boolean)
+                }
                 data-testid="checkbox-replace-all"
               />
               <div className="flex-1">
-                <Label htmlFor="replaceAllItems" className="cursor-pointer font-semibold text-blue-800 dark:text-blue-200">
+                <Label
+                  htmlFor="replaceAllItems"
+                  className="cursor-pointer font-semibold text-blue-800 dark:text-blue-200"
+                >
                   Update all items from CSV
                 </Label>
                 <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                  ℹ️ This will update existing items (matched by AG Part#) and add new ones. Nothing will be deleted, so BOMs and other references remain intact.
+                  ℹ️ This will update existing items (matched by AG Part#) and
+                  add new ones. Nothing will be deleted, so BOMs and other
+                  references remain intact.
                 </p>
               </div>
             </div>
-            
+
             <div className="text-sm text-gray-500 space-y-1">
               <p className="font-semibold">Expected columns:</p>
-              <p>AG Part#, SKU, Name, Source, Supplier Part #, Cost per, Order Date, Notes, Utilized, Secondary Source</p>
+              <p>
+                AG Part#, SKU, Name, Source, Supplier Part #, Cost per, Order
+                Date, Notes, Utilized, Secondary Source
+              </p>
               <p className="text-xs italic mt-2">
-                The "Utilized" column will be parsed for PL1, PL2, Facilities, Admin, Services
+                The "Utilized" column will be parsed for PL1, PL2, Facilities,
+                Admin, Services
               </p>
             </div>
             <div className="flex justify-end space-x-2">
@@ -1307,7 +1460,11 @@ export default function InventoryItemsCard() {
               >
                 Cancel
               </Button>
-              <Button onClick={handleImportCSV} disabled={!importFile} data-testid="button-confirm-import">
+              <Button
+                onClick={handleImportCSV}
+                disabled={!importFile}
+                data-testid="button-confirm-import"
+              >
                 <Upload className="h-4 w-4 mr-2" />
                 Import
               </Button>
@@ -1328,7 +1485,7 @@ export default function InventoryItemsCard() {
             />
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
           </div>
-          
+
           <div className="w-48">
             <Select value={utilizedFilter} onValueChange={setUtilizedFilter}>
               <SelectTrigger data-testid="select-utilized-filter">
@@ -1345,12 +1502,19 @@ export default function InventoryItemsCard() {
             </Select>
           </div>
         </div>
-        
+
         {!isLoading && (
-          <div className="text-sm text-gray-600 dark:text-gray-400" data-testid="text-item-count">
-            Showing <span className="font-semibold">{items.length}</span> {items.length === 1 ? 'item' : 'items'}
+          <div
+            className="text-sm text-gray-600 dark:text-gray-400"
+            data-testid="text-item-count"
+          >
+            Showing <span className="font-semibold">{items.length}</span>{' '}
+            {items.length === 1 ? 'item' : 'items'}
             {allItems.length !== items.length && (
-              <span className="text-gray-500"> (filtered from {allItems.length} total)</span>
+              <span className="text-gray-500">
+                {' '}
+                (filtered from {allItems.length} total)
+              </span>
             )}
           </div>
         )}
@@ -1360,7 +1524,9 @@ export default function InventoryItemsCard() {
         <div className="text-center py-8">Loading inventory items...</div>
       ) : items.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
-          No inventory items found. {searchTerm && 'Try a different search term or '}Import your parts list to get started.
+          No inventory items found.{' '}
+          {searchTerm && 'Try a different search term or '}Import your parts
+          list to get started.
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -1369,60 +1535,94 @@ export default function InventoryItemsCard() {
               <tr className="bg-gray-50 dark:bg-gray-800">
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center w-12">
                   <Checkbox
-                    checked={selectedItems.size === items.length && items.length > 0}
+                    checked={
+                      selectedItems.size === items.length && items.length > 0
+                    }
                     onCheckedChange={toggleSelectAll}
                     data-testid="checkbox-select-all"
                   />
                 </th>
-                <th 
+                <th
                   className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => handleSort('agPartNumber')}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSort('agPartNumber')}
+                  onKeyDown={(e) =>
+                    e.key === 'Enter' && handleSort('agPartNumber')
+                  }
                   tabIndex={0}
                   role="button"
-                  aria-sort={sortColumn === 'agPartNumber' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  aria-sort={
+                    sortColumn === 'agPartNumber'
+                      ? sortDirection === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
                   data-testid="header-agPartNumber"
                 >
                   <div className="flex items-center gap-2">
                     AG Part#
                     {sortColumn === 'agPartNumber' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="h-4 w-4" />
+                      ) : (
+                        <ArrowDown className="h-4 w-4" />
+                      )
                     ) : (
                       <ArrowUpDown className="h-4 w-4 text-gray-400" />
                     )}
                   </div>
                 </th>
-                <th 
+                <th
                   className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => handleSort('sku')}
                   onKeyDown={(e) => e.key === 'Enter' && handleSort('sku')}
                   tabIndex={0}
                   role="button"
-                  aria-sort={sortColumn === 'sku' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  aria-sort={
+                    sortColumn === 'sku'
+                      ? sortDirection === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
                   data-testid="header-sku"
                 >
                   <div className="flex items-center gap-2">
                     SKU
                     {sortColumn === 'sku' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="h-4 w-4" />
+                      ) : (
+                        <ArrowDown className="h-4 w-4" />
+                      )
                     ) : (
                       <ArrowUpDown className="h-4 w-4 text-gray-400" />
                     )}
                   </div>
                 </th>
-                <th 
+                <th
                   className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => handleSort('name')}
                   onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
                   tabIndex={0}
                   role="button"
-                  aria-sort={sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  aria-sort={
+                    sortColumn === 'name'
+                      ? sortDirection === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
                   data-testid="header-name"
                 >
                   <div className="flex items-center gap-2">
                     Name
                     {sortColumn === 'name' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="h-4 w-4" />
+                      ) : (
+                        <ArrowDown className="h-4 w-4" />
+                      )
                     ) : (
                       <ArrowUpDown className="h-4 w-4 text-gray-400" />
                     )}
@@ -1431,73 +1631,117 @@ export default function InventoryItemsCard() {
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Groups
                 </th>
-                <th 
+                <th
                   className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => handleSort('source')}
                   onKeyDown={(e) => e.key === 'Enter' && handleSort('source')}
                   tabIndex={0}
                   role="button"
-                  aria-sort={sortColumn === 'source' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  aria-sort={
+                    sortColumn === 'source'
+                      ? sortDirection === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
                   data-testid="header-source"
                 >
                   <div className="flex items-center gap-2">
                     Source
                     {sortColumn === 'source' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="h-4 w-4" />
+                      ) : (
+                        <ArrowDown className="h-4 w-4" />
+                      )
                     ) : (
                       <ArrowUpDown className="h-4 w-4 text-gray-400" />
                     )}
                   </div>
                 </th>
-                <th 
+                <th
                   className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => handleSort('supplierPartNumber')}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSort('supplierPartNumber')}
+                  onKeyDown={(e) =>
+                    e.key === 'Enter' && handleSort('supplierPartNumber')
+                  }
                   tabIndex={0}
                   role="button"
-                  aria-sort={sortColumn === 'supplierPartNumber' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  aria-sort={
+                    sortColumn === 'supplierPartNumber'
+                      ? sortDirection === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
                   data-testid="header-supplierPartNumber"
                 >
                   <div className="flex items-center gap-2">
                     Supplier Part #
                     {sortColumn === 'supplierPartNumber' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="h-4 w-4" />
+                      ) : (
+                        <ArrowDown className="h-4 w-4" />
+                      )
                     ) : (
                       <ArrowUpDown className="h-4 w-4 text-gray-400" />
                     )}
                   </div>
                 </th>
-                <th 
+                <th
                   className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => handleSort('secondarySource')}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSort('secondarySource')}
+                  onKeyDown={(e) =>
+                    e.key === 'Enter' && handleSort('secondarySource')
+                  }
                   tabIndex={0}
                   role="button"
-                  aria-sort={sortColumn === 'secondarySource' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  aria-sort={
+                    sortColumn === 'secondarySource'
+                      ? sortDirection === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
                   data-testid="header-secondarySource"
                 >
                   <div className="flex items-center gap-2">
                     Secondary Source
                     {sortColumn === 'secondarySource' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="h-4 w-4" />
+                      ) : (
+                        <ArrowDown className="h-4 w-4" />
+                      )
                     ) : (
                       <ArrowUpDown className="h-4 w-4 text-gray-400" />
                     )}
                   </div>
                 </th>
-                <th 
+                <th
                   className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => handleSort('costPer')}
                   onKeyDown={(e) => e.key === 'Enter' && handleSort('costPer')}
                   tabIndex={0}
                   role="button"
-                  aria-sort={sortColumn === 'costPer' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  aria-sort={
+                    sortColumn === 'costPer'
+                      ? sortDirection === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
                   data-testid="header-costPer"
                 >
                   <div className="flex items-center gap-2">
                     Cost per
                     {sortColumn === 'costPer' ? (
-                      sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="h-4 w-4" />
+                      ) : (
+                        <ArrowDown className="h-4 w-4" />
+                      )
                     ) : (
                       <ArrowUpDown className="h-4 w-4 text-gray-400" />
                     )}
@@ -1516,7 +1760,7 @@ export default function InventoryItemsCard() {
                 const itemGroups = itemGroupsMap[item.id] || [];
                 const visibleGroups = itemGroups.slice(0, 3);
                 const remainingCount = itemGroups.length - 3;
-                
+
                 return (
                   <tr
                     key={item.id}
@@ -1576,72 +1820,77 @@ export default function InventoryItemsCard() {
                         {itemGroups.length === 0 && '-'}
                       </div>
                     </td>
-                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
-                    {item.source || '-'}
-                  </td>
-                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
-                    {item.supplierPartNumber || '-'}
-                  </td>
-                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
-                    {item.secondarySource || '-'}
-                  </td>
-                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
-                    {item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}
-                  </td>
-                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
-                    <div className="flex flex-wrap gap-1">
-                      {item.utilizedInPL1 && (
-                        <span className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 rounded">
-                          PL1
-                        </span>
-                      )}
-                      {item.utilizedInPL2 && (
-                        <span className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100 rounded">
-                          PL2
-                        </span>
-                      )}
-                      {item.utilizedInFacilities && (
-                        <span className="px-2 py-1 text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-100 rounded">
-                          Facilities
-                        </span>
-                      )}
-                      {item.utilizedInAdmin && (
-                        <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded">
-                          Admin
-                        </span>
-                      )}
-                      {item.utilizedInServices && (
-                        <span className="px-2 py-1 text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100 rounded">
-                          Services
-                        </span>
-                      )}
-                      {!item.utilizedInPL1 && !item.utilizedInPL2 && !item.utilizedInFacilities && !item.utilizedInAdmin && !item.utilizedInServices && '-'}
-                    </div>
-                  </td>
-                  <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(item)}
-                        title="Edit"
-                        data-testid={`button-edit-${item.id}`}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDelete(item.id)}
-                        disabled={deleteMutation.isPending}
-                        title="Delete"
-                        data-testid={`button-delete-${item.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                      {item.source || '-'}
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                      {item.supplierPartNumber || '-'}
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                      {item.secondarySource || '-'}
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                      {item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {item.utilizedInPL1 && (
+                          <span className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 rounded">
+                            PL1
+                          </span>
+                        )}
+                        {item.utilizedInPL2 && (
+                          <span className="px-2 py-1 text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100 rounded">
+                            PL2
+                          </span>
+                        )}
+                        {item.utilizedInFacilities && (
+                          <span className="px-2 py-1 text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-100 rounded">
+                            Facilities
+                          </span>
+                        )}
+                        {item.utilizedInAdmin && (
+                          <span className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 rounded">
+                            Admin
+                          </span>
+                        )}
+                        {item.utilizedInServices && (
+                          <span className="px-2 py-1 text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-100 rounded">
+                            Services
+                          </span>
+                        )}
+                        {!item.utilizedInPL1 &&
+                          !item.utilizedInPL2 &&
+                          !item.utilizedInFacilities &&
+                          !item.utilizedInAdmin &&
+                          !item.utilizedInServices &&
+                          '-'}
+                      </div>
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(item)}
+                          title="Edit"
+                          data-testid={`button-edit-${item.id}`}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDelete(item.id)}
+                          disabled={deleteMutation.isPending}
+                          title="Delete"
+                          data-testid={`button-delete-${item.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
                 );
               })}
             </tbody>
@@ -1681,7 +1930,7 @@ export default function InventoryItemsCard() {
           />
           {editingItem?.agPartNumber && (
             <div className="mt-6 border-t pt-6">
-              <InventoryItemCostHistory 
+              <InventoryItemCostHistory
                 agPartNumber={editingItem.agPartNumber}
                 currentCost={editingItem.latestCost || undefined}
                 vendorUnit={editingItem.vendorUnit || undefined}
@@ -1696,7 +1945,10 @@ export default function InventoryItemsCard() {
       </Dialog>
 
       {/* Add to Group Dialog */}
-      <Dialog open={isAddToGroupDialogOpen} onOpenChange={setIsAddToGroupDialogOpen}>
+      <Dialog
+        open={isAddToGroupDialogOpen}
+        onOpenChange={setIsAddToGroupDialogOpen}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Items to Group</DialogTitle>
@@ -1704,7 +1956,10 @@ export default function InventoryItemsCard() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="group-select">Select Group</Label>
-              <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
+              <Select
+                value={selectedGroupId}
+                onValueChange={setSelectedGroupId}
+              >
                 <SelectTrigger id="group-select" data-testid="select-group">
                   <SelectValue placeholder="Choose a group" />
                 </SelectTrigger>
@@ -1718,12 +1973,14 @@ export default function InventoryItemsCard() {
               </Select>
               {allGroups.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  No groups available. Create a group first from the Manage Groups page.
+                  No groups available. Create a group first from the Manage
+                  Groups page.
                 </p>
               )}
             </div>
             <div className="text-sm text-muted-foreground">
-              {selectedItems.size} {selectedItems.size === 1 ? 'item' : 'items'} selected
+              {selectedItems.size} {selectedItems.size === 1 ? 'item' : 'items'}{' '}
+              selected
             </div>
           </div>
           <div className="flex justify-end gap-2">
@@ -1748,7 +2005,10 @@ export default function InventoryItemsCard() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isBulkUtilizedDialogOpen} onOpenChange={setIsBulkUtilizedDialogOpen}>
+      <Dialog
+        open={isBulkUtilizedDialogOpen}
+        onOpenChange={setIsBulkUtilizedDialogOpen}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Bulk Update Utilized In</DialogTitle>
@@ -1756,23 +2016,33 @@ export default function InventoryItemsCard() {
           <div className="space-y-4 py-4">
             <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md p-3 mb-4">
               <p className="text-sm text-amber-900 dark:text-amber-100">
-                <strong>⚠️ Warning:</strong> This will REPLACE all utilization flags for the selected items.
-                Checked options will be enabled, unchecked options will be DISABLED for all selected items.
+                <strong>⚠️ Warning:</strong> This will REPLACE all utilization
+                flags for the selected items. Checked options will be enabled,
+                unchecked options will be DISABLED for all selected items.
               </p>
             </div>
             <div className="space-y-3">
-              <Label>Select which production lines/departments these items should be utilized in:</Label>
+              <Label>
+                Select which production lines/departments these items should be
+                utilized in:
+              </Label>
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="bulk-utilizedInPL1"
                     checked={bulkUtilizedFields.utilizedInPL1}
                     onCheckedChange={(checked) =>
-                      setBulkUtilizedFields({ ...bulkUtilizedFields, utilizedInPL1: checked as boolean })
+                      setBulkUtilizedFields({
+                        ...bulkUtilizedFields,
+                        utilizedInPL1: checked as boolean,
+                      })
                     }
                     data-testid="checkbox-bulk-utilizedInPL1"
                   />
-                  <Label htmlFor="bulk-utilizedInPL1" className="cursor-pointer">
+                  <Label
+                    htmlFor="bulk-utilizedInPL1"
+                    className="cursor-pointer"
+                  >
                     PL1
                   </Label>
                 </div>
@@ -1781,11 +2051,17 @@ export default function InventoryItemsCard() {
                     id="bulk-utilizedInPL2"
                     checked={bulkUtilizedFields.utilizedInPL2}
                     onCheckedChange={(checked) =>
-                      setBulkUtilizedFields({ ...bulkUtilizedFields, utilizedInPL2: checked as boolean })
+                      setBulkUtilizedFields({
+                        ...bulkUtilizedFields,
+                        utilizedInPL2: checked as boolean,
+                      })
                     }
                     data-testid="checkbox-bulk-utilizedInPL2"
                   />
-                  <Label htmlFor="bulk-utilizedInPL2" className="cursor-pointer">
+                  <Label
+                    htmlFor="bulk-utilizedInPL2"
+                    className="cursor-pointer"
+                  >
                     PL2
                   </Label>
                 </div>
@@ -1794,11 +2070,17 @@ export default function InventoryItemsCard() {
                     id="bulk-utilizedInFacilities"
                     checked={bulkUtilizedFields.utilizedInFacilities}
                     onCheckedChange={(checked) =>
-                      setBulkUtilizedFields({ ...bulkUtilizedFields, utilizedInFacilities: checked as boolean })
+                      setBulkUtilizedFields({
+                        ...bulkUtilizedFields,
+                        utilizedInFacilities: checked as boolean,
+                      })
                     }
                     data-testid="checkbox-bulk-utilizedInFacilities"
                   />
-                  <Label htmlFor="bulk-utilizedInFacilities" className="cursor-pointer">
+                  <Label
+                    htmlFor="bulk-utilizedInFacilities"
+                    className="cursor-pointer"
+                  >
                     Facilities
                   </Label>
                 </div>
@@ -1807,11 +2089,17 @@ export default function InventoryItemsCard() {
                     id="bulk-utilizedInAdmin"
                     checked={bulkUtilizedFields.utilizedInAdmin}
                     onCheckedChange={(checked) =>
-                      setBulkUtilizedFields({ ...bulkUtilizedFields, utilizedInAdmin: checked as boolean })
+                      setBulkUtilizedFields({
+                        ...bulkUtilizedFields,
+                        utilizedInAdmin: checked as boolean,
+                      })
                     }
                     data-testid="checkbox-bulk-utilizedInAdmin"
                   />
-                  <Label htmlFor="bulk-utilizedInAdmin" className="cursor-pointer">
+                  <Label
+                    htmlFor="bulk-utilizedInAdmin"
+                    className="cursor-pointer"
+                  >
                     Admin
                   </Label>
                 </div>
@@ -1820,18 +2108,25 @@ export default function InventoryItemsCard() {
                     id="bulk-utilizedInServices"
                     checked={bulkUtilizedFields.utilizedInServices}
                     onCheckedChange={(checked) =>
-                      setBulkUtilizedFields({ ...bulkUtilizedFields, utilizedInServices: checked as boolean })
+                      setBulkUtilizedFields({
+                        ...bulkUtilizedFields,
+                        utilizedInServices: checked as boolean,
+                      })
                     }
                     data-testid="checkbox-bulk-utilizedInServices"
                   />
-                  <Label htmlFor="bulk-utilizedInServices" className="cursor-pointer">
+                  <Label
+                    htmlFor="bulk-utilizedInServices"
+                    className="cursor-pointer"
+                  >
                     Services
                   </Label>
                 </div>
               </div>
             </div>
             <div className="text-sm text-muted-foreground">
-              {selectedItems.size} {selectedItems.size === 1 ? 'item' : 'items'} will be updated
+              {selectedItems.size} {selectedItems.size === 1 ? 'item' : 'items'}{' '}
+              will be updated
             </div>
           </div>
           <div className="flex justify-end gap-2">

@@ -641,7 +641,7 @@ export default function InventoryItemsCard() {
 
   const { data: vendorsResponse } = useQuery<{ data: any[] }>({
     queryKey: ['/api/vendors'],
-    queryFn: () => apiRequest('/api/vendors'),
+    queryFn: () => apiRequest('/api/vendors?pageSize=200'),
   });
   
   const vendors = vendorsResponse?.data || [];

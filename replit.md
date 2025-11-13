@@ -21,6 +21,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufact
 - Enhanced Vendor Management modal: Dialog title now displays "Edit Vendor: [Vendor Name]" for clarity, while tab labels remain clean without vendor name to reduce crowding.
 - Fixed monthly vendor evaluation score validation: Changed from `if (numValue && ...)` to `if (numValue !== null && ...)` to properly reject scores of 0 (database constraint requires 1-5 range).
 - Implemented batch save for monthly vendor evaluations: Replaced immediate save-on-blur with pending changes tracking. Cells with unsaved changes show yellow highlight, and "Save All" and "Discard Changes" buttons appear when there are pending edits. This improves UX by reducing API calls and allowing multi-field editing before commit.
+- Fixed inventory items not saving when added through the form. The frontend was calling POST /api/enhanced/inventory/items while the backend router is mounted at /api/inventory (resolving to /api/inventory/items). Updated frontend createMutation to use correct endpoint /api/inventory/items.
 
 
 

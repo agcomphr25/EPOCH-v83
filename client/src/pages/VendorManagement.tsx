@@ -860,26 +860,26 @@ export default function VendorManagement() {
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle data-testid="text-modal-title">
-                {editingVendor ? 'Edit Vendor' : 'New Vendor'}
+                {editingVendor ? `Edit Vendor: ${editingVendor.name}` : 'New Vendor'}
               </DialogTitle>
             </DialogHeader>
 
             <Tabs defaultValue="main" className="w-full">
               <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="main" data-testid="tab-main-info">
-                  Main Info
+                  Main Info{editingVendor ? ` - ${editingVendor.name}` : ''}
                 </TabsTrigger>
                 <TabsTrigger value="contacts" data-testid="tab-contacts">
-                  Additional Contacts{' '}
+                  Additional Contacts{editingVendor ? ` - ${editingVendor.name}` : ''}{' '}
                   {!editingVendor &&
                     pendingContacts.length > 0 &&
                     `(${pendingContacts.length})`}
                 </TabsTrigger>
                 <TabsTrigger value="scope" data-testid="tab-scope">
-                  Scope Approval
+                  Scope Approval{editingVendor ? ` - ${editingVendor.name}` : ''}
                 </TabsTrigger>
                 <TabsTrigger value="evaluation" data-testid="tab-evaluation">
-                  Evaluation & Notes
+                  Evaluation & Notes{editingVendor ? ` - ${editingVendor.name}` : ''}
                 </TabsTrigger>
               </TabsList>
 
@@ -2347,7 +2347,7 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
     const evaluation = getEvaluationForMonth(month);
     const numValue = cellValue ? parseInt(cellValue) : null;
 
-    if (numValue && (numValue < 1 || numValue > 5)) {
+    if (numValue !== null && (numValue < 1 || numValue > 5)) {
       toast({ title: 'Error', description: 'Score must be between 1 and 5', variant: 'destructive' });
       return;
     }

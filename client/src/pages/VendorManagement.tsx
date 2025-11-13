@@ -867,19 +867,19 @@ export default function VendorManagement() {
             <Tabs defaultValue="main" className="w-full">
               <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="main" data-testid="tab-main-info">
-                  Main Info{editingVendor ? ` - ${editingVendor.name}` : ''}
+                  Main Info
                 </TabsTrigger>
                 <TabsTrigger value="contacts" data-testid="tab-contacts">
-                  Additional Contacts{editingVendor ? ` - ${editingVendor.name}` : ''}{' '}
+                  Additional Contacts{' '}
                   {!editingVendor &&
                     pendingContacts.length > 0 &&
                     `(${pendingContacts.length})`}
                 </TabsTrigger>
                 <TabsTrigger value="scope" data-testid="tab-scope">
-                  Scope Approval{editingVendor ? ` - ${editingVendor.name}` : ''}
+                  Scope Approval
                 </TabsTrigger>
                 <TabsTrigger value="evaluation" data-testid="tab-evaluation">
-                  Evaluation & Notes{editingVendor ? ` - ${editingVendor.name}` : ''}
+                  Evaluation & Notes
                 </TabsTrigger>
               </TabsList>
 

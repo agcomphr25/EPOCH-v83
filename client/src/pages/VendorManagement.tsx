@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -176,6 +176,33 @@ export default function VendorManagement() {
       notes: '',
     },
   });
+
+  // Auto-update evaluated field based on scores
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      const { qualityScore, costScore, deliveryScore, responseScore } = value;
+      const hasAllScores = 
+        qualityScore !== null && qualityScore !== undefined &&
+        costScore !== null && costScore !== undefined &&
+        deliveryScore !== null && deliveryScore !== undefined &&
+        responseScore !== null && responseScore !== undefined;
+      
+      const hasAnyScore = 
+        qualityScore !== null && qualityScore !== undefined ||
+        costScore !== null && costScore !== undefined ||
+        deliveryScore !== null && deliveryScore !== undefined ||
+        responseScore !== null && responseScore !== undefined;
+      
+      // Set evaluated to true if at least one score is present
+      const currentEvaluated = form.getValues('evaluated');
+      if (hasAnyScore && !currentEvaluated) {
+        form.setValue('evaluated', true);
+      } else if (!hasAnyScore && currentEvaluated) {
+        form.setValue('evaluated', false);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   // Build query params
   const queryParams = new URLSearchParams({
@@ -2003,10 +2030,17 @@ export default function VendorManagement() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400 text-center">
                       {(() => {
-                        const hasScores = vendor.qualityScore || vendor.costScore || vendor.deliveryScore || vendor.responseScore;
-                        if (!hasScores) return '—';
-                        const totalScore = (vendor.qualityScore ?? 0) + (vendor.costScore ?? 0) + (vendor.deliveryScore ?? 0) + (vendor.responseScore ?? 0);
-                        return totalScore;
+                        const scores = [
+                          vendor.qualityScore,
+                          vendor.costScore,
+                          vendor.deliveryScore,
+                          vendor.responseScore
+                        ].filter(score => score !== null && score !== undefined);
+                        
+                        if (scores.length === 0) return '—';
+                        
+                        const average = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+                        return average.toFixed(1);
                       })()}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">

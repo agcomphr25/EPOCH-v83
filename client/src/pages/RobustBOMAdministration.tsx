@@ -310,7 +310,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
       setEditingLines(revision.lines.map((line: any) => ({
         id: line.id,
         childPartAgNumber: line.childPartAgNumber,
-        quantityPer: line.quantityPer,
+        quantityPer: line.qtyPer,
         scrapPercent: line.scrapPercent || 0,
         referenceDesignator: line.referenceDesignator || '',
         operationSequence: line.operationSeq,
@@ -1410,7 +1410,7 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                                               setEditingLines(revision.lines.map((line: any) => ({
                                                 id: line.id,
                                                 childPartAgNumber: line.childPartAgNumber,
-                                                quantityPer: line.quantityPer,
+                                                quantityPer: line.qtyPer,
                                                 scrapPercent: line.scrapPercent || 0,
                                                 referenceDesignator: line.referenceDesignator || '',
                                                 operationSequence: line.operationSeq,

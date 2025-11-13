@@ -50,6 +50,9 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 -   **Follow-Up Order Signature Workflow**: Complete pricing calculation system for sign-order pages, mirroring OrderEntry logic.
 -   **P1 PO Shipping QC Management**: Comprehensive tracking system for P1 purchase orders with department status tracking. Includes authentication middleware, optimized SQL queries, real-time status badges, cross-PO item selection, and fulfillment tracking.
 -   **P1 PO Shipping Workflow**: Complete UPS integration for creating labels with configurable service levels and billing options. Features a floating "Ship Selected" button and a comprehensive OEM Shipments history page with search/filtering, pagination, and document downloads.
+-   **P1 PO Feature Display**: Production orders display full feature data (action_length, barrel_inlet, handedness, etc.) by parsing specifications JSONB column from production_orders table and mapping to expected features field for department queue rendering.
+-   **P1 PO Department Progression**: Department progression endpoint uses database query-based detection instead of prefix matching to correctly identify production orders with customer-based order IDs (ABC00199-0001 format), ensuring proper updates to production_orders table.
+-   **Production Deployment**: Uses `tsx` to run TypeScript directly in production instead of esbuild bundling, avoiding ESM module exit issues. Static files served from `dist/public/` with error handling for JSON parsing.
 
 
 

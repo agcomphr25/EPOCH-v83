@@ -4804,17 +4804,24 @@ export function registerRoutes(app: Express): Server {
 
       for (const orderId of orderIds) {
         try {
-          // Check if this is a P1/PO order (production order) or regular order
-          const isProductionOrder = orderId.startsWith('P1-') || orderId.startsWith('PO-');
-          const order = isProductionOrder
-            ? await storage.getProductionOrderByOrderId(orderId)
-            : await storage.getOrderById(orderId);
+          // Check if this is a production order by trying to fetch from production_orders table first
+          // P1 PO items use customer-based format (ABC00199-0001) not P1- prefix
+          let order = await storage.getProductionOrderByOrderId(orderId);
+          let isProductionOrder = !!order;
+          
+          // If not found in production orders, try regular orders
+          if (!order) {
+            order = await storage.getOrderById(orderId);
+            isProductionOrder = false;
+          }
           
           if (!order) {
             results.failed.push({ orderId, reason: 'Order not found' });
             console.warn(`⚠️ ${orderId}: Order not found`);
             continue;
           }
+          
+          console.log(`📝 Processing ${orderId} as ${isProductionOrder ? 'PRODUCTION' : 'REGULAR'} order`);
 
           const currentDept = (order as any).currentDepartment;
 

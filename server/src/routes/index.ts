@@ -3947,19 +3947,32 @@ export function registerRoutes(app: Express): Server {
       // Update each order individually with proper completion timestamps
       for (const orderId of orderIds) {
         try {
-          // Get current order to determine its current department
-          let currentOrder = await storage.getFinalizedOrderById(orderId);
-          let isFinalized = true;
+          // Check production orders first (P1 PO items)
+          let currentOrder = await storage.getProductionOrderByOrderId(orderId);
+          let isProductionOrder = !!currentOrder;
+          let isFinalized = false;
 
+          // If not a production order, check finalized orders
+          if (!currentOrder) {
+            currentOrder = await storage.getFinalizedOrderById(orderId);
+            isFinalized = true;
+            isProductionOrder = false;
+          }
+
+          // If still not found, check draft orders
           if (!currentOrder) {
             currentOrder = await storage.getOrderDraft(orderId);
             isFinalized = false;
+            isProductionOrder = false;
           }
 
           if (!currentOrder) {
             console.warn(`Order ${orderId} not found, skipping`);
             continue;
           }
+          
+          console.log(`📝 Update-department processing ${orderId} as ${isProductionOrder ? 'PRODUCTION' : isFinalized ? 'FINALIZED' : 'DRAFT'} order`);
+
 
           // Prepare completion timestamp update based on current department
           const completionUpdates: any = {};
@@ -4005,24 +4018,35 @@ export function registerRoutes(app: Express): Server {
             updateData.assignedTechnician = assignedTechnician;
           }
 
-          // Update the appropriate table
+          // Update the appropriate table based on order type
           let updatedOrder;
-          if (isFinalized) {
+          if (isProductionOrder) {
+            // Update production order table
+            updatedOrder = await storage.updateProductionOrder(
+              (currentOrder as any).id,
+              {
+                ...updateData,
+                updatedAt: now,
+              }
+            );
+            console.log(`✅ Updated production order ${orderId} from ${currentOrder.currentDepartment} to ${department}`);
+          } else if (isFinalized) {
+            // Update finalized orders table
             updatedOrder = await storage.updateFinalizedOrder(
               orderId,
               updateData
             );
+            console.log(`✅ Updated finalized order ${orderId} from ${currentOrder.currentDepartment} to ${department}`);
           } else {
+            // Update draft orders table
             updatedOrder = await storage.updateOrderDraft(orderId, {
               ...updateData,
               updatedAt: now,
             });
+            console.log(`✅ Updated draft order ${orderId} from ${currentOrder.currentDepartment} to ${department}`);
           }
 
           updatedOrders.push(updatedOrder);
-          console.log(
-            `✅ Progressed order ${orderId} from ${currentOrder.currentDepartment} to ${department}`
-          );
         } catch (orderError) {
           console.error(`Error updating order ${orderId}:`, orderError);
         }

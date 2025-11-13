@@ -254,10 +254,13 @@ app.use((req, res, next) => {
         );
         log(`serving on port ${port}`);
         
-        // Keep the process alive in production (prevents ESM bundling exit issue)
+        // CRITICAL: Keep the event loop alive in production (prevents ESM bundling exit issue)
+        // Using setInterval ensures Node never thinks the script is complete
         if (process.env.NODE_ENV === 'production') {
-          process.stdin.resume();
-          console.log('✅ Process keep-alive enabled for production');
+          setInterval(() => {
+            // Empty interval keeps process alive indefinitely
+          }, 1000 * 60 * 60); // Run every hour (just to keep event loop busy)
+          console.log('✅ Production keep-alive interval started (server will run indefinitely)');
         }
 
         // Defer database seeding to run after server is ready (non-blocking)

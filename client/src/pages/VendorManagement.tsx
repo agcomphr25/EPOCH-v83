@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -176,6 +177,33 @@ export default function VendorManagement() {
       notes: '',
     },
   });
+
+  // Auto-update evaluated field based on scores
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      const { qualityScore, costScore, deliveryScore, responseScore } = value;
+      const hasAllScores = 
+        qualityScore !== null && qualityScore !== undefined &&
+        costScore !== null && costScore !== undefined &&
+        deliveryScore !== null && deliveryScore !== undefined &&
+        responseScore !== null && responseScore !== undefined;
+      
+      const hasAnyScore = 
+        qualityScore !== null && qualityScore !== undefined ||
+        costScore !== null && costScore !== undefined ||
+        deliveryScore !== null && deliveryScore !== undefined ||
+        responseScore !== null && responseScore !== undefined;
+      
+      // Set evaluated to true if at least one score is present
+      const currentEvaluated = form.getValues('evaluated');
+      if (hasAnyScore && !currentEvaluated) {
+        form.setValue('evaluated', true);
+      } else if (!hasAnyScore && currentEvaluated) {
+        form.setValue('evaluated', false);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   // Build query params
   const queryParams = new URLSearchParams({
@@ -833,7 +861,7 @@ export default function VendorManagement() {
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle data-testid="text-modal-title">
-                {editingVendor ? 'Edit Vendor' : 'New Vendor'}
+                {editingVendor ? `Edit Vendor: ${editingVendor.name}` : 'New Vendor'}
               </DialogTitle>
             </DialogHeader>
 
@@ -2003,10 +2031,17 @@ export default function VendorManagement() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400 text-center">
                       {(() => {
-                        const hasScores = vendor.qualityScore || vendor.costScore || vendor.deliveryScore || vendor.responseScore;
-                        if (!hasScores) return '—';
-                        const totalScore = (vendor.qualityScore ?? 0) + (vendor.costScore ?? 0) + (vendor.deliveryScore ?? 0) + (vendor.responseScore ?? 0);
-                        return totalScore;
+                        const scores = [
+                          vendor.qualityScore,
+                          vendor.costScore,
+                          vendor.deliveryScore,
+                          vendor.responseScore
+                        ].filter(score => score !== null && score !== undefined);
+                        
+                        if (scores.length === 0) return '—';
+                        
+                        const total = scores.reduce((sum, score) => sum + score, 0);
+                        return total.toFixed(1);
                       })()}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
@@ -2253,6 +2288,7 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
   const [selectedYear, setSelectedYear] = useState(2025);
   const [editingCell, setEditingCell] = useState<{month: number; field: string} | null>(null);
   const [cellValue, setCellValue] = useState('');
+  const [pendingChanges, setPendingChanges] = useState<Map<string, any>>(new Map());
 
   const months = [
     { name: 'Jan', num: 1 },
@@ -2281,24 +2317,33 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
     },
   });
 
-  // Save evaluation mutation
-  const saveEvaluationMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return await apiRequest(`/api/vendors/${vendorId}/evaluations`, {
-        method: 'POST',
-        body: data,
-      });
+  // Save all evaluations mutation
+  const saveAllEvaluationsMutation = useMutation({
+    mutationFn: async (changes: Map<string, any>) => {
+      const promises = Array.from(changes.values()).map(data =>
+        apiRequest(`/api/vendors/${vendorId}/evaluations`, {
+          method: 'POST',
+          body: data,
+        })
+      );
+      return await Promise.all(promises);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendors', vendorId, 'evaluations'] });
-      toast({ title: 'Success', description: 'Evaluation saved successfully' });
+      setPendingChanges(new Map());
+      toast({ title: 'Success', description: 'All evaluations saved successfully' });
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to save evaluation', variant: 'destructive' });
+      setPendingChanges(new Map());
+      toast({ title: 'Error', description: 'Failed to save evaluations', variant: 'destructive' });
     },
   });
 
   const getEvaluationForMonth = (month: number) => {
+    const key = `${month}`;
+    if (pendingChanges.has(key)) {
+      return pendingChanges.get(key);
+    }
     return evaluations.find((e: any) => e.month === month && e.year === selectedYear);
   };
 
@@ -2309,37 +2354,57 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
     setEditingCell({ month, field });
   };
 
-  const handleCellSave = async (month: number, field: string) => {
-    const evaluation = getEvaluationForMonth(month);
+  const handleCellUpdate = (month: number, field: string) => {
     const numValue = cellValue ? parseInt(cellValue) : null;
 
-    if (numValue && (numValue < 1 || numValue > 5)) {
+    if (numValue !== null && (numValue < 1 || numValue > 5)) {
       toast({ title: 'Error', description: 'Score must be between 1 and 5', variant: 'destructive' });
+      setEditingCell(null);
       return;
     }
 
-    const data: any = {
-      month,
-      year: selectedYear,
-      [field]: numValue,
-    };
-
-    // Preserve existing scores
-    if (evaluation) {
-      data.qualityScore = evaluation.qualityScore;
-      data.costScore = evaluation.costScore;
-      data.deliveryScore = evaluation.deliveryScore;
-      data.responseScore = evaluation.responseScore;
-      data[field] = numValue;
+    const key = `${month}`;
+    
+    // Start with existing pending changes if any, otherwise use saved evaluation
+    let baseData: any;
+    if (pendingChanges.has(key)) {
+      // Use existing pending changes as the base
+      baseData = { ...pendingChanges.get(key) };
+    } else {
+      // Use saved evaluation as the base
+      const evaluation = evaluations.find((e: any) => e.month === month && e.year === selectedYear);
+      baseData = {
+        month,
+        year: selectedYear,
+        qualityScore: evaluation?.qualityScore ?? null,
+        costScore: evaluation?.costScore ?? null,
+        deliveryScore: evaluation?.deliveryScore ?? null,
+        responseScore: evaluation?.responseScore ?? null,
+      };
     }
 
-    await saveEvaluationMutation.mutateAsync(data);
+    // Update only the field being edited
+    baseData[field] = numValue;
+
+    const newPendingChanges = new Map(pendingChanges);
+    newPendingChanges.set(key, baseData);
+    setPendingChanges(newPendingChanges);
     setEditingCell(null);
+  };
+
+  const handleSaveAll = async () => {
+    if (pendingChanges.size === 0) return;
+    await saveAllEvaluationsMutation.mutateAsync(pendingChanges);
+  };
+
+  const handleDiscardChanges = () => {
+    setPendingChanges(new Map());
+    toast({ title: 'Changes discarded' });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, month: number, field: string) => {
     if (e.key === 'Enter') {
-      handleCellSave(month, field);
+      handleCellUpdate(month, field);
     } else if (e.key === 'Escape') {
       setEditingCell(null);
     }
@@ -2349,6 +2414,8 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
     const evaluation = getEvaluationForMonth(month);
     const value = evaluation?.[field];
     const isEditing = editingCell?.month === month && editingCell?.field === field;
+    const key = `${month}`;
+    const hasChanges = pendingChanges.has(key);
 
     if (isEditing) {
       return (
@@ -2358,7 +2425,7 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
           max="5"
           value={cellValue}
           onChange={(e) => setCellValue(e.target.value)}
-          onBlur={() => handleCellSave(month, field)}
+          onBlur={() => handleCellUpdate(month, field)}
           onKeyDown={(e) => handleKeyDown(e, month, field)}
           className="w-12 h-8 text-center p-1"
           autoFocus
@@ -2370,7 +2437,10 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
     return (
       <div
         onClick={() => handleCellClick(month, field)}
-        className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 h-8 flex items-center justify-center rounded"
+        className={cn(
+          "cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 h-8 flex items-center justify-center rounded",
+          hasChanges && "bg-yellow-100 dark:bg-yellow-900/30"
+        )}
         data-testid={`cell-${field}-${month}`}
       >
         {value || '-'}
@@ -2398,6 +2468,26 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
             </SelectContent>
           </Select>
         </div>
+        {pendingChanges.size > 0 && (
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDiscardChanges}
+              data-testid="button-discard-changes"
+            >
+              Discard Changes
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveAll}
+              disabled={saveAllEvaluationsMutation.isPending}
+              data-testid="button-save-all"
+            >
+              {saveAllEvaluationsMutation.isPending ? 'Saving...' : `Save All (${pendingChanges.size} month${pendingChanges.size > 1 ? 's' : ''})`}
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="overflow-x-auto">

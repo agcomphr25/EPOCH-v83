@@ -876,7 +876,7 @@ export default function InventoryItemsCard() {
   const updateMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mutationFn: ({ id, data }: { id: number; data: any }) =>
-      apiRequest(`/api/enhanced/inventory/items/${id}`, {
+      apiRequest(`/api/inventory/items/${id}`, {
         method: 'PUT',
         body: data,
       }),
@@ -894,7 +894,7 @@ export default function InventoryItemsCard() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) =>
-      apiRequest(`/api/enhanced/inventory/items/${id}`, {
+      apiRequest(`/api/inventory/items/${id}`, {
         method: 'DELETE',
       }),
     onSuccess: () => {

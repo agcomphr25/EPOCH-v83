@@ -102,6 +102,12 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
+// CRITICAL: Fast health check endpoint for Replit deployment health probes
+// Responds immediately without database operations to pass health checks quickly
+app.get('/healthz', (req, res) => {
+  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
 // Also add express.static as fallback
 app.use('/attached_assets', express.static(assetsPath));
 
@@ -140,8 +146,9 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
-    // Test database connection first
+    console.log('Initializing database connection...');
     const { testDatabaseConnection } = await import('./db');
+    console.log('Testing database connection...');
     const dbConnected = await testDatabaseConnection();
 
     if (!dbConnected) {
@@ -252,6 +259,19 @@ app.use((req, res, next) => {
           process.stdin.resume();
           console.log('✅ Process keep-alive enabled for production');
         }
+
+        // Defer database seeding to run after server is ready (non-blocking)
+        setImmediate(async () => {
+          try {
+            console.log('🌱 Starting background database seeding...');
+            const { seedOrderReferenceTables } = await import('./seeds/orderReferenceTables');
+            await seedOrderReferenceTables();
+            console.log('✅ Background database seeding completed');
+          } catch (error) {
+            console.error('❌ Background database seeding failed:', error);
+            // Don't crash the server - seeding can be done manually via admin endpoint
+          }
+        });
       }
     );
   } catch (error) {

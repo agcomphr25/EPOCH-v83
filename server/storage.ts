@@ -2445,6 +2445,26 @@ export class DatabaseStorage implements IStorage {
         parsedSpecs = null;
       }
       
+      // Map PO specifications to features object with snake_case keys
+      const mappedFeatures: any = {};
+      if (parsedSpecs) {
+        // Map camelCase to snake_case for feature fields
+        if (parsedSpecs.actionLength) mappedFeatures.action_length = parsedSpecs.actionLength;
+        if (parsedSpecs.actionInlet) mappedFeatures.action_inlet = parsedSpecs.actionInlet;
+        if (parsedSpecs.bottomMetal) mappedFeatures.bottom_metal = parsedSpecs.bottomMetal;
+        if (parsedSpecs.barrelInlet) mappedFeatures.barrel_inlet = parsedSpecs.barrelInlet;
+        if (parsedSpecs.qds) mappedFeatures.qds = parsedSpecs.qds;
+        if (parsedSpecs.swivelStuds) mappedFeatures.swivel_studs = parsedSpecs.swivelStuds;
+        if (parsedSpecs.paintOptions) mappedFeatures.paint_options = parsedSpecs.paintOptions;
+        if (parsedSpecs.texture) mappedFeatures.texture = parsedSpecs.texture;
+        if (parsedSpecs.flatTop !== undefined) mappedFeatures.flat_top = parsedSpecs.flatTop;
+        
+        // Also check if there's a nested features object (fallback)
+        if (parsedSpecs.features && typeof parsedSpecs.features === 'object') {
+          Object.assign(mappedFeatures, parsedSpecs.features);
+        }
+      }
+      
       return {
         id: po.id,
         orderId: po.orderId,
@@ -2459,8 +2479,8 @@ export class DatabaseStorage implements IStorage {
         itemId: po.itemId,
         itemName: po.itemName,
         handedness: parsedSpecs?.handedness ?? null,
-        shankLength: parsedSpecs?.shank_length ?? null,
-        features: parsedSpecs?.features ?? null,
+        shankLength: parsedSpecs?.shank_length ?? parsedSpecs?.shankLength ?? null,
+        features: Object.keys(mappedFeatures).length > 0 ? mappedFeatures : null,
         featureQuantities: null,
         discountCode: null,
         notes: po.notes,

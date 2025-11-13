@@ -2491,6 +2491,7 @@ export class DatabaseStorage implements IStorage {
         shipping: 0,
         tikkaOption: null,
         status: po.productionStatus,
+        productionStatus: po.productionStatus,
         statusId: null,
         barcode: null,
         currentDepartment: po.currentDepartment,

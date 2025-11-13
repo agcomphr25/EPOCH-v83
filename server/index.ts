@@ -246,6 +246,12 @@ app.use((req, res, next) => {
           `- Server accessible at: https://${process.env.REPL_ID || 'localhost'}.${process.env.REPL_OWNER || 'local'}.repl.co`
         );
         log(`serving on port ${port}`);
+        
+        // Keep the process alive in production (prevents ESM bundling exit issue)
+        if (process.env.NODE_ENV === 'production') {
+          process.stdin.resume();
+          console.log('✅ Process keep-alive enabled for production');
+        }
       }
     );
   } catch (error) {

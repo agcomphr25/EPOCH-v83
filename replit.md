@@ -5,7 +5,10 @@
 EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. Its primary goal is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The system is a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. Key capabilities include a robust Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System. The business vision is to be the leading ERP solution for small-to-medium customizable product manufacturers.
 
 ## Recent Changes
-**2025-11-13**: 
+**2025-11-13** (Evening):
+- Fixed TypeScript errors in GitHub pull code: Converted `client/src/utils/nonconformanceUtils.js` to TypeScript with proper type annotations. Added `OrderLookup` interface to NonconformanceFormModal.tsx to resolve "Property 'orderId' does not exist on type 'never'" error. The NonconformanceFormModal component now properly types the orderResults state as `OrderLookup[]` array.
+
+**2025-11-13** (Afternoon): 
 - **Nonconformance Disposition Workflow Restored**: Fully implemented disposition-specific workflows in nonconformance tracking.
   - "Repair" disposition now shows blue-highlighted section with required Repair Department dropdown (Layup/CNC/Paint/Finish QC/Assembly/Hardware) and Repair Notes textarea. Department selection is required and enforced via client + server validation.
   - "Use As Is" disposition shows green-highlighted section with "Add to RTS Inventory" checkbox. When checked, system automatically creates RTS inventory entry with status='AVAILABLE' and prevents duplicate entries.

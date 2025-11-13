@@ -66,6 +66,16 @@ const repairDepartmentOptions = [
   'Hardware',
 ];
 
+interface OrderLookup {
+  id: number;
+  orderId: string;
+  serialNumber?: string | null;
+  customerName?: string | null;
+  poNumber?: string | null;
+  customerPO?: string | null;
+  modelId?: string | null;
+}
+
 interface NonconformanceFormModalProps {
   open: boolean;
   onClose: () => void;
@@ -83,7 +93,7 @@ export default function NonconformanceFormModal({
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [orderQuery, setOrderQuery] = useState('');
-  const [orderResults, setOrderResults] = useState([]);
+  const [orderResults, setOrderResults] = useState<OrderLookup[]>([]);
 
   const [form, setForm] = useState({
     orderId: '',

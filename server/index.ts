@@ -51,12 +51,11 @@ console.log('🔒 CORS Configuration:', {
 app.use(cors(corsOptions));
 
 // Serve attached assets (PDFs, documents, etc.) - Must be before other routes
-// In production, assets are copied to dist/attached_assets
+// In production, assets are copied to dist/attached_assets via build script
 // In development, assets are in the root attached_assets folder
-const assetsPath =
-  process.env.NODE_ENV === 'production'
-    ? path.join(import.meta.dirname, 'attached_assets')
-    : path.join(process.cwd(), 'attached_assets');
+const assetsPath = process.env.NODE_ENV === 'production'
+  ? path.join(process.cwd(), 'dist', 'attached_assets')
+  : path.join(process.cwd(), 'attached_assets');
 
 console.log('📁 Assets path configuration:', {
   NODE_ENV: process.env.NODE_ENV,
@@ -102,6 +101,12 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
+// CRITICAL: Fast health check endpoint for Replit deployment health probes
+// Responds immediately without database operations to pass health checks quickly
+app.get('/healthz', (req, res) => {
+  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
 // Also add express.static as fallback
 app.use('/attached_assets', express.static(assetsPath));
 
@@ -140,8 +145,9 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
-    // Test database connection first
+    console.log('Initializing database connection...');
     const { testDatabaseConnection } = await import('./db');
+    console.log('Testing database connection...');
     const dbConnected = await testDatabaseConnection();
 
     if (!dbConnected) {
@@ -246,6 +252,28 @@ app.use((req, res, next) => {
           `- Server accessible at: https://${process.env.REPL_ID || 'localhost'}.${process.env.REPL_OWNER || 'local'}.repl.co`
         );
         log(`serving on port ${port}`);
+        
+        // CRITICAL: Keep the event loop alive in production (prevents ESM bundling exit issue)
+        // Using setInterval ensures Node never thinks the script is complete
+        if (process.env.NODE_ENV === 'production') {
+          setInterval(() => {
+            // Empty interval keeps process alive indefinitely
+          }, 1000 * 60 * 60); // Run every hour (just to keep event loop busy)
+          console.log('✅ Production keep-alive interval started (server will run indefinitely)');
+        }
+
+        // Defer database seeding to run after server is ready (non-blocking)
+        setImmediate(async () => {
+          try {
+            console.log('🌱 Starting background database seeding...');
+            const { seedOrderReferenceTables } = await import('./seeds/orderReferenceTables');
+            await seedOrderReferenceTables();
+            console.log('✅ Background database seeding completed');
+          } catch (error) {
+            console.error('❌ Background database seeding failed:', error);
+            // Don't crash the server - seeding can be done manually via admin endpoint
+          }
+        });
       }
     );
   } catch (error) {

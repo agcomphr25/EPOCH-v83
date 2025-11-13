@@ -58,9 +58,9 @@ export default function FinishQueuePage() {
     ? finishTechniciansData.map((tech: any) => tech.name)
     : [];
 
-  // Get all orders from production pipeline
+  // Get orders in Finish department directly from server (includes both regular orders and P1 PO items)
   const { data: allOrders = [] } = useQuery({
-    queryKey: ['/api/orders/all'],
+    queryKey: ['/api/orders/department/Finish'],
   });
 
   // Fetch all kickbacks to determine which orders have kickbacks
@@ -108,49 +108,21 @@ export default function FinishQueuePage() {
     setSalesOrderModalOpen(true);
   };
 
-  // Get orders in Finish department
+  // Server already filters to Finish department (includes regular orders + P1 PO items)
   const finishOrders = useMemo(() => {
     console.log(
-      '🔍 FINISH QUEUE DEBUG: Total orders from API:',
+      '🔍 FINISH QUEUE DEBUG: Orders in Finish department from API:',
       (allOrders as any[]).length || 0
     );
 
-    const filtered = (allOrders as any[]).filter((order: any) => {
-      const matches = isOrderInDepartment(order, 'Finish');
-
-      // Debug log for orders that don't match but might be expected to
-      if (!matches && order.currentDepartment) {
-        const dept = order.currentDepartment.trim().toLowerCase();
-        if (dept.includes('finish')) {
-          console.log(
-            '⚠️ FINISH QUEUE: Order not matching but has finish in department:',
-            {
-              orderId: order.orderId,
-              currentDepartment: order.currentDepartment,
-              status: order.status,
-              dept: order.department,
-            }
-          );
-        }
-      }
-
-      return matches;
-    });
-
+    // No client-side filtering needed - server returns only Finish department orders
     console.log(
-      '🔍 FINISH QUEUE DEBUG: Filtered to',
-      filtered.length,
-      'orders in Finish department'
+      '✅ FINISH QUEUE: Displaying',
+      (allOrders as any[]).length,
+      'orders from Finish department (includes regular orders + P1 PO items)'
     );
-    if (filtered.length > 0) {
-      console.log('🔍 FINISH QUEUE DEBUG: Sample order:', {
-        orderId: filtered[0].orderId,
-        currentDepartment: filtered[0].currentDepartment,
-        status: filtered[0].status,
-      });
-    }
 
-    return filtered;
+    return allOrders as any[];
   }, [allOrders]);
 
   // Categorize orders by due date

@@ -2409,15 +2409,128 @@ export class DatabaseStorage implements IStorage {
     const customerMap = new Map(
       allCustomers.map((c) => [c.id.toString(), c.name])
     );
+    
+    // Get all stock models for display name mapping
+    const allStockModels = await db.select().from(stockModels);
+    const stockModelMap = new Map(
+      allStockModels.map((sm) => [sm.id, sm.displayName || sm.name])
+    );
 
     // Enrich orders with customer names and add required frontend fields
-    return orders.map((order) => ({
+    const enrichedOrders = orders.map((order) => ({
       ...order,
       customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
       // Add product field for frontend compatibility
       product: order.modelId || 'Unknown Product',
       isFlattop: false, // Add missing field
     })) as any;
+    
+    // Also query production_orders table for P1 PO items
+    const productionOrdersResults = await db
+      .select()
+      .from(productionOrders)
+      .where(ne(productionOrders.productionStatus, 'CANCELLED'))
+      .orderBy(desc(productionOrders.updatedAt));
+
+    // Normalize production orders to match AllOrder shape with feature parsing
+    const normalizedProductionOrders = productionOrdersResults.map((po) => {
+      // Parse specifications JSON to extract features and other fields
+      let parsedSpecs = null;
+      try {
+        parsedSpecs = typeof po.specifications === 'string' 
+          ? JSON.parse(po.specifications) 
+          : po.specifications;
+      } catch (error) {
+        console.error(`Failed to parse specifications for production order ${po.orderId}:`, error);
+        parsedSpecs = null;
+      }
+      
+      return {
+        id: po.id,
+        orderId: po.orderId,
+        orderDate: po.orderDate,
+        dueDate: po.dueDate,
+        customerId: po.customerId,
+        customerPO: po.poNumber,
+        fbOrderNumber: null,
+        agrOrderDetails: null,
+        isCustomOrder: null,
+        modelId: po.itemId,
+        itemId: po.itemId,
+        itemName: po.itemName,
+        handedness: parsedSpecs?.handedness ?? null,
+        shankLength: parsedSpecs?.shank_length ?? null,
+        features: parsedSpecs?.features ?? null,
+        featureQuantities: null,
+        discountCode: null,
+        notes: po.notes,
+        customDiscountType: null,
+        customDiscountValue: 0,
+        showCustomDiscount: false,
+        priceOverride: null,
+        shipping: 0,
+        tikkaOption: null,
+        status: po.productionStatus,
+        statusId: null,
+        barcode: null,
+        currentDepartment: po.currentDepartment,
+        currentDepartmentId: null,
+        departmentHistory: po.departmentHistory || [],
+        scrappedQuantity: null,
+        totalProduced: null,
+        layupCompletedAt: po.layupCompletedAt,
+        pluggingCompletedAt: null,
+        cncCompletedAt: po.cncCompletedAt,
+        finishCompletedAt: po.finishCompletedAt,
+        gunsmithCompletedAt: po.gunsmithCompletedAt,
+        paintCompletedAt: po.paintCompletedAt,
+        qcCompletedAt: po.qcCompletedAt,
+        shippingCompletedAt: po.shippingCompletedAt,
+        scrapDate: null,
+        scrapReason: null,
+        scrapDisposition: null,
+        scrapAuthorization: null,
+        isReplacement: false,
+        replacedOrderId: null,
+        isPaid: false,
+        paymentType: null,
+        paymentAmount: null,
+        paymentDate: null,
+        paymentTimestamp: null,
+        trackingNumber: null,
+        shippingCarrier: null,
+        shippingMethod: null,
+        shippedDate: po.shippedAt,
+        estimatedDelivery: null,
+        shippingLabelGenerated: false,
+        customerNotified: false,
+        notificationMethod: null,
+        notificationSentAt: null,
+        deliveryConfirmed: false,
+        deliveryConfirmedAt: null,
+        isCancelled: false,
+        cancelledAt: null,
+        cancelReason: null,
+        isVerified: false,
+        urgency: null,
+        priorityScore: 50,
+        isManualUrgency: false,
+        createdAt: po.createdAt,
+        updatedAt: po.updatedAt,
+        customer: po.customerName || customerMap.get(po.customerId) || 'Unknown Customer',
+        product: po.itemName || stockModelMap.get(po.itemId || '') || po.itemId || 'Unknown Product',
+        isFlattop: false,
+      };
+    }) as any;
+
+    // Merge regular orders and production orders
+    const allOrdersMerged = [...enrichedOrders, ...normalizedProductionOrders];
+
+    console.log(
+      `✅ getAllOrders: Returning ${enrichedOrders.length} regular orders + ${normalizedProductionOrders.length} P1 PO items = ${allOrdersMerged.length} total orders`
+    );
+
+    return allOrdersMerged;
   }
 
   // PERFORMANCE OPTIMIZED: Calculate order total with cached stock models and features

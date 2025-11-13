@@ -502,6 +502,7 @@ const InventoryForm = ({
             <SelectContent>
               <SelectItem value="Layup/Plugging">Layup/Plugging</SelectItem>
               <SelectItem value="CNC">CNC</SelectItem>
+              <SelectItem value="Cutting Table">Cutting Table</SelectItem>
               <SelectItem value="Finish">Finish</SelectItem>
               <SelectItem value="Gunsmith">Gunsmith</SelectItem>
               <SelectItem value="Paint">Paint</SelectItem>

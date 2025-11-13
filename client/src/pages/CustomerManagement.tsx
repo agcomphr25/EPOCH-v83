@@ -67,6 +67,7 @@ type Customer = {
   preferredCommunicationMethod?: string[]; // Array of "email" and/or "sms"
   notes?: string;
   isActive: boolean;
+  isInternational: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -96,6 +97,7 @@ type CustomerFormData = {
   preferredCommunicationMethod: string[]; // Array of "email" and/or "sms"
   notes: string;
   isActive: boolean;
+  isInternational: boolean;
   // Address fields
   street: string;
   street2: string;
@@ -127,6 +129,7 @@ const initialFormData: CustomerFormData = {
   preferredCommunicationMethod: [],
   notes: '',
   isActive: true,
+  isInternational: false,
   // Address defaults
   street: '',
   street2: '',
@@ -348,6 +351,28 @@ const CustomerFormFields = ({
       </div>
 
       <div className="space-y-2">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="isInternational"
+            data-testid="checkbox-international"
+            checked={formData.isInternational}
+            onCheckedChange={(checked) =>
+              setFormData((prev) => ({ ...prev, isInternational: !!checked }))
+            }
+          />
+          <Label
+            htmlFor="isInternational"
+            className="text-sm font-medium cursor-pointer"
+          >
+            International Customer
+          </Label>
+        </div>
+        <p className="text-xs text-gray-500 ml-6">
+          Check this to allow full state/province names and alphanumeric postal codes
+        </p>
+      </div>
+
+      <div className="space-y-2">
         <Label htmlFor="notes" className="text-sm font-medium">
           Notes
         </Label>
@@ -500,18 +525,33 @@ const CustomerFormFields = ({
           </Label>
           <Input
             id="state"
+            data-testid="input-state"
             value={formData.state}
             onChange={(e) =>
               handleCustomerAddressChange(
                 'state',
-                formData.country === 'United States'
+                formData.isInternational
+                  ? e.target.value
+                  : formData.country === 'United States'
                   ? e.target.value.toUpperCase().slice(0, 2)
                   : e.target.value
               )
             }
             className={formErrors.state ? 'border-red-500' : ''}
-            placeholder={formData.country === 'United States' ? 'SC' : 'State/Province'}
-            maxLength={formData.country === 'United States' ? 2 : undefined}
+            placeholder={
+              formData.isInternational 
+                ? 'State/Province (full name allowed)' 
+                : formData.country === 'United States' 
+                ? 'SC' 
+                : 'State/Province'
+            }
+            maxLength={
+              formData.isInternational 
+                ? undefined 
+                : formData.country === 'United States' 
+                ? 2 
+                : undefined
+            }
           />
           {formErrors.state && (
             <p className="text-sm text-red-500">{formErrors.state}</p>
@@ -522,16 +562,17 @@ const CustomerFormFields = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="zipCode" className="text-sm font-medium">
-            ZIP Code
+            {formData.isInternational ? 'Postal Code' : 'ZIP Code'}
           </Label>
           <Input
             id="zipCode"
+            data-testid="input-zipcode"
             value={formData.zipCode}
             onChange={(e) =>
               handleCustomerAddressChange('zipCode', e.target.value)
             }
             className={formErrors.zipCode ? 'border-red-500' : ''}
-            placeholder="29406"
+            placeholder={formData.isInternational ? 'K1A 0B1' : '29406'}
           />
           {formErrors.zipCode && (
             <p className="text-sm text-red-500">{formErrors.zipCode}</p>
@@ -918,6 +959,7 @@ export default function CustomerManagement() {
           preferredCommunicationMethod: data.preferredCommunicationMethod,
           notes: data.notes,
           isActive: data.isActive,
+          isInternational: data.isInternational,
         }),
       });
 
@@ -1232,6 +1274,7 @@ export default function CustomerManagement() {
       preferredCommunicationMethod: customer.preferredCommunicationMethod || [],
       notes: customer.notes || '',
       isActive: customer.isActive,
+      isInternational: customer.isInternational || false,
       // Load existing address if available
       street: defaultAddress?.street || '',
       street2: defaultAddress?.street2 || '',

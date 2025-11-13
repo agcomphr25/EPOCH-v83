@@ -2526,6 +2526,7 @@ export const customers = pgTable('customers', {
   preferredCommunicationMethod: json('preferred_communication_method'), // Array of strings: ["email", "sms"]
   notes: text('notes'),
   isActive: boolean('is_active').default(true),
+  isInternational: boolean('is_international').default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

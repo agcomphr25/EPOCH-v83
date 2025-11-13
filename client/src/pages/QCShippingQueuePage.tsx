@@ -308,15 +308,21 @@ export default function QCShippingQueuePage() {
     }
   };
 
+  // Helper to identify P1 PO orders (production orders)
+  const isP1POOrder = (order: any) => {
+    return !!order.productionStatus || !!order.poItemId;
+  };
+
   // Get orders in QC/Shipping department and categorize by due date
   const qcShippingOrders = useMemo(() => {
     const orders = allOrders as any[];
     const filteredOrders = orders.filter(
       (order: any) =>
-        order.currentDepartment === 'Shipping QC' ||
+        (order.currentDepartment === 'Shipping QC' ||
         order.currentDepartment === 'QC' ||
         (order.department === 'QC' && order.status === 'IN_PROGRESS') ||
-        (order.department === 'Shipping QC' && order.status === 'IN_PROGRESS')
+        (order.department === 'Shipping QC' && order.status === 'IN_PROGRESS')) &&
+        !isP1POOrder(order)  // Exclude P1 PO items - they go to P1 PO Orders tab
     );
 
     // Separate orders with stock models from orders without stock models
@@ -347,7 +353,8 @@ export default function QCShippingQueuePage() {
             order.status === 'IN_PROGRESS')) &&
         (!order.modelId ||
           order.modelId.trim() === '' ||
-          order.modelId.toLowerCase() === 'none')
+          order.modelId.toLowerCase() === 'none') &&
+        !isP1POOrder(order)  // Exclude P1 PO items - they go to P1 PO Orders tab
     );
 
     // Sort by due date

@@ -26,12 +26,17 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '../lib/queryClient';
 
 const issueOptions = [
-  'Customer Request for Additional Work',
+  'Customer Requested Additional Work',
+  'Order Error',
+  'Incorrect LOP',
+  'Check Riser Hardware Issue',
   'Wrong Inlet/CNC Error',
-  'Does Not Meet Customer QC Requirements',
-  'Material Defect',
-  'Process Error',
-  'Design Issue',
+  'Paint Issue',
+  'Cosmetic Damage/Poor Finish',
+  'Shipping Damage',
+  'Cracked/Broken Stock',
+  'QD/Swivel Stud/Rail Issue',
+  'Does Not Meet Customer Requirements',
   'Other',
 ];
 

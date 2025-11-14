@@ -95,11 +95,17 @@ export default function AnalyticsDashboard() {
     
     setStartDate(startStr);
     setEndDate(endStr);
+    
+    // Auto-apply when preset changes (except custom)
+    if (datePreset !== 'custom') {
+      setAppliedStartDate(startStr);
+      setAppliedEndDate(endStr);
+    }
   }, [datePreset]);
 
   // Fetch analytics data
   const { data, isLoading, refetch } = useQuery<AnalyticsData>({
-    queryKey: ['/api/reports/analytics/metrics', appliedStartDate, appliedEndDate],
+    queryKey: [`/api/reports/analytics/metrics?startDate=${appliedStartDate}&endDate=${appliedEndDate}`],
     enabled: !!appliedStartDate && !!appliedEndDate,
   });
 
@@ -109,14 +115,6 @@ export default function AnalyticsDashboard() {
       setAppliedEndDate(endDate);
     }
   };
-
-  // Apply current month by default on mount
-  useEffect(() => {
-    if (startDate && endDate && !appliedStartDate) {
-      setAppliedStartDate(startDate);
-      setAppliedEndDate(endDate);
-    }
-  }, [startDate, endDate, appliedStartDate]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {

@@ -11,6 +11,7 @@ import {
   insertCuttingPacketSessionSchema,
   insertCuttingPacketSessionLotSchema,
   insertCuttingFabricInventoryTransactionSchema,
+  insertCuttingPacketCompositionSchema,
 } from '../../schema';
 
 const router = Router();
@@ -251,6 +252,29 @@ router.get('/packet-recipes/:categoryId', async (req, res) => {
   } catch (error) {
     console.error('Error fetching packet recipes:', error);
     res.status(500).json({ error: 'Failed to fetch packet recipes' });
+  }
+});
+
+// Create packet composition
+router.post('/packet-compositions', async (req, res) => {
+  try {
+    const validatedData = insertCuttingPacketCompositionSchema.parse(req.body);
+    const composition = await storage.createPacketComposition(validatedData);
+    res.json(composition);
+  } catch (error) {
+    console.error('Error creating packet composition:', error);
+    res.status(400).json({ error: 'Failed to create packet composition' });
+  }
+});
+
+// Delete packet composition
+router.delete('/packet-compositions/:id', async (req, res) => {
+  try {
+    await storage.deletePacketComposition(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting packet composition:', error);
+    res.status(500).json({ error: 'Failed to delete packet composition' });
   }
 });
 

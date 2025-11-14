@@ -522,6 +522,7 @@ export const inventoryItems = pgTable('inventory_items', {
   utilizedInFacilities: boolean('utilized_in_facilities').default(false), // Used in Facilities
   utilizedInAdmin: boolean('utilized_in_admin').default(false), // Used in Admin
   utilizedInServices: boolean('utilized_in_services').default(false), // Used in Services
+  isPacketPart: boolean('is_packet_part').default(false), // Part of cutting table packet
   type: text('type'), // Type: Purchased or Manufactured
   vendorId: integer('vendor_id').references(() => vendors.id), // Primary vendor for this part
 });

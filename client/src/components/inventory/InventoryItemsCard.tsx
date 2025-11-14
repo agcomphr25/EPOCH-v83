@@ -78,6 +78,7 @@ interface InventoryFormData {
   utilizedInFacilities: boolean;
   utilizedInAdmin: boolean;
   utilizedInServices: boolean;
+  isPacketPart: boolean;
 }
 
 const InventoryForm = ({
@@ -536,6 +537,19 @@ const InventoryForm = ({
             Services
           </Label>
         </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="isPacketPart"
+            checked={formData.isPacketPart}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('isPacketPart', checked as boolean)
+            }
+            data-testid="checkbox-isPacketPart"
+          />
+          <Label htmlFor="isPacketPart" className="cursor-pointer">
+            Packet Part (Cutting Table)
+          </Label>
+        </div>
       </div>
     </div>
 
@@ -673,6 +687,7 @@ export default function InventoryItemsCard() {
     utilizedInFacilities: false,
     utilizedInAdmin: false,
     utilizedInServices: false,
+    isPacketPart: false,
   });
 
   // Auto-calculate COGS per unit when conversion data changes
@@ -1039,6 +1054,7 @@ export default function InventoryItemsCard() {
       utilizedInFacilities: false,
       utilizedInAdmin: false,
       utilizedInServices: false,
+      isPacketPart: false,
     });
   };
 
@@ -1106,6 +1122,7 @@ export default function InventoryItemsCard() {
         utilizedInFacilities: formData.utilizedInFacilities,
         utilizedInAdmin: formData.utilizedInAdmin,
         utilizedInServices: formData.utilizedInServices,
+        isPacketPart: formData.isPacketPart,
       };
 
       if (editingItem) {
@@ -1154,6 +1171,7 @@ export default function InventoryItemsCard() {
       utilizedInFacilities: item.utilizedInFacilities || false,
       utilizedInAdmin: item.utilizedInAdmin || false,
       utilizedInServices: item.utilizedInServices || false,
+      isPacketPart: item.isPacketPart || false,
     });
     setIsEditOpen(true);
   };

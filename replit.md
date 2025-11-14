@@ -59,6 +59,7 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 -   **P1 PO Shipping QC Tab Separation**: P1 PO orders appear exclusively in the "PO Orders" tab in Shipping QC.
 -   **Production Deployment**: Uses `tsx` to run TypeScript directly in production; static files served from `dist/public/`.
 -   **Nonconformance Record System**: Comprehensive quality issue tracking with 12 specific issue/cause categories.
+-   **Cutting Table Packet Building**: FIFO-based packet production workflow with automatic inventory consumption, two-phase allocation (simulation before commit), material linkage validation, expiration-based priority indicators, and real-time inventory balance tracking. Includes Recipe Summary, Build Session, and enhanced Fabric Inventory management with sortable views.
 
 ### Technical Implementations
 -   **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

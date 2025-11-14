@@ -1604,6 +1604,8 @@ export interface IStorage {
   // Cutting Table - Packet Compositions
   getAllPacketCompositions(): Promise<CuttingPacketComposition[]>;
   getPacketCompositionsByCategory(categoryId: string): Promise<CuttingPacketComposition[]>;
+  createPacketComposition(data: InsertCuttingPacketComposition): Promise<CuttingPacketComposition>;
+  deletePacketComposition(id: string): Promise<void>;
 
   // Cutting Table - Weekly Data CRUD
   getAllCuttingWeeklyData(): Promise<CuttingWeeklyData[]>;
@@ -12599,6 +12601,15 @@ export class DatabaseStorage implements IStorage {
 
   async getPacketCompositionsByCategory(categoryId: string): Promise<CuttingPacketComposition[]> {
     return await db.select().from(cuttingPacketCompositions).where(eq(cuttingPacketCompositions.productCategoryId, categoryId));
+  }
+
+  async createPacketComposition(data: InsertCuttingPacketComposition): Promise<CuttingPacketComposition> {
+    const [composition] = await db.insert(cuttingPacketCompositions).values(data).returning();
+    return composition;
+  }
+
+  async deletePacketComposition(id: string): Promise<void> {
+    await db.delete(cuttingPacketCompositions).where(eq(cuttingPacketCompositions.id, id));
   }
 
   // Cutting Table - Weekly Data CRUD

@@ -291,8 +291,15 @@ router.post('/packet-sessions/build', async (req, res) => {
     
     for (const comp of compositions) {
       const component = comp.componentId ? await storage.getCuttingComponent(comp.componentId) : null;
-      if (!component || !component.materialId) {
-        continue; // Skip components without material linkage
+      if (!component) {
+        return res.status(400).json({ 
+          error: `Component not found for composition ${comp.id}` 
+        });
+      }
+      if (!component.materialId) {
+        return res.status(400).json({ 
+          error: `Component ${component.componentName} has no material linked. Please configure material ID before building packets.` 
+        });
       }
 
       const totalNeeded = comp.quantityNeeded * packetsCount;

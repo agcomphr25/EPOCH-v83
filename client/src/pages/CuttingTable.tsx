@@ -140,6 +140,7 @@ export default function CuttingTable() {
   // Form state for Packet Management tab
   const [selectedPacketCategory, setSelectedPacketCategory] = useState('');
   const [packetsNeeded, setPacketsNeeded] = useState('');
+  const [buildingSession, setBuildingSession] = useState(false);
 
   // Fetch all data
   const { data: materials = [], isLoading: loadingMaterials } = useQuery<Material[]>({
@@ -459,163 +460,191 @@ export default function CuttingTable() {
   );
 
   const renderPacketManagement = () => {
-    // Get packet categories (only P1 categories with packet compositions)
     const packetCategories = categories.filter(cat => 
       packetCompositions.some(comp => comp.productCategoryId === cat.id)
     );
 
-    // Calculate cuts needed for selected packet
-    const calculatePacketCuts = () => {
-      if (!selectedPacketCategory || !packetsNeeded) return [];
-      
-      const categoryCompositions = packetCompositions.filter(
-        comp => comp.productCategoryId === selectedPacketCategory
-      );
-      
-      return categoryCompositions.map(comp => {
-        const component = components.find(c => c.id === comp.componentId);
-        if (!component) return null;
-        
-        const totalPieces = parseInt(packetsNeeded) * comp.quantityNeeded;
-        const cutsRequired = Math.ceil(totalPieces / component.yieldPerCut);
-        
-        return {
-          componentName: component.componentName,
-          fabricType: component.fabricType,
-          thickness: component.thickness,
-          yieldPerCut: component.yieldPerCut,
-          quantityPerPacket: comp.quantityNeeded,
-          totalPieces,
-          cutsRequired
-        };
-      }).filter(Boolean);
+    const handleBuildPacket = async () => {
+      if (!selectedPacketCategory || !packetsNeeded || parseInt(packetsNeeded) <= 0) {
+        toast({
+          title: "Missing Information",
+          description: "Please select a packet type and enter a valid quantity",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setBuildingSession(true);
+      try {
+        const result = await apiRequest('/api/cutting-table/packet-sessions/build', {
+          method: 'POST',
+          body: JSON.stringify({
+            productCategoryId: selectedPacketCategory,
+            packetsCount: parseInt(packetsNeeded),
+            performedBy: 'Production Team',
+            notes: `Built ${packetsNeeded} packets via UI`,
+          }),
+        });
+
+        const lotsCount = result.sessionLots?.length || 0;
+        toast({
+          title: "Packet Build Complete",
+          description: `Built ${packetsNeeded} packet(s) using ${lotsCount} inventory lot(s). Session ID: ${result.session?.id?.slice(0, 8)}...`,
+          duration: 5000,
+        });
+
+        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
+        setSelectedPacketCategory('');
+        setPacketsNeeded('');
+      } catch (error: any) {
+        const errorMsg = error.error || error.message || "Failed to build packet session";
+        toast({
+          title: "Build Failed",
+          description: errorMsg,
+          variant: "destructive",
+          duration: 7000,
+        });
+      } finally {
+        setBuildingSession(false);
+      }
     };
 
-    const calculatedCuts = calculatePacketCuts();
+    const selectedCategory = categories.find(c => c.id === selectedPacketCategory);
+    const categoryCompositions = packetCompositions.filter(
+      comp => comp.productCategoryId === selectedPacketCategory
+    );
 
     return (
       <div className="space-y-6" data-testid="packet-management">
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Production Calculator</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Packet Type</label>
-              <Select value={selectedPacketCategory} onValueChange={setSelectedPacketCategory}>
-                <SelectTrigger data-testid="select-packet-type">
-                  <SelectValue placeholder="Select packet type..." />
-                </SelectTrigger>
-                <SelectContent position="popper" side="bottom" align="start">
-                  {packetCategories.map(cat => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.categoryName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recipe Summary Panel */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Recipe Summary</h3>
             
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Packets Needed</label>
-              <Input
-                type="number"
-                placeholder="Enter quantity"
-                value={packetsNeeded}
-                onChange={(e) => setPacketsNeeded(e.target.value)}
-                data-testid="input-packets-needed"
-              />
-            </div>
-
-            <div className="flex items-end">
-              <Button 
-                onClick={() => {
-                  setSelectedPacketCategory('');
-                  setPacketsNeeded('');
-                }}
-                variant="outline"
-                data-testid="button-reset-calculator"
-              >
-                Reset
-              </Button>
-            </div>
-          </div>
-
-          {calculatedCuts.length > 0 && (
-            <div className="mt-6">
-              <h4 className="font-semibold mb-3">Cuts Required:</h4>
-              <table className="w-full text-sm">
-                <thead className="border-b">
-                  <tr>
-                    <th className="text-left p-2">Component</th>
-                    <th className="text-left p-2">Fabric</th>
-                    <th className="text-left p-2">Thickness</th>
-                    <th className="text-right p-2">Qty/Packet</th>
-                    <th className="text-right p-2">Total Pieces</th>
-                    <th className="text-right p-2">Yield/Cut</th>
-                    <th className="text-right p-2 font-bold">Cuts Needed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {calculatedCuts.map((item, idx) => (
-                    <tr key={idx} className="border-b">
-                      <td className="p-2">{item.componentName}</td>
-                      <td className="p-2">{item.fabricType}</td>
-                      <td className="p-2">{item.thickness}</td>
-                      <td className="text-right p-2">{item.quantityPerPacket}</td>
-                      <td className="text-right p-2">{item.totalPieces}</td>
-                      <td className="text-right p-2">{item.yieldPerCut}</td>
-                      <td className="text-right p-2 font-bold">{item.cutsRequired}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Components & Yields</h3>
-          <table className="w-full text-sm">
-            <thead className="border-b">
-              <tr>
-                <th className="text-left p-2">Component</th>
-                <th className="text-left p-2">Fabric Type</th>
-                <th className="text-left p-2">Thickness</th>
-                <th className="text-right p-2">Yield per Cut</th>
-              </tr>
-            </thead>
-            <tbody>
-              {components.map(comp => (
-                <tr key={comp.id} className="border-b">
-                  <td className="p-2">{comp.componentName}</td>
-                  <td className="p-2">{comp.fabricType}</td>
-                  <td className="p-2">{comp.thickness}</td>
-                  <td className="text-right p-2">{comp.yieldPerCut}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Packet Compositions</h3>
-          {packetCategories.map(cat => {
-            const comps = packetCompositions.filter(pc => pc.productCategoryId === cat.id);
-            return (
-              <div key={cat.id} className="mb-4">
-                <h4 className="font-medium mb-2">{cat.categoryName}</h4>
-                <ul className="list-disc list-inside text-sm text-muted-foreground ml-4">
-                  {comps.map(comp => {
-                    const component = components.find(c => c.id === comp.componentId);
-                    return component ? (
-                      <li key={comp.id}>
-                        {comp.quantityNeeded}x {component.componentName} ({component.fabricType} - {component.thickness})
-                      </li>
-                    ) : null;
-                  })}
-                </ul>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Select Packet Type</label>
+                <Select value={selectedPacketCategory} onValueChange={setSelectedPacketCategory}>
+                  <SelectTrigger data-testid="select-packet-type">
+                    <SelectValue placeholder="Select packet type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {packetCategories.map(cat => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.categoryName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            );
-          })}
+
+              {selectedCategory && categoryCompositions.length > 0 && (
+                <div className="border rounded p-4 bg-muted/50">
+                  <h4 className="font-medium mb-3">{selectedCategory.categoryName} Composition</h4>
+                  <div className="space-y-2">
+                    {categoryCompositions.map(comp => {
+                      const component = components.find(c => c.id === comp.componentId);
+                      return component ? (
+                        <div key={comp.id} className="flex justify-between text-sm p-2 bg-background rounded">
+                          <span className="font-medium">{component.componentName}</span>
+                          <span className="text-muted-foreground">
+                            {comp.quantityNeeded}x • {component.fabricType} {component.thickness}
+                          </span>
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Build Session Panel */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Build Packet Session</h3>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Packets to Build</label>
+                <Input
+                  type="number"
+                  placeholder="Enter quantity"
+                  value={packetsNeeded}
+                  onChange={(e) => setPacketsNeeded(e.target.value)}
+                  disabled={!selectedPacketCategory}
+                  data-testid="input-packets-needed"
+                  min="1"
+                />
+              </div>
+
+              {selectedPacketCategory && packetsNeeded && parseInt(packetsNeeded) > 0 && (
+                <div className="border rounded p-4 bg-blue-50 dark:bg-blue-950">
+                  <h4 className="font-medium mb-2 text-sm">Estimated Requirements:</h4>
+                  <div className="space-y-1 text-sm">
+                    {categoryCompositions.map(comp => {
+                      const component = components.find(c => c.id === comp.componentId);
+                      if (!component) return null;
+                      const totalNeeded = comp.quantityNeeded * parseInt(packetsNeeded);
+                      return (
+                        <div key={comp.id} className="flex justify-between">
+                          <span>{component.componentName}:</span>
+                          <span className="font-mono">{totalNeeded} pcs</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <Button
+                onClick={handleBuildPacket}
+                disabled={!selectedPacketCategory || !packetsNeeded || buildingSession}
+                className="w-full"
+                data-testid="button-build-session"
+              >
+                {buildingSession ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Building...
+                  </>
+                ) : (
+                  'Build Packet Session (FIFO)'
+                )}
+              </Button>
+
+              <div className="text-xs text-muted-foreground space-y-1 mt-2 p-2 border rounded bg-muted/30">
+                <p>ℹ️ FIFO Allocation Process:</p>
+                <p>• Automatically selects lots with nearest expiration dates</p>
+                <p>• Updates inventory balances in real-time</p>
+                <p>• Creates audit trail for all transactions</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* All Packet Compositions Reference */}
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">All Packet Recipes</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {packetCategories.map(cat => {
+              const comps = packetCompositions.filter(pc => pc.productCategoryId === cat.id);
+              return (
+                <div key={cat.id} className="border rounded p-4 hover:bg-muted/50">
+                  <h4 className="font-medium mb-2">{cat.categoryName}</h4>
+                  <div className="space-y-1">
+                    {comps.map(comp => {
+                      const component = components.find(c => c.id === comp.componentId);
+                      return component ? (
+                        <div key={comp.id} className="text-sm text-muted-foreground">
+                          • {comp.quantityNeeded}x {component.componentName}
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </Card>
       </div>
     );

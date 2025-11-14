@@ -334,6 +334,7 @@ import {
   type InsertCuttingComponent,
   cuttingPacketCompositions,
   type CuttingPacketComposition,
+  type InsertCuttingPacketComposition,
   cuttingWeeklyData,
   type CuttingWeeklyData,
   type InsertCuttingWeeklyData,
@@ -343,6 +344,15 @@ import {
   cuttingFabricInventory,
   type CuttingFabricInventory,
   type InsertCuttingFabricInventory,
+  cuttingPacketSessions,
+  type CuttingPacketSession,
+  type InsertCuttingPacketSession,
+  cuttingPacketSessionLots,
+  type CuttingPacketSessionLot,
+  type InsertCuttingPacketSessionLot,
+  cuttingFabricInventoryTransactions,
+  type CuttingFabricInventoryTransaction,
+  type InsertCuttingFabricInventoryTransaction,
 } from './schema';
 import { db, pool } from './db';
 import {
@@ -1615,9 +1625,28 @@ export interface IStorage {
   getAllCuttingFabricInventory(): Promise<CuttingFabricInventory[]>;
   getCuttingFabricInventory(id: string): Promise<CuttingFabricInventory | undefined>;
   getCuttingFabricInventoryByMaterial(materialId: string): Promise<CuttingFabricInventory[]>;
+  getCuttingFabricInventoryFIFO(materialId?: string): Promise<CuttingFabricInventory[]>;
   createCuttingFabricInventory(data: InsertCuttingFabricInventory): Promise<CuttingFabricInventory>;
   updateCuttingFabricInventory(id: string, data: Partial<InsertCuttingFabricInventory>): Promise<CuttingFabricInventory>;
   deleteCuttingFabricInventory(id: string): Promise<void>;
+
+  // Cutting Table - Packet Sessions CRUD
+  getAllCuttingPacketSessions(): Promise<CuttingPacketSession[]>;
+  getCuttingPacketSession(id: string): Promise<CuttingPacketSession | undefined>;
+  createCuttingPacketSession(data: InsertCuttingPacketSession): Promise<CuttingPacketSession>;
+
+  // Cutting Table - Packet Session Lots CRUD
+  getCuttingPacketSessionLots(sessionId: string): Promise<CuttingPacketSessionLot[]>;
+  createCuttingPacketSessionLot(data: InsertCuttingPacketSessionLot): Promise<CuttingPacketSessionLot>;
+  updateCuttingPacketSessionLot(id: string, data: Partial<InsertCuttingPacketSessionLot>): Promise<void>;
+  deleteCuttingPacketSessionLot(id: string): Promise<void>;
+
+  // Cutting Table - Fabric Inventory Transactions CRUD
+  getAllCuttingFabricInventoryTransactions(): Promise<CuttingFabricInventoryTransaction[]>;
+  getCuttingFabricInventoryTransactionsByInventory(fabricInventoryId: string): Promise<CuttingFabricInventoryTransaction[]>;
+  createCuttingFabricInventoryTransaction(data: InsertCuttingFabricInventoryTransaction): Promise<CuttingFabricInventoryTransaction>;
+  updateCuttingFabricInventoryTransaction(id: string, data: Partial<InsertCuttingFabricInventoryTransaction>): Promise<void>;
+  deleteCuttingFabricInventoryTransaction(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -12665,6 +12694,90 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCuttingFabricInventory(id: string): Promise<void> {
     await db.delete(cuttingFabricInventory).where(eq(cuttingFabricInventory.id, id));
+  }
+
+  async getCuttingFabricInventoryFIFO(materialId?: string): Promise<CuttingFabricInventory[]> {
+    let builder = db.select().from(cuttingFabricInventory);
+    
+    if (materialId) {
+      builder = builder.where(eq(cuttingFabricInventory.materialId, materialId));
+    }
+    
+    builder = builder.orderBy(
+      asc(cuttingFabricInventory.expirationDate),
+      asc(cuttingFabricInventory.receivedDate)
+    );
+    
+    const results = await builder;
+    
+    // Handle null expirations manually - sort nulls to end
+    return results.sort((a, b) => {
+      if (a.expirationDate === null && b.expirationDate === null) {
+        return (a.receivedDate?.getTime() || 0) - (b.receivedDate?.getTime() || 0);
+      }
+      if (a.expirationDate === null) return 1; // a goes after b
+      if (b.expirationDate === null) return -1; // b goes after a
+      
+      const dateCompare = a.expirationDate.getTime() - b.expirationDate.getTime();
+      if (dateCompare !== 0) return dateCompare;
+      
+      return (a.receivedDate?.getTime() || 0) - (b.receivedDate?.getTime() || 0);
+    });
+  }
+
+  // Cutting Table - Packet Sessions CRUD
+  async getAllCuttingPacketSessions(): Promise<CuttingPacketSession[]> {
+    return await db.select().from(cuttingPacketSessions);
+  }
+
+  async getCuttingPacketSession(id: string): Promise<CuttingPacketSession | undefined> {
+    const [session] = await db.select().from(cuttingPacketSessions).where(eq(cuttingPacketSessions.id, id));
+    return session || undefined;
+  }
+
+  async createCuttingPacketSession(data: InsertCuttingPacketSession): Promise<CuttingPacketSession> {
+    const [session] = await db.insert(cuttingPacketSessions).values(data).returning();
+    return session;
+  }
+
+  // Cutting Table - Packet Session Lots CRUD
+  async getCuttingPacketSessionLots(sessionId: string): Promise<CuttingPacketSessionLot[]> {
+    return await db.select().from(cuttingPacketSessionLots).where(eq(cuttingPacketSessionLots.sessionId, sessionId));
+  }
+
+  async createCuttingPacketSessionLot(data: InsertCuttingPacketSessionLot): Promise<CuttingPacketSessionLot> {
+    const [lot] = await db.insert(cuttingPacketSessionLots).values(data).returning();
+    return lot;
+  }
+
+  async updateCuttingPacketSessionLot(id: string, data: Partial<InsertCuttingPacketSessionLot>): Promise<void> {
+    await db.update(cuttingPacketSessionLots).set(data).where(eq(cuttingPacketSessionLots.id, id));
+  }
+
+  async deleteCuttingPacketSessionLot(id: string): Promise<void> {
+    await db.delete(cuttingPacketSessionLots).where(eq(cuttingPacketSessionLots.id, id));
+  }
+
+  // Cutting Table - Fabric Inventory Transactions CRUD
+  async getAllCuttingFabricInventoryTransactions(): Promise<CuttingFabricInventoryTransaction[]> {
+    return await db.select().from(cuttingFabricInventoryTransactions);
+  }
+
+  async getCuttingFabricInventoryTransactionsByInventory(fabricInventoryId: string): Promise<CuttingFabricInventoryTransaction[]> {
+    return await db.select().from(cuttingFabricInventoryTransactions).where(eq(cuttingFabricInventoryTransactions.fabricInventoryId, fabricInventoryId));
+  }
+
+  async createCuttingFabricInventoryTransaction(data: InsertCuttingFabricInventoryTransaction): Promise<CuttingFabricInventoryTransaction> {
+    const [transaction] = await db.insert(cuttingFabricInventoryTransactions).values(data).returning();
+    return transaction;
+  }
+
+  async updateCuttingFabricInventoryTransaction(id: string, data: Partial<InsertCuttingFabricInventoryTransaction>): Promise<void> {
+    await db.update(cuttingFabricInventoryTransactions).set(data).where(eq(cuttingFabricInventoryTransactions.id, id));
+  }
+
+  async deleteCuttingFabricInventoryTransaction(id: string): Promise<void> {
+    await db.delete(cuttingFabricInventoryTransactions).where(eq(cuttingFabricInventoryTransactions.id, id));
   }
 
 

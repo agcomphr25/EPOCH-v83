@@ -142,6 +142,9 @@ export default function CuttingTable() {
   const [packetsNeeded, setPacketsNeeded] = useState('');
   const [buildingSession, setBuildingSession] = useState(false);
 
+  // Form state for Inventory tab
+  const [inventorySortBy, setInventorySortBy] = useState<'fabric' | 'expiration' | 'quantity'>('expiration');
+
   // Fetch all data
   const { data: materials = [], isLoading: loadingMaterials } = useQuery<Material[]>({
     queryKey: ['/api/cutting-table/materials'],
@@ -1034,107 +1037,146 @@ export default function CuttingTable() {
     type FabricWithDetails = FabricInventory & { source?: string; fabric?: string; batchNumber?: string; internalControlNumber?: string; barcode?: string; receivedDate?: string; manufactureDate?: string; productionLineId?: string; conformanceDocumentLink?: string };
     const fabricWithDetails = fabricInventory as FabricWithDetails[];
 
-    return (
-      <Card className="p-8" data-testid="fabric-inventory">
-        <h3 className="text-lg font-semibold mb-4">Fabric Inventory</h3>
-        {fabricWithDetails.length === 0 ? (
-          <p className="text-muted-foreground">No fabric inventory data available. Use the "Add Fabric" tab to add inventory.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-2 text-sm font-medium">Production Line</th>
-                  <th className="text-left p-2 text-sm font-medium">Source</th>
-                  <th className="text-left p-2 text-sm font-medium">Fabric</th>
-                  <th className="text-left p-2 text-sm font-medium">Batch #</th>
-                  <th className="text-left p-2 text-sm font-medium">Control #</th>
-                  <th className="text-left p-2 text-sm font-medium">Barcode</th>
-                  <th className="text-left p-2 text-sm font-medium">Location</th>
-                  <th className="text-left p-2 text-sm font-medium">Paperwork</th>
-                  <th className="text-left p-2 text-sm font-medium">Qty</th>
-                  <th className="text-left p-2 text-sm font-medium">Received</th>
-                  <th className="text-left p-2 text-sm font-medium">Expires</th>
-                  <th className="text-left p-2 text-sm font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fabricWithDetails.map(item => {
-                  const line = productionLines.find(l => l.id === item.productionLineId);
-                  const isLowStock = item.quantityInStock <= item.lowStockThreshold;
+    const getExpirationStatus = (expirationDate: string | null | undefined) => {
+      if (!expirationDate) return { label: 'No Expiration', color: 'text-gray-500', bgColor: 'bg-gray-100 dark:bg-gray-800' };
+      
+      const today = new Date();
+      const expDate = new Date(expirationDate);
+      const daysUntilExpiration = Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysUntilExpiration < 0) return { label: 'Expired', color: 'text-red-700', bgColor: 'bg-red-100 dark:bg-red-900' };
+      if (daysUntilExpiration <= 7) return { label: `${daysUntilExpiration}d - Critical`, color: 'text-orange-700', bgColor: 'bg-orange-100 dark:bg-orange-900' };
+      if (daysUntilExpiration <= 30) return { label: `${daysUntilExpiration}d - Soon`, color: 'text-yellow-700', bgColor: 'bg-yellow-100 dark:bg-yellow-900' };
+      return { label: `${daysUntilExpiration}d - OK`, color: 'text-green-700', bgColor: 'bg-green-100 dark:bg-green-900' };
+    };
 
-                  return (
-                    <tr 
-                      key={item.id} 
-                      className={`border-b hover:bg-muted/50 ${isLowStock ? 'bg-red-50 dark:bg-red-900/10' : ''}`}
-                      data-testid={`inventory-item-${item.id}`}
-                    >
-                      <td className="p-2 text-sm">
-                        <span className={`px-2 py-1 rounded text-xs font-semibold ${line?.lineName === 'P2' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
-                          {line?.lineName || '-'}
-                        </span>
-                      </td>
-                      <td className="p-2 text-sm">{item.source || '-'}</td>
-                      <td className="p-2 text-sm">{item.fabric || '-'}</td>
-                      <td className="p-2 text-sm">{item.batchNumber || '-'}</td>
-                      <td className="p-2 text-sm">{item.internalControlNumber || '-'}</td>
-                      <td className="p-2 text-sm font-mono text-xs">
-                        {item.barcode ? (
-                          <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded" data-testid={`barcode-${item.id}`}>
-                            {item.barcode}
-                          </span>
-                        ) : '-'}
-                      </td>
-                      <td className="p-2 text-sm">{item.location || '-'}</td>
-                      <td className="p-2 text-sm">
-                        {item.conformanceDocumentLink ? (
-                          <a 
-                            href={item.conformanceDocumentLink} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline text-xs"
-                            data-testid={`link-conformance-${item.id}`}
-                          >
-                            📄 View
-                          </a>
-                        ) : '-'}
-                      </td>
-                      <td className="p-2 text-sm">
-                        <span className={`font-semibold ${isLowStock ? 'text-red-600' : ''}`} data-testid={`text-stock-${item.id}`}>
-                          {item.quantityInStock}
-                        </span>
-                        {isLowStock && <span className="text-xs text-red-600 ml-1">⚠</span>}
-                      </td>
-                      <td className="p-2 text-sm">
-                        {item.receivedDate ? new Date(item.receivedDate).toLocaleDateString() : '-'}
-                      </td>
-                      <td className="p-2 text-sm">
-                        {item.expirationDate ? new Date(item.expirationDate).toLocaleDateString() : '-'}
-                      </td>
-                      <td className="p-2">
-                        {item.barcode ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => window.open(`/api/cutting-table/fabric-inventory/${item.id}/print-barcode`, '_blank')}
-                            data-testid={`button-print-barcode-${item.id}`}
-                            className="flex items-center gap-1"
-                          >
-                            <Printer className="w-3 h-3" />
-                            Print
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">No barcode</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+    const sortedInventory = [...fabricWithDetails].sort((a, b) => {
+      if (inventorySortBy === 'fabric') {
+        return (a.fabric || '').localeCompare(b.fabric || '');
+      } else if (inventorySortBy === 'expiration') {
+        if (!a.expirationDate && !b.expirationDate) return 0;
+        if (!a.expirationDate) return 1;
+        if (!b.expirationDate) return -1;
+        return new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime();
+      } else if (inventorySortBy === 'quantity') {
+        return a.quantityInStock - b.quantityInStock;
+      }
+      return 0;
+    });
+
+    const fabricTypes = Array.from(new Set(fabricWithDetails.map(item => item.fabric).filter(Boolean)));
+    const totalQuantity = fabricWithDetails.reduce((sum, item) => sum + item.quantityInStock, 0);
+
+    return (
+      <div className="space-y-4">
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold">Fabric Inventory Overview</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {fabricTypes.length} fabric types • {fabricWithDetails.length} lots • {totalQuantity} units total
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium">Sort by:</label>
+              <Select value={inventorySortBy} onValueChange={(v) => setInventorySortBy(v as any)}>
+                <SelectTrigger className="w-[160px]" data-testid="select-inventory-sort">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="expiration">Expiration (FIFO)</SelectItem>
+                  <SelectItem value="fabric">Fabric Type</SelectItem>
+                  <SelectItem value="quantity">Quantity</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        )}
-      </Card>
+
+          {fabricWithDetails.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">No fabric inventory data available. Use the "Add Fabric" tab to add inventory.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left p-2 text-sm font-medium">Line</th>
+                    <th className="text-left p-2 text-sm font-medium">Fabric Type</th>
+                    <th className="text-left p-2 text-sm font-medium">Source</th>
+                    <th className="text-left p-2 text-sm font-medium">Batch/Control</th>
+                    <th className="text-left p-2 text-sm font-medium">Location</th>
+                    <th className="text-right p-2 text-sm font-medium">Qty on Hand</th>
+                    <th className="text-left p-2 text-sm font-medium">Received</th>
+                    <th className="text-left p-2 text-sm font-medium">Expiration Status</th>
+                    <th className="text-left p-2 text-sm font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedInventory.map(item => {
+                    const line = productionLines.find(l => l.id === item.productionLineId);
+                    const isLowStock = item.quantityInStock <= item.lowStockThreshold;
+                    const expirationStatus = getExpirationStatus(item.expirationDate);
+
+                    return (
+                      <tr 
+                        key={item.id} 
+                        className="border-b hover:bg-muted/50"
+                        data-testid={`inventory-item-${item.id}`}
+                      >
+                        <td className="p-2 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs font-semibold ${line?.lineName === 'P2' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'}`}>
+                            {line?.lineName || '-'}
+                          </span>
+                        </td>
+                        <td className="p-2 text-sm font-medium">{item.fabric || '-'}</td>
+                        <td className="p-2 text-sm text-muted-foreground">{item.source || '-'}</td>
+                        <td className="p-2 text-sm text-muted-foreground">
+                          {item.batchNumber && <div className="text-xs">B: {item.batchNumber}</div>}
+                          {item.internalControlNumber && <div className="text-xs">C: {item.internalControlNumber}</div>}
+                          {!item.batchNumber && !item.internalControlNumber && '-'}
+                        </td>
+                        <td className="p-2 text-sm">{item.location || '-'}</td>
+                        <td className="p-2 text-right">
+                          <span className={`font-bold text-lg ${isLowStock ? 'text-red-600' : 'text-foreground'}`} data-testid={`text-stock-${item.id}`}>
+                            {item.quantityInStock}
+                          </span>
+                          {isLowStock && <div className="text-xs text-red-600">⚠ Low Stock</div>}
+                        </td>
+                        <td className="p-2 text-sm text-muted-foreground">
+                          {item.receivedDate ? new Date(item.receivedDate).toLocaleDateString() : '-'}
+                        </td>
+                        <td className="p-2">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${expirationStatus.color} ${expirationStatus.bgColor}`}>
+                            {expirationStatus.label}
+                          </span>
+                          {item.expirationDate && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {new Date(item.expirationDate).toLocaleDateString()}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-2">
+                          {item.barcode ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(`/api/cutting-table/fabric-inventory/${item.id}/print-barcode`, '_blank')}
+                              data-testid={`button-print-barcode-${item.id}`}
+                              className="flex items-center gap-1 text-xs"
+                            >
+                              <Printer className="w-3 h-3" />
+                              Print
+                            </Button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </div>
     );
   };
 

@@ -8911,15 +8911,15 @@ export class DatabaseStorage implements IStorage {
     // Define standard processing times for each department
     const departmentTimes = {
       Layup: 35,
-      Plugging: 7,
-      CNC: 7,
-      Gunsmith: isAdjusted ? 14 : 7,
-      Finish: isAdjusted ? 14 : 7,
-      'Finish QC': 7,
-      Paint: 7,
-      QC: 7,
-      'Shipping QC': 7,
-      Shipping: 7,
+      Plugging: 5,
+      CNC: 5,
+      Gunsmith: isAdjusted ? 10 : 5,
+      Finish: isAdjusted ? 10 : 5,
+      'Finish QC': 5,
+      Paint: 5,
+      QC: 5,
+      'Shipping QC': 5,
+      Shipping: 5,
     };
 
     // Define department sequence
@@ -8938,7 +8938,7 @@ export class DatabaseStorage implements IStorage {
 
     // Check if order is overdue in current department
     const currentDeptStandardTime =
-      departmentTimes[order.currentDepartment] || 7;
+      departmentTimes[order.currentDepartment] || 5;
     const isDeptOverdue = daysInDept > currentDeptStandardTime;
 
     // Calculate remaining time needed from current department onward
@@ -8950,7 +8950,7 @@ export class DatabaseStorage implements IStorage {
     if (currentDeptIndex !== -1) {
       for (let i = currentDeptIndex; i < departmentSequence.length; i++) {
         const dept = departmentSequence[i];
-        remainingProcessingDays += departmentTimes[dept] || 7;
+        remainingProcessingDays += departmentTimes[dept] || 5;
       }
     } else {
       // Unknown department fallback

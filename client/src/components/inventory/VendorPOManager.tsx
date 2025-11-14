@@ -735,8 +735,18 @@ export default function VendorPOManager() {
       // Fetch line items for this PO
       const items: VendorPOItem[] = await apiRequest(`/api/vendor-pos/${selectedVendorPO.id}/items`);
       
-      // Fetch PO settings for terms and conditions
-      const settings: any = await apiRequest('/api/vendor-pos/settings');
+      // Fetch vendor details to get vendor-specific PO settings
+      const vendor: any = await apiRequest(`/api/vendors/${selectedVendorPO.vendorId}`);
+      
+      // Fetch global PO settings as fallback
+      const globalSettings: any = await apiRequest('/api/vendor-pos/settings');
+      
+      // Use vendor-specific settings if available, otherwise fall back to global settings
+      const settings = {
+        termsAndConditions: vendor?.termsAndConditions || globalSettings?.termsAndConditions || '',
+        paymentTerms: vendor?.paymentTerms || globalSettings?.paymentTerms || '',
+        shippingInstructions: vendor?.shippingInstructions || globalSettings?.shippingInstructions || '',
+      };
       
       // Create a simple HTML structure for PDF conversion
       const printWindow = window.open('', '', 'height=600,width=800');

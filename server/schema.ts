@@ -2575,6 +2575,9 @@ export const vendors = pgTable('vendors', {
   deliveryScore: integer('delivery_score'), // 1-5: 1=Poor, 2=Needs improvement, 3=Acceptable, 4=Good, 5=Excellent
   responseScore: integer('response_score'), // 1-5: 1=Poor, 2=Needs improvement, 3=Acceptable, 4=Good, 5=Excellent
   notes: text('notes'),
+  termsAndConditions: text('terms_and_conditions'), // Vendor-specific PO terms and conditions
+  paymentTerms: text('payment_terms'), // Vendor-specific payment terms
+  shippingInstructions: text('shipping_instructions'), // Vendor-specific shipping instructions
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

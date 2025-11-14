@@ -5274,6 +5274,7 @@ export const cuttingComponents = pgTable('cutting_components', {
   id: uuid('id').defaultRandom().primaryKey(),
   componentName: text('component_name').notNull(),
   materialId: uuid('material_id').references(() => cuttingMaterials.id),
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id), // Link to general inventory items (part numbers)
   yieldPerCut: integer('yield_per_cut'), // How many pieces per cut (e.g., 70 buttstocks, 500 wrist)
   fabricType: text('fabric_type'), // Carbon Fiber, Fiberglass, etc.
   thickness: text('thickness'), // Thin, Thick

@@ -80,6 +80,7 @@ interface InventoryFormData {
   utilizedInServices: boolean;
   isPacketPart: boolean;
   hasSds: boolean;
+  hasTds: boolean;
 }
 
 const InventoryForm = ({
@@ -96,6 +97,8 @@ const InventoryForm = ({
   vendors,
   sdsFile,
   currentSdsFileName,
+  tdsFile,
+  currentTdsFileName,
 }: {
   formData: InventoryFormData;
   onSubmit: (e: React.FormEvent) => void;
@@ -113,6 +116,8 @@ const InventoryForm = ({
   vendors: any[];
   sdsFile: File | null;
   currentSdsFileName: string | null;
+  tdsFile: File | null;
+  currentTdsFileName: string | null;
 }) => (
   <form
     onSubmit={onSubmit}
@@ -665,6 +670,55 @@ const InventoryForm = ({
       </div>
     </div>
 
+    {/* Technical Data Sheet Section */}
+    <div className="space-y-4">
+      <h4 className="text-md font-semibold border-b pb-2">
+        Technical Data Sheet
+      </h4>
+      <div className="grid grid-cols-1 gap-4">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="hasTds"
+            checked={formData.hasTds}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('hasTds', checked as boolean)
+            }
+            data-testid="checkbox-hasTds"
+          />
+          <Label htmlFor="hasTds" className="cursor-pointer">
+            TDS (Technical Data Sheet available)
+          </Label>
+        </div>
+        {formData.hasTds && (
+          <div>
+            <Label htmlFor="tdsFile">Upload TDS PDF</Label>
+            <Input
+              id="tdsFile"
+              name="tdsFile"
+              type="file"
+              accept=".pdf"
+              onChange={onFileChange}
+              data-testid="input-tdsFile"
+              className="cursor-pointer"
+            />
+            {currentTdsFileName && !tdsFile && (
+              <p className="text-xs text-green-600 mt-1">
+                Current file: {currentTdsFileName}
+              </p>
+            )}
+            {tdsFile && (
+              <p className="text-xs text-blue-600 mt-1">
+                New file selected: {tdsFile.name}
+              </p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Upload a PDF file of the Technical Data Sheet
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+
     <div className="flex justify-end space-x-2 pt-4 border-t">
       <Button
         type="button"
@@ -745,10 +799,13 @@ export default function InventoryItemsCard() {
     utilizedInServices: false,
     isPacketPart: false,
     hasSds: false,
+    hasTds: false,
   });
 
   const [sdsFile, setSdsFile] = useState<File | null>(null);
   const [currentSdsFileName, setCurrentSdsFileName] = useState<string | null>(null);
+  const [tdsFile, setTdsFile] = useState<File | null>(null);
+  const [currentTdsFileName, setCurrentTdsFileName] = useState<string | null>(null);
 
   // Auto-calculate COGS per unit when conversion data changes
   useEffect(() => {
@@ -932,11 +989,14 @@ export default function InventoryItemsCard() {
 
   const createMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: async ({ data, file }: { data: any; file: File | null }) => {
+    mutationFn: async ({ data, sdsFile, tdsFile }: { data: any; sdsFile: File | null; tdsFile: File | null }) => {
       const formData = new FormData();
       formData.append('data', JSON.stringify(data));
-      if (file) {
-        formData.append('sdsFile', file);
+      if (sdsFile) {
+        formData.append('sdsFile', sdsFile);
+      }
+      if (tdsFile) {
+        formData.append('tdsFile', tdsFile);
       }
       
       const response = await fetch('/api/inventory/items', {
@@ -963,11 +1023,14 @@ export default function InventoryItemsCard() {
 
   const updateMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: async ({ id, data, file }: { id: number; data: any; file: File | null }) => {
+    mutationFn: async ({ id, data, sdsFile, tdsFile }: { id: number; data: any; sdsFile: File | null; tdsFile: File | null }) => {
       const formData = new FormData();
       formData.append('data', JSON.stringify(data));
-      if (file) {
-        formData.append('sdsFile', file);
+      if (sdsFile) {
+        formData.append('sdsFile', sdsFile);
+      }
+      if (tdsFile) {
+        formData.append('tdsFile', tdsFile);
       }
       
       const response = await fetch(`/api/inventory/items/${id}`, {
@@ -1142,9 +1205,12 @@ export default function InventoryItemsCard() {
       utilizedInServices: false,
       isPacketPart: false,
       hasSds: false,
+      hasTds: false,
     });
     setSdsFile(null);
     setCurrentSdsFileName(null);
+    setTdsFile(null);
+    setCurrentTdsFileName(null);
   };
 
   const handleChange = useCallback(
@@ -1165,8 +1231,14 @@ export default function InventoryItemsCard() {
 
   const handleSdsFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
+    const inputName = e.target.name;
+    
     if (file && file.type === 'application/pdf') {
-      setSdsFile(file);
+      if (inputName === 'sdsFile') {
+        setSdsFile(file);
+      } else if (inputName === 'tdsFile') {
+        setTdsFile(file);
+      }
     } else if (file) {
       toast.error('Please select a PDF file');
       e.target.value = '';
@@ -1223,15 +1295,16 @@ export default function InventoryItemsCard() {
         utilizedInServices: formData.utilizedInServices,
         isPacketPart: formData.isPacketPart,
         hasSds: formData.hasSds,
+        hasTds: formData.hasTds,
       };
 
       if (editingItem) {
-        updateMutation.mutate({ id: editingItem.id, data: submitData, file: sdsFile });
+        updateMutation.mutate({ id: editingItem.id, data: submitData, sdsFile, tdsFile });
       } else {
-        createMutation.mutate({ data: submitData, file: sdsFile });
+        createMutation.mutate({ data: submitData, sdsFile, tdsFile });
       }
     },
-    [formData, editingItem, updateMutation, createMutation, sdsFile]
+    [formData, editingItem, updateMutation, createMutation, sdsFile, tdsFile]
   );
 
   const handleEdit = (item: InventoryItem) => {
@@ -1273,9 +1346,12 @@ export default function InventoryItemsCard() {
       utilizedInServices: item.utilizedInServices || false,
       isPacketPart: item.isPacketPart || false,
       hasSds: item.hasSds || false,
+      hasTds: item.hasTds || false,
     });
     setSdsFile(null);
     setCurrentSdsFileName(item.sdsFilePath ? item.sdsFilePath.split('/').pop() || null : null);
+    setTdsFile(null);
+    setCurrentTdsFileName(item.tdsFilePath ? item.tdsFilePath.split('/').pop() || null : null);
     setIsEditOpen(true);
   };
 
@@ -1502,6 +1578,8 @@ export default function InventoryItemsCard() {
                 vendors={vendors}
                 sdsFile={sdsFile}
                 currentSdsFileName={currentSdsFileName}
+                tdsFile={tdsFile}
+                currentTdsFileName={currentTdsFileName}
               />
             </DialogContent>
           </Dialog>
@@ -1877,6 +1955,9 @@ export default function InventoryItemsCard() {
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
                   SDS
                 </th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                  TDS
+                </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Actions
                 </th>
@@ -2011,6 +2092,23 @@ export default function InventoryItemsCard() {
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                      {item.hasTds && item.tdsFilePath ? (
+                        <a
+                          href={item.tdsFilePath}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+                          data-testid={`link-tds-${item.id}`}
+                          title="View TDS"
+                        >
+                          <Download className="h-4 w-4" />
+                          PDF
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       <div className="flex space-x-2">
                         <Button
@@ -2074,6 +2172,8 @@ export default function InventoryItemsCard() {
             vendors={vendors}
             sdsFile={sdsFile}
             currentSdsFileName={currentSdsFileName}
+            tdsFile={tdsFile}
+            currentTdsFileName={currentTdsFileName}
           />
           {editingItem?.agPartNumber && (
             <div className="mt-6 border-t pt-6">

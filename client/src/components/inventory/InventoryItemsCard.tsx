@@ -1652,6 +1652,8 @@ export default function InventoryItemsCard() {
                 currentSdsFileName={currentSdsFileName}
                 tdsFile={tdsFile}
                 currentTdsFileName={currentTdsFileName}
+                otherDocsFile={otherDocsFile}
+                currentOtherDocsFileName={currentOtherDocsFileName}
               />
             </DialogContent>
           </Dialog>
@@ -2030,6 +2032,9 @@ export default function InventoryItemsCard() {
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
                   TDS
                 </th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                  Other Docs
+                </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Actions
                 </th>
@@ -2181,6 +2186,23 @@ export default function InventoryItemsCard() {
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                      {item.hasOtherDocs && item.otherDocsFilePath ? (
+                        <a
+                          href={item.otherDocsFilePath}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+                          data-testid={`link-other-docs-${item.id}`}
+                          title="View Other Docs"
+                        >
+                          <Download className="h-4 w-4" />
+                          PDF
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       <div className="flex space-x-2">
                         <Button
@@ -2246,6 +2268,8 @@ export default function InventoryItemsCard() {
             currentSdsFileName={currentSdsFileName}
             tdsFile={tdsFile}
             currentTdsFileName={currentTdsFileName}
+            otherDocsFile={otherDocsFile}
+            currentOtherDocsFileName={currentOtherDocsFileName}
           />
           {editingItem?.agPartNumber && (
             <div className="mt-6 border-t pt-6">

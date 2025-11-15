@@ -16,16 +16,23 @@ import { storage } from '../../storage';
 
 const router = Router();
 
-// Pre-create SDS directory to avoid async issues in multer
+// Pre-create SDS and TDS directories to avoid async issues in multer
 const SDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/sds');
+const TDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/tds');
+
 fs.mkdir(SDS_UPLOAD_DIR, { recursive: true }).catch(err => {
   console.error('Failed to create SDS upload directory:', err);
 });
+fs.mkdir(TDS_UPLOAD_DIR, { recursive: true }).catch(err => {
+  console.error('Failed to create TDS upload directory:', err);
+});
 
-// Configure multer for SDS PDF uploads
-const sdsStorage = multer.diskStorage({
+// Configure multer storage for PDF uploads
+const pdfStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, SDS_UPLOAD_DIR);
+    // Determine destination based on field name
+    const uploadDir = file.fieldname === 'tdsFile' ? TDS_UPLOAD_DIR : SDS_UPLOAD_DIR;
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -35,14 +42,14 @@ const sdsStorage = multer.diskStorage({
   }
 });
 
-const sdsUpload = multer({
-  storage: sdsStorage,
+const pdfUpload = multer({
+  storage: pdfStorage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
     if (file.originalname.toLowerCase().endsWith('.pdf')) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF files are allowed for SDS uploads'));
+      cb(new Error('Only PDF files are allowed'));
     }
   }
 });
@@ -59,10 +66,10 @@ router.get('/inventory/items', async (req: Request, res: Response) => {
 });
 
 // Enhanced Inventory API - Update item
-router.put('/inventory/items/:id', sdsUpload.single('sdsFile'), async (req: Request, res: Response) => {
+router.put('/inventory/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
-    const file = req.file;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const dataString = req.body.data;
     
     let updates;
@@ -74,9 +81,12 @@ router.put('/inventory/items/:id', sdsUpload.single('sdsFile'), async (req: Requ
       updates = req.body;
     }
     
-    // Add file path if file was uploaded
-    if (file) {
-      updates.sdsFilePath = `/api/inventory/sds/${path.basename(file.path)}`;
+    // Add file paths if files were uploaded
+    if (files?.sdsFile?.[0]) {
+      updates.sdsFilePath = `/api/inventory/sds/${path.basename(files.sdsFile[0].path)}`;
+    }
+    if (files?.tdsFile?.[0]) {
+      updates.tdsFilePath = `/api/inventory/tds/${path.basename(files.tdsFile[0].path)}`;
     }
     
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
@@ -111,9 +121,9 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST route for creating inventory items at the root level (to match client expectations)
-router.post('/', sdsUpload.single('sdsFile'), async (req: Request, res: Response) => {
+router.post('/', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
   try {
-    const file = req.file;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const dataString = req.body.data;
     
     let itemData;
@@ -125,9 +135,12 @@ router.post('/', sdsUpload.single('sdsFile'), async (req: Request, res: Response
       itemData = insertInventoryItemSchema.parse(req.body);
     }
     
-    // Add file path if file was uploaded
-    if (file) {
-      itemData.sdsFilePath = `/api/inventory/sds/${path.basename(file.path)}`;
+    // Add file paths if files were uploaded
+    if (files?.sdsFile?.[0]) {
+      itemData.sdsFilePath = `/api/inventory/sds/${path.basename(files.sdsFile[0].path)}`;
+    }
+    if (files?.tdsFile?.[0]) {
+      itemData.tdsFilePath = `/api/inventory/tds/${path.basename(files.tdsFile[0].path)}`;
     }
     
     const newItem = await storage.createInventoryItem(itemData);
@@ -142,10 +155,10 @@ router.post('/', sdsUpload.single('sdsFile'), async (req: Request, res: Response
 });
 
 // PUT route for updating inventory items at the root level
-router.put('/:id', sdsUpload.single('sdsFile'), async (req: Request, res: Response) => {
+router.put('/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
-    const file = req.file;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const dataString = req.body.data;
     
     let updates;
@@ -157,9 +170,12 @@ router.put('/:id', sdsUpload.single('sdsFile'), async (req: Request, res: Respon
       updates = req.body;
     }
     
-    // Add file path if file was uploaded
-    if (file) {
-      updates.sdsFilePath = `/api/inventory/sds/${path.basename(file.path)}`;
+    // Add file paths if files were uploaded
+    if (files?.sdsFile?.[0]) {
+      updates.sdsFilePath = `/api/inventory/sds/${path.basename(files.sdsFile[0].path)}`;
+    }
+    if (files?.tdsFile?.[0]) {
+      updates.tdsFilePath = `/api/inventory/tds/${path.basename(files.tdsFile[0].path)}`;
     }
     
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
@@ -209,9 +225,9 @@ router.get('/items/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/items', sdsUpload.single('sdsFile'), async (req: Request, res: Response) => {
+router.post('/items', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
   try {
-    const file = req.file;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const dataString = req.body.data;
     
     let itemData;
@@ -223,9 +239,12 @@ router.post('/items', sdsUpload.single('sdsFile'), async (req: Request, res: Res
       itemData = insertInventoryItemSchema.parse(req.body);
     }
     
-    // Add file path if file was uploaded
-    if (file) {
-      itemData.sdsFilePath = `/api/inventory/sds/${path.basename(file.path)}`;
+    // Add file paths if files were uploaded
+    if (files?.sdsFile?.[0]) {
+      itemData.sdsFilePath = `/api/inventory/sds/${path.basename(files.sdsFile[0].path)}`;
+    }
+    if (files?.tdsFile?.[0]) {
+      itemData.tdsFilePath = `/api/inventory/tds/${path.basename(files.tdsFile[0].path)}`;
     }
     
     const newItem = await storage.createInventoryItem(itemData);
@@ -239,10 +258,10 @@ router.post('/items', sdsUpload.single('sdsFile'), async (req: Request, res: Res
   }
 });
 
-router.put('/items/:id', sdsUpload.single('sdsFile'), async (req: Request, res: Response) => {
+router.put('/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
-    const file = req.file;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const dataString = req.body.data;
     
     let updates;
@@ -254,9 +273,12 @@ router.put('/items/:id', sdsUpload.single('sdsFile'), async (req: Request, res: 
       updates = req.body;
     }
     
-    // Add file path if file was uploaded
-    if (file) {
-      updates.sdsFilePath = `/api/inventory/sds/${path.basename(file.path)}`;
+    // Add file paths if files were uploaded
+    if (files?.sdsFile?.[0]) {
+      updates.sdsFilePath = `/api/inventory/sds/${path.basename(files.sdsFile[0].path)}`;
+    }
+    if (files?.tdsFile?.[0]) {
+      updates.tdsFilePath = `/api/inventory/tds/${path.basename(files.tdsFile[0].path)}`;
     }
     
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
@@ -1406,6 +1428,43 @@ router.get('/sds/:filename', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error serving SDS file:', error);
     res.status(500).json({ error: 'Failed to serve SDS file' });
+  }
+});
+
+// Serve TDS PDF files
+router.get('/tds/:filename', async (req: Request, res: Response) => {
+  try {
+    const filename = req.params.filename;
+    
+    // Security: Validate filename to prevent path traversal
+    // Reject any filename with path separators or parent directory references
+    if (
+      filename.includes('/') ||
+      filename.includes('\\') ||
+      filename.includes('..') ||
+      filename !== path.basename(filename)
+    ) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    
+    // Build absolute path and ensure it's within TDS directory
+    const filePath = path.resolve(TDS_UPLOAD_DIR, filename);
+    if (!filePath.startsWith(path.resolve(TDS_UPLOAD_DIR))) {
+      return res.status(400).json({ error: 'Invalid file path' });
+    }
+    
+    // Check if file exists
+    try {
+      await fs.access(filePath);
+    } catch {
+      return res.status(404).json({ error: 'TDS file not found' });
+    }
+    
+    // Send the PDF file
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('Error serving TDS file:', error);
+    res.status(500).json({ error: 'Failed to serve TDS file' });
   }
 });
 

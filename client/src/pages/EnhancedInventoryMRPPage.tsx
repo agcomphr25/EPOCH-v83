@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearch } from 'wouter';
 import {
   Card,
   CardContent,
@@ -44,10 +45,22 @@ import VendorPOManager from '../components/inventory/VendorPOManager';
 import VendorPOSettings from '../components/inventory/VendorPOSettings';
 
 export default function EnhancedInventoryMRPPage() {
+  const searchParams = useSearch();
   const [activeCard, setActiveCard] = useState<string | null>(null);
   const [isInventoryItemsModalOpen, setIsInventoryItemsModalOpen] =
     useState(false);
   const [isVendorPOModalOpen, setIsVendorPOModalOpen] = useState(false);
+  const [initialPartNumber, setInitialPartNumber] = useState<string | null>(null);
+
+  // Auto-open inventory modal if partNumber is in URL
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    const partNumber = params.get('partNumber');
+    if (partNumber) {
+      setInitialPartNumber(partNumber);
+      setIsInventoryItemsModalOpen(true);
+    }
+  }, [searchParams]);
 
   const handleCardClick = (cardType: string) => {
     if (cardType === 'inventory-items') {
@@ -392,7 +405,7 @@ export default function EnhancedInventoryMRPPage() {
               Inventory Items Management
             </DialogTitle>
           </DialogHeader>
-          <InventoryItemsCard />
+          <InventoryItemsCard initialSearchTerm={initialPartNumber} />
         </DialogContent>
       </Dialog>
 

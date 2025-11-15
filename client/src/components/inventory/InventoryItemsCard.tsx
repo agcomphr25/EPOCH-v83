@@ -793,7 +793,11 @@ const InventoryForm = ({
   </form>
 );
 
-export default function InventoryItemsCard() {
+interface InventoryItemsCardProps {
+  initialSearchTerm?: string | null;
+}
+
+export default function InventoryItemsCard({ initialSearchTerm }: InventoryItemsCardProps = {}) {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -801,7 +805,7 @@ export default function InventoryItemsCard() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [replaceAllItems, setReplaceAllItems] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearchTerm || '');
   const [utilizedFilter, setUtilizedFilter] = useState('all');
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [isAddToGroupDialogOpen, setIsAddToGroupDialogOpen] = useState(false);

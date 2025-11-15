@@ -74,25 +74,30 @@ router.put('/inventory/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount
     
     let updates;
     if (dataString) {
-      // Parse the JSON data from FormData
-      updates = JSON.parse(dataString);
+      // Parse and validate the JSON data from FormData
+      updates = insertInventoryItemSchema.partial().parse(JSON.parse(dataString));
     } else {
       // Fallback to direct JSON body (for backwards compatibility)
-      updates = req.body;
+      updates = insertInventoryItemSchema.partial().parse(req.body);
     }
     
-    // Add file paths if files were uploaded
+    // Add file paths if files were uploaded and set flags
     if (files?.sdsFile?.[0]) {
       updates.sdsFilePath = `/api/inventory/sds/${path.basename(files.sdsFile[0].path)}`;
+      updates.hasSds = true;
     }
     if (files?.tdsFile?.[0]) {
       updates.tdsFilePath = `/api/inventory/tds/${path.basename(files.tdsFile[0].path)}`;
+      updates.hasTds = true;
     }
     
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
     res.json(updatedItem);
   } catch (error) {
     console.error('Update enhanced inventory item error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to update inventory item' });
   }
 });
@@ -135,12 +140,14 @@ router.post('/', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'td
       itemData = insertInventoryItemSchema.parse(req.body);
     }
     
-    // Add file paths if files were uploaded
+    // Add file paths if files were uploaded and set flags
     if (files?.sdsFile?.[0]) {
       itemData.sdsFilePath = `/api/inventory/sds/${path.basename(files.sdsFile[0].path)}`;
+      itemData.hasSds = true;
     }
     if (files?.tdsFile?.[0]) {
       itemData.tdsFilePath = `/api/inventory/tds/${path.basename(files.tdsFile[0].path)}`;
+      itemData.hasTds = true;
     }
     
     const newItem = await storage.createInventoryItem(itemData);
@@ -163,25 +170,30 @@ router.put('/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: '
     
     let updates;
     if (dataString) {
-      // Parse the JSON data from FormData
-      updates = JSON.parse(dataString);
+      // Parse and validate the JSON data from FormData
+      updates = insertInventoryItemSchema.partial().parse(JSON.parse(dataString));
     } else {
       // Fallback to direct JSON body (for backwards compatibility)
-      updates = req.body;
+      updates = insertInventoryItemSchema.partial().parse(req.body);
     }
     
-    // Add file paths if files were uploaded
+    // Add file paths if files were uploaded and set flags
     if (files?.sdsFile?.[0]) {
       updates.sdsFilePath = `/api/inventory/sds/${path.basename(files.sdsFile[0].path)}`;
+      updates.hasSds = true;
     }
     if (files?.tdsFile?.[0]) {
       updates.tdsFilePath = `/api/inventory/tds/${path.basename(files.tdsFile[0].path)}`;
+      updates.hasTds = true;
     }
     
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
     res.json(updatedItem);
   } catch (error) {
     console.error('Update inventory item error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to update inventory item' });
   }
 });
@@ -239,12 +251,14 @@ router.post('/items', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name
       itemData = insertInventoryItemSchema.parse(req.body);
     }
     
-    // Add file paths if files were uploaded
+    // Add file paths if files were uploaded and set flags
     if (files?.sdsFile?.[0]) {
       itemData.sdsFilePath = `/api/inventory/sds/${path.basename(files.sdsFile[0].path)}`;
+      itemData.hasSds = true;
     }
     if (files?.tdsFile?.[0]) {
       itemData.tdsFilePath = `/api/inventory/tds/${path.basename(files.tdsFile[0].path)}`;
+      itemData.hasTds = true;
     }
     
     const newItem = await storage.createInventoryItem(itemData);
@@ -266,25 +280,30 @@ router.put('/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { n
     
     let updates;
     if (dataString) {
-      // Parse the JSON data from FormData
-      updates = JSON.parse(dataString);
+      // Parse and validate the JSON data from FormData
+      updates = insertInventoryItemSchema.partial().parse(JSON.parse(dataString));
     } else {
       // Fallback to direct JSON body (for backwards compatibility)
-      updates = req.body;
+      updates = insertInventoryItemSchema.partial().parse(req.body);
     }
     
-    // Add file paths if files were uploaded
+    // Add file paths if files were uploaded and set flags
     if (files?.sdsFile?.[0]) {
       updates.sdsFilePath = `/api/inventory/sds/${path.basename(files.sdsFile[0].path)}`;
+      updates.hasSds = true;
     }
     if (files?.tdsFile?.[0]) {
       updates.tdsFilePath = `/api/inventory/tds/${path.basename(files.tdsFile[0].path)}`;
+      updates.hasTds = true;
     }
     
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
     res.json(updatedItem);
   } catch (error) {
     console.error('Update inventory item error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to update inventory item' });
   }
 });

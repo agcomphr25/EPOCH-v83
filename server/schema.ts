@@ -527,6 +527,8 @@ export const inventoryItems = pgTable('inventory_items', {
   vendorId: integer('vendor_id').references(() => vendors.id), // Primary vendor for this part
   hasSds: boolean('has_sds').default(false), // Has Safety Data Sheet
   sdsFilePath: text('sds_file_path'), // Path to uploaded SDS PDF file
+  hasTds: boolean('has_tds').default(false), // Has Technical Data Sheet
+  tdsFilePath: text('tds_file_path'), // Path to uploaded TDS PDF file
 });
 
 // Inventory Item Cost History - Tracks price changes over time

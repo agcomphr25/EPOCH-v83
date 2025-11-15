@@ -529,6 +529,8 @@ export const inventoryItems = pgTable('inventory_items', {
   sdsFilePath: text('sds_file_path'), // Path to uploaded SDS PDF file
   hasTds: boolean('has_tds').default(false), // Has Technical Data Sheet
   tdsFilePath: text('tds_file_path'), // Path to uploaded TDS PDF file
+  hasOtherDocs: boolean('has_other_docs').default(false), // Has Other Documents
+  otherDocsFilePath: text('other_docs_file_path'), // Path to uploaded Other Docs PDF file
 });
 
 // Inventory Item Cost History - Tracks price changes over time

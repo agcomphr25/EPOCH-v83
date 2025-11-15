@@ -81,6 +81,7 @@ interface InventoryFormData {
   isPacketPart: boolean;
   hasSds: boolean;
   hasTds: boolean;
+  hasOtherDocs: boolean;
 }
 
 const InventoryForm = ({
@@ -99,6 +100,8 @@ const InventoryForm = ({
   currentSdsFileName,
   tdsFile,
   currentTdsFileName,
+  otherDocsFile,
+  currentOtherDocsFileName,
 }: {
   formData: InventoryFormData;
   onSubmit: (e: React.FormEvent) => void;
@@ -118,6 +121,8 @@ const InventoryForm = ({
   currentSdsFileName: string | null;
   tdsFile: File | null;
   currentTdsFileName: string | null;
+  otherDocsFile: File | null;
+  currentOtherDocsFileName: string | null;
 }) => (
   <form
     onSubmit={onSubmit}
@@ -719,6 +724,55 @@ const InventoryForm = ({
       </div>
     </div>
 
+    {/* Other Documents Section */}
+    <div className="space-y-4">
+      <h4 className="text-md font-semibold border-b pb-2">
+        Other Documents
+      </h4>
+      <div className="grid grid-cols-1 gap-4">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="hasOtherDocs"
+            checked={formData.hasOtherDocs}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('hasOtherDocs', checked as boolean)
+            }
+            data-testid="checkbox-hasOtherDocs"
+          />
+          <Label htmlFor="hasOtherDocs" className="cursor-pointer">
+            Other Docs (Other documentation available)
+          </Label>
+        </div>
+        {formData.hasOtherDocs && (
+          <div>
+            <Label htmlFor="otherDocsFile">Upload Other Docs PDF</Label>
+            <Input
+              id="otherDocsFile"
+              name="otherDocsFile"
+              type="file"
+              accept=".pdf"
+              onChange={onFileChange}
+              data-testid="input-otherDocsFile"
+              className="cursor-pointer"
+            />
+            {currentOtherDocsFileName && !otherDocsFile && (
+              <p className="text-xs text-green-600 mt-1">
+                Current file: {currentOtherDocsFileName}
+              </p>
+            )}
+            {otherDocsFile && (
+              <p className="text-xs text-blue-600 mt-1">
+                New file selected: {otherDocsFile.name}
+              </p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Upload a PDF file of other documentation
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+
     <div className="flex justify-end space-x-2 pt-4 border-t">
       <Button
         type="button"
@@ -800,12 +854,15 @@ export default function InventoryItemsCard() {
     isPacketPart: false,
     hasSds: false,
     hasTds: false,
+    hasOtherDocs: false,
   });
 
   const [sdsFile, setSdsFile] = useState<File | null>(null);
   const [currentSdsFileName, setCurrentSdsFileName] = useState<string | null>(null);
   const [tdsFile, setTdsFile] = useState<File | null>(null);
   const [currentTdsFileName, setCurrentTdsFileName] = useState<string | null>(null);
+  const [otherDocsFile, setOtherDocsFile] = useState<File | null>(null);
+  const [currentOtherDocsFileName, setCurrentOtherDocsFileName] = useState<string | null>(null);
 
   // Auto-calculate COGS per unit when conversion data changes
   useEffect(() => {
@@ -989,7 +1046,7 @@ export default function InventoryItemsCard() {
 
   const createMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: async ({ data, sdsFile, tdsFile }: { data: any; sdsFile: File | null; tdsFile: File | null }) => {
+    mutationFn: async ({ data, sdsFile, tdsFile, otherDocsFile }: { data: any; sdsFile: File | null; tdsFile: File | null; otherDocsFile: File | null }) => {
       const formData = new FormData();
       formData.append('data', JSON.stringify(data));
       if (sdsFile) {
@@ -997,6 +1054,9 @@ export default function InventoryItemsCard() {
       }
       if (tdsFile) {
         formData.append('tdsFile', tdsFile);
+      }
+      if (otherDocsFile) {
+        formData.append('otherDocsFile', otherDocsFile);
       }
       
       const response = await fetch('/api/inventory/items', {
@@ -1023,7 +1083,7 @@ export default function InventoryItemsCard() {
 
   const updateMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: async ({ id, data, sdsFile, tdsFile }: { id: number; data: any; sdsFile: File | null; tdsFile: File | null }) => {
+    mutationFn: async ({ id, data, sdsFile, tdsFile, otherDocsFile }: { id: number; data: any; sdsFile: File | null; tdsFile: File | null; otherDocsFile: File | null }) => {
       const formData = new FormData();
       formData.append('data', JSON.stringify(data));
       if (sdsFile) {
@@ -1031,6 +1091,9 @@ export default function InventoryItemsCard() {
       }
       if (tdsFile) {
         formData.append('tdsFile', tdsFile);
+      }
+      if (otherDocsFile) {
+        formData.append('otherDocsFile', otherDocsFile);
       }
       
       const response = await fetch(`/api/inventory/items/${id}`, {
@@ -1206,11 +1269,14 @@ export default function InventoryItemsCard() {
       isPacketPart: false,
       hasSds: false,
       hasTds: false,
+      hasOtherDocs: false,
     });
     setSdsFile(null);
     setCurrentSdsFileName(null);
     setTdsFile(null);
     setCurrentTdsFileName(null);
+    setOtherDocsFile(null);
+    setCurrentOtherDocsFileName(null);
   };
 
   const handleChange = useCallback(
@@ -1238,6 +1304,8 @@ export default function InventoryItemsCard() {
         setSdsFile(file);
       } else if (inputName === 'tdsFile') {
         setTdsFile(file);
+      } else if (inputName === 'otherDocsFile') {
+        setOtherDocsFile(file);
       }
     } else if (file) {
       toast.error('Please select a PDF file');
@@ -1296,15 +1364,16 @@ export default function InventoryItemsCard() {
         isPacketPart: formData.isPacketPart,
         hasSds: formData.hasSds,
         hasTds: formData.hasTds,
+        hasOtherDocs: formData.hasOtherDocs,
       };
 
       if (editingItem) {
-        updateMutation.mutate({ id: editingItem.id, data: submitData, sdsFile, tdsFile });
+        updateMutation.mutate({ id: editingItem.id, data: submitData, sdsFile, tdsFile, otherDocsFile });
       } else {
-        createMutation.mutate({ data: submitData, sdsFile, tdsFile });
+        createMutation.mutate({ data: submitData, sdsFile, tdsFile, otherDocsFile });
       }
     },
-    [formData, editingItem, updateMutation, createMutation, sdsFile, tdsFile]
+    [formData, editingItem, updateMutation, createMutation, sdsFile, tdsFile, otherDocsFile]
   );
 
   const handleEdit = (item: InventoryItem) => {
@@ -1347,11 +1416,14 @@ export default function InventoryItemsCard() {
       isPacketPart: item.isPacketPart || false,
       hasSds: item.hasSds || false,
       hasTds: item.hasTds || false,
+      hasOtherDocs: item.hasOtherDocs || false,
     });
     setSdsFile(null);
     setCurrentSdsFileName(item.sdsFilePath ? item.sdsFilePath.split('/').pop() || null : null);
     setTdsFile(null);
     setCurrentTdsFileName(item.tdsFilePath ? item.tdsFilePath.split('/').pop() || null : null);
+    setOtherDocsFile(null);
+    setCurrentOtherDocsFileName(item.otherDocsFilePath ? item.otherDocsFilePath.split('/').pop() || null : null);
     setIsEditOpen(true);
   };
 

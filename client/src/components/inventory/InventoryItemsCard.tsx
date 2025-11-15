@@ -356,6 +356,7 @@ const InventoryForm = ({
               <SelectItem value="pc">pc (piece)</SelectItem>
               <SelectItem value="sq ft">sq ft (square foot)</SelectItem>
               <SelectItem value="sq in">sq in (square inch)</SelectItem>
+              <SelectItem value="sq m">sq m (square meter)</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-gray-500 mt-1">
@@ -421,6 +422,7 @@ const InventoryForm = ({
               <SelectItem value="pc">pc (piece)</SelectItem>
               <SelectItem value="sq ft">sq ft (square foot)</SelectItem>
               <SelectItem value="sq in">sq in (square inch)</SelectItem>
+              <SelectItem value="sq m">sq m (square meter)</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-gray-500 mt-1">

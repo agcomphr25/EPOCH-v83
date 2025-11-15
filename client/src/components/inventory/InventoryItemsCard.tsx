@@ -309,6 +309,7 @@ const InventoryForm = ({
               <SelectItem value="CASE">CASE</SelectItem>
               <SelectItem value="PALLET">PALLET</SelectItem>
               <SelectItem value="ROLL">ROLL</SelectItem>
+              <SelectItem value="HALFROLL">HALFROLL</SelectItem>
               <SelectItem value="SHEET">SHEET</SelectItem>
               <SelectItem value="BAG">BAG</SelectItem>
               <SelectItem value="DRUM">DRUM</SelectItem>

@@ -183,7 +183,7 @@ router.get('/global-search', async (req, res) => {
           subtitle: `Part #: ${item.ag_part_number || 'N/A'} • Source: ${item.source || 'N/A'}`,
           matchedField: 'inventory',
           matchedValue: item.ag_part_number || item.name || '',
-          url: `/inventory-manager?partNumber=${item.ag_part_number}`,
+          url: `/inventory/enhanced-mrp?partNumber=${item.ag_part_number}`,
           icon: '📦'
         });
       });

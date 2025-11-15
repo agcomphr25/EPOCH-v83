@@ -79,6 +79,7 @@ interface InventoryFormData {
   utilizedInAdmin: boolean;
   utilizedInServices: boolean;
   isPacketPart: boolean;
+  hasSds: boolean;
 }
 
 const InventoryForm = ({
@@ -87,11 +88,14 @@ const InventoryForm = ({
   onChange,
   onSelectChange,
   onCheckboxChange,
+  onFileChange,
   editingItem,
   isCreatePending,
   isUpdatePending,
   onCancel,
   vendors,
+  sdsFile,
+  currentSdsFileName,
 }: {
   formData: InventoryFormData;
   onSubmit: (e: React.FormEvent) => void;
@@ -100,12 +104,15 @@ const InventoryForm = ({
   ) => void;
   onSelectChange: (name: string, value: string) => void;
   onCheckboxChange: (name: string, checked: boolean) => void;
+  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   editingItem: InventoryItem | null;
   isCreatePending: boolean;
   isUpdatePending: boolean;
   onCancel: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vendors: any[];
+  sdsFile: File | null;
+  currentSdsFileName: string | null;
 }) => (
   <form
     onSubmit={onSubmit}
@@ -609,6 +616,55 @@ const InventoryForm = ({
       </div>
     </div>
 
+    {/* Safety Data Sheet Section */}
+    <div className="space-y-4">
+      <h4 className="text-md font-semibold border-b pb-2">
+        Safety Data Sheet
+      </h4>
+      <div className="grid grid-cols-1 gap-4">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="hasSds"
+            checked={formData.hasSds}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('hasSds', checked as boolean)
+            }
+            data-testid="checkbox-hasSds"
+          />
+          <Label htmlFor="hasSds" className="cursor-pointer">
+            SDS (Safety Data Sheet available)
+          </Label>
+        </div>
+        {formData.hasSds && (
+          <div>
+            <Label htmlFor="sdsFile">Upload SDS PDF</Label>
+            <Input
+              id="sdsFile"
+              name="sdsFile"
+              type="file"
+              accept=".pdf"
+              onChange={onFileChange}
+              data-testid="input-sdsFile"
+              className="cursor-pointer"
+            />
+            {currentSdsFileName && !sdsFile && (
+              <p className="text-xs text-green-600 mt-1">
+                Current file: {currentSdsFileName}
+              </p>
+            )}
+            {sdsFile && (
+              <p className="text-xs text-blue-600 mt-1">
+                New file selected: {sdsFile.name}
+              </p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Upload a PDF file of the Safety Data Sheet
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+
     <div className="flex justify-end space-x-2 pt-4 border-t">
       <Button
         type="button"
@@ -688,7 +744,11 @@ export default function InventoryItemsCard() {
     utilizedInAdmin: false,
     utilizedInServices: false,
     isPacketPart: false,
+    hasSds: false,
   });
+
+  const [sdsFile, setSdsFile] = useState<File | null>(null);
+  const [currentSdsFileName, setCurrentSdsFileName] = useState<string | null>(null);
 
   // Auto-calculate COGS per unit when conversion data changes
   useEffect(() => {
@@ -872,11 +932,24 @@ export default function InventoryItemsCard() {
 
   const createMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: (data: any) =>
-      apiRequest('/api/inventory/items', {
+    mutationFn: async ({ data, file }: { data: any; file: File | null }) => {
+      const formData = new FormData();
+      formData.append('data', JSON.stringify(data));
+      if (file) {
+        formData.append('sdsFile', file);
+      }
+      
+      const response = await fetch('/api/inventory/items', {
         method: 'POST',
-        body: data,
-      }),
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to create inventory item');
+      }
+      
+      return response.json();
+    },
     onSuccess: () => {
       toast.success('Inventory item created successfully');
       setIsCreateOpen(false);
@@ -890,11 +963,24 @@ export default function InventoryItemsCard() {
 
   const updateMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: ({ id, data }: { id: number; data: any }) =>
-      apiRequest(`/api/inventory/items/${id}`, {
+    mutationFn: async ({ id, data, file }: { id: number; data: any; file: File | null }) => {
+      const formData = new FormData();
+      formData.append('data', JSON.stringify(data));
+      if (file) {
+        formData.append('sdsFile', file);
+      }
+      
+      const response = await fetch(`/api/inventory/items/${id}`, {
         method: 'PUT',
-        body: data,
-      }),
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update inventory item');
+      }
+      
+      return response.json();
+    },
     onSuccess: () => {
       toast.success('Inventory item updated successfully');
       setIsEditOpen(false);
@@ -1055,7 +1141,10 @@ export default function InventoryItemsCard() {
       utilizedInAdmin: false,
       utilizedInServices: false,
       isPacketPart: false,
+      hasSds: false,
     });
+    setSdsFile(null);
+    setCurrentSdsFileName(null);
   };
 
   const handleChange = useCallback(
@@ -1072,6 +1161,16 @@ export default function InventoryItemsCard() {
 
   const handleCheckboxChange = useCallback((name: string, checked: boolean) => {
     setFormData((prev) => ({ ...prev, [name]: checked }));
+  }, []);
+
+  const handleSdsFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    if (file && file.type === 'application/pdf') {
+      setSdsFile(file);
+    } else if (file) {
+      toast.error('Please select a PDF file');
+      e.target.value = '';
+    }
   }, []);
 
   const handleSubmit = useCallback(
@@ -1123,15 +1222,16 @@ export default function InventoryItemsCard() {
         utilizedInAdmin: formData.utilizedInAdmin,
         utilizedInServices: formData.utilizedInServices,
         isPacketPart: formData.isPacketPart,
+        hasSds: formData.hasSds,
       };
 
       if (editingItem) {
-        updateMutation.mutate({ id: editingItem.id, data: submitData });
+        updateMutation.mutate({ id: editingItem.id, data: submitData, file: sdsFile });
       } else {
-        createMutation.mutate(submitData);
+        createMutation.mutate({ data: submitData, file: sdsFile });
       }
     },
-    [formData, editingItem, updateMutation, createMutation]
+    [formData, editingItem, updateMutation, createMutation, sdsFile]
   );
 
   const handleEdit = (item: InventoryItem) => {
@@ -1172,7 +1272,10 @@ export default function InventoryItemsCard() {
       utilizedInAdmin: item.utilizedInAdmin || false,
       utilizedInServices: item.utilizedInServices || false,
       isPacketPart: item.isPacketPart || false,
+      hasSds: item.hasSds || false,
     });
+    setSdsFile(null);
+    setCurrentSdsFileName(item.sdsFilePath ? item.sdsFilePath.split('/').pop() || null : null);
     setIsEditOpen(true);
   };
 
@@ -1388,6 +1491,7 @@ export default function InventoryItemsCard() {
                 onChange={handleChange}
                 onSelectChange={handleSelectChange}
                 onCheckboxChange={handleCheckboxChange}
+                onFileChange={handleSdsFileChange}
                 editingItem={editingItem}
                 isCreatePending={createMutation.isPending}
                 isUpdatePending={updateMutation.isPending}
@@ -1396,6 +1500,8 @@ export default function InventoryItemsCard() {
                   resetForm();
                 }}
                 vendors={vendors}
+                sdsFile={sdsFile}
+                currentSdsFileName={currentSdsFileName}
               />
             </DialogContent>
           </Dialog>
@@ -1768,6 +1874,9 @@ export default function InventoryItemsCard() {
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Utilized In
                 </th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                  SDS
+                </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Actions
                 </th>
@@ -1885,6 +1994,23 @@ export default function InventoryItemsCard() {
                           '-'}
                       </div>
                     </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                      {item.hasSds && item.sdsFilePath ? (
+                        <a
+                          href={item.sdsFilePath}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+                          data-testid={`link-sds-${item.id}`}
+                          title="View SDS"
+                        >
+                          <Download className="h-4 w-4" />
+                          PDF
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       <div className="flex space-x-2">
                         <Button
@@ -1936,6 +2062,7 @@ export default function InventoryItemsCard() {
             onChange={handleChange}
             onSelectChange={handleSelectChange}
             onCheckboxChange={handleCheckboxChange}
+            onFileChange={handleSdsFileChange}
             editingItem={editingItem}
             isCreatePending={createMutation.isPending}
             isUpdatePending={updateMutation.isPending}
@@ -1945,6 +2072,8 @@ export default function InventoryItemsCard() {
               resetForm();
             }}
             vendors={vendors}
+            sdsFile={sdsFile}
+            currentSdsFileName={currentSdsFileName}
           />
           {editingItem?.agPartNumber && (
             <div className="mt-6 border-t pt-6">

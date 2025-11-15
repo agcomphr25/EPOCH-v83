@@ -1,4 +1,7 @@
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs/promises';
 import {
   insertInventoryItemSchema,
   insertInventoryScanSchema,
@@ -13,6 +16,37 @@ import { storage } from '../../storage';
 
 const router = Router();
 
+// Pre-create SDS directory to avoid async issues in multer
+const SDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/sds');
+fs.mkdir(SDS_UPLOAD_DIR, { recursive: true }).catch(err => {
+  console.error('Failed to create SDS upload directory:', err);
+});
+
+// Configure multer for SDS PDF uploads
+const sdsStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, SDS_UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    const name = path.basename(file.originalname, ext);
+    cb(null, `${name}-${uniqueSuffix}${ext}`);
+  }
+});
+
+const sdsUpload = multer({
+  storage: sdsStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.originalname.toLowerCase().endsWith('.pdf')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed for SDS uploads'));
+    }
+  }
+});
+
 // Enhanced Inventory API - Get all items
 router.get('/inventory/items', async (req: Request, res: Response) => {
   try {
@@ -25,10 +59,26 @@ router.get('/inventory/items', async (req: Request, res: Response) => {
 });
 
 // Enhanced Inventory API - Update item
-router.put('/inventory/items/:id', async (req: Request, res: Response) => {
+router.put('/inventory/items/:id', sdsUpload.single('sdsFile'), async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
-    const updates = req.body;
+    const file = req.file;
+    const dataString = req.body.data;
+    
+    let updates;
+    if (dataString) {
+      // Parse the JSON data from FormData
+      updates = JSON.parse(dataString);
+    } else {
+      // Fallback to direct JSON body (for backwards compatibility)
+      updates = req.body;
+    }
+    
+    // Add file path if file was uploaded
+    if (file) {
+      updates.sdsFilePath = `/api/inventory/sds/${path.basename(file.path)}`;
+    }
+    
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
     res.json(updatedItem);
   } catch (error) {
@@ -61,9 +111,25 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST route for creating inventory items at the root level (to match client expectations)
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', sdsUpload.single('sdsFile'), async (req: Request, res: Response) => {
   try {
-    const itemData = insertInventoryItemSchema.parse(req.body);
+    const file = req.file;
+    const dataString = req.body.data;
+    
+    let itemData;
+    if (dataString) {
+      // Parse the JSON data from FormData
+      itemData = insertInventoryItemSchema.parse(JSON.parse(dataString));
+    } else {
+      // Fallback to direct JSON body (for backwards compatibility)
+      itemData = insertInventoryItemSchema.parse(req.body);
+    }
+    
+    // Add file path if file was uploaded
+    if (file) {
+      itemData.sdsFilePath = `/api/inventory/sds/${path.basename(file.path)}`;
+    }
+    
     const newItem = await storage.createInventoryItem(itemData);
     res.status(201).json(newItem);
   } catch (error) {
@@ -76,10 +142,26 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // PUT route for updating inventory items at the root level
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', sdsUpload.single('sdsFile'), async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
-    const updates = req.body;
+    const file = req.file;
+    const dataString = req.body.data;
+    
+    let updates;
+    if (dataString) {
+      // Parse the JSON data from FormData
+      updates = JSON.parse(dataString);
+    } else {
+      // Fallback to direct JSON body (for backwards compatibility)
+      updates = req.body;
+    }
+    
+    // Add file path if file was uploaded
+    if (file) {
+      updates.sdsFilePath = `/api/inventory/sds/${path.basename(file.path)}`;
+    }
+    
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
     res.json(updatedItem);
   } catch (error) {
@@ -127,9 +209,25 @@ router.get('/items/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/items', async (req: Request, res: Response) => {
+router.post('/items', sdsUpload.single('sdsFile'), async (req: Request, res: Response) => {
   try {
-    const itemData = insertInventoryItemSchema.parse(req.body);
+    const file = req.file;
+    const dataString = req.body.data;
+    
+    let itemData;
+    if (dataString) {
+      // Parse the JSON data from FormData
+      itemData = insertInventoryItemSchema.parse(JSON.parse(dataString));
+    } else {
+      // Fallback to direct JSON body (for backwards compatibility)
+      itemData = insertInventoryItemSchema.parse(req.body);
+    }
+    
+    // Add file path if file was uploaded
+    if (file) {
+      itemData.sdsFilePath = `/api/inventory/sds/${path.basename(file.path)}`;
+    }
+    
     const newItem = await storage.createInventoryItem(itemData);
     res.status(201).json(newItem);
   } catch (error) {
@@ -141,10 +239,26 @@ router.post('/items', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/items/:id', async (req: Request, res: Response) => {
+router.put('/items/:id', sdsUpload.single('sdsFile'), async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
-    const updates = req.body;
+    const file = req.file;
+    const dataString = req.body.data;
+    
+    let updates;
+    if (dataString) {
+      // Parse the JSON data from FormData
+      updates = JSON.parse(dataString);
+    } else {
+      // Fallback to direct JSON body (for backwards compatibility)
+      updates = req.body;
+    }
+    
+    // Add file path if file was uploaded
+    if (file) {
+      updates.sdsFilePath = `/api/inventory/sds/${path.basename(file.path)}`;
+    }
+    
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
     res.json(updatedItem);
   } catch (error) {
@@ -1255,6 +1369,43 @@ router.get('/material-forecast', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Material forecast error:', error);
     res.status(500).json({ error: 'Failed to calculate material forecast' });
+  }
+});
+
+// Serve SDS PDF files
+router.get('/sds/:filename', async (req: Request, res: Response) => {
+  try {
+    const filename = req.params.filename;
+    
+    // Security: Validate filename to prevent path traversal
+    // Reject any filename with path separators or parent directory references
+    if (
+      filename.includes('/') ||
+      filename.includes('\\') ||
+      filename.includes('..') ||
+      filename !== path.basename(filename)
+    ) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    
+    // Build absolute path and ensure it's within SDS directory
+    const filePath = path.resolve(SDS_UPLOAD_DIR, filename);
+    if (!filePath.startsWith(path.resolve(SDS_UPLOAD_DIR))) {
+      return res.status(400).json({ error: 'Invalid file path' });
+    }
+    
+    // Check if file exists
+    try {
+      await fs.access(filePath);
+    } catch {
+      return res.status(404).json({ error: 'SDS file not found' });
+    }
+    
+    // Send the PDF file
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('Error serving SDS file:', error);
+    res.status(500).json({ error: 'Failed to serve SDS file' });
   }
 });
 

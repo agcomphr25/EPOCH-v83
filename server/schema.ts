@@ -525,6 +525,8 @@ export const inventoryItems = pgTable('inventory_items', {
   isPacketPart: boolean('is_packet_part').default(false), // Part of cutting table packet
   type: text('type'), // Type: Purchased or Manufactured
   vendorId: integer('vendor_id').references(() => vendors.id), // Primary vendor for this part
+  hasSds: boolean('has_sds').default(false), // Has Safety Data Sheet
+  sdsFilePath: text('sds_file_path'), // Path to uploaded SDS PDF file
 });
 
 // Inventory Item Cost History - Tracks price changes over time

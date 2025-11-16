@@ -10,6 +10,11 @@ import {
   insertInventoryTransactionSchema,
   insertVendorPartSchema,
   insertItemGroupSchema,
+  insertDepartmentSchema,
+  insertDepartmentConsumptionRateSchema,
+  DEPARTMENT_LOCATION_MAP,
+  EnrichedInventoryBalance,
+  DepartmentBalanceBreakdown,
 } from '@shared/schema';
 
 import { storage } from '../../storage';
@@ -451,6 +456,9 @@ router.post('/parts-requests', async (req: Request, res: Response) => {
     res.status(201).json(newRequest);
   } catch (error) {
     console.error('Create parts request error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to create parts request' });
   }
 });
@@ -458,12 +466,178 @@ router.post('/parts-requests', async (req: Request, res: Response) => {
 router.put('/parts-requests/:id', async (req: Request, res: Response) => {
   try {
     const requestId = parseInt(req.params.id);
-    const updates = req.body;
+    const updates = insertPartsRequestSchema.partial().parse(req.body);
     const updatedRequest = await storage.updatePartsRequest(requestId, updates);
     res.json(updatedRequest);
   } catch (error) {
     console.error('Update parts request error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to update parts request' });
+  }
+});
+
+// Get parts requests by department
+router.get('/parts-requests/department/:departmentId', async (req: Request, res: Response) => {
+  try {
+    const departmentId = parseInt(req.params.departmentId);
+    const requests = await storage.getPartsRequestsByDepartment(departmentId);
+    res.json(requests);
+  } catch (error) {
+    console.error('Get department parts requests error:', error);
+    res.status(500).json({ error: 'Failed to fetch department parts requests' });
+  }
+});
+
+// Get consolidated parts needs for inventory manager
+router.get('/parts-requests/consolidated/needs', async (req: Request, res: Response) => {
+  try {
+    const needs = await storage.getConsolidatedPartsNeeds();
+    res.json(needs);
+  } catch (error) {
+    console.error('Get consolidated parts needs error:', error);
+    res.status(500).json({ error: 'Failed to fetch consolidated parts needs' });
+  }
+});
+
+// Departments CRUD - Get actual manufacturing departments from orderDepartmentTypes
+router.get('/departments', async (req: Request, res: Response) => {
+  try {
+    const { orderDepartmentTypes } = await import('../../schema');
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    
+    const departments = await db
+      .select()
+      .from(orderDepartmentTypes)
+      .where(eq(orderDepartmentTypes.isActive, true))
+      .orderBy(orderDepartmentTypes.sortOrder);
+    
+    // Map to simple id/name format expected by frontend
+    const simpleDepartments = departments.map(dept => ({
+      id: dept.id,
+      name: dept.displayName
+    }));
+    res.json(simpleDepartments);
+  } catch (error) {
+    console.error('Get departments error:', error);
+    res.status(500).json({ error: 'Failed to fetch departments' });
+  }
+});
+
+router.post('/departments', async (req: Request, res: Response) => {
+  try {
+    const departmentData = insertDepartmentSchema.parse(req.body);
+    const newDepartment = await storage.createDepartment(departmentData);
+    res.status(201).json(newDepartment);
+  } catch (error) {
+    console.error('Create department error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to create department' });
+  }
+});
+
+router.put('/departments/:id', async (req: Request, res: Response) => {
+  try {
+    const departmentId = parseInt(req.params.id);
+    const updates = insertDepartmentSchema.partial().parse(req.body);
+    const updatedDepartment = await storage.updateDepartment(departmentId, updates);
+    res.json(updatedDepartment);
+  } catch (error) {
+    console.error('Update department error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to update department' });
+  }
+});
+
+router.delete('/departments/:id', async (req: Request, res: Response) => {
+  try {
+    const departmentId = parseInt(req.params.id);
+    await storage.deleteDepartment(departmentId);
+    res.status(204).end();
+  } catch (error) {
+    console.error('Delete department error:', error);
+    res.status(500).json({ error: 'Failed to delete department' });
+  }
+});
+
+// Department Consumption Rates
+router.get('/consumption-rates/part/:agPartNumber', async (req: Request, res: Response) => {
+  try {
+    const agPartNumber = req.params.agPartNumber;
+    const rates = await storage.getConsumptionRatesByPart(agPartNumber);
+    res.json(rates);
+  } catch (error) {
+    console.error('Get consumption rates by part error:', error);
+    res.status(500).json({ error: 'Failed to fetch consumption rates' });
+  }
+});
+
+router.get('/consumption-rates/department/:departmentId', async (req: Request, res: Response) => {
+  try {
+    const departmentId = parseInt(req.params.departmentId);
+    const rates = await storage.getConsumptionRatesByDepartment(departmentId);
+    res.json(rates);
+  } catch (error) {
+    console.error('Get consumption rates by department error:', error);
+    res.status(500).json({ error: 'Failed to fetch consumption rates' });
+  }
+});
+
+router.post('/consumption-rates', async (req: Request, res: Response) => {
+  try {
+    const rateData = insertDepartmentConsumptionRateSchema.parse(req.body);
+    const newRate = await storage.createConsumptionRate(rateData);
+    res.status(201).json(newRate);
+  } catch (error) {
+    console.error('Create consumption rate error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to create consumption rate' });
+  }
+});
+
+router.put('/consumption-rates/:id', async (req: Request, res: Response) => {
+  try {
+    const rateId = parseInt(req.params.id);
+    const updates = insertDepartmentConsumptionRateSchema.partial().parse(req.body);
+    const updatedRate = await storage.updateConsumptionRate(rateId, updates);
+    res.json(updatedRate);
+  } catch (error) {
+    console.error('Update consumption rate error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to update consumption rate' });
+  }
+});
+
+router.delete('/consumption-rates/:id', async (req: Request, res: Response) => {
+  try {
+    const rateId = parseInt(req.params.id);
+    await storage.deleteConsumptionRate(rateId);
+    res.status(204).end();
+  } catch (error) {
+    console.error('Delete consumption rate error:', error);
+    res.status(500).json({ error: 'Failed to delete consumption rate' });
+  }
+});
+
+// Get inventory items filtered by department
+router.get('/inventory/items/department/:departmentName', async (req: Request, res: Response) => {
+  try {
+    const departmentName = req.params.departmentName;
+    const items = await storage.getInventoryItemsByDepartment(departmentName);
+    res.json(items);
+  } catch (error) {
+    console.error('Get inventory items by department error:', error);
+    res.status(500).json({ error: 'Failed to fetch department inventory items' });
   }
 });
 
@@ -923,11 +1097,66 @@ router.get('/inventory/export/csv', async (req: Request, res: Response) => {
 // Enhanced Inventory MRP - Inventory Balances Routes
 // ========================================
 
-// GET /api/enhanced/inventory/balances - Get all inventory balances
+// GET /api/enhanced/inventory/balances - Get all inventory balances with department metadata
 router.get('/inventory/balances', async (req: Request, res: Response) => {
   try {
     const balances = await storage.getAllInventoryBalances();
-    res.json(balances);
+    
+    // Enrich balances with department metadata
+    const enrichedBalances: EnrichedInventoryBalance[] = balances.map((balance) => {
+      const deptInfo = DEPARTMENT_LOCATION_MAP[balance.locationId];
+      return {
+        ...balance,
+        departmentMeta: deptInfo ? {
+          departmentId: deptInfo.departmentId,
+          departmentName: deptInfo.departmentName,
+          locationId: balance.locationId,
+        } : undefined,
+      };
+    });
+
+    // Compute per-part department breakdown
+    const departmentBreakdowns = new Map<string, Map<number, DepartmentBalanceBreakdown>>();
+    
+    enrichedBalances.forEach((balance) => {
+      if (!balance.departmentMeta) return;
+      
+      if (!departmentBreakdowns.has(balance.agPartNumber)) {
+        departmentBreakdowns.set(balance.agPartNumber, new Map());
+      }
+      
+      const partDepts = departmentBreakdowns.get(balance.agPartNumber)!;
+      const deptId = balance.departmentMeta.departmentId;
+      
+      if (!partDepts.has(deptId)) {
+        partDepts.set(deptId, {
+          departmentId: deptId,
+          departmentName: balance.departmentMeta.departmentName,
+          totalQuantityOnHand: 0,
+          totalQuantityAllocated: 0,
+          totalQuantityAvailable: 0,
+          locations: [],
+        });
+      }
+      
+      const breakdown = partDepts.get(deptId)!;
+      breakdown.totalQuantityOnHand += balance.quantityOnHand;
+      breakdown.totalQuantityAllocated += balance.quantityAllocated;
+      breakdown.totalQuantityAvailable += balance.quantityAvailable;
+      if (!breakdown.locations.includes(balance.locationId)) {
+        breakdown.locations.push(balance.locationId);
+      }
+    });
+
+    res.json({
+      balances: enrichedBalances,
+      departmentBreakdowns: Object.fromEntries(
+        Array.from(departmentBreakdowns.entries()).map(([part, depts]) => [
+          part,
+          Array.from(depts.values())
+        ])
+      ),
+    });
   } catch (error) {
     console.error('Get inventory balances error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory balances' });
@@ -1010,11 +1239,56 @@ router.delete('/inventory/balances/:id', async (req: Request, res: Response) => 
 // Enhanced Inventory MRP - Inventory Transactions Routes
 // ========================================
 
-// GET /api/enhanced/inventory/transactions - Get all inventory transactions
+// GET /api/enhanced/inventory/transactions - Get inventory transactions with filters and department metadata
 router.get('/inventory/transactions', async (req: Request, res: Response) => {
   try {
-    const transactions = await storage.getAllInventoryTransactions();
-    res.json(transactions);
+    const { partId, transactionType, dateFrom, dateTo, page = '1', limit = '50' } = req.query;
+    
+    let transactions = await storage.getAllInventoryTransactions();
+    
+    // Apply filters
+    if (partId) {
+      transactions = transactions.filter(t => t.agPartNumber === partId);
+    }
+    if (transactionType) {
+      transactions = transactions.filter(t => t.transactionType === transactionType);
+    }
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom as string);
+      transactions = transactions.filter(t => new Date(t.transactionDate) >= fromDate);
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo as string);
+      transactions = transactions.filter(t => new Date(t.transactionDate) <= toDate);
+    }
+    
+    // Enrich with department metadata based on location
+    const enrichedTransactions = transactions.map(transaction => {
+      const location = transaction.toLocation || transaction.fromLocation;
+      const deptInfo = location ? DEPARTMENT_LOCATION_MAP[location] : undefined;
+      
+      return {
+        ...transaction,
+        locationId: location || 'Unknown',
+        departmentName: deptInfo?.departmentName,
+        departmentId: deptInfo?.departmentId,
+      };
+    });
+    
+    // Pagination
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const startIndex = (pageNum - 1) * limitNum;
+    const endIndex = startIndex + limitNum;
+    
+    const paginatedTransactions = enrichedTransactions.slice(startIndex, endIndex);
+    
+    res.json({
+      data: paginatedTransactions,
+      total: enrichedTransactions.length,
+      page: pageNum,
+      limit: limitNum,
+    });
   } catch (error) {
     console.error('Get inventory transactions error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory transactions' });

@@ -41,6 +41,21 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
+interface DepartmentBalanceMeta {
+  departmentId: number;
+  departmentName: string;
+  locationId: string;
+}
+
+interface DepartmentBalanceBreakdown {
+  departmentId: number;
+  departmentName: string;
+  totalQuantityOnHand: number;
+  totalQuantityAllocated: number;
+  totalQuantityAvailable: number;
+  locations: string[];
+}
+
 interface InventoryBalance {
   id: number;
   agPartNumber: string;
@@ -53,6 +68,12 @@ interface InventoryBalance {
   createdAt: Date;
   updatedAt: Date;
   partName?: string;
+  departmentMeta?: DepartmentBalanceMeta;
+}
+
+interface BalancesResponse {
+  balances: InventoryBalance[];
+  departmentBreakdowns: Record<string, DepartmentBalanceBreakdown[]>;
 }
 
 interface UpdateBalanceData {
@@ -64,21 +85,26 @@ interface UpdateBalanceData {
 export default function InventoryBalancesCard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLocationFilter, setSelectedLocationFilter] = useState('');
+  const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState('');
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
   const [editingBalance, setEditingBalance] = useState<InventoryBalance | null>(
     null
   );
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [expandedPart, setExpandedPart] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  // Fetch inventory balances
+  // Fetch inventory balances with department metadata
   const {
-    data: balances = [],
+    data: balancesData,
     isLoading,
     refetch,
-  } = useQuery<InventoryBalance[]>({
+  } = useQuery<BalancesResponse>({
     queryKey: ['/api/enhanced/inventory/balances'],
   });
+
+  const balances = balancesData?.balances || [];
+  const departmentBreakdowns = balancesData?.departmentBreakdowns || {};
 
   // Update balance mutation
   const updateBalanceMutation = useMutation({
@@ -168,18 +194,26 @@ export default function InventoryBalancesCard() {
     const matchesLocation =
       !selectedLocationFilter || balance.locationId === selectedLocationFilter;
 
+    const matchesDepartment =
+      !selectedDepartmentFilter || 
+      balance.departmentMeta?.departmentName === selectedDepartmentFilter;
+
     const matchesLowStock =
       !showLowStockOnly ||
       (balance.reorderPoint && balance.quantityAvailable <= balance.reorderPoint) ||
       balance.quantityAvailable <= 0;
 
-    return matchesSearch && matchesLocation && matchesLowStock;
+    return matchesSearch && matchesLocation && matchesDepartment && matchesLowStock;
   });
 
-  // Get unique locations for filter
+  // Get unique locations and departments for filters
   const uniqueLocations = Array.from(
     new Set(balances.map((b) => b.locationId))
   );
+  
+  const uniqueDepartments = Array.from(
+    new Set(balances.map((b) => b.departmentMeta?.departmentName).filter(Boolean))
+  ) as string[];
 
   return (
     <div className="space-y-6">
@@ -212,7 +246,7 @@ export default function InventoryBalancesCard() {
           <CardTitle className="text-base">Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
               <Label htmlFor="search">Search Parts</Label>
               <div className="relative">
@@ -241,6 +275,24 @@ export default function InventoryBalancesCard() {
                 {uniqueLocations.map((location) => (
                   <option key={location} value={location}>
                     {location}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <Label htmlFor="department">Department</Label>
+              <select
+                id="department"
+                value={selectedDepartmentFilter}
+                onChange={(e) => setSelectedDepartmentFilter(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                data-testid="select-department-filter"
+              >
+                <option value="">All Departments</option>
+                {uniqueDepartments.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
                   </option>
                 ))}
               </select>
@@ -356,6 +408,7 @@ export default function InventoryBalancesCard() {
                 <TableRow>
                   <TableHead>Part Number</TableHead>
                   <TableHead>Part Name</TableHead>
+                  <TableHead>Department</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead className="text-right">On Hand</TableHead>
                   <TableHead className="text-right">Allocated</TableHead>
@@ -368,15 +421,52 @@ export default function InventoryBalancesCard() {
                 {filteredBalances.map((balance, index) => {
                   const stockStatus = getStockStatus(balance);
                   const IconComponent = stockStatus.icon;
+                  const deptBreakdown = departmentBreakdowns[balance.agPartNumber] || [];
 
                   return (
                     <TableRow
                       key={`${balance.agPartNumber}-${balance.locationId}-${index}`}
                     >
                       <TableCell className="font-medium">
-                        {balance.agPartNumber}
+                        <div className="flex items-center gap-2">
+                          {balance.agPartNumber}
+                          {deptBreakdown.length > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setExpandedPart(
+                                expandedPart === balance.agPartNumber ? null : balance.agPartNumber
+                              )}
+                              data-testid={`button-expand-${balance.agPartNumber}`}
+                            >
+                              {expandedPart === balance.agPartNumber ? '▼' : '▶'}
+                            </Button>
+                          )}
+                        </div>
+                        {expandedPart === balance.agPartNumber && deptBreakdown.length > 0 && (
+                          <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-800 rounded text-xs">
+                            <div className="font-semibold mb-1">Department Breakdown:</div>
+                            {deptBreakdown.map((dept) => (
+                              <div key={dept.departmentId} className="flex justify-between py-1">
+                                <span>{dept.departmentName}</span>
+                                <span className="font-mono">
+                                  {dept.totalQuantityAvailable.toLocaleString()} available
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>{balance.partName || 'Unknown'}</TableCell>
+                      <TableCell>
+                        {balance.departmentMeta ? (
+                          <Badge variant="outline" className="text-xs">
+                            {balance.departmentMeta.departmentName}
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-400 text-xs">N/A</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <MapPin className="h-3 w-3 text-gray-400" />

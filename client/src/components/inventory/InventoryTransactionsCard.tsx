@@ -61,6 +61,8 @@ interface InventoryTransaction {
   transactionDate: Date;
   partName?: string;
   locationName?: string;
+  departmentName?: string;
+  departmentId?: number;
 }
 
 interface NewTransactionData {
@@ -76,6 +78,7 @@ interface NewTransactionData {
 export default function InventoryTransactionsCard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTransactionType, setSelectedTransactionType] = useState('');
+  const [selectedDepartment, setSelectedDepartment] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -241,23 +244,38 @@ export default function InventoryTransactionsCard() {
     }
   };
 
-  // Calculate summary statistics
-  const summaryStats = transactions.reduce(
-    (acc: { receipts: number; issues: number; totalValue: number }, transaction: InventoryTransaction) => {
+  // Filter transactions by department
+  const filteredTransactions = selectedDepartment
+    ? transactions.filter((t: InventoryTransaction) => t.departmentName === selectedDepartment)
+    : transactions;
+
+  // Calculate summary statistics (including consumption tracking)
+  const summaryStats = filteredTransactions.reduce(
+    (acc: { receipts: number; issues: number; consumption: number; totalValue: number }, transaction: InventoryTransaction) => {
       if (transaction.transactionType === 'RECEIPT') {
         acc.receipts += transaction.quantity;
-      } else if (
-        ['ISSUE', 'CONSUMPTION'].includes(transaction.transactionType)
-      ) {
+      } else if (transaction.transactionType === 'ISSUE') {
         acc.issues += transaction.quantity;
+      } else if (transaction.transactionType === 'CONSUMPTION') {
+        acc.consumption += transaction.quantity;
       }
       if (transaction.totalCost) {
         acc.totalValue += transaction.totalCost;
       }
       return acc;
     },
-    { receipts: 0, issues: 0, totalValue: 0 }
+    { receipts: 0, issues: 0, consumption: 0, totalValue: 0 }
   );
+
+  // Department consumption breakdown (respects department filter)
+  const departmentConsumption = filteredTransactions
+    .filter((t: InventoryTransaction) => t.transactionType === 'CONSUMPTION' && t.departmentName)
+    .reduce((acc: Record<string, number>, transaction: InventoryTransaction) => {
+      if (transaction.departmentName) {
+        acc[transaction.departmentName] = (acc[transaction.departmentName] || 0) + transaction.quantity;
+      }
+      return acc;
+    }, {});
 
   return (
     <div className="space-y-6">
@@ -336,6 +354,24 @@ export default function InventoryTransactionsCard() {
             </div>
 
             <div>
+              <Label htmlFor="department">Department</Label>
+              <select
+                id="department"
+                value={selectedDepartment}
+                onChange={(e) => setSelectedDepartment(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                data-testid="select-department-filter"
+              >
+                <option value="">All Departments</option>
+                {Array.from(new Set(transactions.map((t: InventoryTransaction) => t.departmentName).filter(Boolean)) as Set<string>).map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
               <Label htmlFor="dateFrom">Date From</Label>
               <Input
                 id="dateFrom"
@@ -363,6 +399,7 @@ export default function InventoryTransactionsCard() {
                 onClick={() => {
                   setSearchQuery('');
                   setSelectedTransactionType('');
+                  setSelectedDepartment('');
                   setDateFrom('');
                   setDateTo('');
                   setCurrentPage(1);
@@ -377,7 +414,7 @@ export default function InventoryTransactionsCard() {
       </Card>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -431,6 +468,22 @@ export default function InventoryTransactionsCard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Consumption
+                </p>
+                <p className="text-2xl font-bold text-gray-600">
+                  {summaryStats.consumption.toLocaleString()}
+                </p>
+              </div>
+              <Package className="h-8 w-8 text-gray-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
                   Total Value
                 </p>
                 <p className="text-2xl font-bold text-purple-600">
@@ -445,6 +498,38 @@ export default function InventoryTransactionsCard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Department Consumption Breakdown (only show if consumption data exists) */}
+      {Object.keys(departmentConsumption).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Department Consumption Tracking</CardTitle>
+            <CardDescription>
+              Parts consumed by each department in the current filter period
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {Object.entries(departmentConsumption)
+                .sort(([, a], [, b]) => b - a)
+                .map(([dept, qty]) => (
+                  <div
+                    key={dept}
+                    className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md"
+                  >
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                      {dept}
+                    </p>
+                    <p className="text-xl font-bold text-gray-900 dark:text-white">
+                      {qty.toLocaleString()}
+                      <span className="text-xs font-normal ml-1">units</span>
+                    </p>
+                  </div>
+                ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Transactions Table */}
       <Card>
@@ -469,6 +554,7 @@ export default function InventoryTransactionsCard() {
                   <TableHead>Transaction ID</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Part ID</TableHead>
+                  <TableHead>Department</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead className="text-right">Quantity</TableHead>
@@ -479,7 +565,7 @@ export default function InventoryTransactionsCard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((transaction: InventoryTransaction) => {
+                {filteredTransactions.map((transaction: InventoryTransaction) => {
                   const typeInfo = getTransactionTypeInfo(
                     transaction.transactionType
                   );
@@ -500,6 +586,15 @@ export default function InventoryTransactionsCard() {
                       </TableCell>
                       <TableCell className="font-medium">
                         {transaction.partId}
+                      </TableCell>
+                      <TableCell>
+                        {transaction.departmentName ? (
+                          <Badge variant="outline" className="text-xs">
+                            {transaction.departmentName}
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-400 text-xs">N/A</span>
+                        )}
                       </TableCell>
                       <TableCell>{transaction.locationId}</TableCell>
                       <TableCell>

@@ -593,6 +593,25 @@ export interface IStorage {
     data: Partial<InsertPartsRequest>
   ): Promise<PartsRequest>;
   deletePartsRequest(id: number): Promise<void>;
+  getPartsRequestsByDepartment(departmentId: number): Promise<PartsRequest[]>;
+  getConsolidatedPartsNeeds(): Promise<PartsRequest[]>; // All PENDING/APPROVED requests for inventory manager
+
+  // Departments CRUD
+  getAllDepartments(): Promise<Department[]>;
+  getDepartment(id: number): Promise<Department | undefined>;
+  createDepartment(data: InsertDepartment): Promise<Department>;
+  updateDepartment(id: number, data: Partial<InsertDepartment>): Promise<Department>;
+  deleteDepartment(id: number): Promise<void>;
+
+  // Department Consumption Rates
+  getConsumptionRatesByPart(agPartNumber: string): Promise<DepartmentConsumptionRate[]>;
+  getConsumptionRatesByDepartment(departmentId: number): Promise<DepartmentConsumptionRate[]>;
+  createConsumptionRate(data: InsertDepartmentConsumptionRate): Promise<DepartmentConsumptionRate>;
+  updateConsumptionRate(id: number, data: Partial<InsertDepartmentConsumptionRate>): Promise<DepartmentConsumptionRate>;
+  deleteConsumptionRate(id: number): Promise<void>;
+
+  // Department-filtered Inventory
+  getInventoryItemsByDepartment(departmentName: string): Promise<InventoryItem[]>;
 
   // Outstanding Orders
   getOutstandingOrders(): Promise<OrderDraft[]>;
@@ -4462,6 +4481,133 @@ export class DatabaseStorage implements IStorage {
 
   async deletePartsRequest(id: number): Promise<void> {
     await db.delete(partsRequests).where(eq(partsRequests.id, id));
+  }
+
+  async getPartsRequestsByDepartment(departmentId: number): Promise<PartsRequest[]> {
+    return await db
+      .select()
+      .from(partsRequests)
+      .where(and(
+        eq(partsRequests.departmentId, departmentId),
+        eq(partsRequests.isActive, true)
+      ))
+      .orderBy(desc(partsRequests.requestDate));
+  }
+
+  async getConsolidatedPartsNeeds(): Promise<any[]> {
+    // Get all PENDING and APPROVED requests with inventory and department details
+    const results = await db
+      .select({
+        request: partsRequests,
+        inventoryItem: inventoryItems,
+        department: departments,
+      })
+      .from(partsRequests)
+      .leftJoin(inventoryItems, eq(partsRequests.agPartNumber, inventoryItems.agPartNumber))
+      .leftJoin(departments, eq(partsRequests.departmentId, departments.id))
+      .where(and(
+        or(
+          eq(partsRequests.status, 'PENDING'),
+          eq(partsRequests.status, 'APPROVED'),
+          eq(partsRequests.status, 'ORDERED')
+        ),
+        eq(partsRequests.isActive, true)
+      ))
+      .orderBy(desc(partsRequests.urgency), desc(partsRequests.requestDate));
+    
+    return results.map(r => ({
+      ...r.request,
+      inventoryItem: r.inventoryItem,
+      department: r.department,
+    }));
+  }
+
+  // Departments CRUD
+  async getAllDepartments(): Promise<Department[]> {
+    return await db
+      .select()
+      .from(departments)
+      .where(eq(departments.isActive, true))
+      .orderBy(departments.name);
+  }
+
+  async getDepartment(id: number): Promise<Department | undefined> {
+    const [department] = await db
+      .select()
+      .from(departments)
+      .where(eq(departments.id, id));
+    return department || undefined;
+  }
+
+  async createDepartment(data: InsertDepartment): Promise<Department> {
+    const [department] = await db
+      .insert(departments)
+      .values(data)
+      .returning();
+    return department;
+  }
+
+  async updateDepartment(id: number, data: Partial<InsertDepartment>): Promise<Department> {
+    const [department] = await db
+      .update(departments)
+      .set(data)
+      .where(eq(departments.id, id))
+      .returning();
+    return department;
+  }
+
+  async deleteDepartment(id: number): Promise<void> {
+    await db.delete(departments).where(eq(departments.id, id));
+  }
+
+  // Department Consumption Rates
+  async getConsumptionRatesByPart(agPartNumber: string): Promise<DepartmentConsumptionRate[]> {
+    return await db
+      .select()
+      .from(departmentConsumptionRates)
+      .where(eq(departmentConsumptionRates.agPartNumber, agPartNumber));
+  }
+
+  async getConsumptionRatesByDepartment(departmentId: number): Promise<DepartmentConsumptionRate[]> {
+    return await db
+      .select()
+      .from(departmentConsumptionRates)
+      .where(eq(departmentConsumptionRates.departmentId, departmentId));
+  }
+
+  async createConsumptionRate(data: InsertDepartmentConsumptionRate): Promise<DepartmentConsumptionRate> {
+    const [rate] = await db
+      .insert(departmentConsumptionRates)
+      .values(data)
+      .returning();
+    return rate;
+  }
+
+  async updateConsumptionRate(id: number, data: Partial<InsertDepartmentConsumptionRate>): Promise<DepartmentConsumptionRate> {
+    const [rate] = await db
+      .update(departmentConsumptionRates)
+      .set(data)
+      .where(eq(departmentConsumptionRates.id, id))
+      .returning();
+    return rate;
+  }
+
+  async deleteConsumptionRate(id: number): Promise<void> {
+    await db.delete(departmentConsumptionRates).where(eq(departmentConsumptionRates.id, id));
+  }
+
+  // Department-filtered Inventory
+  async getInventoryItemsByDepartment(departmentName: string): Promise<InventoryItem[]> {
+    const items = await db
+      .select()
+      .from(inventoryItems)
+      .where(eq(inventoryItems.isActive, true));
+    
+    // Filter items that have this department in their assignedDepartments array
+    return items.filter(item => {
+      const assignedDepts = item.assignedDepartments as string[] | null;
+      return assignedDepts && assignedDepts.includes(departmentName);
+    });
   }
 
   // Outstanding Orders

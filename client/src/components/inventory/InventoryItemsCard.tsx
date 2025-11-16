@@ -68,6 +68,7 @@ interface InventoryFormData {
   cogsPerUnit: string;
   orderDate: string;
   department: string;
+  assignedDepartments: string[];
   leadTimeDays: string;
   secondarySource: string;
   notes: string;
@@ -89,6 +90,7 @@ const InventoryForm = ({
   onSubmit,
   onChange,
   onSelectChange,
+  onMultiSelectChange,
   onCheckboxChange,
   onFileChange,
   editingItem,
@@ -96,6 +98,7 @@ const InventoryForm = ({
   isUpdatePending,
   onCancel,
   vendors,
+  departments,
   sdsFile,
   currentSdsFileName,
   tdsFile,
@@ -109,6 +112,7 @@ const InventoryForm = ({
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => void;
   onSelectChange: (name: string, value: string) => void;
+  onMultiSelectChange: (name: string, values: string[]) => void;
   onCheckboxChange: (name: string, checked: boolean) => void;
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   editingItem: InventoryItem | null;
@@ -117,6 +121,7 @@ const InventoryForm = ({
   onCancel: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vendors: any[];
+  departments: { id: number; name: string }[];
   sdsFile: File | null;
   currentSdsFileName: string | null;
   tdsFile: File | null;
@@ -579,26 +584,50 @@ const InventoryForm = ({
         Additional Information
       </h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="department">Department</Label>
-          <Select
-            value={formData.department}
-            onValueChange={(value) => onSelectChange('department', value)}
-          >
-            <SelectTrigger id="department" data-testid="select-department">
-              <SelectValue placeholder="Select department" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Layup/Plugging">Layup/Plugging</SelectItem>
-              <SelectItem value="CNC">CNC</SelectItem>
-              <SelectItem value="Cutting Table">Cutting Table</SelectItem>
-              <SelectItem value="Finish">Finish</SelectItem>
-              <SelectItem value="Gunsmith">Gunsmith</SelectItem>
-              <SelectItem value="Paint">Paint</SelectItem>
-              <SelectItem value="Shipping">Shipping</SelectItem>
-              <SelectItem value="Office">Office</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="md:col-span-2">
+          <Label htmlFor="assignedDepartments">Assigned Departments *</Label>
+          <div className="border rounded-md p-3 space-y-2 max-h-40 overflow-y-auto">
+            {departments.map((dept) => (
+              <div key={dept.id} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`dept-${dept.id}`}
+                  checked={formData.assignedDepartments.includes(dept.name)}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      onMultiSelectChange('assignedDepartments', [
+                        ...formData.assignedDepartments,
+                        dept.name,
+                      ]);
+                    } else {
+                      onMultiSelectChange(
+                        'assignedDepartments',
+                        formData.assignedDepartments.filter((d) => d !== dept.name)
+                      );
+                    }
+                  }}
+                  data-testid={`checkbox-dept-${dept.name}`}
+                />
+                <Label
+                  htmlFor={`dept-${dept.id}`}
+                  className="cursor-pointer font-normal"
+                >
+                  {dept.name}
+                </Label>
+              </div>
+            ))}
+          </div>
+          {formData.assignedDepartments.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {formData.assignedDepartments.map((dept) => (
+                <Badge key={dept} variant="secondary">
+                  {dept}
+                </Badge>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-gray-500 mt-1">
+            Select which departments can request and use this part
+          </p>
         </div>
         <div>
           <Label htmlFor="leadTimeDays">Lead Time</Label>
@@ -848,6 +877,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     cogsPerUnit: '',
     orderDate: '',
     department: '',
+    assignedDepartments: [],
     leadTimeDays: '',
     secondarySource: '',
     notes: '',
@@ -870,6 +900,17 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   const [currentTdsFileName, setCurrentTdsFileName] = useState<string | null>(null);
   const [otherDocsFile, setOtherDocsFile] = useState<File | null>(null);
   const [currentOtherDocsFileName, setCurrentOtherDocsFileName] = useState<string | null>(null);
+
+  // Sync legacy department field with first assigned department
+  useEffect(() => {
+    const firstDepartment = formData.assignedDepartments[0] || '';
+    if (formData.department !== firstDepartment) {
+      setFormData((prev) => ({
+        ...prev,
+        department: firstDepartment,
+      }));
+    }
+  }, [formData.assignedDepartments, formData.department]);
 
   // Auto-calculate COGS per unit when conversion data changes
   useEffect(() => {
@@ -937,6 +978,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   });
 
   const vendors = vendorsResponse?.data || [];
+
+  // Fetch departments
+  const { data: departments = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ['/api/inventory/departments'],
+  });
 
   // Fetch all item groups
   const { data: allGroups = [] } = useQuery<ItemGroup[]>({
@@ -1263,6 +1309,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       cogsPerUnit: '',
       orderDate: '',
       department: '',
+      assignedDepartments: [],
       leadTimeDays: '',
       secondarySource: '',
       notes: '',
@@ -1296,6 +1343,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
 
   const handleSelectChange = useCallback((name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
+  }, []);
+
+  const handleMultiSelectChange = useCallback((name: string, values: string[]) => {
+    setFormData((prev) => ({ ...prev, [name]: values }));
   }, []);
 
   const handleCheckboxChange = useCallback((name: string, checked: boolean) => {
@@ -1357,7 +1408,8 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
           ? parseFloat(formData.cogsPerUnit)
           : null,
         orderDate: formData.orderDate || null,
-        department: formData.department || null,
+        department: formData.assignedDepartments.length > 0 ? formData.assignedDepartments[0] : null,
+        assignedDepartments: formData.assignedDepartments,
         leadTimeDays: parseLeadTimeToDays(formData.leadTimeDays),
         secondarySource: formData.secondarySource || null,
         notes: formData.notes || null,
@@ -1410,6 +1462,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         ? new Date(item.orderDate).toISOString().split('T')[0]
         : '',
       department: item.department || '',
+      assignedDepartments: (item as any).assignedDepartments || [],
       leadTimeDays: item.leadTimeDays ? item.leadTimeDays.toString() : '',
       secondarySource: item.secondarySource || '',
       notes: item.notes || '',
@@ -1645,6 +1698,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                 onSubmit={handleSubmit}
                 onChange={handleChange}
                 onSelectChange={handleSelectChange}
+                onMultiSelectChange={handleMultiSelectChange}
                 onCheckboxChange={handleCheckboxChange}
                 onFileChange={handleSdsFileChange}
                 editingItem={editingItem}
@@ -1655,6 +1709,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                   resetForm();
                 }}
                 vendors={vendors}
+                departments={departments}
                 sdsFile={sdsFile}
                 currentSdsFileName={currentSdsFileName}
                 tdsFile={tdsFile}
@@ -2260,6 +2315,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             onSubmit={handleSubmit}
             onChange={handleChange}
             onSelectChange={handleSelectChange}
+            onMultiSelectChange={handleMultiSelectChange}
             onCheckboxChange={handleCheckboxChange}
             onFileChange={handleSdsFileChange}
             editingItem={editingItem}
@@ -2271,6 +2327,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
               resetForm();
             }}
             vendors={vendors}
+            departments={departments}
             sdsFile={sdsFile}
             currentSdsFileName={currentSdsFileName}
             tdsFile={tdsFile}

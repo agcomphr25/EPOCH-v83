@@ -78,6 +78,10 @@ interface InventoryFormData {
   utilizedInFacilities: boolean;
   utilizedInAdmin: boolean;
   utilizedInServices: boolean;
+  isPacketPart: boolean;
+  hasSds: boolean;
+  hasTds: boolean;
+  hasOtherDocs: boolean;
 }
 
 const InventoryForm = ({
@@ -86,11 +90,18 @@ const InventoryForm = ({
   onChange,
   onSelectChange,
   onCheckboxChange,
+  onFileChange,
   editingItem,
   isCreatePending,
   isUpdatePending,
   onCancel,
   vendors,
+  sdsFile,
+  currentSdsFileName,
+  tdsFile,
+  currentTdsFileName,
+  otherDocsFile,
+  currentOtherDocsFileName,
 }: {
   formData: InventoryFormData;
   onSubmit: (e: React.FormEvent) => void;
@@ -99,12 +110,19 @@ const InventoryForm = ({
   ) => void;
   onSelectChange: (name: string, value: string) => void;
   onCheckboxChange: (name: string, checked: boolean) => void;
+  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   editingItem: InventoryItem | null;
   isCreatePending: boolean;
   isUpdatePending: boolean;
   onCancel: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vendors: any[];
+  sdsFile: File | null;
+  currentSdsFileName: string | null;
+  tdsFile: File | null;
+  currentTdsFileName: string | null;
+  otherDocsFile: File | null;
+  currentOtherDocsFileName: string | null;
 }) => (
   <form
     onSubmit={onSubmit}
@@ -291,6 +309,7 @@ const InventoryForm = ({
               <SelectItem value="CASE">CASE</SelectItem>
               <SelectItem value="PALLET">PALLET</SelectItem>
               <SelectItem value="ROLL">ROLL</SelectItem>
+              <SelectItem value="HALFROLL">HALFROLL</SelectItem>
               <SelectItem value="SHEET">SHEET</SelectItem>
               <SelectItem value="BAG">BAG</SelectItem>
               <SelectItem value="DRUM">DRUM</SelectItem>
@@ -337,6 +356,7 @@ const InventoryForm = ({
               <SelectItem value="pc">pc (piece)</SelectItem>
               <SelectItem value="sq ft">sq ft (square foot)</SelectItem>
               <SelectItem value="sq in">sq in (square inch)</SelectItem>
+              <SelectItem value="sq m">sq m (square meter)</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-gray-500 mt-1">
@@ -402,6 +422,7 @@ const InventoryForm = ({
               <SelectItem value="pc">pc (piece)</SelectItem>
               <SelectItem value="sq ft">sq ft (square foot)</SelectItem>
               <SelectItem value="sq in">sq in (square inch)</SelectItem>
+              <SelectItem value="sq m">sq m (square meter)</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-gray-500 mt-1">
@@ -536,6 +557,19 @@ const InventoryForm = ({
             Services
           </Label>
         </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="isPacketPart"
+            checked={formData.isPacketPart}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('isPacketPart', checked as boolean)
+            }
+            data-testid="checkbox-isPacketPart"
+          />
+          <Label htmlFor="isPacketPart" className="cursor-pointer">
+            Packet Part (Cutting Table)
+          </Label>
+        </div>
       </div>
     </div>
 
@@ -595,6 +629,153 @@ const InventoryForm = ({
       </div>
     </div>
 
+    {/* Safety Data Sheet Section */}
+    <div className="space-y-4">
+      <h4 className="text-md font-semibold border-b pb-2">
+        Safety Data Sheet
+      </h4>
+      <div className="grid grid-cols-1 gap-4">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="hasSds"
+            checked={formData.hasSds}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('hasSds', checked as boolean)
+            }
+            data-testid="checkbox-hasSds"
+          />
+          <Label htmlFor="hasSds" className="cursor-pointer">
+            SDS (Safety Data Sheet available)
+          </Label>
+        </div>
+        {formData.hasSds && (
+          <div>
+            <Label htmlFor="sdsFile">Upload SDS PDF</Label>
+            <Input
+              id="sdsFile"
+              name="sdsFile"
+              type="file"
+              accept=".pdf"
+              onChange={onFileChange}
+              data-testid="input-sdsFile"
+              className="cursor-pointer"
+            />
+            {currentSdsFileName && !sdsFile && (
+              <p className="text-xs text-green-600 mt-1">
+                Current file: {currentSdsFileName}
+              </p>
+            )}
+            {sdsFile && (
+              <p className="text-xs text-blue-600 mt-1">
+                New file selected: {sdsFile.name}
+              </p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Upload a PDF file of the Safety Data Sheet
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+
+    {/* Technical Data Sheet Section */}
+    <div className="space-y-4">
+      <h4 className="text-md font-semibold border-b pb-2">
+        Technical Data Sheet
+      </h4>
+      <div className="grid grid-cols-1 gap-4">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="hasTds"
+            checked={formData.hasTds}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('hasTds', checked as boolean)
+            }
+            data-testid="checkbox-hasTds"
+          />
+          <Label htmlFor="hasTds" className="cursor-pointer">
+            TDS (Technical Data Sheet available)
+          </Label>
+        </div>
+        {formData.hasTds && (
+          <div>
+            <Label htmlFor="tdsFile">Upload TDS PDF</Label>
+            <Input
+              id="tdsFile"
+              name="tdsFile"
+              type="file"
+              accept=".pdf"
+              onChange={onFileChange}
+              data-testid="input-tdsFile"
+              className="cursor-pointer"
+            />
+            {currentTdsFileName && !tdsFile && (
+              <p className="text-xs text-green-600 mt-1">
+                Current file: {currentTdsFileName}
+              </p>
+            )}
+            {tdsFile && (
+              <p className="text-xs text-blue-600 mt-1">
+                New file selected: {tdsFile.name}
+              </p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Upload a PDF file of the Technical Data Sheet
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+
+    {/* Other Documents Section */}
+    <div className="space-y-4">
+      <h4 className="text-md font-semibold border-b pb-2">
+        Other Documents
+      </h4>
+      <div className="grid grid-cols-1 gap-4">
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="hasOtherDocs"
+            checked={formData.hasOtherDocs}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('hasOtherDocs', checked as boolean)
+            }
+            data-testid="checkbox-hasOtherDocs"
+          />
+          <Label htmlFor="hasOtherDocs" className="cursor-pointer">
+            Other Docs (Other documentation available)
+          </Label>
+        </div>
+        {formData.hasOtherDocs && (
+          <div>
+            <Label htmlFor="otherDocsFile">Upload Other Docs PDF</Label>
+            <Input
+              id="otherDocsFile"
+              name="otherDocsFile"
+              type="file"
+              accept=".pdf"
+              onChange={onFileChange}
+              data-testid="input-otherDocsFile"
+              className="cursor-pointer"
+            />
+            {currentOtherDocsFileName && !otherDocsFile && (
+              <p className="text-xs text-green-600 mt-1">
+                Current file: {currentOtherDocsFileName}
+              </p>
+            )}
+            {otherDocsFile && (
+              <p className="text-xs text-blue-600 mt-1">
+                New file selected: {otherDocsFile.name}
+              </p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              Upload a PDF file of other documentation
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+
     <div className="flex justify-end space-x-2 pt-4 border-t">
       <Button
         type="button"
@@ -615,7 +796,11 @@ const InventoryForm = ({
   </form>
 );
 
-export default function InventoryItemsCard() {
+interface InventoryItemsCardProps {
+  initialSearchTerm?: string | null;
+}
+
+export default function InventoryItemsCard({ initialSearchTerm }: InventoryItemsCardProps = {}) {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -623,7 +808,7 @@ export default function InventoryItemsCard() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [replaceAllItems, setReplaceAllItems] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearchTerm || '');
   const [utilizedFilter, setUtilizedFilter] = useState('all');
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [isAddToGroupDialogOpen, setIsAddToGroupDialogOpen] = useState(false);
@@ -673,7 +858,18 @@ export default function InventoryItemsCard() {
     utilizedInFacilities: false,
     utilizedInAdmin: false,
     utilizedInServices: false,
+    isPacketPart: false,
+    hasSds: false,
+    hasTds: false,
+    hasOtherDocs: false,
   });
+
+  const [sdsFile, setSdsFile] = useState<File | null>(null);
+  const [currentSdsFileName, setCurrentSdsFileName] = useState<string | null>(null);
+  const [tdsFile, setTdsFile] = useState<File | null>(null);
+  const [currentTdsFileName, setCurrentTdsFileName] = useState<string | null>(null);
+  const [otherDocsFile, setOtherDocsFile] = useState<File | null>(null);
+  const [currentOtherDocsFileName, setCurrentOtherDocsFileName] = useState<string | null>(null);
 
   // Auto-calculate COGS per unit when conversion data changes
   useEffect(() => {
@@ -857,11 +1053,30 @@ export default function InventoryItemsCard() {
 
   const createMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: (data: any) =>
-      apiRequest('/api/inventory/items', {
+    mutationFn: async ({ data, sdsFile, tdsFile, otherDocsFile }: { data: any; sdsFile: File | null; tdsFile: File | null; otherDocsFile: File | null }) => {
+      const formData = new FormData();
+      formData.append('data', JSON.stringify(data));
+      if (sdsFile) {
+        formData.append('sdsFile', sdsFile);
+      }
+      if (tdsFile) {
+        formData.append('tdsFile', tdsFile);
+      }
+      if (otherDocsFile) {
+        formData.append('otherDocsFile', otherDocsFile);
+      }
+      
+      const response = await fetch('/api/inventory/items', {
         method: 'POST',
-        body: data,
-      }),
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to create inventory item');
+      }
+      
+      return response.json();
+    },
     onSuccess: () => {
       toast.success('Inventory item created successfully');
       setIsCreateOpen(false);
@@ -875,11 +1090,30 @@ export default function InventoryItemsCard() {
 
   const updateMutation = useMutation({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mutationFn: ({ id, data }: { id: number; data: any }) =>
-      apiRequest(`/api/inventory/items/${id}`, {
+    mutationFn: async ({ id, data, sdsFile, tdsFile, otherDocsFile }: { id: number; data: any; sdsFile: File | null; tdsFile: File | null; otherDocsFile: File | null }) => {
+      const formData = new FormData();
+      formData.append('data', JSON.stringify(data));
+      if (sdsFile) {
+        formData.append('sdsFile', sdsFile);
+      }
+      if (tdsFile) {
+        formData.append('tdsFile', tdsFile);
+      }
+      if (otherDocsFile) {
+        formData.append('otherDocsFile', otherDocsFile);
+      }
+      
+      const response = await fetch(`/api/inventory/items/${id}`, {
         method: 'PUT',
-        body: data,
-      }),
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update inventory item');
+      }
+      
+      return response.json();
+    },
     onSuccess: () => {
       toast.success('Inventory item updated successfully');
       setIsEditOpen(false);
@@ -1039,7 +1273,17 @@ export default function InventoryItemsCard() {
       utilizedInFacilities: false,
       utilizedInAdmin: false,
       utilizedInServices: false,
+      isPacketPart: false,
+      hasSds: false,
+      hasTds: false,
+      hasOtherDocs: false,
     });
+    setSdsFile(null);
+    setCurrentSdsFileName(null);
+    setTdsFile(null);
+    setCurrentTdsFileName(null);
+    setOtherDocsFile(null);
+    setCurrentOtherDocsFileName(null);
   };
 
   const handleChange = useCallback(
@@ -1056,6 +1300,24 @@ export default function InventoryItemsCard() {
 
   const handleCheckboxChange = useCallback((name: string, checked: boolean) => {
     setFormData((prev) => ({ ...prev, [name]: checked }));
+  }, []);
+
+  const handleSdsFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    const inputName = e.target.name;
+    
+    if (file && file.type === 'application/pdf') {
+      if (inputName === 'sdsFile') {
+        setSdsFile(file);
+      } else if (inputName === 'tdsFile') {
+        setTdsFile(file);
+      } else if (inputName === 'otherDocsFile') {
+        setOtherDocsFile(file);
+      }
+    } else if (file) {
+      toast.error('Please select a PDF file');
+      e.target.value = '';
+    }
   }, []);
 
   const handleSubmit = useCallback(
@@ -1106,15 +1368,19 @@ export default function InventoryItemsCard() {
         utilizedInFacilities: formData.utilizedInFacilities,
         utilizedInAdmin: formData.utilizedInAdmin,
         utilizedInServices: formData.utilizedInServices,
+        isPacketPart: formData.isPacketPart,
+        hasSds: formData.hasSds,
+        hasTds: formData.hasTds,
+        hasOtherDocs: formData.hasOtherDocs,
       };
 
       if (editingItem) {
-        updateMutation.mutate({ id: editingItem.id, data: submitData });
+        updateMutation.mutate({ id: editingItem.id, data: submitData, sdsFile, tdsFile, otherDocsFile });
       } else {
-        createMutation.mutate(submitData);
+        createMutation.mutate({ data: submitData, sdsFile, tdsFile, otherDocsFile });
       }
     },
-    [formData, editingItem, updateMutation, createMutation]
+    [formData, editingItem, updateMutation, createMutation, sdsFile, tdsFile, otherDocsFile]
   );
 
   const handleEdit = (item: InventoryItem) => {
@@ -1154,7 +1420,17 @@ export default function InventoryItemsCard() {
       utilizedInFacilities: item.utilizedInFacilities || false,
       utilizedInAdmin: item.utilizedInAdmin || false,
       utilizedInServices: item.utilizedInServices || false,
+      isPacketPart: item.isPacketPart || false,
+      hasSds: item.hasSds || false,
+      hasTds: item.hasTds || false,
+      hasOtherDocs: item.hasOtherDocs || false,
     });
+    setSdsFile(null);
+    setCurrentSdsFileName(item.sdsFilePath ? item.sdsFilePath.split('/').pop() || null : null);
+    setTdsFile(null);
+    setCurrentTdsFileName(item.tdsFilePath ? item.tdsFilePath.split('/').pop() || null : null);
+    setOtherDocsFile(null);
+    setCurrentOtherDocsFileName(item.otherDocsFilePath ? item.otherDocsFilePath.split('/').pop() || null : null);
     setIsEditOpen(true);
   };
 
@@ -1370,6 +1646,7 @@ export default function InventoryItemsCard() {
                 onChange={handleChange}
                 onSelectChange={handleSelectChange}
                 onCheckboxChange={handleCheckboxChange}
+                onFileChange={handleSdsFileChange}
                 editingItem={editingItem}
                 isCreatePending={createMutation.isPending}
                 isUpdatePending={updateMutation.isPending}
@@ -1378,6 +1655,12 @@ export default function InventoryItemsCard() {
                   resetForm();
                 }}
                 vendors={vendors}
+                sdsFile={sdsFile}
+                currentSdsFileName={currentSdsFileName}
+                tdsFile={tdsFile}
+                currentTdsFileName={currentTdsFileName}
+                otherDocsFile={otherDocsFile}
+                currentOtherDocsFileName={currentOtherDocsFileName}
               />
             </DialogContent>
           </Dialog>
@@ -1750,6 +2033,15 @@ export default function InventoryItemsCard() {
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Utilized In
                 </th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                  SDS
+                </th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                  TDS
+                </th>
+                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                  Other Docs
+                </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Actions
                 </th>
@@ -1867,6 +2159,57 @@ export default function InventoryItemsCard() {
                           '-'}
                       </div>
                     </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                      {item.hasSds && item.sdsFilePath ? (
+                        <a
+                          href={item.sdsFilePath}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+                          data-testid={`link-sds-${item.id}`}
+                          title="View SDS"
+                        >
+                          <Download className="h-4 w-4" />
+                          PDF
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                      {item.hasTds && item.tdsFilePath ? (
+                        <a
+                          href={item.tdsFilePath}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+                          data-testid={`link-tds-${item.id}`}
+                          title="View TDS"
+                        >
+                          <Download className="h-4 w-4" />
+                          PDF
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
+                      {item.hasOtherDocs && item.otherDocsFilePath ? (
+                        <a
+                          href={item.otherDocsFilePath}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+                          data-testid={`link-other-docs-${item.id}`}
+                          title="View Other Docs"
+                        >
+                          <Download className="h-4 w-4" />
+                          PDF
+                        </a>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       <div className="flex space-x-2">
                         <Button
@@ -1918,6 +2261,7 @@ export default function InventoryItemsCard() {
             onChange={handleChange}
             onSelectChange={handleSelectChange}
             onCheckboxChange={handleCheckboxChange}
+            onFileChange={handleSdsFileChange}
             editingItem={editingItem}
             isCreatePending={createMutation.isPending}
             isUpdatePending={updateMutation.isPending}
@@ -1927,6 +2271,12 @@ export default function InventoryItemsCard() {
               resetForm();
             }}
             vendors={vendors}
+            sdsFile={sdsFile}
+            currentSdsFileName={currentSdsFileName}
+            tdsFile={tdsFile}
+            currentTdsFileName={currentTdsFileName}
+            otherDocsFile={otherDocsFile}
+            currentOtherDocsFileName={currentOtherDocsFileName}
           />
           {editingItem?.agPartNumber && (
             <div className="mt-6 border-t pt-6">

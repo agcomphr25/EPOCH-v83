@@ -99,7 +99,12 @@ export default function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) 
         e.preventDefault();
         const selectedResult = results[selectedIndex];
         if (selectedResult) {
-          setLocation(selectedResult.url);
+          // If URL contains query parameters, use window.location to preserve them
+          if (selectedResult.url.includes('?')) {
+            window.location.href = selectedResult.url;
+          } else {
+            setLocation(selectedResult.url);
+          }
           onOpenChange(false);
           setSearchTerm('');
         }
@@ -124,7 +129,12 @@ export default function GlobalSearch({ open, onOpenChange }: GlobalSearchProps) 
   }, [selectedIndex]);
 
   const handleResultClick = (url: string) => {
-    setLocation(url);
+    // If URL contains query parameters, use window.location to preserve them
+    if (url.includes('?')) {
+      window.location.href = url;
+    } else {
+      setLocation(url);
+    }
     onOpenChange(false);
     setSearchTerm('');
   };

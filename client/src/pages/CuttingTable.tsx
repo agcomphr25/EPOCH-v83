@@ -759,21 +759,23 @@ export default function CuttingTable() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Inventory Item *</label>
+                <label className="text-sm font-medium">Packet Part (from Inventory) *</label>
                 <Select value={recipeInventoryItem} onValueChange={setRecipeInventoryItem}>
                   <SelectTrigger data-testid="select-inventory-item">
-                    <SelectValue placeholder="Select inventory item" />
+                    <SelectValue placeholder="Select packet part" />
                   </SelectTrigger>
                   <SelectContent>
-                    {inventoryItems.map((item: any) => (
-                      <SelectItem 
-                        key={item.id} 
-                        value={item.id.toString()}
-                        data-testid={`option-item-${item.id}`}
-                      >
-                        {item.agPartNumber} - {item.partDescription}
-                      </SelectItem>
-                    ))}
+                    {inventoryItems
+                      .filter((item: any) => item.isPacketPart === true)
+                      .map((item: any) => (
+                        <SelectItem 
+                          key={item.id} 
+                          value={item.id.toString()}
+                          data-testid={`option-item-${item.id}`}
+                        >
+                          {item.agPartNumber} - {item.partDescription}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

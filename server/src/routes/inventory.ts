@@ -12,6 +12,9 @@ import {
   insertItemGroupSchema,
   insertDepartmentSchema,
   insertDepartmentConsumptionRateSchema,
+  DEPARTMENT_LOCATION_MAP,
+  EnrichedInventoryBalance,
+  DepartmentBalanceBreakdown,
 } from '@shared/schema';
 
 import { storage } from '../../storage';
@@ -1080,11 +1083,66 @@ router.get('/inventory/export/csv', async (req: Request, res: Response) => {
 // Enhanced Inventory MRP - Inventory Balances Routes
 // ========================================
 
-// GET /api/enhanced/inventory/balances - Get all inventory balances
+// GET /api/enhanced/inventory/balances - Get all inventory balances with department metadata
 router.get('/inventory/balances', async (req: Request, res: Response) => {
   try {
     const balances = await storage.getAllInventoryBalances();
-    res.json(balances);
+    
+    // Enrich balances with department metadata
+    const enrichedBalances: EnrichedInventoryBalance[] = balances.map((balance) => {
+      const deptInfo = DEPARTMENT_LOCATION_MAP[balance.locationId];
+      return {
+        ...balance,
+        departmentMeta: deptInfo ? {
+          departmentId: deptInfo.departmentId,
+          departmentName: deptInfo.departmentName,
+          locationId: balance.locationId,
+        } : undefined,
+      };
+    });
+
+    // Compute per-part department breakdown
+    const departmentBreakdowns = new Map<string, Map<number, DepartmentBalanceBreakdown>>();
+    
+    enrichedBalances.forEach((balance) => {
+      if (!balance.departmentMeta) return;
+      
+      if (!departmentBreakdowns.has(balance.agPartNumber)) {
+        departmentBreakdowns.set(balance.agPartNumber, new Map());
+      }
+      
+      const partDepts = departmentBreakdowns.get(balance.agPartNumber)!;
+      const deptId = balance.departmentMeta.departmentId;
+      
+      if (!partDepts.has(deptId)) {
+        partDepts.set(deptId, {
+          departmentId: deptId,
+          departmentName: balance.departmentMeta.departmentName,
+          totalQuantityOnHand: 0,
+          totalQuantityAllocated: 0,
+          totalQuantityAvailable: 0,
+          locations: [],
+        });
+      }
+      
+      const breakdown = partDepts.get(deptId)!;
+      breakdown.totalQuantityOnHand += balance.quantityOnHand;
+      breakdown.totalQuantityAllocated += balance.quantityAllocated;
+      breakdown.totalQuantityAvailable += balance.quantityAvailable;
+      if (!breakdown.locations.includes(balance.locationId)) {
+        breakdown.locations.push(balance.locationId);
+      }
+    });
+
+    res.json({
+      balances: enrichedBalances,
+      departmentBreakdowns: Object.fromEntries(
+        Array.from(departmentBreakdowns.entries()).map(([part, depts]) => [
+          part,
+          Array.from(depts.values())
+        ])
+      ),
+    });
   } catch (error) {
     console.error('Get inventory balances error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory balances' });
@@ -1167,11 +1225,56 @@ router.delete('/inventory/balances/:id', async (req: Request, res: Response) => 
 // Enhanced Inventory MRP - Inventory Transactions Routes
 // ========================================
 
-// GET /api/enhanced/inventory/transactions - Get all inventory transactions
+// GET /api/enhanced/inventory/transactions - Get inventory transactions with filters and department metadata
 router.get('/inventory/transactions', async (req: Request, res: Response) => {
   try {
-    const transactions = await storage.getAllInventoryTransactions();
-    res.json(transactions);
+    const { partId, transactionType, dateFrom, dateTo, page = '1', limit = '50' } = req.query;
+    
+    let transactions = await storage.getAllInventoryTransactions();
+    
+    // Apply filters
+    if (partId) {
+      transactions = transactions.filter(t => t.agPartNumber === partId);
+    }
+    if (transactionType) {
+      transactions = transactions.filter(t => t.transactionType === transactionType);
+    }
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom as string);
+      transactions = transactions.filter(t => new Date(t.transactionDate) >= fromDate);
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo as string);
+      transactions = transactions.filter(t => new Date(t.transactionDate) <= toDate);
+    }
+    
+    // Enrich with department metadata based on location
+    const enrichedTransactions = transactions.map(transaction => {
+      const location = transaction.toLocation || transaction.fromLocation;
+      const deptInfo = location ? DEPARTMENT_LOCATION_MAP[location] : undefined;
+      
+      return {
+        ...transaction,
+        locationId: location || 'Unknown',
+        departmentName: deptInfo?.departmentName,
+        departmentId: deptInfo?.departmentId,
+      };
+    });
+    
+    // Pagination
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const startIndex = (pageNum - 1) * limitNum;
+    const endIndex = startIndex + limitNum;
+    
+    const paginatedTransactions = enrichedTransactions.slice(startIndex, endIndex);
+    
+    res.json({
+      data: paginatedTransactions,
+      total: enrichedTransactions.length,
+      page: pageNum,
+      limit: limitNum,
+    });
   } catch (error) {
     console.error('Get inventory transactions error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory transactions' });

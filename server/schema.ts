@@ -5288,7 +5288,8 @@ export const cuttingComponents = pgTable('cutting_components', {
 export const cuttingPacketCompositions = pgTable('cutting_packet_compositions', {
   id: uuid('id').defaultRandom().primaryKey(),
   productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
-  componentId: uuid('component_id').references(() => cuttingComponents.id),
+  componentId: uuid('component_id').references(() => cuttingComponents.id), // Nullable - can link via component or direct inventory item
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id), // Direct link to inventory items
   quantityNeeded: integer('quantity_needed').notNull(), // How many of this component per packet
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

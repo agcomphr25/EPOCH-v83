@@ -53,7 +53,8 @@ type Component = {
 type PacketComposition = {
   id: string;
   productCategoryId: string;
-  componentId: string;
+  componentId: string | null;
+  inventoryItemId: number | null;
   quantityNeeded: number;
 };
 
@@ -122,6 +123,11 @@ export default function CuttingTable() {
   const [selectedFormLine, setSelectedFormLine] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [quantity, setQuantity] = useState('');
+  
+  // Form state for Configure Recipes tab
+  const [recipePacketType, setRecipePacketType] = useState('');
+  const [recipeInventoryItem, setRecipeInventoryItem] = useState('');
+  const [recipeQuantity, setRecipeQuantity] = useState('');
 
   // Form state for Add Fabric Inventory tab
   const [fabricFormLine, setFabricFormLine] = useState('');
@@ -178,7 +184,11 @@ export default function CuttingTable() {
     queryKey: ['/api/cutting-table/fabric-inventory'],
   });
 
-  const isLoading = loadingMaterials || loadingLines || loadingCategories || loadingComponents || loadingPacketCompositions || loadingWeekly || loadingProgress || loadingInventory;
+  const { data: inventoryItems = [], isLoading: loadingInventoryItems } = useQuery<any[]>({
+    queryKey: ['/api/inventory-items'],
+  });
+
+  const isLoading = loadingMaterials || loadingLines || loadingCategories || loadingComponents || loadingPacketCompositions || loadingWeekly || loadingProgress || loadingInventory || loadingInventoryItems;
 
   // Clear selected category when production line changes
   useEffect(() => {
@@ -648,6 +658,187 @@ export default function CuttingTable() {
               );
             })}
           </div>
+        </Card>
+      </div>
+    );
+  };
+
+  const renderConfigureRecipes = () => {
+    const handleAddComposition = async (e: React.FormEvent) => {
+      e.preventDefault();
+
+      if (!recipePacketType || !recipeInventoryItem || !recipeQuantity) {
+        toast({
+          title: "Missing Information",
+          description: "Please fill in all fields",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      try {
+        await apiRequest('/api/cutting-table/packet-compositions', {
+          method: 'POST',
+          body: JSON.stringify({
+            productCategoryId: recipePacketType,
+            inventoryItemId: parseInt(recipeInventoryItem),
+            componentId: null,
+            quantityNeeded: parseInt(recipeQuantity),
+          }),
+        });
+
+        toast({
+          title: "Success",
+          description: "Inventory item added to packet recipe"
+        });
+
+        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-compositions'] });
+
+        setRecipeInventoryItem('');
+        setRecipeQuantity('');
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to add inventory item to recipe",
+          variant: "destructive"
+        });
+      }
+    };
+
+    const handleDeleteComposition = async (compositionId: string) => {
+      try {
+        await apiRequest(`/api/cutting-table/packet-compositions/${compositionId}`, {
+          method: 'DELETE',
+        });
+
+        toast({
+          title: "Success",
+          description: "Inventory item removed from recipe"
+        });
+
+        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-compositions'] });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to remove inventory item",
+          variant: "destructive"
+        });
+      }
+    };
+
+    const selectedPacketCompositions = packetCompositions.filter(pc => pc.productCategoryId === recipePacketType);
+
+    return (
+      <div className="space-y-6">
+        <Card className="p-8" data-testid="configure-recipes">
+          <h3 className="text-lg font-semibold mb-6">Configure Packet Recipes</h3>
+          <p className="text-sm text-muted-foreground mb-6">
+            Define which inventory items and quantities are needed for each packet type. This configuration will be used when building packets to automatically consume inventory.
+          </p>
+
+          <form onSubmit={handleAddComposition} className="space-y-6 max-w-2xl">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Packet Type *</label>
+              <Select value={recipePacketType} onValueChange={setRecipePacketType}>
+                <SelectTrigger data-testid="select-packet-type">
+                  <SelectValue placeholder="Select packet type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map(cat => (
+                    <SelectItem 
+                      key={cat.id} 
+                      value={cat.id}
+                      data-testid={`option-packet-${cat.id}`}
+                    >
+                      {cat.categoryName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Inventory Item *</label>
+                <Select value={recipeInventoryItem} onValueChange={setRecipeInventoryItem}>
+                  <SelectTrigger data-testid="select-inventory-item">
+                    <SelectValue placeholder="Select inventory item" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {inventoryItems.map((item: any) => (
+                      <SelectItem 
+                        key={item.id} 
+                        value={item.id.toString()}
+                        data-testid={`option-item-${item.id}`}
+                      >
+                        {item.agPartNumber} - {item.partDescription}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Quantity Needed Per Packet *</label>
+                <Input 
+                  type="number" 
+                  min="1"
+                  value={recipeQuantity}
+                  onChange={(e) => setRecipeQuantity(e.target.value)}
+                  placeholder="Enter quantity"
+                  data-testid="input-recipe-quantity"
+                />
+              </div>
+            </div>
+
+            <Button 
+              type="submit" 
+              className="w-full"
+              data-testid="button-add-recipe-item"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Item to Recipe
+            </Button>
+          </form>
+
+          {recipePacketType && (
+            <div className="mt-8 pt-6 border-t">
+              <h4 className="font-medium mb-4">
+                Current Recipe for {categories.find(c => c.id === recipePacketType)?.categoryName}
+              </h4>
+              {selectedPacketCompositions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No items configured yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {selectedPacketCompositions.map(comp => {
+                    const item = inventoryItems.find((i: any) => i.id === comp.inventoryItemId);
+                    return (
+                      <div 
+                        key={comp.id} 
+                        className="flex items-center justify-between p-3 border rounded hover:bg-muted/50"
+                        data-testid={`recipe-item-${comp.id}`}
+                      >
+                        <div className="flex-1">
+                          <span className="font-medium">{comp.quantityNeeded}x</span>
+                          <span className="ml-2">
+                            {item ? `${item.agPartNumber} - ${item.partDescription}` : 'Unknown Item'}
+                          </span>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteComposition(comp.id)}
+                          data-testid={`button-delete-recipe-${comp.id}`}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </Card>
       </div>
     );
@@ -1235,12 +1426,13 @@ export default function CuttingTable() {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full" data-testid="tabs-main">
-        <TabsList className="grid w-full grid-cols-8" data-testid="tabs-list">
+        <TabsList className="grid w-full grid-cols-9" data-testid="tabs-list">
           <TabsTrigger value="dashboard" data-testid="tab-dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="daily" data-testid="tab-daily">Daily Tracker</TabsTrigger>
           <TabsTrigger value="weekly" data-testid="tab-weekly">Weekly Report</TabsTrigger>
           <TabsTrigger value="projections" data-testid="tab-projections">Projections</TabsTrigger>
           <TabsTrigger value="packetMgmt" data-testid="tab-packet-mgmt">Packet Mgmt</TabsTrigger>
+          <TabsTrigger value="configRecipes" data-testid="tab-config-recipes">Configure Recipes</TabsTrigger>
           <TabsTrigger value="submit" data-testid="tab-submit">Submit Data</TabsTrigger>
           <TabsTrigger value="addFabric" data-testid="tab-add-fabric">Add Fabric</TabsTrigger>
           <TabsTrigger value="inventory" data-testid="tab-inventory">Inventory</TabsTrigger>
@@ -1264,6 +1456,10 @@ export default function CuttingTable() {
 
         <TabsContent value="packetMgmt" className="mt-6" data-testid="content-packet-mgmt">
           {renderPacketManagement()}
+        </TabsContent>
+
+        <TabsContent value="configRecipes" className="mt-6" data-testid="content-config-recipes">
+          {renderConfigureRecipes()}
         </TabsContent>
 
         <TabsContent value="submit" className="mt-6" data-testid="content-submit">

@@ -28,6 +28,7 @@ import InventoryManagerPage from './pages/InventoryManagerPage';
 import InventoryReceivingPage from './pages/InventoryReceivingPage';
 import EnhancedInventoryMRPPage from './pages/EnhancedInventoryMRPPage';
 import DepartmentPartsRequestPage from './pages/DepartmentPartsRequestPage';
+import ConsolidatedNeedsListPage from './pages/ConsolidatedNeedsListPage';
 import QCPage from './pages/QCPage';
 import MaintenancePage from './pages/MaintenancePage';
 import EmployeePortalPage from './pages/EmployeePortalPage';
@@ -390,6 +391,10 @@ function App() {
                   <Route
                     path="/inventory/parts-request"
                     component={DepartmentPartsRequestPage}
+                  />
+                  <Route
+                    path="/inventory/consolidated-needs"
+                    component={ConsolidatedNeedsListPage}
                   />
 
                   {/* Enhanced System Routes (Independent) */}

@@ -773,7 +773,7 @@ export default function CuttingTable() {
                           value={item.id.toString()}
                           data-testid={`option-item-${item.id}`}
                         >
-                          {item.agPartNumber} - {item.partDescription}
+                          {item.agPartNumber} - {item.name}
                         </SelectItem>
                       ))}
                   </SelectContent>

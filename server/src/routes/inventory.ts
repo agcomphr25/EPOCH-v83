@@ -504,8 +504,9 @@ router.get('/parts-requests/consolidated/needs', async (req: Request, res: Respo
 // Departments CRUD
 router.get('/departments', async (req: Request, res: Response) => {
   try {
-    const departments = await storage.getAllDepartments();
-    res.json(departments);
+    // Return static list of departments from DEPARTMENT_LOCATION_MAP
+    const { AVAILABLE_DEPARTMENTS } = await import('../../schema');
+    res.json(AVAILABLE_DEPARTMENTS);
   } catch (error) {
     console.error('Get departments error:', error);
     res.status(500).json({ error: 'Failed to fetch departments' });

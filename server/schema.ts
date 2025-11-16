@@ -2710,6 +2710,16 @@ export const DEPARTMENT_LOCATION_MAP: Record<string, { departmentId: number; dep
   'MAINTENANCE': { departmentId: 7, departmentName: 'Maintenance' },
 };
 
+// Extract unique departments from the location map for form dropdowns
+export const AVAILABLE_DEPARTMENTS = Array.from(
+  new Map(
+    Object.values(DEPARTMENT_LOCATION_MAP).map(dept => [
+      dept.departmentId,
+      { id: dept.departmentId, name: dept.departmentName }
+    ])
+  ).values()
+).sort((a, b) => a.id - b.id);
+
 // Enriched balance response types
 export type DepartmentBalanceMeta = {
   departmentId: number;

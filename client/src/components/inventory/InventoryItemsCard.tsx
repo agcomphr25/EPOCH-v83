@@ -981,7 +981,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
 
   // Fetch departments
   const { data: departments = [] } = useQuery<{ id: number; name: string }[]>({
-    queryKey: ['/api/departments'],
+    queryKey: ['/api/inventory/departments'],
   });
 
   // Fetch all item groups

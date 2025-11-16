@@ -2693,32 +2693,21 @@ export const inventoryBalances = pgTable('inventory_balances', {
 }));
 
 // Department-Location Mapping for derived department tracking
+// Department-Location Mapping for physical staging locations
+// Maps physical warehouse/production locations to manufacturing departments
 export const DEPARTMENT_LOCATION_MAP: Record<string, { departmentId: number; departmentName: string }> = {
-  'P1-LAYUP': { departmentId: 1, departmentName: 'Production - Layup' },
-  'P1-CNC': { departmentId: 1, departmentName: 'Production - CNC' },
-  'P1-FINISH': { departmentId: 1, departmentName: 'Production - Finish' },
-  'P1-QC': { departmentId: 1, departmentName: 'Production - QC' },
-  'P1-SHIPPING': { departmentId: 1, departmentName: 'Production - Shipping' },
-  'P2-LAYUP': { departmentId: 2, departmentName: 'Production P2 - Layup' },
-  'P2-CNC': { departmentId: 2, departmentName: 'Production P2 - CNC' },
-  'P2-FINISH': { departmentId: 2, departmentName: 'Production P2 - Finish' },
-  'WAREHOUSE-MAIN': { departmentId: 3, departmentName: 'Warehouse' },
-  'WAREHOUSE-OVERFLOW': { departmentId: 3, departmentName: 'Warehouse' },
-  'ENGINEERING': { departmentId: 4, departmentName: 'Engineering' },
-  'IT': { departmentId: 5, departmentName: 'IT' },
-  'HR': { departmentId: 6, departmentName: 'HR' },
-  'MAINTENANCE': { departmentId: 7, departmentName: 'Maintenance' },
+  'P1-PRODUCTION-QUEUE': { departmentId: 1, departmentName: 'Production Queue' },
+  'P1-LAYUP': { departmentId: 2, departmentName: 'Layup/Plugging' },
+  'P1-BARCODE': { departmentId: 3, departmentName: 'Barcode' },
+  'P1-CNC': { departmentId: 4, departmentName: 'CNC' },
+  'P1-GUNSMITH': { departmentId: 5, departmentName: 'Gunsmith' },
+  'P1-FINISH': { departmentId: 6, departmentName: 'Finish' },
+  'P1-FINISH-QC': { departmentId: 7, departmentName: 'Finish QC' },
+  'P1-SHIPPING-QC': { departmentId: 8, departmentName: 'Shipping QC' },
+  'P1-SHIPPING': { departmentId: 9, departmentName: 'Shipping' },
+  'WAREHOUSE-MAIN': { departmentId: 1, departmentName: 'Production Queue' }, // General staging
+  'WAREHOUSE-OVERFLOW': { departmentId: 1, departmentName: 'Production Queue' },
 };
-
-// Extract unique departments from the location map for form dropdowns
-export const AVAILABLE_DEPARTMENTS = Array.from(
-  new Map(
-    Object.values(DEPARTMENT_LOCATION_MAP).map(dept => [
-      dept.departmentId,
-      { id: dept.departmentId, name: dept.departmentName }
-    ])
-  ).values()
-).sort((a, b) => a.id - b.id);
 
 // Enriched balance response types
 export type DepartmentBalanceMeta = {

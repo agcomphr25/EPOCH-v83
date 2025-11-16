@@ -501,12 +501,25 @@ router.get('/parts-requests/consolidated/needs', async (req: Request, res: Respo
   }
 });
 
-// Departments CRUD
+// Departments CRUD - Get actual manufacturing departments from orderDepartmentTypes
 router.get('/departments', async (req: Request, res: Response) => {
   try {
-    // Return static list of departments from DEPARTMENT_LOCATION_MAP
-    const { AVAILABLE_DEPARTMENTS } = await import('../../schema');
-    res.json(AVAILABLE_DEPARTMENTS);
+    const { orderDepartmentTypes } = await import('../../schema');
+    const { eq } = await import('drizzle-orm');
+    const { db } = await import('../../db');
+    
+    const departments = await db
+      .select()
+      .from(orderDepartmentTypes)
+      .where(eq(orderDepartmentTypes.isActive, true))
+      .orderBy(orderDepartmentTypes.sortOrder);
+    
+    // Map to simple id/name format expected by frontend
+    const simpleDepartments = departments.map(dept => ({
+      id: dept.id,
+      name: dept.displayName
+    }));
+    res.json(simpleDepartments);
   } catch (error) {
     console.error('Get departments error:', error);
     res.status(500).json({ error: 'Failed to fetch departments' });

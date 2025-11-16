@@ -15,9 +15,9 @@ import {
   index,
   serial,
 } from 'drizzle-orm/pg-core';
+import { sql, relations } from 'drizzle-orm';
 import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
-import { relations } from 'drizzle-orm';
 
 // Order Department Types Reference Table (separate from order_departments tracking table)
 export const orderDepartmentTypes = pgTable('order_department_types', {
@@ -482,7 +482,8 @@ export const inventoryItems = pgTable('inventory_items', {
   costPer: real('cost_per'), // Purchase cost from vendor (e.g., $491.20 for 80lb box)
   orderDate: date('order_date'), // Order Date
   notes: text('notes'), // Notes
-  department: text('department'), // Dept.
+  department: text('department'), // Dept. (legacy - kept for backward compatibility)
+  assignedDepartments: jsonb('assigned_departments').$type<string[]>().default(sql`'[]'::jsonb`), // Departments that can request/use this part
   secondarySource: text('secondary_source'), // Secondary Source
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
@@ -618,24 +619,48 @@ export const inventoryScans = pgTable('inventory_scans', {
   scannedAt: timestamp('scanned_at').defaultNow(),
 });
 
+// Department-specific consumption rates for parts
+export const departmentConsumptionRates = pgTable('department_consumption_rates', {
+  id: serial('id').primaryKey(),
+  agPartNumber: text('ag_part_number')
+    .references(() => inventoryItems.agPartNumber, { onDelete: 'cascade' })
+    .notNull(),
+  departmentId: integer('department_id')
+    .references(() => departments.id, { onDelete: 'cascade' })
+    .notNull(),
+  consumptionRate: real('consumption_rate').notNull(), // Units consumed per time period
+  ratePeriod: text('rate_period').default('weekly'), // daily, weekly, monthly
+  usageUnit: text('usage_unit'), // Unit of measurement (ea, lbs, oz, etc.)
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  uniquePartDepartment: unique().on(table.agPartNumber, table.departmentId),
+}));
+
 export const partsRequests = pgTable('parts_requests', {
   id: serial('id').primaryKey(),
-  partNumber: text('part_number').notNull(),
+  agPartNumber: text('ag_part_number').references(() => inventoryItems.agPartNumber), // Link to inventory item (nullable for ad-hoc requests)
+  partNumber: text('part_number').notNull(), // Part number (can be AG part or external)
   partName: text('part_name').notNull(),
   requestedBy: text('requested_by').notNull(),
-  department: text('department'),
+  department: text('department'), // Department name (legacy text field)
+  departmentId: integer('department_id').references(() => departments.id), // FK to departments table
   quantity: integer('quantity').notNull(),
   urgency: text('urgency').notNull(), // LOW, MEDIUM, HIGH, CRITICAL
   supplier: text('supplier'),
   estimatedCost: real('estimated_cost'),
   reason: text('reason'), // Why the part is needed
-  status: text('status').default('PENDING').notNull(), // PENDING, APPROVED, ORDERED, RECEIVED, REJECTED
+  status: text('status').default('PENDING').notNull(), // PENDING, APPROVED, ORDERED, RECEIVED, DELIVERED_TO_DEPT, REJECTED
   requestDate: timestamp('request_date').defaultNow().notNull(),
   approvedBy: text('approved_by'),
   approvedDate: timestamp('approved_date'),
   orderDate: timestamp('order_date'),
   expectedDelivery: date('expected_delivery'),
   actualDelivery: date('actual_delivery'),
+  deliveredToDepartment: timestamp('delivered_to_department'), // When parts were turned over to requesting department
+  receivedByDepartment: text('received_by_department'), // Who in the department received the parts
+  vendorPoId: integer('vendor_po_id').references(() => vendorPOs.id), // Link to vendor PO if ordered
   notes: text('notes'),
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
@@ -1576,6 +1601,7 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     cogsPerUnit: z.number().min(0).optional().nullable(),
     orderDate: z.coerce.date().optional().nullable(),
     department: z.string().optional().nullable(),
+    assignedDepartments: z.array(z.string()).default([]),
     secondarySource: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
     isStockItem: z.boolean().default(false),
@@ -2084,6 +2110,21 @@ export const insertOnboardingDocSchema = createInsertSchema(onboardingDocs)
     signatureDataURL: z.string().optional().nullable(),
   });
 
+export const insertDepartmentConsumptionRateSchema = createInsertSchema(departmentConsumptionRates)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    agPartNumber: z.string().min(1, 'Part number is required'),
+    departmentId: z.number().positive('Department ID is required'),
+    consumptionRate: z.number().positive('Consumption rate must be positive'),
+    ratePeriod: z.enum(['daily', 'weekly', 'monthly']).default('weekly'),
+    usageUnit: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  });
+
 export const insertPartsRequestSchema = createInsertSchema(partsRequests)
   .omit({
     id: true,
@@ -2092,23 +2133,28 @@ export const insertPartsRequestSchema = createInsertSchema(partsRequests)
     requestDate: true,
   })
   .extend({
+    agPartNumber: z.string().optional().nullable(),
     partNumber: z.string().min(1, 'Part number is required'),
     partName: z.string().min(1, 'Part name is required'),
     requestedBy: z.string().min(1, 'Requested by is required'),
     department: z.string().optional().nullable(),
+    departmentId: z.number().optional().nullable(),
     quantity: z.number().positive('Quantity must be positive'),
     urgency: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
     supplier: z.string().optional().nullable(),
     estimatedCost: z.number().min(0).optional().nullable(),
     reason: z.string().optional().nullable(),
     status: z
-      .enum(['PENDING', 'APPROVED', 'ORDERED', 'RECEIVED', 'REJECTED'])
+      .enum(['PENDING', 'APPROVED', 'ORDERED', 'RECEIVED', 'DELIVERED_TO_DEPT', 'REJECTED'])
       .default('PENDING'),
     approvedBy: z.string().optional().nullable(),
     approvedDate: z.coerce.date().optional().nullable(),
     orderDate: z.coerce.date().optional().nullable(),
     expectedDelivery: z.coerce.date().optional().nullable(),
     actualDelivery: z.coerce.date().optional().nullable(),
+    deliveredToDepartment: z.coerce.date().optional().nullable(),
+    receivedByDepartment: z.string().optional().nullable(),
+    vendorPoId: z.number().optional().nullable(),
     notes: z.string().optional().nullable(),
     isActive: z.boolean().default(true),
   });
@@ -2270,6 +2316,8 @@ export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
 export type ChecklistItem = typeof checklistItems.$inferSelect;
 export type InsertOnboardingDoc = z.infer<typeof insertOnboardingDocSchema>;
 export type OnboardingDoc = typeof onboardingDocs.$inferSelect;
+export type InsertDepartmentConsumptionRate = z.infer<typeof insertDepartmentConsumptionRateSchema>;
+export type DepartmentConsumptionRate = typeof departmentConsumptionRates.$inferSelect;
 export type InsertPartsRequest = z.infer<typeof insertPartsRequestSchema>;
 export type PartsRequest = typeof partsRequests.$inferSelect;
 
@@ -4865,11 +4913,13 @@ export type OemPrioritySettings = typeof oemPrioritySettings.$inferSelect;
 
 // Internal Messaging System Tables
 
-// Departments table for internal messaging
+// Departments table for internal messaging and parts requests
 export const departments = pgTable('departments', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull(),
+  name: text('name').notNull().unique(),
+  displayName: text('display_name'), // Display name for UI
   description: text('description'),
+  locationId: text('location_id'), // Physical location/storage area for parts
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -4920,11 +4970,19 @@ export const messageAttachments = pgTable('message_attachments', {
 });
 
 // Insert schemas for internal messaging
-export const insertDepartmentSchema = createInsertSchema(departments).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+export const insertDepartmentSchema = createInsertSchema(departments)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    name: z.string().min(1, 'Name is required'),
+    displayName: z.string().optional().nullable(),
+    description: z.string().optional().nullable(),
+    locationId: z.string().optional().nullable(),
+    isActive: z.boolean().default(true),
+  });
 
 export const insertInternalMessageSchema = createInsertSchema(
   internalMessages

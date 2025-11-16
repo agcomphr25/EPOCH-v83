@@ -2692,6 +2692,51 @@ export const inventoryBalances = pgTable('inventory_balances', {
   uniquePartLocation: unique().on(table.agPartNumber, table.locationId),
 }));
 
+// Department-Location Mapping for derived department tracking
+export const DEPARTMENT_LOCATION_MAP: Record<string, { departmentId: number; departmentName: string }> = {
+  'P1-LAYUP': { departmentId: 1, departmentName: 'Production - Layup' },
+  'P1-CNC': { departmentId: 1, departmentName: 'Production - CNC' },
+  'P1-FINISH': { departmentId: 1, departmentName: 'Production - Finish' },
+  'P1-QC': { departmentId: 1, departmentName: 'Production - QC' },
+  'P1-SHIPPING': { departmentId: 1, departmentName: 'Production - Shipping' },
+  'P2-LAYUP': { departmentId: 2, departmentName: 'Production P2 - Layup' },
+  'P2-CNC': { departmentId: 2, departmentName: 'Production P2 - CNC' },
+  'P2-FINISH': { departmentId: 2, departmentName: 'Production P2 - Finish' },
+  'WAREHOUSE-MAIN': { departmentId: 3, departmentName: 'Warehouse' },
+  'WAREHOUSE-OVERFLOW': { departmentId: 3, departmentName: 'Warehouse' },
+  'ENGINEERING': { departmentId: 4, departmentName: 'Engineering' },
+  'IT': { departmentId: 5, departmentName: 'IT' },
+  'HR': { departmentId: 6, departmentName: 'HR' },
+  'MAINTENANCE': { departmentId: 7, departmentName: 'Maintenance' },
+};
+
+// Enriched balance response types
+export type DepartmentBalanceMeta = {
+  departmentId: number;
+  departmentName: string;
+  locationId: string;
+};
+
+export type DepartmentBalanceBreakdown = {
+  departmentId: number;
+  departmentName: string;
+  totalQuantityOnHand: number;
+  totalQuantityAllocated: number;
+  totalQuantityAvailable: number;
+  locations: string[];
+};
+
+export type EnrichedInventoryBalance = typeof inventoryBalances.$inferSelect & {
+  partName?: string;
+  departmentMeta?: DepartmentBalanceMeta;
+};
+
+export type InventoryBalanceWithDepartments = {
+  balance: typeof inventoryBalances.$inferSelect & { partName?: string };
+  departmentMeta?: DepartmentBalanceMeta;
+  departmentBreakdown: DepartmentBalanceBreakdown[];
+};
+
 // Inventory Transactions - Movement audit trail
 export const inventoryTransactions = pgTable('inventory_transactions', {
   id: serial('id').primaryKey(),

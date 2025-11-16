@@ -185,7 +185,7 @@ export default function CuttingTable() {
   });
 
   const { data: inventoryItems = [], isLoading: loadingInventoryItems } = useQuery<any[]>({
-    queryKey: ['/api/inventory-items'],
+    queryKey: ['/api/enhanced/inventory/items'],
   });
 
   const isLoading = loadingMaterials || loadingLines || loadingCategories || loadingComponents || loadingPacketCompositions || loadingWeekly || loadingProgress || loadingInventory || loadingInventoryItems;

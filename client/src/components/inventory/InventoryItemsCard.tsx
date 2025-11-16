@@ -584,29 +584,6 @@ const InventoryForm = ({
         Additional Information
       </h4>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="department">Department (Legacy - Read Only)</Label>
-          <Select
-            value={formData.department}
-            onValueChange={(value) => onSelectChange('department', value)}
-            disabled
-          >
-            <SelectTrigger id="department" data-testid="select-department">
-              <SelectValue placeholder={formData.assignedDepartments.length > 0 ? formData.assignedDepartments[0] : "Select department"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Layup/Plugging">Layup/Plugging</SelectItem>
-              <SelectItem value="CNC">CNC</SelectItem>
-              <SelectItem value="Cutting Table">Cutting Table</SelectItem>
-              <SelectItem value="Finish">Finish</SelectItem>
-              <SelectItem value="Gunsmith">Gunsmith</SelectItem>
-              <SelectItem value="Paint">Paint</SelectItem>
-              <SelectItem value="Shipping">Shipping</SelectItem>
-              <SelectItem value="Office">Office</SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-gray-500 mt-1">Auto-populated from first assigned department</p>
-        </div>
         <div className="md:col-span-2">
           <Label htmlFor="assignedDepartments">Assigned Departments *</Label>
           <div className="border rounded-md p-3 space-y-2 max-h-40 overflow-y-auto">
@@ -924,6 +901,17 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   const [otherDocsFile, setOtherDocsFile] = useState<File | null>(null);
   const [currentOtherDocsFileName, setCurrentOtherDocsFileName] = useState<string | null>(null);
 
+  // Sync legacy department field with first assigned department
+  useEffect(() => {
+    const firstDepartment = formData.assignedDepartments[0] || '';
+    if (formData.department !== firstDepartment) {
+      setFormData((prev) => ({
+        ...prev,
+        department: firstDepartment,
+      }));
+    }
+  }, [formData.assignedDepartments, formData.department]);
+
   // Auto-calculate COGS per unit when conversion data changes
   useEffect(() => {
     const {
@@ -994,7 +982,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   // Fetch departments
   const { data: departments = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ['/api/departments'],
-    queryFn: () => apiRequest('/api/departments'),
   });
 
   // Fetch all item groups

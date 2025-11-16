@@ -823,7 +823,7 @@ export default function CuttingTable() {
                         <div className="flex-1">
                           <span className="font-medium">{comp.quantityNeeded}x</span>
                           <span className="ml-2">
-                            {item ? `${item.agPartNumber} - ${item.partDescription}` : 'Unknown Item'}
+                            {item ? `${item.agPartNumber} - ${item.name}` : 'Unknown Item'}
                           </span>
                         </div>
                         <Button

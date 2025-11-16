@@ -16,6 +16,14 @@ Search standardization: All department queue pages use unified OrderSearchBox co
 Navigation dropdown behavior: All navbar dropdown menus close automatically after selection.
 Balance due access: Customer balance due tracking is restricted to username "glennj" only for security. Balance Due column appears in Customer Management only when glennj is logged in.
 
+## Recent Changes
+
+**2025-11-16** (Midnight):
+- Verified GitHub inventory items integration: All changes compatible with packet part feature. Route changed from `/enhanced-inventory-mrp` to `/inventory/enhanced-mrp`. "Packet Part (Cutting Table)" checkbox remains fully functional in Production Line Utilization section.
+- Confirmed vendor PO columns: Added `terms_and_conditions`, `payment_terms`, and `shipping_instructions` columns to vendors table via SQL.
+- Database verification: `is_packet_part` boolean column exists with default value `false`.
+- Full stack integration verified: Frontend form state, backend API routes, Drizzle schema, and Zod validation all properly handle packet part field.
+
 ## System Architecture
 The application uses a monorepo structure with a full-stack TypeScript approach, prioritizing type safety and cross-platform deployment.
 

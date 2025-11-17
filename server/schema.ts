@@ -5386,6 +5386,26 @@ export const cuttingFabricInventoryTransactions = pgTable('cutting_fabric_invent
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Cutting Table - Cut Records (track actual yields and fabric usage per cut)
+export const cuttingCutRecords = pgTable('cutting_cut_records', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  productionLineId: uuid('production_line_id').references(() => cuttingProductionLines.id).notNull(),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id).notNull(),
+  materialId: uuid('material_id').references(() => cuttingMaterials.id),
+  componentId: uuid('component_id').references(() => cuttingComponents.id),
+  workDate: date('work_date').notNull(), // Date of the cut
+  piecesYielded: integer('pieces_yielded').notNull(), // Actual pieces produced from the cut
+  fabricAreaUsed: real('fabric_area_used'), // Square meters of fabric used
+  fabricInventoryId: uuid('fabric_inventory_id').references(() => cuttingFabricInventory.id), // Link to specific fabric lot used
+  operator: text('operator'), // Who performed the cut
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  workDateIdx: index('cutting_cut_records_work_date_idx').on(table.workDate),
+  productCategoryIdx: index('cutting_cut_records_category_idx').on(table.productCategoryId),
+}));
+
 // Cutting Table Insert Schemas
 export const insertCuttingMaterialSchema = createInsertSchema(cuttingMaterials).omit({
   id: true,
@@ -5442,6 +5462,12 @@ export const insertCuttingPacketSessionSchema = createInsertSchema(cuttingPacket
 });
 
 export const insertCuttingPacketSessionLotSchema = createInsertSchema(cuttingPacketSessionLots).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCuttingCutRecordSchema = createInsertSchema(cuttingCutRecords).omit({
   id: true,
   createdAt: true,
   updatedAt: true,

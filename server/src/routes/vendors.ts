@@ -640,8 +640,10 @@ router.post('/reset-monthly-evaluations', async (req: Request, res: Response) =>
   try {
     console.log('🔄 Manual vendor evaluation reset requested...');
     
-    // Get all vendors
-    const allVendors = await storage.getAllVendors();
+    // Get all vendors (use a large page size to get all)
+    const { data: allVendors } = await storage.getAllVendors({ 
+      pageSize: 10000 // Large enough to get all vendors
+    });
     
     // Reset evaluation status and scores for all vendors
     const resetPromises = allVendors.map(vendor => 

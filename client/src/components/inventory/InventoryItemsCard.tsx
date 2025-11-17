@@ -80,6 +80,7 @@ interface InventoryFormData {
   utilizedInAdmin: boolean;
   utilizedInServices: boolean;
   isPacketPart: boolean;
+  isFabric: boolean;
   hasSds: boolean;
   hasTds: boolean;
   hasOtherDocs: boolean;
@@ -575,6 +576,19 @@ const InventoryForm = ({
             Packet Part (Cutting Table)
           </Label>
         </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="isFabric"
+            checked={formData.isFabric}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('isFabric', checked as boolean)
+            }
+            data-testid="checkbox-isFabric"
+          />
+          <Label htmlFor="isFabric" className="cursor-pointer">
+            Fabric (Cutting Table)
+          </Label>
+        </div>
       </div>
     </div>
 
@@ -889,6 +903,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     utilizedInAdmin: false,
     utilizedInServices: false,
     isPacketPart: false,
+    isFabric: false,
     hasSds: false,
     hasTds: false,
     hasOtherDocs: false,
@@ -1321,6 +1336,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       utilizedInAdmin: false,
       utilizedInServices: false,
       isPacketPart: false,
+      isFabric: false,
       hasSds: false,
       hasTds: false,
       hasOtherDocs: false,
@@ -1421,6 +1437,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         utilizedInAdmin: formData.utilizedInAdmin,
         utilizedInServices: formData.utilizedInServices,
         isPacketPart: formData.isPacketPart,
+        isFabric: formData.isFabric,
         hasSds: formData.hasSds,
         hasTds: formData.hasTds,
         hasOtherDocs: formData.hasOtherDocs,
@@ -1474,6 +1491,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       utilizedInAdmin: item.utilizedInAdmin || false,
       utilizedInServices: item.utilizedInServices || false,
       isPacketPart: item.isPacketPart || false,
+      isFabric: item.isFabric || false,
       hasSds: item.hasSds || false,
       hasTds: item.hasTds || false,
       hasOtherDocs: item.hasOtherDocs || false,

@@ -19,6 +19,10 @@ Balance due access: Customer balance due tracking is restricted to username "gle
 ## Recent Changes
 
 **2025-11-17** (Latest):
+- Enhanced Cut Management with Fabric Type and Part Number tracking: Added `fabric_type` and `part_number` columns to `cutting_cut_records` table. Form now includes inputs for both fields with auto-uppercase formatting on part number. History table displays new columns.
+- Added Packet Parts to Cut Management dropdown: Product category selector now includes packet parts (inventory items with `isPacketPart=true`) in a separate optgroup. When selected, system automatically populates part number and allows category-less recording.
+- Implemented smart category/part validation: Made `productCategoryId` nullable in schema with backend Zod refinement ensuring either category OR part number is present. Frontend submission logic detects packet part selection and properly handles data transformation.
+- Fixed missing columns in cutting_components table: Added `material_id` and `waste_factor` columns via SQL ALTER statement.
 - Added Edit functionality to Fabric Inventory: Each fabric inventory item now has an Edit button in the Actions column. Opens a dialog with form to edit quantity in stock, low stock threshold, location, received date, expiration date, and notes. Backend PATCH endpoint added at `/api/cutting-table/fabric-inventory/:id`.
 - Added Part Number Quick Entry to Cutting Table Configure Recipes: New input field allows typing AG part numbers directly to auto-select inventory items. Field performs real-time lookup and automatically populates the dropdown when a matching packet part is found. Includes uppercase auto-formatting and helpful placeholder text for faster data entry.
 

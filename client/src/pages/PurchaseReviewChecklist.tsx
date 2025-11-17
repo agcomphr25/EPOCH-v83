@@ -60,7 +60,7 @@ export default function PurchaseReviewChecklist() {
 
   // Fetch P2 customers for dropdown including ship-to information
   const { data: p2Customers = [] } = useQuery({
-    queryKey: ['/api/p2/customers'],
+    queryKey: ['/api/p2-customers-bypass'],
     select: (data: any[]) =>
       data.map((customer) => ({
         id: customer.id,

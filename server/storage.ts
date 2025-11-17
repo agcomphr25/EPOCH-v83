@@ -353,6 +353,9 @@ import {
   cuttingFabricInventoryTransactions,
   type CuttingFabricInventoryTransaction,
   type InsertCuttingFabricInventoryTransaction,
+  cuttingCutRecords,
+  type CuttingCutRecord,
+  type InsertCuttingCutRecord,
 } from './schema';
 import { db, pool } from './db';
 import {
@@ -1650,6 +1653,15 @@ export interface IStorage {
   createCuttingFabricInventoryTransaction(data: InsertCuttingFabricInventoryTransaction): Promise<CuttingFabricInventoryTransaction>;
   updateCuttingFabricInventoryTransaction(id: string, data: Partial<InsertCuttingFabricInventoryTransaction>): Promise<void>;
   deleteCuttingFabricInventoryTransaction(id: string): Promise<void>;
+
+  // Cutting Table - Cut Records CRUD
+  getAllCuttingCutRecords(): Promise<CuttingCutRecord[]>;
+  getCuttingCutRecord(id: string): Promise<CuttingCutRecord | undefined>;
+  getCuttingCutRecordsByDate(workDate: string): Promise<CuttingCutRecord[]>;
+  getCuttingCutRecordsByCategory(productCategoryId: string): Promise<CuttingCutRecord[]>;
+  createCuttingCutRecord(data: InsertCuttingCutRecord): Promise<CuttingCutRecord>;
+  updateCuttingCutRecord(id: string, data: Partial<InsertCuttingCutRecord>): Promise<CuttingCutRecord>;
+  deleteCuttingCutRecord(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -12796,6 +12808,41 @@ export class DatabaseStorage implements IStorage {
     await db.delete(cuttingFabricInventoryTransactions).where(eq(cuttingFabricInventoryTransactions.id, id));
   }
 
+  // Cutting Table - Cut Records CRUD
+  async getAllCuttingCutRecords(): Promise<CuttingCutRecord[]> {
+    return await db.select().from(cuttingCutRecords).orderBy(desc(cuttingCutRecords.workDate), desc(cuttingCutRecords.createdAt));
+  }
+
+  async getCuttingCutRecord(id: string): Promise<CuttingCutRecord | undefined> {
+    const [record] = await db.select().from(cuttingCutRecords).where(eq(cuttingCutRecords.id, id));
+    return record || undefined;
+  }
+
+  async getCuttingCutRecordsByDate(workDate: string): Promise<CuttingCutRecord[]> {
+    return await db.select().from(cuttingCutRecords).where(eq(cuttingCutRecords.workDate, workDate)).orderBy(desc(cuttingCutRecords.createdAt));
+  }
+
+  async getCuttingCutRecordsByCategory(productCategoryId: string): Promise<CuttingCutRecord[]> {
+    return await db.select().from(cuttingCutRecords).where(eq(cuttingCutRecords.productCategoryId, productCategoryId)).orderBy(desc(cuttingCutRecords.workDate));
+  }
+
+  async createCuttingCutRecord(data: InsertCuttingCutRecord): Promise<CuttingCutRecord> {
+    const [record] = await db.insert(cuttingCutRecords).values(data).returning();
+    return record;
+  }
+
+  async updateCuttingCutRecord(id: string, data: Partial<InsertCuttingCutRecord>): Promise<CuttingCutRecord> {
+    const [record] = await db
+      .update(cuttingCutRecords)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(cuttingCutRecords.id, id))
+      .returning();
+    return record;
+  }
+
+  async deleteCuttingCutRecord(id: string): Promise<void> {
+    await db.delete(cuttingCutRecords).where(eq(cuttingCutRecords.id, id));
+  }
 
   // Invoice Number Tracking
   async getNextInvoiceNumber(customerId: string, customerName: string): Promise<string> {

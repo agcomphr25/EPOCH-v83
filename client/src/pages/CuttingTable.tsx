@@ -9,12 +9,14 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Trash2, CheckCircle2, AlertCircle, Printer } from "lucide-react";
+import { Loader2, Plus, Trash2, CheckCircle2, AlertCircle, Printer, Edit } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 type Material = {
@@ -48,6 +50,23 @@ type Component = {
   fabricType: string;
   thickness: string;
   isActive: boolean;
+  productCategoryId: string;
+  materialId: string;
+  requiredQuantity: number;
+};
+
+type CuttingCutRecord = {
+  id: string;
+  workDate: string;
+  productCategoryId: string;
+  piecesYielded: number;
+  fabricSquareMetersUsed: number;
+  fabricType: string | null;
+  partNumber: string | null;
+  itemDescription: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type PacketComposition = {
@@ -126,6 +145,7 @@ export default function CuttingTable() {
   
   // Form state for Configure Recipes tab
   const [recipePacketType, setRecipePacketType] = useState('');
+  const [recipePartNumber, setRecipePartNumber] = useState('');
   const [recipeInventoryItem, setRecipeInventoryItem] = useState('');
   const [recipeQuantity, setRecipeQuantity] = useState('');
 
@@ -141,6 +161,7 @@ export default function CuttingTable() {
   const [location, setLocation] = useState('');
   const [conformanceDocLink, setConformanceDocLink] = useState('');
   const [fabricQuantity, setFabricQuantity] = useState('');
+  const [fabricSquareMeters, setFabricSquareMeters] = useState('');
   const [fabricNotes, setFabricNotes] = useState('');
 
   // Form state for Packet Management tab
@@ -150,6 +171,8 @@ export default function CuttingTable() {
 
   // Form state for Inventory tab
   const [inventorySortBy, setInventorySortBy] = useState<'fabric' | 'expiration' | 'quantity'>('expiration');
+  const [editingFabric, setEditingFabric] = useState<FabricInventory | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   // Fetch all data
   const { data: materials = [], isLoading: loadingMaterials } = useQuery<Material[]>({
@@ -188,6 +211,31 @@ export default function CuttingTable() {
     queryKey: ['/api/enhanced/inventory/items'],
   });
 
+  const { data: fabricItems = [], isLoading: loadingFabricItems } = useQuery<any[]>({
+    queryKey: ['/api/cutting-table/fabric-items'],
+  });
+
+  // Fetch inventory items used in packet compositions for Cut Management dropdown
+  const { data: packetCompositionItems = [] } = useQuery<any[]>({
+    queryKey: ['/api/cutting-table/packet-composition-items'],
+  });
+
+  // Cut Management state and queries
+  const [cutFormData, setCutFormData] = useState({
+    workDate: new Date().toISOString().split('T')[0],
+    productCategoryId: '',
+    piecesYielded: '',
+    fabricSquareMetersUsed: '',
+    fabricType: '',
+    partNumber: '',
+    itemDescription: '',
+    notes: '',
+  });
+
+  const { data: cutRecords = [], isLoading: recordsLoading, refetch: refetchCutRecords } = useQuery<CuttingCutRecord[]>({
+    queryKey: ['/api/cutting-table/cut-records'],
+  });
+
   const isLoading = loadingMaterials || loadingLines || loadingCategories || loadingComponents || loadingPacketCompositions || loadingWeekly || loadingProgress || loadingInventory || loadingInventoryItems;
 
   // Clear selected category when production line changes
@@ -216,6 +264,58 @@ export default function CuttingTable() {
         title: "Error",
         description: "Failed to initialize cutting table",
         variant: "destructive"
+      });
+    },
+  });
+
+  // Cut Management mutations
+  const createCutRecordMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest('/api/cutting-table/cut-records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/cut-records'] });
+      refetchCutRecords();
+      setCutFormData({
+        workDate: new Date().toISOString().split('T')[0],
+        productCategoryId: '',
+        piecesYielded: '',
+        fabricSquareMetersUsed: '',
+        fabricType: '',
+        partNumber: '',
+        itemDescription: '',
+        notes: '',
+      });
+      toast({ title: 'Success', description: 'Cut record added successfully' });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: 'Error', 
+        description: error.message || 'Failed to add cut record',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const deleteCutRecordMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest(`/api/cutting-table/cut-records/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/cut-records'] });
+      refetchCutRecords();
+      toast({ title: 'Success', description: 'Cut record deleted successfully' });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: 'Error', 
+        description: error.message || 'Failed to delete cut record',
+        variant: 'destructive',
       });
     },
   });
@@ -705,6 +805,7 @@ export default function CuttingTable() {
 
         queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-compositions'] });
 
+        setRecipePartNumber('');
         setRecipeInventoryItem('');
         setRecipeQuantity('');
       } catch (error) {
@@ -766,6 +867,35 @@ export default function CuttingTable() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Part Number (Quick Entry)</label>
+              <Input 
+                type="text"
+                value={recipePartNumber}
+                onChange={(e) => {
+                  const partNumber = e.target.value.toUpperCase();
+                  setRecipePartNumber(partNumber);
+                  
+                  // Auto-lookup and select matching inventory item
+                  if (partNumber.length > 0) {
+                    const matchingItem = inventoryItems.find(
+                      (item: any) => item.isPacketPart === true && 
+                      item.agPartNumber?.toUpperCase() === partNumber
+                    );
+                    if (matchingItem) {
+                      setRecipeInventoryItem(matchingItem.id.toString());
+                    }
+                  }
+                }}
+                placeholder="Type part number (e.g., AG123)"
+                data-testid="input-part-number"
+                className="uppercase"
+              />
+              <p className="text-xs text-muted-foreground">
+                Type the AG part number to quickly find and select an item
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -1073,6 +1203,7 @@ export default function CuttingTable() {
             location: location || null,
             conformanceDocumentLink: conformanceDocLink || null,
             quantityInStock: parseInt(fabricQuantity),
+            squareMeters: fabricSquareMeters || null,
             notes: fabricNotes || null,
           }),
         });
@@ -1097,6 +1228,7 @@ export default function CuttingTable() {
         setLocation('');
         setConformanceDocLink('');
         setFabricQuantity('');
+        setFabricSquareMeters('');
         setFabricNotes('');
       } catch (error) {
         toast({
@@ -1233,6 +1365,19 @@ export default function CuttingTable() {
                 onChange={(e) => setFabricQuantity(e.target.value)}
                 placeholder="Enter quantity"
                 data-testid="input-fabric-quantity"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Square Meters (m²)</label>
+              <Input 
+                type="number" 
+                min="0"
+                step="0.01"
+                value={fabricSquareMeters}
+                onChange={(e) => setFabricSquareMeters(e.target.value)}
+                placeholder="Total square meters"
+                data-testid="input-fabric-square-meters"
               />
             </div>
           </div>
@@ -1395,18 +1540,446 @@ export default function CuttingTable() {
                           )}
                         </td>
                         <td className="p-2">
-                          {item.barcode ? (
+                          <div className="flex items-center gap-2">
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => window.open(`/api/cutting-table/fabric-inventory/${item.id}/print-barcode`, '_blank')}
-                              data-testid={`button-print-barcode-${item.id}`}
+                              onClick={() => {
+                                setEditingFabric(item);
+                                setEditDialogOpen(true);
+                              }}
+                              data-testid={`button-edit-fabric-${item.id}`}
                               className="flex items-center gap-1 text-xs"
                             >
-                              <Printer className="w-3 h-3" />
-                              Print
+                              <Edit className="w-3 h-3" />
+                              Edit
                             </Button>
-                          ) : null}
+                            {item.barcode && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => window.open(`/api/cutting-table/fabric-inventory/${item.id}/print-barcode`, '_blank')}
+                                data-testid={`button-print-barcode-${item.id}`}
+                                className="flex items-center gap-1 text-xs"
+                              >
+                                <Printer className="w-3 h-3" />
+                                Print
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        {/* Edit Fabric Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Fabric Inventory</DialogTitle>
+            </DialogHeader>
+            {editingFabric && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  try {
+                    await apiRequest(`/api/cutting-table/fabric-inventory/${editingFabric.id}`, {
+                      method: 'PATCH',
+                      body: JSON.stringify(editingFabric),
+                    });
+                    
+                    toast({
+                      title: "Success",
+                      description: "Fabric inventory updated successfully"
+                    });
+                    
+                    setEditDialogOpen(false);
+                    setEditingFabric(null);
+                    queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
+                  } catch (error) {
+                    toast({
+                      title: "Error",
+                      description: "Failed to update fabric inventory",
+                      variant: "destructive"
+                    });
+                  }
+                }}
+                className="space-y-4"
+              >
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Quantity in Stock *</label>
+                    <Input
+                      type="number"
+                      value={editingFabric.quantityInStock}
+                      onChange={(e) => setEditingFabric({ ...editingFabric, quantityInStock: parseInt(e.target.value) || 0 })}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Low Stock Threshold</label>
+                    <Input
+                      type="number"
+                      value={editingFabric.lowStockThreshold}
+                      onChange={(e) => setEditingFabric({ ...editingFabric, lowStockThreshold: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Location</label>
+                  <Input
+                    type="text"
+                    value={editingFabric.location || ''}
+                    onChange={(e) => setEditingFabric({ ...editingFabric, location: e.target.value })}
+                    placeholder="e.g., Warehouse A, Shelf 3"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Received Date</label>
+                    <Input
+                      type="date"
+                      value={editingFabric.receivedDate || ''}
+                      onChange={(e) => setEditingFabric({ ...editingFabric, receivedDate: e.target.value })}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Expiration Date</label>
+                    <Input
+                      type="date"
+                      value={editingFabric.expirationDate || ''}
+                      onChange={(e) => setEditingFabric({ ...editingFabric, expirationDate: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Notes</label>
+                  <Input
+                    type="text"
+                    value={editingFabric.notes || ''}
+                    onChange={(e) => setEditingFabric({ ...editingFabric, notes: e.target.value })}
+                    placeholder="Additional notes"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditDialogOpen(false);
+                      setEditingFabric(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit">
+                    Save Changes
+                  </Button>
+                </div>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  };
+
+  const renderCutManagement = () => {
+    const handleSubmitCutRecord = (e: React.FormEvent) => {
+      e.preventDefault();
+
+      if (!cutFormData.productCategoryId || !cutFormData.piecesYielded || !cutFormData.fabricSquareMetersUsed) {
+        toast({
+          title: 'Validation Error',
+          description: 'Please fill in all required fields',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Handle packet composition item selection vs category selection
+      let categoryId: string | null = null;
+      let partNum = cutFormData.partNumber;
+      let itemDesc = cutFormData.itemDescription;
+      
+      if (cutFormData.productCategoryId.startsWith('item-')) {
+        // Extract inventory item ID from the item-{id} format
+        const inventoryItemId = cutFormData.productCategoryId.replace('item-', '');
+        const compositionItem = packetCompositionItems.find((comp: any) => comp.inventoryItemId.toString() === inventoryItemId);
+        if (compositionItem) {
+          partNum = compositionItem.item.agPartNumber;
+          itemDesc = compositionItem.item.description;
+          // Always use the category from the composition, even if it's null
+          categoryId = compositionItem.productCategoryId || null;
+        } else {
+          // If composition item not found, this is an error state
+          toast({
+            title: 'Error',
+            description: 'Selected packet item not found in compositions',
+            variant: 'destructive',
+          });
+          return;
+        }
+      } else {
+        // It's a regular category UUID - convert empty string to null
+        categoryId = cutFormData.productCategoryId || null;
+      }
+
+      createCutRecordMutation.mutate({
+        workDate: cutFormData.workDate,
+        productCategoryId: categoryId,
+        piecesYielded: parseInt(cutFormData.piecesYielded),
+        fabricSquareMetersUsed: cutFormData.fabricSquareMetersUsed,
+        fabricType: cutFormData.fabricType || null,
+        partNumber: partNum || null,
+        itemDescription: itemDesc || null,
+        notes: cutFormData.notes || null,
+      });
+    };
+
+    return (
+      <div className="space-y-6">
+        <Card className="p-6">
+          <h2 className="text-xl font-bold mb-4">Record Cut Performance</h2>
+          <form onSubmit={handleSubmitCutRecord} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Work Date *</label>
+                <Input
+                  type="date"
+                  value={cutFormData.workDate}
+                  onChange={(e) => setCutFormData({ ...cutFormData, workDate: e.target.value })}
+                  required
+                  data-testid="input-work-date"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Product Category / Part Number *</label>
+                <Select
+                  value={cutFormData.productCategoryId}
+                  onValueChange={(value) => {
+                    // If it's a packet composition item selection, auto-populate the part number and description
+                    if (value.startsWith('item-')) {
+                      const inventoryItemId = value.replace('item-', '');
+                      const compositionItem = packetCompositionItems.find((comp: any) => comp.inventoryItemId.toString() === inventoryItemId);
+                      if (compositionItem) {
+                        setCutFormData({ 
+                          ...cutFormData, 
+                          productCategoryId: value,
+                          partNumber: compositionItem.item.agPartNumber,
+                          itemDescription: compositionItem.item.description
+                        });
+                      }
+                    } else {
+                      // Clear item description when selecting a regular category
+                      setCutFormData({ 
+                        ...cutFormData, 
+                        productCategoryId: value,
+                        itemDescription: ''
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger data-testid="select-product-category">
+                    <SelectValue placeholder="Select category or part number" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel>Product Categories</SelectLabel>
+                      {categories.map((cat: any) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.categoryName} (P{cat.productionLineId})
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                    {/* Group packet composition items by category */}
+                    {categories.map((cat: any) => {
+                      const categoryItems = packetCompositionItems.filter(
+                        (comp: any) => comp.productCategoryId === cat.id
+                      );
+                      
+                      if (categoryItems.length === 0) return null;
+                      
+                      return (
+                        <SelectGroup key={`cat-items-${cat.id}`}>
+                          <SelectLabel>{cat.categoryName} - Packet Items</SelectLabel>
+                          {categoryItems.map((comp: any) => (
+                            <SelectItem key={`item-${comp.inventoryItemId}`} value={`item-${comp.inventoryItemId}`}>
+                              {comp.item.agPartNumber} - {comp.item.description}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Pieces Yielded *</label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={cutFormData.piecesYielded}
+                  onChange={(e) => setCutFormData({ ...cutFormData, piecesYielded: e.target.value })}
+                  placeholder="Number of pieces cut"
+                  required
+                  data-testid="input-pieces-yielded"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Fabric Used (m²) *</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={cutFormData.fabricSquareMetersUsed}
+                  onChange={(e) => setCutFormData({ ...cutFormData, fabricSquareMetersUsed: e.target.value })}
+                  placeholder="Square meters of fabric"
+                  required
+                  data-testid="input-fabric-used"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Fabric Type</label>
+                <Select
+                  value={cutFormData.fabricType}
+                  onValueChange={(value) => setCutFormData({ ...cutFormData, fabricType: value })}
+                >
+                  <SelectTrigger data-testid="select-fabric-type">
+                    <SelectValue placeholder="Select fabric type (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fabricItems.map((fabric: any) => (
+                      <SelectItem key={fabric.id} value={fabric.name}>
+                        {fabric.agPartNumber} - {fabric.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Part Number</label>
+                <Input
+                  type="text"
+                  value={cutFormData.partNumber}
+                  onChange={(e) => setCutFormData({ ...cutFormData, partNumber: e.target.value.toUpperCase() })}
+                  placeholder="e.g., AG123"
+                  data-testid="input-part-number"
+                />
+                {cutFormData.itemDescription && (
+                  <p className="text-sm text-muted-foreground mt-1">{cutFormData.itemDescription}</p>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Notes</label>
+              <textarea
+                className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={cutFormData.notes}
+                onChange={(e) => setCutFormData({ ...cutFormData, notes: e.target.value })}
+                placeholder="Optional notes about this cut"
+                data-testid="textarea-notes"
+              />
+            </div>
+
+            <Button 
+              type="submit" 
+              disabled={createCutRecordMutation.isPending}
+              data-testid="button-submit-cut-record"
+            >
+              {createCutRecordMutation.isPending ? 'Saving...' : 'Record Cut'}
+            </Button>
+          </form>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-xl font-bold mb-4">Cut Records History</h2>
+          {recordsLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="w-6 h-6 animate-spin" />
+            </div>
+          ) : cutRecords.length === 0 ? (
+            <p className="text-muted-foreground text-center p-8">No cut records found</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left p-2">Date</th>
+                    <th className="text-left p-2">Category</th>
+                    <th className="text-left p-2">Item</th>
+                    <th className="text-left p-2">Fabric Type</th>
+                    <th className="text-right p-2">Pieces</th>
+                    <th className="text-right p-2">Fabric (m²)</th>
+                    <th className="text-right p-2">Yield/m²</th>
+                    <th className="text-left p-2">Notes</th>
+                    <th className="text-right p-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cutRecords.map((record: any) => {
+                    const category = categories.find((c: any) => c.id === record.productCategoryId);
+                    const fabricUsed = parseFloat(record.fabricSquareMetersUsed);
+                    const yieldPerSqM = fabricUsed > 0 
+                      ? (record.piecesYielded / fabricUsed).toFixed(2)
+                      : 'N/A';
+                    
+                    // Display category name if available, otherwise show "Packet Part"
+                    const categoryDisplay = category?.categoryName || (record.partNumber ? 'Packet Part' : 'Unknown');
+                    
+                    return (
+                      <tr key={record.id} className="border-b hover:bg-muted/50">
+                        <td className="p-2">{new Date(record.workDate).toLocaleDateString()}</td>
+                        <td className="p-2">{categoryDisplay}</td>
+                        <td className="p-2 text-sm">
+                          {record.partNumber && record.itemDescription ? (
+                            <div>
+                              <span className="font-mono font-semibold">{record.partNumber}</span>
+                              <br />
+                              <span className="text-muted-foreground">{record.itemDescription}</span>
+                            </div>
+                          ) : record.partNumber ? (
+                            <span className="font-mono">{record.partNumber}</span>
+                          ) : (
+                            '-'
+                          )}
+                        </td>
+                        <td className="p-2 text-sm">{record.fabricType || '-'}</td>
+                        <td className="p-2 text-right">{record.piecesYielded}</td>
+                        <td className="p-2 text-right">{fabricUsed.toFixed(2)}</td>
+                        <td className="p-2 text-right font-semibold">{yieldPerSqM}</td>
+                        <td className="p-2 text-sm text-muted-foreground">{record.notes || '-'}</td>
+                        <td className="p-2 text-right">
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm('Are you sure you want to delete this cut record?')) {
+                                deleteCutRecordMutation.mutate(record.id);
+                              }
+                            }}
+                            disabled={deleteCutRecordMutation.isPending}
+                            data-testid={`button-delete-${record.id}`}
+                          >
+                            Delete
+                          </Button>
                         </td>
                       </tr>
                     );
@@ -1475,7 +2048,7 @@ export default function CuttingTable() {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full" data-testid="tabs-main">
-        <TabsList className="grid w-full grid-cols-9" data-testid="tabs-list">
+        <TabsList className="grid w-full grid-cols-10" data-testid="tabs-list">
           <TabsTrigger value="dashboard" data-testid="tab-dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="daily" data-testid="tab-daily">Daily Tracker</TabsTrigger>
           <TabsTrigger value="weekly" data-testid="tab-weekly">Weekly Report</TabsTrigger>
@@ -1485,6 +2058,7 @@ export default function CuttingTable() {
           <TabsTrigger value="submit" data-testid="tab-submit">Submit Data</TabsTrigger>
           <TabsTrigger value="addFabric" data-testid="tab-add-fabric">Add Fabric</TabsTrigger>
           <TabsTrigger value="inventory" data-testid="tab-inventory">Inventory</TabsTrigger>
+          <TabsTrigger value="cutManagement" data-testid="tab-cut-management">Cut Mgmt</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard" className="mt-6" data-testid="content-dashboard">
@@ -1521,6 +2095,10 @@ export default function CuttingTable() {
 
         <TabsContent value="inventory" className="mt-6" data-testid="content-inventory">
           {renderFabricInventory()}
+        </TabsContent>
+
+        <TabsContent value="cutManagement" className="mt-6" data-testid="content-cut-management">
+          {renderCutManagement()}
         </TabsContent>
       </Tabs>
     </div>

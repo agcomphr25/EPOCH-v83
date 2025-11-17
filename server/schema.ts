@@ -524,6 +524,7 @@ export const inventoryItems = pgTable('inventory_items', {
   utilizedInAdmin: boolean('utilized_in_admin').default(false), // Used in Admin
   utilizedInServices: boolean('utilized_in_services').default(false), // Used in Services
   isPacketPart: boolean('is_packet_part').default(false), // Part of cutting table packet
+  isFabric: boolean('is_fabric').default(false), // Fabric for cutting table
   type: text('type'), // Type: Purchased or Manufactured
   vendorId: integer('vendor_id').references(() => vendors.id), // Primary vendor for this part
   hasSds: boolean('has_sds').default(false), // Has Safety Data Sheet
@@ -5338,6 +5339,7 @@ export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
   location: text('location'), // Storage location/freezer #
   conformanceDocumentLink: text('conformance_document_link'), // Link to conformance/traceability paperwork
   quantityInStock: integer('quantity_in_stock').notNull().default(0),
+  squareMeters: numeric('square_meters', { precision: 10, scale: 2 }), // Total square meters of fabric
   lowStockThreshold: integer('low_stock_threshold').default(10),
   barcode: text('barcode').unique(), // Auto-generated for P2 items
   notes: text('notes'),
@@ -5385,6 +5387,24 @@ export const cuttingFabricInventoryTransactions = pgTable('cutting_fabric_invent
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+// Cutting Table - Cut Records (track actual yields and fabric usage per cut)
+export const cuttingCutRecords = pgTable('cutting_cut_records', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  workDate: text('work_date').notNull(), // Date of the cut
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id), // Optional - either this or partNumber should be set
+  piecesYielded: integer('pieces_yielded').notNull(), // Actual pieces produced from the cut
+  fabricSquareMetersUsed: numeric('fabric_square_meters_used', { precision: 10, scale: 2 }).notNull(), // Square meters of fabric used
+  fabricType: text('fabric_type'), // Type of fabric used (Carbon Fiber, Fiberglass, etc.)
+  partNumber: text('part_number'), // AG part number being cut
+  itemDescription: text('item_description'), // Description of the item being cut
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  workDateIdx: index('cutting_cut_records_work_date_idx').on(table.workDate),
+  productCategoryIdx: index('cutting_cut_records_category_idx').on(table.productCategoryId),
+}));
 
 // Cutting Table Insert Schemas
 export const insertCuttingMaterialSchema = createInsertSchema(cuttingMaterials).omit({
@@ -5446,6 +5466,15 @@ export const insertCuttingPacketSessionLotSchema = createInsertSchema(cuttingPac
   createdAt: true,
   updatedAt: true,
 });
+
+export const insertCuttingCutRecordSchema = createInsertSchema(cuttingCutRecords).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).refine(
+  (data) => data.productCategoryId !== null || data.partNumber !== null,
+  { message: 'Either productCategoryId or partNumber must be provided' }
+);
 
 export const insertCuttingFabricInventoryTransactionSchema = createInsertSchema(cuttingFabricInventoryTransactions).omit({
   id: true,

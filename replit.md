@@ -18,6 +18,24 @@ Balance due access: Customer balance due tracking is restricted to username "gle
 
 ## Recent Changes
 
+**2025-11-17** (7:00 PM):
+- Added Square Meters field to Add Fabric Inventory: New "Square Meters (m²)" field allows tracking total fabric area for each inventory lot. Database column `square_meters` added to `cutting_fabric_inventory` table as optional numeric(10,2) field. Form includes decimal input with step 0.01 for precise measurements.
+
+**2025-11-17** (6:40 PM):
+- Connected fabric inventory to Cut Management: Inventory items marked with "Fabric (Cutting Table)" checkbox now populate the Fabric Type dropdown in Cut Management. Backend endpoint `/api/cutting-table/fabric-items` filters and returns items where `is_fabric = true`. Fabric Type field converted from text input to Select dropdown showing "AG Part Number - Name" format for each fabric item.
+
+**2025-11-17** (5:20 PM):
+- Added Fabric checkbox to Enhanced Inventory: New "Fabric (Cutting Table)" checkbox in inventory item form's Production Line Utilization section. Enables marking inventory items as fabrics associated with the cutting table. Database column `is_fabric` added to `inventory_items` table with default value `false`.
+
+**2025-11-17** (Earlier):
+- Enhanced Cut Management with Packet Composition Items: Product category dropdown now shows inventory items used to make packets, sourced from `cutting_packet_compositions` table. Items are grouped by their parent category (e.g., "Buttstock - Packet Items") for better organization. New backend endpoint `/api/cutting-table/packet-composition-items` enriches compositions with item and category details. When selected, system auto-populates part number and item name from Enhanced Inventory and MRP system.
+- Enhanced Cut Management with Item Description tracking: Added `item_description` column to `cutting_cut_records` table. When a packet composition item is selected, the item name from the Enhanced Inventory and MRP system is automatically populated and displayed below the part number field. History table shows both part number and item name in a stacked format for better readability.
+- Enhanced Cut Management with Fabric Type and Part Number tracking: Added `fabric_type` and `part_number` columns to `cutting_cut_records` table. Form now includes inputs for both fields with auto-uppercase formatting on part number. History table displays new columns.
+- Implemented smart category/part validation: Made `productCategoryId` nullable in schema with backend Zod refinement ensuring either category OR part number is present. Frontend submission logic detects packet composition item selection, auto-populates part number and description, and preserves category association for proper record tracking.
+- Fixed missing columns in cutting_components table: Added `material_id` and `waste_factor` columns via SQL ALTER statement.
+- Added Edit functionality to Fabric Inventory: Each fabric inventory item now has an Edit button in the Actions column. Opens a dialog with form to edit quantity in stock, low stock threshold, location, received date, expiration date, and notes. Backend PATCH endpoint added at `/api/cutting-table/fabric-inventory/:id`.
+- Added Part Number Quick Entry to Cutting Table Configure Recipes: New input field allows typing AG part numbers directly to auto-select inventory items. Field performs real-time lookup and automatically populates the dropdown when a matching packet part is found. Includes uppercase auto-formatting and helpful placeholder text for faster data entry.
+
 **2025-11-17** (3:39 PM):
 - Fixed discount display issue in Order Entry: Discounts were not showing in order summary because discount details map was created but never saved to state. Solution: Added `discountDetailsMap` state variable, updated `loadDiscountCodes` to save the map, and modified `calculateDiscountAmount` to use map directly instead of async-loaded details. Discounts now display immediately when selected.
 

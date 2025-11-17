@@ -1309,6 +1309,140 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P2 PO PDF Attachment routes
+  const multer = require('multer');
+  const path = require('path');
+  const fs = require('fs');
+  const crypto = require('crypto');
+
+  // Ensure P2 PO attachments directory exists
+  const uploadsDir = path.join(process.cwd(), 'uploads');
+  const p2POAttachmentsDir = path.join(uploadsDir, 'p2-po-attachments');
+
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  if (!fs.existsSync(p2POAttachmentsDir)) {
+    fs.mkdirSync(p2POAttachmentsDir, { recursive: true });
+  }
+
+  const p2POAttachmentStorage = multer.diskStorage({
+    destination: (req: any, file: any, cb: any) => {
+      cb(null, p2POAttachmentsDir);
+    },
+    filename: (req: any, file: any, cb: any) => {
+      const timestamp = Date.now();
+      const hash = crypto.randomBytes(8).toString('hex');
+      const ext = path.extname(file.originalname);
+      const basename = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_');
+      cb(null, `${basename}_${timestamp}_${hash}${ext}`);
+    },
+  });
+
+  const p2POAttachmentUpload = multer({
+    storage: p2POAttachmentStorage,
+    fileFilter: (req: any, file: any, cb: any) => {
+      if (file.mimetype === 'application/pdf') {
+        cb(null, true);
+      } else {
+        cb(new Error('Only PDF files are allowed'));
+      }
+    },
+    limits: {
+      fileSize: 25 * 1024 * 1024, // 25MB limit
+    },
+  });
+
+  // POST /api/p2-purchase-orders/:id/upload-attachment - Upload PDF attachment
+  app.post(
+    '/api/p2-purchase-orders/:id/upload-attachment',
+    p2POAttachmentUpload.single('file'),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        
+        if (!req.file) {
+          return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const { storage } = await import('../../storage');
+        const po = await storage.getP2PurchaseOrder(parseInt(id));
+        
+        if (!po) {
+          return res.status(404).json({ error: 'P2 Purchase Order not found' });
+        }
+
+        const fileUrl = `/uploads/p2-po-attachments/${req.file.filename}`;
+        
+        // Add the new attachment to the existing array
+        const currentAttachments = po.attachments || [];
+        const updatedAttachments = [...currentAttachments, fileUrl];
+        
+        await storage.updateP2PurchaseOrder(parseInt(id), {
+          attachments: updatedAttachments,
+        });
+
+        res.status(200).json({
+          url: fileUrl,
+          filename: req.file.filename,
+          originalName: req.file.originalname,
+          size: req.file.size,
+        });
+      } catch (error) {
+        console.error('P2 PO attachment upload error:', error);
+        res.status(500).json({ error: 'Failed to upload attachment' });
+      }
+    }
+  );
+
+  // DELETE /api/p2-purchase-orders/:id/attachment - Delete specific attachment
+  app.delete('/api/p2-purchase-orders/:id/attachment', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { attachmentUrl } = req.body;
+
+      if (!attachmentUrl) {
+        return res.status(400).json({ error: 'Attachment URL is required' });
+      }
+
+      const { storage } = await import('../../storage');
+      const po = await storage.getP2PurchaseOrder(parseInt(id));
+      
+      if (!po) {
+        return res.status(404).json({ error: 'P2 Purchase Order not found' });
+      }
+
+      // Remove the attachment from the array
+      const currentAttachments = po.attachments || [];
+      const updatedAttachments = currentAttachments.filter(
+        (url: string) => url !== attachmentUrl
+      );
+      
+      await storage.updateP2PurchaseOrder(parseInt(id), {
+        attachments: updatedAttachments,
+      });
+
+      // Try to delete the physical file
+      const filename = attachmentUrl.split('/').pop();
+      if (filename) {
+        const filePath = path.join(p2POAttachmentsDir, filename);
+        try {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        } catch (fileError) {
+          console.error('Failed to delete physical file:', fileError);
+          // Continue anyway - database record is updated
+        }
+      }
+
+      res.json({ success: true, message: 'Attachment removed successfully' });
+    } catch (error) {
+      console.error('P2 PO attachment delete error:', error);
+      res.status(500).json({ error: 'Failed to delete attachment' });
+    }
+  });
+
   // Stock Models routes - bypass to old monolithic routes temporarily
   app.get('/api/stock-models', async (req, res) => {
     try {

@@ -59,6 +59,8 @@ type CuttingCutRecord = {
   productCategoryId: string;
   piecesYielded: number;
   fabricSquareMetersUsed: number;
+  fabricType: string | null;
+  partNumber: string | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -211,6 +213,8 @@ export default function CuttingTable() {
     productCategoryId: '',
     piecesYielded: '',
     fabricSquareMetersUsed: '',
+    fabricType: '',
+    partNumber: '',
     notes: '',
   });
 
@@ -268,6 +272,8 @@ export default function CuttingTable() {
         productCategoryId: '',
         piecesYielded: '',
         fabricSquareMetersUsed: '',
+        fabricType: '',
+        partNumber: '',
         notes: '',
       });
       toast({ title: 'Success', description: 'Cut record added successfully' });
@@ -1672,11 +1678,29 @@ export default function CuttingTable() {
         return;
       }
 
+      // Handle packet part selection vs category selection
+      let categoryId = null;
+      let partNum = cutFormData.partNumber;
+      
+      if (cutFormData.productCategoryId.startsWith('packet-')) {
+        // Extract inventory item ID from the packet-{id} format
+        const inventoryItemId = cutFormData.productCategoryId.replace('packet-', '');
+        const packetPart = inventoryItems.find((item: any) => item.id.toString() === inventoryItemId);
+        if (packetPart) {
+          partNum = packetPart.agPartNumber;
+        }
+      } else {
+        // It's a regular category UUID
+        categoryId = cutFormData.productCategoryId;
+      }
+
       createCutRecordMutation.mutate({
         workDate: cutFormData.workDate,
-        productCategoryId: cutFormData.productCategoryId,
+        productCategoryId: categoryId,
         piecesYielded: parseInt(cutFormData.piecesYielded),
         fabricSquareMetersUsed: parseFloat(cutFormData.fabricSquareMetersUsed),
+        fabricType: cutFormData.fabricType || null,
+        partNumber: partNum || null,
         notes: cutFormData.notes || null,
       });
     };
@@ -1699,20 +1723,32 @@ export default function CuttingTable() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">Product Category *</label>
+                <label className="block text-sm font-medium mb-2">Product Category / Part Number *</label>
                 <Select
                   value={cutFormData.productCategoryId}
                   onValueChange={(value) => setCutFormData({ ...cutFormData, productCategoryId: value })}
                 >
                   <SelectTrigger data-testid="select-product-category">
-                    <SelectValue placeholder="Select category" />
+                    <SelectValue placeholder="Select category or part number" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((cat: any) => (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        {cat.categoryName} (P{cat.productionLineId})
-                      </SelectItem>
-                    ))}
+                    <optgroup label="Product Categories">
+                      {categories.map((cat: any) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.categoryName} (P{cat.productionLineId})
+                        </SelectItem>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Packet Parts">
+                      {inventoryItems
+                        .filter((item: any) => item.isPacketPart)
+                        .map((item: any) => (
+                          <SelectItem key={`packet-${item.id}`} value={`packet-${item.id}`}>
+                            {item.agPartNumber} - {item.description}
+                          </SelectItem>
+                        ))
+                      }
+                    </optgroup>
                   </SelectContent>
                 </Select>
               </div>
@@ -1741,6 +1777,28 @@ export default function CuttingTable() {
                   placeholder="Square meters of fabric"
                   required
                   data-testid="input-fabric-used"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Fabric Type</label>
+                <Input
+                  type="text"
+                  value={cutFormData.fabricType}
+                  onChange={(e) => setCutFormData({ ...cutFormData, fabricType: e.target.value })}
+                  placeholder="e.g., Carbon Fiber, Fiberglass"
+                  data-testid="input-fabric-type"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Part Number</label>
+                <Input
+                  type="text"
+                  value={cutFormData.partNumber}
+                  onChange={(e) => setCutFormData({ ...cutFormData, partNumber: e.target.value.toUpperCase() })}
+                  placeholder="e.g., AG123"
+                  data-testid="input-part-number"
                 />
               </div>
             </div>
@@ -1781,6 +1839,8 @@ export default function CuttingTable() {
                   <tr className="border-b">
                     <th className="text-left p-2">Date</th>
                     <th className="text-left p-2">Category</th>
+                    <th className="text-left p-2">Fabric Type</th>
+                    <th className="text-left p-2">Part #</th>
                     <th className="text-right p-2">Pieces</th>
                     <th className="text-right p-2">Fabric (m²)</th>
                     <th className="text-right p-2">Yield/m²</th>
@@ -1795,10 +1855,15 @@ export default function CuttingTable() {
                       ? (record.piecesYielded / record.fabricSquareMetersUsed).toFixed(2)
                       : 'N/A';
                     
+                    // Display category name if available, otherwise show "Packet Part"
+                    const categoryDisplay = category?.categoryName || (record.partNumber ? 'Packet Part' : 'Unknown');
+                    
                     return (
                       <tr key={record.id} className="border-b hover:bg-muted/50">
                         <td className="p-2">{new Date(record.workDate).toLocaleDateString()}</td>
-                        <td className="p-2">{category?.categoryName || 'Unknown'}</td>
+                        <td className="p-2">{categoryDisplay}</td>
+                        <td className="p-2 text-sm">{record.fabricType || '-'}</td>
+                        <td className="p-2 text-sm font-mono">{record.partNumber || '-'}</td>
                         <td className="p-2 text-right">{record.piecesYielded}</td>
                         <td className="p-2 text-right">{record.fabricSquareMetersUsed.toFixed(2)}</td>
                         <td className="p-2 text-right font-semibold">{yieldPerSqM}</td>

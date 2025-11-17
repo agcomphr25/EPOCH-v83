@@ -5390,9 +5390,11 @@ export const cuttingFabricInventoryTransactions = pgTable('cutting_fabric_invent
 export const cuttingCutRecords = pgTable('cutting_cut_records', {
   id: uuid('id').defaultRandom().primaryKey(),
   workDate: text('work_date').notNull(), // Date of the cut
-  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id).notNull(),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id), // Optional - either this or partNumber should be set
   piecesYielded: integer('pieces_yielded').notNull(), // Actual pieces produced from the cut
   fabricSquareMetersUsed: numeric('fabric_square_meters_used', { precision: 10, scale: 2 }).notNull(), // Square meters of fabric used
+  fabricType: text('fabric_type'), // Type of fabric used (Carbon Fiber, Fiberglass, etc.)
+  partNumber: text('part_number'), // AG part number being cut
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -5466,7 +5468,10 @@ export const insertCuttingCutRecordSchema = createInsertSchema(cuttingCutRecords
   id: true,
   createdAt: true,
   updatedAt: true,
-});
+}).refine(
+  (data) => data.productCategoryId !== null || data.partNumber !== null,
+  { message: 'Either productCategoryId or partNumber must be provided' }
+);
 
 export const insertCuttingFabricInventoryTransactionSchema = createInsertSchema(cuttingFabricInventoryTransactions).omit({
   id: true,

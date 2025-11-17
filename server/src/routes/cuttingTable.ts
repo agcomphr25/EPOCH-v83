@@ -253,7 +253,8 @@ router.get('/packet-composition-items', async (req, res) => {
             item: item ? {
               id: item.id,
               agPartNumber: item.agPartNumber,
-              description: item.description,
+              name: item.name, // Use name from Enhanced Inventory system
+              description: item.name, // Keep description property for compatibility but use name
             } : null,
             category: category ? {
               id: category.id,

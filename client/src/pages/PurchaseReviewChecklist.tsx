@@ -347,11 +347,22 @@ export default function PurchaseReviewChecklist() {
   };
 
   // Handle form submission
-  const handleSubmitChecklist = () => {
-    // TODO: Implement form submission logic
-    // For now, just show a placeholder message
-    console.log('Purchase Review Checklist submitted:', formData);
-    alert('Checklist submission functionality will be implemented soon.');
+  const handleSubmitChecklist = async () => {
+    // Save signature if present
+    if (signatureCanvasRef.current && !signatureCanvasRef.current.isEmpty()) {
+      const signatureData = signatureCanvasRef.current.toDataURL();
+      setFormData((prev) => ({ ...prev, signature: signatureData }));
+    }
+
+    const submissionData = {
+      customerId: formData.customerId || null,
+      quoteId: formData.quoteId || null,
+      formData: formData,
+      createdBy: 'current_user',
+      status: 'SUBMITTED' as const,
+    };
+
+    submitChecklistMutation.mutate(submissionData);
   };
 
   return (
@@ -1721,15 +1732,26 @@ export default function PurchaseReviewChecklist() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="date">Date</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => handleInputChange('date', e.target.value)}
+                  className="max-w-md"
+                />
+              </div>
+              
               <div>
                 <Label>Digital Signature</Label>
-                <div className="border border-gray-300 rounded-md p-2">
+                <div className="border border-gray-300 rounded-md p-2 max-w-md">
                   <SignatureCanvas
                     ref={signatureCanvasRef}
                     penColor="black"
                     canvasProps={{
-                      width: 300,
+                      width: 400,
                       height: 150,
                       className: 'signature-canvas border rounded',
                     }}
@@ -1745,15 +1767,6 @@ export default function PurchaseReviewChecklist() {
                   </Button>
                 </div>
               </div>
-              <div>
-                <Label htmlFor="date">Date</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => handleInputChange('date', e.target.value)}
-                />
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -1764,8 +1777,10 @@ export default function PurchaseReviewChecklist() {
             onClick={handleSubmitChecklist}
             className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 text-lg font-medium"
             size="lg"
+            disabled={submitChecklistMutation.isPending}
+            data-testid="button-submit-checklist"
           >
-            Submit Checklist
+            {submitChecklistMutation.isPending ? 'Submitting...' : 'Submit Checklist'}
           </Button>
         </div>
 

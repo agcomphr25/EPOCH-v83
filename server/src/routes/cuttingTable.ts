@@ -12,6 +12,7 @@ import {
   insertCuttingPacketSessionLotSchema,
   insertCuttingFabricInventoryTransactionSchema,
   insertCuttingPacketCompositionSchema,
+  insertCuttingCutRecordSchema,
 } from '../../schema';
 
 const router = Router();
@@ -851,6 +852,84 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
   } catch (error) {
     console.error('Error generating barcode label:', error);
     res.status(500).json({ error: 'Failed to generate barcode label' });
+  }
+});
+
+// Cut Records Routes
+router.get('/cut-records', async (req, res) => {
+  try {
+    const records = await storage.getAllCuttingCutRecords();
+    res.json(records);
+  } catch (error) {
+    console.error('Error fetching cut records:', error);
+    res.status(500).json({ error: 'Failed to fetch cut records' });
+  }
+});
+
+router.get('/cut-records/:id', async (req, res) => {
+  try {
+    const record = await storage.getCuttingCutRecord(req.params.id);
+    if (!record) {
+      return res.status(404).json({ error: 'Cut record not found' });
+    }
+    res.json(record);
+  } catch (error) {
+    console.error('Error fetching cut record:', error);
+    res.status(500).json({ error: 'Failed to fetch cut record' });
+  }
+});
+
+router.get('/cut-records/by-date/:workDate', async (req, res) => {
+  try {
+    const records = await storage.getCuttingCutRecordsByDate(req.params.workDate);
+    res.json(records);
+  } catch (error) {
+    console.error('Error fetching cut records by date:', error);
+    res.status(500).json({ error: 'Failed to fetch cut records by date' });
+  }
+});
+
+router.get('/cut-records/by-category/:categoryId', async (req, res) => {
+  try {
+    const records = await storage.getCuttingCutRecordsByCategory(req.params.categoryId);
+    res.json(records);
+  } catch (error) {
+    console.error('Error fetching cut records by category:', error);
+    res.status(500).json({ error: 'Failed to fetch cut records by category' });
+  }
+});
+
+router.post('/cut-records', async (req, res) => {
+  try {
+    const validation = insertCuttingCutRecordSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ error: validation.error.message });
+    }
+    const record = await storage.createCuttingCutRecord(validation.data);
+    res.status(201).json(record);
+  } catch (error) {
+    console.error('Error creating cut record:', error);
+    res.status(500).json({ error: 'Failed to create cut record' });
+  }
+});
+
+router.patch('/cut-records/:id', async (req, res) => {
+  try {
+    const record = await storage.updateCuttingCutRecord(req.params.id, req.body);
+    res.json(record);
+  } catch (error) {
+    console.error('Error updating cut record:', error);
+    res.status(500).json({ error: 'Failed to update cut record' });
+  }
+});
+
+router.delete('/cut-records/:id', async (req, res) => {
+  try {
+    await storage.deleteCuttingCutRecord(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting cut record:', error);
+    res.status(500).json({ error: 'Failed to delete cut record' });
   }
 });
 

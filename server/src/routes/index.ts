@@ -1175,6 +1175,20 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  app.put('/api/purchase-review-submissions/:id', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const submission = await storage.updatePurchaseReviewSubmission(req.params.id, req.body);
+      if (!submission) {
+        return res.status(404).json({ _error: 'Submission not found' });
+      }
+      res.json(submission);
+    } catch (_error) {
+      console.error('Update purchase review submission _error:', _error);
+      res.status(500).json({ _error: 'Failed to update purchase review submission' });
+    }
+  });
+
   // P2 Purchase Orders bypass route to avoid monolithic conflicts
   app.get('/api/p2-purchase-orders-bypass', async (req, res) => {
     try {

@@ -13023,6 +13023,89 @@ export class DatabaseStorage implements IStorage {
       isActive: true
     }));
   }
+
+  // Quotes CRUD
+  async getAllQuotes(): Promise<Quote[]> {
+    const { quotes } = await import('./schema');
+    return await db.select().from(quotes).orderBy(quotes.createdAt);
+  }
+
+  async getQuote(id: string): Promise<Quote | undefined> {
+    const { quotes } = await import('./schema');
+    const [quote] = await db.select().from(quotes).where(eq(quotes.id, id));
+    return quote;
+  }
+
+  async createQuote(data: InsertQuote): Promise<Quote> {
+    const { quotes } = await import('./schema');
+    const [quote] = await db
+      .insert(quotes)
+      .values({ ...data })
+      .returning();
+    return quote;
+  }
+
+  async updateQuote(id: string, data: Partial<InsertQuote>): Promise<Quote> {
+    const { quotes } = await import('./schema');
+    const [quote] = await db
+      .update(quotes)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(quotes.id, id))
+      .returning();
+    return quote;
+  }
+
+  async deleteQuote(id: string): Promise<void> {
+    const { quotes } = await import('./schema');
+    await db.delete(quotes).where(eq(quotes.id, id));
+  }
+
+  // Purchase Review Checklist Submissions CRUD
+  async getAllPurchaseReviewSubmissions(): Promise<PurchaseReviewChecklistSubmission[]> {
+    const { purchaseReviewChecklistSubmissions } = await import('./schema');
+    return await db
+      .select()
+      .from(purchaseReviewChecklistSubmissions)
+      .orderBy(purchaseReviewChecklistSubmissions.createdAt);
+  }
+
+  async getPurchaseReviewSubmission(id: string): Promise<PurchaseReviewChecklistSubmission | undefined> {
+    const { purchaseReviewChecklistSubmissions } = await import('./schema');
+    const [submission] = await db
+      .select()
+      .from(purchaseReviewChecklistSubmissions)
+      .where(eq(purchaseReviewChecklistSubmissions.id, id));
+    return submission;
+  }
+
+  async createPurchaseReviewSubmission(
+    data: InsertPurchaseReviewChecklistSubmission
+  ): Promise<PurchaseReviewChecklistSubmission> {
+    const { purchaseReviewChecklistSubmissions } = await import('./schema');
+    const [submission] = await db
+      .insert(purchaseReviewChecklistSubmissions)
+      .values({ ...data })
+      .returning();
+    return submission;
+  }
+
+  async updatePurchaseReviewSubmission(
+    id: string,
+    data: Partial<InsertPurchaseReviewChecklistSubmission>
+  ): Promise<PurchaseReviewChecklistSubmission> {
+    const { purchaseReviewChecklistSubmissions } = await import('./schema');
+    const [submission] = await db
+      .update(purchaseReviewChecklistSubmissions)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(purchaseReviewChecklistSubmissions.id, id))
+      .returning();
+    return submission;
+  }
+
+  async deletePurchaseReviewSubmission(id: string): Promise<void> {
+    const { purchaseReviewChecklistSubmissions } = await import('./schema');
+    await db.delete(purchaseReviewChecklistSubmissions).where(eq(purchaseReviewChecklistSubmissions.id, id));
+  }
 }
 
 export const storage = new DatabaseStorage();

@@ -278,7 +278,7 @@ router.delete('/packet-compositions/:id', async (req, res) => {
   }
 });
 
-// Packet Sessions - Build a new packet with FIFO inventory consumption
+// Packet Sessions - Build packets with inventory consumption
 router.post('/packet-sessions/build', async (req, res) => {
   try {
     const {
@@ -298,132 +298,161 @@ router.post('/packet-sessions/build', async (req, res) => {
       return res.status(400).json({ error: 'No recipe found for this product category' });
     }
 
-    // Phase 1: Simulate allocation to verify sufficient inventory
-    interface AllocationPlan {
-      componentId: string;
-      componentName: string;
-      totalNeeded: number;
-      wasteFactor: number;
-      lots: Array<{
-        inventoryLotId: string;
-        quantityToUse: number;
-        availableQty: number;
-      }>;
+    // Phase 1: Check for legacy components and verify inventory availability
+    interface ItemConsumption {
+      type: 'inventory_item';
+      inventoryItemId: number;
+      itemName: string;
+      itemPartNumber: string;
+      quantityNeeded: number;
+      availableQty: number;
     }
     
-    const allocationPlans: AllocationPlan[] = [];
+    const itemConsumptions: ItemConsumption[] = [];
     
+    // First pass: Check for ANY legacy components and block if found
     for (const comp of compositions) {
-      const component = comp.componentId ? await storage.getCuttingComponent(comp.componentId) : null;
-      if (!component) {
+      if (comp.componentId && !comp.inventoryItemId) {
         return res.status(400).json({ 
-          error: `Component not found for composition ${comp.id}` 
+          error: 'This recipe contains legacy component-based items. Please update the recipe:\n1. Go to Configure Recipes tab\n2. Select this packet type\n3. Click "Clear All" to remove old items\n4. Add new items using inventory parts with the "Packet Part" checkbox enabled' 
         });
       }
-      if (!component.materialId) {
-        return res.status(400).json({ 
-          error: `Component ${component.componentName} has no material linked. Please configure material ID before building packets.` 
-        });
-      }
-
-      const totalNeeded = comp.quantityNeeded * packetsCount;
-      const wasteFactor = component.wasteFactor || 0.05;
-      const quantityWithWaste = Math.ceil(totalNeeded * (1 + wasteFactor));
-
-      // Get FIFO inventory for this material
-      const fifoInventory = await storage.getCuttingFabricInventoryFIFO(component.materialId);
-      
-      let remainingNeeded = quantityWithWaste;
-      const lotAllocations: AllocationPlan['lots'] = [];
-      
-      // Simulate allocation from FIFO lots
-      for (const inventoryLot of fifoInventory) {
-        if (remainingNeeded <= 0) break;
-        
-        const availableQty = inventoryLot.quantityOnHand || 0;
-        if (availableQty <= 0) continue;
-        
-        const quantityToUse = Math.min(remainingNeeded, availableQty);
-        
-        // Only allocate if it results in meaningful quantity
-        if (quantityToUse > 0) {
-          lotAllocations.push({
-            inventoryLotId: inventoryLot.id,
-            quantityToUse,
-            availableQty,
+    }
+    
+    // Second pass: Validate inventory availability
+    for (const comp of compositions) {
+      if (comp.inventoryItemId) {
+        // Get inventory item details
+        const inventoryItem = await storage.getInventoryItem(comp.inventoryItemId);
+        if (!inventoryItem) {
+          return res.status(400).json({ 
+            error: `Inventory item not found for composition ${comp.id}` 
           });
-          remainingNeeded -= quantityToUse;
+        }
+
+        const totalNeeded = comp.quantityNeeded * packetsCount;
+        const availableQty = inventoryItem.available || inventoryItem.quantityInStock || 0;
+        
+        // Check if sufficient inventory
+        if (availableQty < totalNeeded) {
+          return res.status(400).json({ 
+            error: `Insufficient inventory for ${inventoryItem.agPartNumber} - ${inventoryItem.name}. Need ${totalNeeded}, have ${availableQty}` 
+          });
+        }
+        
+        itemConsumptions.push({
+          type: 'inventory_item',
+          inventoryItemId: comp.inventoryItemId,
+          itemName: inventoryItem.name,
+          itemPartNumber: inventoryItem.agPartNumber,
+          quantityNeeded: totalNeeded,
+          availableQty,
+        });
+      }
+    }
+
+    // Phase 2: All checks passed, now perform atomic transaction
+    // Store ORIGINAL values before ANY updates (handles duplicate items correctly)
+    const originalInventoryValues = new Map<number, {
+      available: number;
+      onHand: number;
+      quantityInStock: number;
+    }>();
+    
+    const consumptionResults = [];
+    let createdSession: any = null;
+
+    try {
+      // Step 1: Capture original values for ALL unique inventory items
+      const uniqueItemIds = new Set(itemConsumptions.map(c => c.inventoryItemId));
+      for (const itemId of uniqueItemIds) {
+        const inventoryItem = await storage.getInventoryItem(itemId);
+        if (!inventoryItem) {
+          throw new Error(`Inventory item ${itemId} not found`);
+        }
+        originalInventoryValues.set(itemId, {
+          available: inventoryItem.available || 0,
+          onHand: inventoryItem.onHand || 0,
+          quantityInStock: inventoryItem.quantityInStock || 0,
+        });
+      }
+
+      // Step 2: Apply all inventory updates
+      for (const consumption of itemConsumptions) {
+        const inventoryItem = await storage.getInventoryItem(consumption.inventoryItemId);
+        if (!inventoryItem) {
+          throw new Error(`Inventory item ${consumption.inventoryItemId} disappeared during transaction`);
+        }
+
+        const oldAvailable = inventoryItem.available || 0;
+        const newAvailable = Math.max(0, oldAvailable - consumption.quantityNeeded);
+        const newOnHand = Math.max(0, (inventoryItem.onHand || 0) - consumption.quantityNeeded);
+        const newQtyInStock = Math.max(0, (inventoryItem.quantityInStock || 0) - consumption.quantityNeeded);
+        
+        await storage.updateInventoryItem(consumption.inventoryItemId, {
+          available: newAvailable,
+          onHand: newOnHand,
+          quantityInStock: newQtyInStock,
+          lastUpdated: new Date(),
+        });
+        
+        consumptionResults.push({
+          inventoryItemId: consumption.inventoryItemId,
+          itemName: consumption.itemName,
+          itemPartNumber: consumption.itemPartNumber,
+          quantityConsumed: consumption.quantityNeeded,
+          oldBalance: oldAvailable,
+          newBalance: newAvailable,
+        });
+      }
+
+      // Step 3: Only create session AFTER all inventory updates succeed
+      const transactionDetails = itemConsumptions.map(item => 
+        `${item.itemPartNumber} - ${item.itemName}: ${item.quantityNeeded} units consumed`
+      ).join('\n');
+      
+      const sessionNotes = notes 
+        ? `${notes}\n\nInventory Consumption:\n${transactionDetails}`
+        : `Inventory Consumption:\n${transactionDetails}`;
+
+      createdSession = await storage.createCuttingPacketSession({
+        productCategoryId,
+        packetsTarget: packetsCount,
+        createdBy: performedBy,
+        notes: sessionNotes,
+      });
+
+      res.json({
+        success: true,
+        session: createdSession,
+        consumptions: consumptionResults,
+        message: `Successfully built ${packetsCount} packet(s)`,
+      });
+    } catch (transactionError) {
+      console.error('Error during packet build transaction, rolling back:', transactionError);
+      
+      // Rollback: Restore ORIGINAL values (not intermediate values)
+      for (const [itemId, originalValues] of originalInventoryValues.entries()) {
+        try {
+          await storage.updateInventoryItem(itemId, originalValues);
+        } catch (rollbackError) {
+          console.error(`CRITICAL: Failed to rollback inventory item ${itemId}:`, rollbackError);
         }
       }
       
-      // Check if we have enough inventory for this component
-      if (remainingNeeded > 0) {
-        return res.status(400).json({ 
-          error: `Insufficient inventory for component ${component.componentName}. Need ${quantityWithWaste}, short by ${remainingNeeded}` 
-        });
+      // If session was created, try to delete it (best effort)
+      if (createdSession) {
+        try {
+          // Note: Add deletePacketSession to storage if it doesn't exist
+          // For now, log that manual cleanup may be needed
+          console.error(`Session ${createdSession.id} may need manual cleanup`);
+        } catch (cleanupError) {
+          console.error('Failed to cleanup session:', cleanupError);
+        }
       }
       
-      allocationPlans.push({
-        componentId: comp.componentId!,
-        componentName: component.componentName,
-        totalNeeded: quantityWithWaste,
-        wasteFactor,
-        lots: lotAllocations,
-      });
+      throw new Error('Packet build failed, all changes rolled back');
     }
-
-    // Phase 2: All checks passed, now commit the allocation
-    const session = await storage.createCuttingPacketSession({
-      productCategoryId,
-      packetsCount,
-      status: 'COMPLETED',
-      performedBy,
-      notes,
-    });
-
-    const sessionLots = [];
-    const inventoryTransactions = [];
-
-    for (const plan of allocationPlans) {
-      for (const lotAlloc of plan.lots) {
-        // Calculate cuts from this lot (for audit purposes)
-        const cutsFromThisLot = Math.floor(lotAlloc.quantityToUse / (plan.totalNeeded / packetsCount));
-        
-        // Create session lot record
-        const sessionLot = await storage.createCuttingPacketSessionLot({
-          sessionId: session.id,
-          componentId: plan.componentId,
-          fabricInventoryId: lotAlloc.inventoryLotId,
-          cutsPlanned: Math.max(1, cutsFromThisLot), // At least 1 to avoid zero-cut records
-          quantityUsed: lotAlloc.quantityToUse,
-          wasteFactorApplied: plan.wasteFactor,
-        });
-        sessionLots.push(sessionLot);
-        
-        // Create inventory transaction (ISSUE)
-        const transaction = await storage.createCuttingFabricInventoryTransaction({
-          fabricInventoryId: lotAlloc.inventoryLotId,
-          sessionLotId: sessionLot.id,
-          changeType: 'ISSUE',
-          quantityDelta: -lotAlloc.quantityToUse,
-          notes: `Packet build session ${session.id} - ${plan.componentName}`,
-          performedBy,
-        });
-        inventoryTransactions.push(transaction);
-        
-        // Update inventory balance
-        const newBalance = lotAlloc.availableQty - lotAlloc.quantityToUse;
-        await storage.updateCuttingFabricInventory(lotAlloc.inventoryLotId, {
-          quantityOnHand: newBalance,
-        });
-      }
-    }
-
-    res.json({
-      session,
-      sessionLots,
-      inventoryTransactions,
-    });
   } catch (error) {
     console.error('Error building packet session:', error);
     res.status(500).json({ error: 'Failed to build packet session' });

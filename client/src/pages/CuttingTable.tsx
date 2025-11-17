@@ -637,23 +637,34 @@ export default function CuttingTable() {
 
         {/* All Packet Compositions Reference */}
         <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">All Packet Recipes</h3>
+          <h3 className="text-lg font-semibold mb-4">Recipe Summary - All Configured Packet Recipes</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            View all packet recipes configured for each packet type. These recipes are used during packet building.
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {packetCategories.map(cat => {
               const comps = packetCompositions.filter(pc => pc.productCategoryId === cat.id);
               return (
                 <div key={cat.id} className="border rounded p-4 hover:bg-muted/50">
                   <h4 className="font-medium mb-2">{cat.categoryName}</h4>
-                  <div className="space-y-1">
-                    {comps.map(comp => {
-                      const component = components.find(c => c.id === comp.componentId);
-                      return component ? (
-                        <div key={comp.id} className="text-sm text-muted-foreground">
-                          • {comp.quantityNeeded}x {component.componentName}
-                        </div>
-                      ) : null;
-                    })}
-                  </div>
+                  {comps.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic">No recipe configured</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {comps.map(comp => {
+                        const item = inventoryItems.find((i: any) => i.id === comp.inventoryItemId);
+                        return item ? (
+                          <div key={comp.id} className="text-sm text-muted-foreground">
+                            • {comp.quantityNeeded}x {item.agPartNumber} - {item.name}
+                          </div>
+                        ) : comp.componentId ? (
+                          <div key={comp.id} className="text-sm text-muted-foreground">
+                            • {comp.quantityNeeded}x (Legacy Component)
+                          </div>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -805,9 +816,45 @@ export default function CuttingTable() {
 
           {recipePacketType && (
             <div className="mt-8 pt-6 border-t">
-              <h4 className="font-medium mb-4">
-                Current Recipe for {categories.find(c => c.id === recipePacketType)?.categoryName}
-              </h4>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-medium">
+                  Current Recipe for {categories.find(c => c.id === recipePacketType)?.categoryName}
+                </h4>
+                {selectedPacketCompositions.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={async () => {
+                      if (!confirm(`Delete all ${selectedPacketCompositions.length} item(s) from this recipe?`)) return;
+                      
+                      try {
+                        for (const comp of selectedPacketCompositions) {
+                          await apiRequest(`/api/cutting-table/packet-compositions/${comp.id}`, {
+                            method: 'DELETE',
+                          });
+                        }
+                        
+                        toast({
+                          title: "Success",
+                          description: "All recipe items deleted"
+                        });
+                        
+                        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-compositions'] });
+                      } catch (error) {
+                        toast({
+                          title: "Error",
+                          description: "Failed to delete recipe items",
+                          variant: "destructive"
+                        });
+                      }
+                    }}
+                    data-testid="button-clear-recipe"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear All
+                  </Button>
+                )}
+              </div>
               {selectedPacketCompositions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No items configured yet</p>
               ) : (
@@ -823,7 +870,7 @@ export default function CuttingTable() {
                         <div className="flex-1">
                           <span className="font-medium">{comp.quantityNeeded}x</span>
                           <span className="ml-2">
-                            {item ? `${item.agPartNumber} - ${item.name}` : 'Unknown Item'}
+                            {item ? `${item.agPartNumber} - ${item.name}` : comp.componentId ? '(Legacy Component)' : 'Unknown Item'}
                           </span>
                         </div>
                         <Button

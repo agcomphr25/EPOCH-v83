@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Trash2, CheckCircle2, AlertCircle, Printer, Edit } from "lucide-react";
+import { Loader2, Plus, Trash2, CheckCircle2, AlertCircle, Printer, Edit, Package, Zap } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 type Material = {
@@ -271,6 +271,15 @@ export default function CuttingTable() {
     notes: '',
   });
 
+  // Quick Production Entry state
+  const [quickEntryData, setQuickEntryData] = useState({
+    workDate: new Date().toISOString().split('T')[0],
+    productCategoryId: '',
+    packetsProduced: '',
+    fabricSquareMetersUsed: '',
+    notes: '',
+  });
+
   const { data: cutRecords = [], isLoading: recordsLoading, refetch: refetchCutRecords } = useQuery<CuttingCutRecord[]>({
     queryKey: ['/api/cutting-table/cut-records'],
   });
@@ -359,6 +368,44 @@ export default function CuttingTable() {
         title: 'Error', 
         description: error.message || 'Failed to delete cut record',
         variant: 'destructive',
+      });
+    },
+  });
+
+  // Quick Production Entry mutation - automatically creates cut records for all components
+  const quickProductionEntryMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest('/api/cutting-table/quick-production-entry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return response;
+    },
+    onSuccess: (result: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/cut-records'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/production-progress'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/recommended-cuts'] });
+      refetchCutRecords();
+      setQuickEntryData({
+        workDate: new Date().toISOString().split('T')[0],
+        productCategoryId: '',
+        packetsProduced: '',
+        fabricSquareMetersUsed: '',
+        notes: '',
+      });
+      toast({ 
+        title: 'Production Entry Successful!', 
+        description: result.message || `Created ${result.recordsCreated} cut records`,
+        duration: 5000,
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Quick Entry Failed', 
+        description: error.error || error.message || 'Failed to create production entry',
+        variant: 'destructive',
+        duration: 7000,
       });
     },
   });
@@ -1858,8 +1905,164 @@ export default function CuttingTable() {
 
     return (
       <div className="space-y-6">
+        {/* Quick Production Entry - Simple packet-based entry */}
+        <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-2 border-blue-200 dark:border-blue-800">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="bg-blue-500 text-white rounded-full p-2">
+              <Package className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Quick Production Entry</h2>
+              <p className="text-sm text-muted-foreground">Record packets made - cuts calculated automatically</p>
+            </div>
+          </div>
+          
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              
+              if (!quickEntryData.productCategoryId || !quickEntryData.packetsProduced || parseInt(quickEntryData.packetsProduced) <= 0) {
+                toast({
+                  title: 'Validation Error',
+                  description: 'Please select packet type and enter valid quantity',
+                  variant: 'destructive',
+                });
+                return;
+              }
+              
+              quickProductionEntryMutation.mutate({
+                workDate: quickEntryData.workDate,
+                productCategoryId: quickEntryData.productCategoryId,
+                packetsProduced: parseInt(quickEntryData.packetsProduced),
+                fabricSquareMetersUsed: quickEntryData.fabricSquareMetersUsed || '0',
+                notes: quickEntryData.notes,
+              });
+            }} 
+            className="space-y-4"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Work Date *</label>
+                <Input
+                  type="date"
+                  value={quickEntryData.workDate}
+                  onChange={(e) => setQuickEntryData({ ...quickEntryData, workDate: e.target.value })}
+                  required
+                  data-testid="input-quick-work-date"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Packet Type *</label>
+                <Select
+                  value={quickEntryData.productCategoryId}
+                  onValueChange={(value) => setQuickEntryData({ ...quickEntryData, productCategoryId: value })}
+                >
+                  <SelectTrigger data-testid="select-quick-packet-type">
+                    <SelectValue placeholder="Select packet type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories
+                      .filter(cat => packetCompositions.some(comp => comp.productCategoryId === cat.id))
+                      .map((cat: any) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.categoryName}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Packets Made *</label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={quickEntryData.packetsProduced}
+                  onChange={(e) => setQuickEntryData({ ...quickEntryData, packetsProduced: e.target.value })}
+                  placeholder="e.g., 50"
+                  required
+                  data-testid="input-quick-packets-made"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Total Fabric Used (m²)</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={quickEntryData.fabricSquareMetersUsed}
+                  onChange={(e) => setQuickEntryData({ ...quickEntryData, fabricSquareMetersUsed: e.target.value })}
+                  placeholder="Optional - for yield tracking"
+                  data-testid="input-quick-fabric-used"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Notes</label>
+                <Input
+                  type="text"
+                  value={quickEntryData.notes}
+                  onChange={(e) => setQuickEntryData({ ...quickEntryData, notes: e.target.value })}
+                  placeholder="Optional notes"
+                  data-testid="input-quick-notes"
+                />
+              </div>
+            </div>
+
+            {quickEntryData.productCategoryId && quickEntryData.packetsProduced && (
+              <div className="bg-white dark:bg-gray-900 rounded-lg p-4 border-2 border-blue-300 dark:border-blue-700">
+                <h4 className="font-semibold mb-2 text-sm flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-blue-500" />
+                  Auto-Generated Cut Records:
+                </h4>
+                <div className="text-sm space-y-1">
+                  {packetCompositions
+                    .filter(comp => comp.productCategoryId === quickEntryData.productCategoryId)
+                    .map(comp => {
+                      const component = components.find(c => c.id === comp.componentId);
+                      const totalCuts = comp.quantityNeeded * parseInt(quickEntryData.packetsProduced || '0');
+                      return component ? (
+                        <div key={comp.id} className="flex justify-between py-1 border-b border-gray-200 dark:border-gray-700 last:border-0">
+                          <span className="text-muted-foreground">{component.componentName}</span>
+                          <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">
+                            {totalCuts} pieces
+                          </span>
+                        </div>
+                      ) : null;
+                    })}
+                </div>
+              </div>
+            )}
+
+            <Button 
+              type="submit" 
+              disabled={quickProductionEntryMutation.isPending}
+              className="w-full bg-blue-600 hover:bg-blue-700"
+              data-testid="button-quick-submit"
+            >
+              {quickProductionEntryMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating Cut Records...
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4 mr-2" />
+                  Submit Production & Auto-Generate Cuts
+                </>
+              )}
+            </Button>
+          </form>
+        </Card>
+
+        {/* Manual Entry - Advanced cut record entry */}
         <Card className="p-6">
-          <h2 className="text-xl font-bold mb-4">Record Cut Performance</h2>
+          <h2 className="text-xl font-bold mb-4">Manual Cut Entry (Advanced)</h2>
+          <p className="text-sm text-muted-foreground mb-4">For individual component cuts not part of packet production</p>
           <form onSubmit={handleSubmitCutRecord} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>

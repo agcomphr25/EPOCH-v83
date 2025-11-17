@@ -18,6 +18,9 @@ Balance due access: Customer balance due tracking is restricted to username "gle
 
 ## Recent Changes
 
+**2025-11-17** (3:39 PM):
+- Fixed discount display issue in Order Entry: Discounts were not showing in order summary because discount details map was created but never saved to state. Solution: Added `discountDetailsMap` state variable, updated `loadDiscountCodes` to save the map, and modified `calculateDiscountAmount` to use map directly instead of async-loaded details. Discounts now display immediately when selected.
+
 **2025-11-16** (3:45 AM):
 - Second GitHub inventory items pull verified: All changes compatible with packet part feature. Component now 2,568 lines with 10 references to isPacketPart field (interface, initialization, submission, edit loading). No conflicts detected.
 - API endpoints confirmed functional: Both `/api/enhanced/inventory/items` and `/api/vendors` responding correctly.

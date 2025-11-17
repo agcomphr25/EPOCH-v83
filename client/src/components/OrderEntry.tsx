@@ -154,6 +154,7 @@ export default function OrderEntry() {
   >('percent');
   const [customDiscountValue, setCustomDiscountValue] = useState<number>(0);
   const [showCustomDiscount, setShowCustomDiscount] = useState(false);
+  const [discountDetailsMap, setDiscountDetailsMap] = useState<Record<string, any>>({});
   const [shipping, setShipping] = useState(36.95);
   const [isCustomOrder, setIsCustomOrder] = useState(false);
   const [notes, setNotes] = useState('');
@@ -656,53 +657,56 @@ export default function OrderEntry() {
       );
       if (!selectedDiscount) return 0;
 
+      // Get discount details from the map
+      const currentDiscountDetails = discountDetailsMap[discountCode];
+
       // For persistent discounts, check appliesTo setting
-      if (discountCode.startsWith('persistent_') && discountDetails) {
+      if (discountCode.startsWith('persistent_') && currentDiscountDetails) {
         const baseAmount =
           priceOverride !== null
             ? priceOverride
             : modelOptions.find((m) => m.id === modelId)?.price || 0;
 
         // If appliesTo is 'stock_model', apply discount only to base model price
-        if (discountDetails.appliesTo === 'stock_model') {
+        if (currentDiscountDetails.appliesTo === 'stock_model') {
           // Handle percentage discounts
-          if (discountDetails.percent) {
-            return (baseAmount * discountDetails.percent) / 100;
+          if (currentDiscountDetails.percent) {
+            return (baseAmount * currentDiscountDetails.percent) / 100;
           }
 
           // Handle fixed amount discounts
-          if (discountDetails.fixedAmount) {
-            return discountDetails.fixedAmount / 100; // Convert from cents to dollars
+          if (currentDiscountDetails.fixedAmount) {
+            return currentDiscountDetails.fixedAmount / 100; // Convert from cents to dollars
           }
         }
         // If appliesTo is 'total_order', apply to full subtotal (existing behavior)
         else {
           // Handle percentage discounts on total order
-          if (discountDetails.percent) {
-            return (subtotal * discountDetails.percent) / 100;
+          if (currentDiscountDetails.percent) {
+            return (subtotal * currentDiscountDetails.percent) / 100;
           }
 
           // Handle fixed amount discounts on total order
-          if (discountDetails.fixedAmount) {
-            return discountDetails.fixedAmount / 100; // Convert from cents to dollars
+          if (currentDiscountDetails.fixedAmount) {
+            return currentDiscountDetails.fixedAmount / 100; // Convert from cents to dollars
           }
         }
       }
 
       // For short-term sales, check appliesTo setting
-      if (discountCode.startsWith('short_term_') && discountDetails) {
-        if (discountDetails.appliesTo === 'stock_model') {
+      if (discountCode.startsWith('short_term_') && currentDiscountDetails) {
+        if (currentDiscountDetails.appliesTo === 'stock_model') {
           const baseAmount =
             priceOverride !== null
               ? priceOverride
               : modelOptions.find((m) => m.id === modelId)?.price || 0;
-          if (discountDetails.percent) {
-            return (baseAmount * discountDetails.percent) / 100;
+          if (currentDiscountDetails.percent) {
+            return (baseAmount * currentDiscountDetails.percent) / 100;
           }
         } else {
           // Apply to total order
-          if (discountDetails.percent) {
-            return (subtotal * discountDetails.percent) / 100;
+          if (currentDiscountDetails.percent) {
+            return (subtotal * currentDiscountDetails.percent) / 100;
           }
         }
       }
@@ -728,7 +732,7 @@ export default function OrderEntry() {
       showCustomDiscount,
       customDiscountType,
       customDiscountValue,
-      discountDetails,
+      discountDetailsMap,
       priceOverride,
       modelOptions,
       modelId,
@@ -1643,7 +1647,9 @@ export default function OrderEntry() {
         'total discounts'
       );
       console.log('💳 Discount options:', discounts);
+      console.log('💳 Discount details map:', discountDetailsMap);
       setDiscountOptions(discounts);
+      setDiscountDetailsMap(discountDetailsMap);
       // Store discount details for appliesTo logic
       if (discountCode && discountDetailsMap[discountCode]) {
         setDiscountDetails(discountDetailsMap[discountCode]);

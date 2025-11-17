@@ -816,9 +816,45 @@ export default function CuttingTable() {
 
           {recipePacketType && (
             <div className="mt-8 pt-6 border-t">
-              <h4 className="font-medium mb-4">
-                Current Recipe for {categories.find(c => c.id === recipePacketType)?.categoryName}
-              </h4>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-medium">
+                  Current Recipe for {categories.find(c => c.id === recipePacketType)?.categoryName}
+                </h4>
+                {selectedPacketCompositions.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={async () => {
+                      if (!confirm(`Delete all ${selectedPacketCompositions.length} item(s) from this recipe?`)) return;
+                      
+                      try {
+                        for (const comp of selectedPacketCompositions) {
+                          await apiRequest(`/api/cutting-table/packet-compositions/${comp.id}`, {
+                            method: 'DELETE',
+                          });
+                        }
+                        
+                        toast({
+                          title: "Success",
+                          description: "All recipe items deleted"
+                        });
+                        
+                        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-compositions'] });
+                      } catch (error) {
+                        toast({
+                          title: "Error",
+                          description: "Failed to delete recipe items",
+                          variant: "destructive"
+                        });
+                      }
+                    }}
+                    data-testid="button-clear-recipe"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Clear All
+                  </Button>
+                )}
+              </div>
               {selectedPacketCompositions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No items configured yet</p>
               ) : (
@@ -834,7 +870,7 @@ export default function CuttingTable() {
                         <div className="flex-1">
                           <span className="font-medium">{comp.quantityNeeded}x</span>
                           <span className="ml-2">
-                            {item ? `${item.agPartNumber} - ${item.name}` : 'Unknown Item'}
+                            {item ? `${item.agPartNumber} - ${item.name}` : comp.componentId ? '(Legacy Component)' : 'Unknown Item'}
                           </span>
                         </div>
                         <Button

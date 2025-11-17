@@ -298,7 +298,7 @@ router.post('/packet-sessions/build', async (req, res) => {
       return res.status(400).json({ error: 'No recipe found for this product category' });
     }
 
-    // Phase 1: Verify inventory availability for all items
+    // Phase 1: Check for legacy components and verify inventory availability
     interface ItemConsumption {
       type: 'inventory_item';
       inventoryItemId: number;
@@ -309,16 +309,18 @@ router.post('/packet-sessions/build', async (req, res) => {
     }
     
     const itemConsumptions: ItemConsumption[] = [];
-    let hasLegacyComponents = false;
     
+    // First pass: Check for ANY legacy components and block if found
     for (const comp of compositions) {
-      // Check if this is a legacy component-based recipe
       if (comp.componentId && !comp.inventoryItemId) {
-        hasLegacyComponents = true;
-        continue; // Skip legacy components - they would need fabric inventory logic
+        return res.status(400).json({ 
+          error: 'This recipe contains legacy component-based items. Please update the recipe:\n1. Go to Configure Recipes tab\n2. Select this packet type\n3. Click "Clear All" to remove old items\n4. Add new items using inventory parts with the "Packet Part" checkbox enabled' 
+        });
       }
-
-      // Handle inventory item-based recipe
+    }
+    
+    // Second pass: Validate inventory availability
+    for (const comp of compositions) {
       if (comp.inventoryItemId) {
         // Get inventory item details
         const inventoryItem = await storage.getInventoryItem(comp.inventoryItemId);
@@ -348,70 +350,109 @@ router.post('/packet-sessions/build', async (req, res) => {
         });
       }
     }
+
+    // Phase 2: All checks passed, now perform atomic transaction
+    // Store ORIGINAL values before ANY updates (handles duplicate items correctly)
+    const originalInventoryValues = new Map<number, {
+      available: number;
+      onHand: number;
+      quantityInStock: number;
+    }>();
     
-    // If recipe only contains legacy components, show helpful error
-    if (hasLegacyComponents && itemConsumptions.length === 0) {
-      return res.status(400).json({ 
-        error: 'This recipe uses legacy component-based items. Please update the recipe in Configure Recipes tab to use inventory items.' 
-      });
-    }
-
-    // Phase 2: All checks passed, commit the transaction
-    // Build detailed transaction notes for audit trail
-    const transactionDetails = itemConsumptions.map(item => 
-      `${item.itemPartNumber} - ${item.itemName}: ${item.quantityNeeded} units consumed`
-    ).join('\n');
-    
-    const sessionNotes = notes 
-      ? `${notes}\n\nInventory Consumption:\n${transactionDetails}`
-      : `Inventory Consumption:\n${transactionDetails}`;
-
-    const session = await storage.createCuttingPacketSession({
-      productCategoryId,
-      packetsTarget: packetsCount,
-      createdBy: performedBy,
-      notes: sessionNotes,
-    });
-
     const consumptionResults = [];
+    let createdSession: any = null;
 
-    for (const consumption of itemConsumptions) {
-      // Update inventory quantity
-      const inventoryItem = await storage.getInventoryItem(consumption.inventoryItemId);
-      if (!inventoryItem) continue;
+    try {
+      // Step 1: Capture original values for ALL unique inventory items
+      const uniqueItemIds = new Set(itemConsumptions.map(c => c.inventoryItemId));
+      for (const itemId of uniqueItemIds) {
+        const inventoryItem = await storage.getInventoryItem(itemId);
+        if (!inventoryItem) {
+          throw new Error(`Inventory item ${itemId} not found`);
+        }
+        originalInventoryValues.set(itemId, {
+          available: inventoryItem.available || 0,
+          onHand: inventoryItem.onHand || 0,
+          quantityInStock: inventoryItem.quantityInStock || 0,
+        });
+      }
 
-      const oldAvailable = inventoryItem.available || 0;
-      const oldOnHand = inventoryItem.onHand || 0;
-      const oldQtyInStock = inventoryItem.quantityInStock || 0;
+      // Step 2: Apply all inventory updates
+      for (const consumption of itemConsumptions) {
+        const inventoryItem = await storage.getInventoryItem(consumption.inventoryItemId);
+        if (!inventoryItem) {
+          throw new Error(`Inventory item ${consumption.inventoryItemId} disappeared during transaction`);
+        }
 
-      const newAvailable = Math.max(0, oldAvailable - consumption.quantityNeeded);
-      const newOnHand = Math.max(0, oldOnHand - consumption.quantityNeeded);
-      const newQtyInStock = Math.max(0, oldQtyInStock - consumption.quantityNeeded);
+        const oldAvailable = inventoryItem.available || 0;
+        const newAvailable = Math.max(0, oldAvailable - consumption.quantityNeeded);
+        const newOnHand = Math.max(0, (inventoryItem.onHand || 0) - consumption.quantityNeeded);
+        const newQtyInStock = Math.max(0, (inventoryItem.quantityInStock || 0) - consumption.quantityNeeded);
+        
+        await storage.updateInventoryItem(consumption.inventoryItemId, {
+          available: newAvailable,
+          onHand: newOnHand,
+          quantityInStock: newQtyInStock,
+          lastUpdated: new Date(),
+        });
+        
+        consumptionResults.push({
+          inventoryItemId: consumption.inventoryItemId,
+          itemName: consumption.itemName,
+          itemPartNumber: consumption.itemPartNumber,
+          quantityConsumed: consumption.quantityNeeded,
+          oldBalance: oldAvailable,
+          newBalance: newAvailable,
+        });
+      }
+
+      // Step 3: Only create session AFTER all inventory updates succeed
+      const transactionDetails = itemConsumptions.map(item => 
+        `${item.itemPartNumber} - ${item.itemName}: ${item.quantityNeeded} units consumed`
+      ).join('\n');
       
-      await storage.updateInventoryItem(consumption.inventoryItemId, {
-        available: newAvailable,
-        onHand: newOnHand,
-        quantityInStock: newQtyInStock,
-        lastUpdated: new Date(),
+      const sessionNotes = notes 
+        ? `${notes}\n\nInventory Consumption:\n${transactionDetails}`
+        : `Inventory Consumption:\n${transactionDetails}`;
+
+      createdSession = await storage.createCuttingPacketSession({
+        productCategoryId,
+        packetsTarget: packetsCount,
+        createdBy: performedBy,
+        notes: sessionNotes,
       });
+
+      res.json({
+        success: true,
+        session: createdSession,
+        consumptions: consumptionResults,
+        message: `Successfully built ${packetsCount} packet(s)`,
+      });
+    } catch (transactionError) {
+      console.error('Error during packet build transaction, rolling back:', transactionError);
       
-      consumptionResults.push({
-        inventoryItemId: consumption.inventoryItemId,
-        itemName: consumption.itemName,
-        itemPartNumber: consumption.itemPartNumber,
-        quantityConsumed: consumption.quantityNeeded,
-        oldBalance: oldAvailable,
-        newBalance: newAvailable,
-      });
+      // Rollback: Restore ORIGINAL values (not intermediate values)
+      for (const [itemId, originalValues] of originalInventoryValues.entries()) {
+        try {
+          await storage.updateInventoryItem(itemId, originalValues);
+        } catch (rollbackError) {
+          console.error(`CRITICAL: Failed to rollback inventory item ${itemId}:`, rollbackError);
+        }
+      }
+      
+      // If session was created, try to delete it (best effort)
+      if (createdSession) {
+        try {
+          // Note: Add deletePacketSession to storage if it doesn't exist
+          // For now, log that manual cleanup may be needed
+          console.error(`Session ${createdSession.id} may need manual cleanup`);
+        } catch (cleanupError) {
+          console.error('Failed to cleanup session:', cleanupError);
+        }
+      }
+      
+      throw new Error('Packet build failed, all changes rolled back');
     }
-
-    res.json({
-      success: true,
-      session,
-      consumptions: consumptionResults,
-      message: `Successfully built ${packetsCount} packet(s)`,
-      warning: hasLegacyComponents ? 'Note: Legacy component items were skipped. Update recipe to use inventory items for complete packet building.' : undefined,
-    });
   } catch (error) {
     console.error('Error building packet session:', error);
     res.status(500).json({ error: 'Failed to build packet session' });

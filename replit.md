@@ -1,7 +1,8 @@
 # EPOCH v8 - Manufacturing ERP System
 
 ## Overview
-EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. It aims to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The system is a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. Key capabilities include a robust Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System. The business vision is to be the leading ERP solution for small-to-medium customizable product manufacturers.
+
+EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. Its primary goal is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The system is a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. Key capabilities include a robust Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System. The business vision is to be the leading ERP solution for small-to-medium customizable product manufacturers.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -52,6 +53,9 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 -   **Production Deployment**: Uses `tsx` to run TypeScript directly in production; static files served from `dist/public/`.
 -   **Nonconformance Record System**: Comprehensive quality issue tracking with 12 specific issue/cause categories.
 -   **Cutting Table Packet Building**: FIFO-based packet production workflow with automatic inventory consumption, two-phase allocation (simulation before commit), material linkage validation, expiration-based priority indicators, and real-time inventory balance tracking. Includes Recipe Summary, Build Session, and enhanced Fabric Inventory management with sortable views.
+-   **Dynamic Discount System**: Orders save discount metadata (type, value, scope) at creation for dynamic recalculation while preserving original intent.
+-   **Cutting Table Inventory Integration**: Fabric inventory items are linked to Cut Management for selection and tracking.
+-   **Cutting Table Production Progress Tracker**: Automatic calculation of remaining cuts needed to hit weekly production goals. System compares actual cut records against submitted targets, displaying visual progress with color-coded bars and real-time updates.
 
 ### Technical Implementations
 -   **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

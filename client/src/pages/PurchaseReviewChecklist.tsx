@@ -1746,14 +1746,14 @@ export default function PurchaseReviewChecklist() {
               
               <div>
                 <Label>Digital Signature</Label>
-                <div className="border border-gray-300 rounded-md p-2 max-w-md">
+                <div className="border border-gray-300 rounded-md p-2">
                   <SignatureCanvas
                     ref={signatureCanvasRef}
                     penColor="black"
                     canvasProps={{
-                      width: 400,
-                      height: 150,
-                      className: 'signature-canvas border rounded',
+                      width: 700,
+                      height: 200,
+                      className: 'signature-canvas border rounded w-full',
                     }}
                     onEnd={saveSignature}
                   />

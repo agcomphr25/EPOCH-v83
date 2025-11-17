@@ -1223,42 +1223,75 @@ export default function OrderEntry() {
           }
         }
 
-        // CRITICAL FIX: Load discount details after setting discount code
+        // CRITICAL FIX: Load discount details from saved metadata instead of fetching from discount_codes table
+        // This ensures discounts remain stable even if the discount code is later modified or deleted
         if (order.discountCode && order.discountCode !== 'none') {
-          const loadDiscountDetailsForEdit = async () => {
-            try {
-              if (order.discountCode.startsWith('persistent_')) {
-                const discountId = order.discountCode.replace(
-                  'persistent_',
-                  ''
-                );
-                const persistentDiscounts = await apiRequest(
-                  '/api/persistent-discounts'
-                );
-                const discount = persistentDiscounts.find(
-                  (d: any) => d.id.toString() === discountId
-                );
-                setDiscountDetails(discount || null);
-              } else if (order.discountCode.startsWith('short_term_')) {
-                const saleId = order.discountCode.replace('short_term_', '');
-                const shortTermSales = await apiRequest(
-                  '/api/short-term-sales'
-                );
-                const sale = shortTermSales.find(
-                  (s: any) => s.id.toString() === saleId
-                );
-                setDiscountDetails(
-                  sale
-                    ? { ...sale, appliesTo: sale.appliesTo || 'total_order' }
-                    : null
-                );
+          // Check if we have saved discount metadata
+          if (order.discountType && order.discountValue) {
+            // Use saved metadata to reconstruct discount details
+            const reconstructedDetails = {
+              percent: order.discountType === 'percent' ? order.discountValue : null,
+              fixedAmount: order.discountType === 'fixed' ? order.discountValue * 100 : null, // Convert dollars back to cents
+              appliesTo: order.discountAppliesTo || 'total_order',
+            };
+            
+            // Store in both discountDetails and discountDetailsMap
+            setDiscountDetails(reconstructedDetails);
+            setDiscountDetailsMap(prev => ({
+              ...prev,
+              [order.discountCode]: reconstructedDetails
+            }));
+            
+            console.log('✅ Loaded discount from saved metadata:', reconstructedDetails);
+          } else {
+            // Fallback: Load from discount codes table (for orders created before metadata feature)
+            const loadDiscountDetailsForEdit = async () => {
+              try {
+                if (order.discountCode.startsWith('persistent_')) {
+                  const discountId = order.discountCode.replace(
+                    'persistent_',
+                    ''
+                  );
+                  const persistentDiscounts = await apiRequest(
+                    '/api/persistent-discounts'
+                  );
+                  const discount = persistentDiscounts.find(
+                    (d: any) => d.id.toString() === discountId
+                  );
+                  setDiscountDetails(discount || null);
+                  if (discount) {
+                    setDiscountDetailsMap(prev => ({
+                      ...prev,
+                      [order.discountCode]: discount
+                    }));
+                  }
+                } else if (order.discountCode.startsWith('short_term_')) {
+                  const saleId = order.discountCode.replace('short_term_', '');
+                  const shortTermSales = await apiRequest(
+                    '/api/short-term-sales'
+                  );
+                  const sale = shortTermSales.find(
+                    (s: any) => s.id.toString() === saleId
+                  );
+                  setDiscountDetails(
+                    sale
+                      ? { ...sale, appliesTo: sale.appliesTo || 'total_order' }
+                      : null
+                  );
+                  if (sale) {
+                    setDiscountDetailsMap(prev => ({
+                      ...prev,
+                      [order.discountCode]: { ...sale, appliesTo: sale.appliesTo || 'total_order' }
+                    }));
+                  }
+                }
+              } catch (error) {
+                console.error('Failed to load discount details for edit:', error);
+                setDiscountDetails(null);
               }
-            } catch (error) {
-              console.error('Failed to load discount details for edit:', error);
-              setDiscountDetails(null);
-            }
-          };
-          loadDiscountDetailsForEdit();
+            };
+            loadDiscountDetailsForEdit();
+          }
         }
 
         // Payment data will be loaded by PaymentManager component

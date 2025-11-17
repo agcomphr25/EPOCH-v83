@@ -5395,6 +5395,7 @@ export const cuttingCutRecords = pgTable('cutting_cut_records', {
   fabricSquareMetersUsed: numeric('fabric_square_meters_used', { precision: 10, scale: 2 }).notNull(), // Square meters of fabric used
   fabricType: text('fabric_type'), // Type of fabric used (Carbon Fiber, Fiberglass, etc.)
   partNumber: text('part_number'), // AG part number being cut
+  itemDescription: text('item_description'), // Description of the item being cut
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

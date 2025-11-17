@@ -63,6 +63,7 @@ type CuttingCutRecord = {
   fabricSquareMetersUsed: number;
   fabricType: string | null;
   partNumber: string | null;
+  itemDescription: string | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -222,6 +223,7 @@ export default function CuttingTable() {
     fabricSquareMetersUsed: '',
     fabricType: '',
     partNumber: '',
+    itemDescription: '',
     notes: '',
   });
 
@@ -281,6 +283,7 @@ export default function CuttingTable() {
         fabricSquareMetersUsed: '',
         fabricType: '',
         partNumber: '',
+        itemDescription: '',
         notes: '',
       });
       toast({ title: 'Success', description: 'Cut record added successfully' });
@@ -1688,6 +1691,7 @@ export default function CuttingTable() {
       // Handle packet composition item selection vs category selection
       let categoryId: string | null = null;
       let partNum = cutFormData.partNumber;
+      let itemDesc = cutFormData.itemDescription;
       
       if (cutFormData.productCategoryId.startsWith('item-')) {
         // Extract inventory item ID from the item-{id} format
@@ -1695,6 +1699,7 @@ export default function CuttingTable() {
         const compositionItem = packetCompositionItems.find((comp: any) => comp.inventoryItemId.toString() === inventoryItemId);
         if (compositionItem) {
           partNum = compositionItem.item.agPartNumber;
+          itemDesc = compositionItem.item.description;
           // Always use the category from the composition, even if it's null
           categoryId = compositionItem.productCategoryId || null;
         } else {
@@ -1718,6 +1723,7 @@ export default function CuttingTable() {
         fabricSquareMetersUsed: parseFloat(cutFormData.fabricSquareMetersUsed),
         fabricType: cutFormData.fabricType || null,
         partNumber: partNum || null,
+        itemDescription: itemDesc || null,
         notes: cutFormData.notes || null,
       });
     };
@@ -1866,8 +1872,8 @@ export default function CuttingTable() {
                   <tr className="border-b">
                     <th className="text-left p-2">Date</th>
                     <th className="text-left p-2">Category</th>
+                    <th className="text-left p-2">Item</th>
                     <th className="text-left p-2">Fabric Type</th>
-                    <th className="text-left p-2">Part #</th>
                     <th className="text-right p-2">Pieces</th>
                     <th className="text-right p-2">Fabric (m²)</th>
                     <th className="text-right p-2">Yield/m²</th>
@@ -1889,8 +1895,20 @@ export default function CuttingTable() {
                       <tr key={record.id} className="border-b hover:bg-muted/50">
                         <td className="p-2">{new Date(record.workDate).toLocaleDateString()}</td>
                         <td className="p-2">{categoryDisplay}</td>
+                        <td className="p-2 text-sm">
+                          {record.partNumber && record.itemDescription ? (
+                            <div>
+                              <span className="font-mono font-semibold">{record.partNumber}</span>
+                              <br />
+                              <span className="text-muted-foreground">{record.itemDescription}</span>
+                            </div>
+                          ) : record.partNumber ? (
+                            <span className="font-mono">{record.partNumber}</span>
+                          ) : (
+                            '-'
+                          )}
+                        </td>
                         <td className="p-2 text-sm">{record.fabricType || '-'}</td>
-                        <td className="p-2 text-sm font-mono">{record.partNumber || '-'}</td>
                         <td className="p-2 text-right">{record.piecesYielded}</td>
                         <td className="p-2 text-right">{record.fabricSquareMetersUsed.toFixed(2)}</td>
                         <td className="p-2 text-right font-semibold">{yieldPerSqM}</td>

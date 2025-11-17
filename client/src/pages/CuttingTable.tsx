@@ -53,7 +53,8 @@ type Component = {
 type PacketComposition = {
   id: string;
   productCategoryId: string;
-  componentId: string;
+  componentId: string | null;
+  inventoryItemId: number | null;
   quantityNeeded: number;
 };
 
@@ -122,6 +123,11 @@ export default function CuttingTable() {
   const [selectedFormLine, setSelectedFormLine] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [quantity, setQuantity] = useState('');
+  
+  // Form state for Configure Recipes tab
+  const [recipePacketType, setRecipePacketType] = useState('');
+  const [recipeInventoryItem, setRecipeInventoryItem] = useState('');
+  const [recipeQuantity, setRecipeQuantity] = useState('');
 
   // Form state for Add Fabric Inventory tab
   const [fabricFormLine, setFabricFormLine] = useState('');
@@ -140,6 +146,10 @@ export default function CuttingTable() {
   // Form state for Packet Management tab
   const [selectedPacketCategory, setSelectedPacketCategory] = useState('');
   const [packetsNeeded, setPacketsNeeded] = useState('');
+  const [buildingSession, setBuildingSession] = useState(false);
+
+  // Form state for Inventory tab
+  const [inventorySortBy, setInventorySortBy] = useState<'fabric' | 'expiration' | 'quantity'>('expiration');
 
   // Fetch all data
   const { data: materials = [], isLoading: loadingMaterials } = useQuery<Material[]>({
@@ -174,7 +184,11 @@ export default function CuttingTable() {
     queryKey: ['/api/cutting-table/fabric-inventory'],
   });
 
-  const isLoading = loadingMaterials || loadingLines || loadingCategories || loadingComponents || loadingPacketCompositions || loadingWeekly || loadingProgress || loadingInventory;
+  const { data: inventoryItems = [], isLoading: loadingInventoryItems } = useQuery<any[]>({
+    queryKey: ['/api/enhanced/inventory/items'],
+  });
+
+  const isLoading = loadingMaterials || loadingLines || loadingCategories || loadingComponents || loadingPacketCompositions || loadingWeekly || loadingProgress || loadingInventory || loadingInventoryItems;
 
   // Clear selected category when production line changes
   useEffect(() => {
@@ -459,163 +473,374 @@ export default function CuttingTable() {
   );
 
   const renderPacketManagement = () => {
-    // Get packet categories (only P1 categories with packet compositions)
     const packetCategories = categories.filter(cat => 
       packetCompositions.some(comp => comp.productCategoryId === cat.id)
     );
 
-    // Calculate cuts needed for selected packet
-    const calculatePacketCuts = () => {
-      if (!selectedPacketCategory || !packetsNeeded) return [];
-      
-      const categoryCompositions = packetCompositions.filter(
-        comp => comp.productCategoryId === selectedPacketCategory
-      );
-      
-      return categoryCompositions.map(comp => {
-        const component = components.find(c => c.id === comp.componentId);
-        if (!component) return null;
-        
-        const totalPieces = parseInt(packetsNeeded) * comp.quantityNeeded;
-        const cutsRequired = Math.ceil(totalPieces / component.yieldPerCut);
-        
-        return {
-          componentName: component.componentName,
-          fabricType: component.fabricType,
-          thickness: component.thickness,
-          yieldPerCut: component.yieldPerCut,
-          quantityPerPacket: comp.quantityNeeded,
-          totalPieces,
-          cutsRequired
-        };
-      }).filter(Boolean);
+    const handleBuildPacket = async () => {
+      if (!selectedPacketCategory || !packetsNeeded || parseInt(packetsNeeded) <= 0) {
+        toast({
+          title: "Missing Information",
+          description: "Please select a packet type and enter a valid quantity",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setBuildingSession(true);
+      try {
+        const result = await apiRequest('/api/cutting-table/packet-sessions/build', {
+          method: 'POST',
+          body: JSON.stringify({
+            productCategoryId: selectedPacketCategory,
+            packetsCount: parseInt(packetsNeeded),
+            performedBy: 'Production Team',
+            notes: `Built ${packetsNeeded} packets via UI`,
+          }),
+        });
+
+        const lotsCount = result.sessionLots?.length || 0;
+        toast({
+          title: "Packet Build Complete",
+          description: `Built ${packetsNeeded} packet(s) using ${lotsCount} inventory lot(s). Session ID: ${result.session?.id?.slice(0, 8)}...`,
+          duration: 5000,
+        });
+
+        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
+        setSelectedPacketCategory('');
+        setPacketsNeeded('');
+      } catch (error: any) {
+        const errorMsg = error.error || error.message || "Failed to build packet session";
+        toast({
+          title: "Build Failed",
+          description: errorMsg,
+          variant: "destructive",
+          duration: 7000,
+        });
+      } finally {
+        setBuildingSession(false);
+      }
     };
 
-    const calculatedCuts = calculatePacketCuts();
+    const selectedCategory = categories.find(c => c.id === selectedPacketCategory);
+    const categoryCompositions = packetCompositions.filter(
+      comp => comp.productCategoryId === selectedPacketCategory
+    );
 
     return (
       <div className="space-y-6" data-testid="packet-management">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recipe Summary Panel */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Recipe Summary</h3>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Select Packet Type</label>
+                <Select value={selectedPacketCategory} onValueChange={setSelectedPacketCategory}>
+                  <SelectTrigger data-testid="select-packet-type">
+                    <SelectValue placeholder="Select packet type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {packetCategories.map(cat => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.categoryName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedCategory && categoryCompositions.length > 0 && (
+                <div className="border rounded p-4 bg-muted/50">
+                  <h4 className="font-medium mb-3">{selectedCategory.categoryName} Composition</h4>
+                  <div className="space-y-2">
+                    {categoryCompositions.map(comp => {
+                      const component = components.find(c => c.id === comp.componentId);
+                      return component ? (
+                        <div key={comp.id} className="flex justify-between text-sm p-2 bg-background rounded">
+                          <span className="font-medium">{component.componentName}</span>
+                          <span className="text-muted-foreground">
+                            {comp.quantityNeeded}x • {component.fabricType} {component.thickness}
+                          </span>
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Build Session Panel */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Build Packet Session</h3>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Packets to Build</label>
+                <Input
+                  type="number"
+                  placeholder="Enter quantity"
+                  value={packetsNeeded}
+                  onChange={(e) => setPacketsNeeded(e.target.value)}
+                  disabled={!selectedPacketCategory}
+                  data-testid="input-packets-needed"
+                  min="1"
+                />
+              </div>
+
+              {selectedPacketCategory && packetsNeeded && parseInt(packetsNeeded) > 0 && (
+                <div className="border rounded p-4 bg-blue-50 dark:bg-blue-950">
+                  <h4 className="font-medium mb-2 text-sm">Estimated Requirements:</h4>
+                  <div className="space-y-1 text-sm">
+                    {categoryCompositions.map(comp => {
+                      const component = components.find(c => c.id === comp.componentId);
+                      if (!component) return null;
+                      const totalNeeded = comp.quantityNeeded * parseInt(packetsNeeded);
+                      return (
+                        <div key={comp.id} className="flex justify-between">
+                          <span>{component.componentName}:</span>
+                          <span className="font-mono">{totalNeeded} pcs</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <Button
+                onClick={handleBuildPacket}
+                disabled={!selectedPacketCategory || !packetsNeeded || buildingSession}
+                className="w-full"
+                data-testid="button-build-session"
+              >
+                {buildingSession ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Building...
+                  </>
+                ) : (
+                  'Build Packet Session (FIFO)'
+                )}
+              </Button>
+
+              <div className="text-xs text-muted-foreground space-y-1 mt-2 p-2 border rounded bg-muted/30">
+                <p>ℹ️ FIFO Allocation Process:</p>
+                <p>• Automatically selects lots with nearest expiration dates</p>
+                <p>• Updates inventory balances in real-time</p>
+                <p>• Creates audit trail for all transactions</p>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* All Packet Compositions Reference */}
         <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Production Calculator</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <h3 className="text-lg font-semibold mb-4">All Packet Recipes</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {packetCategories.map(cat => {
+              const comps = packetCompositions.filter(pc => pc.productCategoryId === cat.id);
+              return (
+                <div key={cat.id} className="border rounded p-4 hover:bg-muted/50">
+                  <h4 className="font-medium mb-2">{cat.categoryName}</h4>
+                  <div className="space-y-1">
+                    {comps.map(comp => {
+                      const component = components.find(c => c.id === comp.componentId);
+                      return component ? (
+                        <div key={comp.id} className="text-sm text-muted-foreground">
+                          • {comp.quantityNeeded}x {component.componentName}
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
+    );
+  };
+
+  const renderConfigureRecipes = () => {
+    const handleAddComposition = async (e: React.FormEvent) => {
+      e.preventDefault();
+
+      if (!recipePacketType || !recipeInventoryItem || !recipeQuantity) {
+        toast({
+          title: "Missing Information",
+          description: "Please fill in all fields",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      try {
+        await apiRequest('/api/cutting-table/packet-compositions', {
+          method: 'POST',
+          body: JSON.stringify({
+            productCategoryId: recipePacketType,
+            inventoryItemId: parseInt(recipeInventoryItem),
+            componentId: null,
+            quantityNeeded: parseInt(recipeQuantity),
+          }),
+        });
+
+        toast({
+          title: "Success",
+          description: "Inventory item added to packet recipe"
+        });
+
+        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-compositions'] });
+
+        setRecipeInventoryItem('');
+        setRecipeQuantity('');
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to add inventory item to recipe",
+          variant: "destructive"
+        });
+      }
+    };
+
+    const handleDeleteComposition = async (compositionId: string) => {
+      try {
+        await apiRequest(`/api/cutting-table/packet-compositions/${compositionId}`, {
+          method: 'DELETE',
+        });
+
+        toast({
+          title: "Success",
+          description: "Inventory item removed from recipe"
+        });
+
+        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-compositions'] });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to remove inventory item",
+          variant: "destructive"
+        });
+      }
+    };
+
+    const selectedPacketCompositions = packetCompositions.filter(pc => pc.productCategoryId === recipePacketType);
+
+    return (
+      <div className="space-y-6">
+        <Card className="p-8" data-testid="configure-recipes">
+          <h3 className="text-lg font-semibold mb-6">Configure Packet Recipes</h3>
+          <p className="text-sm text-muted-foreground mb-6">
+            Define which inventory items and quantities are needed for each packet type. This configuration will be used when building packets to automatically consume inventory.
+          </p>
+
+          <form onSubmit={handleAddComposition} className="space-y-6 max-w-2xl">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Packet Type</label>
-              <Select value={selectedPacketCategory} onValueChange={setSelectedPacketCategory}>
+              <label className="text-sm font-medium">Packet Type *</label>
+              <Select value={recipePacketType} onValueChange={setRecipePacketType}>
                 <SelectTrigger data-testid="select-packet-type">
-                  <SelectValue placeholder="Select packet type..." />
+                  <SelectValue placeholder="Select packet type" />
                 </SelectTrigger>
-                <SelectContent position="popper" side="bottom" align="start">
-                  {packetCategories.map(cat => (
-                    <SelectItem key={cat.id} value={cat.id}>
+                <SelectContent>
+                  {categories.map(cat => (
+                    <SelectItem 
+                      key={cat.id} 
+                      value={cat.id}
+                      data-testid={`option-packet-${cat.id}`}
+                    >
                       {cat.categoryName}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Packets Needed</label>
-              <Input
-                type="number"
-                placeholder="Enter quantity"
-                value={packetsNeeded}
-                onChange={(e) => setPacketsNeeded(e.target.value)}
-                data-testid="input-packets-needed"
-              />
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Packet Part (from Inventory) *</label>
+                <Select value={recipeInventoryItem} onValueChange={setRecipeInventoryItem}>
+                  <SelectTrigger data-testid="select-inventory-item">
+                    <SelectValue placeholder="Select packet part" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {inventoryItems
+                      .filter((item: any) => item.isPacketPart === true)
+                      .map((item: any) => (
+                        <SelectItem 
+                          key={item.id} 
+                          value={item.id.toString()}
+                          data-testid={`option-item-${item.id}`}
+                        >
+                          {item.agPartNumber} - {item.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Quantity Needed Per Packet *</label>
+                <Input 
+                  type="number" 
+                  min="1"
+                  value={recipeQuantity}
+                  onChange={(e) => setRecipeQuantity(e.target.value)}
+                  placeholder="Enter quantity"
+                  data-testid="input-recipe-quantity"
+                />
+              </div>
             </div>
 
-            <div className="flex items-end">
-              <Button 
-                onClick={() => {
-                  setSelectedPacketCategory('');
-                  setPacketsNeeded('');
-                }}
-                variant="outline"
-                data-testid="button-reset-calculator"
-              >
-                Reset
-              </Button>
-            </div>
-          </div>
+            <Button 
+              type="submit" 
+              className="w-full"
+              data-testid="button-add-recipe-item"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Item to Recipe
+            </Button>
+          </form>
 
-          {calculatedCuts.length > 0 && (
-            <div className="mt-6">
-              <h4 className="font-semibold mb-3">Cuts Required:</h4>
-              <table className="w-full text-sm">
-                <thead className="border-b">
-                  <tr>
-                    <th className="text-left p-2">Component</th>
-                    <th className="text-left p-2">Fabric</th>
-                    <th className="text-left p-2">Thickness</th>
-                    <th className="text-right p-2">Qty/Packet</th>
-                    <th className="text-right p-2">Total Pieces</th>
-                    <th className="text-right p-2">Yield/Cut</th>
-                    <th className="text-right p-2 font-bold">Cuts Needed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {calculatedCuts.map((item, idx) => (
-                    <tr key={idx} className="border-b">
-                      <td className="p-2">{item.componentName}</td>
-                      <td className="p-2">{item.fabricType}</td>
-                      <td className="p-2">{item.thickness}</td>
-                      <td className="text-right p-2">{item.quantityPerPacket}</td>
-                      <td className="text-right p-2">{item.totalPieces}</td>
-                      <td className="text-right p-2">{item.yieldPerCut}</td>
-                      <td className="text-right p-2 font-bold">{item.cutsRequired}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {recipePacketType && (
+            <div className="mt-8 pt-6 border-t">
+              <h4 className="font-medium mb-4">
+                Current Recipe for {categories.find(c => c.id === recipePacketType)?.categoryName}
+              </h4>
+              {selectedPacketCompositions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No items configured yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {selectedPacketCompositions.map(comp => {
+                    const item = inventoryItems.find((i: any) => i.id === comp.inventoryItemId);
+                    return (
+                      <div 
+                        key={comp.id} 
+                        className="flex items-center justify-between p-3 border rounded hover:bg-muted/50"
+                        data-testid={`recipe-item-${comp.id}`}
+                      >
+                        <div className="flex-1">
+                          <span className="font-medium">{comp.quantityNeeded}x</span>
+                          <span className="ml-2">
+                            {item ? `${item.agPartNumber} - ${item.name}` : 'Unknown Item'}
+                          </span>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteComposition(comp.id)}
+                          data-testid={`button-delete-recipe-${comp.id}`}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
-        </Card>
-
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Components & Yields</h3>
-          <table className="w-full text-sm">
-            <thead className="border-b">
-              <tr>
-                <th className="text-left p-2">Component</th>
-                <th className="text-left p-2">Fabric Type</th>
-                <th className="text-left p-2">Thickness</th>
-                <th className="text-right p-2">Yield per Cut</th>
-              </tr>
-            </thead>
-            <tbody>
-              {components.map(comp => (
-                <tr key={comp.id} className="border-b">
-                  <td className="p-2">{comp.componentName}</td>
-                  <td className="p-2">{comp.fabricType}</td>
-                  <td className="p-2">{comp.thickness}</td>
-                  <td className="text-right p-2">{comp.yieldPerCut}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Packet Compositions</h3>
-          {packetCategories.map(cat => {
-            const comps = packetCompositions.filter(pc => pc.productCategoryId === cat.id);
-            return (
-              <div key={cat.id} className="mb-4">
-                <h4 className="font-medium mb-2">{cat.categoryName}</h4>
-                <ul className="list-disc list-inside text-sm text-muted-foreground ml-4">
-                  {comps.map(comp => {
-                    const component = components.find(c => c.id === comp.componentId);
-                    return component ? (
-                      <li key={comp.id}>
-                        {comp.quantityNeeded}x {component.componentName} ({component.fabricType} - {component.thickness})
-                      </li>
-                    ) : null;
-                  })}
-                </ul>
-              </div>
-            );
-          })}
         </Card>
       </div>
     );
@@ -1005,107 +1230,146 @@ export default function CuttingTable() {
     type FabricWithDetails = FabricInventory & { source?: string; fabric?: string; batchNumber?: string; internalControlNumber?: string; barcode?: string; receivedDate?: string; manufactureDate?: string; productionLineId?: string; conformanceDocumentLink?: string };
     const fabricWithDetails = fabricInventory as FabricWithDetails[];
 
-    return (
-      <Card className="p-8" data-testid="fabric-inventory">
-        <h3 className="text-lg font-semibold mb-4">Fabric Inventory</h3>
-        {fabricWithDetails.length === 0 ? (
-          <p className="text-muted-foreground">No fabric inventory data available. Use the "Add Fabric" tab to add inventory.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-2 text-sm font-medium">Production Line</th>
-                  <th className="text-left p-2 text-sm font-medium">Source</th>
-                  <th className="text-left p-2 text-sm font-medium">Fabric</th>
-                  <th className="text-left p-2 text-sm font-medium">Batch #</th>
-                  <th className="text-left p-2 text-sm font-medium">Control #</th>
-                  <th className="text-left p-2 text-sm font-medium">Barcode</th>
-                  <th className="text-left p-2 text-sm font-medium">Location</th>
-                  <th className="text-left p-2 text-sm font-medium">Paperwork</th>
-                  <th className="text-left p-2 text-sm font-medium">Qty</th>
-                  <th className="text-left p-2 text-sm font-medium">Received</th>
-                  <th className="text-left p-2 text-sm font-medium">Expires</th>
-                  <th className="text-left p-2 text-sm font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fabricWithDetails.map(item => {
-                  const line = productionLines.find(l => l.id === item.productionLineId);
-                  const isLowStock = item.quantityInStock <= item.lowStockThreshold;
+    const getExpirationStatus = (expirationDate: string | null | undefined) => {
+      if (!expirationDate) return { label: 'No Expiration', color: 'text-gray-500', bgColor: 'bg-gray-100 dark:bg-gray-800' };
+      
+      const today = new Date();
+      const expDate = new Date(expirationDate);
+      const daysUntilExpiration = Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysUntilExpiration < 0) return { label: 'Expired', color: 'text-red-700', bgColor: 'bg-red-100 dark:bg-red-900' };
+      if (daysUntilExpiration <= 7) return { label: `${daysUntilExpiration}d - Critical`, color: 'text-orange-700', bgColor: 'bg-orange-100 dark:bg-orange-900' };
+      if (daysUntilExpiration <= 30) return { label: `${daysUntilExpiration}d - Soon`, color: 'text-yellow-700', bgColor: 'bg-yellow-100 dark:bg-yellow-900' };
+      return { label: `${daysUntilExpiration}d - OK`, color: 'text-green-700', bgColor: 'bg-green-100 dark:bg-green-900' };
+    };
 
-                  return (
-                    <tr 
-                      key={item.id} 
-                      className={`border-b hover:bg-muted/50 ${isLowStock ? 'bg-red-50 dark:bg-red-900/10' : ''}`}
-                      data-testid={`inventory-item-${item.id}`}
-                    >
-                      <td className="p-2 text-sm">
-                        <span className={`px-2 py-1 rounded text-xs font-semibold ${line?.lineName === 'P2' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
-                          {line?.lineName || '-'}
-                        </span>
-                      </td>
-                      <td className="p-2 text-sm">{item.source || '-'}</td>
-                      <td className="p-2 text-sm">{item.fabric || '-'}</td>
-                      <td className="p-2 text-sm">{item.batchNumber || '-'}</td>
-                      <td className="p-2 text-sm">{item.internalControlNumber || '-'}</td>
-                      <td className="p-2 text-sm font-mono text-xs">
-                        {item.barcode ? (
-                          <span className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded" data-testid={`barcode-${item.id}`}>
-                            {item.barcode}
-                          </span>
-                        ) : '-'}
-                      </td>
-                      <td className="p-2 text-sm">{item.location || '-'}</td>
-                      <td className="p-2 text-sm">
-                        {item.conformanceDocumentLink ? (
-                          <a 
-                            href={item.conformanceDocumentLink} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline text-xs"
-                            data-testid={`link-conformance-${item.id}`}
-                          >
-                            📄 View
-                          </a>
-                        ) : '-'}
-                      </td>
-                      <td className="p-2 text-sm">
-                        <span className={`font-semibold ${isLowStock ? 'text-red-600' : ''}`} data-testid={`text-stock-${item.id}`}>
-                          {item.quantityInStock}
-                        </span>
-                        {isLowStock && <span className="text-xs text-red-600 ml-1">⚠</span>}
-                      </td>
-                      <td className="p-2 text-sm">
-                        {item.receivedDate ? new Date(item.receivedDate).toLocaleDateString() : '-'}
-                      </td>
-                      <td className="p-2 text-sm">
-                        {item.expirationDate ? new Date(item.expirationDate).toLocaleDateString() : '-'}
-                      </td>
-                      <td className="p-2">
-                        {item.barcode ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => window.open(`/api/cutting-table/fabric-inventory/${item.id}/print-barcode`, '_blank')}
-                            data-testid={`button-print-barcode-${item.id}`}
-                            className="flex items-center gap-1"
-                          >
-                            <Printer className="w-3 h-3" />
-                            Print
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">No barcode</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+    const sortedInventory = [...fabricWithDetails].sort((a, b) => {
+      if (inventorySortBy === 'fabric') {
+        return (a.fabric || '').localeCompare(b.fabric || '');
+      } else if (inventorySortBy === 'expiration') {
+        if (!a.expirationDate && !b.expirationDate) return 0;
+        if (!a.expirationDate) return 1;
+        if (!b.expirationDate) return -1;
+        return new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime();
+      } else if (inventorySortBy === 'quantity') {
+        return a.quantityInStock - b.quantityInStock;
+      }
+      return 0;
+    });
+
+    const fabricTypes = Array.from(new Set(fabricWithDetails.map(item => item.fabric).filter(Boolean)));
+    const totalQuantity = fabricWithDetails.reduce((sum, item) => sum + item.quantityInStock, 0);
+
+    return (
+      <div className="space-y-4">
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold">Fabric Inventory Overview</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {fabricTypes.length} fabric types • {fabricWithDetails.length} lots • {totalQuantity} units total
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium">Sort by:</label>
+              <Select value={inventorySortBy} onValueChange={(v) => setInventorySortBy(v as any)}>
+                <SelectTrigger className="w-[160px]" data-testid="select-inventory-sort">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="expiration">Expiration (FIFO)</SelectItem>
+                  <SelectItem value="fabric">Fabric Type</SelectItem>
+                  <SelectItem value="quantity">Quantity</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        )}
-      </Card>
+
+          {fabricWithDetails.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">No fabric inventory data available. Use the "Add Fabric" tab to add inventory.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left p-2 text-sm font-medium">Line</th>
+                    <th className="text-left p-2 text-sm font-medium">Fabric Type</th>
+                    <th className="text-left p-2 text-sm font-medium">Source</th>
+                    <th className="text-left p-2 text-sm font-medium">Batch/Control</th>
+                    <th className="text-left p-2 text-sm font-medium">Location</th>
+                    <th className="text-right p-2 text-sm font-medium">Qty on Hand</th>
+                    <th className="text-left p-2 text-sm font-medium">Received</th>
+                    <th className="text-left p-2 text-sm font-medium">Expiration Status</th>
+                    <th className="text-left p-2 text-sm font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedInventory.map(item => {
+                    const line = productionLines.find(l => l.id === item.productionLineId);
+                    const isLowStock = item.quantityInStock <= item.lowStockThreshold;
+                    const expirationStatus = getExpirationStatus(item.expirationDate);
+
+                    return (
+                      <tr 
+                        key={item.id} 
+                        className="border-b hover:bg-muted/50"
+                        data-testid={`inventory-item-${item.id}`}
+                      >
+                        <td className="p-2 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs font-semibold ${line?.lineName === 'P2' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'}`}>
+                            {line?.lineName || '-'}
+                          </span>
+                        </td>
+                        <td className="p-2 text-sm font-medium">{item.fabric || '-'}</td>
+                        <td className="p-2 text-sm text-muted-foreground">{item.source || '-'}</td>
+                        <td className="p-2 text-sm text-muted-foreground">
+                          {item.batchNumber && <div className="text-xs">B: {item.batchNumber}</div>}
+                          {item.internalControlNumber && <div className="text-xs">C: {item.internalControlNumber}</div>}
+                          {!item.batchNumber && !item.internalControlNumber && '-'}
+                        </td>
+                        <td className="p-2 text-sm">{item.location || '-'}</td>
+                        <td className="p-2 text-right">
+                          <span className={`font-bold text-lg ${isLowStock ? 'text-red-600' : 'text-foreground'}`} data-testid={`text-stock-${item.id}`}>
+                            {item.quantityInStock}
+                          </span>
+                          {isLowStock && <div className="text-xs text-red-600">⚠ Low Stock</div>}
+                        </td>
+                        <td className="p-2 text-sm text-muted-foreground">
+                          {item.receivedDate ? new Date(item.receivedDate).toLocaleDateString() : '-'}
+                        </td>
+                        <td className="p-2">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${expirationStatus.color} ${expirationStatus.bgColor}`}>
+                            {expirationStatus.label}
+                          </span>
+                          {item.expirationDate && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {new Date(item.expirationDate).toLocaleDateString()}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-2">
+                          {item.barcode ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(`/api/cutting-table/fabric-inventory/${item.id}/print-barcode`, '_blank')}
+                              data-testid={`button-print-barcode-${item.id}`}
+                              className="flex items-center gap-1 text-xs"
+                            >
+                              <Printer className="w-3 h-3" />
+                              Print
+                            </Button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </div>
     );
   };
 
@@ -1164,12 +1428,13 @@ export default function CuttingTable() {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full" data-testid="tabs-main">
-        <TabsList className="grid w-full grid-cols-8" data-testid="tabs-list">
+        <TabsList className="grid w-full grid-cols-9" data-testid="tabs-list">
           <TabsTrigger value="dashboard" data-testid="tab-dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="daily" data-testid="tab-daily">Daily Tracker</TabsTrigger>
           <TabsTrigger value="weekly" data-testid="tab-weekly">Weekly Report</TabsTrigger>
           <TabsTrigger value="projections" data-testid="tab-projections">Projections</TabsTrigger>
           <TabsTrigger value="packetMgmt" data-testid="tab-packet-mgmt">Packet Mgmt</TabsTrigger>
+          <TabsTrigger value="configRecipes" data-testid="tab-config-recipes">Configure Recipes</TabsTrigger>
           <TabsTrigger value="submit" data-testid="tab-submit">Submit Data</TabsTrigger>
           <TabsTrigger value="addFabric" data-testid="tab-add-fabric">Add Fabric</TabsTrigger>
           <TabsTrigger value="inventory" data-testid="tab-inventory">Inventory</TabsTrigger>
@@ -1193,6 +1458,10 @@ export default function CuttingTable() {
 
         <TabsContent value="packetMgmt" className="mt-6" data-testid="content-packet-mgmt">
           {renderPacketManagement()}
+        </TabsContent>
+
+        <TabsContent value="configRecipes" className="mt-6" data-testid="content-config-recipes">
+          {renderConfigureRecipes()}
         </TabsContent>
 
         <TabsContent value="submit" className="mt-6" data-testid="content-submit">

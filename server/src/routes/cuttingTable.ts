@@ -8,6 +8,10 @@ import {
   insertCuttingWeeklyDataSchema,
   insertCuttingCutProgressSchema,
   insertCuttingFabricInventorySchema,
+  insertCuttingPacketSessionSchema,
+  insertCuttingPacketSessionLotSchema,
+  insertCuttingFabricInventoryTransactionSchema,
+  insertCuttingPacketCompositionSchema,
 } from '../../schema';
 
 const router = Router();
@@ -225,6 +229,204 @@ router.get('/packet-compositions', async (req, res) => {
   } catch (error) {
     console.error('Error fetching packet compositions:', error);
     res.status(500).json({ error: 'Failed to fetch packet compositions' });
+  }
+});
+
+// Packet Recipes - Get recipe (composition) for a specific category
+router.get('/packet-recipes/:categoryId', async (req, res) => {
+  try {
+    const compositions = await storage.getPacketCompositionsByCategory(req.params.categoryId);
+    
+    // Enrich with component details
+    const enrichedCompositions = await Promise.all(
+      compositions.map(async (comp) => {
+        const component = comp.componentId ? await storage.getCuttingComponent(comp.componentId) : null;
+        return {
+          ...comp,
+          component,
+        };
+      })
+    );
+    
+    res.json(enrichedCompositions);
+  } catch (error) {
+    console.error('Error fetching packet recipes:', error);
+    res.status(500).json({ error: 'Failed to fetch packet recipes' });
+  }
+});
+
+// Create packet composition
+router.post('/packet-compositions', async (req, res) => {
+  try {
+    const validatedData = insertCuttingPacketCompositionSchema.parse(req.body);
+    const composition = await storage.createPacketComposition(validatedData);
+    res.json(composition);
+  } catch (error) {
+    console.error('Error creating packet composition:', error);
+    res.status(400).json({ error: 'Failed to create packet composition' });
+  }
+});
+
+// Delete packet composition
+router.delete('/packet-compositions/:id', async (req, res) => {
+  try {
+    await storage.deletePacketComposition(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting packet composition:', error);
+    res.status(500).json({ error: 'Failed to delete packet composition' });
+  }
+});
+
+// Packet Sessions - Build a new packet with FIFO inventory consumption
+router.post('/packet-sessions/build', async (req, res) => {
+  try {
+    const {
+      productCategoryId,
+      packetsCount,
+      performedBy,
+      notes,
+    } = req.body;
+
+    if (!productCategoryId || !packetsCount || packetsCount <= 0) {
+      return res.status(400).json({ error: 'Product category and packets count required' });
+    }
+
+    // Get packet recipe (compositions)
+    const compositions = await storage.getPacketCompositionsByCategory(productCategoryId);
+    if (compositions.length === 0) {
+      return res.status(400).json({ error: 'No recipe found for this product category' });
+    }
+
+    // Phase 1: Simulate allocation to verify sufficient inventory
+    interface AllocationPlan {
+      componentId: string;
+      componentName: string;
+      totalNeeded: number;
+      wasteFactor: number;
+      lots: Array<{
+        inventoryLotId: string;
+        quantityToUse: number;
+        availableQty: number;
+      }>;
+    }
+    
+    const allocationPlans: AllocationPlan[] = [];
+    
+    for (const comp of compositions) {
+      const component = comp.componentId ? await storage.getCuttingComponent(comp.componentId) : null;
+      if (!component) {
+        return res.status(400).json({ 
+          error: `Component not found for composition ${comp.id}` 
+        });
+      }
+      if (!component.materialId) {
+        return res.status(400).json({ 
+          error: `Component ${component.componentName} has no material linked. Please configure material ID before building packets.` 
+        });
+      }
+
+      const totalNeeded = comp.quantityNeeded * packetsCount;
+      const wasteFactor = component.wasteFactor || 0.05;
+      const quantityWithWaste = Math.ceil(totalNeeded * (1 + wasteFactor));
+
+      // Get FIFO inventory for this material
+      const fifoInventory = await storage.getCuttingFabricInventoryFIFO(component.materialId);
+      
+      let remainingNeeded = quantityWithWaste;
+      const lotAllocations: AllocationPlan['lots'] = [];
+      
+      // Simulate allocation from FIFO lots
+      for (const inventoryLot of fifoInventory) {
+        if (remainingNeeded <= 0) break;
+        
+        const availableQty = inventoryLot.quantityOnHand || 0;
+        if (availableQty <= 0) continue;
+        
+        const quantityToUse = Math.min(remainingNeeded, availableQty);
+        
+        // Only allocate if it results in meaningful quantity
+        if (quantityToUse > 0) {
+          lotAllocations.push({
+            inventoryLotId: inventoryLot.id,
+            quantityToUse,
+            availableQty,
+          });
+          remainingNeeded -= quantityToUse;
+        }
+      }
+      
+      // Check if we have enough inventory for this component
+      if (remainingNeeded > 0) {
+        return res.status(400).json({ 
+          error: `Insufficient inventory for component ${component.componentName}. Need ${quantityWithWaste}, short by ${remainingNeeded}` 
+        });
+      }
+      
+      allocationPlans.push({
+        componentId: comp.componentId!,
+        componentName: component.componentName,
+        totalNeeded: quantityWithWaste,
+        wasteFactor,
+        lots: lotAllocations,
+      });
+    }
+
+    // Phase 2: All checks passed, now commit the allocation
+    const session = await storage.createCuttingPacketSession({
+      productCategoryId,
+      packetsCount,
+      status: 'COMPLETED',
+      performedBy,
+      notes,
+    });
+
+    const sessionLots = [];
+    const inventoryTransactions = [];
+
+    for (const plan of allocationPlans) {
+      for (const lotAlloc of plan.lots) {
+        // Calculate cuts from this lot (for audit purposes)
+        const cutsFromThisLot = Math.floor(lotAlloc.quantityToUse / (plan.totalNeeded / packetsCount));
+        
+        // Create session lot record
+        const sessionLot = await storage.createCuttingPacketSessionLot({
+          sessionId: session.id,
+          componentId: plan.componentId,
+          fabricInventoryId: lotAlloc.inventoryLotId,
+          cutsPlanned: Math.max(1, cutsFromThisLot), // At least 1 to avoid zero-cut records
+          quantityUsed: lotAlloc.quantityToUse,
+          wasteFactorApplied: plan.wasteFactor,
+        });
+        sessionLots.push(sessionLot);
+        
+        // Create inventory transaction (ISSUE)
+        const transaction = await storage.createCuttingFabricInventoryTransaction({
+          fabricInventoryId: lotAlloc.inventoryLotId,
+          sessionLotId: sessionLot.id,
+          changeType: 'ISSUE',
+          quantityDelta: -lotAlloc.quantityToUse,
+          notes: `Packet build session ${session.id} - ${plan.componentName}`,
+          performedBy,
+        });
+        inventoryTransactions.push(transaction);
+        
+        // Update inventory balance
+        const newBalance = lotAlloc.availableQty - lotAlloc.quantityToUse;
+        await storage.updateCuttingFabricInventory(lotAlloc.inventoryLotId, {
+          quantityOnHand: newBalance,
+        });
+      }
+    }
+
+    res.json({
+      session,
+      sessionLots,
+      inventoryTransactions,
+    });
+  } catch (error) {
+    console.error('Error building packet session:', error);
+    res.status(500).json({ error: 'Failed to build packet session' });
   }
 });
 

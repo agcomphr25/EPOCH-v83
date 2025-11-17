@@ -5273,9 +5273,12 @@ export const cuttingProductCategories = pgTable('cutting_product_categories', {
 export const cuttingComponents = pgTable('cutting_components', {
   id: uuid('id').defaultRandom().primaryKey(),
   componentName: text('component_name').notNull(),
+  materialId: uuid('material_id').references(() => cuttingMaterials.id),
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id), // Link to general inventory items (part numbers)
   yieldPerCut: integer('yield_per_cut'), // How many pieces per cut (e.g., 70 buttstocks, 500 wrist)
   fabricType: text('fabric_type'), // Carbon Fiber, Fiberglass, etc.
   thickness: text('thickness'), // Thin, Thick
+  wasteFactor: real('waste_factor').default(0.05), // Waste factor for calculations (e.g., 0.05 = 5%)
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -5285,7 +5288,8 @@ export const cuttingComponents = pgTable('cutting_components', {
 export const cuttingPacketCompositions = pgTable('cutting_packet_compositions', {
   id: uuid('id').defaultRandom().primaryKey(),
   productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
-  componentId: uuid('component_id').references(() => cuttingComponents.id),
+  componentId: uuid('component_id').references(() => cuttingComponents.id), // Nullable - can link via component or direct inventory item
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id), // Direct link to inventory items
   quantityNeeded: integer('quantity_needed').notNull(), // How many of this component per packet
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -5339,6 +5343,47 @@ export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  expirationIdx: index('cutting_fabric_inventory_expiration_idx').on(table.expirationDate),
+}));
+
+// Cutting Table - Packet Sessions (tracks when packets are built)
+export const cuttingPacketSessions = pgTable('cutting_packet_sessions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id).notNull(),
+  weekDate: date('week_date'), // Week this session is associated with
+  workDate: date('work_date'), // Actual work date
+  packetsTarget: integer('packets_target').notNull(), // How many packets being built
+  createdBy: text('created_by'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cutting Table - Packet Session Lots (tracks which inventory lots were used for a packet session)
+export const cuttingPacketSessionLots = pgTable('cutting_packet_session_lots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sessionId: uuid('session_id').references(() => cuttingPacketSessions.id, { onDelete: 'cascade' }).notNull(),
+  componentId: uuid('component_id').references(() => cuttingComponents.id).notNull(),
+  fabricInventoryId: uuid('fabric_inventory_id').references(() => cuttingFabricInventory.id).notNull(),
+  cutsPlanned: integer('cuts_planned').notNull(), // How many cuts planned from this lot
+  quantityUsed: integer('quantity_used').notNull(), // Quantity consumed from this lot
+  wasteFactorApplied: real('waste_factor_applied').default(0.05), // Waste factor used in calculation
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Cutting Table - Fabric Inventory Transactions (audit trail for all inventory changes)
+export const cuttingFabricInventoryTransactions = pgTable('cutting_fabric_inventory_transactions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  fabricInventoryId: uuid('fabric_inventory_id').references(() => cuttingFabricInventory.id).notNull(),
+  sessionLotId: uuid('session_lot_id').references(() => cuttingPacketSessionLots.id),
+  changeType: text('change_type').notNull(), // 'RECEIPT', 'ISSUE', 'ADJUSTMENT'
+  quantityDelta: integer('quantity_delta').notNull(), // Positive for receipts, negative for issues
+  notes: text('notes'),
+  performedBy: text('performed_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // Cutting Table Insert Schemas
@@ -5384,6 +5429,30 @@ export const insertCuttingFabricInventorySchema = createInsertSchema(cuttingFabr
   updatedAt: true,
 });
 
+export const insertCuttingPacketCompositionSchema = createInsertSchema(cuttingPacketCompositions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCuttingPacketSessionSchema = createInsertSchema(cuttingPacketSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCuttingPacketSessionLotSchema = createInsertSchema(cuttingPacketSessionLots).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCuttingFabricInventoryTransactionSchema = createInsertSchema(cuttingFabricInventoryTransactions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Cutting Table Types
 export type CuttingMaterial = typeof cuttingMaterials.$inferSelect;
 export type InsertCuttingMaterial = z.infer<typeof insertCuttingMaterialSchema>;
@@ -5405,6 +5474,18 @@ export type InsertCuttingCutProgress = z.infer<typeof insertCuttingCutProgressSc
 
 export type CuttingFabricInventory = typeof cuttingFabricInventory.$inferSelect;
 export type InsertCuttingFabricInventory = z.infer<typeof insertCuttingFabricInventorySchema>;
+
+export type CuttingPacketComposition = typeof cuttingPacketCompositions.$inferSelect;
+export type InsertCuttingPacketComposition = z.infer<typeof insertCuttingPacketCompositionSchema>;
+
+export type CuttingPacketSession = typeof cuttingPacketSessions.$inferSelect;
+export type InsertCuttingPacketSession = z.infer<typeof insertCuttingPacketSessionSchema>;
+
+export type CuttingPacketSessionLot = typeof cuttingPacketSessionLots.$inferSelect;
+export type InsertCuttingPacketSessionLot = z.infer<typeof insertCuttingPacketSessionLotSchema>;
+
+export type CuttingFabricInventoryTransaction = typeof cuttingFabricInventoryTransactions.$inferSelect;
+export type InsertCuttingFabricInventoryTransaction = z.infer<typeof insertCuttingFabricInventoryTransactionSchema>;
 
 // Controlled Documents - Master Document Register
 export const controlledDocuments = pgTable('controlled_documents', {

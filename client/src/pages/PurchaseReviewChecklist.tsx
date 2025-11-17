@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,6 +61,9 @@ export default function PurchaseReviewChecklist() {
   // Signature canvas reference
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
   const { toast } = useToast();
+  const [location] = useLocation();
+  const [submissionId, setSubmissionId] = useState<string | null>(null);
+  const [isLoadingSubmission, setIsLoadingSubmission] = useState(false);
 
   // Fetch P2 customers for dropdown including ship-to information
   const { data: p2Customers = [] } = useQuery({
@@ -206,6 +210,62 @@ export default function PurchaseReviewChecklist() {
     signature: '',
     date: '',
   });
+
+  // Load submission data if editing an existing submission
+  useEffect(() => {
+    const loadSubmission = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      
+      if (id) {
+        setSubmissionId(id);
+        setIsLoadingSubmission(true);
+        
+        try {
+          const response = await fetch(`/api/purchase-review-submissions/${id}`);
+          if (response.ok) {
+            const submission = await response.json();
+            
+            // Load form data
+            if (submission.formData) {
+              setFormData(submission.formData);
+              
+              // Load signature into canvas after a brief delay to ensure canvas is ready
+              if (submission.formData.signature && signatureCanvasRef.current) {
+                setTimeout(() => {
+                  if (signatureCanvasRef.current) {
+                    signatureCanvasRef.current.fromDataURL(submission.formData.signature);
+                  }
+                }, 100);
+              }
+            }
+            
+            toast({
+              title: 'Draft Loaded',
+              description: 'Your saved draft has been loaded for editing.',
+            });
+          } else {
+            toast({
+              title: 'Error',
+              description: 'Failed to load submission.',
+              variant: 'destructive',
+            });
+          }
+        } catch (error) {
+          console.error('Error loading submission:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to load submission.',
+            variant: 'destructive',
+          });
+        } finally {
+          setIsLoadingSubmission(false);
+        }
+      }
+    };
+    
+    loadSubmission();
+  }, []);
 
   // Calculate amount when quantity, unit price, tooling, or additional cost changes
   useEffect(() => {

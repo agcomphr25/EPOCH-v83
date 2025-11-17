@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Trash2, CheckCircle2, AlertCircle, Printer } from "lucide-react";
+import { Loader2, Plus, Trash2, CheckCircle2, AlertCircle, Printer, Edit } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 type Material = {
@@ -151,6 +151,8 @@ export default function CuttingTable() {
 
   // Form state for Inventory tab
   const [inventorySortBy, setInventorySortBy] = useState<'fabric' | 'expiration' | 'quantity'>('expiration');
+  const [editingFabric, setEditingFabric] = useState<FabricInventory | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   // Fetch all data
   const { data: materials = [], isLoading: loadingMaterials } = useQuery<Material[]>({
@@ -1426,18 +1428,33 @@ export default function CuttingTable() {
                           )}
                         </td>
                         <td className="p-2">
-                          {item.barcode ? (
+                          <div className="flex items-center gap-2">
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => window.open(`/api/cutting-table/fabric-inventory/${item.id}/print-barcode`, '_blank')}
-                              data-testid={`button-print-barcode-${item.id}`}
+                              onClick={() => {
+                                setEditingFabric(item);
+                                setEditDialogOpen(true);
+                              }}
+                              data-testid={`button-edit-fabric-${item.id}`}
                               className="flex items-center gap-1 text-xs"
                             >
-                              <Printer className="w-3 h-3" />
-                              Print
+                              <Edit className="w-3 h-3" />
+                              Edit
                             </Button>
-                          ) : null}
+                            {item.barcode && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => window.open(`/api/cutting-table/fabric-inventory/${item.id}/print-barcode`, '_blank')}
+                                data-testid={`button-print-barcode-${item.id}`}
+                                className="flex items-center gap-1 text-xs"
+                              >
+                                <Printer className="w-3 h-3" />
+                                Print
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1447,6 +1464,121 @@ export default function CuttingTable() {
             </div>
           )}
         </Card>
+
+        {/* Edit Fabric Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Fabric Inventory</DialogTitle>
+            </DialogHeader>
+            {editingFabric && (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  try {
+                    await apiRequest(`/api/cutting-table/fabric-inventory/${editingFabric.id}`, {
+                      method: 'PATCH',
+                      body: JSON.stringify(editingFabric),
+                    });
+                    
+                    toast({
+                      title: "Success",
+                      description: "Fabric inventory updated successfully"
+                    });
+                    
+                    setEditDialogOpen(false);
+                    setEditingFabric(null);
+                    queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
+                  } catch (error) {
+                    toast({
+                      title: "Error",
+                      description: "Failed to update fabric inventory",
+                      variant: "destructive"
+                    });
+                  }
+                }}
+                className="space-y-4"
+              >
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Quantity in Stock *</label>
+                    <Input
+                      type="number"
+                      value={editingFabric.quantityInStock}
+                      onChange={(e) => setEditingFabric({ ...editingFabric, quantityInStock: parseInt(e.target.value) || 0 })}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Low Stock Threshold</label>
+                    <Input
+                      type="number"
+                      value={editingFabric.lowStockThreshold}
+                      onChange={(e) => setEditingFabric({ ...editingFabric, lowStockThreshold: parseInt(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Location</label>
+                  <Input
+                    type="text"
+                    value={editingFabric.location || ''}
+                    onChange={(e) => setEditingFabric({ ...editingFabric, location: e.target.value })}
+                    placeholder="e.g., Warehouse A, Shelf 3"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Received Date</label>
+                    <Input
+                      type="date"
+                      value={editingFabric.receivedDate || ''}
+                      onChange={(e) => setEditingFabric({ ...editingFabric, receivedDate: e.target.value })}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Expiration Date</label>
+                    <Input
+                      type="date"
+                      value={editingFabric.expirationDate || ''}
+                      onChange={(e) => setEditingFabric({ ...editingFabric, expirationDate: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Notes</label>
+                  <Input
+                    type="text"
+                    value={editingFabric.notes || ''}
+                    onChange={(e) => setEditingFabric({ ...editingFabric, notes: e.target.value })}
+                    placeholder="Additional notes"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditDialogOpen(false);
+                      setEditingFabric(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit">
+                    Save Changes
+                  </Button>
+                </div>
+              </form>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     );
   };

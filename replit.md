@@ -19,6 +19,7 @@ Balance due access: Customer balance due tracking is restricted to username "gle
 ## Recent Changes
 
 **2025-11-17** (Latest):
+- Added Edit functionality to Fabric Inventory: Each fabric inventory item now has an Edit button in the Actions column. Opens a dialog with form to edit quantity in stock, low stock threshold, location, received date, expiration date, and notes. Backend PATCH endpoint added at `/api/cutting-table/fabric-inventory/:id`.
 - Added Part Number Quick Entry to Cutting Table Configure Recipes: New input field allows typing AG part numbers directly to auto-select inventory items. Field performs real-time lookup and automatically populates the dropdown when a matching packet part is found. Includes uppercase auto-formatting and helpful placeholder text for faster data entry.
 
 **2025-11-17** (3:39 PM):

@@ -630,6 +630,17 @@ router.put('/fabric-inventory/:id', async (req, res) => {
   }
 });
 
+router.patch('/fabric-inventory/:id', async (req, res) => {
+  try {
+    const validatedData = insertCuttingFabricInventorySchema.partial().parse(req.body);
+    const inventory = await storage.updateCuttingFabricInventory(req.params.id, validatedData);
+    res.json(inventory);
+  } catch (error) {
+    console.error('Error updating fabric inventory:', error);
+    res.status(400).json({ error: 'Failed to update fabric inventory' });
+  }
+});
+
 router.delete('/fabric-inventory/:id', async (req, res) => {
   try {
     await storage.deleteCuttingFabricInventory(req.params.id);

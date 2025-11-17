@@ -895,4 +895,62 @@ router.get('/:id/balance-due', async (req: Request, res: Response) => {
   }
 });
 
+// P2 Purchase Order Items Routes
+router.get(
+  '/purchase-orders/:id/items',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const items = await storage.getP2PurchaseOrderItems(parseInt(id));
+      res.json(items);
+    } catch (error) {
+      console.error('Error fetching P2 purchase order items:', error);
+      res.status(500).json({ error: 'Failed to fetch P2 purchase order items' });
+    }
+  }
+);
+
+router.post(
+  '/purchase-orders/:id/items',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const itemData = { ...req.body, poId: parseInt(id) };
+      const item = await storage.createP2PurchaseOrderItem(itemData);
+      res.status(201).json(item);
+    } catch (error) {
+      console.error('Error creating P2 purchase order item:', error);
+      res.status(500).json({ error: 'Failed to create P2 purchase order item' });
+    }
+  }
+);
+
+router.put(
+  '/purchase-orders/:poId/items/:itemId',
+  async (req: Request, res: Response) => {
+    try {
+      const { itemId } = req.params;
+      const item = await storage.updateP2PurchaseOrderItem(parseInt(itemId), req.body);
+      res.json(item);
+    } catch (error) {
+      console.error('Error updating P2 purchase order item:', error);
+      res.status(500).json({ error: 'Failed to update P2 purchase order item' });
+    }
+  }
+);
+
+router.delete(
+  '/purchase-orders/:poId/items/:itemId',
+  async (req: Request, res: Response) => {
+    try {
+      const { itemId } = req.params;
+      await storage.deleteP2PurchaseOrderItem(parseInt(itemId));
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting P2 purchase order item:', error);
+      res.status(500).json({ error: 'Failed to delete P2 purchase order item' });
+    }
+  }
+);
+
 export default router;

@@ -18,6 +18,7 @@ Balance due access: Customer balance due tracking is restricted to username "gle
 
 ## Recent Changes
 
+
 **2025-11-17** (7:00 PM):
 - Added Square Meters field to Add Fabric Inventory: New "Square Meters (m²)" field allows tracking total fabric area for each inventory lot. Database column `square_meters` added to `cutting_fabric_inventory` table as optional numeric(10,2) field. Form includes decimal input with step 0.01 for precise measurements.
 
@@ -35,6 +36,10 @@ Balance due access: Customer balance due tracking is restricted to username "gle
 - Fixed missing columns in cutting_components table: Added `material_id` and `waste_factor` columns via SQL ALTER statement.
 - Added Edit functionality to Fabric Inventory: Each fabric inventory item now has an Edit button in the Actions column. Opens a dialog with form to edit quantity in stock, low stock threshold, location, received date, expiration date, and notes. Backend PATCH endpoint added at `/api/cutting-table/fabric-inventory/:id`.
 - Added Part Number Quick Entry to Cutting Table Configure Recipes: New input field allows typing AG part numbers directly to auto-select inventory items. Field performs real-time lookup and automatically populates the dropdown when a matching packet part is found. Includes uppercase auto-formatting and helpful placeholder text for faster data entry.
+
+**2025-11-17** (5:37 PM):
+- Implemented dynamic discount system with saved metadata: Added `discount_type`, `discount_value`, and `discount_applies_to` columns to `all_orders` table. Orders now save discount metadata (percent/fixed, value, scope) at creation time, enabling dynamic recalculation when stock model prices change while preserving original discount intent. Example: 10% off a $1000 stock automatically becomes $120 off when the stock price increases to $1200. Edit mode reconstructs discount details from saved metadata instead of querying discount_codes table, ensuring stability even if discount codes are later modified or deleted. Backward compatible fallback for orders created before this feature.
+
 
 **2025-11-17** (3:39 PM):
 - Fixed discount display issue in Order Entry: Discounts were not showing in order summary because discount details map was created but never saved to state. Solution: Added `discountDetailsMap` state variable, updated `loadDiscountCodes` to save the map, and modified `calculateDiscountAmount` to use map directly instead of async-loaded details. Discounts now display immediately when selected.

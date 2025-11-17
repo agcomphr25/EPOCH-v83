@@ -1791,6 +1791,33 @@ export default function OrderEntry() {
         console.warn('Could not fetch stock BOMs for auto-linking:', error);
       }
 
+      // Extract discount metadata from discountDetailsMap
+      let discountType = null;
+      let discountValue = null;
+      let discountAppliesTo = null;
+
+      if (discountCode && discountCode !== 'none') {
+        if (discountCode === 'custom' || showCustomDiscount) {
+          // Custom discount
+          discountType = customDiscountType; // 'percent' or 'fixed'
+          discountValue = customDiscountValue;
+          discountAppliesTo = 'total_order'; // Custom discounts always apply to total
+        } else {
+          // Predefined discount code - get metadata from map
+          const discountDetails = discountDetailsMap[discountCode];
+          if (discountDetails) {
+            if (discountDetails.percent) {
+              discountType = 'percent';
+              discountValue = discountDetails.percent;
+            } else if (discountDetails.fixedAmount) {
+              discountType = 'fixed';
+              discountValue = discountDetails.fixedAmount / 100; // Convert cents to dollars
+            }
+            discountAppliesTo = discountDetails.appliesTo || 'total_order';
+          }
+        }
+      }
+
       const orderData = {
         customerId: customer.id.toString(),
         modelId,
@@ -1808,6 +1835,9 @@ export default function OrderEntry() {
         isCustomOrder: isCustomOrder ? 'yes' : 'no',
         notes,
         discountCode,
+        discountType,
+        discountValue,
+        discountAppliesTo,
         customDiscountType,
         customDiscountValue,
         showCustomDiscount,

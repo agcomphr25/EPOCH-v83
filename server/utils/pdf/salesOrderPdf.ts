@@ -51,6 +51,8 @@ interface OrderData {
   total?: number;
   paymentStatus?: 'PAID' | 'PENDING';
   discountCode?: string;
+  discountDisplayName?: string;
+  discountAppliesTo?: 'stock_model' | 'total_order';
   customDiscountType?: string;
   customDiscountValue?: number;
   showCustomDiscount?: boolean;
@@ -717,17 +719,25 @@ export async function generateSalesOrderPDF(
   // Discount (if applicable)
   let discountAmount = 0;
   if (orderData.showCustomDiscount && orderData.customDiscountValue) {
+    // Determine the base amount for discount calculation
+    const baseAmountForDiscount = orderData.discountAppliesTo === 'stock_model' 
+      ? basePrice  // Apply only to stock model price
+      : calculatedSubtotal;  // Apply to full subtotal
+    
     if (orderData.customDiscountType === 'percent') {
-      discountAmount = calculatedSubtotal * (orderData.customDiscountValue / 100);
+      discountAmount = baseAmountForDiscount * (orderData.customDiscountValue / 100);
     } else {
       discountAmount = orderData.customDiscountValue;
     }
 
-    const discountLabel = orderData.discountCode 
-      ? `Discount (${orderData.discountCode}):`
-      : orderData.customDiscountType === 'percent'
-        ? `Discount (${orderData.customDiscountValue}%):`
-        : 'Discount:';
+    // Use friendly display name if available, otherwise fall back to code or generic label
+    const discountLabel = orderData.discountDisplayName 
+      ? `Discount (${orderData.discountDisplayName}):`
+      : orderData.discountCode 
+        ? `Discount (${orderData.discountCode}):`
+        : orderData.customDiscountType === 'percent'
+          ? `Discount (${orderData.customDiscountValue}%):`
+          : 'Discount:';
 
     page.drawText(discountLabel, {
       x: margin + 8,

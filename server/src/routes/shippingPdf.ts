@@ -1053,6 +1053,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     let calculatedDiscountType: string | undefined;
     let calculatedDiscountValue: number | undefined;
     let calculatedDiscountCode: string | undefined;
+    let calculatedDiscountDisplayName: string | undefined;
+    let calculatedDiscountAppliesTo: 'stock_model' | 'total_order' | undefined;
     let shouldShowDiscount = false;
 
     // Get persistent and seasonal discounts to check if this order has one
@@ -1080,6 +1082,12 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       if (discount && discount.isActive) {
         shouldShowDiscount = true;
         
+        // Get the display name from the discount
+        calculatedDiscountDisplayName = discount.name || discount.description || order.discountCode;
+        
+        // Get the appliesTo setting
+        calculatedDiscountAppliesTo = discount.appliesTo || 'total_order';
+        
         if (discount.percent !== null && discount.percent > 0) {
           calculatedDiscountType = 'percent';
           calculatedDiscountValue = discount.percent;
@@ -1089,7 +1097,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         }
         
         const discountType = order.discountCode.startsWith('short_term_') ? 'Seasonal' : 'Persistent';
-        console.log(`📄 [Discount Fix] ${discountType} discount found: ${order.discountCode} -> ${calculatedDiscountType} ${calculatedDiscountValue}`);
+        console.log(`📄 [Discount Fix] ${discountType} discount found: ${order.discountCode} -> ${calculatedDiscountType} ${calculatedDiscountValue}, appliesTo: ${calculatedDiscountAppliesTo}, displayName: ${calculatedDiscountDisplayName}`);
       }
     }
     
@@ -1099,6 +1107,7 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       calculatedDiscountType = order.customDiscountType || 'percent';
       calculatedDiscountValue = order.customDiscountValue;
       calculatedDiscountCode = order.discountCode || undefined;
+      // Keep the display name and appliesTo from above if they were set
       console.log(`📄 [Discount Fix] Using existing custom discount: ${calculatedDiscountType} ${calculatedDiscountValue}`);
     }
     
@@ -1156,6 +1165,8 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
       paymentStatus: paymentStatus as 'PAID' | 'PENDING',
       // Use calculated discount information
       discountCode: calculatedDiscountCode || undefined,
+      discountDisplayName: calculatedDiscountDisplayName || undefined,
+      discountAppliesTo: calculatedDiscountAppliesTo || undefined,
       customDiscountType: calculatedDiscountType || undefined,
       customDiscountValue: calculatedDiscountValue || undefined,
       showCustomDiscount: shouldShowDiscount,

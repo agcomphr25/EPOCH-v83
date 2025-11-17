@@ -45,6 +45,9 @@ import {
   FileText,
   Package,
   Calendar,
+  Upload,
+  X,
+  ExternalLink,
 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { format } from 'date-fns';
@@ -77,6 +80,7 @@ interface P2PurchaseOrder
   id: number;
   poDate: string;
   expectedDelivery: string;
+  attachments?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -88,6 +92,7 @@ interface P2POManagerProps {
 export function P2POManager({ onManageItems }: P2POManagerProps) {
   const [selectedPO, setSelectedPO] = useState<P2PurchaseOrder | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -238,6 +243,104 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
       notes: '',
     });
     setDialogOpen(true);
+  };
+
+  const handleAttachmentUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedPO) return;
+
+    if (file.type !== 'application/pdf') {
+      toast({
+        title: 'Invalid file type',
+        description: 'Please upload a PDF file',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUploadingAttachment(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(
+        `/api/p2-purchase-orders/${selectedPO.id}/upload-attachment`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+
+      if (!response.ok) throw new Error('Upload failed');
+
+      const data = await response.json();
+      
+      await queryClient.invalidateQueries({
+        queryKey: ['/api/p2-purchase-orders-bypass'],
+      });
+      
+      // Refresh selectedPO with latest data from the query cache
+      const updatedData = queryClient.getQueryData<P2PurchaseOrder[]>([
+        '/api/p2-purchase-orders-bypass',
+      ]);
+      const updatedPO = updatedData?.find((po) => po.id === selectedPO.id);
+      if (updatedPO) {
+        setSelectedPO(updatedPO);
+      }
+      
+      toast({ title: 'Attachment uploaded successfully' });
+      
+      // Reset the input
+      e.target.value = '';
+    } catch (error) {
+      toast({
+        title: 'Upload failed',
+        description: 'Failed to upload attachment',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentUrl: string) => {
+    if (!selectedPO) return;
+
+    try {
+      const response = await fetch(
+        `/api/p2-purchase-orders/${selectedPO.id}/attachment`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ attachmentUrl }),
+        }
+      );
+
+      if (!response.ok) throw new Error('Delete failed');
+
+      await queryClient.invalidateQueries({
+        queryKey: ['/api/p2-purchase-orders-bypass'],
+      });
+      
+      // Refresh selectedPO with latest data from the query cache
+      const updatedData = queryClient.getQueryData<P2PurchaseOrder[]>([
+        '/api/p2-purchase-orders-bypass',
+      ]);
+      const updatedPO = updatedData?.find((po) => po.id === selectedPO.id);
+      if (updatedPO) {
+        setSelectedPO(updatedPO);
+      }
+      
+      toast({ title: 'Attachment removed successfully' });
+    } catch (error) {
+      toast({
+        title: 'Delete failed',
+        description: 'Failed to remove attachment',
+        variant: 'destructive',
+      });
+    }
   };
 
   const getStatusBadgeVariant = (status: string) => {
@@ -410,6 +513,90 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                     </FormItem>
                   )}
                 />
+
+                {/* PDF Attachments Section - Only show when editing */}
+                {selectedPO && (
+                  <div className="space-y-3 border-t pt-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-medium">PDF Attachments</h3>
+                      <label className="cursor-pointer">
+                        <Input
+                          type="file"
+                          accept="application/pdf"
+                          onChange={handleAttachmentUpload}
+                          className="hidden"
+                          disabled={uploadingAttachment}
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={uploadingAttachment}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            (e.currentTarget.previousElementSibling as HTMLInputElement)?.click();
+                          }}
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          {uploadingAttachment ? 'Uploading...' : 'Upload PDF'}
+                        </Button>
+                      </label>
+                    </div>
+
+                    {selectedPO.attachments && selectedPO.attachments.length > 0 ? (
+                      <div className="space-y-2">
+                        {selectedPO.attachments.map((attachmentUrl, index) => {
+                          const filename = attachmentUrl.split('/').pop() || 'document.pdf';
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between p-2 border rounded-lg bg-gray-50 dark:bg-gray-800"
+                            >
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <FileText className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                                <span className="text-sm truncate">{filename}</span>
+                              </div>
+                              <div className="flex gap-1 flex-shrink-0">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => window.open(attachmentUrl, '_blank')}
+                                  title="View PDF"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    if (
+                                      confirm(
+                                        'Are you sure you want to delete this attachment?'
+                                      )
+                                    ) {
+                                      handleDeleteAttachment(attachmentUrl);
+                                    }
+                                  }}
+                                  title="Delete attachment"
+                                >
+                                  <X className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No attachments yet. Upload PDFs to attach them to this purchase
+                        order.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex justify-end space-x-2">
                   <Button
                     type="button"

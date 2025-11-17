@@ -164,12 +164,16 @@ app.use((req, res, next) => {
         const { vendors } = await import('./schema');
         const { eq } = await import('drizzle-orm');
         
-        // Reset all vendor evaluation statuses
+        // Reset all vendor evaluation statuses and scores
         const result = await db
           .update(vendors)
           .set({
             evaluated: false,
             evaluationDate: null,
+            qualityScore: null,
+            costScore: null,
+            deliveryScore: null,
+            responseScore: null,
           })
           .returning();
         

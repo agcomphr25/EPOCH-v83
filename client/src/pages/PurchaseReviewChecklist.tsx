@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,8 @@ import { Separator } from '@/components/ui/separator';
 import { Save, Printer, Download, FileText } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { COMPANY_INFO } from '@shared/company-config';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 
 // SmartyStreets address autocomplete hook
 const useSmartyStreetsAutocomplete = (query: string) => {
@@ -57,10 +59,11 @@ const useSmartyStreetsAutocomplete = (query: string) => {
 export default function PurchaseReviewChecklist() {
   // Signature canvas reference
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
+  const { toast } = useToast();
 
   // Fetch P2 customers for dropdown including ship-to information
   const { data: p2Customers = [] } = useQuery({
-    queryKey: ['/api/p2/customers'],
+    queryKey: ['/api/p2-customers-bypass'],
     select: (data: any[]) =>
       data.map((customer) => ({
         id: customer.id,
@@ -68,6 +71,42 @@ export default function PurchaseReviewChecklist() {
         customerName: customer.customerName,
         shipToAddress: customer.shipToAddress,
       })),
+  });
+
+  // Fetch quotes for dropdown
+  const { data: quotes = [] } = useQuery({
+    queryKey: ['/api/quotes'],
+    select: (data: any[]) =>
+      data.map((quote) => ({
+        id: quote.id,
+        quoteNumber: quote.quoteNumber,
+        customerName: quote.customerName,
+        description: quote.description,
+        totalAmount: quote.totalAmount,
+      })),
+  });
+
+  // Submit checklist mutation
+  const submitChecklistMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await apiRequest('/api/purchase-review-submissions', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Success',
+        description: 'Purchase Review Checklist saved successfully!',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to save checklist. Please try again.',
+        variant: 'destructive',
+      });
+    },
   });
 
   // Address autocomplete state
@@ -79,6 +118,7 @@ export default function PurchaseReviewChecklist() {
   const [formData, setFormData] = useState({
     // Section A - Customer Information - moved customerId to top
     customerId: '',
+    quoteId: '',
     existingCustomer: '',
     significantChanges: '',
     companyName: '',
@@ -285,37 +325,21 @@ export default function PurchaseReviewChecklist() {
   };
 
   const handleSave = async () => {
-    try {
-      console.log('Saving form data:', formData);
-
-      const checklistData = {
-        customerId: formData.customerId || null,
-        formData: formData,
-        createdBy: 'current_user', // Replace with actual user context
-        status: 'DRAFT' as const,
-      };
-
-      const response = await fetch('/api/purchase-review-checklists', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(checklistData),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save checklist');
-      }
-
-      const result = await response.json();
-      console.log('Checklist saved successfully:', result);
-
-      // Show success message
-      alert('Purchase Review Checklist saved successfully!');
-    } catch (error) {
-      console.error('Error saving checklist:', error);
-      alert('Failed to save checklist. Please try again.');
+    // Save signature if present
+    if (signatureCanvasRef.current && !signatureCanvasRef.current.isEmpty()) {
+      const signatureData = signatureCanvasRef.current.toDataURL();
+      setFormData((prev) => ({ ...prev, signature: signatureData }));
     }
+
+    const submissionData = {
+      customerId: formData.customerId || null,
+      quoteId: formData.quoteId || null,
+      formData: formData,
+      createdBy: 'current_user', // TODO: Replace with actual user context
+      status: 'DRAFT' as const,
+    };
+
+    submitChecklistMutation.mutate(submissionData);
   };
 
   const handlePrint = () => {
@@ -347,9 +371,14 @@ export default function PurchaseReviewChecklist() {
 
           {/* Action Buttons */}
           <div className="flex justify-center gap-3 mb-6">
-            <Button onClick={handleSave} className="flex items-center gap-2">
+            <Button 
+              onClick={handleSave} 
+              className="flex items-center gap-2"
+              disabled={submitChecklistMutation.isPending}
+              data-testid="button-save-checklist"
+            >
               <Save className="h-4 w-4" />
-              Save Form
+              {submitChecklistMutation.isPending ? 'Saving...' : 'Save Form'}
             </Button>
             <Button
               onClick={handlePrint}
@@ -371,7 +400,7 @@ export default function PurchaseReviewChecklist() {
           <CardHeader>
             <CardTitle>Customer Selection</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="customerId">Select Customer</Label>
               <Select
@@ -387,6 +416,32 @@ export default function PurchaseReviewChecklist() {
                       {customer.customerName} ({customer.customerId})
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="quoteId">Select Quote</Label>
+              <Select
+                value={formData.quoteId}
+                onValueChange={(value) => handleInputChange('quoteId', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a quote (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {quotes.length === 0 ? (
+                    <SelectItem value="none" disabled>
+                      No quotes available
+                    </SelectItem>
+                  ) : (
+                    quotes.map((quote) => (
+                      <SelectItem key={quote.id} value={quote.id}>
+                        {quote.quoteNumber} - {quote.customerName} 
+                        {quote.description && ` (${quote.description})`}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>

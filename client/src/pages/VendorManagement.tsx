@@ -55,6 +55,7 @@ import {
   Upload,
   FileText,
   X,
+  RefreshCw,
 } from 'lucide-react';
 import Papa from 'papaparse';
 import {
@@ -319,6 +320,28 @@ export default function VendorManagement() {
     },
   });
 
+  // Reset monthly evaluations mutation
+  const resetEvaluationsMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('/api/vendors/reset-monthly-evaluations', {
+        method: 'POST',
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+      toast({ 
+        title: 'Monthly evaluations reset', 
+        description: `Successfully reset ${data.vendorsReset} vendors` 
+      });
+    },
+    onError: () => {
+      toast({ 
+        title: 'Failed to reset evaluations', 
+        variant: 'destructive' 
+      });
+    },
+  });
+
   // Contact management state
   const [editingContact, setEditingContact] = useState<VendorContact | null>(
     null
@@ -466,6 +489,9 @@ export default function VendorManagement() {
   });
 
   const handleOpenModal = (vendor?: Vendor) => {
+    // Reset file upload state when opening modal
+    setUploadedFile(null);
+    
     if (vendor) {
       setEditingVendor(vendor);
       form.reset({
@@ -854,6 +880,19 @@ export default function VendorManagement() {
           >
             <Upload className="w-4 h-4 mr-2" />
             Import CSV
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (confirm('This will reset all vendor evaluation statuses and scores. Are you sure you want to continue?')) {
+                resetEvaluationsMutation.mutate();
+              }
+            }}
+            disabled={resetEvaluationsMutation.isPending}
+            data-testid="button-reset-evaluations"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${resetEvaluationsMutation.isPending ? 'animate-spin' : ''}`} />
+            {resetEvaluationsMutation.isPending ? 'Resetting...' : 'Reset Evaluations'}
           </Button>
           <Button
             onClick={() => handleOpenModal()}
@@ -1525,7 +1564,11 @@ export default function VendorManagement() {
                             <div className="flex items-center gap-2">
                               <FileText className="w-5 h-5 text-blue-600" />
                               <span className="text-sm font-medium">
-                                {uploadedFile?.name || 'Approval Document.pdf'}
+                                {uploadedFile?.name || (
+                                  form.watch('approvalPdfUrl')
+                                    ? form.watch('approvalPdfUrl').split('/').pop()
+                                    : 'Approval Document.pdf'
+                                )}
                               </span>
                             </div>
                             <Button

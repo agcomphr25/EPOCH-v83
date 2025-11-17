@@ -5625,4 +5625,144 @@ export const insertPdfTemplateSchema = createInsertSchema(pdfTemplates).omit({
 export type PdfTemplate = typeof pdfTemplates.$inferSelect;
 export type InsertPdfTemplate = z.infer<typeof insertPdfTemplateSchema>;
 
+// Quotes - Customer quotes for P2 business (stub for future implementation)
+export const quotes = pgTable('quotes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  quoteNumber: text('quote_number').notNull().unique(),
+  customerId: text('customer_id').notNull(),
+  customerName: text('customer_name').notNull(),
+  description: text('description'),
+  totalAmount: real('total_amount').notNull().default(0),
+  status: text('status').notNull().default('DRAFT'), // DRAFT, SENT, ACCEPTED, REJECTED, EXPIRED
+  validUntil: timestamp('valid_until'),
+  quotedBy: text('quoted_by'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert Schema
+export const insertQuoteSchema = createInsertSchema(quotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types
+export type Quote = typeof quotes.$inferSelect;
+export type InsertQuote = z.infer<typeof insertQuoteSchema>;
+
+// Purchase Review Checklist Submissions
+export const purchaseReviewChecklistSubmissions = pgTable('purchase_review_checklist_submissions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  
+  // References
+  customerId: text('customer_id'),
+  quoteId: text('quote_id'),
+  
+  // Section A - Customer Information
+  existingCustomer: text('existing_customer'),
+  significantChanges: text('significant_changes'),
+  companyName: text('company_name'),
+  address: text('address'),
+  contractingOfficer: text('contracting_officer'),
+  phone: text('phone'),
+  email: text('email'),
+  ffl: text('ffl'),
+  fflCopyOnHand: text('ffl_copy_on_hand'),
+  creditCheckAuth: text('credit_check_auth'),
+  creditApproval: text('credit_approval'),
+  poNumber: text('po_number'),
+  contractNumber: text('contract_number'),
+  invoiceRemittance: text('invoice_remittance'),
+  paymentTerms: text('payment_terms'),
+  earlyPayDiscount: text('early_pay_discount'),
+  paymentMethod: text('payment_method'),
+  paymentMethodOther: text('payment_method_other'),
+  
+  // Section B - Service/Product Requested and Prices
+  outsideServices: text('outside_services'),
+  quantityRequested: text('quantity_requested'),
+  unitOfMeasure: text('unit_of_measure'),
+  unitPrice: text('unit_price'),
+  toolingPrice: text('tooling_price'),
+  additionalItems: text('additional_items'),
+  additionalCost: text('additional_cost'),
+  amount: text('amount'),
+  disbursementSchedule: text('disbursement_schedule'),
+  
+  // Level 1 Assembly
+  level1ItemNumber: text('level1_item_number'),
+  level1PartsKits: text('level1_parts_kits'),
+  level1Exhibits: text('level1_exhibits'),
+  
+  // Level 2 CNC
+  level2ItemNumber: text('level2_item_number'),
+  level2PartsKits: text('level2_parts_kits'),
+  level2Programming: text('level2_programming'),
+  
+  // Level 3 Manufacturing
+  level3ItemNumber: text('level3_item_number'),
+  level3PartsKits: text('level3_parts_kits'),
+  level3Exhibits: text('level3_exhibits'),
+  
+  // Section C - Description/Specifications
+  criticalSafetyItems: text('critical_safety_items'),
+  qualityRequirements: text('quality_requirements'),
+  acceptanceRejectionCriteria: text('acceptance_rejection_criteria'),
+  verificationOperations: text('verification_operations'),
+  verificationRequirements: text('verification_requirements'),
+  verificationSequence: text('verification_sequence'),
+  measurementResults: text('measurement_results'),
+  measurementEquipment: text('measurement_equipment'),
+  specialInstructions: text('special_instructions'),
+  materialSourcing: text('material_sourcing'),
+  optionalDesignElements: text('optional_design_elements'),
+  tolerancesProvided: text('tolerances_provided'),
+  
+  // Section D - Inspection and Acceptance
+  firstArticleQuantity: text('first_article_quantity'),
+  firstArticleDueDate: text('first_article_due_date'),
+  inspectionLocation: text('inspection_location'),
+  acceptanceTimeframe: text('acceptance_timeframe'),
+  
+  // Section E - Shipping
+  specialPackaging: text('special_packaging'),
+  specialMarking: text('special_marking'),
+  fobType: text('fob_type'),
+  shippingCompany: text('shipping_company'),
+  clientAccountNumber: text('client_account_number'),
+  shippingType: text('shipping_type'),
+  deliverySchedule: text('delivery_schedule'),
+  shipToInformation: text('ship_to_information'),
+  
+  // Section F - Special Contract Requirements
+  certifications: text('certifications').array(),
+  retentionRequirements: text('retention_requirements'),
+  dpasRating: text('dpas_rating'),
+  
+  // Reviewers
+  reviewerName: text('reviewer_name'),
+  reviewerTitle: text('reviewer_title'),
+  acceptance: text('acceptance'),
+  signature: text('signature'), // Base64 encoded signature image
+  date: text('date'),
+  
+  // Metadata
+  submittedBy: text('submitted_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert Schema
+export const insertPurchaseReviewChecklistSubmissionSchema = createInsertSchema(purchaseReviewChecklistSubmissions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types
+export type PurchaseReviewChecklistSubmission = typeof purchaseReviewChecklistSubmissions.$inferSelect;
+export type InsertPurchaseReviewChecklistSubmission = z.infer<typeof insertPurchaseReviewChecklistSubmissionSchema>;
+
 export * from './calendar.schema';

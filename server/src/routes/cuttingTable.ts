@@ -278,7 +278,7 @@ router.delete('/packet-compositions/:id', async (req, res) => {
   }
 });
 
-// Packet Sessions - Build a new packet with FIFO inventory consumption
+// Packet Sessions - Build packets with inventory consumption
 router.post('/packet-sessions/build', async (req, res) => {
   try {
     const {
@@ -298,131 +298,119 @@ router.post('/packet-sessions/build', async (req, res) => {
       return res.status(400).json({ error: 'No recipe found for this product category' });
     }
 
-    // Phase 1: Simulate allocation to verify sufficient inventory
-    interface AllocationPlan {
-      componentId: string;
-      componentName: string;
-      totalNeeded: number;
-      wasteFactor: number;
-      lots: Array<{
-        inventoryLotId: string;
-        quantityToUse: number;
-        availableQty: number;
-      }>;
+    // Phase 1: Verify inventory availability for all items
+    interface ItemConsumption {
+      type: 'inventory_item';
+      inventoryItemId: number;
+      itemName: string;
+      itemPartNumber: string;
+      quantityNeeded: number;
+      availableQty: number;
     }
     
-    const allocationPlans: AllocationPlan[] = [];
+    const itemConsumptions: ItemConsumption[] = [];
+    let hasLegacyComponents = false;
     
     for (const comp of compositions) {
-      const component = comp.componentId ? await storage.getCuttingComponent(comp.componentId) : null;
-      if (!component) {
-        return res.status(400).json({ 
-          error: `Component not found for composition ${comp.id}` 
-        });
-      }
-      if (!component.materialId) {
-        return res.status(400).json({ 
-          error: `Component ${component.componentName} has no material linked. Please configure material ID before building packets.` 
-        });
+      // Check if this is a legacy component-based recipe
+      if (comp.componentId && !comp.inventoryItemId) {
+        hasLegacyComponents = true;
+        continue; // Skip legacy components - they would need fabric inventory logic
       }
 
-      const totalNeeded = comp.quantityNeeded * packetsCount;
-      const wasteFactor = component.wasteFactor || 0.05;
-      const quantityWithWaste = Math.ceil(totalNeeded * (1 + wasteFactor));
-
-      // Get FIFO inventory for this material
-      const fifoInventory = await storage.getCuttingFabricInventoryFIFO(component.materialId);
-      
-      let remainingNeeded = quantityWithWaste;
-      const lotAllocations: AllocationPlan['lots'] = [];
-      
-      // Simulate allocation from FIFO lots
-      for (const inventoryLot of fifoInventory) {
-        if (remainingNeeded <= 0) break;
-        
-        const availableQty = inventoryLot.quantityOnHand || 0;
-        if (availableQty <= 0) continue;
-        
-        const quantityToUse = Math.min(remainingNeeded, availableQty);
-        
-        // Only allocate if it results in meaningful quantity
-        if (quantityToUse > 0) {
-          lotAllocations.push({
-            inventoryLotId: inventoryLot.id,
-            quantityToUse,
-            availableQty,
+      // Handle inventory item-based recipe
+      if (comp.inventoryItemId) {
+        // Get inventory item details
+        const inventoryItem = await storage.getInventoryItem(comp.inventoryItemId);
+        if (!inventoryItem) {
+          return res.status(400).json({ 
+            error: `Inventory item not found for composition ${comp.id}` 
           });
-          remainingNeeded -= quantityToUse;
         }
-      }
-      
-      // Check if we have enough inventory for this component
-      if (remainingNeeded > 0) {
-        return res.status(400).json({ 
-          error: `Insufficient inventory for component ${component.componentName}. Need ${quantityWithWaste}, short by ${remainingNeeded}` 
+
+        const totalNeeded = comp.quantityNeeded * packetsCount;
+        const availableQty = inventoryItem.available || inventoryItem.quantityInStock || 0;
+        
+        // Check if sufficient inventory
+        if (availableQty < totalNeeded) {
+          return res.status(400).json({ 
+            error: `Insufficient inventory for ${inventoryItem.agPartNumber} - ${inventoryItem.name}. Need ${totalNeeded}, have ${availableQty}` 
+          });
+        }
+        
+        itemConsumptions.push({
+          type: 'inventory_item',
+          inventoryItemId: comp.inventoryItemId,
+          itemName: inventoryItem.name,
+          itemPartNumber: inventoryItem.agPartNumber,
+          quantityNeeded: totalNeeded,
+          availableQty,
         });
       }
-      
-      allocationPlans.push({
-        componentId: comp.componentId!,
-        componentName: component.componentName,
-        totalNeeded: quantityWithWaste,
-        wasteFactor,
-        lots: lotAllocations,
+    }
+    
+    // If recipe only contains legacy components, show helpful error
+    if (hasLegacyComponents && itemConsumptions.length === 0) {
+      return res.status(400).json({ 
+        error: 'This recipe uses legacy component-based items. Please update the recipe in Configure Recipes tab to use inventory items.' 
       });
     }
 
-    // Phase 2: All checks passed, now commit the allocation
+    // Phase 2: All checks passed, commit the transaction
+    // Build detailed transaction notes for audit trail
+    const transactionDetails = itemConsumptions.map(item => 
+      `${item.itemPartNumber} - ${item.itemName}: ${item.quantityNeeded} units consumed`
+    ).join('\n');
+    
+    const sessionNotes = notes 
+      ? `${notes}\n\nInventory Consumption:\n${transactionDetails}`
+      : `Inventory Consumption:\n${transactionDetails}`;
+
     const session = await storage.createCuttingPacketSession({
       productCategoryId,
-      packetsCount,
-      status: 'COMPLETED',
-      performedBy,
-      notes,
+      packetsTarget: packetsCount,
+      createdBy: performedBy,
+      notes: sessionNotes,
     });
 
-    const sessionLots = [];
-    const inventoryTransactions = [];
+    const consumptionResults = [];
 
-    for (const plan of allocationPlans) {
-      for (const lotAlloc of plan.lots) {
-        // Calculate cuts from this lot (for audit purposes)
-        const cutsFromThisLot = Math.floor(lotAlloc.quantityToUse / (plan.totalNeeded / packetsCount));
-        
-        // Create session lot record
-        const sessionLot = await storage.createCuttingPacketSessionLot({
-          sessionId: session.id,
-          componentId: plan.componentId,
-          fabricInventoryId: lotAlloc.inventoryLotId,
-          cutsPlanned: Math.max(1, cutsFromThisLot), // At least 1 to avoid zero-cut records
-          quantityUsed: lotAlloc.quantityToUse,
-          wasteFactorApplied: plan.wasteFactor,
-        });
-        sessionLots.push(sessionLot);
-        
-        // Create inventory transaction (ISSUE)
-        const transaction = await storage.createCuttingFabricInventoryTransaction({
-          fabricInventoryId: lotAlloc.inventoryLotId,
-          sessionLotId: sessionLot.id,
-          changeType: 'ISSUE',
-          quantityDelta: -lotAlloc.quantityToUse,
-          notes: `Packet build session ${session.id} - ${plan.componentName}`,
-          performedBy,
-        });
-        inventoryTransactions.push(transaction);
-        
-        // Update inventory balance
-        const newBalance = lotAlloc.availableQty - lotAlloc.quantityToUse;
-        await storage.updateCuttingFabricInventory(lotAlloc.inventoryLotId, {
-          quantityOnHand: newBalance,
-        });
-      }
+    for (const consumption of itemConsumptions) {
+      // Update inventory quantity
+      const inventoryItem = await storage.getInventoryItem(consumption.inventoryItemId);
+      if (!inventoryItem) continue;
+
+      const oldAvailable = inventoryItem.available || 0;
+      const oldOnHand = inventoryItem.onHand || 0;
+      const oldQtyInStock = inventoryItem.quantityInStock || 0;
+
+      const newAvailable = Math.max(0, oldAvailable - consumption.quantityNeeded);
+      const newOnHand = Math.max(0, oldOnHand - consumption.quantityNeeded);
+      const newQtyInStock = Math.max(0, oldQtyInStock - consumption.quantityNeeded);
+      
+      await storage.updateInventoryItem(consumption.inventoryItemId, {
+        available: newAvailable,
+        onHand: newOnHand,
+        quantityInStock: newQtyInStock,
+        lastUpdated: new Date(),
+      });
+      
+      consumptionResults.push({
+        inventoryItemId: consumption.inventoryItemId,
+        itemName: consumption.itemName,
+        itemPartNumber: consumption.itemPartNumber,
+        quantityConsumed: consumption.quantityNeeded,
+        oldBalance: oldAvailable,
+        newBalance: newAvailable,
+      });
     }
 
     res.json({
+      success: true,
       session,
-      sessionLots,
-      inventoryTransactions,
+      consumptions: consumptionResults,
+      message: `Successfully built ${packetsCount} packet(s)`,
+      warning: hasLegacyComponents ? 'Note: Legacy component items were skipped. Update recipe to use inventory items for complete packet building.' : undefined,
     });
   } catch (error) {
     console.error('Error building packet session:', error);

@@ -18,6 +18,9 @@ Balance due access: Customer balance due tracking is restricted to username "gle
 
 ## Recent Changes
 
+**2025-11-17** (Latest):
+- Added Part Number Quick Entry to Cutting Table Configure Recipes: New input field allows typing AG part numbers directly to auto-select inventory items. Field performs real-time lookup and automatically populates the dropdown when a matching packet part is found. Includes uppercase auto-formatting and helpful placeholder text for faster data entry.
+
 **2025-11-17** (3:39 PM):
 - Fixed discount display issue in Order Entry: Discounts were not showing in order summary because discount details map was created but never saved to state. Solution: Added `discountDetailsMap` state variable, updated `loadDiscountCodes` to save the map, and modified `calculateDiscountAmount` to use map directly instead of async-loaded details. Discounts now display immediately when selected.
 

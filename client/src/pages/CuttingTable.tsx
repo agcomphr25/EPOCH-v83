@@ -126,6 +126,7 @@ export default function CuttingTable() {
   
   // Form state for Configure Recipes tab
   const [recipePacketType, setRecipePacketType] = useState('');
+  const [recipePartNumber, setRecipePartNumber] = useState('');
   const [recipeInventoryItem, setRecipeInventoryItem] = useState('');
   const [recipeQuantity, setRecipeQuantity] = useState('');
 
@@ -705,6 +706,7 @@ export default function CuttingTable() {
 
         queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-compositions'] });
 
+        setRecipePartNumber('');
         setRecipeInventoryItem('');
         setRecipeQuantity('');
       } catch (error) {
@@ -766,6 +768,35 @@ export default function CuttingTable() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Part Number (Quick Entry)</label>
+              <Input 
+                type="text"
+                value={recipePartNumber}
+                onChange={(e) => {
+                  const partNumber = e.target.value.toUpperCase();
+                  setRecipePartNumber(partNumber);
+                  
+                  // Auto-lookup and select matching inventory item
+                  if (partNumber.length > 0) {
+                    const matchingItem = inventoryItems.find(
+                      (item: any) => item.isPacketPart === true && 
+                      item.agPartNumber?.toUpperCase() === partNumber
+                    );
+                    if (matchingItem) {
+                      setRecipeInventoryItem(matchingItem.id.toString());
+                    }
+                  }
+                }}
+                placeholder="Type part number (e.g., AG123)"
+                data-testid="input-part-number"
+                className="uppercase"
+              />
+              <p className="text-xs text-muted-foreground">
+                Type the AG part number to quickly find and select an item
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

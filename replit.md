@@ -1,7 +1,7 @@
 # EPOCH v8 - Manufacturing ERP System
 
 ## Overview
-EPOCH v8 is a comprehensive Manufacturing ERP system tailored for small manufacturing companies specializing in customizable products. It aims to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The system is a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. Key capabilities include a robust Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System. The business vision is to be the leading ERP solution for small-to-medium customizable product manufacturers.
+EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. It aims to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The system is a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. Key capabilities include a robust Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System. The business vision is to be the leading ERP solution for small-to-medium customizable product manufacturers.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -15,45 +15,6 @@ Critical requirement: All completed functionality must be hard-coded to prevent 
 Search standardization: All department queue pages use unified OrderSearchBox component with "Search orders by Order ID or FishBowl Number..." placeholder for consistent user experience.
 Navigation dropdown behavior: All navbar dropdown menus close automatically after selection.
 Balance due access: Customer balance due tracking is restricted to username "glennj" only for security. Balance Due column appears in Customer Management only when glennj is logged in.
-
-## Recent Changes
-
-
-**2025-11-17** (7:00 PM):
-- Added Square Meters field to Add Fabric Inventory: New "Square Meters (m²)" field allows tracking total fabric area for each inventory lot. Database column `square_meters` added to `cutting_fabric_inventory` table as optional numeric(10,2) field. Form includes decimal input with step 0.01 for precise measurements.
-
-**2025-11-17** (6:40 PM):
-- Connected fabric inventory to Cut Management: Inventory items marked with "Fabric (Cutting Table)" checkbox now populate the Fabric Type dropdown in Cut Management. Backend endpoint `/api/cutting-table/fabric-items` filters and returns items where `is_fabric = true`. Fabric Type field converted from text input to Select dropdown showing "AG Part Number - Name" format for each fabric item.
-
-**2025-11-17** (5:20 PM):
-- Added Fabric checkbox to Enhanced Inventory: New "Fabric (Cutting Table)" checkbox in inventory item form's Production Line Utilization section. Enables marking inventory items as fabrics associated with the cutting table. Database column `is_fabric` added to `inventory_items` table with default value `false`.
-
-**2025-11-17** (Earlier):
-- Enhanced Cut Management with Packet Composition Items: Product category dropdown now shows inventory items used to make packets, sourced from `cutting_packet_compositions` table. Items are grouped by their parent category (e.g., "Buttstock - Packet Items") for better organization. New backend endpoint `/api/cutting-table/packet-composition-items` enriches compositions with item and category details. When selected, system auto-populates part number and item name from Enhanced Inventory and MRP system.
-- Enhanced Cut Management with Item Description tracking: Added `item_description` column to `cutting_cut_records` table. When a packet composition item is selected, the item name from the Enhanced Inventory and MRP system is automatically populated and displayed below the part number field. History table shows both part number and item name in a stacked format for better readability.
-- Enhanced Cut Management with Fabric Type and Part Number tracking: Added `fabric_type` and `part_number` columns to `cutting_cut_records` table. Form now includes inputs for both fields with auto-uppercase formatting on part number. History table displays new columns.
-- Implemented smart category/part validation: Made `productCategoryId` nullable in schema with backend Zod refinement ensuring either category OR part number is present. Frontend submission logic detects packet composition item selection, auto-populates part number and description, and preserves category association for proper record tracking.
-- Fixed missing columns in cutting_components table: Added `material_id` and `waste_factor` columns via SQL ALTER statement.
-- Added Edit functionality to Fabric Inventory: Each fabric inventory item now has an Edit button in the Actions column. Opens a dialog with form to edit quantity in stock, low stock threshold, location, received date, expiration date, and notes. Backend PATCH endpoint added at `/api/cutting-table/fabric-inventory/:id`.
-- Added Part Number Quick Entry to Cutting Table Configure Recipes: New input field allows typing AG part numbers directly to auto-select inventory items. Field performs real-time lookup and automatically populates the dropdown when a matching packet part is found. Includes uppercase auto-formatting and helpful placeholder text for faster data entry.
-
-**2025-11-17** (5:37 PM):
-- Implemented dynamic discount system with saved metadata: Added `discount_type`, `discount_value`, and `discount_applies_to` columns to `all_orders` table. Orders now save discount metadata (percent/fixed, value, scope) at creation time, enabling dynamic recalculation when stock model prices change while preserving original discount intent. Example: 10% off a $1000 stock automatically becomes $120 off when the stock price increases to $1200. Edit mode reconstructs discount details from saved metadata instead of querying discount_codes table, ensuring stability even if discount codes are later modified or deleted. Backward compatible fallback for orders created before this feature.
-
-
-**2025-11-17** (3:39 PM):
-- Fixed discount display issue in Order Entry: Discounts were not showing in order summary because discount details map was created but never saved to state. Solution: Added `discountDetailsMap` state variable, updated `loadDiscountCodes` to save the map, and modified `calculateDiscountAmount` to use map directly instead of async-loaded details. Discounts now display immediately when selected.
-
-**2025-11-16** (3:45 AM):
-- Second GitHub inventory items pull verified: All changes compatible with packet part feature. Component now 2,568 lines with 10 references to isPacketPart field (interface, initialization, submission, edit loading). No conflicts detected.
-- API endpoints confirmed functional: Both `/api/enhanced/inventory/items` and `/api/vendors` responding correctly.
-- Complete integration chain verified: Database → Schema → Backend API → Frontend Form → User Interface all working seamlessly.
-
-**2025-11-16** (Midnight):
-- Verified GitHub inventory items integration: All changes compatible with packet part feature. Route changed from `/enhanced-inventory-mrp` to `/inventory/enhanced-mrp`. "Packet Part (Cutting Table)" checkbox remains fully functional in Production Line Utilization section.
-- Confirmed vendor PO columns: Added `terms_and_conditions`, `payment_terms`, and `shipping_instructions` columns to vendors table via SQL.
-- Database verification: `is_packet_part` boolean column exists with default value `false`.
-- Full stack integration verified: Frontend form state, backend API routes, Drizzle schema, and Zod validation all properly handle packet part field.
 
 ## System Architecture
 The application uses a monorepo structure with a full-stack TypeScript approach, prioritizing type safety and cross-platform deployment.

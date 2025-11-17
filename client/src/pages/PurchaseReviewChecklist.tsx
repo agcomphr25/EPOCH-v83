@@ -70,6 +70,19 @@ export default function PurchaseReviewChecklist() {
       })),
   });
 
+  // Fetch quotes for dropdown
+  const { data: quotes = [] } = useQuery({
+    queryKey: ['/api/quotes'],
+    select: (data: any[]) =>
+      data.map((quote) => ({
+        id: quote.id,
+        quoteNumber: quote.quoteNumber,
+        customerName: quote.customerName,
+        description: quote.description,
+        totalAmount: quote.totalAmount,
+      })),
+  });
+
   // Address autocomplete state
   const [addressQuery, setAddressQuery] = useState('');
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
@@ -79,6 +92,7 @@ export default function PurchaseReviewChecklist() {
   const [formData, setFormData] = useState({
     // Section A - Customer Information - moved customerId to top
     customerId: '',
+    quoteId: '',
     existingCustomer: '',
     significantChanges: '',
     companyName: '',
@@ -371,7 +385,7 @@ export default function PurchaseReviewChecklist() {
           <CardHeader>
             <CardTitle>Customer Selection</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="customerId">Select Customer</Label>
               <Select
@@ -387,6 +401,32 @@ export default function PurchaseReviewChecklist() {
                       {customer.customerName} ({customer.customerId})
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="quoteId">Select Quote</Label>
+              <Select
+                value={formData.quoteId}
+                onValueChange={(value) => handleInputChange('quoteId', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a quote (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {quotes.length === 0 ? (
+                    <SelectItem value="none" disabled>
+                      No quotes available
+                    </SelectItem>
+                  ) : (
+                    quotes.map((quote) => (
+                      <SelectItem key={quote.id} value={quote.id}>
+                        {quote.quoteNumber} - {quote.customerName} 
+                        {quote.description && ` (${quote.description})`}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>

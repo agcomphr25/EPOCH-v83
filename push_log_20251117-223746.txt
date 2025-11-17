@@ -1,0 +1,34 @@
+Your branch is behind 'origin/main' by 24 commits, and can be fast-forwarded.
+  (use "git pull" to update your local branch)
+Updating 31ab6f06..d006fd0c
+Fast-forward
+ .../Sales-Order-EI193_1763408453789.pdf            | Bin 0 -> 55351 bytes
+ attached_assets/image_1763408443939.png            | Bin 0 -> 42996 bytes
+ attached_assets/image_1763408793532.png            | Bin 0 -> 108930 bytes
+ attached_assets/image_1763409744712.png            | Bin 0 -> 115411 bytes
+ attached_assets/image_1763410049802.png            | Bin 0 -> 123202 bytes
+ attached_assets/image_1763413965409.png            | Bin 0 -> 96498 bytes
+ client/src/components/P2POManager.tsx              | 187 +++++++++++++++++++++
+ client/src/pages/PurchaseReviewChecklist.tsx       | 123 ++++++++++----
+ client/src/pages/VendorManagement.tsx              |  45 ++++-
+ push_log_20251117-213055.txt                       |   3 +
+ push_log_20251117-213255.txt                       |   3 +
+ replit.md                                          |   1 +
+ server/index.ts                                    |   6 +-
+ server/schema.ts                                   | 140 +++++++++++++++
+ server/src/routes/followupOrders.ts                |  58 +++++++
+ server/src/routes/index.ts                         | 183 ++++++++++++++++++++
+ server/src/routes/orders.ts                        |  29 ++++
+ server/src/routes/shippingPdf.ts                   |  13 +-
+ server/src/routes/vendors.ts                       |  40 +++++
+ server/storage.ts                                  |  83 +++++++++
+ server/utils/pdf/salesOrderPdf.ts                  |  22 ++-
+ 21 files changed, 893 insertions(+), 43 deletions(-)
+ create mode 100644 attached_assets/Sales-Order-EI193_1763408453789.pdf
+ create mode 100644 attached_assets/image_1763408443939.png
+ create mode 100644 attached_assets/image_1763408793532.png
+ create mode 100644 attached_assets/image_1763409744712.png
+ create mode 100644 attached_assets/image_1763410049802.png
+ create mode 100644 attached_assets/image_1763413965409.png
+ create mode 100644 push_log_20251117-213055.txt
+ create mode 100644 push_log_20251117-213255.txt

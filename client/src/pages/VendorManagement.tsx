@@ -55,6 +55,7 @@ import {
   Upload,
   FileText,
   X,
+  RefreshCw,
 } from 'lucide-react';
 import Papa from 'papaparse';
 import {
@@ -316,6 +317,28 @@ export default function VendorManagement() {
     },
     onError: () => {
       toast({ title: 'Failed to delete vendor', variant: 'destructive' });
+    },
+  });
+
+  // Reset monthly evaluations mutation
+  const resetEvaluationsMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('/api/vendors/reset-monthly-evaluations', {
+        method: 'POST',
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+      toast({ 
+        title: 'Monthly evaluations reset', 
+        description: `Successfully reset ${data.vendorsReset} vendors` 
+      });
+    },
+    onError: () => {
+      toast({ 
+        title: 'Failed to reset evaluations', 
+        variant: 'destructive' 
+      });
     },
   });
 
@@ -854,6 +877,19 @@ export default function VendorManagement() {
           >
             <Upload className="w-4 h-4 mr-2" />
             Import CSV
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (confirm('This will reset all vendor evaluation statuses and scores. Are you sure you want to continue?')) {
+                resetEvaluationsMutation.mutate();
+              }
+            }}
+            disabled={resetEvaluationsMutation.isPending}
+            data-testid="button-reset-evaluations"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${resetEvaluationsMutation.isPending ? 'animate-spin' : ''}`} />
+            {resetEvaluationsMutation.isPending ? 'Resetting...' : 'Reset Evaluations'}
           </Button>
           <Button
             onClick={() => handleOpenModal()}

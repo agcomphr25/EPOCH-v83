@@ -635,4 +635,42 @@ router.post('/import-evaluations', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/vendors/reset-monthly-evaluations - Manually reset all vendor evaluations
+router.post('/reset-monthly-evaluations', async (req: Request, res: Response) => {
+  try {
+    console.log('🔄 Manual vendor evaluation reset requested...');
+    
+    // Get all vendors
+    const allVendors = await storage.getAllVendors();
+    
+    // Reset evaluation status and scores for all vendors
+    const resetPromises = allVendors.map(vendor => 
+      storage.updateVendor(vendor.id, {
+        evaluated: false,
+        evaluationDate: null,
+        qualityScore: null,
+        costScore: null,
+        deliveryScore: null,
+        responseScore: null,
+      })
+    );
+    
+    await Promise.all(resetPromises);
+    
+    console.log(`✅ Manual reset complete. Reset ${allVendors.length} vendors.`);
+    
+    res.json({
+      success: true,
+      message: `Successfully reset ${allVendors.length} vendors`,
+      vendorsReset: allVendors.length,
+    });
+  } catch (error) {
+    console.error('Manual vendor evaluation reset error:', error);
+    res.status(500).json({ 
+      error: 'Failed to reset vendor evaluations',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 export default router;

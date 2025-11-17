@@ -215,6 +215,29 @@ export default function CuttingTable() {
     queryKey: ['/api/cutting-table/production-progress', selectedWeek],
   });
 
+  // Recommended Cuts data
+  interface ComponentCut {
+    componentName: string;
+    partNumber: string;
+    quantityPerPacket: number;
+    totalCutsNeeded: number;
+    completedCuts: number;
+    remainingCuts: number;
+  }
+
+  interface RecommendedCuts {
+    goalId: string;
+    weekDate: string;
+    productionLine: string;
+    productCategory: string;
+    packetsNeeded: number;
+    components: ComponentCut[];
+  }
+
+  const { data: recommendedCuts = [], isLoading: loadingRecommendedCuts } = useQuery<RecommendedCuts[]>({
+    queryKey: ['/api/cutting-table/recommended-cuts', selectedWeek],
+  });
+
   const { data: cutProgress = [], isLoading: loadingProgress } = useQuery<CutProgress[]>({
     queryKey: ['/api/cutting-table/cut-progress/by-week', currentWeek],
   });
@@ -297,6 +320,7 @@ export default function CuttingTable() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/cut-records'] });
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/production-progress'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/recommended-cuts'] });
       refetchCutRecords();
       setCutFormData({
         workDate: new Date().toISOString().split('T')[0],
@@ -326,6 +350,7 @@ export default function CuttingTable() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/cut-records'] });
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/production-progress'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/recommended-cuts'] });
       refetchCutRecords();
       toast({ title: 'Success', description: 'Cut record deleted successfully' });
     },
@@ -1073,6 +1098,7 @@ export default function CuttingTable() {
         // Invalidate cache to refresh the data display
         queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/weekly-data'] });
         queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/production-progress'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/recommended-cuts'] });
 
         // Reset form
         setSelectedFormLine('');
@@ -1169,56 +1195,85 @@ export default function CuttingTable() {
         </form>
 
         <div className="mt-8 pt-6 border-t">
-          <h4 className="font-medium mb-4">Production Progress Tracker</h4>
-          {productionProgress.length === 0 ? (
+          <h4 className="font-medium mb-4">Weekly Cuts Breakdown</h4>
+          {recommendedCuts.length === 0 ? (
             <p className="text-sm text-muted-foreground">No goals set for this week yet.</p>
           ) : (
-            <div className="space-y-3">
-              {productionProgress.map(progress => (
+            <div className="space-y-4">
+              {recommendedCuts.map(rec => (
                 <Card 
-                  key={progress.goalId} 
+                  key={rec.goalId} 
                   className="p-4"
-                  data-testid={`progress-${progress.goalId}`}
+                  data-testid={`recommended-${rec.goalId}`}
                 >
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-medium">
-                          {progress.productionLine} - {progress.productCategory}
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Target: {progress.targetQuantity} units
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                          {progress.remainingQuantity}
-                        </p>
-                        <p className="text-xs text-muted-foreground">cuts remaining</p>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span>Progress: {progress.completedQuantity} / {progress.targetQuantity}</span>
-                        <span className="font-medium">{progress.percentComplete}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                        <div 
-                          className={`h-2 rounded-full transition-all ${
-                            progress.percentComplete === 100 
-                              ? 'bg-green-500' 
-                              : progress.percentComplete >= 75 
-                                ? 'bg-blue-500' 
-                                : progress.percentComplete >= 50 
-                                  ? 'bg-yellow-500' 
-                                  : 'bg-orange-500'
-                          }`}
-                          style={{ width: `${progress.percentComplete}%` }}
-                        />
-                      </div>
-                    </div>
+                  <div className="mb-3">
+                    <h5 className="font-semibold text-lg">
+                      {rec.productionLine} - {rec.productCategory}
+                    </h5>
+                    <p className="text-sm text-muted-foreground">
+                      Goal: {rec.packetsNeeded} packets this week
+                    </p>
                   </div>
+                  
+                  {rec.components.length === 0 ? (
+                    <p className="text-sm text-amber-600 dark:text-amber-400">
+                      ⚠️ No recipe configured for this packet type. Go to Configure Recipes to set it up.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {rec.components.map((comp, idx) => (
+                        <div 
+                          key={idx} 
+                          className="p-3 bg-muted rounded-lg"
+                          data-testid={`component-${comp.partNumber}`}
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1">
+                              <p className="font-medium">{comp.componentName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {comp.partNumber} • {comp.quantityPerPacket} per packet
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                                {comp.remainingCuts}
+                              </p>
+                              <p className="text-xs text-muted-foreground">cuts needed</p>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-sm">
+                              <span>Progress: {comp.completedCuts} / {comp.totalCutsNeeded}</span>
+                              <span className="font-medium">
+                                {comp.totalCutsNeeded > 0 
+                                  ? Math.round((comp.completedCuts / comp.totalCutsNeeded) * 100) 
+                                  : 0}%
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                              <div 
+                                className={`h-2 rounded-full transition-all ${
+                                  comp.remainingCuts <= 0
+                                    ? 'bg-green-500' 
+                                    : comp.completedCuts >= comp.totalCutsNeeded * 0.75 
+                                      ? 'bg-blue-500' 
+                                      : comp.completedCuts >= comp.totalCutsNeeded * 0.5 
+                                        ? 'bg-yellow-500' 
+                                        : 'bg-orange-500'
+                                }`}
+                                style={{ 
+                                  width: `${comp.totalCutsNeeded > 0 
+                                    ? Math.min((comp.completedCuts / comp.totalCutsNeeded) * 100, 100) 
+                                    : 0}%` 
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </Card>
               ))}
             </div>

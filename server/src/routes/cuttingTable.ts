@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { cuttingCutRecords } from '../../schema';
-import { and, gte, eq } from 'drizzle-orm';
+import { cuttingCutRecords, cuttingPacketCompositions, inventoryItems } from '../../schema';
+import { and, gte, lte, eq } from 'drizzle-orm';
 import {
   insertCuttingMaterialSchema,
   insertCuttingProductionLineSchema,
@@ -711,6 +711,128 @@ router.delete('/fabric-inventory/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting fabric inventory:', error);
     res.status(500).json({ error: 'Failed to delete fabric inventory' });
+  }
+});
+
+// Recommended Cuts endpoint - calculates cuts needed based on packet recipes and weekly goals
+router.get('/recommended-cuts/:weekDate', async (req, res) => {
+  try {
+    const { weekDate } = req.params;
+    
+    // Calculate week end date (Sunday)
+    const weekStart = new Date(weekDate);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6); // Add 6 days to get Sunday
+    const weekEndStr = weekEnd.toISOString().split('T')[0];
+    
+    // Get all goals for this week
+    const goals = await storage.getCuttingWeeklyDataByWeek(weekDate);
+    
+    if (goals.length === 0) {
+      return res.json([]);
+    }
+    
+    // Get all cut records for this week in one query
+    const weekCuts = await db
+      .select()
+      .from(cuttingCutRecords)
+      .where(and(
+        gte(cuttingCutRecords.workDate, weekDate),
+        lte(cuttingCutRecords.workDate, weekEndStr)
+      ));
+    
+    // Calculate recommended cuts for each goal
+    const recommendations = await Promise.all(goals.map(async (goal) => {
+      if (!goal.productCategoryId) {
+        return null;
+      }
+      
+      // Get packet recipe/composition for this product category
+      const compositions = await db
+        .select()
+        .from(cuttingPacketCompositions)
+        .where(eq(cuttingPacketCompositions.productCategoryId, goal.productCategoryId));
+      
+      // Get category and line details
+      const category = await storage.getCuttingProductCategory(goal.productCategoryId);
+      const line = goal.productionLineId ? await storage.getCuttingProductionLine(goal.productionLineId) : null;
+      
+      // Calculate cuts needed for each component
+      const componentCuts = await Promise.all(compositions.map(async (comp: any) => {
+        const totalCutsNeeded = goal.quantity * comp.quantityNeeded;
+        
+        // Get inventory item details if available
+        let itemName = 'Unknown Component';
+        let partNumber = '';
+        
+        if (comp.inventoryItemId) {
+          const item = await db
+            .select()
+            .from(inventoryItems)
+            .where(eq(inventoryItems.id, comp.inventoryItemId))
+            .limit(1);
+          
+          if (item[0]) {
+            itemName = item[0].name;
+            partNumber = item[0].agPartNumber;
+          }
+        } else if (comp.componentId) {
+          const component = await storage.getCuttingComponent(comp.componentId);
+          if (component) {
+            itemName = component.componentName;
+          }
+        }
+        
+        // Filter cuts for this specific component by part number AND product category
+        // This prevents cross-contamination between different goals with shared part numbers
+        const completedCuts = weekCuts
+          .filter(cut => {
+            // REQUIRE category match to prevent cross-contamination
+            // Skip cuts without a category tag
+            if (!cut.productCategoryId || cut.productCategoryId !== goal.productCategoryId) {
+              return false;
+            }
+            
+            // If component has a part number, cut must match that part number
+            if (partNumber && cut.partNumber !== partNumber) {
+              return false;
+            }
+            
+            // If component has NO part number but cut HAS a part number, skip it
+            // (that cut belongs to a different component)
+            if (!partNumber && cut.partNumber) {
+              return false;
+            }
+            
+            return true;
+          })
+          .reduce((sum: number, cut) => sum + (cut.piecesYielded || 0), 0);
+        
+        return {
+          componentName: itemName,
+          partNumber,
+          quantityPerPacket: comp.quantityNeeded,
+          totalCutsNeeded,
+          completedCuts,
+          remainingCuts: totalCutsNeeded - completedCuts,
+        };
+      }));
+      
+      return {
+        goalId: goal.id,
+        weekDate: goal.weekDate,
+        productionLine: line?.lineName || 'N/A',
+        productCategory: category?.categoryName || 'Unknown',
+        packetsNeeded: goal.quantity,
+        components: componentCuts,
+      };
+    }));
+    
+    const validRecommendations = recommendations.filter(r => r !== null);
+    res.json(validRecommendations);
+  } catch (error) {
+    console.error('Error calculating recommended cuts:', error);
+    res.status(500).json({ error: 'Failed to calculate recommended cuts' });
   }
 });
 

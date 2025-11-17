@@ -59,6 +59,9 @@ export const allOrders = pgTable('all_orders', {
   features: jsonb('features'),
   featureQuantities: jsonb('feature_quantities'),
   discountCode: text('discount_code'),
+  discountType: text('discount_type'),
+  discountValue: numeric('discount_value'),
+  discountAppliesTo: text('discount_applies_to'),
   notes: text('notes'), // Order notes/special instructions
   customDiscountType: text('custom_discount_type').default('percent'),
   customDiscountValue: real('custom_discount_value').default(0),

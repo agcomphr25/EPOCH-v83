@@ -542,6 +542,33 @@ router.post('/finalized', async (req: Request, res: Response) => {
       // Extract miscellaneous items from features object
       const miscItems = (order.features as any)?.miscItems || [];
       
+      // Get discount display name and appliesTo if a discount is set
+      let discountDisplayName: string | undefined;
+      let discountAppliesTo: 'stock_model' | 'total_order' | undefined;
+      
+      if (order.discountCode && order.discountCode !== 'none') {
+        try {
+          const persistentDiscounts = await storage.getAllPersistentDiscounts();
+          const seasonalDiscounts = await storage.getAllShortTermSales();
+          
+          let discount: any = null;
+          if (order.discountCode.startsWith('persistent_')) {
+            const discountId = parseInt(order.discountCode.replace('persistent_', ''));
+            discount = persistentDiscounts.find((d) => d.id === discountId);
+          } else if (order.discountCode.startsWith('short_term_')) {
+            const discountId = parseInt(order.discountCode.replace('short_term_', ''));
+            discount = seasonalDiscounts.find((d) => d.id === discountId);
+          }
+          
+          if (discount) {
+            discountDisplayName = discount.name || discount.description;
+            discountAppliesTo = discount.appliesTo || 'total_order';
+          }
+        } catch (error) {
+          console.error('Error fetching discount details:', error);
+        }
+      }
+      
       // Prepare order data for PDF (using actual order from database)
       const pdfOrderData = {
         orderId: order.orderId,
@@ -576,6 +603,8 @@ router.post('/finalized', async (req: Request, res: Response) => {
         shipping: order.shipping || 0,
         paymentStatus: 'PENDING' as const,
         discountCode: order.discountCode || undefined,
+        discountDisplayName: discountDisplayName || undefined,
+        discountAppliesTo: discountAppliesTo || undefined,
         customDiscountType: order.customDiscountType || undefined,
         customDiscountValue: order.customDiscountValue || undefined,
         showCustomDiscount: order.showCustomDiscount || undefined,

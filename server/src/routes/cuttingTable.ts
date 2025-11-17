@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import { storage } from '../../storage';
+import { db } from '../../db';
+import { cuttingCutRecords } from '../../schema';
+import { and, gte, eq } from 'drizzle-orm';
 import {
   insertCuttingMaterialSchema,
   insertCuttingProductionLineSchema,
@@ -708,6 +711,60 @@ router.delete('/fabric-inventory/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting fabric inventory:', error);
     res.status(500).json({ error: 'Failed to delete fabric inventory' });
+  }
+});
+
+// Production Progress endpoint - calculates remaining cuts needed to hit goals
+router.get('/production-progress/:weekDate', async (req, res) => {
+  try {
+    const { weekDate } = req.params;
+    
+    // Get all goals for this week
+    const goals = await storage.getCuttingWeeklyDataByWeek(weekDate);
+    
+    // Calculate progress for each goal
+    const progress = await Promise.all(goals.map(async (goal) => {
+      // Skip if no product category
+      if (!goal.productCategoryId) {
+        return null;
+      }
+      
+      // Find all cut records for this week and product category
+      const cuts = await db
+        .select()
+        .from(cuttingCutRecords)
+        .where(and(
+          gte(cuttingCutRecords.workDate, weekDate),
+          eq(cuttingCutRecords.productCategoryId, goal.productCategoryId)
+        ));
+      
+      // Sum up pieces yielded
+      const totalCut = cuts.reduce((sum: number, cut) => sum + (cut.piecesYielded || 0), 0);
+      const remaining = goal.quantity - totalCut;
+      
+      // Get category and line details
+      const category = await storage.getCuttingProductCategory(goal.productCategoryId!);
+      const line = goal.productionLineId ? await storage.getCuttingProductionLine(goal.productionLineId) : null;
+      
+      return {
+        goalId: goal.id,
+        weekDate: goal.weekDate,
+        productionLine: line?.lineName || 'N/A',
+        productCategory: category?.categoryName || 'Unknown',
+        targetQuantity: goal.quantity,
+        completedQuantity: totalCut,
+        remainingQuantity: remaining,
+        percentComplete: goal.quantity > 0 ? Math.round((totalCut / goal.quantity) * 100) : 0,
+      };
+    }));
+    
+    // Filter out null entries
+    const validProgress = progress.filter(p => p !== null);
+    
+    res.json(validProgress);
+  } catch (error) {
+    console.error('Error calculating production progress:', error);
+    res.status(500).json({ error: 'Failed to calculate production progress' });
   }
 });
 

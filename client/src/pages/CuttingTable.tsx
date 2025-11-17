@@ -199,6 +199,22 @@ export default function CuttingTable() {
     queryKey: ['/api/cutting-table/weekly-data/by-week', currentWeek],
   });
 
+  // Production Progress data
+  interface ProductionProgress {
+    goalId: string;
+    weekDate: string;
+    productionLine: string;
+    productCategory: string;
+    targetQuantity: number;
+    completedQuantity: number;
+    remainingQuantity: number;
+    percentComplete: number;
+  }
+
+  const { data: productionProgress = [], isLoading: loadingProgress2 } = useQuery<ProductionProgress[]>({
+    queryKey: ['/api/cutting-table/production-progress', selectedWeek],
+  });
+
   const { data: cutProgress = [], isLoading: loadingProgress } = useQuery<CutProgress[]>({
     queryKey: ['/api/cutting-table/cut-progress/by-week', currentWeek],
   });
@@ -280,6 +296,7 @@ export default function CuttingTable() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/cut-records'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/production-progress'] });
       refetchCutRecords();
       setCutFormData({
         workDate: new Date().toISOString().split('T')[0],
@@ -308,6 +325,7 @@ export default function CuttingTable() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/cut-records'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/production-progress'] });
       refetchCutRecords();
       toast({ title: 'Success', description: 'Cut record deleted successfully' });
     },
@@ -1054,6 +1072,7 @@ export default function CuttingTable() {
 
         // Invalidate cache to refresh the data display
         queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/weekly-data'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/production-progress'] });
 
         // Reset form
         setSelectedFormLine('');
@@ -1150,24 +1169,58 @@ export default function CuttingTable() {
         </form>
 
         <div className="mt-8 pt-6 border-t">
-          <h4 className="font-medium mb-3">Current Week's Goals</h4>
-          {weeklyData.filter(w => w.weekDate === selectedWeek).length === 0 ? (
+          <h4 className="font-medium mb-4">Production Progress Tracker</h4>
+          {productionProgress.length === 0 ? (
             <p className="text-sm text-muted-foreground">No goals set for this week yet.</p>
           ) : (
-            <div className="space-y-2">
-              {weeklyData.filter(w => w.weekDate === selectedWeek).map(week => {
-                const line = productionLines.find(l => l.id === week.productionLineId);
-                const category = categories.find(c => c.id === week.productCategoryId);
-                return (
-                  <div 
-                    key={week.id} 
-                    className="text-sm p-2 bg-muted rounded"
-                    data-testid={`current-goal-${week.id}`}
-                  >
-                    <span className="font-medium">{line?.lineName}</span> - {category?.categoryName}: {week.quantity} units
+            <div className="space-y-3">
+              {productionProgress.map(progress => (
+                <Card 
+                  key={progress.goalId} 
+                  className="p-4"
+                  data-testid={`progress-${progress.goalId}`}
+                >
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-medium">
+                          {progress.productionLine} - {progress.productCategory}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Target: {progress.targetQuantity} units
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                          {progress.remainingQuantity}
+                        </p>
+                        <p className="text-xs text-muted-foreground">cuts remaining</p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span>Progress: {progress.completedQuantity} / {progress.targetQuantity}</span>
+                        <span className="font-medium">{progress.percentComplete}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full transition-all ${
+                            progress.percentComplete === 100 
+                              ? 'bg-green-500' 
+                              : progress.percentComplete >= 75 
+                                ? 'bg-blue-500' 
+                                : progress.percentComplete >= 50 
+                                  ? 'bg-yellow-500' 
+                                  : 'bg-orange-500'
+                          }`}
+                          style={{ width: `${progress.percentComplete}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
-                );
-              })}
+                </Card>
+              ))}
             </div>
           )}
         </div>

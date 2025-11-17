@@ -1716,8 +1716,8 @@ export default function CuttingTable() {
           return;
         }
       } else {
-        // It's a regular category UUID
-        categoryId = cutFormData.productCategoryId;
+        // It's a regular category UUID - convert empty string to null
+        categoryId = cutFormData.productCategoryId || null;
       }
 
       createCutRecordMutation.mutate({

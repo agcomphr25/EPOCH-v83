@@ -1126,6 +1126,55 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Quotes routes
+  app.get('/api/quotes', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const quotes = await storage.getAllQuotes();
+      res.json(quotes);
+    } catch (_error) {
+      console.error('Get quotes _error:', _error);
+      res.status(500).json({ _error: 'Failed to fetch quotes' });
+    }
+  });
+
+  // Purchase Review Checklist Submissions routes
+  app.get('/api/purchase-review-submissions', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const submissions = await storage.getAllPurchaseReviewSubmissions();
+      res.json(submissions);
+    } catch (_error) {
+      console.error('Get purchase review submissions _error:', _error);
+      res.status(500).json({ _error: 'Failed to fetch purchase review submissions' });
+    }
+  });
+
+  app.post('/api/purchase-review-submissions', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const submission = await storage.createPurchaseReviewSubmission(req.body);
+      res.status(201).json(submission);
+    } catch (_error) {
+      console.error('Create purchase review submission _error:', _error);
+      res.status(500).json({ _error: 'Failed to create purchase review submission' });
+    }
+  });
+
+  app.get('/api/purchase-review-submissions/:id', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const submission = await storage.getPurchaseReviewSubmission(req.params.id);
+      if (!submission) {
+        return res.status(404).json({ _error: 'Submission not found' });
+      }
+      res.json(submission);
+    } catch (_error) {
+      console.error('Get purchase review submission _error:', _error);
+      res.status(500).json({ _error: 'Failed to fetch purchase review submission' });
+    }
+  });
+
   // P2 Purchase Orders bypass route to avoid monolithic conflicts
   app.get('/api/p2-purchase-orders-bypass', async (req, res) => {
     try {

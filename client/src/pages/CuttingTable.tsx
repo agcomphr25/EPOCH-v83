@@ -1845,10 +1845,9 @@ export default function CuttingTable() {
                   onValueChange={(value) => setCutFormData({ ...cutFormData, fabricType: value })}
                 >
                   <SelectTrigger data-testid="select-fabric-type">
-                    <SelectValue placeholder="Select fabric type" />
+                    <SelectValue placeholder="Select fabric type (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">-- None --</SelectItem>
                     {fabricItems.map((fabric: any) => (
                       <SelectItem key={fabric.id} value={fabric.name}>
                         {fabric.agPartNumber} - {fabric.name}

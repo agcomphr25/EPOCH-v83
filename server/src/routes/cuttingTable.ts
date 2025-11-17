@@ -1220,7 +1220,7 @@ router.post('/quick-production-entry', async (req, res) => {
         if (item[0]) {
           partNumber = item[0].agPartNumber || '';
           itemDescription = item[0].name || '';
-          fabricType = item[0].material || '';
+          fabricType = item[0].category || '';
         }
       } else if (comp.componentId) {
         const component = await storage.getCuttingComponent(comp.componentId);

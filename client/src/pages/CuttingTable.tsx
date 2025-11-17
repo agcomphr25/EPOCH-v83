@@ -161,6 +161,7 @@ export default function CuttingTable() {
   const [location, setLocation] = useState('');
   const [conformanceDocLink, setConformanceDocLink] = useState('');
   const [fabricQuantity, setFabricQuantity] = useState('');
+  const [fabricSquareMeters, setFabricSquareMeters] = useState('');
   const [fabricNotes, setFabricNotes] = useState('');
 
   // Form state for Packet Management tab
@@ -1202,6 +1203,7 @@ export default function CuttingTable() {
             location: location || null,
             conformanceDocumentLink: conformanceDocLink || null,
             quantityInStock: parseInt(fabricQuantity),
+            squareMeters: fabricSquareMeters || null,
             notes: fabricNotes || null,
           }),
         });
@@ -1226,6 +1228,7 @@ export default function CuttingTable() {
         setLocation('');
         setConformanceDocLink('');
         setFabricQuantity('');
+        setFabricSquareMeters('');
         setFabricNotes('');
       } catch (error) {
         toast({
@@ -1362,6 +1365,19 @@ export default function CuttingTable() {
                 onChange={(e) => setFabricQuantity(e.target.value)}
                 placeholder="Enter quantity"
                 data-testid="input-fabric-quantity"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Square Meters (m²)</label>
+              <Input 
+                type="number" 
+                min="0"
+                step="0.01"
+                value={fabricSquareMeters}
+                onChange={(e) => setFabricSquareMeters(e.target.value)}
+                placeholder="Total square meters"
+                data-testid="input-fabric-square-meters"
               />
             </div>
           </div>
@@ -1920,8 +1936,9 @@ export default function CuttingTable() {
                 <tbody>
                   {cutRecords.map((record: any) => {
                     const category = categories.find((c: any) => c.id === record.productCategoryId);
-                    const yieldPerSqM = record.fabricSquareMetersUsed > 0 
-                      ? (record.piecesYielded / record.fabricSquareMetersUsed).toFixed(2)
+                    const fabricUsed = parseFloat(record.fabricSquareMetersUsed);
+                    const yieldPerSqM = fabricUsed > 0 
+                      ? (record.piecesYielded / fabricUsed).toFixed(2)
                       : 'N/A';
                     
                     // Display category name if available, otherwise show "Packet Part"
@@ -1946,7 +1963,7 @@ export default function CuttingTable() {
                         </td>
                         <td className="p-2 text-sm">{record.fabricType || '-'}</td>
                         <td className="p-2 text-right">{record.piecesYielded}</td>
-                        <td className="p-2 text-right">{record.fabricSquareMetersUsed.toFixed(2)}</td>
+                        <td className="p-2 text-right">{fabricUsed.toFixed(2)}</td>
                         <td className="p-2 text-right font-semibold">{yieldPerSqM}</td>
                         <td className="p-2 text-sm text-muted-foreground">{record.notes || '-'}</td>
                         <td className="p-2 text-right">

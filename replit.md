@@ -18,6 +18,9 @@ Balance due access: Customer balance due tracking is restricted to username "gle
 
 ## Recent Changes
 
+**2025-11-17** (7:00 PM):
+- Added Square Meters field to Add Fabric Inventory: New "Square Meters (m²)" field allows tracking total fabric area for each inventory lot. Database column `square_meters` added to `cutting_fabric_inventory` table as optional numeric(10,2) field. Form includes decimal input with step 0.01 for precise measurements.
+
 **2025-11-17** (6:40 PM):
 - Connected fabric inventory to Cut Management: Inventory items marked with "Fabric (Cutting Table)" checkbox now populate the Fabric Type dropdown in Cut Management. Backend endpoint `/api/cutting-table/fabric-items` filters and returns items where `is_fabric = true`. Fabric Type field converted from text input to Select dropdown showing "AG Part Number - Name" format for each fabric item.
 

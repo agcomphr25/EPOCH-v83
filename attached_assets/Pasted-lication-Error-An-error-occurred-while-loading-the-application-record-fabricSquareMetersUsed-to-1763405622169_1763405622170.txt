@@ -1,0 +1,32 @@
+lication Error
+An error occurred while loading the application:
+
+record.fabricSquareMetersUsed.toFixed is not a function
+
+Stack trace:
+TypeError: record.fabricSquareMetersUsed.toFixed is not a function
+    at https://1fbd751e-b853-4958-9e74-04cb1e830b17-00-13s5iy19bw7r9.janeway.replit.dev/src/pages/CuttingTable.tsx:3454:213
+    at Array.map (<anonymous>)
+    at renderCutManagement (https://1fbd751e-b853-4958-9e74-04cb1e830b17-00-13s5iy19bw7r9.janeway.replit.dev/src/pages/CuttingTable.tsx:3400:167)
+    at CuttingTable (https://1fbd751e-b853-4958-9e74-04cb1e830b17-00-13s5iy19bw7r9.janeway.replit.dev/src/pages/CuttingTable.tsx:3733:245)
+    at renderWithHooks (https://1fbd751e-b853-4958-9e74-04cb1e830b17-00-13s5iy19bw7r9.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=880458c9:11548:26)
+    at updateFunctionComponent (https://1fbd751e-b853-4958-9e74-04cb1e830b17-00-13s5iy19bw7r9.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=880458c9:14582:28)
+    at beginWork (https://1fbd751e-b853-4958-9e74-04cb1e830b17-00-13s5iy19bw7r9.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=880458c9:15924:22)
+    at beginWork$1 (https://1fbd751e-b853-4958-9e74-04cb1e830b17-00-13s5iy19bw7r9.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=880458c9:19753:22)
+    at performUnitOfWork (https://1fbd751e-b853-4958-9e74-04cb1e830b17-00-13s5iy19bw7r9.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=880458c9:19198:20)
+    at workLoopSync (https://1fbd751e-b853-4958-9e74-04cb1e830b17-00-13s5iy19bw7r9.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=880458c9:19137:13)
+Reload Application
+[plugin:runtime-error-plugin] record.fabricSquareMetersUsed.toFixed is not a function
+/home/runner/workspace/client/src/pages/CuttingTable.tsx:1949:87
+1947|                          <td className="p-2 text-sm">{record.fabricType || '-'}</td>
+1948|                          <td className="p-2 text-right">{record.piecesYielded}</td>
+1949|                          <td className="p-2 text-right">{record.fabricSquareMetersUsed.toFixed(2)}</td>
+   |                                                                                        ^
+1950|                          <td className="p-2 text-right font-semibold">{yieldPerSqM}</td>
+1951|                          <td className="p-2 text-sm text-muted-foreground">{record.notes || '-'}</td>
+    at /home/runner/workspace/client/src/pages/CuttingTable.tsx:1949:87
+    at Array.map (<anonymous>)
+    at renderCutManagement /home/runner/workspace/client/src/pages/CuttingTable.tsx:1921:31
+    at CuttingTable /home/runner/workspace/client/src/pages/CuttingTable.tsx:2084:12
+Click outside, press Esc key, or fix the code to dismiss.
+You can also disable this overlay by setting server.hmr.overlay to false in vite.config.js

@@ -5339,6 +5339,7 @@ export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
   location: text('location'), // Storage location/freezer #
   conformanceDocumentLink: text('conformance_document_link'), // Link to conformance/traceability paperwork
   quantityInStock: integer('quantity_in_stock').notNull().default(0),
+  squareMeters: numeric('square_meters', { precision: 10, scale: 2 }), // Total square meters of fabric
   lowStockThreshold: integer('low_stock_threshold').default(10),
   barcode: text('barcode').unique(), // Auto-generated for P2 items
   notes: text('notes'),

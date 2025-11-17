@@ -960,10 +960,8 @@ router.get('/cut-records/by-category/:categoryId', async (req, res) => {
 
 router.post('/cut-records', async (req, res) => {
   try {
-    console.log('📊 Cut record submission:', JSON.stringify(req.body, null, 2));
     const validation = insertCuttingCutRecordSchema.safeParse(req.body);
     if (!validation.success) {
-      console.error('❌ Validation failed:', JSON.stringify(validation.error.issues, null, 2));
       return res.status(400).json({ error: validation.error.message });
     }
     const record = await storage.createCuttingCutRecord(validation.data);

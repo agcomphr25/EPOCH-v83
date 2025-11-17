@@ -353,6 +353,9 @@ import {
   cuttingFabricInventoryTransactions,
   type CuttingFabricInventoryTransaction,
   type InsertCuttingFabricInventoryTransaction,
+  cuttingCutRecords,
+  type CuttingCutRecord,
+  type InsertCuttingCutRecord,
 } from './schema';
 import { db, pool } from './db';
 import {

@@ -5389,15 +5389,10 @@ export const cuttingFabricInventoryTransactions = pgTable('cutting_fabric_invent
 // Cutting Table - Cut Records (track actual yields and fabric usage per cut)
 export const cuttingCutRecords = pgTable('cutting_cut_records', {
   id: uuid('id').defaultRandom().primaryKey(),
-  productionLineId: uuid('production_line_id').references(() => cuttingProductionLines.id).notNull(),
+  workDate: text('work_date').notNull(), // Date of the cut
   productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id).notNull(),
-  materialId: uuid('material_id').references(() => cuttingMaterials.id),
-  componentId: uuid('component_id').references(() => cuttingComponents.id),
-  workDate: date('work_date').notNull(), // Date of the cut
   piecesYielded: integer('pieces_yielded').notNull(), // Actual pieces produced from the cut
-  fabricAreaUsed: real('fabric_area_used'), // Square meters of fabric used
-  fabricInventoryId: uuid('fabric_inventory_id').references(() => cuttingFabricInventory.id), // Link to specific fabric lot used
-  operator: text('operator'), // Who performed the cut
+  fabricSquareMetersUsed: numeric('fabric_square_meters_used', { precision: 10, scale: 2 }).notNull(), // Square meters of fabric used
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

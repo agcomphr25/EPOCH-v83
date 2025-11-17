@@ -48,6 +48,20 @@ type Component = {
   fabricType: string;
   thickness: string;
   isActive: boolean;
+  productCategoryId: string;
+  materialId: string;
+  requiredQuantity: number;
+};
+
+type CuttingCutRecord = {
+  id: string;
+  workDate: string;
+  productCategoryId: string;
+  piecesYielded: number;
+  fabricSquareMetersUsed: number;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type PacketComposition = {
@@ -191,6 +205,19 @@ export default function CuttingTable() {
     queryKey: ['/api/enhanced/inventory/items'],
   });
 
+  // Cut Management state and queries
+  const [cutFormData, setCutFormData] = useState({
+    workDate: new Date().toISOString().split('T')[0],
+    productCategoryId: '',
+    piecesYielded: '',
+    fabricSquareMetersUsed: '',
+    notes: '',
+  });
+
+  const { data: cutRecords = [], isLoading: recordsLoading, refetch: refetchCutRecords } = useQuery<CuttingCutRecord[]>({
+    queryKey: ['/api/cutting-table/cut-records'],
+  });
+
   const isLoading = loadingMaterials || loadingLines || loadingCategories || loadingComponents || loadingPacketCompositions || loadingWeekly || loadingProgress || loadingInventory || loadingInventoryItems;
 
   // Clear selected category when production line changes
@@ -219,6 +246,55 @@ export default function CuttingTable() {
         title: "Error",
         description: "Failed to initialize cutting table",
         variant: "destructive"
+      });
+    },
+  });
+
+  // Cut Management mutations
+  const createCutRecordMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest('/api/cutting-table/cut-records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/cut-records'] });
+      refetchCutRecords();
+      setCutFormData({
+        workDate: new Date().toISOString().split('T')[0],
+        productCategoryId: '',
+        piecesYielded: '',
+        fabricSquareMetersUsed: '',
+        notes: '',
+      });
+      toast({ title: 'Success', description: 'Cut record added successfully' });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: 'Error', 
+        description: error.message || 'Failed to add cut record',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const deleteCutRecordMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest(`/api/cutting-table/cut-records/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/cut-records'] });
+      refetchCutRecords();
+      toast({ title: 'Success', description: 'Cut record deleted successfully' });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: 'Error', 
+        description: error.message || 'Failed to delete cut record',
+        variant: 'destructive',
       });
     },
   });
@@ -1584,66 +1660,6 @@ export default function CuttingTable() {
   };
 
   const renderCutManagement = () => {
-    const [cutFormData, setCutFormData] = useState({
-      workDate: new Date().toISOString().split('T')[0],
-      productCategoryId: '',
-      piecesYielded: '',
-      fabricSquareMetersUsed: '',
-      notes: '',
-    });
-
-    const { data: cutRecords = [], isLoading: recordsLoading, refetch: refetchCutRecords } = useQuery({
-      queryKey: ['/api/cutting-table/cut-records'],
-    });
-
-    const createCutRecordMutation = useMutation({
-      mutationFn: async (data: any) => {
-        const response = await apiRequest('/api/cutting-table/cut-records', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        });
-        return response;
-      },
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/cut-records'] });
-        refetchCutRecords();
-        setCutFormData({
-          workDate: new Date().toISOString().split('T')[0],
-          productCategoryId: '',
-          piecesYielded: '',
-          fabricSquareMetersUsed: '',
-          notes: '',
-        });
-        toast({ title: 'Success', description: 'Cut record added successfully' });
-      },
-      onError: (error: Error) => {
-        toast({ 
-          title: 'Error', 
-          description: error.message || 'Failed to add cut record',
-          variant: 'destructive',
-        });
-      },
-    });
-
-    const deleteCutRecordMutation = useMutation({
-      mutationFn: async (id: string) => {
-        await apiRequest(`/api/cutting-table/cut-records/${id}`, { method: 'DELETE' });
-      },
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/cut-records'] });
-        refetchCutRecords();
-        toast({ title: 'Success', description: 'Cut record deleted successfully' });
-      },
-      onError: (error: Error) => {
-        toast({ 
-          title: 'Error', 
-          description: error.message || 'Failed to delete cut record',
-          variant: 'destructive',
-        });
-      },
-    });
-
     const handleSubmitCutRecord = (e: React.FormEvent) => {
       e.preventDefault();
 

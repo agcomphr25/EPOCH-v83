@@ -1724,7 +1724,7 @@ export default function CuttingTable() {
         workDate: cutFormData.workDate,
         productCategoryId: categoryId,
         piecesYielded: parseInt(cutFormData.piecesYielded),
-        fabricSquareMetersUsed: parseFloat(cutFormData.fabricSquareMetersUsed),
+        fabricSquareMetersUsed: cutFormData.fabricSquareMetersUsed,
         fabricType: cutFormData.fabricType || null,
         partNumber: partNum || null,
         itemDescription: itemDesc || null,

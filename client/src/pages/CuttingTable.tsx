@@ -1749,7 +1749,28 @@ export default function CuttingTable() {
                 <label className="block text-sm font-medium mb-2">Product Category / Part Number *</label>
                 <Select
                   value={cutFormData.productCategoryId}
-                  onValueChange={(value) => setCutFormData({ ...cutFormData, productCategoryId: value })}
+                  onValueChange={(value) => {
+                    // If it's a packet composition item selection, auto-populate the part number and description
+                    if (value.startsWith('item-')) {
+                      const inventoryItemId = value.replace('item-', '');
+                      const compositionItem = packetCompositionItems.find((comp: any) => comp.inventoryItemId.toString() === inventoryItemId);
+                      if (compositionItem) {
+                        setCutFormData({ 
+                          ...cutFormData, 
+                          productCategoryId: value,
+                          partNumber: compositionItem.item.agPartNumber,
+                          itemDescription: compositionItem.item.description
+                        });
+                      }
+                    } else {
+                      // Clear item description when selecting a regular category
+                      setCutFormData({ 
+                        ...cutFormData, 
+                        productCategoryId: value,
+                        itemDescription: ''
+                      });
+                    }
+                  }}
                 >
                   <SelectTrigger data-testid="select-product-category">
                     <SelectValue placeholder="Select category or part number" />
@@ -1833,6 +1854,9 @@ export default function CuttingTable() {
                   placeholder="e.g., AG123"
                   data-testid="input-part-number"
                 />
+                {cutFormData.itemDescription && (
+                  <p className="text-sm text-muted-foreground mt-1">{cutFormData.itemDescription}</p>
+                )}
               </div>
             </div>
 

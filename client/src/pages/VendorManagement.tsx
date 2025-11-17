@@ -489,6 +489,9 @@ export default function VendorManagement() {
   });
 
   const handleOpenModal = (vendor?: Vendor) => {
+    // Reset file upload state when opening modal
+    setUploadedFile(null);
+    
     if (vendor) {
       setEditingVendor(vendor);
       form.reset({
@@ -1561,7 +1564,11 @@ export default function VendorManagement() {
                             <div className="flex items-center gap-2">
                               <FileText className="w-5 h-5 text-blue-600" />
                               <span className="text-sm font-medium">
-                                {uploadedFile?.name || 'Approval Document.pdf'}
+                                {uploadedFile?.name || (
+                                  form.watch('approvalPdfUrl')
+                                    ? form.watch('approvalPdfUrl').split('/').pop()
+                                    : 'Approval Document.pdf'
+                                )}
                               </span>
                             </div>
                             <Button

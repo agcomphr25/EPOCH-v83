@@ -1583,6 +1583,237 @@ export default function CuttingTable() {
     );
   };
 
+  const renderCutManagement = () => {
+    const [cutFormData, setCutFormData] = useState({
+      workDate: new Date().toISOString().split('T')[0],
+      productCategoryId: '',
+      piecesYielded: '',
+      fabricSquareMetersUsed: '',
+      notes: '',
+    });
+
+    const { data: cutRecords = [], isLoading: recordsLoading, refetch: refetchCutRecords } = useQuery({
+      queryKey: ['/api/cutting-table/cut-records'],
+    });
+
+    const createCutRecordMutation = useMutation({
+      mutationFn: async (data: any) => {
+        const response = await apiRequest('/api/cutting-table/cut-records', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        return response;
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/cut-records'] });
+        refetchCutRecords();
+        setCutFormData({
+          workDate: new Date().toISOString().split('T')[0],
+          productCategoryId: '',
+          piecesYielded: '',
+          fabricSquareMetersUsed: '',
+          notes: '',
+        });
+        toast({ title: 'Success', description: 'Cut record added successfully' });
+      },
+      onError: (error: Error) => {
+        toast({ 
+          title: 'Error', 
+          description: error.message || 'Failed to add cut record',
+          variant: 'destructive',
+        });
+      },
+    });
+
+    const deleteCutRecordMutation = useMutation({
+      mutationFn: async (id: string) => {
+        await apiRequest(`/api/cutting-table/cut-records/${id}`, { method: 'DELETE' });
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/cut-records'] });
+        refetchCutRecords();
+        toast({ title: 'Success', description: 'Cut record deleted successfully' });
+      },
+      onError: (error: Error) => {
+        toast({ 
+          title: 'Error', 
+          description: error.message || 'Failed to delete cut record',
+          variant: 'destructive',
+        });
+      },
+    });
+
+    const handleSubmitCutRecord = (e: React.FormEvent) => {
+      e.preventDefault();
+
+      if (!cutFormData.productCategoryId || !cutFormData.piecesYielded || !cutFormData.fabricSquareMetersUsed) {
+        toast({
+          title: 'Validation Error',
+          description: 'Please fill in all required fields',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      createCutRecordMutation.mutate({
+        workDate: cutFormData.workDate,
+        productCategoryId: cutFormData.productCategoryId,
+        piecesYielded: parseInt(cutFormData.piecesYielded),
+        fabricSquareMetersUsed: parseFloat(cutFormData.fabricSquareMetersUsed),
+        notes: cutFormData.notes || null,
+      });
+    };
+
+    return (
+      <div className="space-y-6">
+        <Card className="p-6">
+          <h2 className="text-xl font-bold mb-4">Record Cut Performance</h2>
+          <form onSubmit={handleSubmitCutRecord} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Work Date *</label>
+                <Input
+                  type="date"
+                  value={cutFormData.workDate}
+                  onChange={(e) => setCutFormData({ ...cutFormData, workDate: e.target.value })}
+                  required
+                  data-testid="input-work-date"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Product Category *</label>
+                <Select
+                  value={cutFormData.productCategoryId}
+                  onValueChange={(value) => setCutFormData({ ...cutFormData, productCategoryId: value })}
+                >
+                  <SelectTrigger data-testid="select-product-category">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat: any) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.categoryName} (P{cat.productionLineId})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Pieces Yielded *</label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={cutFormData.piecesYielded}
+                  onChange={(e) => setCutFormData({ ...cutFormData, piecesYielded: e.target.value })}
+                  placeholder="Number of pieces cut"
+                  required
+                  data-testid="input-pieces-yielded"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Fabric Used (m²) *</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={cutFormData.fabricSquareMetersUsed}
+                  onChange={(e) => setCutFormData({ ...cutFormData, fabricSquareMetersUsed: e.target.value })}
+                  placeholder="Square meters of fabric"
+                  required
+                  data-testid="input-fabric-used"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Notes</label>
+              <textarea
+                className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={cutFormData.notes}
+                onChange={(e) => setCutFormData({ ...cutFormData, notes: e.target.value })}
+                placeholder="Optional notes about this cut"
+                data-testid="textarea-notes"
+              />
+            </div>
+
+            <Button 
+              type="submit" 
+              disabled={createCutRecordMutation.isPending}
+              data-testid="button-submit-cut-record"
+            >
+              {createCutRecordMutation.isPending ? 'Saving...' : 'Record Cut'}
+            </Button>
+          </form>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-xl font-bold mb-4">Cut Records History</h2>
+          {recordsLoading ? (
+            <div className="flex justify-center p-8">
+              <Loader2 className="w-6 h-6 animate-spin" />
+            </div>
+          ) : cutRecords.length === 0 ? (
+            <p className="text-muted-foreground text-center p-8">No cut records found</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left p-2">Date</th>
+                    <th className="text-left p-2">Category</th>
+                    <th className="text-right p-2">Pieces</th>
+                    <th className="text-right p-2">Fabric (m²)</th>
+                    <th className="text-right p-2">Yield/m²</th>
+                    <th className="text-left p-2">Notes</th>
+                    <th className="text-right p-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cutRecords.map((record: any) => {
+                    const category = categories.find((c: any) => c.id === record.productCategoryId);
+                    const yieldPerSqM = record.fabricSquareMetersUsed > 0 
+                      ? (record.piecesYielded / record.fabricSquareMetersUsed).toFixed(2)
+                      : 'N/A';
+                    
+                    return (
+                      <tr key={record.id} className="border-b hover:bg-muted/50">
+                        <td className="p-2">{new Date(record.workDate).toLocaleDateString()}</td>
+                        <td className="p-2">{category?.categoryName || 'Unknown'}</td>
+                        <td className="p-2 text-right">{record.piecesYielded}</td>
+                        <td className="p-2 text-right">{record.fabricSquareMetersUsed.toFixed(2)}</td>
+                        <td className="p-2 text-right font-semibold">{yieldPerSqM}</td>
+                        <td className="p-2 text-sm text-muted-foreground">{record.notes || '-'}</td>
+                        <td className="p-2 text-right">
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm('Are you sure you want to delete this cut record?')) {
+                                deleteCutRecordMutation.mutate(record.id);
+                              }
+                            }}
+                            disabled={deleteCutRecordMutation.isPending}
+                            data-testid={`button-delete-${record.id}`}
+                          >
+                            Delete
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </div>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -1638,7 +1869,7 @@ export default function CuttingTable() {
       </div>
 
       <Tabs defaultValue="dashboard" className="w-full" data-testid="tabs-main">
-        <TabsList className="grid w-full grid-cols-9" data-testid="tabs-list">
+        <TabsList className="grid w-full grid-cols-10" data-testid="tabs-list">
           <TabsTrigger value="dashboard" data-testid="tab-dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="daily" data-testid="tab-daily">Daily Tracker</TabsTrigger>
           <TabsTrigger value="weekly" data-testid="tab-weekly">Weekly Report</TabsTrigger>
@@ -1648,6 +1879,7 @@ export default function CuttingTable() {
           <TabsTrigger value="submit" data-testid="tab-submit">Submit Data</TabsTrigger>
           <TabsTrigger value="addFabric" data-testid="tab-add-fabric">Add Fabric</TabsTrigger>
           <TabsTrigger value="inventory" data-testid="tab-inventory">Inventory</TabsTrigger>
+          <TabsTrigger value="cutManagement" data-testid="tab-cut-management">Cut Mgmt</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard" className="mt-6" data-testid="content-dashboard">
@@ -1684,6 +1916,10 @@ export default function CuttingTable() {
 
         <TabsContent value="inventory" className="mt-6" data-testid="content-inventory">
           {renderFabricInventory()}
+        </TabsContent>
+
+        <TabsContent value="cutManagement" className="mt-6" data-testid="content-cut-management">
+          {renderCutManagement()}
         </TabsContent>
       </Tabs>
     </div>

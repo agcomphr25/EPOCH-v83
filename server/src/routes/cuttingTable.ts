@@ -233,6 +233,44 @@ router.get('/packet-compositions', async (req, res) => {
   }
 });
 
+// Packet Compositions - Get inventory items used in packet compositions
+router.get('/packet-composition-items', async (req, res) => {
+  try {
+    const compositions = await storage.getAllPacketCompositions();
+    
+    // Filter to only compositions with inventory items and enrich with item and category details
+    const itemCompositions = await Promise.all(
+      compositions
+        .filter((comp) => comp.inventoryItemId !== null)
+        .map(async (comp) => {
+          const item = await storage.getInventoryItem(comp.inventoryItemId!);
+          const category = comp.productCategoryId ? await storage.getCuttingProductCategory(comp.productCategoryId) : null;
+          return {
+            compositionId: comp.id,
+            inventoryItemId: comp.inventoryItemId,
+            productCategoryId: comp.productCategoryId,
+            quantityNeeded: comp.quantityNeeded,
+            item: item ? {
+              id: item.id,
+              agPartNumber: item.agPartNumber,
+              description: item.description,
+            } : null,
+            category: category ? {
+              id: category.id,
+              categoryName: category.categoryName,
+              productionLineId: category.productionLineId,
+            } : null,
+          };
+        })
+    );
+    
+    res.json(itemCompositions.filter((comp) => comp.item !== null));
+  } catch (error) {
+    console.error('Error fetching packet composition items:', error);
+    res.status(500).json({ error: 'Failed to fetch packet composition items' });
+  }
+});
+
 // Packet Recipes - Get recipe (composition) for a specific category
 router.get('/packet-recipes/:categoryId', async (req, res) => {
   try {

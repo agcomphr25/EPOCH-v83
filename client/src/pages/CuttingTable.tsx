@@ -9,7 +9,9 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -205,6 +207,11 @@ export default function CuttingTable() {
 
   const { data: inventoryItems = [], isLoading: loadingInventoryItems } = useQuery<any[]>({
     queryKey: ['/api/enhanced/inventory/items'],
+  });
+
+  // Fetch inventory items used in packet compositions for Cut Management dropdown
+  const { data: packetCompositionItems = [] } = useQuery<any[]>({
+    queryKey: ['/api/cutting-table/packet-composition-items'],
   });
 
   // Cut Management state and queries
@@ -1678,16 +1685,26 @@ export default function CuttingTable() {
         return;
       }
 
-      // Handle packet part selection vs category selection
-      let categoryId = null;
+      // Handle packet composition item selection vs category selection
+      let categoryId: string | null = null;
       let partNum = cutFormData.partNumber;
       
-      if (cutFormData.productCategoryId.startsWith('packet-')) {
-        // Extract inventory item ID from the packet-{id} format
-        const inventoryItemId = cutFormData.productCategoryId.replace('packet-', '');
-        const packetPart = inventoryItems.find((item: any) => item.id.toString() === inventoryItemId);
-        if (packetPart) {
-          partNum = packetPart.agPartNumber;
+      if (cutFormData.productCategoryId.startsWith('item-')) {
+        // Extract inventory item ID from the item-{id} format
+        const inventoryItemId = cutFormData.productCategoryId.replace('item-', '');
+        const compositionItem = packetCompositionItems.find((comp: any) => comp.inventoryItemId.toString() === inventoryItemId);
+        if (compositionItem) {
+          partNum = compositionItem.item.agPartNumber;
+          // Always use the category from the composition, even if it's null
+          categoryId = compositionItem.productCategoryId || null;
+        } else {
+          // If composition item not found, this is an error state
+          toast({
+            title: 'Error',
+            description: 'Selected packet item not found in compositions',
+            variant: 'destructive',
+          });
+          return;
         }
       } else {
         // It's a regular category UUID
@@ -1732,23 +1749,33 @@ export default function CuttingTable() {
                     <SelectValue placeholder="Select category or part number" />
                   </SelectTrigger>
                   <SelectContent>
-                    <optgroup label="Product Categories">
+                    <SelectGroup>
+                      <SelectLabel>Product Categories</SelectLabel>
                       {categories.map((cat: any) => (
                         <SelectItem key={cat.id} value={cat.id}>
                           {cat.categoryName} (P{cat.productionLineId})
                         </SelectItem>
                       ))}
-                    </optgroup>
-                    <optgroup label="Packet Parts">
-                      {inventoryItems
-                        .filter((item: any) => item.isPacketPart)
-                        .map((item: any) => (
-                          <SelectItem key={`packet-${item.id}`} value={`packet-${item.id}`}>
-                            {item.agPartNumber} - {item.description}
-                          </SelectItem>
-                        ))
-                      }
-                    </optgroup>
+                    </SelectGroup>
+                    {/* Group packet composition items by category */}
+                    {categories.map((cat: any) => {
+                      const categoryItems = packetCompositionItems.filter(
+                        (comp: any) => comp.productCategoryId === cat.id
+                      );
+                      
+                      if (categoryItems.length === 0) return null;
+                      
+                      return (
+                        <SelectGroup key={`cat-items-${cat.id}`}>
+                          <SelectLabel>{cat.categoryName} - Packet Items</SelectLabel>
+                          {categoryItems.map((comp: any) => (
+                            <SelectItem key={`item-${comp.inventoryItemId}`} value={`item-${comp.inventoryItemId}`}>
+                              {comp.item.agPartNumber} - {comp.item.description}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>

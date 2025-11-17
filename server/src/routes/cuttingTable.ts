@@ -1171,4 +1171,99 @@ router.delete('/cut-records/:id', async (req, res) => {
   }
 });
 
+// Quick Production Entry - automatically generates cut records for all components in a packet
+router.post('/quick-production-entry', async (req, res) => {
+  try {
+    const { workDate, productCategoryId, packetsProduced, fabricSquareMetersUsed, notes } = req.body;
+    
+    // Validate required fields
+    if (!workDate || !productCategoryId || !packetsProduced || packetsProduced <= 0) {
+      return res.status(400).json({ 
+        error: 'Work date, product category, and packets produced (>0) are required' 
+      });
+    }
+    
+    // Get packet composition/recipe for this product category
+    const compositions = await db
+      .select()
+      .from(cuttingPacketCompositions)
+      .where(eq(cuttingPacketCompositions.productCategoryId, productCategoryId));
+    
+    if (compositions.length === 0) {
+      return res.status(400).json({ 
+        error: 'No recipe found for this packet type. Please create a recipe first in the Recipe Builder tab.' 
+      });
+    }
+    
+    // Get category details for naming
+    const category = await storage.getCuttingProductCategory(productCategoryId);
+    const categoryName = category?.categoryName || 'Unknown';
+    
+    // Create cut records for each component in the recipe
+    const createdRecords = [];
+    
+    for (const comp of compositions) {
+      const totalPiecesYielded = packetsProduced * comp.quantityNeeded;
+      
+      // Get inventory item details if available
+      let partNumber = '';
+      let itemDescription = '';
+      let fabricType = '';
+      
+      if (comp.inventoryItemId) {
+        const item = await db
+          .select()
+          .from(inventoryItems)
+          .where(eq(inventoryItems.id, comp.inventoryItemId))
+          .limit(1);
+        
+        if (item[0]) {
+          partNumber = item[0].agPartNumber || '';
+          itemDescription = item[0].name || '';
+          fabricType = item[0].material || '';
+        }
+      } else if (comp.componentId) {
+        const component = await storage.getCuttingComponent(comp.componentId);
+        if (component) {
+          itemDescription = component.componentName;
+          fabricType = component.fabricType || '';
+        }
+      }
+      
+      // Create cut record
+      const cutRecordData = {
+        workDate,
+        productCategoryId,
+        piecesYielded: totalPiecesYielded,
+        fabricSquareMetersUsed: fabricSquareMetersUsed || '0',
+        fabricType: fabricType || categoryName,
+        partNumber: partNumber || null,
+        itemDescription: itemDescription || `${categoryName} Component`,
+        notes: notes || `Quick entry: ${packetsProduced} packets of ${categoryName}`,
+      };
+      
+      const validation = insertCuttingCutRecordSchema.safeParse(cutRecordData);
+      if (!validation.success) {
+        console.error('Validation error for component:', validation.error);
+        continue; // Skip this component but continue with others
+      }
+      
+      const record = await storage.createCuttingCutRecord(validation.data);
+      createdRecords.push(record);
+    }
+    
+    res.status(201).json({
+      success: true,
+      message: `Created ${createdRecords.length} cut records for ${packetsProduced} packets of ${categoryName}`,
+      recordsCreated: createdRecords.length,
+      packetsProduced,
+      categoryName,
+      records: createdRecords,
+    });
+  } catch (error) {
+    console.error('Error in quick production entry:', error);
+    res.status(500).json({ error: 'Failed to create production entry' });
+  }
+});
+
 export default router;

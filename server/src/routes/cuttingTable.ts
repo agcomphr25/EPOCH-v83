@@ -272,6 +272,26 @@ router.get('/packet-composition-items', async (req, res) => {
   }
 });
 
+// Fabric Items - Get inventory items marked as fabrics (is_fabric = true)
+router.get('/fabric-items', async (req, res) => {
+  try {
+    const allItems = await storage.getAllInventoryItems();
+    const fabricItems = allItems
+      .filter((item) => item.isFabric === true)
+      .map((item) => ({
+        id: item.id,
+        agPartNumber: item.agPartNumber,
+        name: item.name,
+        sku: item.sku,
+      }));
+    
+    res.json(fabricItems);
+  } catch (error) {
+    console.error('Error fetching fabric items:', error);
+    res.status(500).json({ error: 'Failed to fetch fabric items' });
+  }
+});
+
 // Packet Recipes - Get recipe (composition) for a specific category
 router.get('/packet-recipes/:categoryId', async (req, res) => {
   try {

@@ -18,6 +18,9 @@ Balance due access: Customer balance due tracking is restricted to username "gle
 
 ## Recent Changes
 
+**2025-11-17** (6:40 PM):
+- Connected fabric inventory to Cut Management: Inventory items marked with "Fabric (Cutting Table)" checkbox now populate the Fabric Type dropdown in Cut Management. Backend endpoint `/api/cutting-table/fabric-items` filters and returns items where `is_fabric = true`. Fabric Type field converted from text input to Select dropdown showing "AG Part Number - Name" format for each fabric item.
+
 **2025-11-17** (5:20 PM):
 - Added Fabric checkbox to Enhanced Inventory: New "Fabric (Cutting Table)" checkbox in inventory item form's Production Line Utilization section. Enables marking inventory items as fabrics associated with the cutting table. Database column `is_fabric` added to `inventory_items` table with default value `false`.
 

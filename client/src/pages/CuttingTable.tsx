@@ -210,6 +210,10 @@ export default function CuttingTable() {
     queryKey: ['/api/enhanced/inventory/items'],
   });
 
+  const { data: fabricItems = [], isLoading: loadingFabricItems } = useQuery<any[]>({
+    queryKey: ['/api/cutting-table/fabric-items'],
+  });
+
   // Fetch inventory items used in packet compositions for Cut Management dropdown
   const { data: packetCompositionItems = [] } = useQuery<any[]>({
     queryKey: ['/api/cutting-table/packet-composition-items'],
@@ -1836,13 +1840,22 @@ export default function CuttingTable() {
 
               <div>
                 <label className="block text-sm font-medium mb-2">Fabric Type</label>
-                <Input
-                  type="text"
+                <Select
                   value={cutFormData.fabricType}
-                  onChange={(e) => setCutFormData({ ...cutFormData, fabricType: e.target.value })}
-                  placeholder="e.g., Carbon Fiber, Fiberglass"
-                  data-testid="input-fabric-type"
-                />
+                  onValueChange={(value) => setCutFormData({ ...cutFormData, fabricType: value })}
+                >
+                  <SelectTrigger data-testid="select-fabric-type">
+                    <SelectValue placeholder="Select fabric type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">-- None --</SelectItem>
+                    {fabricItems.map((fabric: any) => (
+                      <SelectItem key={fabric.id} value={fabric.name}>
+                        {fabric.agPartNumber} - {fabric.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>

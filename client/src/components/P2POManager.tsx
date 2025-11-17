@@ -277,9 +277,18 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
 
       const data = await response.json();
       
-      queryClient.invalidateQueries({
+      await queryClient.invalidateQueries({
         queryKey: ['/api/p2-purchase-orders-bypass'],
       });
+      
+      // Refresh selectedPO with latest data from the query cache
+      const updatedData = queryClient.getQueryData<P2PurchaseOrder[]>([
+        '/api/p2-purchase-orders-bypass',
+      ]);
+      const updatedPO = updatedData?.find((po) => po.id === selectedPO.id);
+      if (updatedPO) {
+        setSelectedPO(updatedPO);
+      }
       
       toast({ title: 'Attachment uploaded successfully' });
       
@@ -311,9 +320,18 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
 
       if (!response.ok) throw new Error('Delete failed');
 
-      queryClient.invalidateQueries({
+      await queryClient.invalidateQueries({
         queryKey: ['/api/p2-purchase-orders-bypass'],
       });
+      
+      // Refresh selectedPO with latest data from the query cache
+      const updatedData = queryClient.getQueryData<P2PurchaseOrder[]>([
+        '/api/p2-purchase-orders-bypass',
+      ]);
+      const updatedPO = updatedData?.find((po) => po.id === selectedPO.id);
+      if (updatedPO) {
+        setSelectedPO(updatedPO);
+      }
       
       toast({ title: 'Attachment removed successfully' });
     } catch (error) {

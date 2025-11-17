@@ -1,5 +1,9 @@
 import { Express } from 'express';
 import { createServer, type Server } from 'http';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
 import employeesRoutes from './employees';
 import ordersRoutes from './orders';
 import formsRoutes from './forms';
@@ -1310,10 +1314,6 @@ export function registerRoutes(app: Express): Server {
   });
 
   // P2 PO PDF Attachment routes
-  const multer = require('multer');
-  const path = require('path');
-  const fs = require('fs');
-  const crypto = require('crypto');
 
   // Ensure P2 PO attachments directory exists
   const uploadsDir = path.join(process.cwd(), 'uploads');

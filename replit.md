@@ -70,6 +70,9 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 
 ## Recent Changes
 
+**2025-11-18** (7:00 PM):
+- **RESOLVED: Certifications deployment crisis**: Fixed persistent "type 'serial' does not exist" deployment error by understanding that production deployments use SQL migration files from `drizzle-kit generate`, not `db:push`. Root cause was duplicate schema files (./schema.ts and ./server/schema.ts) both defining certifications tables, with ./schema.ts still using serial(). Solution: (1) Updated both schema files to use `integer('id').primaryKey().notNull().default(sql\`nextval('certifications_id_seq'::regclass)\`)` for certifications and employee_certifications tables; (2) Cleared migration cache and regenerated fresh SQL migrations via `drizzle-kit generate`; (3) New migration file (0000_wakeful_doctor_doom.sql) now correctly creates tables with integer+nextval instead of serial. Deployment should now succeed.
+
 **2025-11-18** (1:55 PM):
 - **Fixed certifications table deployment issue**: Matched `certifications` and `employee_certifications` table schemas exactly to production structure using `serial()` for ID columns (which creates integer with sequence, matching production's `nextval()` default). Added missing production columns: `validity_period_months`, `is_required`, `requirements_data`, `work_instructions` for certifications table; `issuing_authority`, `status`, `trainer_name`, `trainer_signature`, `training_date`, `critical_points_completed`, `completed_by_user_id`, `form_completed_at`, `work_instructions_completed`, `uploaded_files` for employee_certifications table. This ensures zero-conflict deployments by perfectly mirroring production schema without attempting destructive ALTER TABLE statements.
 

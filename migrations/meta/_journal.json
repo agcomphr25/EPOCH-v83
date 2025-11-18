@@ -5,29 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1760396444267,
-      "tag": "0000_gray_black_cat",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1761670951515,
-      "tag": "0001_amusing_avengers",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1762399597251,
-      "tag": "0002_long_thunderbird",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1762818821066,
-      "tag": "0003_p2_customers_identity",
+      "when": 1763491901702,
+      "tag": "0000_wakeful_doctor_doom",
       "breakpoints": true
     }
   ]

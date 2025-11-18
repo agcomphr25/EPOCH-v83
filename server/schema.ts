@@ -1431,6 +1431,19 @@ export const insertAllOrderSchema = createInsertSchema(allOrders)
     features: z.record(z.any()).optional().nullable(),
     featureQuantities: z.record(z.any()).optional().nullable(),
     discountCode: z.string().optional().nullable(),
+    discountType: z.string().optional().nullable(),
+    discountValue: z.union([
+      z.string().transform(val => {
+        const trimmed = val?.trim() || '';
+        if (trimmed === '') return null;
+        if (!/^-?\d+(\.\d+)?$/.test(trimmed)) {
+          throw new Error('Discount value must be a valid number');
+        }
+        return trimmed;
+      }),
+      z.number().transform(val => String(val)),
+    ]).optional().nullable(),
+    discountAppliesTo: z.string().optional().nullable(),
     shipping: z.number().min(0).default(0),
     tikkaOption: z.string().optional().nullable(),
     status: z.string().default('DRAFT'), // Legacy field

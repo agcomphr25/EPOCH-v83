@@ -154,6 +154,7 @@ function CertificationCard({
   getStatusBadge: (status: string) => JSX.Element;
 }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -223,6 +224,36 @@ function CertificationCard({
     },
   });
 
+  const deleteCertificationMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/employees/certifications/${cert.id}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete certification');
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employee-certifications'] });
+      setShowDeleteConfirm(false);
+      toast({
+        title: 'Success',
+        description: 'Certification deleted successfully',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -255,7 +286,7 @@ function CertificationCard({
   return (
     <div className="border rounded-lg p-4 space-y-4">
       <div className="flex items-start justify-between">
-        <div>
+        <div className="flex-1">
           <h4 className="font-medium">
             {cert.certification?.name || 'Unknown Certification'}
           </h4>
@@ -276,8 +307,47 @@ function CertificationCard({
             )}
           </div>
         </div>
-        {getStatusBadge(cert.status)}
+        <div className="flex items-center space-x-2">
+          {getStatusBadge(cert.status)}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setShowDeleteConfirm(true)}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            data-testid={`button-delete-cert-${cert.id}`}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="border-t pt-4 bg-red-50 rounded p-3">
+          <p className="text-sm text-red-900 mb-3">
+            Are you sure you want to delete this certification? This action cannot be undone.
+          </p>
+          <div className="flex justify-end space-x-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleteCertificationMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => deleteCertificationMutation.mutate()}
+              disabled={deleteCertificationMutation.isPending}
+              data-testid="button-confirm-delete-cert"
+            >
+              {deleteCertificationMutation.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* File Upload Section */}
       <div className="border-t pt-4">

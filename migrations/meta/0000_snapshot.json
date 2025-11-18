@@ -1,5 +1,5 @@
 {
-  "id": "9a0c26a6-c2f4-438f-b369-10586a65a408",
+  "id": "7449a31b-801e-4cbf-8611-d640063db8cf",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1453,7 +1453,17 @@
           "type": "integer",
           "primaryKey": true,
           "notNull": true,
-          "default": "nextval('certifications_id_seq'::regclass)"
+          "identity": {
+            "type": "byDefault",
+            "name": "certifications_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
         },
         "name": {
           "name": "name",
@@ -4900,7 +4910,17 @@
           "type": "integer",
           "primaryKey": true,
           "notNull": true,
-          "default": "nextval('employee_certifications_id_seq'::regclass)"
+          "identity": {
+            "type": "byDefault",
+            "name": "employee_certifications_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
         },
         "employee_id": {
           "name": "employee_id",

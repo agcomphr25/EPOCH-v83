@@ -220,6 +220,34 @@ export default function TrainingManagement() {
     },
   });
 
+  // Delete certification mutation
+  const deleteCertificationMutation = useMutation({
+    mutationFn: async (certificationId: number) => {
+      const response = await fetch(`/api/certifications/${certificationId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete certification');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/certifications'] });
+      toast({
+        title: 'Certification Deleted',
+        description: 'Certification template has been deleted successfully',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Delete Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Create evaluation mutation
   const createEvaluationMutation = useMutation({
     mutationFn: async (evaluationData: any) => {
@@ -308,6 +336,12 @@ export default function TrainingManagement() {
     };
 
     createEvaluationMutation.mutate(evaluationData);
+  };
+
+  const handleDeleteCertification = (certificationId: number) => {
+    if (confirm('Are you sure you want to delete this certification template? This will not affect existing employee certifications.')) {
+      deleteCertificationMutation.mutate(certificationId);
+    }
   };
 
   return (
@@ -564,6 +598,15 @@ export default function TrainingManagement() {
                               Assign to Employee
                             </Button>
                           </Link>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteCertification(cert.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            data-testid={`button-delete-template-${cert.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
                     </CardHeader>

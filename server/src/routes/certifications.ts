@@ -553,4 +553,35 @@ router.get('/:certificationId/download-file/:fileId', async (req: Request, res: 
   }
 });
 
+// DELETE certification template
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Check if certification exists
+    const certResult = await pool.query`
+      SELECT id, name FROM certifications WHERE id = ${parseInt(id)}
+    `;
+
+    if (!certResult || certResult.length === 0) {
+      return res.status(404).json({ error: 'Certification template not found' });
+    }
+
+    // Soft delete by setting is_active to false
+    await pool.query`
+      UPDATE certifications
+      SET is_active = false, updated_at = NOW()
+      WHERE id = ${parseInt(id)}
+    `;
+
+    res.json({ 
+      success: true, 
+      message: `Certification template "${certResult[0].name}" has been deleted successfully` 
+    });
+  } catch (error: any) {
+    console.error('Delete certification template error:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete certification template' });
+  }
+});
+
 export default router;

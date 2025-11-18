@@ -47,6 +47,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import AddCertificationModal from '@/components/employee/AddCertificationModal';
+import CertificationFormModal from '@/components/employee/CertificationFormModal';
 import AddEvaluationModal from '@/components/employee/AddEvaluationModal';
 
 interface Employee {
@@ -1086,7 +1087,13 @@ export default function EmployeeDetail() {
                       Employee training and certification records
                     </CardDescription>
                   </div>
-                  <AddCertificationModal employeeId={parseInt(id || '0')} />
+                  <div className="flex gap-2">
+                    <CertificationFormModal 
+                      employeeId={parseInt(id || '0')} 
+                      employeeName={employee.name}
+                    />
+                    <AddCertificationModal employeeId={parseInt(id || '0')} />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {certifications.length === 0 ? (

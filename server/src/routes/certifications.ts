@@ -212,4 +212,140 @@ router.post('/create-from-google-drive', async (req: Request, res: Response) => 
   }
 });
 
+// POST complete training certification form
+router.post('/complete-training', async (req: Request, res: Response) => {
+  try {
+    const {
+      employeeId,
+      certificationId,
+      trainingDate,
+      trainerName,
+      trainerSignature,
+      notes,
+      criticalPointsCompleted,
+    } = req.body;
+
+    if (!employeeId || !certificationId || !trainingDate || !trainerName || !trainerSignature) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: employeeId, certificationId, trainingDate, trainerName, trainerSignature' 
+      });
+    }
+
+    // Get certification details for training matrix
+    const certResult = await pool.query`
+      SELECT name, category, validity_period_months as "validityPeriodMonths"
+      FROM certifications
+      WHERE id = ${certificationId}
+    `;
+
+    if (!certResult || certResult.length === 0) {
+      return res.status(404).json({ error: 'Certification not found' });
+    }
+
+    const certification = certResult[0];
+
+    // Get employee details
+    const empResult = await pool.query`
+      SELECT name, job_title as "jobTitle", department
+      FROM employees
+      WHERE id = ${employeeId}
+    `;
+
+    if (!empResult || empResult.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+
+    const employee = empResult[0];
+
+    // Calculate expiry date if validity period is set
+    let expiryDate = null;
+    let nextDueDate = null;
+    if (certification.validityPeriodMonths) {
+      const training = new Date(trainingDate);
+      const expiry = new Date(training);
+      expiry.setMonth(expiry.getMonth() + certification.validityPeriodMonths);
+      expiryDate = expiry.toISOString().split('T')[0];
+      nextDueDate = expiry;
+    }
+
+    // Create employee certification record
+    const empCertResult = await pool.query`
+      INSERT INTO employee_certifications (
+        employee_id,
+        certification_id,
+        date_obtained,
+        expiry_date,
+        trainer_name,
+        trainer_signature,
+        training_date,
+        critical_points_completed,
+        status,
+        notes,
+        is_active,
+        created_at,
+        updated_at,
+        form_completed_at
+      ) VALUES (
+        ${employeeId},
+        ${certificationId},
+        ${trainingDate},
+        ${expiryDate},
+        ${trainerName},
+        ${trainerSignature},
+        ${trainingDate},
+        ${JSON.stringify(criticalPointsCompleted)},
+        'ACTIVE',
+        ${notes || null},
+        true,
+        NOW(),
+        NOW(),
+        NOW()
+      )
+      RETURNING *
+    `;
+
+    // Add to training matrix
+    await pool.query`
+      INSERT INTO training_matrix (
+        employee_id,
+        employee_name,
+        job_title,
+        department,
+        training_name,
+        required_by,
+        frequency,
+        last_completed,
+        next_due,
+        status,
+        notes,
+        created_at,
+        updated_at
+      ) VALUES (
+        ${employeeId},
+        ${employee.name},
+        ${employee.jobTitle || null},
+        ${employee.department || null},
+        ${certification.name},
+        ${certification.category || null},
+        ${certification.validityPeriodMonths ? `Every ${certification.validityPeriodMonths} months` : 'One-time'},
+        ${trainingDate},
+        ${nextDueDate ? nextDueDate.toISOString() : null},
+        'COMPLETED',
+        ${`Certified by ${trainerName} on ${trainingDate}${notes ? '. ' + notes : ''}`},
+        NOW(),
+        NOW()
+      )
+    `;
+
+    res.status(201).json({
+      message: 'Certification completed successfully',
+      employeeCertification: empCertResult[0],
+      addedToTrainingMatrix: true,
+    });
+  } catch (error: any) {
+    console.error('Complete training certification error:', error);
+    res.status(500).json({ error: error.message || 'Failed to complete certification' });
+  }
+});
+
 export default router;

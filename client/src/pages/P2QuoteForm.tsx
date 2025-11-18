@@ -636,11 +636,11 @@ export default function P2QuoteForm() {
                 />
               </div>
               <div>
-                <Label>To</Label>
+                <Label>To (Contracting Person)</Label>
                 <Input
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Customer Name"
+                  placeholder="Enter contracting person's name"
                   data-testid="input-customer-name"
                 />
               </div>
@@ -859,6 +859,7 @@ export default function P2QuoteForm() {
               multiple
               onChange={handleFileUpload}
               className="hidden"
+              data-testid="input-file-upload"
             />
 
             {/* Upload button */}
@@ -869,12 +870,13 @@ export default function P2QuoteForm() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={!savedQuoteId || isUploadingFile}
                 className="flex items-center gap-2"
+                data-testid="button-upload-pdf"
               >
                 <Upload className="h-4 w-4" />
                 {isUploadingFile ? 'Uploading...' : 'Upload PDF Files'}
               </Button>
               <p className="text-sm text-gray-500 mt-2">
-                {!savedQuoteId ? 'Save the quote first to upload files.' : 'Upload one or more PDF files (max 5 files, 10MB each).'}
+                {!savedQuoteId ? '⚠️ Save the quote first to upload files.' : 'Upload one or more PDF files (max 5 files, 10MB each).'}
               </p>
             </div>
 
@@ -889,6 +891,7 @@ export default function P2QuoteForm() {
                       <div
                         key={index}
                         className="flex items-center justify-between p-3 bg-gray-50 border rounded-md"
+                        data-testid={`attachment-${index}`}
                       >
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4 text-gray-600" />
@@ -897,6 +900,7 @@ export default function P2QuoteForm() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-sm text-blue-600 hover:underline"
+                            data-testid={`link-attachment-${index}`}
                           >
                             {fileName}
                           </a>
@@ -907,6 +911,7 @@ export default function P2QuoteForm() {
                           size="sm"
                           onClick={() => handleDeleteAttachment(fileName)}
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          data-testid={`button-delete-attachment-${index}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

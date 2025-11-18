@@ -1548,6 +1548,85 @@ CREATE TABLE "p2_purchase_orders" (
 	CONSTRAINT "p2_purchase_orders_po_number_unique" UNIQUE("po_number")
 );
 --> statement-breakpoint
+CREATE TABLE "p2_serialized_item_events" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"serialized_item_id" uuid NOT NULL,
+	"barcode" text NOT NULL,
+	"event_type" text NOT NULL,
+	"from_department" text,
+	"to_department" text,
+	"from_stage_index" integer,
+	"to_stage_index" integer,
+	"performed_by" text NOT NULL,
+	"notes" text,
+	"metadata" jsonb,
+	"created_at" timestamp DEFAULT now()
+);
+--> statement-breakpoint
+CREATE TABLE "p2_serialized_item_traceability" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"serialized_item_id" uuid NOT NULL,
+	"department" text NOT NULL,
+	"inventory_part_id" text,
+	"inventory_part_number" text,
+	"traceability_type" text NOT NULL,
+	"traceability_label" text NOT NULL,
+	"traceability_value" text NOT NULL,
+	"recorded_by" text NOT NULL,
+	"created_at" timestamp DEFAULT now()
+);
+--> statement-breakpoint
+CREATE TABLE "p2_serialized_items" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"serial_number" text NOT NULL,
+	"barcode" text NOT NULL,
+	"po_id" integer NOT NULL,
+	"po_item_id" integer NOT NULL,
+	"po_number" text NOT NULL,
+	"part_number" text NOT NULL,
+	"part_name" text NOT NULL,
+	"customer_id" text NOT NULL,
+	"customer_name" text NOT NULL,
+	"sequence_number" integer NOT NULL,
+	"current_department" text DEFAULT 'Layup' NOT NULL,
+	"current_stage_index" integer DEFAULT 0 NOT NULL,
+	"status" text DEFAULT 'ACTIVE' NOT NULL,
+	"department_history" jsonb DEFAULT '[]',
+	"metadata" jsonb,
+	"layup_completed_at" timestamp,
+	"assemble_disassembly_completed_at" timestamp,
+	"cnc_completed_at" timestamp,
+	"finish_completed_at" timestamp,
+	"paint_completed_at" timestamp,
+	"final_qc_completed_at" timestamp,
+	"completed_at" timestamp,
+	"hold_reason" text,
+	"hold_by" text,
+	"hold_at" timestamp,
+	"scrap_reason" text,
+	"scrap_by" text,
+	"scrap_at" timestamp,
+	"notes" text,
+	"created_at" timestamp DEFAULT now(),
+	"updated_at" timestamp DEFAULT now(),
+	CONSTRAINT "p2_serialized_items_serial_number_unique" UNIQUE("serial_number"),
+	CONSTRAINT "p2_serialized_items_barcode_unique" UNIQUE("barcode")
+);
+--> statement-breakpoint
+CREATE TABLE "part_routings" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"inventory_item_id" text NOT NULL,
+	"part_number" text NOT NULL,
+	"part_name" text NOT NULL,
+	"department_sequence" jsonb NOT NULL,
+	"traceability_config" jsonb NOT NULL,
+	"department_config" jsonb,
+	"is_active" boolean DEFAULT true NOT NULL,
+	"created_by" text NOT NULL,
+	"created_at" timestamp DEFAULT now(),
+	"updated_at" timestamp DEFAULT now()
+);
+--> statement-breakpoint
 CREATE TABLE "parts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"sku" text NOT NULL,
@@ -2521,6 +2600,10 @@ ALTER TABLE "p2_production_orders" ADD CONSTRAINT "p2_production_orders_bom_defi
 ALTER TABLE "p2_production_orders" ADD CONSTRAINT "p2_production_orders_bom_item_id_bom_items_id_fk" FOREIGN KEY ("bom_item_id") REFERENCES "public"."bom_items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "p2_purchase_order_items" ADD CONSTRAINT "p2_purchase_order_items_po_id_p2_purchase_orders_id_fk" FOREIGN KEY ("po_id") REFERENCES "public"."p2_purchase_orders"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "p2_purchase_orders" ADD CONSTRAINT "p2_purchase_orders_customer_id_p2_customers_customer_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."p2_customers"("customer_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "p2_serialized_item_events" ADD CONSTRAINT "p2_serialized_item_events_serialized_item_id_p2_serialized_items_id_fk" FOREIGN KEY ("serialized_item_id") REFERENCES "public"."p2_serialized_items"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "p2_serialized_item_traceability" ADD CONSTRAINT "p2_serialized_item_traceability_serialized_item_id_p2_serialized_items_id_fk" FOREIGN KEY ("serialized_item_id") REFERENCES "public"."p2_serialized_items"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "p2_serialized_items" ADD CONSTRAINT "p2_serialized_items_po_id_p2_purchase_orders_id_fk" FOREIGN KEY ("po_id") REFERENCES "public"."p2_purchase_orders"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "p2_serialized_items" ADD CONSTRAINT "p2_serialized_items_po_item_id_p2_purchase_order_items_id_fk" FOREIGN KEY ("po_item_id") REFERENCES "public"."p2_purchase_order_items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "parts_requests" ADD CONSTRAINT "parts_requests_ag_part_number_inventory_items_ag_part_number_fk" FOREIGN KEY ("ag_part_number") REFERENCES "public"."inventory_items"("ag_part_number") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "parts_requests" ADD CONSTRAINT "parts_requests_department_id_departments_id_fk" FOREIGN KEY ("department_id") REFERENCES "public"."departments"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "parts_requests" ADD CONSTRAINT "parts_requests_vendor_po_id_vendor_pos_id_fk" FOREIGN KEY ("vendor_po_id") REFERENCES "public"."vendor_pos"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -2570,4 +2653,9 @@ CREATE INDEX "boms_code_idx" ON "boms" USING btree ("code");--> statement-breakp
 CREATE INDEX "cutting_cut_records_work_date_idx" ON "cutting_cut_records" USING btree ("work_date");--> statement-breakpoint
 CREATE INDEX "cutting_cut_records_category_idx" ON "cutting_cut_records" USING btree ("product_category_id");--> statement-breakpoint
 CREATE INDEX "cutting_fabric_inventory_expiration_idx" ON "cutting_fabric_inventory" USING btree ("expiration_date");--> statement-breakpoint
+CREATE INDEX "p2_serialized_item_events_barcode_idx" ON "p2_serialized_item_events" USING btree ("barcode");--> statement-breakpoint
+CREATE INDEX "p2_serialized_item_events_item_id_idx" ON "p2_serialized_item_events" USING btree ("serialized_item_id");--> statement-breakpoint
+CREATE INDEX "p2_serialized_item_traceability_item_id_idx" ON "p2_serialized_item_traceability" USING btree ("serialized_item_id");--> statement-breakpoint
+CREATE INDEX "p2_serialized_item_traceability_department_idx" ON "p2_serialized_item_traceability" USING btree ("department");--> statement-breakpoint
+CREATE INDEX "part_routings_inventory_item_idx" ON "part_routings" USING btree ("inventory_item_id");--> statement-breakpoint
 CREATE INDEX "parts_sku_idx" ON "parts" USING btree ("sku");

@@ -64,12 +64,19 @@ interface MaterialRequirement {
   partNumber: string;
   partName: string;
   requiredFields: string[]; // Which traceability fields are required for this material
+  entryMethod: 'manual' | 'barcode'; // How the material will be entered/tracked
+}
+
+interface QCStandard {
+  standard: string; // The QC check description
+  tolerance: string; // Acceptable tolerance/variance
+  requirement: string; // Specific requirement or specification
 }
 
 interface DepartmentConfiguration {
   materials: MaterialRequirement[]; // Materials used in this department
   technicianRequired: boolean; // Whether technician is required for this department
-  qcStandards: string[]; // List of QC standards that must be checked
+  qcStandards: QCStandard[]; // QC standards with tolerance and requirements
 }
 
 interface PartRouting {
@@ -106,7 +113,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   // UI state for materials search
   const [materialSearchTerm, setMaterialSearchTerm] = useState('');
   const [selectedDeptForConfig, setSelectedDeptForConfig] = useState<string>('');
+  
+  // UI state for QC standards input
   const [qcStandardInput, setQcStandardInput] = useState<string>('');
+  const [qcToleranceInput, setQcToleranceInput] = useState<string>('');
+  const [qcRequirementInput, setQcRequirementInput] = useState<string>('');
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -191,6 +202,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     setMaterialSearchTerm('');
     setSelectedDeptForConfig('');
     setQcStandardInput('');
+    setQcToleranceInput('');
+    setQcRequirementInput('');
   };
 
   const handleClose = () => {
@@ -270,6 +283,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
       partNumber: item.agPartNumber,
       partName: item.name,
       requiredFields: [],
+      entryMethod: 'manual', // Default to manual entry
     };
 
     setDepartmentConfig({
@@ -321,6 +335,28 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     });
   };
 
+  const toggleMaterialEntryMethod = (dept: string, partId: string) => {
+    const config = getOrCreateDeptConfig(dept);
+    const updated = config.materials.map(material => {
+      if (material.partId === partId) {
+        const newMethod: 'manual' | 'barcode' = material.entryMethod === 'manual' ? 'barcode' : 'manual';
+        return {
+          ...material,
+          entryMethod: newMethod,
+        };
+      }
+      return material;
+    });
+
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        materials: updated,
+      },
+    });
+  };
+
   const toggleTechnicianRequired = (dept: string) => {
     const config = getOrCreateDeptConfig(dept);
     setDepartmentConfig({
@@ -332,36 +368,49 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     });
   };
 
-  const addQcStandard = (dept: string, standard: string) => {
-    if (!standard.trim()) return;
-    
-    const config = getOrCreateDeptConfig(dept);
-    if (config.qcStandards.includes(standard)) {
+  const addQcStandard = (dept: string) => {
+    if (!qcStandardInput.trim() || !qcToleranceInput.trim() || !qcRequirementInput.trim()) {
       toast({
-        title: 'Already Added',
-        description: `QC standard "${standard}" already exists`,
+        title: 'Missing Fields',
+        description: 'Please fill in all QC standard fields',
         variant: 'destructive',
       });
       return;
     }
+    
+    const config = getOrCreateDeptConfig(dept);
+    const newStandard: QCStandard = {
+      standard: qcStandardInput.trim(),
+      tolerance: qcToleranceInput.trim(),
+      requirement: qcRequirementInput.trim(),
+    };
 
     setDepartmentConfig({
       ...departmentConfig,
       [dept]: {
         ...config,
-        qcStandards: [...config.qcStandards, standard],
+        qcStandards: [...config.qcStandards, newStandard],
       },
     });
+    
+    // Clear inputs
     setQcStandardInput('');
+    setQcToleranceInput('');
+    setQcRequirementInput('');
+    
+    toast({
+      title: 'QC Standard Added',
+      description: `"${newStandard.standard}" added to ${dept}`,
+    });
   };
 
-  const removeQcStandard = (dept: string, standard: string) => {
+  const removeQcStandard = (dept: string, index: number) => {
     const config = getOrCreateDeptConfig(dept);
     setDepartmentConfig({
       ...departmentConfig,
       [dept]: {
         ...config,
-        qcStandards: config.qcStandards.filter(s => s !== standard),
+        qcStandards: config.qcStandards.filter((_, i) => i !== index),
       },
     });
   };
@@ -629,6 +678,21 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                                         <X className="h-4 w-4" />
                                       </Button>
                                     </div>
+                                    
+                                    {/* Entry Method */}
+                                    <div className="mb-3 flex items-center gap-2">
+                                      <Label className="text-xs font-semibold">Entry Method:</Label>
+                                      <Button
+                                        size="sm"
+                                        variant={material.entryMethod === 'manual' ? 'default' : 'outline'}
+                                        className="h-7 text-xs"
+                                        onClick={() => toggleMaterialEntryMethod(dept, material.partId)}
+                                      >
+                                        {material.entryMethod === 'manual' ? 'Manual Entry' : 'Barcode Scan'}
+                                      </Button>
+                                    </div>
+                                    
+                                    {/* Traceability Fields */}
                                     <div className="grid grid-cols-2 gap-2">
                                       {TRACEABILITY_FIELDS.map((field) => (
                                         <div key={field.id} className="flex items-center space-x-2">
@@ -703,39 +767,75 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                           <div>
                             <h4 className="font-semibold mb-3">QC Standards ({config.qcStandards.length})</h4>
                             {config.qcStandards.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mb-3">
-                                {config.qcStandards.map((standard) => (
-                                  <Badge key={standard} variant="secondary" className="flex items-center gap-1">
-                                    {standard}
-                                    <X
-                                      className="h-3 w-3 cursor-pointer hover:text-destructive"
-                                      onClick={() => removeQcStandard(dept, standard)}
-                                    />
-                                  </Badge>
+                              <div className="space-y-2 mb-3">
+                                {config.qcStandards.map((qcStandard, idx) => (
+                                  <Card key={idx} className="p-3">
+                                    <div className="flex items-start justify-between mb-2">
+                                      <div className="flex-1">
+                                        <p className="font-medium text-sm">{qcStandard.standard}</p>
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0"
+                                        onClick={() => removeQcStandard(dept, idx)}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                      <div>
+                                        <span className="text-muted-foreground">Tolerance:</span>
+                                        <p className="font-mono">{qcStandard.tolerance}</p>
+                                      </div>
+                                      <div>
+                                        <span className="text-muted-foreground">Requirement:</span>
+                                        <p className="font-mono">{qcStandard.requirement}</p>
+                                      </div>
+                                    </div>
+                                  </Card>
                                 ))}
                               </div>
                             )}
-                            <div className="flex gap-2">
+                            <div className="space-y-2">
                               <Input
-                                placeholder="Enter QC standard..."
+                                placeholder="QC Standard (e.g., Surface Finish)"
                                 value={selectedDeptForConfig === dept ? qcStandardInput : ''}
                                 onChange={(e) => {
                                   setSelectedDeptForConfig(dept);
                                   setQcStandardInput(e.target.value);
                                 }}
                                 onFocus={() => setSelectedDeptForConfig(dept)}
-                                onKeyPress={(e) => {
-                                  if (e.key === 'Enter') {
-                                    addQcStandard(dept, qcStandardInput);
-                                  }
+                              />
+                              <Input
+                                placeholder="Tolerance (e.g., ±0.001 in)"
+                                value={selectedDeptForConfig === dept ? qcToleranceInput : ''}
+                                onChange={(e) => {
+                                  setSelectedDeptForConfig(dept);
+                                  setQcToleranceInput(e.target.value);
                                 }}
+                                onFocus={() => setSelectedDeptForConfig(dept)}
+                              />
+                              <Input
+                                placeholder="Requirement (e.g., 32 Ra max)"
+                                value={selectedDeptForConfig === dept ? qcRequirementInput : ''}
+                                onChange={(e) => {
+                                  setSelectedDeptForConfig(dept);
+                                  setQcRequirementInput(e.target.value);
+                                }}
+                                onFocus={() => setSelectedDeptForConfig(dept)}
                               />
                               <Button
                                 size="sm"
-                                onClick={() => addQcStandard(dept, qcStandardInput)}
-                                disabled={!qcStandardInput.trim() || selectedDeptForConfig !== dept}
+                                onClick={() => addQcStandard(dept)}
+                                disabled={
+                                  !qcStandardInput.trim() || 
+                                  !qcToleranceInput.trim() || 
+                                  !qcRequirementInput.trim() || 
+                                  selectedDeptForConfig !== dept
+                                }
                               >
-                                Add
+                                Add QC Standard
                               </Button>
                             </div>
                           </div>

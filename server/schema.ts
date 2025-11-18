@@ -3593,6 +3593,7 @@ export const partRoutings = pgTable('part_routings', {
   partName: text('part_name').notNull(), // Denormalized for display
   departmentSequence: jsonb('department_sequence').notNull(), // Array of department names in order: ["Layup", "CNC", "Finish"]
   traceabilityConfig: jsonb('traceability_config').notNull(), // Requirements per department: { "Layup": ["lot_number", "batch_number", "expiration"], "CNC": ["custom_1"] }
+  departmentConfig: jsonb('department_config'), // Full department configuration: { "Layup": { materials: [{partId, partNumber, partName, requiredFields, entryMethod}], technicianRequired: bool, qcStandards: [{standard, tolerance, requirement}] } }
   isActive: boolean('is_active').default(true).notNull(),
   createdBy: text('created_by').notNull(), // Username who created routing
   createdAt: timestamp('created_at').defaultNow(),

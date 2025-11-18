@@ -185,10 +185,16 @@ export default function RFQRiskAssessment() {
   useEffect(() => {
     if (formData.signature && signatureCanvasRef.current) {
       try {
+        // Clear the canvas first to prevent duplicates
+        signatureCanvasRef.current.clear();
+        // Load the signature
         signatureCanvasRef.current.fromDataURL(formData.signature);
       } catch (error) {
         console.error('Error loading signature:', error);
       }
+    } else if (!formData.signature && signatureCanvasRef.current) {
+      // If there's no signature data, ensure canvas is clear
+      signatureCanvasRef.current.clear();
     }
   }, [formData.signature]);
 
@@ -1565,7 +1571,6 @@ export default function RFQRiskAssessment() {
                       pointerEvents: canEditSignature ? 'auto' : 'none',
                     },
                   }}
-                  onEnd={saveSignature}
                 />
               </div>
               <div className="flex gap-2 mt-2">

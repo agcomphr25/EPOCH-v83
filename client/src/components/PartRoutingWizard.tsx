@@ -59,11 +59,11 @@ interface InventoryItem {
   description?: string;
 }
 
-interface PartTraceabilityRequirement {
+interface MaterialRequirement {
   partId: string;
   partNumber: string;
   partName: string;
-  requiredFields: string[];
+  requiredFields: string[]; // Which traceability fields are required for this material
 }
 
 interface PartRouting {
@@ -72,7 +72,8 @@ interface PartRouting {
   partNumber: string;  // This comes from backend, keep as is for routing data
   partName: string;    // This comes from backend, keep as is for routing data
   departmentSequence: string[];
-  traceabilityConfig: Record<string, PartTraceabilityRequirement[]>;
+  traceabilityConfig: Record<string, string[]>; // Item-level traceability for manufactured item
+  departmentMaterials?: Record<string, MaterialRequirement[]>; // Materials used in each department
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -88,18 +89,22 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   const [step, setStep] = useState(1);
   const [selectedItemId, setSelectedItemId] = useState<string>(editRouting?.inventoryItemId || '');
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>(editRouting?.departmentSequence || []);
-  const [traceabilityConfig, setTraceabilityConfig] = useState<Record<string, PartTraceabilityRequirement[]>>(
+  const [traceabilityConfig, setTraceabilityConfig] = useState<Record<string, string[]>>(
     editRouting?.traceabilityConfig || {}
   );
   const [searchTerm, setSearchTerm] = useState('');
-  const [step3SearchTerm, setStep3SearchTerm] = useState('');
+  const [departmentMaterials, setDepartmentMaterials] = useState<Record<string, MaterialRequirement[]>>(
+    editRouting?.departmentMaterials || {}
+  );
+  const [materialSearchTerm, setMaterialSearchTerm] = useState('');
+  const [selectedDeptForMaterial, setSelectedDeptForMaterial] = useState<string>('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch inventory items
+  // Fetch inventory items for both step 1 and step 4 (materials)
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory'],
-    enabled: open && step === 1,
+    enabled: open && (step === 1 || step === 4),
   });
 
   // Filter inventory items by search

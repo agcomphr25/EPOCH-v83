@@ -1680,7 +1680,6 @@ export default function RFQRiskAssessment() {
                                 className="flex items-center gap-1"
                                 data-testid={`button-view-${assessment.id}`}
                                 onClick={() => loadAssessmentForEditing(assessment.rfqNumber)}
-                                disabled={isSubmitted}
                               >
                                 <Eye className="h-3 w-3" />
                                 {isSubmitted ? 'View' : 'Edit'}

@@ -218,11 +218,17 @@ export async function extractTrainingContent(
     const result = await analyzeDocument(fileBuffer, 'layout');
     content = result.content || '';
   } else {
-    // Use dynamic import for pdf-parse
-    const pdfParseModule = await import('pdf-parse');
-    const pdfParse = pdfParseModule.default || pdfParseModule;
-    const pdfData = await pdfParse(fileBuffer);
-    content = pdfData.text || '';
+    // Fallback: Use pdf-parse with proper error handling
+    try {
+      const pdfParse = await import('pdf-parse');
+      const pdfData = await pdfParse(fileBuffer);
+      content = pdfData.text || '';
+    } catch (error) {
+      console.error('PDF parsing error:', error);
+      throw new Error(
+        'Azure Document Intelligence is not configured. Please contact your administrator to set up AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY for PDF processing.'
+      );
+    }
   }
 
   const lines = content.split('\n').filter((line) => line.trim());
@@ -348,11 +354,17 @@ export async function extractCertificationContent(
     const result = await analyzeDocument(fileBuffer, 'document');
     content = result.content || '';
   } else {
-    // Use dynamic import for pdf-parse
-    const pdfParseModule = await import('pdf-parse');
-    const pdfParse = pdfParseModule.default || pdfParseModule;
-    const pdfData = await pdfParse(fileBuffer);
-    content = pdfData.text || '';
+    // Fallback: Use pdf-parse with proper error handling
+    try {
+      const pdfParse = await import('pdf-parse');
+      const pdfData = await pdfParse(fileBuffer);
+      content = pdfData.text || '';
+    } catch (error) {
+      console.error('PDF parsing error:', error);
+      throw new Error(
+        'Azure Document Intelligence is not configured. Please contact your administrator to set up AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY for PDF processing.'
+      );
+    }
   }
 
   const lines = content.split('\n').filter((line) => line.trim());
@@ -462,11 +474,17 @@ export async function extractTrainingMatrixData(
     content = result.content || '';
     tables = result.tables || [];
   } else {
-    // Use dynamic import for pdf-parse
-    const pdfParseModule = await import('pdf-parse');
-    const pdfParse = pdfParseModule.default || pdfParseModule;
-    const pdfData = await pdfParse(fileBuffer);
-    content = pdfData.text || '';
+    // Fallback: Use pdf-parse with proper error handling
+    try {
+      const pdfParse = await import('pdf-parse');
+      const pdfData = await pdfParse(fileBuffer);
+      content = pdfData.text || '';
+    } catch (error) {
+      console.error('PDF parsing error:', error);
+      throw new Error(
+        'Azure Document Intelligence is not configured. Please contact your administrator to set up AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY for PDF processing.'
+      );
+    }
   }
 
   const entries: TrainingMatrixData['entries'] = [];

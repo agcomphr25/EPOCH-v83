@@ -54,16 +54,16 @@ const TRACEABILITY_FIELDS = [
 
 interface InventoryItem {
   id: string;
-  partNumber: string;
-  partName: string;
+  agPartNumber: string;
+  name: string;
   description?: string;
 }
 
 interface PartRouting {
   id: string;
   inventoryItemId: string;
-  partNumber: string;
-  partName: string;
+  partNumber: string;  // This comes from backend, keep as is for routing data
+  partName: string;    // This comes from backend, keep as is for routing data
   departmentSequence: string[];
   traceabilityConfig: Record<string, string[]>;
   createdBy: string;
@@ -96,8 +96,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
 
   // Filter inventory items by search
   const filteredItems = inventoryItems.filter(item =>
-    (item.partNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-    (item.partName?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+    (item.agPartNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (item.name?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
   // Selected inventory item
@@ -184,8 +184,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
 
     const data = {
       inventoryItemId: selectedItem.id,
-      partNumber: selectedItem.partNumber,
-      partName: selectedItem.partName,
+      partNumber: selectedItem.agPartNumber,
+      partName: selectedItem.name,
       departmentSequence: selectedDepartments,
       traceabilityConfig,
       createdBy: 'system', // TODO: Get from auth context
@@ -302,8 +302,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-mono font-semibold">{item.partNumber}</p>
-                          <p className="text-sm">{item.partName}</p>
+                          <p className="font-mono font-semibold">{item.agPartNumber}</p>
+                          <p className="text-sm">{item.name}</p>
                           {item.description && (
                             <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
                           )}
@@ -334,8 +334,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2">
                       <Package className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-mono font-semibold">{selectedItem.partNumber}</span>
-                      <span className="text-sm">- {selectedItem.partName}</span>
+                      <span className="font-mono font-semibold">{selectedItem.agPartNumber}</span>
+                      <span className="text-sm">- {selectedItem.name}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -422,8 +422,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2">
                       <Package className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-mono font-semibold">{selectedItem.partNumber}</span>
-                      <span className="text-sm">- {selectedItem.partName}</span>
+                      <span className="font-mono font-semibold">{selectedItem.agPartNumber}</span>
+                      <span className="text-sm">- {selectedItem.name}</span>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1">
                       {selectedDepartments.map((dept, index) => (

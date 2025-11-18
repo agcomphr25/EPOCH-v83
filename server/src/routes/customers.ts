@@ -1184,7 +1184,7 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const item = await storage.getP2SerializedItem(parseInt(id));
+      const item = await storage.getP2SerializedItem(id);
       
       if (!item) {
         return res.status(404).json({ error: 'Serialized item not found' });
@@ -1227,7 +1227,7 @@ router.post(
       const { username = 'system', notes } = req.body;
       
       const item = await storage.transitionSerializedItem(
-        parseInt(id),
+        id,
         '', // nextDepartment is determined automatically
         username,
         notes
@@ -1257,7 +1257,7 @@ router.post(
       }
       
       const item = await storage.holdSerializedItem(
-        parseInt(id),
+        id,
         reason,
         username
       );
@@ -1282,7 +1282,7 @@ router.post(
       const { username = 'system' } = req.body;
       
       const item = await storage.releaseSerializedItem(
-        parseInt(id),
+        id,
         username
       );
       
@@ -1310,7 +1310,7 @@ router.post(
       }
       
       const item = await storage.scrapSerializedItem(
-        parseInt(id),
+        id,
         reason,
         username
       );
@@ -1332,7 +1332,7 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const history = await storage.getP2SerializedItemHistory(parseInt(id));
+      const history = await storage.getP2SerializedItemHistory(id);
       res.json(history);
     } catch (error) {
       console.error('Error fetching item history:', error);

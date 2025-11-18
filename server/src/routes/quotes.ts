@@ -107,14 +107,17 @@ router.post('/api/quotes/save', async (req: Request, res: Response) => {
     if (items.length > 0) {
       for (const item of items) {
         const validation = insertQuoteLineItemSchema.safeParse({
-          quoteId: id || 'temp', // Temporary ID for validation
-          lineNumber: item.lineNumber,
-          quantity: item.quantity,
-          description: item.description,
-          unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice,
+          quoteId: id || nanoid(), // Temporary ID for validation
+          lineNumber: parseInt(String(item.lineNumber || 0)),
+          quantity: parseFloat(String(item.quantity || 1)),
+          description: String(item.description || ''),
+          unitPrice: parseFloat(String(item.unitPrice || 0)),
+          totalPrice: parseFloat(String(item.totalPrice || 0)),
+          inventoryItemId: item.inventoryItemId ? parseInt(String(item.inventoryItemId)) : null,
+          agPartNumber: item.agPartNumber || null,
         });
         if (!validation.success) {
+          console.error('Line item validation error:', validation.error.format());
           return res.status(400).json({
             error: 'Invalid line item data',
             details: validation.error.format(),

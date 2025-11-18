@@ -181,6 +181,28 @@ export default function RFQRiskAssessment() {
     };
   }, []);
 
+  // Effect to load signature into canvas when signature data changes
+  useEffect(() => {
+    // Use a small delay to ensure canvas is fully mounted
+    const loadSignature = setTimeout(() => {
+      if (formData.signature && signatureCanvasRef.current) {
+        try {
+          // Clear the canvas first to prevent duplicates
+          signatureCanvasRef.current.clear();
+          // Load the signature
+          signatureCanvasRef.current.fromDataURL(formData.signature);
+        } catch (error) {
+          console.error('Error loading signature:', error);
+        }
+      } else if (!formData.signature && signatureCanvasRef.current) {
+        // If there's no signature data, ensure canvas is clear
+        signatureCanvasRef.current.clear();
+      }
+    }, 100);
+
+    return () => clearTimeout(loadSignature);
+  }, [formData.signature]);
+
   // Effect to handle mitigation actions requirement based on risk score
   useEffect(() => {
     if (formData.totalOverallPoints > 16) {
@@ -771,11 +793,7 @@ export default function RFQRiskAssessment() {
         setIsViewingSubmitted(assessment.status === 'submitted');
         setAttachments(assessment.attachments || []);
         
-        // Load signature if it exists
-        if (assessment.formData.signature && signatureCanvasRef.current) {
-          const canvas = signatureCanvasRef.current;
-          canvas.fromDataURL(assessment.formData.signature);
-        }
+        // Signature will be loaded automatically by the useEffect hook
         
         // Switch to create tab to show the loaded form
         setActiveTab('create');
@@ -1558,7 +1576,6 @@ export default function RFQRiskAssessment() {
                       pointerEvents: canEditSignature ? 'auto' : 'none',
                     },
                   }}
-                  onEnd={saveSignature}
                 />
               </div>
               <div className="flex gap-2 mt-2">

@@ -869,13 +869,109 @@ export default function P2DepartmentManager() {
                 />
               </div>
             )}
+
+            {/* Materials Traceability */}
+            {requiredMaterials.length > 0 && (
+              <div className="border-t pt-4 mt-4">
+                <h4 className="font-semibold mb-3">Materials Used in {selectedItem?.currentDepartment}</h4>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Enter traceability data for each material used in this department
+                </p>
+                {requiredMaterials.map((material) => {
+                  const materialData = materialTraceabilityData[material.partId] || {};
+                  return (
+                    <Card key={material.partId} className="mb-4">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-mono">{material.partNumber}</CardTitle>
+                        <CardDescription className="text-xs">{material.partName}</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {material.requiredFields.includes('lotNumber') && (
+                          <div>
+                            <Label htmlFor={`material-${material.partId}-lot`}>Lot Number *</Label>
+                            <Input
+                              id={`material-${material.partId}-lot`}
+                              value={materialData.lotNumber || ''}
+                              onChange={(e) => setMaterialTraceabilityData({
+                                ...materialTraceabilityData,
+                                [material.partId]: { ...materialData, lotNumber: e.target.value }
+                              })}
+                              placeholder="Scan or enter lot number..."
+                            />
+                          </div>
+                        )}
+                        {material.requiredFields.includes('batchNumber') && (
+                          <div>
+                            <Label htmlFor={`material-${material.partId}-batch`}>Batch Number *</Label>
+                            <Input
+                              id={`material-${material.partId}-batch`}
+                              value={materialData.batchNumber || ''}
+                              onChange={(e) => setMaterialTraceabilityData({
+                                ...materialTraceabilityData,
+                                [material.partId]: { ...materialData, batchNumber: e.target.value }
+                              })}
+                              placeholder="Scan or enter batch number..."
+                            />
+                          </div>
+                        )}
+                        {material.requiredFields.includes('expirationDate') && (
+                          <div>
+                            <Label htmlFor={`material-${material.partId}-exp`}>Expiration Date *</Label>
+                            <Input
+                              id={`material-${material.partId}-exp`}
+                              type="date"
+                              value={materialData.expirationDate || ''}
+                              onChange={(e) => setMaterialTraceabilityData({
+                                ...materialTraceabilityData,
+                                [material.partId]: { ...materialData, expirationDate: e.target.value }
+                              })}
+                            />
+                          </div>
+                        )}
+                        {material.requiredFields.includes('serialNumber') && (
+                          <div>
+                            <Label htmlFor={`material-${material.partId}-serial`}>Serial Number *</Label>
+                            <Input
+                              id={`material-${material.partId}-serial`}
+                              value={materialData.serialNumber || ''}
+                              onChange={(e) => setMaterialTraceabilityData({
+                                ...materialTraceabilityData,
+                                [material.partId]: { ...materialData, serialNumber: e.target.value }
+                              })}
+                              placeholder="Scan or enter serial number..."
+                            />
+                          </div>
+                        )}
+                        {material.requiredFields.includes('revision') && (
+                          <div>
+                            <Label htmlFor={`material-${material.partId}-rev`}>Revision *</Label>
+                            <Input
+                              id={`material-${material.partId}-rev`}
+                              value={materialData.revision || ''}
+                              onChange={(e) => setMaterialTraceabilityData({
+                                ...materialTraceabilityData,
+                                [material.partId]: { ...materialData, revision: e.target.value }
+                              })}
+                              placeholder="Enter revision..."
+                            />
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => {
                 setShowTraceabilityDialog(false);
                 setTraceabilityData({});
+                setMaterialTraceabilityData({});
                 setPendingTransitionItemId(null);
                 setPendingTransitionDepartment(null);
                 setRequiredTraceabilityFields([]);
+                setRequiredMaterials([]);
               }}>
                 Cancel
               </Button>
@@ -891,7 +987,7 @@ export default function P2DepartmentManager() {
                     return;
                   }
 
-                  // Validate required fields are filled
+                  // Validate item-level required fields are filled
                   const missingFields = requiredTraceabilityFields.filter(field => {
                     const value = traceabilityData[field as keyof TraceabilityData];
                     return !value || value.trim() === '';
@@ -899,19 +995,56 @@ export default function P2DepartmentManager() {
 
                   if (missingFields.length > 0) {
                     toast({
-                      title: 'Missing Required Fields',
-                      description: 'Please fill in all required traceability fields',
+                      title: 'Missing Item Traceability Fields',
+                      description: 'Please fill in all required traceability fields for the item',
                       variant: 'destructive',
                     });
                     return;
                   }
 
-                  try {
-                    // Save traceability data first
-                    await saveTraceabilityMutation.mutateAsync({
-                      itemId: pendingTransitionItemId,
-                      data: { ...traceabilityData, department: pendingTransitionDepartment },
+                  // Validate materials required fields are filled
+                  for (const material of requiredMaterials) {
+                    const materialData = materialTraceabilityData[material.partId] || {};
+                    const missingMaterialFields = material.requiredFields.filter(field => {
+                      const value = materialData[field as keyof TraceabilityData];
+                      return !value || (typeof value === 'string' && value.trim() === '');
                     });
+
+                    if (missingMaterialFields.length > 0) {
+                      toast({
+                        title: 'Missing Material Traceability',
+                        description: `Please fill in all required fields for ${material.partNumber}`,
+                        variant: 'destructive',
+                      });
+                      return;
+                    }
+                  }
+
+                  try {
+                    // Save item-level traceability data first
+                    if (requiredTraceabilityFields.length > 0) {
+                      await saveTraceabilityMutation.mutateAsync({
+                        itemId: pendingTransitionItemId,
+                        data: { ...traceabilityData, department: pendingTransitionDepartment },
+                      });
+                    }
+
+                    // Save materials traceability data
+                    for (const material of requiredMaterials) {
+                      const materialData = materialTraceabilityData[material.partId];
+                      if (materialData && material.requiredFields.length > 0) {
+                        await apiRequest(`/api/p2/serialized-items/${pendingTransitionItemId}/traceability`, {
+                          method: 'POST',
+                          body: {
+                            ...materialData,
+                            department: pendingTransitionDepartment,
+                            inventoryPartId: material.partId,
+                            inventoryPartNumber: material.partNumber,
+                            recordedBy: 'system',
+                          },
+                        });
+                      }
+                    }
 
                     // Proceed with transition after successful save
                     transitionMutation.mutate(pendingTransitionItemId);
@@ -919,14 +1052,20 @@ export default function P2DepartmentManager() {
                     // Reset dialog state
                     setShowTraceabilityDialog(false);
                     setTraceabilityData({});
+                    setMaterialTraceabilityData({});
                     setPendingTransitionItemId(null);
                     setPendingTransitionDepartment(null);
                     setRequiredTraceabilityFields([]);
-                  } catch (error) {
-                    // Error handling is done by mutation onError
+                    setRequiredMaterials([]);
+                  } catch (error: any) {
+                    toast({
+                      title: 'Error Saving Traceability',
+                      description: error.message || 'Failed to save traceability data',
+                      variant: 'destructive',
+                    });
                   }
                 }}
-                disabled={saveTraceabilityMutation.isPending || transitionMutation.isPending || requiredTraceabilityFields.length === 0}
+                disabled={saveTraceabilityMutation.isPending || transitionMutation.isPending || (requiredTraceabilityFields.length === 0 && requiredMaterials.length === 0)}
               >
                 Save & Advance
               </Button>

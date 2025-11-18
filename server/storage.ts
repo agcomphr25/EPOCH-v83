@@ -1051,6 +1051,7 @@ export interface IStorage {
   createRFQRiskAssessment(data: InsertRFQRiskAssessment): Promise<RFQRiskAssessment>;
   getAllRFQRiskAssessments(): Promise<RFQRiskAssessment[]>;
   getRFQRiskAssessment(rfqNumber: string): Promise<RFQRiskAssessment | undefined>;
+  getRFQRiskAssessmentById(id: number): Promise<RFQRiskAssessment | undefined>;
   updateRFQRiskAssessment(id: number, data: Partial<InsertRFQRiskAssessment>): Promise<RFQRiskAssessment | undefined>;
   submitRFQRiskAssessment(id: number, username: string): Promise<RFQRiskAssessment | undefined>;
 
@@ -9815,6 +9816,17 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(rfqRiskAssessments)
       .where(eq(rfqRiskAssessments.rfqNumber, rfqNumber))
+      .limit(1);
+    return assessment;
+  }
+
+  async getRFQRiskAssessmentById(
+    id: number
+  ): Promise<RFQRiskAssessment | undefined> {
+    const [assessment] = await db
+      .select()
+      .from(rfqRiskAssessments)
+      .where(eq(rfqRiskAssessments.id, id))
       .limit(1);
     return assessment;
   }

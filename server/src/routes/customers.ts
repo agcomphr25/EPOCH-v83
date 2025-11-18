@@ -367,8 +367,8 @@ router.post('/rfq-assessments/:id/attachments', rfqUpload.array('files', 5), asy
       return res.status(400).json({ error: 'No files uploaded' });
     }
 
-    // Get the current assessment
-    const assessment = await storage.getRFQRiskAssessment(req.params.id);
+    // Get the current assessment by ID
+    const assessment = await storage.getRFQRiskAssessmentById(id);
     if (!assessment) {
       return res.status(404).json({ error: 'RFQ Risk Assessment not found' });
     }

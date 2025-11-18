@@ -124,7 +124,7 @@ export default function RFQRiskAssessment() {
   const isAuthorizedSigner = session?.username === 'tandyd' || session?.username === 'tandym';
   const requiresExecutiveApproval = isHighRisk;
   const canApprove = !requiresExecutiveApproval || isAuthorizedSigner;
-  const canEditSignature = !requiresExecutiveApproval || isAuthorizedSigner;
+  const canEditSignature = (!requiresExecutiveApproval || isAuthorizedSigner) && !isViewingSubmitted;
 
   const handleCustomerChange = async (customerId: string) => {
     const selectedCustomer = customers.find(c => c.customerId === customerId);
@@ -362,6 +362,10 @@ export default function RFQRiskAssessment() {
       signatureCanvasRef.current.clear();
     }
     setFormData((prev) => ({ ...prev, signature: '' }));
+    toast({
+      title: 'Signature Cleared',
+      description: 'The signature has been removed.',
+    });
   };
 
   // Save signature as base64
@@ -369,6 +373,10 @@ export default function RFQRiskAssessment() {
     if (signatureCanvasRef.current) {
       const signatureData = signatureCanvasRef.current.toDataURL();
       setFormData((prev) => ({ ...prev, signature: signatureData }));
+      toast({
+        title: 'Signature Saved',
+        description: 'Your signature has been saved to the form.',
+      });
     }
   };
 
@@ -861,8 +869,20 @@ export default function RFQRiskAssessment() {
 
           {/* Create New Tab */}
           <TabsContent value="create" className="max-w-4xl mx-auto ml-16">
+            {/* Read-Only Banner for Submitted Assessments */}
+            {isViewingSubmitted && (
+              <div className="bg-gray-100 border-2 border-gray-400 rounded-lg p-4 mb-4 text-center">
+                <p className="text-gray-900 font-bold text-lg">
+                  👁️ VIEWING SUBMITTED ASSESSMENT (READ-ONLY)
+                </p>
+                <p className="text-gray-700 mt-1">
+                  This assessment has been submitted and cannot be modified. All form fields are disabled.
+                </p>
+              </div>
+            )}
+
             {/* High-Risk Warning Banner */}
-            {requiresExecutiveApproval && (
+            {requiresExecutiveApproval && !isViewingSubmitted && (
               <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4 text-center">
                 <p className="text-red-800 font-bold text-lg">
                   ⚠️ HIGH-RISK ASSESSMENT (Score: {formData.totalOverallPoints})
@@ -874,7 +894,7 @@ export default function RFQRiskAssessment() {
             )}
 
             {/* Editing indicator and action buttons */}
-            {editingAssessmentId && (
+            {editingAssessmentId && !isViewingSubmitted && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-center">
                 <p className="text-blue-800 font-medium">
                   ✏️ Editing RFQ {formData.rfqNumber} - Make changes and click "Save Form" to update
@@ -899,6 +919,7 @@ export default function RFQRiskAssessment() {
                 onClick={handleSave} 
                 className="flex items-center gap-2"
                 data-testid="button-save-form"
+                disabled={isViewingSubmitted}
               >
                 <Save className="h-4 w-4" />
                 {editingAssessmentId ? 'Update Form' : 'Save Form'}
@@ -936,6 +957,7 @@ export default function RFQRiskAssessment() {
                 <Select
                   value={formData.customerId}
                   onValueChange={handleCustomerChange}
+                  disabled={isViewingSubmitted}
                 >
                   <SelectTrigger data-testid="select-customer">
                     <SelectValue placeholder="Select a customer" />
@@ -1569,11 +1591,12 @@ export default function RFQRiskAssessment() {
             onClick={handleSubmitAssessment}
             className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg font-medium"
             size="lg"
-            disabled={!canApprove}
+            disabled={!canApprove || isViewingSubmitted}
             data-testid="button-submit-assessment"
           >
             Submit Assessment
             {!canApprove && ' (Executive Approval Required)'}
+            {isViewingSubmitted && ' (Already Submitted)'}
           </Button>
         </div>
 

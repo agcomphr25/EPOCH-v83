@@ -804,7 +804,7 @@ export const employees = pgTable('employees', {
 
 // Employee Certifications Management
 export const certifications = pgTable('certifications', {
-  id: serial('id').primaryKey(),
+  id: integer('id').primaryKey().notNull().default(sql`nextval('certifications_id_seq'::regclass)`),
   name: varchar('name').notNull(),
   description: text('description'),
   category: varchar('category'),
@@ -822,7 +822,7 @@ export const certifications = pgTable('certifications', {
 
 // Employee-Certification Junction Table
 export const employeeCertifications = pgTable('employee_certifications', {
-  id: serial('id').primaryKey(),
+  id: integer('id').primaryKey().notNull().default(sql`nextval('employee_certifications_id_seq'::regclass)`),
   employeeId: integer('employee_id')
     .references(() => employees.id)
     .notNull(),

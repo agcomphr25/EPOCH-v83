@@ -3,6 +3,10 @@ import {
   AzureKeyCredential,
   AnalyzeResult,
 } from '@azure/ai-form-recognizer';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const pdfParse = require('pdf-parse');
 
 let client: DocumentAnalysisClient | null = null;
 
@@ -24,6 +28,12 @@ function getClient(): DocumentAnalysisClient {
   }
 
   return client;
+}
+
+function hasAzureCredentials(): boolean {
+  const endpoint = process.env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT;
+  const apiKey = process.env.AZURE_DOCUMENT_INTELLIGENCE_KEY;
+  return !!(endpoint && apiKey);
 }
 
 export type DocumentType =
@@ -206,9 +216,16 @@ export interface TrainingContent {
 export async function extractTrainingContent(
   fileBuffer: Buffer
 ): Promise<TrainingContent> {
-  const result = await analyzeDocument(fileBuffer, 'layout');
+  let content = '';
 
-  const content = result.content || '';
+  if (hasAzureCredentials()) {
+    const result = await analyzeDocument(fileBuffer, 'layout');
+    content = result.content || '';
+  } else {
+    const pdfData = await pdfParse(fileBuffer);
+    content = pdfData.text || '';
+  }
+
   const lines = content.split('\n').filter((line) => line.trim());
 
   const title = lines[0]?.trim() || 'Untitled Training Module';
@@ -326,9 +343,16 @@ export interface CertificationContent {
 export async function extractCertificationContent(
   fileBuffer: Buffer
 ): Promise<CertificationContent> {
-  const result = await analyzeDocument(fileBuffer, 'document');
+  let content = '';
 
-  const content = result.content || '';
+  if (hasAzureCredentials()) {
+    const result = await analyzeDocument(fileBuffer, 'document');
+    content = result.content || '';
+  } else {
+    const pdfData = await pdfParse(fileBuffer);
+    content = pdfData.text || '';
+  }
+
   const lines = content.split('\n').filter((line) => line.trim());
 
   const name = lines[0]?.trim() || 'Untitled Certification';
@@ -428,14 +452,23 @@ export interface TrainingMatrixData {
 export async function extractTrainingMatrixData(
   fileBuffer: Buffer
 ): Promise<TrainingMatrixData> {
-  const result = await analyzeDocument(fileBuffer, 'layout');
+  let content = '';
+  let tables: any[] = [];
 
-  const content = result.content || '';
+  if (hasAzureCredentials()) {
+    const result = await analyzeDocument(fileBuffer, 'layout');
+    content = result.content || '';
+    tables = result.tables || [];
+  } else {
+    const pdfData = await pdfParse(fileBuffer);
+    content = pdfData.text || '';
+  }
+
   const entries: TrainingMatrixData['entries'] = [];
 
   // Try to extract table data if available
-  if (result.tables && result.tables.length > 0) {
-    const table = result.tables[0];
+  if (tables.length > 0) {
+    const table = tables[0];
 
     // Find header row to identify columns
     const headerCells = table.cells.filter((cell) => cell.rowIndex === 0);

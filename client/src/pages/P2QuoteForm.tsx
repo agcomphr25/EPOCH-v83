@@ -40,6 +40,17 @@ interface QuoteLineItem {
   totalPrice: number;
 }
 
+interface RFQAssessment {
+  id: number;
+  rfqNumber: string;
+  customerId: string;
+  customerName: string;
+  description: string | null;
+  status: string;
+  submittedBy: string | null;
+  submittedAt: string | null;
+}
+
 export default function P2QuoteForm() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -70,6 +81,16 @@ export default function P2QuoteForm() {
   const { data: p2Customers = [] } = useQuery<any[]>({
     queryKey: ['/api/p2-customers-bypass'],
   });
+
+  // Fetch RFQ Risk Assessments
+  const { data: rfqAssessments = [] } = useQuery<RFQAssessment[]>({
+    queryKey: ['/api/customers/rfq-assessments'],
+  });
+
+  // Filter for submitted RFQs only (case-insensitive)
+  const submittedRFQs = rfqAssessments.filter(
+    (rfq) => rfq.status?.toLowerCase() === 'submitted'
+  );
 
   // Calculate grand total
   const grandTotal = lineItems.reduce(
@@ -188,14 +209,32 @@ export default function P2QuoteForm() {
               <p className="text-sm">Owens Cross Roads, AL 35763</p>
             </div>
             <div className="text-right">
-              <Label className="text-sm font-semibold">Quote Number</Label>
-              <Input
-                value={quoteNumber}
-                onChange={(e) => setQuoteNumber(e.target.value)}
-                className="w-48 mt-1 text-right font-mono"
-                placeholder="STR250015"
-                data-testid="input-quote-number"
-              />
+              <Label className="text-sm font-semibold">Quote Number (RFQ)</Label>
+              <Select value={quoteNumber} onValueChange={setQuoteNumber}>
+                <SelectTrigger
+                  className="w-48 mt-1 text-right font-mono"
+                  data-testid="select-quote-number"
+                >
+                  <SelectValue placeholder="Select RFQ..." />
+                </SelectTrigger>
+                <SelectContent data-testid="select-quote-number-content">
+                  {submittedRFQs.length === 0 ? (
+                    <SelectItem value="none" disabled data-testid="option-no-rfqs">
+                      No submitted RFQs
+                    </SelectItem>
+                  ) : (
+                    submittedRFQs.map((rfq) => (
+                      <SelectItem
+                        key={rfq.id}
+                        value={rfq.rfqNumber}
+                        data-testid={`option-rfq-${rfq.rfqNumber}`}
+                      >
+                        {rfq.rfqNumber} - {rfq.customerName}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

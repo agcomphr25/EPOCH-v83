@@ -181,6 +181,17 @@ export default function RFQRiskAssessment() {
     };
   }, []);
 
+  // Effect to load signature into canvas when signature data changes
+  useEffect(() => {
+    if (formData.signature && signatureCanvasRef.current) {
+      try {
+        signatureCanvasRef.current.fromDataURL(formData.signature);
+      } catch (error) {
+        console.error('Error loading signature:', error);
+      }
+    }
+  }, [formData.signature]);
+
   // Effect to handle mitigation actions requirement based on risk score
   useEffect(() => {
     if (formData.totalOverallPoints > 16) {
@@ -771,11 +782,7 @@ export default function RFQRiskAssessment() {
         setIsViewingSubmitted(assessment.status === 'submitted');
         setAttachments(assessment.attachments || []);
         
-        // Load signature if it exists
-        if (assessment.formData.signature && signatureCanvasRef.current) {
-          const canvas = signatureCanvasRef.current;
-          canvas.fromDataURL(assessment.formData.signature);
-        }
+        // Signature will be loaded automatically by the useEffect hook
         
         // Switch to create tab to show the loaded form
         setActiveTab('create');

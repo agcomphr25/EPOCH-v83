@@ -250,10 +250,16 @@ router.put('/rfq-assessments/:id/submit', async (req: Request, res: Response) =>
   try {
     const id = parseInt(req.params.id);
     
+    // Debug logging
+    console.log('🔍 RFQ Submit - Cookies:', req.cookies);
+    console.log('🔍 RFQ Submit - Headers:', req.headers);
+    
     // Extract session token from cookies or authorization header
     const sessionToken =
       req.cookies?.sessionToken ||
       req.headers.authorization?.replace('Bearer ', '');
+
+    console.log('🔍 RFQ Submit - Session Token:', sessionToken ? 'Found' : 'Not found');
 
     if (!sessionToken) {
       return res.status(401).json({ error: 'Not authenticated' });

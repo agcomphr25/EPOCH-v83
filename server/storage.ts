@@ -11348,13 +11348,14 @@ export class DatabaseStorage implements IStorage {
     };
 
     // Insert directly into all_orders table (id, createdAt, updatedAt are auto-generated)
-    console.log('🔍 DEBUG: finalizedOrderData keys:', Object.keys(finalizedOrderData));
-    console.log('🔍 DEBUG: Has id property?', 'id' in finalizedOrderData);
-    console.log('🔍 DEBUG: id value:', (finalizedOrderData as any).id);
+    // Use Object.fromEntries to create a clean object without any undefined properties
+    const cleanInsertData = Object.fromEntries(
+      Object.entries(finalizedOrderData).filter(([_, value]) => value !== undefined)
+    );
     
     const [finalizedOrder] = await db
       .insert(allOrders)
-      .values(finalizedOrderData)
+      .values(cleanInsertData as any)
       .returning();
 
     // Log the auto-addition to Production Queue

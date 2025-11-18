@@ -50,6 +50,7 @@ import VendorManagement from './pages/VendorManagement';
 import ManageGroups from './pages/ManageGroups';
 import PurchaseOrders from './pages/PurchaseOrders';
 import P2PurchaseOrders from './pages/P2PurchaseOrders';
+import P2DepartmentManager from './pages/P2DepartmentManager';
 import POProductsPage from './pages/POProductsPage';
 import ProductionTracking from './pages/ProductionTracking';
 import BarcodeScannerPage from './pages/BarcodeScannerPage';
@@ -341,6 +342,10 @@ function App() {
                   <Route
                     path="/p2-purchase-orders"
                     component={P2PurchaseOrders}
+                  />
+                  <Route
+                    path="/p2-department-manager"
+                    component={P2DepartmentManager}
                   />
                   <Route path="/po-products" component={POProductsPage} />
 

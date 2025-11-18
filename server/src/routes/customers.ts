@@ -1114,4 +1114,421 @@ router.delete(
   }
 );
 
+// P2 Serialized Items Routes
+
+// Generate serialized items from a PO item
+router.post(
+  '/purchase-orders/items/:poItemId/generate-serialized',
+  async (req: Request, res: Response) => {
+    try {
+      const { poItemId } = req.params;
+      const { username = 'system' } = req.body;
+      const items = await storage.generateSerializedItems(parseInt(poItemId), username);
+      res.status(201).json(items);
+    } catch (error) {
+      console.error('Error generating serialized items:', error);
+      res.status(500).json({ 
+        error: 'Failed to generate serialized items',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Get serialized items with filters
+router.get(
+  '/serialized-items',
+  async (req: Request, res: Response) => {
+    try {
+      const { poId, poItemId, department, status } = req.query;
+      const filters: any = {};
+      
+      if (poId) filters.poId = parseInt(poId as string);
+      if (poItemId) filters.poItemId = parseInt(poItemId as string);
+      if (department) filters.department = department as string;
+      if (status) filters.status = status as string;
+      
+      const items = await storage.getP2SerializedItems(filters);
+      res.json(items);
+    } catch (error) {
+      console.error('Error fetching serialized items:', error);
+      res.status(500).json({ error: 'Failed to fetch serialized items' });
+    }
+  }
+);
+
+// Get department queue (items for a specific department)
+router.get(
+  '/departments/:department/queue',
+  async (req: Request, res: Response) => {
+    try {
+      const { department } = req.params;
+      const { status = 'ACTIVE' } = req.query;
+      
+      const items = await storage.getP2SerializedItems({
+        department,
+        status: status as string
+      });
+      
+      res.json(items);
+    } catch (error) {
+      console.error('Error fetching department queue:', error);
+      res.status(500).json({ error: 'Failed to fetch department queue' });
+    }
+  }
+);
+
+// Get single serialized item by ID
+router.get(
+  '/serialized-items/:id',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const item = await storage.getP2SerializedItem(id);
+      
+      if (!item) {
+        return res.status(404).json({ error: 'Serialized item not found' });
+      }
+      
+      res.json(item);
+    } catch (error) {
+      console.error('Error fetching serialized item:', error);
+      res.status(500).json({ error: 'Failed to fetch serialized item' });
+    }
+  }
+);
+
+// Get serialized item by barcode (for scanner lookup)
+router.get(
+  '/barcode/:barcode',
+  async (req: Request, res: Response) => {
+    try {
+      const { barcode } = req.params;
+      const item = await storage.getP2SerializedItemByBarcode(barcode);
+      
+      if (!item) {
+        return res.status(404).json({ error: 'Item not found' });
+      }
+      
+      res.json(item);
+    } catch (error) {
+      console.error('Error looking up barcode:', error);
+      res.status(500).json({ error: 'Failed to lookup barcode' });
+    }
+  }
+);
+
+// Transition item to next department
+router.post(
+  '/serialized-items/:id/transition',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { username = 'system', notes } = req.body;
+      
+      const item = await storage.transitionSerializedItem(
+        id,
+        '', // nextDepartment is determined automatically
+        username,
+        notes
+      );
+      
+      res.json(item);
+    } catch (error) {
+      console.error('Error transitioning item:', error);
+      res.status(500).json({ 
+        error: 'Failed to transition item',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Hold an item
+router.post(
+  '/serialized-items/:id/hold',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { reason, username = 'system' } = req.body;
+      
+      if (!reason) {
+        return res.status(400).json({ error: 'Hold reason is required' });
+      }
+      
+      const item = await storage.holdSerializedItem(
+        id,
+        reason,
+        username
+      );
+      
+      res.json(item);
+    } catch (error) {
+      console.error('Error holding item:', error);
+      res.status(500).json({ 
+        error: 'Failed to hold item',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Release an item from hold
+router.post(
+  '/serialized-items/:id/release',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { username = 'system' } = req.body;
+      
+      const item = await storage.releaseSerializedItem(
+        id,
+        username
+      );
+      
+      res.json(item);
+    } catch (error) {
+      console.error('Error releasing item:', error);
+      res.status(500).json({ 
+        error: 'Failed to release item',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Scrap an item
+router.post(
+  '/serialized-items/:id/scrap',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { reason, username = 'system' } = req.body;
+      
+      if (!reason) {
+        return res.status(400).json({ error: 'Scrap reason is required' });
+      }
+      
+      const item = await storage.scrapSerializedItem(
+        id,
+        reason,
+        username
+      );
+      
+      res.json(item);
+    } catch (error) {
+      console.error('Error scrapping item:', error);
+      res.status(500).json({ 
+        error: 'Failed to scrap item',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Get item history
+router.get(
+  '/serialized-items/:id/history',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const history = await storage.getP2SerializedItemHistory(id);
+      res.json(history);
+    } catch (error) {
+      console.error('Error fetching item history:', error);
+      res.status(500).json({ error: 'Failed to fetch item history' });
+    }
+  }
+);
+
+// ========== PART ROUTING ROUTES ==========
+
+// Create part routing
+router.post(
+  '/part-routings',
+  async (req: Request, res: Response) => {
+    try {
+      const { insertPartRoutingSchema } = await import('@/schema');
+      const validated = insertPartRoutingSchema.parse(req.body);
+      const routing = await storage.createPartRouting(validated);
+      res.json(routing);
+    } catch (error) {
+      console.error('Error creating part routing:', error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ error: 'Validation error', details: error.message });
+      }
+      res.status(500).json({ 
+        error: 'Failed to create part routing',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Get all part routings (with optional filters)
+router.get(
+  '/part-routings',
+  async (req: Request, res: Response) => {
+    try {
+      const { inventoryItemId, isActive } = req.query;
+      const routings = await storage.getPartRoutings({
+        inventoryItemId: inventoryItemId as string | undefined,
+        isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined
+      });
+      res.json(routings);
+    } catch (error) {
+      console.error('Error fetching part routings:', error);
+      res.status(500).json({ error: 'Failed to fetch part routings' });
+    }
+  }
+);
+
+// Get routing by ID
+router.get(
+  '/part-routings/:id',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const routing = await storage.getPartRouting(id);
+      
+      if (!routing) {
+        return res.status(404).json({ error: 'Part routing not found' });
+      }
+      
+      res.json(routing);
+    } catch (error) {
+      console.error('Error fetching part routing:', error);
+      res.status(500).json({ error: 'Failed to fetch part routing' });
+    }
+  }
+);
+
+// Get routing by inventory item ID
+router.get(
+  '/part-routings/by-item/:inventoryItemId',
+  async (req: Request, res: Response) => {
+    try {
+      const { inventoryItemId } = req.params;
+      const routing = await storage.getPartRoutingByInventoryItem(inventoryItemId);
+      
+      if (!routing) {
+        return res.status(404).json({ error: 'No active routing found for this item' });
+      }
+      
+      res.json(routing);
+    } catch (error) {
+      console.error('Error fetching part routing:', error);
+      res.status(500).json({ error: 'Failed to fetch part routing' });
+    }
+  }
+);
+
+// Get routing by part number
+router.get(
+  '/part-routings/part/:partNumber',
+  async (req: Request, res: Response) => {
+    try {
+      const { partNumber } = req.params;
+      const routing = await storage.getPartRoutingByPartNumber(partNumber);
+      
+      if (!routing) {
+        return res.status(404).json({ error: 'No active routing found for this part number' });
+      }
+      
+      res.json(routing);
+    } catch (error) {
+      console.error('Error fetching part routing:', error);
+      res.status(500).json({ error: 'Failed to fetch part routing' });
+    }
+  }
+);
+
+// Update part routing
+router.put(
+  '/part-routings/:id',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { updatePartRoutingSchema } = await import('@/schema');
+      
+      // Validate against dedicated update schema (with refinements)
+      const validated = updatePartRoutingSchema.parse(req.body);
+      
+      // Storage now handles merging with existing record
+      const routing = await storage.updatePartRouting(id, validated);
+      res.json(routing);
+    } catch (error) {
+      console.error('Error updating part routing:', error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ error: 'Validation error', details: error.message });
+      }
+      res.status(500).json({ 
+        error: 'Failed to update part routing',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Delete part routing
+router.delete(
+  '/part-routings/:id',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      await storage.deletePartRouting(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting part routing:', error);
+      res.status(500).json({ error: 'Failed to delete part routing' });
+    }
+  }
+);
+
+// ========== TRACEABILITY ROUTES ==========
+
+// Add traceability data
+router.post(
+  '/serialized-items/:id/traceability',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { insertP2SerializedItemTraceabilitySchema } = await import('@/schema');
+      const data = { ...req.body, serializedItemId: id };
+      const validated = insertP2SerializedItemTraceabilitySchema.parse(data);
+      const record = await storage.addTraceabilityData(validated);
+      res.json(record);
+    } catch (error) {
+      console.error('Error adding traceability data:', error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ error: 'Validation error', details: error.message });
+      }
+      res.status(500).json({ 
+        error: 'Failed to add traceability data',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Get traceability data for item
+router.get(
+  '/serialized-items/:id/traceability',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { department } = req.query;
+      
+      const data = department
+        ? await storage.getTraceabilityForDepartment(id, department as string)
+        : await storage.getTraceabilityData(id);
+      
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching traceability data:', error);
+      res.status(500).json({ error: 'Failed to fetch traceability data' });
+    }
+  }
+);
+
 export default router;

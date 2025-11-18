@@ -45,6 +45,11 @@ import {
   p2PurchaseOrders,
   p2PurchaseOrderItems,
   p2ProductionOrders,
+  p2SerializedItems,
+  p2SerializedItemEvents,
+  partRoutings,
+  p2SerializedItemTraceability,
+  P2_DEPARTMENT_STAGES,
   rfqRiskAssessments,
   molds,
   employeeLayupSettings,
@@ -228,6 +233,10 @@ import {
   type InsertP2PurchaseOrderItem,
   type P2ProductionOrder,
   type InsertP2ProductionOrder,
+  type P2SerializedItem,
+  type InsertP2SerializedItem,
+  type P2SerializedItemEvent,
+  type InsertP2SerializedItemEvent,
   type RFQRiskAssessment,
   type InsertRFQRiskAssessment,
   type Mold,
@@ -1093,6 +1102,56 @@ export interface IStorage {
   deleteP2ProductionOrder(id: number): Promise<void>;
   generateP2ProductionOrders(poId: number): Promise<P2ProductionOrder[]>;
   getP2MaterialRequirements(poId: number): Promise<any[]>;
+
+  // P2 Serialized Items CRUD
+  generateSerializedItems(poItemId: number, username: string): Promise<P2SerializedItem[]>;
+  getP2SerializedItems(filters?: {
+    poId?: number;
+    poItemId?: number;
+    department?: string;
+    status?: string;
+  }): Promise<P2SerializedItem[]>;
+  getP2SerializedItem(id: string): Promise<P2SerializedItem | undefined>;
+  getP2SerializedItemByBarcode(barcode: string): Promise<P2SerializedItem | undefined>;
+  updateP2SerializedItem(
+    id: string,
+    data: Partial<InsertP2SerializedItem>
+  ): Promise<P2SerializedItem>;
+  transitionSerializedItem(
+    id: string,
+    nextDepartment: string,
+    username: string,
+    notes?: string
+  ): Promise<P2SerializedItem>;
+  holdSerializedItem(
+    id: string,
+    reason: string,
+    username: string
+  ): Promise<P2SerializedItem>;
+  releaseSerializedItem(
+    id: string,
+    username: string
+  ): Promise<P2SerializedItem>;
+  scrapSerializedItem(
+    id: string,
+    reason: string,
+    username: string
+  ): Promise<P2SerializedItem>;
+  getP2SerializedItemHistory(id: string): Promise<P2SerializedItemEvent[]>;
+
+  // Part Routing CRUD
+  createPartRouting(data: InsertPartRouting): Promise<PartRouting>;
+  getPartRoutings(filters?: { inventoryItemId?: string; isActive?: boolean }): Promise<PartRouting[]>;
+  getPartRouting(id: string): Promise<PartRouting | undefined>;
+  getPartRoutingByInventoryItem(inventoryItemId: string): Promise<PartRouting | undefined>;
+  getPartRoutingByPartNumber(partNumber: string): Promise<PartRouting | undefined>;
+  updatePartRouting(id: string, data: Partial<InsertPartRouting>): Promise<PartRouting>;
+  deletePartRouting(id: string): Promise<void>;
+
+  // P2 Serialized Item Traceability CRUD
+  addTraceabilityData(data: InsertP2SerializedItemTraceability): Promise<P2SerializedItemTraceability>;
+  getTraceabilityData(serializedItemId: string): Promise<P2SerializedItemTraceability[]>;
+  getTraceabilityForDepartment(serializedItemId: string, department: string): Promise<P2SerializedItemTraceability[]>;
 
   // Shipment Records CRUD
   createShipment(data: {
@@ -10178,6 +10237,504 @@ export class DatabaseStorage implements IStorage {
     }
 
     return materialRequirements;
+  }
+
+  // P2 Serialized Items CRUD
+  async generateSerializedItems(poItemId: number, username: string): Promise<P2SerializedItem[]> {
+    return await db.transaction(async (tx) => {
+      // Get the PO item
+      const [poItem] = await tx
+        .select()
+        .from(p2PurchaseOrderItems)
+        .where(eq(p2PurchaseOrderItems.id, poItemId));
+
+      if (!poItem) {
+        throw new Error(`PO Item ${poItemId} not found`);
+      }
+
+      // Get the PO
+      const [po] = await tx
+        .select()
+        .from(p2PurchaseOrders)
+        .where(eq(p2PurchaseOrders.id, poItem.poId));
+
+      if (!po) {
+        throw new Error(`PO ${poItem.poId} not found`);
+      }
+
+      const serializedItems: P2SerializedItem[] = [];
+
+      // Generate serialized items based on quantity
+      for (let i = 1; i <= poItem.quantity; i++) {
+        const sequenceNumber = i;
+        const serialNumber = `${po.poNumber}-${poItem.partNumber}-${String(sequenceNumber).padStart(4, '0')}`;
+        const barcode = serialNumber; // Same as serial number
+
+        const itemData: InsertP2SerializedItem = {
+          serialNumber,
+          barcode,
+          poId: po.id,
+          poItemId: poItem.id,
+          poNumber: po.poNumber,
+          partNumber: poItem.partNumber,
+          partName: poItem.partName,
+          customerId: po.customerId,
+          customerName: po.customerName,
+          sequenceNumber,
+          currentDepartment: P2_DEPARTMENT_STAGES[0], // Start at first department (Layup)
+          currentStageIndex: 0,
+          status: 'ACTIVE',
+          departmentHistory: [],
+          metadata: {
+            specifications: poItem.specifications,
+            unitPrice: poItem.unitPrice,
+          },
+        };
+
+        const [item] = await tx.insert(p2SerializedItems).values(itemData).returning();
+        serializedItems.push(item);
+
+        // Log the generation event
+        await tx.insert(p2SerializedItemEvents).values({
+          serializedItemId: item.id,
+          barcode: item.barcode,
+          eventType: 'GENERATED',
+          toDepartment: P2_DEPARTMENT_STAGES[0],
+          toStageIndex: 0,
+          performedBy: username,
+          notes: `Generated from PO ${po.poNumber}, Part ${poItem.partNumber}`,
+        });
+      }
+
+      return serializedItems;
+    });
+  }
+
+  async getP2SerializedItems(filters?: {
+    poId?: number;
+    poItemId?: number;
+    department?: string;
+    status?: string;
+  }): Promise<P2SerializedItem[]> {
+    let conditions = [];
+
+    if (filters?.poId) {
+      conditions.push(eq(p2SerializedItems.poId, filters.poId));
+    }
+    if (filters?.poItemId) {
+      conditions.push(eq(p2SerializedItems.poItemId, filters.poItemId));
+    }
+    if (filters?.department) {
+      conditions.push(eq(p2SerializedItems.currentDepartment, filters.department));
+    }
+    if (filters?.status) {
+      conditions.push(eq(p2SerializedItems.status, filters.status));
+    }
+
+    if (conditions.length === 0) {
+      return await db.select().from(p2SerializedItems).orderBy(p2SerializedItems.createdAt);
+    }
+
+    return await db
+      .select()
+      .from(p2SerializedItems)
+      .where(and(...conditions))
+      .orderBy(p2SerializedItems.createdAt);
+  }
+
+  async getP2SerializedItem(id: string): Promise<P2SerializedItem | undefined> {
+    const [item] = await db
+      .select()
+      .from(p2SerializedItems)
+      .where(eq(p2SerializedItems.id, id));
+    return item;
+  }
+
+  async getP2SerializedItemByBarcode(barcode: string): Promise<P2SerializedItem | undefined> {
+    const [item] = await db
+      .select()
+      .from(p2SerializedItems)
+      .where(eq(p2SerializedItems.barcode, barcode));
+    return item;
+  }
+
+  async updateP2SerializedItem(
+    id: string,
+    data: Partial<InsertP2SerializedItem>
+  ): Promise<P2SerializedItem> {
+    const [updated] = await db
+      .update(p2SerializedItems)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(p2SerializedItems.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new Error(`Serialized item ${id} not found`);
+    }
+
+    return updated;
+  }
+
+  async transitionSerializedItem(
+    id: string,
+    nextDepartment: string,
+    username: string,
+    notes?: string
+  ): Promise<P2SerializedItem> {
+    return await db.transaction(async (tx) => {
+      const [item] = await tx
+        .select()
+        .from(p2SerializedItems)
+        .where(eq(p2SerializedItems.id, id));
+
+      if (!item) {
+        throw new Error(`Serialized item ${id} not found`);
+      }
+
+      if (item.status === 'COMPLETED') {
+        throw new Error('Item is already completed');
+      }
+
+      if (item.status === 'SCRAPPED') {
+        throw new Error('Item is scrapped and cannot be transitioned');
+      }
+
+      if (item.status === 'HOLD') {
+        throw new Error('Item is on hold. Please release it before transitioning');
+      }
+
+      const currentIndex = item.currentStageIndex;
+      const nextIndex = currentIndex + 1;
+
+      // Check if transitioning to completion
+      const isCompleting = nextIndex >= P2_DEPARTMENT_STAGES.length;
+
+      const departmentHistory = Array.isArray(item.departmentHistory) 
+        ? item.departmentHistory 
+        : [];
+
+      const historyEntry = {
+        department: item.currentDepartment,
+        completedAt: new Date().toISOString(),
+        completedBy: username,
+      };
+
+      // Determine completion timestamp field based on current department
+      const completionField = item.currentDepartment.toLowerCase().replace(/[\/\s]/g, '_') + '_completed_at';
+
+      const updateData: any = {
+        departmentHistory: [...departmentHistory, historyEntry],
+        updatedAt: new Date(),
+      };
+
+      // Set department-specific completion timestamp
+      if (item.currentDepartment === 'Layup') {
+        updateData.layupCompletedAt = new Date();
+      } else if (item.currentDepartment === 'Assemble/Disassembly') {
+        updateData.assembleDisassemblyCompletedAt = new Date();
+      } else if (item.currentDepartment === 'CNC') {
+        updateData.cncCompletedAt = new Date();
+      } else if (item.currentDepartment === 'Finish') {
+        updateData.finishCompletedAt = new Date();
+      } else if (item.currentDepartment === 'Paint') {
+        updateData.paintCompletedAt = new Date();
+      } else if (item.currentDepartment === 'Final QC') {
+        updateData.finalQcCompletedAt = new Date();
+      }
+
+      if (isCompleting) {
+        updateData.status = 'COMPLETED';
+        updateData.completedAt = new Date();
+        updateData.currentDepartment = 'Completed';
+      } else {
+        updateData.currentDepartment = P2_DEPARTMENT_STAGES[nextIndex];
+        updateData.currentStageIndex = nextIndex;
+      }
+
+      const [updated] = await tx
+        .update(p2SerializedItems)
+        .set(updateData)
+        .where(eq(p2SerializedItems.id, id))
+        .returning();
+
+      // Log the transition event
+      await tx.insert(p2SerializedItemEvents).values({
+        serializedItemId: id,
+        barcode: item.barcode,
+        eventType: 'TRANSITION',
+        fromDepartment: item.currentDepartment,
+        toDepartment: isCompleting ? 'Completed' : P2_DEPARTMENT_STAGES[nextIndex],
+        fromStageIndex: currentIndex,
+        toStageIndex: isCompleting ? null : nextIndex,
+        performedBy: username,
+        notes: notes || `Transitioned from ${item.currentDepartment} to ${isCompleting ? 'Completed' : P2_DEPARTMENT_STAGES[nextIndex]}`,
+      });
+
+      return updated;
+    });
+  }
+
+  async holdSerializedItem(
+    id: string,
+    reason: string,
+    username: string
+  ): Promise<P2SerializedItem> {
+    return await db.transaction(async (tx) => {
+      const [item] = await tx
+        .select()
+        .from(p2SerializedItems)
+        .where(eq(p2SerializedItems.id, id));
+
+      if (!item) {
+        throw new Error(`Serialized item ${id} not found`);
+      }
+
+      if (item.status !== 'ACTIVE') {
+        throw new Error(`Item must be ACTIVE to place on hold. Current status: ${item.status}`);
+      }
+
+      const [updated] = await tx
+        .update(p2SerializedItems)
+        .set({
+          status: 'HOLD',
+          holdReason: reason,
+          holdBy: username,
+          holdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(p2SerializedItems.id, id))
+        .returning();
+
+      await tx.insert(p2SerializedItemEvents).values({
+        serializedItemId: id,
+        barcode: item.barcode,
+        eventType: 'HOLD',
+        fromDepartment: item.currentDepartment,
+        fromStageIndex: item.currentStageIndex,
+        performedBy: username,
+        notes: `Hold reason: ${reason}`,
+      });
+
+      return updated;
+    });
+  }
+
+  async releaseSerializedItem(
+    id: string,
+    username: string
+  ): Promise<P2SerializedItem> {
+    return await db.transaction(async (tx) => {
+      const [item] = await tx
+        .select()
+        .from(p2SerializedItems)
+        .where(eq(p2SerializedItems.id, id));
+
+      if (!item) {
+        throw new Error(`Serialized item ${id} not found`);
+      }
+
+      if (item.status !== 'HOLD') {
+        throw new Error(`Item must be on HOLD to release. Current status: ${item.status}`);
+      }
+
+      const [updated] = await tx
+        .update(p2SerializedItems)
+        .set({
+          status: 'ACTIVE',
+          holdReason: null,
+          holdBy: null,
+          holdAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(p2SerializedItems.id, id))
+        .returning();
+
+      await tx.insert(p2SerializedItemEvents).values({
+        serializedItemId: id,
+        barcode: item.barcode,
+        eventType: 'RELEASE',
+        fromDepartment: item.currentDepartment,
+        fromStageIndex: item.currentStageIndex,
+        performedBy: username,
+        notes: `Released from hold`,
+      });
+
+      return updated;
+    });
+  }
+
+  async scrapSerializedItem(
+    id: string,
+    reason: string,
+    username: string
+  ): Promise<P2SerializedItem> {
+    return await db.transaction(async (tx) => {
+      const [item] = await tx
+        .select()
+        .from(p2SerializedItems)
+        .where(eq(p2SerializedItems.id, id));
+
+      if (!item) {
+        throw new Error(`Serialized item ${id} not found`);
+      }
+
+      if (item.status === 'SCRAPPED') {
+        throw new Error('Item is already scrapped');
+      }
+
+      const [updated] = await tx
+        .update(p2SerializedItems)
+        .set({
+          status: 'SCRAPPED',
+          scrapReason: reason,
+          scrapBy: username,
+          scrapAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(p2SerializedItems.id, id))
+        .returning();
+
+      await tx.insert(p2SerializedItemEvents).values({
+        serializedItemId: id,
+        barcode: item.barcode,
+        eventType: 'SCRAP',
+        fromDepartment: item.currentDepartment,
+        fromStageIndex: item.currentStageIndex,
+        performedBy: username,
+        notes: `Scrap reason: ${reason}`,
+      });
+
+      return updated;
+    });
+  }
+
+  async getP2SerializedItemHistory(id: string): Promise<P2SerializedItemEvent[]> {
+    return await db
+      .select()
+      .from(p2SerializedItemEvents)
+      .where(eq(p2SerializedItemEvents.serializedItemId, id))
+      .orderBy(p2SerializedItemEvents.createdAt);
+  }
+
+  // Part Routing CRUD
+  async createPartRouting(data: InsertPartRouting): Promise<PartRouting> {
+    const [routing] = await db
+      .insert(partRoutings)
+      .values(data)
+      .returning();
+    return routing;
+  }
+
+  async getPartRoutings(filters?: { inventoryItemId?: string; isActive?: boolean }): Promise<PartRouting[]> {
+    const conditions = [];
+    
+    if (filters?.inventoryItemId) {
+      conditions.push(eq(partRoutings.inventoryItemId, filters.inventoryItemId));
+    }
+    if (filters?.isActive !== undefined) {
+      conditions.push(eq(partRoutings.isActive, filters.isActive));
+    }
+
+    if (conditions.length === 0) {
+      return await db.select().from(partRoutings).orderBy(partRoutings.createdAt);
+    }
+
+    return await db
+      .select()
+      .from(partRoutings)
+      .where(and(...conditions))
+      .orderBy(partRoutings.createdAt);
+  }
+
+  async getPartRouting(id: string): Promise<PartRouting | undefined> {
+    const [routing] = await db
+      .select()
+      .from(partRoutings)
+      .where(eq(partRoutings.id, id));
+    return routing;
+  }
+
+  async getPartRoutingByInventoryItem(inventoryItemId: string): Promise<PartRouting | undefined> {
+    const [routing] = await db
+      .select()
+      .from(partRoutings)
+      .where(and(
+        eq(partRoutings.inventoryItemId, inventoryItemId),
+        eq(partRoutings.isActive, true)
+      ));
+    return routing;
+  }
+
+  async getPartRoutingByPartNumber(partNumber: string): Promise<PartRouting | undefined> {
+    const [routing] = await db
+      .select()
+      .from(partRoutings)
+      .where(and(
+        eq(partRoutings.partNumber, partNumber),
+        eq(partRoutings.isActive, true)
+      ));
+    return routing;
+  }
+
+  async updatePartRouting(id: string, data: Partial<InsertPartRouting>): Promise<PartRouting> {
+    // Fetch existing routing
+    const existing = await this.getPartRouting(id);
+    if (!existing) {
+      throw new Error(`Part routing ${id} not found`);
+    }
+
+    // Merge validated fields with existing data
+    // Only update fields that are actually provided (not undefined)
+    const mergedData = {
+      ...existing,
+      ...data,
+      updatedAt: new Date(),
+    };
+
+    // Update with merged data
+    const [updated] = await db
+      .update(partRoutings)
+      .set(mergedData)
+      .where(eq(partRoutings.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new Error(`Failed to update part routing ${id}`);
+    }
+
+    return updated;
+  }
+
+  async deletePartRouting(id: string): Promise<void> {
+    await db.delete(partRoutings).where(eq(partRoutings.id, id));
+  }
+
+  // P2 Serialized Item Traceability CRUD
+  async addTraceabilityData(data: InsertP2SerializedItemTraceability): Promise<P2SerializedItemTraceability> {
+    const [record] = await db
+      .insert(p2SerializedItemTraceability)
+      .values(data)
+      .returning();
+    return record;
+  }
+
+  async getTraceabilityData(serializedItemId: string): Promise<P2SerializedItemTraceability[]> {
+    return await db
+      .select()
+      .from(p2SerializedItemTraceability)
+      .where(eq(p2SerializedItemTraceability.serializedItemId, serializedItemId))
+      .orderBy(p2SerializedItemTraceability.createdAt);
+  }
+
+  async getTraceabilityForDepartment(serializedItemId: string, department: string): Promise<P2SerializedItemTraceability[]> {
+    return await db
+      .select()
+      .from(p2SerializedItemTraceability)
+      .where(and(
+        eq(p2SerializedItemTraceability.serializedItemId, serializedItemId),
+        eq(p2SerializedItemTraceability.department, department)
+      ))
+      .orderBy(p2SerializedItemTraceability.createdAt);
   }
 
   // Shipment Records CRUD

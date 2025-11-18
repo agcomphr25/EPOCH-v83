@@ -42,6 +42,12 @@ export default function P2Forms() {
                 Generate and manage production order documentation
               </p>
               <div className="space-y-2">
+                <Link href="/p2-quote-form">
+                  <Button className="w-full justify-start" variant="outline">
+                    <Receipt className="h-4 w-4 mr-2" />
+                    P2 Quote Form
+                  </Button>
+                </Link>
                 <Link href="/purchase-review-checklist">
                   <Button className="w-full justify-start" variant="outline">
                     <ClipboardList className="h-4 w-4 mr-2" />

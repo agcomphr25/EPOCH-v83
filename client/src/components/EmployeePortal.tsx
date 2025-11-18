@@ -25,6 +25,9 @@ import {
   FileText,
   CheckCircle,
   AlertCircle,
+  Award,
+  Calendar,
+  Download,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -52,6 +55,16 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       );
       if (!response.ok) throw new Error('Failed to fetch checklist');
       return response.json() as Promise<ChecklistItem[]>;
+    },
+  });
+
+  // Load employee certifications
+  const { data: certifications = [], isLoading: certificationsLoading } = useQuery({
+    queryKey: ['/api/employees', employeeId, 'certifications'],
+    queryFn: async () => {
+      const response = await fetch(`/api/employees/${employeeId}/certifications`);
+      if (!response.ok) throw new Error('Failed to fetch certifications');
+      return response.json();
     },
   });
 
@@ -127,10 +140,14 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="checklist" className="flex items-center gap-2">
             <ClipboardList className="h-4 w-4" />
             Daily Checklist
+          </TabsTrigger>
+          <TabsTrigger value="certifications" className="flex items-center gap-2">
+            <Award className="h-4 w-4" />
+            Certifications
           </TabsTrigger>
           <TabsTrigger value="onboarding" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -281,6 +298,137 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                       Complete all required items to save and enable clock out
                     </div>
                   )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="certifications" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Award className="h-5 w-5" />
+                My Certifications
+              </CardTitle>
+              <CardDescription>
+                View your completed certifications and training records
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {certificationsLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : certifications.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Award className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>No certifications found</p>
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {certifications.map((cert: any) => (
+                    <Card key={cert.id} className="border-l-4 border-l-blue-500">
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <CardTitle className="text-lg">
+                              {cert.certificationName || 'Certification'}
+                            </CardTitle>
+                            <CardDescription className="mt-1">
+                              {cert.certificationDescription || 'No description available'}
+                            </CardDescription>
+                          </div>
+                          <Badge
+                            variant={
+                              cert.status === 'ACTIVE'
+                                ? 'default'
+                                : cert.status === 'EXPIRED'
+                                ? 'destructive'
+                                : 'secondary'
+                            }
+                          >
+                            {cert.status || 'N/A'}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Date Obtained</p>
+                            <p className="font-medium flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {cert.dateObtained
+                                ? new Date(cert.dateObtained).toLocaleDateString()
+                                : 'N/A'}
+                            </p>
+                          </div>
+                          {cert.expiryDate && (
+                            <div>
+                              <p className="text-muted-foreground">Expires</p>
+                              <p className="font-medium flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {new Date(cert.expiryDate).toLocaleDateString()}
+                              </p>
+                            </div>
+                          )}
+                          {cert.trainerName && (
+                            <div>
+                              <p className="text-muted-foreground">Trainer</p>
+                              <p className="font-medium">{cert.trainerName}</p>
+                            </div>
+                          )}
+                          {cert.trainingDate && (
+                            <div>
+                              <p className="text-muted-foreground">Training Date</p>
+                              <p className="font-medium">
+                                {new Date(cert.trainingDate).toLocaleDateString()}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {cert.notes && (
+                          <div className="mt-3 p-3 bg-muted rounded-md">
+                            <p className="text-sm">
+                              <strong>Notes:</strong> {cert.notes}
+                            </p>
+                          </div>
+                        )}
+
+                        {cert.uploadedFiles && cert.uploadedFiles.length > 0 && (
+                          <div className="mt-3">
+                            <p className="text-sm font-medium mb-2">Attached Files:</p>
+                            <div className="space-y-2">
+                              {cert.uploadedFiles.map((file: any) => (
+                                <div
+                                  key={file.id}
+                                  className="flex items-center justify-between p-2 bg-muted rounded-md text-sm"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <FileText className="h-4 w-4" />
+                                    <span>{file.name}</span>
+                                    <span className="text-muted-foreground">
+                                      ({(file.size / 1024).toFixed(1)} KB)
+                                    </span>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      window.location.href = `/api/certifications/${cert.id}/download-file/${file.id}`;
+                                    }}
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               )}
             </CardContent>

@@ -47,6 +47,8 @@ interface QuoteLineItem {
   description: string;
   unitPrice: number;
   totalPrice: number;
+  inventoryItemId?: number | null;
+  agPartNumber?: string | null;
 }
 
 interface RFQAssessment {
@@ -324,6 +326,8 @@ export default function P2QuoteForm() {
           description: item.description,
           unitPrice: item.unitPrice,
           totalPrice: item.totalPrice,
+          inventoryItemId: item.inventoryItemId || null,
+          agPartNumber: item.agPartNumber || null,
         })),
       };
 
@@ -468,6 +472,8 @@ export default function P2QuoteForm() {
               description: item.description,
               unitPrice: item.unitPrice,
               totalPrice: item.totalPrice,
+              inventoryItemId: item.inventoryItemId || null,
+              agPartNumber: item.agPartNumber || null,
             })),
           };
 

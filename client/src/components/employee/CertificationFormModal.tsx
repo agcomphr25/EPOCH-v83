@@ -23,12 +23,20 @@ interface CertificationFormModalProps {
   employeeName: string;
 }
 
+interface RequirementsData {
+  ppe: string[];
+  criticalPoints: string[];
+  workInstructions: string[];
+}
+
 interface Certification {
   id: number;
   name: string;
   category: string;
   description: string;
   requirements: string;
+  requirementsData?: RequirementsData;
+  workInstructions?: string;
   issuingOrganization: string;
   validityPeriodMonths: number;
 }
@@ -66,22 +74,30 @@ export default function CertificationFormModal({
     (c: Certification) => c.id === parseInt(selectedCertId)
   );
 
-  // Parse critical points from requirements
-  const criticalPoints = selectedCert?.requirements
+  // Use structured data if available, otherwise parse from requirements text
+  const criticalPoints = selectedCert?.requirementsData?.criticalPoints
+    ? selectedCert.requirementsData.criticalPoints.map((point, index) => ({ 
+        id: index, 
+        text: point 
+      }))
+    : selectedCert?.requirements
     ? selectedCert.requirements
         .split('\n')
         .filter((line: string) => line.trim().match(/^\d+\./))
         .map((point: string, index: number) => ({ id: index, text: point.trim() }))
     : [];
 
-  // Parse PPE requirements
-  const ppeRequirements = selectedCert?.requirements
+  const ppeRequirements = selectedCert?.requirementsData?.ppe
+    ? selectedCert.requirementsData.ppe
+    : selectedCert?.requirements
     ? selectedCert.requirements
         .split('\n')[0]
         .split(',')
         .map((item: string) => item.trim())
         .filter((item: string) => item && !item.includes('Critical Points'))
     : [];
+
+  const workInstructions = selectedCert?.requirementsData?.workInstructions || [];
 
   const completeCertificationMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -260,6 +276,23 @@ export default function CertificationFormModal({
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {/* Work Instructions */}
+              {workInstructions.length > 0 && (
+                <div className="p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
+                  <h4 className="font-semibold text-blue-900 mb-2 flex items-center">
+                    <FileText className="w-5 h-5 mr-2" />
+                    Work Instructions
+                  </h4>
+                  <ol className="list-decimal list-inside space-y-2">
+                    {workInstructions.map((instruction: string, index: number) => (
+                      <li key={index} className="text-sm text-blue-900">
+                        {instruction}
+                      </li>
+                    ))}
+                  </ol>
                 </div>
               )}
 

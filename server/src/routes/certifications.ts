@@ -20,6 +20,8 @@ router.get('/', async (req: Request, res: Response) => {
         validity_period_months as "validityPeriodMonths",
         category,
         requirements,
+        requirements_data as "requirementsData",
+        work_instructions as "workInstructions",
         is_active as "isActive",
         created_at as "createdAt",
         updated_at as "updatedAt"

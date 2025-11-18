@@ -48,6 +48,12 @@ export default function P2Forms() {
                     P2 Quote Form
                   </Button>
                 </Link>
+                <Link href="/p2-quotes-list">
+                  <Button className="w-full justify-start" variant="outline">
+                    <FileText className="h-4 w-4 mr-2" />
+                    View Submitted Quotes
+                  </Button>
+                </Link>
                 <Link href="/purchase-review-checklist">
                   <Button className="w-full justify-start" variant="outline">
                     <ClipboardList className="h-4 w-4 mr-2" />
@@ -57,7 +63,7 @@ export default function P2Forms() {
                 <Link href="/purchase-review-submissions">
                   <Button className="w-full justify-start" variant="outline">
                     <FileText className="h-4 w-4 mr-2" />
-                    View Submissions
+                    View Purchase Review Submissions
                   </Button>
                 </Link>
                 <Link href="/rfq-risk-assessment">

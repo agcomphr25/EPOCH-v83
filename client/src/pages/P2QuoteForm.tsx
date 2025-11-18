@@ -112,6 +112,55 @@ export default function P2QuoteForm() {
     (rfq) => rfq.status?.toLowerCase() === 'submitted'
   );
 
+  // Load existing quote if id is in URL query params
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const quoteId = urlParams.get('id');
+    
+    if (quoteId) {
+      // Fetch the quote data
+      fetch(`/api/quotes/${quoteId}`)
+        .then(res => res.json())
+        .then(data => {
+          // Populate form with quote data
+          setSavedQuoteId(data.id);
+          setQuoteNumber(data.quoteNumber);
+          setQuoteStatus(data.status);
+          setCustomerName(data.description?.split('(')[0]?.replace('From: ', '').trim() || '');
+          setCustomerCompany(data.customerName);
+          setNotes(data.notes || '');
+          setValidityDays(String(Math.round((new Date(data.validUntil).getTime() - new Date(data.createdAt).getTime()) / (1000 * 60 * 60 * 24))));
+          setAttachments(data.attachments || []);
+          
+          // Load line items if present
+          if (data.lineItems && data.lineItems.length > 0) {
+            const loadedItems = data.lineItems.map((item: any) => ({
+              id: `${Date.now()}-${item.lineNumber}`,
+              lineNumber: item.lineNumber,
+              quantity: item.quantity,
+              description: item.description,
+              unitPrice: item.unitPrice,
+              totalPrice: item.totalPrice,
+            }));
+            setLineItems(loadedItems);
+          }
+          
+          toast({
+            title: 'Quote Loaded',
+            description: `Viewing quote ${data.quoteNumber}`,
+          });
+        })
+        .catch(error => {
+          console.error('Error loading quote:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to load quote data',
+            variant: 'destructive',
+          });
+        });
+    }
+  }, []);
+
   // Auto-populate customer info when RFQ is selected
   useEffect(() => {
     if (quoteNumber) {

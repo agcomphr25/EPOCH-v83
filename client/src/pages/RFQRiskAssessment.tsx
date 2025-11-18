@@ -904,7 +904,7 @@ export default function RFQRiskAssessment() {
             
             {/* Action Buttons */}
             <div className="flex justify-center gap-3 mb-6">
-              {editingAssessmentId && (
+              {(editingAssessmentId || isViewingSubmitted) && (
                 <Button 
                   onClick={clearForm} 
                   variant="secondary"

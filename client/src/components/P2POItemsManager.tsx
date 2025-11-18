@@ -73,6 +73,20 @@ export function P2POItemsManager({
     queryFn: () => apiRequest(`/api/p2/purchase-orders/${poId}/items`),
   });
 
+  // Fetch inventory items for autocomplete
+  const { data: inventoryItems = [], isLoading: isLoadingInventory } = useQuery({
+    queryKey: ['/api/inventory/items'],
+    select: (data: any[]) =>
+      data
+        .map((item) => ({
+          id: item.id,
+          agPartNumber: item.agPartNumber,
+          name: item.name,
+          sku: item.sku,
+        }))
+        .filter((item) => item.agPartNumber), // Only items with part numbers
+  });
+
   const createMutation = useMutation({
     mutationFn: (data: typeof formData) =>
       apiRequest(`/api/p2/purchase-orders/${poId}/items`, {
@@ -238,15 +252,17 @@ export function P2POItemsManager({
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="partNumber">Part Number *</Label>
+                  <Label htmlFor="partNumber">Part Number * (from inventory or custom)</Label>
                   <Input
                     id="partNumber"
+                    list="inventory-items-list"
                     value={formData.partNumber}
                     onChange={(e) =>
                       setFormData({ ...formData, partNumber: e.target.value })
                     }
                     required
-                    placeholder="Enter part number"
+                    placeholder="Select from inventory or type custom..."
+                    disabled={isLoadingInventory}
                   />
                 </div>
                 <div className="space-y-2">
@@ -428,6 +444,15 @@ export function P2POItemsManager({
           )}
         </CardContent>
       </Card>
+
+      {/* Centralized inventory items datalist for Part Number autocomplete */}
+      <datalist id="inventory-items-list">
+        {inventoryItems.map((item: any) => (
+          <option key={item.id} value={item.agPartNumber}>
+            {item.agPartNumber} - {item.name}
+          </option>
+        ))}
+      </datalist>
     </div>
   );
 }

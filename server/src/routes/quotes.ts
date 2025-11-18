@@ -3,6 +3,9 @@ import { db } from '../../db';
 import { quotes, quoteLineItems, insertQuoteSchema, insertQuoteLineItemSchema } from '../../schema';
 import { eq, desc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import { uploadMiddleware } from '../../utils/fileUpload';
+import path from 'path';
+import fs from 'fs';
 
 const router = Router();
 
@@ -268,6 +271,136 @@ router.delete('/api/quotes/:id', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Delete quote error:', error);
     res.status(500).json({ error: 'Failed to delete quote' });
+  }
+});
+
+// Quote PDF Attachments
+const quoteAttachmentsDir = path.join(process.cwd(), 'uploads', 'quote-attachments');
+if (!fs.existsSync(quoteAttachmentsDir)) {
+  fs.mkdirSync(quoteAttachmentsDir, { recursive: true });
+}
+
+router.post('/api/quotes/:id/attachments', uploadMiddleware.array('files', 5), async (req: Request, res: Response) => {
+  try {
+    const quoteId = req.params.id;
+    const files = req.files as Express.Multer.File[];
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+
+    // Get the current quote
+    const [quote] = await db
+      .select()
+      .from(quotes)
+      .where(eq(quotes.id, quoteId));
+
+    if (!quote) {
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+
+    const uploadedFiles: string[] = [];
+
+    for (const file of files) {
+      // Only accept PDFs
+      if (file.mimetype !== 'application/pdf') {
+        fs.unlinkSync(file.path); // Delete non-PDF file
+        continue;
+      }
+
+      // Move file to quote attachments directory
+      const newFileName = `${Date.now()}_${file.filename}`;
+      const newFilePath = path.join(quoteAttachmentsDir, newFileName);
+      fs.renameSync(file.path, newFilePath);
+      uploadedFiles.push(newFilePath);
+    }
+
+    // Update quote with new attachment paths
+    const currentAttachments = quote.attachments || [];
+    const updatedAttachments = [...currentAttachments, ...uploadedFiles];
+
+    const [updatedQuote] = await db
+      .update(quotes)
+      .set({
+        attachments: updatedAttachments,
+        updatedAt: new Date(),
+      })
+      .where(eq(quotes.id, quoteId))
+      .returning();
+
+    res.json({
+      message: 'Files uploaded successfully',
+      attachments: updatedAttachments,
+      quote: updatedQuote,
+    });
+  } catch (error) {
+    console.error('Upload quote attachment error:', error);
+    res.status(500).json({ error: 'Failed to upload attachments' });
+  }
+});
+
+router.delete('/api/quotes/:id/attachments/:fileName', async (req: Request, res: Response) => {
+  try {
+    const quoteId = req.params.id;
+    const { fileName } = req.params;
+
+    // Get the current quote
+    const [quote] = await db
+      .select()
+      .from(quotes)
+      .where(eq(quotes.id, quoteId));
+
+    if (!quote) {
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+
+    // Remove the file from attachments array
+    const currentAttachments = quote.attachments || [];
+    const updatedAttachments = currentAttachments.filter(
+      (filePath) => !filePath.includes(fileName)
+    );
+
+    // Delete the physical file
+    const fileToDelete = currentAttachments.find((filePath) =>
+      filePath.includes(fileName)
+    );
+    if (fileToDelete && fs.existsSync(fileToDelete)) {
+      fs.unlinkSync(fileToDelete);
+    }
+
+    // Update quote
+    const [updatedQuote] = await db
+      .update(quotes)
+      .set({
+        attachments: updatedAttachments,
+        updatedAt: new Date(),
+      })
+      .where(eq(quotes.id, quoteId))
+      .returning();
+
+    res.json({
+      message: 'Attachment deleted successfully',
+      quote: updatedQuote,
+    });
+  } catch (error) {
+    console.error('Delete quote attachment error:', error);
+    res.status(500).json({ error: 'Failed to delete attachment' });
+  }
+});
+
+router.get('/api/quotes/:id/attachments/:fileName', async (req: Request, res: Response) => {
+  try {
+    const { fileName } = req.params;
+    const filePath = path.join(quoteAttachmentsDir, fileName);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('Download quote attachment error:', error);
+    res.status(500).json({ error: 'Failed to download attachment' });
   }
 });
 

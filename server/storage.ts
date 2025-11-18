@@ -1051,6 +1051,7 @@ export interface IStorage {
   createRFQRiskAssessment(data: InsertRFQRiskAssessment): Promise<RFQRiskAssessment>;
   getAllRFQRiskAssessments(): Promise<RFQRiskAssessment[]>;
   getRFQRiskAssessment(rfqNumber: string): Promise<RFQRiskAssessment | undefined>;
+  getRFQRiskAssessmentById(id: number): Promise<RFQRiskAssessment | undefined>;
   updateRFQRiskAssessment(id: number, data: Partial<InsertRFQRiskAssessment>): Promise<RFQRiskAssessment | undefined>;
   submitRFQRiskAssessment(id: number, username: string): Promise<RFQRiskAssessment | undefined>;
 
@@ -9819,6 +9820,17 @@ export class DatabaseStorage implements IStorage {
     return assessment;
   }
 
+  async getRFQRiskAssessmentById(
+    id: number
+  ): Promise<RFQRiskAssessment | undefined> {
+    const [assessment] = await db
+      .select()
+      .from(rfqRiskAssessments)
+      .where(eq(rfqRiskAssessments.id, id))
+      .limit(1);
+    return assessment;
+  }
+
   async updateRFQRiskAssessment(
     id: number,
     data: Partial<InsertRFQRiskAssessment>
@@ -11265,16 +11277,22 @@ export class DatabaseStorage implements IStorage {
       features: orderData.features,
       featureQuantities: orderData.featureQuantities,
       discountCode: orderData.discountCode || '',
+      discountType: orderData.discountType,
+      discountValue: orderData.discountValue,
+      discountAppliesTo: orderData.discountAppliesTo,
       notes: orderData.notes || '',
       customDiscountType: orderData.customDiscountType || 'percent',
       customDiscountValue: orderData.customDiscountValue || 0,
       showCustomDiscount: orderData.showCustomDiscount || false,
       priceOverride: orderData.priceOverride,
+      flattopPriceOverride: orderData.flattopPriceOverride,
       shipping: orderData.shipping || 0,
       tikkaOption: orderData.tikkaOption,
       status: status,
+      statusId: orderData.statusId,
       barcode: barcode,
       currentDepartment: currentDepartment,
+      currentDepartmentId: orderData.currentDepartmentId,
       departmentHistory: [],
       scrappedQuantity: 0,
       totalProduced: 0,
@@ -11318,14 +11336,21 @@ export class DatabaseStorage implements IStorage {
       altShipToEmail: orderData.altShipToEmail,
       altShipToPhone: orderData.altShipToPhone,
       altShipToAddress: orderData.altShipToAddress,
+      bomDefinitionId: orderData.bomDefinitionId,
+      priorityLevel: orderData.priorityLevel || 'low',
+      priorityScore: orderData.priorityScore || 50,
+      isUrgent: orderData.isUrgent || false,
+      rushTier: orderData.rushTier,
+      isLinked: orderData.isLinked || false,
+      linkedOrderIds: orderData.linkedOrderIds,
+      isFollowup: orderData.isFollowup || false,
+      hasAttachments: orderData.hasAttachments || false,
     };
 
-    // Insert directly into all_orders table
-    const { id, createdAt, updatedAt, ...insertData } =
-      finalizedOrderData as any;
+    // Insert directly into all_orders table (id, createdAt, updatedAt are auto-generated)
     const [finalizedOrder] = await db
       .insert(allOrders)
-      .values(insertData)
+      .values(finalizedOrderData)
       .returning();
 
     // Log the auto-addition to Production Queue

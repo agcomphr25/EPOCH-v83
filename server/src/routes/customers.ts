@@ -8,6 +8,11 @@ import {
 
 import { storage } from '../../storage';
 import { pool } from '../../db';
+import { uploadMiddleware } from '../../utils/fileUpload';
+import path from 'path';
+import fs from 'fs';
+import multer from 'multer';
+import crypto from 'crypto';
 
 const router = Router();
 
@@ -315,6 +320,135 @@ router.put('/rfq-assessments/:id/submit', async (req: Request, res: Response) =>
   } catch (error) {
     console.error('Submit RFQ risk assessment error:', error);
     res.status(500).json({ error: 'Failed to submit RFQ risk assessment' });
+  }
+});
+
+// RFQ Risk Assessment PDF Attachments
+const rfqAttachmentsDir = path.join(process.cwd(), 'uploads', 'rfq-attachments');
+if (!fs.existsSync(rfqAttachmentsDir)) {
+  fs.mkdirSync(rfqAttachmentsDir, { recursive: true });
+}
+
+// Create dedicated multer instance for RFQ attachments
+const rfqAttachmentStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, rfqAttachmentsDir);
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const hash = crypto.randomBytes(8).toString('hex');
+    const ext = path.extname(file.originalname);
+    const name = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9]/g, '_');
+    cb(null, `${timestamp}_${hash}_${name}${ext}`);
+  },
+});
+
+const rfqUpload = multer({
+  storage: rfqAttachmentStorage,
+  fileFilter: (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'));
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+    files: 5,
+  },
+});
+
+router.post('/rfq-assessments/:id/attachments', rfqUpload.array('files', 5), async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const files = req.files as Express.Multer.File[];
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+
+    // Get the current assessment by ID
+    const assessment = await storage.getRFQRiskAssessmentById(id);
+    if (!assessment) {
+      return res.status(404).json({ error: 'RFQ Risk Assessment not found' });
+    }
+
+    // Files are already saved in the correct directory by multer
+    // Just collect the file paths
+    const uploadedFiles: string[] = files.map(file => file.path);
+
+    // Update assessment with new attachment paths
+    const currentAttachments = assessment.attachments || [];
+    const updatedAttachments = [...currentAttachments, ...uploadedFiles];
+
+    const updatedAssessment = await storage.updateRFQRiskAssessment(id, {
+      attachments: updatedAttachments,
+    });
+
+    res.json({
+      message: 'Files uploaded successfully',
+      attachments: updatedAttachments,
+      assessment: updatedAssessment,
+    });
+  } catch (error) {
+    console.error('Upload RFQ attachment error:', error);
+    res.status(500).json({ error: 'Failed to upload attachments' });
+  }
+});
+
+router.delete('/rfq-assessments/:id/attachments/:fileName', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { fileName } = req.params;
+
+    // Get the current assessment
+    const assessment = await storage.getRFQRiskAssessment(id.toString());
+    if (!assessment) {
+      return res.status(404).json({ error: 'RFQ Risk Assessment not found' });
+    }
+
+    // Remove the file from attachments array
+    const currentAttachments = assessment.attachments || [];
+    const updatedAttachments = currentAttachments.filter(
+      (filePath) => !filePath.includes(fileName)
+    );
+
+    // Delete the physical file
+    const fileToDelete = currentAttachments.find((filePath) =>
+      filePath.includes(fileName)
+    );
+    if (fileToDelete && fs.existsSync(fileToDelete)) {
+      fs.unlinkSync(fileToDelete);
+    }
+
+    // Update assessment
+    const updatedAssessment = await storage.updateRFQRiskAssessment(id, {
+      attachments: updatedAttachments,
+    });
+
+    res.json({
+      message: 'Attachment deleted successfully',
+      assessment: updatedAssessment,
+    });
+  } catch (error) {
+    console.error('Delete RFQ attachment error:', error);
+    res.status(500).json({ error: 'Failed to delete attachment' });
+  }
+});
+
+router.get('/rfq-assessments/:id/attachments/:fileName', async (req: Request, res: Response) => {
+  try {
+    const { fileName } = req.params;
+    const filePath = path.join(rfqAttachmentsDir, fileName);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('Download RFQ attachment error:', error);
+    res.status(500).json({ error: 'Failed to download attachment' });
   }
 });
 

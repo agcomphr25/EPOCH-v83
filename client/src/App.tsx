@@ -121,6 +121,7 @@ import PurchaseReviewChecklist from './pages/PurchaseReviewChecklist';
 import PurchaseReviewSubmissions from './pages/PurchaseReviewSubmissions';
 import ManufacturersCertificate from './pages/ManufacturersCertificate';
 import P2QuoteForm from './pages/P2QuoteForm';
+import P2QuotesList from './pages/P2QuotesList';
 import PaymentManagement from './pages/PaymentManagement';
 import RefundRequest from './pages/RefundRequest';
 import RefundQueue from './pages/RefundQueue';
@@ -562,6 +563,7 @@ function App() {
                     component={PurchaseReviewSubmissions}
                   />
                   <Route path="/p2-quote-form" component={P2QuoteForm} />
+                  <Route path="/p2-quotes-list" component={P2QuotesList} />
                   <Route
                     path="/manufacturers-certificate"
                     component={ManufacturersCertificate}

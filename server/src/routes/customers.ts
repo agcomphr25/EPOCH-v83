@@ -273,8 +273,11 @@ router.put('/rfq-assessments/:id/submit', async (req: Request, res: Response) =>
     );
 
     console.log('🔍 RFQ Submit - DB Query Result:', {
-      rowCount: result.rows?.length || 0,
-      rows: result.rows
+      result: result,
+      rowCount: result.rowCount,
+      rows: result.rows,
+      hasRows: !!result.rows,
+      rowsLength: result.rows?.length
     });
 
     if (!result.rows || result.rows.length === 0) {

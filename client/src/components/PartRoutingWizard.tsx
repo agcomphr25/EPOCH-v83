@@ -59,13 +59,20 @@ interface InventoryItem {
   description?: string;
 }
 
+interface PartTraceabilityRequirement {
+  partId: string;
+  partNumber: string;
+  partName: string;
+  requiredFields: string[];
+}
+
 interface PartRouting {
   id: string;
   inventoryItemId: string;
   partNumber: string;  // This comes from backend, keep as is for routing data
   partName: string;    // This comes from backend, keep as is for routing data
   departmentSequence: string[];
-  traceabilityConfig: Record<string, string[]>;
+  traceabilityConfig: Record<string, PartTraceabilityRequirement[]>;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -81,10 +88,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   const [step, setStep] = useState(1);
   const [selectedItemId, setSelectedItemId] = useState<string>(editRouting?.inventoryItemId || '');
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>(editRouting?.departmentSequence || []);
-  const [traceabilityConfig, setTraceabilityConfig] = useState<Record<string, string[]>>(
+  const [traceabilityConfig, setTraceabilityConfig] = useState<Record<string, PartTraceabilityRequirement[]>>(
     editRouting?.traceabilityConfig || {}
   );
   const [searchTerm, setSearchTerm] = useState('');
+  const [step3SearchTerm, setStep3SearchTerm] = useState('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
 

@@ -554,7 +554,7 @@ export default function TrainingManagement() {
                             <Eye className="w-4 h-4 mr-2" />
                             View Details
                           </Button>
-                          <Link href="/employee-portal">
+                          <Link href="/employee-dashboard">
                             <Button
                               variant="default"
                               size="sm"
@@ -668,7 +668,7 @@ export default function TrainingManagement() {
                     >
                       Close
                     </Button>
-                    <Link href="/employee-portal">
+                    <Link href="/employee-dashboard">
                       <Button>
                         <Users className="w-4 h-4 mr-2" />
                         Assign to Employee

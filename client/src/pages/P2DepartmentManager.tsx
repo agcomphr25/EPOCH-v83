@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Scan,
   Package,
@@ -80,6 +81,13 @@ interface P2SerializedItemEvent {
   createdAt: string;
 }
 
+interface MaterialRequirement {
+  partId: string;
+  partNumber: string;
+  partName: string;
+  requiredFields: string[];
+}
+
 interface PartRouting {
   id: string;
   inventoryItemId: string;
@@ -87,6 +95,7 @@ interface PartRouting {
   partName: string;
   departmentSequence: string[];
   traceabilityConfig: Record<string, string[]>;
+  departmentMaterials?: Record<string, MaterialRequirement[]>;
 }
 
 interface TraceabilityData {
@@ -95,6 +104,10 @@ interface TraceabilityData {
   expirationDate?: string;
   serialNumber?: string;
   revision?: string;
+}
+
+interface MaterialTraceabilityData {
+  [partId: string]: TraceabilityData;
 }
 
 export default function P2DepartmentManager() {
@@ -108,9 +121,11 @@ export default function P2DepartmentManager() {
   const [showRoutingWizard, setShowRoutingWizard] = useState(false);
   const [showTraceabilityDialog, setShowTraceabilityDialog] = useState(false);
   const [traceabilityData, setTraceabilityData] = useState<TraceabilityData>({});
+  const [materialTraceabilityData, setMaterialTraceabilityData] = useState<MaterialTraceabilityData>({});
   const [pendingTransitionItemId, setPendingTransitionItemId] = useState<string | null>(null);
   const [pendingTransitionDepartment, setPendingTransitionDepartment] = useState<string | null>(null);
   const [requiredTraceabilityFields, setRequiredTraceabilityFields] = useState<string[]>([]);
+  const [requiredMaterials, setRequiredMaterials] = useState<MaterialRequirement[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -183,9 +198,12 @@ export default function P2DepartmentManager() {
   };
 
   // Get required fields for a specific item and department (independent of state)
-  const getRequiredFieldsForItem = async (partNumber: string, department: string): Promise<string[]> => {
+  const getRequiredFieldsForItem = async (partNumber: string, department: string): Promise<{ itemFields: string[]; materials: MaterialRequirement[] }> => {
     const routing: PartRouting = await apiRequest(`/api/part-routings/part/${partNumber}`);
-    return routing.traceabilityConfig[department] || [];
+    return {
+      itemFields: routing.traceabilityConfig[department] || [],
+      materials: routing.departmentMaterials?.[department] || [],
+    };
   };
 
   // Save traceability mutation
@@ -217,14 +235,15 @@ export default function P2DepartmentManager() {
   const handleTransition = async (item: P2SerializedItem) => {
     try {
       // Fetch traceability requirements for this specific item
-      const requiredFields = await getRequiredFieldsForItem(item.partNumber, item.currentDepartment);
+      const requirements = await getRequiredFieldsForItem(item.partNumber, item.currentDepartment);
       
-      if (requiredFields.length > 0) {
+      if (requirements.itemFields.length > 0 || requirements.materials.length > 0) {
         // Capture item and requirements for traceability dialog
         setSelectedItem(item);
         setPendingTransitionItemId(item.id);
         setPendingTransitionDepartment(item.currentDepartment);
-        setRequiredTraceabilityFields(requiredFields);
+        setRequiredTraceabilityFields(requirements.itemFields);
+        setRequiredMaterials(requirements.materials);
         setShowTraceabilityDialog(true);
       } else {
         // No traceability required, proceed directly

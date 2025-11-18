@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import fs from 'fs';
 
 import { pool } from '../../db';
 import { uploadMiddleware } from '../../utils/fileUpload';
@@ -44,7 +45,8 @@ router.post(
         return res.status(400).json({ error: 'No PDF file uploaded' });
       }
 
-      const pdfBuffer = req.file.buffer;
+      // Read the file from disk since we're using diskStorage
+      const pdfBuffer = fs.readFileSync(req.file.path);
       const createdBy = req.body.createdBy || 'system';
 
       // Extract certification content using Azure Document Intelligence

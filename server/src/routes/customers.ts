@@ -8,6 +8,9 @@ import {
 
 import { storage } from '../../storage';
 import { pool } from '../../db';
+import { uploadMiddleware } from '../../utils/fileUpload';
+import path from 'path';
+import fs from 'fs';
 
 const router = Router();
 
@@ -315,6 +318,118 @@ router.put('/rfq-assessments/:id/submit', async (req: Request, res: Response) =>
   } catch (error) {
     console.error('Submit RFQ risk assessment error:', error);
     res.status(500).json({ error: 'Failed to submit RFQ risk assessment' });
+  }
+});
+
+// RFQ Risk Assessment PDF Attachments
+const rfqAttachmentsDir = path.join(process.cwd(), 'uploads', 'rfq-attachments');
+if (!fs.existsSync(rfqAttachmentsDir)) {
+  fs.mkdirSync(rfqAttachmentsDir, { recursive: true });
+}
+
+router.post('/rfq-assessments/:id/attachments', uploadMiddleware.array('files', 5), async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const files = req.files as Express.Multer.File[];
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+
+    // Get the current assessment
+    const assessment = await storage.getRFQRiskAssessment(req.params.id);
+    if (!assessment) {
+      return res.status(404).json({ error: 'RFQ Risk Assessment not found' });
+    }
+
+    const uploadedFiles: string[] = [];
+
+    for (const file of files) {
+      // Only accept PDFs
+      if (file.mimetype !== 'application/pdf') {
+        fs.unlinkSync(file.path); // Delete non-PDF file
+        continue;
+      }
+
+      // Move file to RFQ attachments directory
+      const newFileName = `${Date.now()}_${file.filename}`;
+      const newFilePath = path.join(rfqAttachmentsDir, newFileName);
+      fs.renameSync(file.path, newFilePath);
+      uploadedFiles.push(newFilePath);
+    }
+
+    // Update assessment with new attachment paths
+    const currentAttachments = assessment.attachments || [];
+    const updatedAttachments = [...currentAttachments, ...uploadedFiles];
+
+    const updatedAssessment = await storage.updateRFQRiskAssessment(id, {
+      attachments: updatedAttachments,
+    });
+
+    res.json({
+      message: 'Files uploaded successfully',
+      attachments: updatedAttachments,
+      assessment: updatedAssessment,
+    });
+  } catch (error) {
+    console.error('Upload RFQ attachment error:', error);
+    res.status(500).json({ error: 'Failed to upload attachments' });
+  }
+});
+
+router.delete('/rfq-assessments/:id/attachments/:fileName', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { fileName } = req.params;
+
+    // Get the current assessment
+    const assessment = await storage.getRFQRiskAssessment(id.toString());
+    if (!assessment) {
+      return res.status(404).json({ error: 'RFQ Risk Assessment not found' });
+    }
+
+    // Remove the file from attachments array
+    const currentAttachments = assessment.attachments || [];
+    const updatedAttachments = currentAttachments.filter(
+      (filePath) => !filePath.includes(fileName)
+    );
+
+    // Delete the physical file
+    const fileToDelete = currentAttachments.find((filePath) =>
+      filePath.includes(fileName)
+    );
+    if (fileToDelete && fs.existsSync(fileToDelete)) {
+      fs.unlinkSync(fileToDelete);
+    }
+
+    // Update assessment
+    const updatedAssessment = await storage.updateRFQRiskAssessment(id, {
+      attachments: updatedAttachments,
+    });
+
+    res.json({
+      message: 'Attachment deleted successfully',
+      assessment: updatedAssessment,
+    });
+  } catch (error) {
+    console.error('Delete RFQ attachment error:', error);
+    res.status(500).json({ error: 'Failed to delete attachment' });
+  }
+});
+
+router.get('/rfq-assessments/:id/attachments/:fileName', async (req: Request, res: Response) => {
+  try {
+    const { fileName } = req.params;
+    const filePath = path.join(rfqAttachmentsDir, fileName);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('Download RFQ attachment error:', error);
+    res.status(500).json({ error: 'Failed to download attachment' });
   }
 });
 

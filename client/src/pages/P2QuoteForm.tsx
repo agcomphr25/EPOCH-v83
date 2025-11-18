@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,7 +34,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Plus, Trash2, Save, FileText, Printer, Search } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, FileText, Printer, Search, Upload } from 'lucide-react';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -80,6 +80,9 @@ export default function P2QuoteForm() {
   const [quoteStatus, setQuoteStatus] = useState<string>('DRAFT');
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Modal state for inventory item selection
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
@@ -287,6 +290,7 @@ export default function P2QuoteForm() {
       setSavedQuoteId(response.id);
       setQuoteNumber(response.quoteNumber);
       setQuoteStatus(response.status);
+      setAttachments(response.attachments || []);
 
       toast({
         title: 'Quote Saved',
@@ -301,6 +305,71 @@ export default function P2QuoteForm() {
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // File upload handlers
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!savedQuoteId) {
+      toast({ title: 'Save Required', description: 'Please save the quote before uploading files.', variant: 'destructive' });
+      return;
+    }
+
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    for (const file of Array.from(files)) {
+      if (file.type !== 'application/pdf') {
+        toast({ title: 'Invalid File Type', description: 'Only PDF files are allowed.', variant: 'destructive' });
+        return;
+      }
+    }
+
+    setIsUploadingFile(true);
+    const formData = new FormData();
+    for (const file of Array.from(files)) {
+      formData.append('files', file);
+    }
+
+    try {
+      const response = await fetch(`/api/quotes/${savedQuoteId}/attachments`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+
+      const result = await response.json();
+      setAttachments(result.attachments || []);
+      toast({ title: 'Success', description: 'Files uploaded successfully.' });
+      
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({ title: 'Upload Failed', description: 'Failed to upload files. Please try again.', variant: 'destructive' });
+    } finally {
+      setIsUploadingFile(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (fileName: string) => {
+    if (!savedQuoteId) return;
+
+    try {
+      const response = await fetch(`/api/quotes/${savedQuoteId}/attachments/${fileName}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Delete failed');
+
+      const result = await response.json();
+      setAttachments(result.quote?.attachments || []);
+      toast({ title: 'Success', description: 'Attachment deleted successfully.' });
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast({ title: 'Delete Failed', description: 'Failed to delete attachment. Please try again.', variant: 'destructive' });
     }
   };
 
@@ -365,6 +434,7 @@ export default function P2QuoteForm() {
           quoteIdToSubmit = saveResponse.id;
           setSavedQuoteId(saveResponse.id);
           setQuoteNumber(saveResponse.quoteNumber);
+          setAttachments(saveResponse.attachments || []);
         } finally {
           setIsSaving(false);
         }
@@ -723,6 +793,80 @@ export default function P2QuoteForm() {
               className="w-full"
               data-testid="textarea-notes"
             />
+          </div>
+
+          {/* PDF Attachments Section */}
+          <div className="mb-8 border rounded-lg p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <FileText className="h-5 w-5" />
+              <Label className="text-lg font-semibold">PDF Attachments</Label>
+            </div>
+
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              multiple
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+
+            {/* Upload button */}
+            <div className="mb-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!savedQuoteId || isUploadingFile}
+                className="flex items-center gap-2"
+              >
+                <Upload className="h-4 w-4" />
+                {isUploadingFile ? 'Uploading...' : 'Upload PDF Files'}
+              </Button>
+              <p className="text-sm text-gray-500 mt-2">
+                {!savedQuoteId ? 'Save the quote first to upload files.' : 'Upload one or more PDF files (max 5 files, 10MB each).'}
+              </p>
+            </div>
+
+            {/* Attachments list */}
+            {attachments.length > 0 && (
+              <div className="space-y-2">
+                <Label className="font-medium">Attached Files ({attachments.length})</Label>
+                <div className="space-y-2">
+                  {attachments.map((attachment, index) => {
+                    const fileName = attachment.split('/').pop() || attachment;
+                    return (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-3 bg-gray-50 border rounded-md"
+                      >
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-gray-600" />
+                          <a
+                            href={`/api/quotes/${savedQuoteId}/attachments/${fileName}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-600 hover:underline"
+                          >
+                            {fileName}
+                          </a>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteAttachment(fileName)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Footer */}

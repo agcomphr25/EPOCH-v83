@@ -11,11 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Save, Printer, Download, List, Plus, Eye, Search } from 'lucide-react';
+import { Save, Printer, Download, List, Plus, Eye, Search, Upload, Trash2, FileText } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import type { P2Customer } from '@shared/schema';
 import { COMPANY_INFO } from '@shared/company-config';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 interface SessionUser {
   id: number;
@@ -47,9 +48,15 @@ export default function RFQRiskAssessment() {
   const [activeTab, setActiveTab] = useState('create');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingAssessmentId, setEditingAssessmentId] = useState<number | null>(null);
+  const [isViewingSubmitted, setIsViewingSubmitted] = useState(false);
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Signature canvas reference
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
+  
+  const { toast } = useToast();
 
   const [formData, setFormData] = useState({
     customerId: '',
@@ -650,7 +657,96 @@ export default function RFQRiskAssessment() {
     );
   });
 
-  // Function to load an assessment into the form for editing
+  // File upload handlers
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!editingAssessmentId) {
+      toast({
+        title: 'Save Required',
+        description: 'Please save the assessment before uploading files.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    // Validate PDF files only
+    for (const file of Array.from(files)) {
+      if (file.type !== 'application/pdf') {
+        toast({
+          title: 'Invalid File Type',
+          description: 'Only PDF files are allowed.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    setIsUploadingFile(true);
+    const formData = new FormData();
+    for (const file of Array.from(files)) {
+      formData.append('files', file);
+    }
+
+    try {
+      const response = await fetch(`/api/customers/rfq-assessments/${editingAssessmentId}/attachments`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+
+      const result = await response.json();
+      setAttachments(result.attachments || []);
+      toast({
+        title: 'Success',
+        description: 'Files uploaded successfully.',
+      });
+      
+      // Clear file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({
+        title: 'Upload Failed',
+        description: 'Failed to upload files. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploadingFile(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (fileName: string) => {
+    if (!editingAssessmentId) return;
+
+    try {
+      const response = await fetch(`/api/customers/rfq-assessments/${editingAssessmentId}/attachments/${fileName}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Delete failed');
+
+      const result = await response.json();
+      setAttachments(result.assessment?.attachments || []);
+      toast({
+        title: 'Success',
+        description: 'Attachment deleted successfully.',
+      });
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast({
+        title: 'Delete Failed',
+        description: 'Failed to delete attachment. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Function to load an assessment into the form for editing or viewing
   const loadAssessmentForEditing = async (rfqNumber: string) => {
     try {
       const response = await fetch(`/api/customers/rfq-assessments/${rfqNumber}`);
@@ -660,20 +756,12 @@ export default function RFQRiskAssessment() {
       
       const assessment = await response.json();
       
-      // Check if assessment is already submitted
-      if (assessment.status === 'submitted') {
-        alert(
-          `This assessment has already been submitted and cannot be edited.\n\n` +
-          `Submitted by: ${assessment.submittedBy || 'Unknown'}\n` +
-          `Submitted on: ${assessment.submittedAt ? format(new Date(assessment.submittedAt), 'MM/dd/yyyy') : 'Unknown'}`
-        );
-        return;
-      }
-      
       // Populate form with saved data
       if (assessment.formData) {
         setFormData(assessment.formData);
         setEditingAssessmentId(assessment.id);
+        setIsViewingSubmitted(assessment.status === 'submitted');
+        setAttachments(assessment.attachments || []);
         
         // Load signature if it exists
         if (assessment.formData.signature && signatureCanvasRef.current) {
@@ -684,7 +772,16 @@ export default function RFQRiskAssessment() {
         // Switch to create tab to show the loaded form
         setActiveTab('create');
         
-        alert(`Loaded RFQ ${rfqNumber} for editing. Make your changes and click "Save Form" to update.`);
+        // Check if assessment is already submitted
+        if (assessment.status === 'submitted') {
+          alert(
+            `Viewing submitted assessment - This is read-only.\n\n` +
+            `Submitted by: ${assessment.submittedBy || 'Unknown'}\n` +
+            `Submitted on: ${assessment.submittedAt ? format(new Date(assessment.submittedAt), 'MM/dd/yyyy') : 'Unknown'}`
+          );
+        } else {
+          alert(`Loaded RFQ ${rfqNumber} for editing. Make your changes and click "Save Form" to update.`);
+        }
       }
     } catch (error) {
       console.error('Error loading assessment:', error);
@@ -728,6 +825,7 @@ export default function RFQRiskAssessment() {
       signature: '',
     });
     setEditingAssessmentId(null);
+    setIsViewingSubmitted(false);
     
     // Clear signature canvas
     if (signatureCanvasRef.current) {
@@ -1274,6 +1372,90 @@ export default function RFQRiskAssessment() {
                 </div>
               </RadioGroup>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* PDF Attachments Section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              PDF Attachments
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,application/pdf"
+              multiple
+              onChange={handleFileUpload}
+              className="hidden"
+              data-testid="input-file-upload"
+            />
+
+            {/* Upload button */}
+            <div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!editingAssessmentId || isUploadingFile || isViewingSubmitted}
+                className="flex items-center gap-2"
+                data-testid="button-upload-pdf"
+              >
+                <Upload className="h-4 w-4" />
+                {isUploadingFile ? 'Uploading...' : 'Upload PDF Files'}
+              </Button>
+              <p className="text-sm text-gray-500 mt-2">
+                {!editingAssessmentId ? 'Save the assessment first to upload files.' : 'Upload one or more PDF files (max 5 files, 10MB each).'}
+              </p>
+            </div>
+
+            {/* Attachments list */}
+            {attachments.length > 0 && (
+              <div className="space-y-2">
+                <Label className="font-medium">Attached Files ({attachments.length})</Label>
+                <div className="space-y-2">
+                  {attachments.map((attachment, index) => {
+                    const fileName = attachment.split('/').pop() || attachment;
+                    return (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-3 bg-gray-50 border rounded-md"
+                        data-testid={`attachment-${index}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-gray-600" />
+                          <a
+                            href={`/api/customers/rfq-assessments/${editingAssessmentId}/attachments/${fileName}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-600 hover:underline"
+                            data-testid={`link-attachment-${index}`}
+                          >
+                            {fileName}
+                          </a>
+                        </div>
+                        {!isViewingSubmitted && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteAttachment(fileName)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            data-testid={`button-delete-attachment-${index}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

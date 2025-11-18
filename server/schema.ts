@@ -3442,6 +3442,7 @@ export const rfqRiskAssessments = pgTable('rfq_risk_assessments', {
   status: text('status').notNull().default('draft'), // draft or submitted
   submittedBy: text('submitted_by'), // Username who submitted
   submittedAt: timestamp('submitted_at'), // When it was submitted
+  attachments: text('attachments').array(), // PDF file paths
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -5637,6 +5638,7 @@ export const quotes = pgTable('quotes', {
   validUntil: timestamp('valid_until'),
   quotedBy: text('quoted_by'),
   notes: text('notes'),
+  attachments: text('attachments').array(), // PDF file paths
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

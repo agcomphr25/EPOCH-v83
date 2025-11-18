@@ -96,8 +96,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
 
   // Filter inventory items by search
   const filteredItems = inventoryItems.filter(item =>
-    item.partNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.partName.toLowerCase().includes(searchTerm.toLowerCase())
+    (item.partNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (item.partName?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
   // Selected inventory item

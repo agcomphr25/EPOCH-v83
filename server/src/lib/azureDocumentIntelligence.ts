@@ -221,14 +221,16 @@ export async function extractTrainingContent(
     // Fallback: Use pdf-parse with proper error handling
     try {
       const { PDFParse } = await import('pdf-parse');
-      const parser = new PDFParse({ data: fileBuffer });
+      // Convert Buffer to Uint8Array for pdf-parse
+      const uint8Array = new Uint8Array(fileBuffer);
+      const parser = new PDFParse({ data: uint8Array });
       const textResult = await parser.getText();
       content = textResult.text || '';
+      await parser.destroy();
     } catch (error) {
       console.error('PDF parsing error:', error);
-      throw new Error(
-        'Azure Document Intelligence is not configured. Please contact your administrator to set up AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY for PDF processing.'
-      );
+      // Re-throw the actual error for better debugging
+      throw error;
     }
   }
 
@@ -358,14 +360,16 @@ export async function extractCertificationContent(
     // Fallback: Use pdf-parse with proper error handling
     try {
       const { PDFParse } = await import('pdf-parse');
-      const parser = new PDFParse({ data: fileBuffer });
+      // Convert Buffer to Uint8Array for pdf-parse
+      const uint8Array = new Uint8Array(fileBuffer);
+      const parser = new PDFParse({ data: uint8Array });
       const textResult = await parser.getText();
       content = textResult.text || '';
+      await parser.destroy();
     } catch (error) {
       console.error('PDF parsing error:', error);
-      throw new Error(
-        'Azure Document Intelligence is not configured. Please contact your administrator to set up AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY for PDF processing.'
-      );
+      // Re-throw the actual error for better debugging
+      throw error;
     }
   }
 
@@ -479,14 +483,16 @@ export async function extractTrainingMatrixData(
     // Fallback: Use pdf-parse with proper error handling
     try {
       const { PDFParse } = await import('pdf-parse');
-      const parser = new PDFParse({ data: fileBuffer });
+      // Convert Buffer to Uint8Array for pdf-parse
+      const uint8Array = new Uint8Array(fileBuffer);
+      const parser = new PDFParse({ data: uint8Array });
       const textResult = await parser.getText();
       content = textResult.text || '';
+      await parser.destroy();
     } catch (error) {
       console.error('PDF parsing error:', error);
-      throw new Error(
-        'Azure Document Intelligence is not configured. Please contact your administrator to set up AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY for PDF processing.'
-      );
+      // Re-throw the actual error for better debugging
+      throw error;
     }
   }
 

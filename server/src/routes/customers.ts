@@ -272,14 +272,27 @@ router.put('/rfq-assessments/:id/submit', async (req: Request, res: Response) =>
       [sessionToken]
     );
 
+    console.log('🔍 RFQ Submit - DB Query Result:', {
+      rowCount: result.rows?.length || 0,
+      rows: result.rows
+    });
+
     if (!result.rows || result.rows.length === 0) {
+      console.log('❌ RFQ Submit - No session found in database');
       return res.status(401).json({ error: 'Invalid or expired session' });
     }
 
     const { username, expires_at } = result.rows[0];
 
+    console.log('🔍 RFQ Submit - Session found:', {
+      username,
+      expires_at,
+      isExpired: new Date(expires_at) < new Date()
+    });
+
     // Check if session has expired
     if (new Date(expires_at) < new Date()) {
+      console.log('❌ RFQ Submit - Session expired');
       return res.status(401).json({ error: 'Session expired' });
     }
     

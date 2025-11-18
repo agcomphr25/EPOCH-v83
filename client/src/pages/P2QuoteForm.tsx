@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -91,6 +91,30 @@ export default function P2QuoteForm() {
   const submittedRFQs = rfqAssessments.filter(
     (rfq) => rfq.status?.toLowerCase() === 'submitted'
   );
+
+  // Auto-populate customer info when RFQ is selected
+  useEffect(() => {
+    if (quoteNumber) {
+      const selectedRFQ = submittedRFQs.find(
+        (rfq) => rfq.rfqNumber === quoteNumber
+      );
+      if (selectedRFQ) {
+        // Find the P2 customer details using customerId from RFQ
+        const p2Customer = p2Customers.find(
+          (customer: any) => customer.customerId === selectedRFQ.customerId
+        );
+        
+        if (p2Customer) {
+          // Populate both To and Company fields from P2 customer data
+          setCustomerName(p2Customer.contactName || '');
+          setCustomerCompany(p2Customer.customerName || selectedRFQ.customerName);
+        } else {
+          // Fallback to RFQ data if P2 customer not found
+          setCustomerCompany(selectedRFQ.customerName);
+        }
+      }
+    }
+  }, [quoteNumber, submittedRFQs, p2Customers]);
 
   // Calculate grand total
   const grandTotal = lineItems.reduce(

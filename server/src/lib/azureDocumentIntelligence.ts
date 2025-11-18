@@ -222,8 +222,7 @@ export async function extractTrainingContent(
     try {
       const { PDFParse } = await import('pdf-parse');
       const parser = new PDFParse({ data: fileBuffer });
-      await parser.parse();
-      const textResult = await parser.text();
+      const textResult = await parser.getText();
       content = textResult.text || '';
     } catch (error) {
       console.error('PDF parsing error:', error);
@@ -360,8 +359,7 @@ export async function extractCertificationContent(
     try {
       const { PDFParse } = await import('pdf-parse');
       const parser = new PDFParse({ data: fileBuffer });
-      await parser.parse();
-      const textResult = await parser.text();
+      const textResult = await parser.getText();
       content = textResult.text || '';
     } catch (error) {
       console.error('PDF parsing error:', error);
@@ -482,8 +480,7 @@ export async function extractTrainingMatrixData(
     try {
       const { PDFParse } = await import('pdf-parse');
       const parser = new PDFParse({ data: fileBuffer });
-      await parser.parse();
-      const textResult = await parser.text();
+      const textResult = await parser.getText();
       content = textResult.text || '';
     } catch (error) {
       console.error('PDF parsing error:', error);

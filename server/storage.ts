@@ -1144,6 +1144,7 @@ export interface IStorage {
   getPartRoutings(filters?: { inventoryItemId?: string; isActive?: boolean }): Promise<PartRouting[]>;
   getPartRouting(id: string): Promise<PartRouting | undefined>;
   getPartRoutingByInventoryItem(inventoryItemId: string): Promise<PartRouting | undefined>;
+  getPartRoutingByPartNumber(partNumber: string): Promise<PartRouting | undefined>;
   updatePartRouting(id: string, data: Partial<InsertPartRouting>): Promise<PartRouting>;
   deletePartRouting(id: string): Promise<void>;
 
@@ -10659,6 +10660,17 @@ export class DatabaseStorage implements IStorage {
       .from(partRoutings)
       .where(and(
         eq(partRoutings.inventoryItemId, inventoryItemId),
+        eq(partRoutings.isActive, true)
+      ));
+    return routing;
+  }
+
+  async getPartRoutingByPartNumber(partNumber: string): Promise<PartRouting | undefined> {
+    const [routing] = await db
+      .select()
+      .from(partRoutings)
+      .where(and(
+        eq(partRoutings.partNumber, partNumber),
         eq(partRoutings.isActive, true)
       ));
     return routing;

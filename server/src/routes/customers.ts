@@ -1423,6 +1423,26 @@ router.get(
   }
 );
 
+// Get routing by part number
+router.get(
+  '/part-routings/part/:partNumber',
+  async (req: Request, res: Response) => {
+    try {
+      const { partNumber } = req.params;
+      const routing = await storage.getPartRoutingByPartNumber(partNumber);
+      
+      if (!routing) {
+        return res.status(404).json({ error: 'No active routing found for this part number' });
+      }
+      
+      res.json(routing);
+    } catch (error) {
+      console.error('Error fetching part routing:', error);
+      res.status(500).json({ error: 'Failed to fetch part routing' });
+    }
+  }
+);
+
 // Update part routing
 router.put(
   '/part-routings/:id',

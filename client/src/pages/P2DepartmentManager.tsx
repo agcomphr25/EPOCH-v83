@@ -80,6 +80,23 @@ interface P2SerializedItemEvent {
   createdAt: string;
 }
 
+interface PartRouting {
+  id: string;
+  inventoryItemId: string;
+  partNumber: string;
+  partName: string;
+  departmentSequence: string[];
+  traceabilityConfig: Record<string, string[]>;
+}
+
+interface TraceabilityData {
+  lotNumber?: string;
+  batchNumber?: string;
+  expirationDate?: string;
+  serialNumber?: string;
+  revision?: string;
+}
+
 export default function P2DepartmentManager() {
   const [selectedDepartment, setSelectedDepartment] = useState<Department>('Layup');
   const [selectedItem, setSelectedItem] = useState<P2SerializedItem | null>(null);
@@ -89,6 +106,11 @@ export default function P2DepartmentManager() {
   const [showHoldDialog, setShowHoldDialog] = useState(false);
   const [showScrapDialog, setShowScrapDialog] = useState(false);
   const [showRoutingWizard, setShowRoutingWizard] = useState(false);
+  const [showTraceabilityDialog, setShowTraceabilityDialog] = useState(false);
+  const [traceabilityData, setTraceabilityData] = useState<TraceabilityData>({});
+  const [pendingTransitionItemId, setPendingTransitionItemId] = useState<string | null>(null);
+  const [pendingTransitionDepartment, setPendingTransitionDepartment] = useState<string | null>(null);
+  const [requiredTraceabilityFields, setRequiredTraceabilityFields] = useState<string[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -148,6 +170,88 @@ export default function P2DepartmentManager() {
     enabled: !!selectedItem && showHistory,
   });
 
+  // Fetch part routing for selected item
+  const { data: partRouting } = useQuery<PartRouting>({
+    queryKey: selectedItem ? [`/api/part-routings/part/${selectedItem.partNumber}`] : [],
+    enabled: !!selectedItem,
+  });
+
+  // Get required traceability fields for current department
+  const getRequiredTraceabilityFields = () => {
+    if (!partRouting || !selectedItem) return [];
+    return partRouting.traceabilityConfig[selectedItem.currentDepartment] || [];
+  };
+
+  // Get required fields for a specific item and department (independent of state)
+  const getRequiredFieldsForItem = async (partNumber: string, department: string): Promise<string[]> => {
+    const routing: PartRouting = await apiRequest(`/api/part-routings/part/${partNumber}`);
+    return routing.traceabilityConfig[department] || [];
+  };
+
+  // Save traceability mutation
+  const saveTraceabilityMutation = useMutation({
+    mutationFn: ({ itemId, data }: { itemId: string; data: TraceabilityData & { department: string } }) =>
+      apiRequest(`/api/p2/serialized-items/${itemId}/traceability`, {
+        method: 'POST',
+        body: {
+          ...data,
+          recordedBy: 'system',
+        },
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Traceability Recorded',
+        description: 'Traceability data saved successfully',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to save traceability data',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Handle transition - check for traceability requirements first
+  const handleTransition = async (item: P2SerializedItem) => {
+    try {
+      // Fetch traceability requirements for this specific item
+      const requiredFields = await getRequiredFieldsForItem(item.partNumber, item.currentDepartment);
+      
+      if (requiredFields.length > 0) {
+        // Capture item and requirements for traceability dialog
+        setSelectedItem(item);
+        setPendingTransitionItemId(item.id);
+        setPendingTransitionDepartment(item.currentDepartment);
+        setRequiredTraceabilityFields(requiredFields);
+        setShowTraceabilityDialog(true);
+      } else {
+        // No traceability required, proceed directly
+        transitionMutation.mutate(item.id);
+      }
+    } catch (error: any) {
+      // Fail closed - routing fetch failed, block advancement
+      const errorMessage = (error.message || '').toLowerCase();
+      const isNoRoutingConfigured = 
+        errorMessage.includes('no active routing found') ||
+        errorMessage.includes('part routing not found') ||
+        errorMessage.includes('404');
+      
+      if (isNoRoutingConfigured) {
+        // No routing configured for this part, allow advancement without traceability
+        transitionMutation.mutate(item.id);
+      } else {
+        // Network error or server error - block advancement and show error
+        toast({
+          title: 'Cannot Verify Traceability Requirements',
+          description: error.message || 'Failed to load routing configuration. Cannot advance item.',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
+
   // Transition mutation
   const transitionMutation = useMutation({
     mutationFn: (itemId: string) =>
@@ -171,6 +275,7 @@ export default function P2DepartmentManager() {
       });
       clearScan();
       setSelectedItem(null);
+      setTraceabilityData({});
     },
     onError: (error: any) => {
       toast({
@@ -368,7 +473,7 @@ export default function P2DepartmentManager() {
               <div className="flex gap-2">
                 <Button
                   data-testid="button-transition"
-                  onClick={() => transitionMutation.mutate(selectedItem.id)}
+                  onClick={() => handleTransition(selectedItem)}
                   disabled={transitionMutation.isPending}
                 >
                   <ArrowRight className="mr-2 h-4 w-4" />
@@ -502,7 +607,7 @@ export default function P2DepartmentManager() {
                               <Button
                                 size="sm"
                                 data-testid={`button-advance-${item.id}`}
-                                onClick={() => transitionMutation.mutate(item.id)}
+                                onClick={() => handleTransition(item)}
                                 disabled={transitionMutation.isPending || item.status !== 'ACTIVE'}
                               >
                                 <ArrowRight className="mr-1 h-3 w-3" />
@@ -671,6 +776,142 @@ export default function P2DepartmentManager() {
                 )}
               </div>
             ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Traceability Dialog */}
+      <Dialog open={showTraceabilityDialog} onOpenChange={setShowTraceabilityDialog}>
+        <DialogContent data-testid="dialog-traceability">
+          <DialogHeader>
+            <DialogTitle>Record Traceability Data</DialogTitle>
+            <DialogDescription>
+              Enter required traceability information for {selectedItem?.currentDepartment}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {requiredTraceabilityFields.includes('lotNumber') && (
+              <div>
+                <Label htmlFor="lot-number">Lot Number *</Label>
+                <Input
+                  id="lot-number"
+                  data-testid="input-lot-number"
+                  value={traceabilityData.lotNumber || ''}
+                  onChange={(e) => setTraceabilityData({ ...traceabilityData, lotNumber: e.target.value })}
+                  placeholder="Scan or enter lot number..."
+                />
+              </div>
+            )}
+            {requiredTraceabilityFields.includes('batchNumber') && (
+              <div>
+                <Label htmlFor="batch-number">Batch Number *</Label>
+                <Input
+                  id="batch-number"
+                  data-testid="input-batch-number"
+                  value={traceabilityData.batchNumber || ''}
+                  onChange={(e) => setTraceabilityData({ ...traceabilityData, batchNumber: e.target.value })}
+                  placeholder="Scan or enter batch number..."
+                />
+              </div>
+            )}
+            {requiredTraceabilityFields.includes('expirationDate') && (
+              <div>
+                <Label htmlFor="expiration-date">Expiration Date *</Label>
+                <Input
+                  id="expiration-date"
+                  data-testid="input-expiration-date"
+                  type="date"
+                  value={traceabilityData.expirationDate || ''}
+                  onChange={(e) => setTraceabilityData({ ...traceabilityData, expirationDate: e.target.value })}
+                />
+              </div>
+            )}
+            {requiredTraceabilityFields.includes('serialNumber') && (
+              <div>
+                <Label htmlFor="component-serial">Component Serial Number *</Label>
+                <Input
+                  id="component-serial"
+                  data-testid="input-component-serial"
+                  value={traceabilityData.serialNumber || ''}
+                  onChange={(e) => setTraceabilityData({ ...traceabilityData, serialNumber: e.target.value })}
+                  placeholder="Scan or enter component serial..."
+                />
+              </div>
+            )}
+            {requiredTraceabilityFields.includes('revision') && (
+              <div>
+                <Label htmlFor="revision">Revision *</Label>
+                <Input
+                  id="revision"
+                  data-testid="input-revision"
+                  value={traceabilityData.revision || ''}
+                  onChange={(e) => setTraceabilityData({ ...traceabilityData, revision: e.target.value })}
+                  placeholder="Enter revision..."
+                />
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => {
+                setShowTraceabilityDialog(false);
+                setTraceabilityData({});
+                setPendingTransitionItemId(null);
+                setPendingTransitionDepartment(null);
+                setRequiredTraceabilityFields([]);
+              }}>
+                Cancel
+              </Button>
+              <Button
+                data-testid="button-confirm-traceability"
+                onClick={async () => {
+                  if (!pendingTransitionItemId || !pendingTransitionDepartment) {
+                    toast({
+                      title: 'Error',
+                      description: 'No item queued for transition',
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
+
+                  // Validate required fields are filled
+                  const missingFields = requiredTraceabilityFields.filter(field => {
+                    const value = traceabilityData[field as keyof TraceabilityData];
+                    return !value || value.trim() === '';
+                  });
+
+                  if (missingFields.length > 0) {
+                    toast({
+                      title: 'Missing Required Fields',
+                      description: 'Please fill in all required traceability fields',
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
+
+                  try {
+                    // Save traceability data first
+                    await saveTraceabilityMutation.mutateAsync({
+                      itemId: pendingTransitionItemId,
+                      data: { ...traceabilityData, department: pendingTransitionDepartment },
+                    });
+
+                    // Proceed with transition after successful save
+                    transitionMutation.mutate(pendingTransitionItemId);
+                    
+                    // Reset dialog state
+                    setShowTraceabilityDialog(false);
+                    setTraceabilityData({});
+                    setPendingTransitionItemId(null);
+                    setPendingTransitionDepartment(null);
+                    setRequiredTraceabilityFields([]);
+                  } catch (error) {
+                    // Error handling is done by mutation onError
+                  }
+                }}
+                disabled={saveTraceabilityMutation.isPending || transitionMutation.isPending || requiredTraceabilityFields.length === 0}
+              >
+                Save & Advance
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -7,6 +7,7 @@ import {
 } from '@shared/schema';
 
 import { storage } from '../../storage';
+import { pool } from '../../db';
 
 const router = Router();
 
@@ -266,7 +267,6 @@ router.put('/rfq-assessments/:id/submit', async (req: Request, res: Response) =>
     }
 
     // Query database for session to get authenticated username
-    const { pool } = await import('../../db');
     const result: any = await pool.query(
       'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1',
       [sessionToken]

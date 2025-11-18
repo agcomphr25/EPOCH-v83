@@ -187,12 +187,10 @@ export default function RFQRiskAssessment() {
     const loadSignature = setTimeout(() => {
       if (formData.signature && signatureCanvasRef.current) {
         try {
-          console.log('Loading signature into canvas...');
           // Clear the canvas first to prevent duplicates
           signatureCanvasRef.current.clear();
           // Load the signature
           signatureCanvasRef.current.fromDataURL(formData.signature);
-          console.log('Signature loaded successfully');
         } catch (error) {
           console.error('Error loading signature:', error);
         }
@@ -787,10 +785,6 @@ export default function RFQRiskAssessment() {
       }
       
       const assessment = await response.json();
-      console.log('Loaded assessment:', assessment);
-      console.log('Assessment formData:', assessment.formData);
-      console.log('Signature data exists:', !!assessment.formData?.signature);
-      console.log('Signature data length:', assessment.formData?.signature?.length || 0);
       
       // Populate form with saved data
       if (assessment.formData) {

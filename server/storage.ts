@@ -11347,12 +11347,14 @@ export class DatabaseStorage implements IStorage {
       hasAttachments: orderData.hasAttachments || false,
     };
 
-    // Insert directly into all_orders table
-    const { id, createdAt, updatedAt, ...insertData } =
-      finalizedOrderData as any;
+    // Insert directly into all_orders table (id, createdAt, updatedAt are auto-generated)
+    console.log('🔍 DEBUG: finalizedOrderData keys:', Object.keys(finalizedOrderData));
+    console.log('🔍 DEBUG: Has id property?', 'id' in finalizedOrderData);
+    console.log('🔍 DEBUG: id value:', (finalizedOrderData as any).id);
+    
     const [finalizedOrder] = await db
       .insert(allOrders)
-      .values(insertData)
+      .values(finalizedOrderData)
       .returning();
 
     // Log the auto-addition to Production Queue

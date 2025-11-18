@@ -11,6 +11,8 @@ import { pool } from '../../db';
 import { uploadMiddleware } from '../../utils/fileUpload';
 import path from 'path';
 import fs from 'fs';
+import multer from 'multer';
+import crypto from 'crypto';
 
 const router = Router();
 
@@ -327,7 +329,36 @@ if (!fs.existsSync(rfqAttachmentsDir)) {
   fs.mkdirSync(rfqAttachmentsDir, { recursive: true });
 }
 
-router.post('/rfq-assessments/:id/attachments', uploadMiddleware.array('files', 5), async (req: Request, res: Response) => {
+// Create dedicated multer instance for RFQ attachments
+const rfqAttachmentStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, rfqAttachmentsDir);
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const hash = crypto.randomBytes(8).toString('hex');
+    const ext = path.extname(file.originalname);
+    const name = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9]/g, '_');
+    cb(null, `${timestamp}_${hash}_${name}${ext}`);
+  },
+});
+
+const rfqUpload = multer({
+  storage: rfqAttachmentStorage,
+  fileFilter: (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'));
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+    files: 5,
+  },
+});
+
+router.post('/rfq-assessments/:id/attachments', rfqUpload.array('files', 5), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     const files = req.files as Express.Multer.File[];
@@ -342,21 +373,9 @@ router.post('/rfq-assessments/:id/attachments', uploadMiddleware.array('files', 
       return res.status(404).json({ error: 'RFQ Risk Assessment not found' });
     }
 
-    const uploadedFiles: string[] = [];
-
-    for (const file of files) {
-      // Only accept PDFs
-      if (file.mimetype !== 'application/pdf') {
-        fs.unlinkSync(file.path); // Delete non-PDF file
-        continue;
-      }
-
-      // Move file to RFQ attachments directory
-      const newFileName = `${Date.now()}_${file.filename}`;
-      const newFilePath = path.join(rfqAttachmentsDir, newFileName);
-      fs.renameSync(file.path, newFilePath);
-      uploadedFiles.push(newFilePath);
-    }
+    // Files are already saved in the correct directory by multer
+    // Just collect the file paths
+    const uploadedFiles: string[] = files.map(file => file.path);
 
     // Update assessment with new attachment paths
     const currentAttachments = assessment.attachments || [];

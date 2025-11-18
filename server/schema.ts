@@ -14,6 +14,7 @@ import {
   numeric,
   index,
   serial,
+  varchar,
 } from 'drizzle-orm/pg-core';
 import { sql, relations } from 'drizzle-orm';
 import { createInsertSchema } from 'drizzle-zod';
@@ -803,21 +804,25 @@ export const employees = pgTable('employees', {
 
 // Employee Certifications Management
 export const certifications = pgTable('certifications', {
-  id: serial('id').primaryKey(),
-  name: text('name').notNull(),
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+  name: varchar('name').notNull(),
   description: text('description'),
-  issuingOrganization: text('issuing_organization'),
-  validityPeriod: integer('validity_period'), // months
-  category: text('category'), // SAFETY, TECHNICAL, REGULATORY, etc.
+  category: varchar('category'),
+  validityPeriodMonths: integer('validity_period_months'),
+  isRequired: boolean('is_required'),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
+  issuingOrganization: varchar('issuing_organization'),
+  validityPeriod: integer('validity_period'),
   requirements: text('requirements'),
-  isActive: boolean('is_active').default(true),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  isActive: boolean('is_active'),
+  requirementsData: jsonb('requirements_data'),
+  workInstructions: text('work_instructions'),
 });
 
 // Employee-Certification Junction Table
 export const employeeCertifications = pgTable('employee_certifications', {
-  id: serial('id').primaryKey(),
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
   employeeId: integer('employee_id')
     .references(() => employees.id)
     .notNull(),
@@ -826,12 +831,23 @@ export const employeeCertifications = pgTable('employee_certifications', {
     .notNull(),
   dateObtained: date('date_obtained').notNull(),
   expiryDate: date('expiry_date'),
-  certificateNumber: text('certificate_number'),
-  documentUrl: text('document_url'), // Link to certificate document
-  isActive: boolean('is_active').default(true),
+  certificateNumber: varchar('certificate_number'),
+  issuingAuthority: varchar('issuing_authority'),
+  status: varchar('status'),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
+  dateExpiry: date('date_expiry'),
+  documentUrl: text('document_url'),
+  isActive: boolean('is_active'),
   notes: text('notes'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  trainerName: varchar('trainer_name'),
+  trainerSignature: varchar('trainer_signature'),
+  trainingDate: date('training_date'),
+  criticalPointsCompleted: jsonb('critical_points_completed'),
+  completedByUserId: integer('completed_by_user_id'),
+  formCompletedAt: timestamp('form_completed_at'),
+  workInstructionsCompleted: jsonb('work_instructions_completed'),
+  uploadedFiles: jsonb('uploaded_files').default(sql`'[]'::jsonb`),
 });
 
 // Employee Evaluations

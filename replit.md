@@ -68,6 +68,14 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 -   **Legacy Tables**: Existing tables using `serial` IDs should not be modified.
 -   **Migration Safety**: Never change existing ID column types. Use `npm run db:push` for schema sync.
 
+## Recent Changes
+
+**2025-11-18** (1:55 PM):
+- **Fixed certifications table deployment issue**: Changed `certifications` and `employee_certifications` tables from `serial()` to `integer().generatedAlwaysAsIdentity()` to match production database structure and avoid "type serial does not exist" migration errors. Updated schemas to include all production columns (`validity_period_months`, `is_required`, `requirements_data`, `work_instructions`, `issuing_authority`, `status`, `trainer_name`, `trainer_signature`, `training_date`, `critical_points_completed`, `completed_by_user_id`, `form_completed_at`, `work_instructions_completed`, `uploaded_files`) for zero-conflict deployments.
+
+**2025-11-17** (5:37 PM):
+- **Dynamic discount system implemented**: Orders save discount metadata (type, value, scope) at creation for dynamic recalculation while preserving original intent. Percentage discounts automatically adjust when stock model prices change.
+
 ## External Dependencies
 
 ### Database

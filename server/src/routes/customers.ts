@@ -277,15 +277,20 @@ router.put('/rfq-assessments/:id/submit', async (req: Request, res: Response) =>
       rowCount: result.rowCount,
       rows: result.rows,
       hasRows: !!result.rows,
-      rowsLength: result.rows?.length
+      rowsLength: result.rows?.length,
+      isArray: Array.isArray(result),
+      resultLength: result.length
     });
 
-    if (!result.rows || result.rows.length === 0) {
+    // Handle both result formats (some pools return result.rows, others return array directly)
+    const rows = Array.isArray(result) ? result : result.rows;
+    
+    if (!rows || rows.length === 0) {
       console.log('❌ RFQ Submit - No session found in database');
       return res.status(401).json({ error: 'Invalid or expired session' });
     }
 
-    const { username, expires_at } = result.rows[0];
+    const { username, expires_at } = rows[0];
 
     console.log('🔍 RFQ Submit - Session found:', {
       username,

@@ -3510,6 +3510,81 @@ export const p2EmployeePartCertifications = pgTable('p2_employee_part_certificat
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// P2 Department Workflow Stages - Ordered stages for serialized items
+export const P2_DEPARTMENT_STAGES = [
+  'Layup',
+  'Assemble/Disassembly',
+  'CNC',
+  'Finish',
+  'Paint',
+  'Final QC',
+] as const;
+
+export type P2DepartmentStage = typeof P2_DEPARTMENT_STAGES[number];
+
+// P2 Serialized Items - Individual tracked items from P2 PO items
+export const p2SerializedItems = pgTable('p2_serialized_items', {
+  id: serial('id').primaryKey(),
+  serialNumber: text('serial_number').notNull().unique(), // Unique serial for this item
+  barcode: text('barcode').notNull().unique(), // Format: {PONumber}-{PartNumber}-{Sequence}
+  poId: integer('po_id')
+    .references(() => p2PurchaseOrders.id)
+    .notNull(),
+  poItemId: integer('po_item_id')
+    .references(() => p2PurchaseOrderItems.id)
+    .notNull(),
+  poNumber: text('po_number').notNull(), // Denormalized for performance
+  partNumber: text('part_number').notNull(), // Denormalized for performance
+  partName: text('part_name').notNull(), // Denormalized for display
+  customerId: text('customer_id').notNull(), // Denormalized from PO
+  customerName: text('customer_name').notNull(), // Denormalized from PO
+  sequenceNumber: integer('sequence_number').notNull(), // Item sequence within PO item (1, 2, 3...)
+  currentDepartment: text('current_department').notNull().default('Layup'), // Current workflow stage
+  currentStageIndex: integer('current_stage_index').notNull().default(0), // Index in P2_DEPARTMENT_STAGES array
+  status: text('status').notNull().default('ACTIVE'), // ACTIVE, COMPLETED, SCRAPPED, HOLD
+  departmentHistory: jsonb('department_history').default('[]'), // Quick-read cache of transitions
+  metadata: jsonb('metadata'), // Flexible field for specifications, custom data
+  // Department completion timestamps
+  layupCompletedAt: timestamp('layup_completed_at'),
+  assembleDisassemblyCompletedAt: timestamp('assemble_disassembly_completed_at'),
+  cncCompletedAt: timestamp('cnc_completed_at'),
+  finishCompletedAt: timestamp('finish_completed_at'),
+  paintCompletedAt: timestamp('paint_completed_at'),
+  finalQcCompletedAt: timestamp('final_qc_completed_at'),
+  completedAt: timestamp('completed_at'), // When item finished all stages
+  // Hold and scrap tracking
+  holdReason: text('hold_reason'),
+  holdBy: text('hold_by'), // Username who placed hold
+  holdAt: timestamp('hold_at'),
+  scrapReason: text('scrap_reason'),
+  scrapBy: text('scrap_by'), // Username who scrapped item
+  scrapAt: timestamp('scrap_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// P2 Serialized Item Events - Append-only audit log for all item transitions
+export const p2SerializedItemEvents = pgTable('p2_serialized_item_events', {
+  id: serial('id').primaryKey(),
+  serializedItemId: integer('serialized_item_id')
+    .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  barcode: text('barcode').notNull(), // Denormalized for quick queries
+  eventType: text('event_type').notNull(), // GENERATED, TRANSITION, HOLD, RELEASE, SCRAP, NOTE
+  fromDepartment: text('from_department'),
+  toDepartment: text('to_department'),
+  fromStageIndex: integer('from_stage_index'),
+  toStageIndex: integer('to_stage_index'),
+  performedBy: text('performed_by').notNull(), // Username who performed action
+  notes: text('notes'),
+  metadata: jsonb('metadata'), // Event-specific data
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  barcodeIdx: index('p2_serialized_item_events_barcode_idx').on(table.barcode),
+  itemIdIdx: index('p2_serialized_item_events_item_id_idx').on(table.serializedItemId),
+}));
+
 // Production Orders - separate from regular orders for PO tracking
 export const productionOrders = pgTable('production_orders', {
   id: serial('id').primaryKey(),
@@ -3764,6 +3839,50 @@ export const insertP2EmployeePartCertificationSchema = createInsertSchema(
     notes: z.string().optional().nullable(),
   });
 
+// P2 Serialized Items Schemas
+export const insertP2SerializedItemSchema = createInsertSchema(p2SerializedItems)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    serialNumber: z.string().min(1, 'Serial number is required'),
+    barcode: z.string().min(1, 'Barcode is required'),
+    poId: z.number().min(1, 'PO ID is required'),
+    poItemId: z.number().min(1, 'PO Item ID is required'),
+    poNumber: z.string().min(1, 'PO Number is required'),
+    partNumber: z.string().min(1, 'Part Number is required'),
+    partName: z.string().min(1, 'Part Name is required'),
+    customerId: z.string().min(1, 'Customer ID is required'),
+    customerName: z.string().min(1, 'Customer Name is required'),
+    sequenceNumber: z.number().min(1, 'Sequence number is required'),
+    currentDepartment: z.string().default('Layup'),
+    currentStageIndex: z.number().min(0).default(0),
+    status: z.enum(['ACTIVE', 'COMPLETED', 'SCRAPPED', 'HOLD']).default('ACTIVE'),
+    departmentHistory: z.any().optional(),
+    metadata: z.any().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  });
+
+export const insertP2SerializedItemEventSchema = createInsertSchema(p2SerializedItemEvents)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    serializedItemId: z.number().min(1, 'Serialized Item ID is required'),
+    barcode: z.string().min(1, 'Barcode is required'),
+    eventType: z.enum(['GENERATED', 'TRANSITION', 'HOLD', 'RELEASE', 'SCRAP', 'NOTE']),
+    fromDepartment: z.string().optional().nullable(),
+    toDepartment: z.string().optional().nullable(),
+    fromStageIndex: z.number().optional().nullable(),
+    toStageIndex: z.number().optional().nullable(),
+    performedBy: z.string().min(1, 'Performed by is required'),
+    notes: z.string().optional().nullable(),
+    metadata: z.any().optional().nullable(),
+  });
+
 // Production Order Schema
 export const insertProductionOrderSchema = createInsertSchema(productionOrders)
   .omit({
@@ -3838,6 +3957,12 @@ export type InsertP2EmployeePartCertification = z.infer<
   typeof insertP2EmployeePartCertificationSchema
 >;
 export type P2EmployeePartCertification = typeof p2EmployeePartCertifications.$inferSelect;
+
+// P2 Serialized Items Types
+export type InsertP2SerializedItem = z.infer<typeof insertP2SerializedItemSchema>;
+export type P2SerializedItem = typeof p2SerializedItems.$inferSelect;
+export type InsertP2SerializedItemEvent = z.infer<typeof insertP2SerializedItemEventSchema>;
+export type P2SerializedItemEvent = typeof p2SerializedItemEvents.$inferSelect;
 
 // Production Order Types
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;

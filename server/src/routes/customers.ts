@@ -1114,4 +1114,231 @@ router.delete(
   }
 );
 
+// P2 Serialized Items Routes
+
+// Generate serialized items from a PO item
+router.post(
+  '/purchase-orders/items/:poItemId/generate-serialized',
+  async (req: Request, res: Response) => {
+    try {
+      const { poItemId } = req.params;
+      const { username = 'system' } = req.body;
+      const items = await storage.generateSerializedItems(parseInt(poItemId), username);
+      res.status(201).json(items);
+    } catch (error) {
+      console.error('Error generating serialized items:', error);
+      res.status(500).json({ 
+        error: 'Failed to generate serialized items',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Get serialized items with filters
+router.get(
+  '/serialized-items',
+  async (req: Request, res: Response) => {
+    try {
+      const { poId, poItemId, department, status } = req.query;
+      const filters: any = {};
+      
+      if (poId) filters.poId = parseInt(poId as string);
+      if (poItemId) filters.poItemId = parseInt(poItemId as string);
+      if (department) filters.department = department as string;
+      if (status) filters.status = status as string;
+      
+      const items = await storage.getP2SerializedItems(filters);
+      res.json(items);
+    } catch (error) {
+      console.error('Error fetching serialized items:', error);
+      res.status(500).json({ error: 'Failed to fetch serialized items' });
+    }
+  }
+);
+
+// Get department queue (items for a specific department)
+router.get(
+  '/departments/:department/queue',
+  async (req: Request, res: Response) => {
+    try {
+      const { department } = req.params;
+      const { status = 'ACTIVE' } = req.query;
+      
+      const items = await storage.getP2SerializedItems({
+        department,
+        status: status as string
+      });
+      
+      res.json(items);
+    } catch (error) {
+      console.error('Error fetching department queue:', error);
+      res.status(500).json({ error: 'Failed to fetch department queue' });
+    }
+  }
+);
+
+// Get single serialized item by ID
+router.get(
+  '/serialized-items/:id',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const item = await storage.getP2SerializedItem(parseInt(id));
+      
+      if (!item) {
+        return res.status(404).json({ error: 'Serialized item not found' });
+      }
+      
+      res.json(item);
+    } catch (error) {
+      console.error('Error fetching serialized item:', error);
+      res.status(500).json({ error: 'Failed to fetch serialized item' });
+    }
+  }
+);
+
+// Get serialized item by barcode (for scanner lookup)
+router.get(
+  '/barcode/:barcode',
+  async (req: Request, res: Response) => {
+    try {
+      const { barcode } = req.params;
+      const item = await storage.getP2SerializedItemByBarcode(barcode);
+      
+      if (!item) {
+        return res.status(404).json({ error: 'Item not found' });
+      }
+      
+      res.json(item);
+    } catch (error) {
+      console.error('Error looking up barcode:', error);
+      res.status(500).json({ error: 'Failed to lookup barcode' });
+    }
+  }
+);
+
+// Transition item to next department
+router.post(
+  '/serialized-items/:id/transition',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { username = 'system', notes } = req.body;
+      
+      const item = await storage.transitionSerializedItem(
+        parseInt(id),
+        '', // nextDepartment is determined automatically
+        username,
+        notes
+      );
+      
+      res.json(item);
+    } catch (error) {
+      console.error('Error transitioning item:', error);
+      res.status(500).json({ 
+        error: 'Failed to transition item',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Hold an item
+router.post(
+  '/serialized-items/:id/hold',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { reason, username = 'system' } = req.body;
+      
+      if (!reason) {
+        return res.status(400).json({ error: 'Hold reason is required' });
+      }
+      
+      const item = await storage.holdSerializedItem(
+        parseInt(id),
+        reason,
+        username
+      );
+      
+      res.json(item);
+    } catch (error) {
+      console.error('Error holding item:', error);
+      res.status(500).json({ 
+        error: 'Failed to hold item',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Release an item from hold
+router.post(
+  '/serialized-items/:id/release',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { username = 'system' } = req.body;
+      
+      const item = await storage.releaseSerializedItem(
+        parseInt(id),
+        username
+      );
+      
+      res.json(item);
+    } catch (error) {
+      console.error('Error releasing item:', error);
+      res.status(500).json({ 
+        error: 'Failed to release item',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Scrap an item
+router.post(
+  '/serialized-items/:id/scrap',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { reason, username = 'system' } = req.body;
+      
+      if (!reason) {
+        return res.status(400).json({ error: 'Scrap reason is required' });
+      }
+      
+      const item = await storage.scrapSerializedItem(
+        parseInt(id),
+        reason,
+        username
+      );
+      
+      res.json(item);
+    } catch (error) {
+      console.error('Error scrapping item:', error);
+      res.status(500).json({ 
+        error: 'Failed to scrap item',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Get item history
+router.get(
+  '/serialized-items/:id/history',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const history = await storage.getP2SerializedItemHistory(parseInt(id));
+      res.json(history);
+    } catch (error) {
+      console.error('Error fetching item history:', error);
+      res.status(500).json({ error: 'Failed to fetch item history' });
+    }
+  }
+);
+
 export default router;

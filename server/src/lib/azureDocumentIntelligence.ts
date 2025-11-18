@@ -3,11 +3,6 @@ import {
   AzureKeyCredential,
   AnalyzeResult,
 } from '@azure/ai-form-recognizer';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-const pdfParseModule = require('pdf-parse');
-const pdfParse = pdfParseModule.default || pdfParseModule;
 
 let client: DocumentAnalysisClient | null = null;
 
@@ -223,6 +218,9 @@ export async function extractTrainingContent(
     const result = await analyzeDocument(fileBuffer, 'layout');
     content = result.content || '';
   } else {
+    // Use dynamic import for pdf-parse
+    const pdfParseModule = await import('pdf-parse');
+    const pdfParse = pdfParseModule.default || pdfParseModule;
     const pdfData = await pdfParse(fileBuffer);
     content = pdfData.text || '';
   }
@@ -350,6 +348,9 @@ export async function extractCertificationContent(
     const result = await analyzeDocument(fileBuffer, 'document');
     content = result.content || '';
   } else {
+    // Use dynamic import for pdf-parse
+    const pdfParseModule = await import('pdf-parse');
+    const pdfParse = pdfParseModule.default || pdfParseModule;
     const pdfData = await pdfParse(fileBuffer);
     content = pdfData.text || '';
   }
@@ -461,6 +462,9 @@ export async function extractTrainingMatrixData(
     content = result.content || '';
     tables = result.tables || [];
   } else {
+    // Use dynamic import for pdf-parse
+    const pdfParseModule = await import('pdf-parse');
+    const pdfParse = pdfParseModule.default || pdfParseModule;
     const pdfData = await pdfParse(fileBuffer);
     content = pdfData.text || '';
   }

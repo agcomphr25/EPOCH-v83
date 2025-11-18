@@ -54,6 +54,13 @@ router.post(
       // Extract certification content using Azure Document Intelligence
       const extractedData = await extractCertificationContent(pdfBuffer);
 
+      // Build structured requirements data
+      const requirementsData = {
+        ppe: extractedData.ppe || [],
+        criticalPoints: extractedData.criticalPoints || [],
+        workInstructions: extractedData.workInstructions || []
+      };
+
       // Create certification in database
       const result = await pool.query`
       INSERT INTO certifications (
@@ -61,6 +68,8 @@ router.post(
         description,
         category,
         requirements,
+        requirements_data,
+        work_instructions,
         is_active,
         created_at,
         updated_at
@@ -69,6 +78,8 @@ router.post(
         ${extractedData.description || ''},
         ${'DEPARTMENT'},
         ${extractedData.requirements || ''},
+        ${JSON.stringify(requirementsData)},
+        ${extractedData.workInstructions.length > 0 ? 'Extracted from PDF' : null},
         true,
         NOW(),
         NOW()
@@ -153,6 +164,13 @@ router.post('/create-from-google-drive', async (req: Request, res: Response) => 
     // Extract certification content using Azure Document Intelligence
     const extractedData = await extractCertificationContent(pdfBuffer);
 
+    // Build structured requirements data
+    const requirementsData = {
+      ppe: extractedData.ppe || [],
+      criticalPoints: extractedData.criticalPoints || [],
+      workInstructions: extractedData.workInstructions || []
+    };
+
     // Create certification in database
     const result = await pool.query`
       INSERT INTO certifications (
@@ -160,6 +178,8 @@ router.post('/create-from-google-drive', async (req: Request, res: Response) => 
         description,
         category,
         requirements,
+        requirements_data,
+        work_instructions,
         is_active,
         created_at,
         updated_at
@@ -168,6 +188,8 @@ router.post('/create-from-google-drive', async (req: Request, res: Response) => 
         ${extractedData.description || ''},
         ${'DEPARTMENT'},
         ${extractedData.requirements || ''},
+        ${JSON.stringify(requirementsData)},
+        ${extractedData.workInstructions.length > 0 ? 'Extracted from PDF' : null},
         true,
         NOW(),
         NOW()

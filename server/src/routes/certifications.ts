@@ -383,4 +383,152 @@ router.post('/complete-training', async (req: Request, res: Response) => {
   }
 });
 
+// POST upload file to employee certification
+router.post('/:certificationId/upload-file', uploadMiddleware.single('file'), async (req: Request, res: Response) => {
+  try {
+    const { certificationId } = req.params;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Get the current uploaded files
+    const certResult = await pool.query`
+      SELECT uploaded_files as "uploadedFiles"
+      FROM employee_certifications
+      WHERE id = ${parseInt(certificationId)}
+    `;
+
+    if (!certResult || certResult.length === 0) {
+      // Clean up uploaded file
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
+      return res.status(404).json({ error: 'Employee certification not found' });
+    }
+
+    const uploadedFiles = certResult[0].uploadedFiles || [];
+    
+    // Create new file record
+    const newFile = {
+      id: Date.now().toString(),
+      name: file.originalname,
+      path: file.path,
+      size: file.size,
+      mimeType: file.mimetype,
+      uploadedAt: new Date().toISOString(),
+    };
+
+    // Add to uploaded files array
+    uploadedFiles.push(newFile);
+
+    // Update database
+    await pool.query`
+      UPDATE employee_certifications
+      SET uploaded_files = ${JSON.stringify(uploadedFiles)},
+          updated_at = NOW()
+      WHERE id = ${parseInt(certificationId)}
+    `;
+
+    res.status(201).json({
+      message: 'File uploaded successfully',
+      file: newFile,
+    });
+  } catch (error: any) {
+    console.error('Upload certification file error:', error);
+    
+    // Clean up uploaded file on error
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    
+    res.status(500).json({ error: error.message || 'Failed to upload file' });
+  }
+});
+
+// DELETE file from employee certification
+router.delete('/:certificationId/delete-file/:fileId', async (req: Request, res: Response) => {
+  try {
+    const { certificationId, fileId } = req.params;
+
+    // Get the current uploaded files
+    const certResult = await pool.query`
+      SELECT uploaded_files as "uploadedFiles"
+      FROM employee_certifications
+      WHERE id = ${parseInt(certificationId)}
+    `;
+
+    if (!certResult || certResult.length === 0) {
+      return res.status(404).json({ error: 'Employee certification not found' });
+    }
+
+    const uploadedFiles = certResult[0].uploadedFiles || [];
+    
+    // Find the file to delete
+    const fileToDelete = uploadedFiles.find((f: any) => f.id === fileId);
+    
+    if (!fileToDelete) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Delete physical file
+    if (fs.existsSync(fileToDelete.path)) {
+      fs.unlinkSync(fileToDelete.path);
+    }
+
+    // Remove from array
+    const updatedFiles = uploadedFiles.filter((f: any) => f.id !== fileId);
+
+    // Update database
+    await pool.query`
+      UPDATE employee_certifications
+      SET uploaded_files = ${JSON.stringify(updatedFiles)},
+          updated_at = NOW()
+      WHERE id = ${parseInt(certificationId)}
+    `;
+
+    res.json({
+      message: 'File deleted successfully',
+    });
+  } catch (error: any) {
+    console.error('Delete certification file error:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete file' });
+  }
+});
+
+// GET download certification file
+router.get('/:certificationId/download-file/:fileId', async (req: Request, res: Response) => {
+  try {
+    const { certificationId, fileId } = req.params;
+
+    // Get the uploaded files
+    const certResult = await pool.query`
+      SELECT uploaded_files as "uploadedFiles"
+      FROM employee_certifications
+      WHERE id = ${parseInt(certificationId)}
+    `;
+
+    if (!certResult || certResult.length === 0) {
+      return res.status(404).json({ error: 'Employee certification not found' });
+    }
+
+    const uploadedFiles = certResult[0].uploadedFiles || [];
+    const file = uploadedFiles.find((f: any) => f.id === fileId);
+
+    if (!file) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    if (!fs.existsSync(file.path)) {
+      return res.status(404).json({ error: 'File not found on disk' });
+    }
+
+    res.download(file.path, file.name);
+  } catch (error: any) {
+    console.error('Download certification file error:', error);
+    res.status(500).json({ error: error.message || 'Failed to download file' });
+  }
+});
+
 export default router;

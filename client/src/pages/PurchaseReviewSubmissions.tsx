@@ -469,6 +469,20 @@ export default function PurchaseReviewSubmissions() {
                             </DialogContent>
                           </Dialog>
 
+                          {submission.status === 'DRAFT' && (
+                            <Link href={`/purchase-review-checklist?id=${submission.id}`}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="bg-blue-50 hover:bg-blue-100 border-blue-200"
+                                data-testid={`button-edit-in-form-${submission.id}`}
+                              >
+                                <FileText className="h-4 w-4 mr-1" />
+                                Edit in Form
+                              </Button>
+                            </Link>
+                          )}
+
                           <Button
                             variant="outline"
                             size="sm"

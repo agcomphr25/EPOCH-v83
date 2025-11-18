@@ -66,6 +66,7 @@ import followupOrdersRoutes from './followupOrders';
 import cuttingTableRoutes from './cuttingTable';
 import controlledDocumentsRoutes from './controlledDocuments';
 import adminRoutes from './admin';
+import quotesRoutes from './quotes';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -135,6 +136,9 @@ export function registerRoutes(app: Express): Server {
   
   // Vendor purchase orders routes
   app.use('/api/vendor-pos', vendorPOsRoutes);
+
+  // Quote management routes
+  app.use(quotesRoutes);
 
   // PDFME SYSTEM COMMENTED OUT - NOT IN USE
   // PDF Templates routes
@@ -1172,6 +1176,20 @@ export function registerRoutes(app: Express): Server {
     } catch (_error) {
       console.error('Get purchase review submission _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch purchase review submission' });
+    }
+  });
+
+  app.put('/api/purchase-review-submissions/:id', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const submission = await storage.updatePurchaseReviewSubmission(req.params.id, req.body);
+      if (!submission) {
+        return res.status(404).json({ _error: 'Submission not found' });
+      }
+      res.json(submission);
+    } catch (_error) {
+      console.error('Update purchase review submission _error:', _error);
+      res.status(500).json({ _error: 'Failed to update purchase review submission' });
     }
   });
 

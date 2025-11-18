@@ -7,6 +7,7 @@ import {
 } from '@shared/schema';
 
 import { storage } from '../../storage';
+import { pool } from '../../db';
 
 const router = Router();
 
@@ -250,30 +251,56 @@ router.put('/rfq-assessments/:id/submit', async (req: Request, res: Response) =>
   try {
     const id = parseInt(req.params.id);
     
+    // Debug logging
+    console.log('🔍 RFQ Submit - Cookies:', req.cookies);
+    console.log('🔍 RFQ Submit - Headers:', req.headers);
+    
     // Extract session token from cookies or authorization header
     const sessionToken =
       req.cookies?.sessionToken ||
       req.headers.authorization?.replace('Bearer ', '');
+
+    console.log('🔍 RFQ Submit - Session Token:', sessionToken ? 'Found' : 'Not found');
 
     if (!sessionToken) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
     // Query database for session to get authenticated username
-    const { pool } = await import('../../db');
     const result: any = await pool.query(
       'SELECT user_id, username, expires_at FROM user_sessions WHERE session_token = $1',
       [sessionToken]
     );
 
-    if (!result.rows || result.rows.length === 0) {
+    console.log('🔍 RFQ Submit - DB Query Result:', {
+      result: result,
+      rowCount: result.rowCount,
+      rows: result.rows,
+      hasRows: !!result.rows,
+      rowsLength: result.rows?.length,
+      isArray: Array.isArray(result),
+      resultLength: result.length
+    });
+
+    // Handle both result formats (some pools return result.rows, others return array directly)
+    const rows = Array.isArray(result) ? result : result.rows;
+    
+    if (!rows || rows.length === 0) {
+      console.log('❌ RFQ Submit - No session found in database');
       return res.status(401).json({ error: 'Invalid or expired session' });
     }
 
-    const { username, expires_at } = result.rows[0];
+    const { username, expires_at } = rows[0];
+
+    console.log('🔍 RFQ Submit - Session found:', {
+      username,
+      expires_at,
+      isExpired: new Date(expires_at) < new Date()
+    });
 
     // Check if session has expired
     if (new Date(expires_at) < new Date()) {
+      console.log('❌ RFQ Submit - Session expired');
       return res.status(401).json({ error: 'Session expired' });
     }
     
@@ -894,5 +921,63 @@ router.get('/:id/balance-due', async (req: Request, res: Response) => {
     });
   }
 });
+
+// P2 Purchase Order Items Routes
+router.get(
+  '/purchase-orders/:id/items',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const items = await storage.getP2PurchaseOrderItems(parseInt(id));
+      res.json(items);
+    } catch (error) {
+      console.error('Error fetching P2 purchase order items:', error);
+      res.status(500).json({ error: 'Failed to fetch P2 purchase order items' });
+    }
+  }
+);
+
+router.post(
+  '/purchase-orders/:id/items',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const itemData = { ...req.body, poId: parseInt(id) };
+      const item = await storage.createP2PurchaseOrderItem(itemData);
+      res.status(201).json(item);
+    } catch (error) {
+      console.error('Error creating P2 purchase order item:', error);
+      res.status(500).json({ error: 'Failed to create P2 purchase order item' });
+    }
+  }
+);
+
+router.put(
+  '/purchase-orders/:poId/items/:itemId',
+  async (req: Request, res: Response) => {
+    try {
+      const { itemId } = req.params;
+      const item = await storage.updateP2PurchaseOrderItem(parseInt(itemId), req.body);
+      res.json(item);
+    } catch (error) {
+      console.error('Error updating P2 purchase order item:', error);
+      res.status(500).json({ error: 'Failed to update P2 purchase order item' });
+    }
+  }
+);
+
+router.delete(
+  '/purchase-orders/:poId/items/:itemId',
+  async (req: Request, res: Response) => {
+    try {
+      const { itemId } = req.params;
+      await storage.deleteP2PurchaseOrderItem(parseInt(itemId));
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting P2 purchase order item:', error);
+      res.status(500).json({ error: 'Failed to delete P2 purchase order item' });
+    }
+  }
+);
 
 export default router;

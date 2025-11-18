@@ -120,6 +120,7 @@ import WorkDayAwareScheduler from './components/WorkDayAwareScheduler';
 import PurchaseReviewChecklist from './pages/PurchaseReviewChecklist';
 import PurchaseReviewSubmissions from './pages/PurchaseReviewSubmissions';
 import ManufacturersCertificate from './pages/ManufacturersCertificate';
+import P2QuoteForm from './pages/P2QuoteForm';
 import PaymentManagement from './pages/PaymentManagement';
 import RefundRequest from './pages/RefundRequest';
 import RefundQueue from './pages/RefundQueue';
@@ -560,6 +561,7 @@ function App() {
                     path="/purchase-review-submissions"
                     component={PurchaseReviewSubmissions}
                   />
+                  <Route path="/p2-quote-form" component={P2QuoteForm} />
                   <Route
                     path="/manufacturers-certificate"
                     component={ManufacturersCertificate}

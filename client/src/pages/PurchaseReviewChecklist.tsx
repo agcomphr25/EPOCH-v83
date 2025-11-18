@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +20,7 @@ import { Save, Printer, Download, FileText } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { COMPANY_INFO } from '@shared/company-config';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 
 // SmartyStreets address autocomplete hook
 const useSmartyStreetsAutocomplete = (query: string) => {
@@ -60,6 +61,9 @@ export default function PurchaseReviewChecklist() {
   // Signature canvas reference
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
   const { toast } = useToast();
+  const [location] = useLocation();
+  const [submissionId, setSubmissionId] = useState<string | null>(null);
+  const [isLoadingSubmission, setIsLoadingSubmission] = useState(false);
 
   // Fetch P2 customers for dropdown including ship-to information
   const { data: p2Customers = [] } = useQuery({
@@ -86,19 +90,41 @@ export default function PurchaseReviewChecklist() {
       })),
   });
 
+  // Fetch inventory items for Item # autocomplete
+  const { data: inventoryItems = [], isLoading: isLoadingInventory, error: inventoryError } = useQuery({
+    queryKey: ['/api/inventory/items'],
+    select: (data: any[]) =>
+      data.map((item) => ({
+        id: item.id,
+        agPartNumber: item.agPartNumber,
+        name: item.name,
+        sku: item.sku,
+      })).filter(item => item.agPartNumber), // Only items with part numbers
+  });
+
   // Submit checklist mutation
   const submitChecklistMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return await apiRequest('/api/purchase-review-submissions', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+    mutationFn: async ({ data, isUpdate, updateId }: { data: any; isUpdate: boolean; updateId?: string }) => {
+      if (isUpdate && updateId) {
+        return await apiRequest(`/api/purchase-review-submissions/${updateId}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        });
+      } else {
+        return await apiRequest('/api/purchase-review-submissions', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        });
+      }
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
+      const action = variables.isUpdate ? 'updated' : 'saved';
       toast({
         title: 'Success',
-        description: 'Purchase Review Checklist saved successfully!',
+        description: `Purchase Review Checklist ${action} successfully!`,
       });
+      // Invalidate queries to refresh submissions list
+      queryClient.invalidateQueries({ queryKey: ['/api/purchase-review-submissions'] });
     },
     onError: (error: Error) => {
       toast({
@@ -206,6 +232,64 @@ export default function PurchaseReviewChecklist() {
     signature: '',
     date: '',
   });
+
+  // Load submission data if editing an existing submission
+  useEffect(() => {
+    const loadSubmission = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      
+      if (id) {
+        setSubmissionId(id);
+        setIsLoadingSubmission(true);
+        
+        try {
+          const response = await fetch(`/api/purchase-review-submissions/${id}`);
+          if (response.ok) {
+            const submission = await response.json();
+            
+            // Load form data
+            if (submission.formData) {
+              setFormData(submission.formData);
+            }
+            
+            toast({
+              title: 'Draft Loaded',
+              description: 'Your saved draft has been loaded for editing.',
+            });
+          } else {
+            toast({
+              title: 'Error',
+              description: 'Failed to load submission.',
+              variant: 'destructive',
+            });
+          }
+        } catch (error) {
+          console.error('Error loading submission:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to load submission.',
+            variant: 'destructive',
+          });
+        } finally {
+          setIsLoadingSubmission(false);
+        }
+      }
+    };
+    
+    loadSubmission();
+  }, []);
+
+  // Load signature when formData changes and signature exists
+  useEffect(() => {
+    if (formData.signature && signatureCanvasRef.current) {
+      try {
+        signatureCanvasRef.current.fromDataURL(formData.signature);
+      } catch (error) {
+        console.error('Error loading signature:', error);
+      }
+    }
+  }, [formData.signature]);
 
   // Calculate amount when quantity, unit price, tooling, or additional cost changes
   useEffect(() => {
@@ -326,20 +410,26 @@ export default function PurchaseReviewChecklist() {
 
   const handleSave = async () => {
     // Save signature if present
+    let updatedFormData = { ...formData };
     if (signatureCanvasRef.current && !signatureCanvasRef.current.isEmpty()) {
       const signatureData = signatureCanvasRef.current.toDataURL();
-      setFormData((prev) => ({ ...prev, signature: signatureData }));
+      updatedFormData = { ...updatedFormData, signature: signatureData };
+      setFormData(updatedFormData);
     }
 
     const submissionData = {
-      customerId: formData.customerId || null,
-      quoteId: formData.quoteId || null,
-      formData: formData,
-      createdBy: 'current_user', // TODO: Replace with actual user context
+      customerId: updatedFormData.customerId || null,
+      quoteId: updatedFormData.quoteId || null,
+      formData: updatedFormData,
+      createdBy: 'current_user',
       status: 'DRAFT' as const,
     };
 
-    submitChecklistMutation.mutate(submissionData);
+    submitChecklistMutation.mutate({
+      data: submissionData,
+      isUpdate: !!submissionId,
+      updateId: submissionId || undefined,
+    });
   };
 
   const handlePrint = () => {
@@ -347,11 +437,35 @@ export default function PurchaseReviewChecklist() {
   };
 
   // Handle form submission
-  const handleSubmitChecklist = () => {
-    // TODO: Implement form submission logic
-    // For now, just show a placeholder message
-    console.log('Purchase Review Checklist submitted:', formData);
-    alert('Checklist submission functionality will be implemented soon.');
+  const handleSubmitChecklist = async () => {
+    // Save signature if present
+    let updatedFormData = { ...formData };
+    if (signatureCanvasRef.current && !signatureCanvasRef.current.isEmpty()) {
+      const signatureData = signatureCanvasRef.current.toDataURL();
+      updatedFormData = { ...updatedFormData, signature: signatureData };
+      setFormData(updatedFormData);
+    }
+
+    const submissionData = {
+      customerId: updatedFormData.customerId || null,
+      quoteId: updatedFormData.quoteId || null,
+      formData: updatedFormData,
+      createdBy: 'current_user',
+      status: 'SUBMITTED' as const,
+    };
+
+    submitChecklistMutation.mutate({
+      data: submissionData,
+      isUpdate: !!submissionId,
+      updateId: submissionId || undefined,
+    });
+    
+    // Redirect to submissions page after successful submit if updating
+    if (submissionId && !submitChecklistMutation.isPending) {
+      setTimeout(() => {
+        window.location.href = '/purchase-review-submissions';
+      }, 1000);
+    }
   };
 
   return (
@@ -938,6 +1052,18 @@ export default function PurchaseReviewChecklist() {
               </Select>
             </div>
 
+            {/* Inventory items loading/error status */}
+            {isLoadingInventory && (
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-sm text-blue-700">
+                Loading inventory items for Item # fields...
+              </div>
+            )}
+            {inventoryError && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700">
+                Failed to load inventory items. You can still enter Item # manually.
+              </div>
+            )}
+
             {/* Level sections */}
             <div className="space-y-6">
               {/* Level 1 - Assembly */}
@@ -945,13 +1071,16 @@ export default function PurchaseReviewChecklist() {
                 <h4 className="font-semibold mb-3">Level 1 - Assembly</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <Label htmlFor="level1ItemNumber">Item #</Label>
+                    <Label htmlFor="level1ItemNumber">Item # (from inventory or custom)</Label>
                     <Input
                       id="level1ItemNumber"
+                      list="inventory-items-list"
                       value={formData.level1ItemNumber}
                       onChange={(e) =>
                         handleInputChange('level1ItemNumber', e.target.value)
                       }
+                      placeholder="Select from inventory or type custom..."
+                      disabled={isLoadingInventory}
                     />
                   </div>
                   <div className="space-y-2">
@@ -1010,13 +1139,16 @@ export default function PurchaseReviewChecklist() {
                 <h4 className="font-semibold mb-3">Level 2 - CNC</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <Label htmlFor="level2ItemNumber">Item #</Label>
+                    <Label htmlFor="level2ItemNumber">Item # (from inventory or custom)</Label>
                     <Input
                       id="level2ItemNumber"
+                      list="inventory-items-list"
                       value={formData.level2ItemNumber}
                       onChange={(e) =>
                         handleInputChange('level2ItemNumber', e.target.value)
                       }
+                      placeholder="Select from inventory or type custom..."
+                      disabled={isLoadingInventory}
                     />
                   </div>
                   <div className="space-y-2">
@@ -1078,13 +1210,16 @@ export default function PurchaseReviewChecklist() {
                 <h4 className="font-semibold mb-3">Level 3 - Manufacturing</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <Label htmlFor="level3ItemNumber">Item #</Label>
+                    <Label htmlFor="level3ItemNumber">Item # (from inventory or custom)</Label>
                     <Input
                       id="level3ItemNumber"
+                      list="inventory-items-list"
                       value={formData.level3ItemNumber}
                       onChange={(e) =>
                         handleInputChange('level3ItemNumber', e.target.value)
                       }
+                      placeholder="Select from inventory or type custom..."
+                      disabled={isLoadingInventory}
                     />
                   </div>
                   <div className="space-y-2">
@@ -1721,7 +1856,18 @@ export default function PurchaseReviewChecklist() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="date">Date</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => handleInputChange('date', e.target.value)}
+                  className="max-w-md"
+                />
+              </div>
+              
               <div>
                 <Label>Digital Signature</Label>
                 <div className="border border-gray-300 rounded-md p-2">
@@ -1729,9 +1875,9 @@ export default function PurchaseReviewChecklist() {
                     ref={signatureCanvasRef}
                     penColor="black"
                     canvasProps={{
-                      width: 300,
-                      height: 150,
-                      className: 'signature-canvas border rounded',
+                      width: 700,
+                      height: 200,
+                      className: 'signature-canvas border rounded w-full',
                     }}
                     onEnd={saveSignature}
                   />
@@ -1745,15 +1891,6 @@ export default function PurchaseReviewChecklist() {
                   </Button>
                 </div>
               </div>
-              <div>
-                <Label htmlFor="date">Date</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => handleInputChange('date', e.target.value)}
-                />
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -1764,8 +1901,10 @@ export default function PurchaseReviewChecklist() {
             onClick={handleSubmitChecklist}
             className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 text-lg font-medium"
             size="lg"
+            disabled={submitChecklistMutation.isPending}
+            data-testid="button-submit-checklist"
           >
-            Submit Checklist
+            {submitChecklistMutation.isPending ? 'Submitting...' : 'Submit Checklist'}
           </Button>
         </div>
 
@@ -1774,6 +1913,15 @@ export default function PurchaseReviewChecklist() {
             FO Form 12 • Version 1.4 07/22/2025
           </p>
         </div>
+
+        {/* Centralized inventory items datalist for all Item # fields */}
+        <datalist id="inventory-items-list">
+          {inventoryItems.map((item) => (
+            <option key={item.id} value={item.agPartNumber}>
+              {item.agPartNumber} - {item.name}
+            </option>
+          ))}
+        </datalist>
       </div>
     </div>
   );

@@ -1,0 +1,922 @@
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ArrowLeft, Plus, Trash2, Save, FileText, Printer, Search } from 'lucide-react';
+import { Link } from 'wouter';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
+import type { InventoryItem } from '@shared/schema';
+
+interface QuoteLineItem {
+  id: string;
+  lineNumber: number;
+  quantity: number;
+  description: string;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+interface RFQAssessment {
+  id: number;
+  rfqNumber: string;
+  customerId: string;
+  customerName: string;
+  description: string | null;
+  status: string;
+  submittedBy: string | null;
+  submittedAt: string | null;
+}
+
+export default function P2QuoteForm() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [quoteDate, setQuoteDate] = useState(
+    new Date().toISOString().split('T')[0]
+  );
+  const [quoteNumber, setQuoteNumber] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerCompany, setCustomerCompany] = useState('');
+  const [fromName, setFromName] = useState('Dave Tandy');
+  const [fromEmail, setFromEmail] = useState('dave@agcomposites.com');
+  const [fromPhone, setFromPhone] = useState('256-723-8381');
+  const [paymentTerms, setPaymentTerms] = useState('Net 30');
+  const [notes, setNotes] = useState('');
+  const [validityDays, setValidityDays] = useState('30');
+  const [lineItems, setLineItems] = useState<QuoteLineItem[]>([]);
+  const [savedQuoteId, setSavedQuoteId] = useState<string | null>(null);
+  const [quoteStatus, setQuoteStatus] = useState<string>('DRAFT');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Modal state for inventory item selection
+  const [isItemModalOpen, setIsItemModalOpen] = useState(false);
+  const [selectedInventoryItem, setSelectedInventoryItem] = useState<InventoryItem | null>(null);
+  const [itemQuantity, setItemQuantity] = useState('1');
+  const [profitMarginPercent, setProfitMarginPercent] = useState('30');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Fetch P2 customers for autocomplete
+  const { data: p2Customers = [] } = useQuery<any[]>({
+    queryKey: ['/api/p2-customers-bypass'],
+  });
+
+  // Fetch RFQ Risk Assessments
+  const { data: rfqAssessments = [] } = useQuery<RFQAssessment[]>({
+    queryKey: ['/api/customers/rfq-assessments'],
+  });
+
+  // Fetch inventory items from enhanced MRP system
+  const { data: inventoryItems = [], isLoading: isLoadingInventory } = useQuery<InventoryItem[]>({
+    queryKey: ['/api/enhanced/inventory/items'],
+    queryFn: () => apiRequest('/api/enhanced/inventory/items'),
+  });
+
+  // Filter for submitted RFQs only (case-insensitive)
+  const submittedRFQs = rfqAssessments.filter(
+    (rfq) => rfq.status?.toLowerCase() === 'submitted'
+  );
+
+  // Auto-populate customer info when RFQ is selected
+  useEffect(() => {
+    if (quoteNumber) {
+      const selectedRFQ = submittedRFQs.find(
+        (rfq) => rfq.rfqNumber === quoteNumber
+      );
+      if (selectedRFQ) {
+        // Find the P2 customer details using customerId from RFQ
+        const p2Customer = p2Customers.find(
+          (customer: any) => customer.customerId === selectedRFQ.customerId
+        );
+        
+        if (p2Customer) {
+          // Populate both To and Company fields from P2 customer data
+          setCustomerName(p2Customer.contactName || '');
+          setCustomerCompany(p2Customer.customerName || selectedRFQ.customerName);
+        } else {
+          // Fallback to RFQ data if P2 customer not found
+          setCustomerCompany(selectedRFQ.customerName);
+        }
+      }
+    }
+  }, [quoteNumber, submittedRFQs, p2Customers]);
+
+  // Calculate grand total
+  const grandTotal = lineItems.reduce(
+    (sum, item) => sum + item.totalPrice,
+    0
+  );
+
+  const openAddItemModal = () => {
+    setSelectedInventoryItem(null);
+    setItemQuantity('1');
+    setProfitMarginPercent('30');
+    setSearchTerm('');
+    setIsItemModalOpen(true);
+  };
+
+  const handleAddItemFromInventory = () => {
+    if (!selectedInventoryItem) {
+      toast({
+        title: 'No Item Selected',
+        description: 'Please select an inventory item first.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const quantity = Number(itemQuantity) || 1;
+    const cost = Number(selectedInventoryItem.costPer) || 0;
+    const profitMargin = Number(profitMarginPercent) || 0;
+    
+    // Calculate unit price: cost + (cost * profitMargin%)
+    const unitPrice = cost + (cost * (profitMargin / 100));
+    
+    const newLineNumber = lineItems.length + 1;
+    const newLineItem: QuoteLineItem = {
+      id: crypto.randomUUID(),
+      lineNumber: newLineNumber,
+      quantity,
+      description: `${selectedInventoryItem.name} (${selectedInventoryItem.agPartNumber})`,
+      unitPrice: Math.round(unitPrice * 100) / 100, // Round to 2 decimals
+      totalPrice: Math.round(quantity * unitPrice * 100) / 100,
+    };
+
+    setLineItems([...lineItems, newLineItem]);
+    setIsItemModalOpen(false);
+    
+    toast({
+      title: 'Line Item Added',
+      description: `Added ${selectedInventoryItem.name} to quote.`,
+    });
+  };
+
+  // Filter inventory items based on search term
+  const filteredInventoryItems = inventoryItems.filter(item => {
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      item.agPartNumber?.toLowerCase().includes(searchLower) ||
+      item.name?.toLowerCase().includes(searchLower) ||
+      item.sku?.toLowerCase().includes(searchLower)
+    );
+  });
+
+  const removeLineItem = (id: string) => {
+    const filtered = lineItems.filter((item) => item.id !== id);
+    // Renumber remaining items
+    const renumbered = filtered.map((item, index) => ({
+      ...item,
+      lineNumber: index + 1,
+    }));
+    setLineItems(renumbered);
+  };
+
+  const updateLineItem = (
+    id: string,
+    field: keyof QuoteLineItem,
+    value: string | number
+  ) => {
+    setLineItems(
+      lineItems.map((item) => {
+        if (item.id !== id) return item;
+
+        const updated = { ...item, [field]: value };
+
+        // Recalculate total price when quantity or unit price changes
+        if (field === 'quantity' || field === 'unitPrice') {
+          // Default to 0 for NaN/empty values
+          const qty = Number(updated.quantity) || 0;
+          const price = Number(updated.unitPrice) || 0;
+          updated.totalPrice = Math.max(0, qty * price);
+        }
+
+        return updated;
+      })
+    );
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      // Validation
+      if (!customerName && !customerCompany) {
+        toast({
+          title: 'Validation Error',
+          description: 'Please enter customer information.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (lineItems.length === 0) {
+        toast({
+          title: 'Validation Error',
+          description: 'Please add at least one line item.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const quoteData = {
+        id: savedQuoteId,
+        rfqNumber: quoteNumber,
+        customerId: '',
+        customerName,
+        customerCompany,
+        fromName,
+        fromEmail,
+        fromPhone,
+        paymentTerms,
+        notes,
+        validityDays,
+        lineItems: lineItems.map(item => ({
+          lineNumber: item.lineNumber,
+          quantity: item.quantity,
+          description: item.description,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+        })),
+      };
+
+      const response = await apiRequest('/api/quotes/save', {
+        method: 'POST',
+        body: JSON.stringify(quoteData),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // Update local state with saved quote info
+      setSavedQuoteId(response.id);
+      setQuoteNumber(response.quoteNumber);
+      setQuoteStatus(response.status);
+
+      toast({
+        title: 'Quote Saved',
+        description: `Quote ${response.quoteNumber} has been saved as draft.`,
+      });
+    } catch (error) {
+      console.error('Save quote error:', error);
+      toast({
+        title: 'Save Failed',
+        description: 'Failed to save quote. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      let quoteIdToSubmit = savedQuoteId;
+
+      // Save first if not already saved
+      if (!quoteIdToSubmit) {
+        setIsSaving(true);
+        try {
+          // Validation
+          if (!customerName && !customerCompany) {
+            toast({
+              title: 'Validation Error',
+              description: 'Please enter customer information.',
+              variant: 'destructive',
+            });
+            return;
+          }
+
+          if (lineItems.length === 0) {
+            toast({
+              title: 'Validation Error',
+              description: 'Please add at least one line item.',
+              variant: 'destructive',
+            });
+            return;
+          }
+
+          const quoteData = {
+            id: savedQuoteId,
+            rfqNumber: quoteNumber,
+            customerId: '',
+            customerName,
+            customerCompany,
+            fromName,
+            fromEmail,
+            fromPhone,
+            paymentTerms,
+            notes,
+            validityDays,
+            lineItems: lineItems.map(item => ({
+              lineNumber: item.lineNumber,
+              quantity: item.quantity,
+              description: item.description,
+              unitPrice: item.unitPrice,
+              totalPrice: item.totalPrice,
+            })),
+          };
+
+          const saveResponse = await apiRequest('/api/quotes/save', {
+            method: 'POST',
+            body: JSON.stringify(quoteData),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+
+          // Capture the returned ID
+          quoteIdToSubmit = saveResponse.id;
+          setSavedQuoteId(saveResponse.id);
+          setQuoteNumber(saveResponse.quoteNumber);
+        } finally {
+          setIsSaving(false);
+        }
+      }
+
+      // Verify we have a quote ID before submitting
+      if (!quoteIdToSubmit) {
+        throw new Error('Failed to save quote before submitting');
+      }
+
+      // Submit the quote
+      const response = await apiRequest('/api/quotes/submit', {
+        method: 'POST',
+        body: JSON.stringify({ id: quoteIdToSubmit }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      setQuoteStatus('SENT');
+
+      toast({
+        title: 'Quote Submitted',
+        description: `Quote ${quoteNumber} has been submitted to the customer.`,
+      });
+    } catch (error) {
+      console.error('Submit quote error:', error);
+      toast({
+        title: 'Submit Failed',
+        description: 'Failed to submit quote. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto p-6 max-w-7xl">
+      {/* Navigation */}
+      <div className="mb-6 no-print">
+        <Link href="/p2-forms">
+          <Button variant="outline" data-testid="button-back">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to P2 Forms
+          </Button>
+        </Link>
+      </div>
+
+      {/* Quote Form */}
+      <Card className="print:shadow-none">
+        <CardHeader className="border-b">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-3xl font-bold">Job Quote</CardTitle>
+              <CardDescription className="mt-2">
+                Generate professional quotes for P2 customers
+              </CardDescription>
+            </div>
+            <div className="flex gap-2 items-center no-print">
+              {quoteStatus === 'SENT' && (
+                <div className="bg-green-50 text-green-700 px-3 py-1 rounded-md text-sm font-medium border border-green-200">
+                  ✓ Submitted
+                </div>
+              )}
+              {quoteStatus === 'DRAFT' && savedQuoteId && (
+                <div className="bg-yellow-50 text-yellow-700 px-3 py-1 rounded-md text-sm font-medium border border-yellow-200">
+                  Draft
+                </div>
+              )}
+              <Button
+                variant="outline"
+                onClick={handlePrint}
+                data-testid="button-print"
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Print
+              </Button>
+              <Button 
+                onClick={handleSave} 
+                disabled={isSaving || isSubmitting}
+                data-testid="button-save"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {isSaving ? 'Saving...' : 'Save Quote'}
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={isSaving || isSubmitting || quoteStatus === 'SENT'}
+                variant="default"
+                data-testid="button-submit"
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                {isSubmitting ? 'Submitting...' : 'Submit Quote'}
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-8">
+          {/* Company Header */}
+          <div className="flex justify-between mb-8 pb-6 border-b">
+            <div>
+              <h2 className="font-bold text-lg">AG Composites, LLC</h2>
+              <p className="text-sm">dba AG Advanced Technologies</p>
+              <p className="text-sm">230 Hamer Road</p>
+              <p className="text-sm">Owens Cross Roads, AL 35763</p>
+            </div>
+            <div className="text-right">
+              <Label className="text-sm font-semibold">Quote Number (RFQ)</Label>
+              <Select value={quoteNumber} onValueChange={setQuoteNumber}>
+                <SelectTrigger
+                  className="w-48 mt-1 text-right font-mono"
+                  data-testid="select-quote-number"
+                >
+                  <SelectValue placeholder="Select RFQ..." />
+                </SelectTrigger>
+                <SelectContent data-testid="select-quote-number-content">
+                  {submittedRFQs.length === 0 ? (
+                    <SelectItem value="none" disabled data-testid="option-no-rfqs">
+                      No submitted RFQs
+                    </SelectItem>
+                  ) : (
+                    submittedRFQs.map((rfq) => (
+                      <SelectItem
+                        key={rfq.id}
+                        value={rfq.rfqNumber}
+                        data-testid={`option-rfq-${rfq.rfqNumber}`}
+                      >
+                        {rfq.rfqNumber} - {rfq.customerName}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Quote Details */}
+          <div className="grid grid-cols-2 gap-8 mb-8">
+            {/* Left Column */}
+            <div className="space-y-4">
+              <div>
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  value={quoteDate}
+                  onChange={(e) => setQuoteDate(e.target.value)}
+                  data-testid="input-date"
+                />
+              </div>
+              <div>
+                <Label>To</Label>
+                <Input
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Customer Name"
+                  data-testid="input-customer-name"
+                />
+              </div>
+              <div>
+                <Label>Company</Label>
+                <Input
+                  list="p2-customers-list"
+                  value={customerCompany}
+                  onChange={(e) => setCustomerCompany(e.target.value)}
+                  placeholder="Select or enter company name"
+                  data-testid="input-customer-company"
+                />
+                <datalist id="p2-customers-list">
+                  {p2Customers.map((customer: any) => (
+                    <option key={customer.id} value={customer.customerName}>
+                      {customer.customerName}
+                    </option>
+                  ))}
+                </datalist>
+              </div>
+              <div>
+                <Label>Terms</Label>
+                <Select value={paymentTerms} onValueChange={setPaymentTerms}>
+                  <SelectTrigger data-testid="select-payment-terms">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent data-testid="select-payment-terms-content">
+                    <SelectItem value="Net 30" data-testid="option-net-30">Net 30</SelectItem>
+                    <SelectItem value="Net 60" data-testid="option-net-60">Net 60</SelectItem>
+                    <SelectItem value="Due on Receipt" data-testid="option-due-on-receipt">Due on Receipt</SelectItem>
+                    <SelectItem value="50% Deposit" data-testid="option-50-deposit">50% Deposit</SelectItem>
+                    <SelectItem value="Custom" data-testid="option-custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Right Column */}
+            <div className="space-y-4">
+              <div>
+                <Label>From</Label>
+                <Input
+                  value={fromName}
+                  onChange={(e) => setFromName(e.target.value)}
+                  data-testid="input-from-name"
+                />
+              </div>
+              <div>
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={fromEmail}
+                  onChange={(e) => setFromEmail(e.target.value)}
+                  data-testid="input-from-email"
+                />
+              </div>
+              <div>
+                <Label>Phone</Label>
+                <Input
+                  type="tel"
+                  value={fromPhone}
+                  onChange={(e) => setFromPhone(e.target.value)}
+                  data-testid="input-from-phone"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Line Items Table */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Line Items</h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openAddItemModal}
+                className="no-print"
+                data-testid="button-add-line"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Line Item from Inventory
+              </Button>
+            </div>
+
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16">Line</TableHead>
+                    <TableHead className="w-32">Quantity</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="w-32">Unit Price</TableHead>
+                    <TableHead className="w-32">Total Price</TableHead>
+                    <TableHead className="w-16 no-print"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lineItems.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">
+                        {item.lineNumber}
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) =>
+                            updateLineItem(
+                              item.id,
+                              'quantity',
+                              parseInt(e.target.value) || 0
+                            )
+                          }
+                          className="w-full"
+                          data-testid={`input-quantity-${item.lineNumber}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Textarea
+                          value={item.description}
+                          onChange={(e) =>
+                            updateLineItem(
+                              item.id,
+                              'description',
+                              e.target.value
+                            )
+                          }
+                          rows={2}
+                          className="w-full"
+                          placeholder="Enter detailed description..."
+                          data-testid={`input-description-${item.lineNumber}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center">
+                          <span className="mr-1">$</span>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.unitPrice}
+                            onChange={(e) =>
+                              updateLineItem(
+                                item.id,
+                                'unitPrice',
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            className="w-full"
+                            data-testid={`input-unit-price-${item.lineNumber}`}
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        ${item.totalPrice.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="no-print">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeLineItem(item.id)}
+                          className="text-red-600 hover:text-red-800"
+                          data-testid={`button-delete-${item.lineNumber}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Total */}
+            <div className="flex justify-end mt-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex items-center gap-8">
+                  <span className="text-lg font-semibold">Total</span>
+                  <span
+                    className="text-2xl font-bold"
+                    data-testid="text-grand-total"
+                  >
+                    ${grandTotal.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Notes Section */}
+          <div className="mb-8">
+            <Label className="text-lg font-semibold mb-2 block">Notes</Label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={6}
+              placeholder="Enter detailed notes about materials, delivery schedule, lead times, etc..."
+              className="w-full"
+              data-testid="textarea-notes"
+            />
+          </div>
+
+          {/* Footer */}
+          <div className="border-t pt-6 space-y-4">
+            <p className="text-center text-sm">
+              Thank you for the opportunity to provide this quotation.
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <p className="text-center text-sm font-semibold">
+                This quote has a validity period of
+              </p>
+              <Input
+                type="number"
+                min="1"
+                value={validityDays}
+                onChange={(e) => setValidityDays(e.target.value)}
+                className="w-20 text-center"
+                data-testid="input-validity-days"
+              />
+              <span className="text-sm font-semibold">days.</span>
+            </div>
+          </div>
+
+          {/* Form Footer */}
+          <div className="mt-8 text-center text-xs text-gray-500 border-t pt-4">
+            FO Form 7 - Version 1.4 07/15/2024
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Inventory Item Selection Modal */}
+      <Dialog open={isItemModalOpen} onOpenChange={setIsItemModalOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Item from Inventory</DialogTitle>
+            <DialogDescription>
+              Select an inventory item and configure pricing
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search by Part#, Name, or SKU..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+                data-testid="input-search-inventory"
+              />
+            </div>
+
+            {/* Inventory Items List */}
+            <div className="border rounded-lg max-h-64 overflow-y-auto">
+              {isLoadingInventory ? (
+                <div className="p-4 text-center text-gray-500">Loading inventory...</div>
+              ) : filteredInventoryItems.length === 0 ? (
+                <div className="p-4 text-center text-gray-500">No items found</div>
+              ) : (
+                <div className="divide-y">
+                  {filteredInventoryItems.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => setSelectedInventoryItem(item)}
+                      className={`p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
+                        selectedInventoryItem?.id === item.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                      }`}
+                      data-testid={`item-${item.agPartNumber}`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-medium">{item.name}</div>
+                          <div className="text-sm text-gray-500">
+                            Part#: {item.agPartNumber}
+                            {item.sku && ` • SKU: ${item.sku}`}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-green-600">
+                            ${Number(item.costPer || 0).toFixed(2)}
+                          </div>
+                          <div className="text-xs text-gray-500">Cost per {item.vendorUnit || 'unit'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Selected Item Details */}
+            {selectedInventoryItem && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-4">
+                <div>
+                  <h4 className="font-semibold text-blue-900">Selected Item</h4>
+                  <p className="text-sm text-blue-700">{selectedInventoryItem.name}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="item-quantity">Quantity</Label>
+                    <Input
+                      id="item-quantity"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={itemQuantity}
+                      onChange={(e) => setItemQuantity(e.target.value)}
+                      data-testid="input-item-quantity"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="profit-margin">Profit Margin (%)</Label>
+                    <Input
+                      id="profit-margin"
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={profitMarginPercent}
+                      onChange={(e) => setProfitMarginPercent(e.target.value)}
+                      data-testid="input-profit-margin"
+                    />
+                  </div>
+                </div>
+
+                {/* Pricing Summary */}
+                <div className="bg-white rounded p-3 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Base Cost:</span>
+                    <span className="font-medium">
+                      ${Number(selectedInventoryItem.costPer || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Profit Margin ({profitMarginPercent}%):</span>
+                    <span className="font-medium text-green-600">
+                      +${(Number(selectedInventoryItem.costPer || 0) * (Number(profitMarginPercent) / 100)).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold border-t pt-2">
+                    <span>Unit Price:</span>
+                    <span className="text-blue-600">
+                      ${(
+                        Number(selectedInventoryItem.costPer || 0) +
+                        Number(selectedInventoryItem.costPer || 0) * (Number(profitMarginPercent) / 100)
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold border-t pt-2">
+                    <span>Line Total:</span>
+                    <span className="text-purple-600">
+                      ${(
+                        (Number(selectedInventoryItem.costPer || 0) +
+                          Number(selectedInventoryItem.costPer || 0) * (Number(profitMarginPercent) / 100)) *
+                        Number(itemQuantity || 1)
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsItemModalOpen(false)}
+              data-testid="button-cancel-add-item"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddItemFromInventory}
+              disabled={!selectedInventoryItem}
+              data-testid="button-confirm-add-item"
+            >
+              Add to Quote
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <style>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          @page {
+            margin: 0.5in;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}

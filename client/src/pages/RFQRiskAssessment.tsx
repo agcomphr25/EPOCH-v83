@@ -427,6 +427,7 @@ export default function RFQRiskAssessment() {
           headers: {
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
         });
 
         if (!submitResponse.ok) {
@@ -453,6 +454,7 @@ export default function RFQRiskAssessment() {
           headers: {
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
         });
 
         if (!response.ok) {

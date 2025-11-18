@@ -1,5 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -122,10 +123,12 @@ const DepartmentVisualization = ({
   department,
   orders,
   getModelDisplayName,
+  onOrderClick,
 }: {
   department: string;
   orders: OrderDetail[];
   getModelDisplayName: (modelId: string) => string;
+  onOrderClick: (orderId: string) => void;
 }) => {
   const count = orders.length;
   const usePixels = count > 20; // Hybrid selection threshold
@@ -136,7 +139,11 @@ const DepartmentVisualization = ({
       <div className="space-y-2">
         <div className="grid grid-cols-10 gap-1">
           {orders.map((order, index) => (
-            <OrderPixel key={order.orderId} order={order} />
+            <OrderPixel
+              key={order.orderId}
+              order={order}
+              onClick={() => onOrderClick(order.orderId)}
+            />
           ))}
         </div>
       </div>
@@ -150,6 +157,7 @@ const DepartmentVisualization = ({
             key={order.orderId}
             order={order}
             getModelDisplayName={getModelDisplayName}
+            onClick={() => onOrderClick(order.orderId)}
           />
         ))}
       </div>
@@ -158,6 +166,8 @@ const DepartmentVisualization = ({
 };
 
 export default function PipelineVisualization() {
+  const [, navigate] = useLocation();
+  
   const { data: pipelineCounts, isLoading: countsLoading } = useQuery<
     Record<string, number>
   >({
@@ -182,6 +192,11 @@ export default function PipelineVisualization() {
     const models = stockModels as any[];
     const model = models?.find((m: any) => m.id === modelId);
     return model?.displayName || model?.name || modelId;
+  };
+
+  // Navigation handler for clicking on orders
+  const handleOrderClick = (orderId: string) => {
+    navigate(`/order-entry?draft=${orderId}`);
   };
 
   const isLoading = countsLoading || detailsLoading;
@@ -245,6 +260,7 @@ export default function PipelineVisualization() {
                     department={dept.name}
                     orders={orders}
                     getModelDisplayName={getModelDisplayName}
+                    onOrderClick={handleOrderClick}
                   />
                 </div>
 

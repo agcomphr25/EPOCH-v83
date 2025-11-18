@@ -3585,6 +3585,39 @@ export const p2SerializedItemEvents = pgTable('p2_serialized_item_events', {
   itemIdIdx: index('p2_serialized_item_events_item_id_idx').on(table.serializedItemId),
 }));
 
+// Part Routing Definitions - Custom department sequences and traceability requirements per inventory item
+export const partRoutings = pgTable('part_routings', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  inventoryItemId: text('inventory_item_id').notNull(), // Reference to inventory item
+  partNumber: text('part_number').notNull(), // Denormalized for display
+  partName: text('part_name').notNull(), // Denormalized for display
+  departmentSequence: jsonb('department_sequence').notNull(), // Array of department names in order: ["Layup", "CNC", "Finish"]
+  traceabilityConfig: jsonb('traceability_config').notNull(), // Requirements per department: { "Layup": ["lot_number", "batch_number", "expiration"], "CNC": ["custom_1"] }
+  isActive: boolean('is_active').default(true).notNull(),
+  createdBy: text('created_by').notNull(), // Username who created routing
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  inventoryItemIdx: index('part_routings_inventory_item_idx').on(table.inventoryItemId),
+}));
+
+// P2 Serialized Item Traceability - Stores scanned/entered traceability data per department
+export const p2SerializedItemTraceability = pgTable('p2_serialized_item_traceability', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  serializedItemId: uuid('serialized_item_id')
+    .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  department: text('department').notNull(), // Department where traceability was recorded
+  traceabilityType: text('traceability_type').notNull(), // lot_number, batch_number, expiration, custom
+  traceabilityLabel: text('traceability_label').notNull(), // Display label (e.g., "Lot #", "Batch #", or custom name)
+  traceabilityValue: text('traceability_value').notNull(), // The scanned/entered value
+  recordedBy: text('recorded_by').notNull(), // Username who recorded the data
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  itemIdIdx: index('p2_serialized_item_traceability_item_id_idx').on(table.serializedItemId),
+  departmentIdx: index('p2_serialized_item_traceability_department_idx').on(table.department),
+}));
+
 // Production Orders - separate from regular orders for PO tracking
 export const productionOrders = pgTable('production_orders', {
   id: serial('id').primaryKey(),
@@ -3963,6 +3996,42 @@ export type InsertP2SerializedItem = z.infer<typeof insertP2SerializedItemSchema
 export type P2SerializedItem = typeof p2SerializedItems.$inferSelect;
 export type InsertP2SerializedItemEvent = z.infer<typeof insertP2SerializedItemEventSchema>;
 export type P2SerializedItemEvent = typeof p2SerializedItemEvents.$inferSelect;
+
+// Part Routing Schemas
+export const insertPartRoutingSchema = createInsertSchema(partRoutings)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    inventoryItemId: z.string().min(1, 'Inventory item ID is required'),
+    partNumber: z.string().min(1, 'Part number is required'),
+    partName: z.string().min(1, 'Part name is required'),
+    departmentSequence: z.array(z.string()).min(1, 'At least one department required'),
+    traceabilityConfig: z.record(z.array(z.string())),
+    createdBy: z.string().min(1, 'Created by is required'),
+  });
+
+export const insertP2SerializedItemTraceabilitySchema = createInsertSchema(p2SerializedItemTraceability)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    serializedItemId: z.string().uuid('Invalid serialized item ID'),
+    department: z.string().min(1, 'Department is required'),
+    traceabilityType: z.string().min(1, 'Traceability type is required'),
+    traceabilityLabel: z.string().min(1, 'Traceability label is required'),
+    traceabilityValue: z.string().min(1, 'Traceability value is required'),
+    recordedBy: z.string().min(1, 'Recorded by is required'),
+  });
+
+// Part Routing Types
+export type InsertPartRouting = z.infer<typeof insertPartRoutingSchema>;
+export type PartRouting = typeof partRoutings.$inferSelect;
+export type InsertP2SerializedItemTraceability = z.infer<typeof insertP2SerializedItemTraceabilitySchema>;
+export type P2SerializedItemTraceability = typeof p2SerializedItemTraceability.$inferSelect;
 
 // Production Order Types
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;

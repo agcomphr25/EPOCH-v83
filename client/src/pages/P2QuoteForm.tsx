@@ -76,6 +76,10 @@ export default function P2QuoteForm() {
   const [notes, setNotes] = useState('');
   const [validityDays, setValidityDays] = useState('30');
   const [lineItems, setLineItems] = useState<QuoteLineItem[]>([]);
+  const [savedQuoteId, setSavedQuoteId] = useState<string | null>(null);
+  const [quoteStatus, setQuoteStatus] = useState<string>('DRAFT');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Modal state for inventory item selection
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
@@ -228,13 +232,174 @@ export default function P2QuoteForm() {
     window.print();
   };
 
-  const handleSave = () => {
-    // TODO: Implement backend persistence
-    toast({
-      title: 'Coming Soon',
-      description: 'Quote saving will be available after backend integration.',
-      variant: 'default',
-    });
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      // Validation
+      if (!customerName && !customerCompany) {
+        toast({
+          title: 'Validation Error',
+          description: 'Please enter customer information.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (lineItems.length === 0) {
+        toast({
+          title: 'Validation Error',
+          description: 'Please add at least one line item.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const quoteData = {
+        id: savedQuoteId,
+        rfqNumber: quoteNumber,
+        customerId: '',
+        customerName,
+        customerCompany,
+        fromName,
+        fromEmail,
+        fromPhone,
+        paymentTerms,
+        notes,
+        validityDays,
+        lineItems: lineItems.map(item => ({
+          lineNumber: item.lineNumber,
+          quantity: item.quantity,
+          description: item.description,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+        })),
+      };
+
+      const response = await apiRequest('/api/quotes/save', {
+        method: 'POST',
+        body: JSON.stringify(quoteData),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // Update local state with saved quote info
+      setSavedQuoteId(response.id);
+      setQuoteNumber(response.quoteNumber);
+      setQuoteStatus(response.status);
+
+      toast({
+        title: 'Quote Saved',
+        description: `Quote ${response.quoteNumber} has been saved as draft.`,
+      });
+    } catch (error) {
+      console.error('Save quote error:', error);
+      toast({
+        title: 'Save Failed',
+        description: 'Failed to save quote. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      let quoteIdToSubmit = savedQuoteId;
+
+      // Save first if not already saved
+      if (!quoteIdToSubmit) {
+        setIsSaving(true);
+        try {
+          // Validation
+          if (!customerName && !customerCompany) {
+            toast({
+              title: 'Validation Error',
+              description: 'Please enter customer information.',
+              variant: 'destructive',
+            });
+            return;
+          }
+
+          if (lineItems.length === 0) {
+            toast({
+              title: 'Validation Error',
+              description: 'Please add at least one line item.',
+              variant: 'destructive',
+            });
+            return;
+          }
+
+          const quoteData = {
+            id: savedQuoteId,
+            rfqNumber: quoteNumber,
+            customerId: '',
+            customerName,
+            customerCompany,
+            fromName,
+            fromEmail,
+            fromPhone,
+            paymentTerms,
+            notes,
+            validityDays,
+            lineItems: lineItems.map(item => ({
+              lineNumber: item.lineNumber,
+              quantity: item.quantity,
+              description: item.description,
+              unitPrice: item.unitPrice,
+              totalPrice: item.totalPrice,
+            })),
+          };
+
+          const saveResponse = await apiRequest('/api/quotes/save', {
+            method: 'POST',
+            body: JSON.stringify(quoteData),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+
+          // Capture the returned ID
+          quoteIdToSubmit = saveResponse.id;
+          setSavedQuoteId(saveResponse.id);
+          setQuoteNumber(saveResponse.quoteNumber);
+        } finally {
+          setIsSaving(false);
+        }
+      }
+
+      // Verify we have a quote ID before submitting
+      if (!quoteIdToSubmit) {
+        throw new Error('Failed to save quote before submitting');
+      }
+
+      // Submit the quote
+      const response = await apiRequest('/api/quotes/submit', {
+        method: 'POST',
+        body: JSON.stringify({ id: quoteIdToSubmit }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      setQuoteStatus('SENT');
+
+      toast({
+        title: 'Quote Submitted',
+        description: `Quote ${quoteNumber} has been submitted to the customer.`,
+      });
+    } catch (error) {
+      console.error('Submit quote error:', error);
+      toast({
+        title: 'Submit Failed',
+        description: 'Failed to submit quote. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -259,7 +424,17 @@ export default function P2QuoteForm() {
                 Generate professional quotes for P2 customers
               </CardDescription>
             </div>
-            <div className="flex gap-2 no-print">
+            <div className="flex gap-2 items-center no-print">
+              {quoteStatus === 'SENT' && (
+                <div className="bg-green-50 text-green-700 px-3 py-1 rounded-md text-sm font-medium border border-green-200">
+                  ✓ Submitted
+                </div>
+              )}
+              {quoteStatus === 'DRAFT' && savedQuoteId && (
+                <div className="bg-yellow-50 text-yellow-700 px-3 py-1 rounded-md text-sm font-medium border border-yellow-200">
+                  Draft
+                </div>
+              )}
               <Button
                 variant="outline"
                 onClick={handlePrint}
@@ -268,9 +443,22 @@ export default function P2QuoteForm() {
                 <Printer className="h-4 w-4 mr-2" />
                 Print
               </Button>
-              <Button onClick={handleSave} data-testid="button-save">
+              <Button 
+                onClick={handleSave} 
+                disabled={isSaving || isSubmitting}
+                data-testid="button-save"
+              >
                 <Save className="h-4 w-4 mr-2" />
-                Save Quote
+                {isSaving ? 'Saving...' : 'Save Quote'}
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={isSaving || isSubmitting || quoteStatus === 'SENT'}
+                variant="default"
+                data-testid="button-submit"
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                {isSubmitting ? 'Submitting...' : 'Submit Quote'}
               </Button>
             </div>
           </div>

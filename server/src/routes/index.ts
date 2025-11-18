@@ -66,6 +66,7 @@ import followupOrdersRoutes from './followupOrders';
 import cuttingTableRoutes from './cuttingTable';
 import controlledDocumentsRoutes from './controlledDocuments';
 import adminRoutes from './admin';
+import quotesRoutes from './quotes';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -135,6 +136,9 @@ export function registerRoutes(app: Express): Server {
   
   // Vendor purchase orders routes
   app.use('/api/vendor-pos', vendorPOsRoutes);
+
+  // Quote management routes
+  app.use(quotesRoutes);
 
   // PDFME SYSTEM COMMENTED OUT - NOT IN USE
   // PDF Templates routes

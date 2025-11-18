@@ -5652,6 +5652,30 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
 export type Quote = typeof quotes.$inferSelect;
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 
+// Quote Line Items - Individual line items for quotes
+export const quoteLineItems = pgTable('quote_line_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  quoteId: uuid('quote_id').notNull().references(() => quotes.id, { onDelete: 'cascade' }),
+  lineNumber: integer('line_number').notNull(),
+  quantity: real('quantity').notNull().default(1),
+  description: text('description').notNull(),
+  unitPrice: real('unit_price').notNull().default(0),
+  totalPrice: real('total_price').notNull().default(0),
+  inventoryItemId: integer('inventory_item_id'), // Optional reference to inventory item
+  agPartNumber: text('ag_part_number'), // Captured for reference
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Insert Schema
+export const insertQuoteLineItemSchema = createInsertSchema(quoteLineItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types
+export type QuoteLineItem = typeof quoteLineItems.$inferSelect;
+export type InsertQuoteLineItem = z.infer<typeof insertQuoteLineItemSchema>;
+
 // Purchase Review Checklist Submissions
 export const purchaseReviewChecklistSubmissions = pgTable('purchase_review_checklist_submissions', {
   id: uuid('id').defaultRandom().primaryKey(),

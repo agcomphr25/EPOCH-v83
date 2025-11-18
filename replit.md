@@ -56,6 +56,14 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 -   **Dynamic Discount System**: Orders save discount metadata (type, value, scope) at creation for dynamic recalculation while preserving original intent.
 -   **Cutting Table Inventory Integration**: Fabric inventory items are linked to Cut Management for selection and tracking.
 -   **Cutting Table Production Progress Tracker**: Automatic calculation of remaining cuts needed to hit weekly production goals. System compares actual cut records against submitted targets, displaying visual progress with color-coded bars and real-time updates.
+-   **P2 Department Manager with Part Routing**: Complete P2 purchase order serialized item tracking system with customizable department workflows, barcode scanning, and mandatory traceability data capture. Features include:
+    - **UUID-Based Architecture**: All new P2 tables (p2_serialized_items, part_routings, traceability_records) use UUID primary keys per system standards
+    - **Part Routing Wizard**: Multi-step UI for configuring custom department sequences and per-department traceability requirements (lot #, batch #, expiration date, serial #, revision)
+    - **Fail-Closed Traceability Gating**: Operators must scan/enter required traceability data before advancing items through departments; system blocks advancement on network errors to prevent bypass
+    - **Fetch-and-Merge Storage Updates**: Part routing updates preserve existing configuration data using database query-based merges
+    - **Barcode Integration**: Scan P2 item barcodes to quickly locate items in department queues
+    - **Department Progression**: Items flow through customized department sequences with status tracking (ACTIVE, ON_HOLD, SCRAPPED)
+    - **Production-Ready Error Handling**: 404 errors (no routing) allow advancement, all other errors block with clear user feedback
 
 ### Technical Implementations
 -   **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

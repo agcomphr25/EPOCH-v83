@@ -3608,6 +3608,8 @@ export const p2SerializedItemTraceability = pgTable('p2_serialized_item_traceabi
     .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
     .notNull(),
   department: text('department').notNull(), // Department where traceability was recorded
+  inventoryPartId: text('inventory_part_id'), // ID of the inventory part/material this traceability is for (nullable for backward compatibility)
+  inventoryPartNumber: text('inventory_part_number'), // Denormalized part number for display
   traceabilityType: text('traceability_type').notNull(), // lot_number, batch_number, expiration, custom
   traceabilityLabel: text('traceability_label').notNull(), // Display label (e.g., "Lot #", "Batch #", or custom name)
   traceabilityValue: text('traceability_value').notNull(), // The scanned/entered value

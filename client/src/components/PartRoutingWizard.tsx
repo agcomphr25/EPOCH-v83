@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -66,6 +66,12 @@ interface MaterialRequirement {
   requiredFields: string[]; // Which traceability fields are required for this material
 }
 
+interface DepartmentConfiguration {
+  materials: MaterialRequirement[]; // Materials used in this department
+  technicianRequired: boolean; // Whether technician is required for this department
+  qcStandards: string[]; // List of QC standards that must be checked
+}
+
 interface PartRouting {
   id: string;
   inventoryItemId: string;
@@ -74,6 +80,7 @@ interface PartRouting {
   departmentSequence: string[];
   traceabilityConfig: Record<string, string[]>; // Item-level traceability for manufactured item
   departmentMaterials?: Record<string, MaterialRequirement[]>; // Materials used in each department
+  departmentConfig?: Record<string, DepartmentConfiguration>; // Complete department configuration
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -89,22 +96,49 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   const [step, setStep] = useState(1);
   const [selectedItemId, setSelectedItemId] = useState<string>(editRouting?.inventoryItemId || '');
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>(editRouting?.departmentSequence || []);
-  const [traceabilityConfig, setTraceabilityConfig] = useState<Record<string, string[]>>(
-    editRouting?.traceabilityConfig || {}
-  );
   const [searchTerm, setSearchTerm] = useState('');
-  const [departmentMaterials, setDepartmentMaterials] = useState<Record<string, MaterialRequirement[]>>(
-    editRouting?.departmentMaterials || {}
+  
+  // Department configuration state (replaces old separate states)
+  const [departmentConfig, setDepartmentConfig] = useState<Record<string, DepartmentConfiguration>>(
+    editRouting?.departmentConfig || {}
   );
+  
+  // UI state for materials search
   const [materialSearchTerm, setMaterialSearchTerm] = useState('');
-  const [selectedDeptForMaterial, setSelectedDeptForMaterial] = useState<string>('');
+  const [selectedDeptForConfig, setSelectedDeptForConfig] = useState<string>('');
+  const [qcStandardInput, setQcStandardInput] = useState<string>('');
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch inventory items for both step 1 and step 4 (materials)
+  // Initialize department configs for all selected departments
+  useEffect(() => {
+    if (!open) return;
+    
+    const newConfig = { ...departmentConfig };
+    let hasChanges = false;
+    
+    // Ensure every selected department has a config entry
+    selectedDepartments.forEach(dept => {
+      if (!newConfig[dept]) {
+        newConfig[dept] = {
+          materials: [],
+          technicianRequired: false,
+          qcStandards: [],
+        };
+        hasChanges = true;
+      }
+    });
+    
+    if (hasChanges) {
+      setDepartmentConfig(newConfig);
+    }
+  }, [selectedDepartments, open]);
+
+  // Fetch inventory items for step 1 and step 3 (materials)
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory'],
-    enabled: open && (step === 1 || step === 4),
+    enabled: open && (step === 1 || step === 3),
   });
 
   // Filter inventory items by search
@@ -152,11 +186,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     setStep(1);
     setSelectedItemId('');
     setSelectedDepartments([]);
-    setTraceabilityConfig({});
-    setDepartmentMaterials({});
+    setDepartmentConfig({});
     setSearchTerm('');
     setMaterialSearchTerm('');
-    setSelectedDeptForMaterial('');
+    setSelectedDeptForConfig('');
+    setQcStandardInput('');
   };
 
   const handleClose = () => {
@@ -203,20 +237,26 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
       partNumber: selectedItem.agPartNumber,
       partName: selectedItem.name,
       departmentSequence: selectedDepartments,
-      traceabilityConfig,
-      departmentMaterials,
+      departmentConfig,
       createdBy: 'system', // TODO: Get from auth context
     };
 
     saveMutation.mutate(data);
   };
 
-  // Material handlers
+  // Department configuration handlers
+  const getOrCreateDeptConfig = (dept: string): DepartmentConfiguration => {
+    return departmentConfig[dept] || {
+      materials: [],
+      technicianRequired: false,
+      qcStandards: [],
+    };
+  };
+
   const addMaterialToDepartment = (dept: string, item: InventoryItem) => {
-    const currentMaterials = departmentMaterials[dept] || [];
+    const config = getOrCreateDeptConfig(dept);
     
-    // Check if already added
-    if (currentMaterials.some(m => m.partId === item.id)) {
+    if (config.materials.some(m => m.partId === item.id)) {
       toast({
         title: 'Already Added',
         description: `${item.agPartNumber} is already in this department`,
@@ -232,9 +272,12 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
       requiredFields: [],
     };
 
-    setDepartmentMaterials({
-      ...departmentMaterials,
-      [dept]: [...currentMaterials, newMaterial],
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        materials: [...config.materials, newMaterial],
+      },
     });
 
     toast({
@@ -244,16 +287,19 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   };
 
   const removeMaterialFromDepartment = (dept: string, partId: string) => {
-    const currentMaterials = departmentMaterials[dept] || [];
-    setDepartmentMaterials({
-      ...departmentMaterials,
-      [dept]: currentMaterials.filter(m => m.partId !== partId),
+    const config = getOrCreateDeptConfig(dept);
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        materials: config.materials.filter(m => m.partId !== partId),
+      },
     });
   };
 
   const toggleMaterialTraceability = (dept: string, partId: string, fieldId: string) => {
-    const currentMaterials = departmentMaterials[dept] || [];
-    const updated = currentMaterials.map(material => {
+    const config = getOrCreateDeptConfig(dept);
+    const updated = config.materials.map(material => {
       if (material.partId === partId) {
         const fields = material.requiredFields || [];
         return {
@@ -266,25 +312,80 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
       return material;
     });
 
-    setDepartmentMaterials({
-      ...departmentMaterials,
-      [dept]: updated,
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        materials: updated,
+      },
+    });
+  };
+
+  const toggleTechnicianRequired = (dept: string) => {
+    const config = getOrCreateDeptConfig(dept);
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        technicianRequired: !config.technicianRequired,
+      },
+    });
+  };
+
+  const addQcStandard = (dept: string, standard: string) => {
+    if (!standard.trim()) return;
+    
+    const config = getOrCreateDeptConfig(dept);
+    if (config.qcStandards.includes(standard)) {
+      toast({
+        title: 'Already Added',
+        description: `QC standard "${standard}" already exists`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        qcStandards: [...config.qcStandards, standard],
+      },
+    });
+    setQcStandardInput('');
+  };
+
+  const removeQcStandard = (dept: string, standard: string) => {
+    const config = getOrCreateDeptConfig(dept);
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        qcStandards: config.qcStandards.filter(s => s !== standard),
+      },
     });
   };
 
   const toggleDepartment = (dept: string) => {
     if (selectedDepartments.includes(dept)) {
       setSelectedDepartments(selectedDepartments.filter(d => d !== dept));
-      // Remove from traceability config
-      const newConfig = { ...traceabilityConfig };
+      // Remove department configuration
+      const newConfig = { ...departmentConfig };
       delete newConfig[dept];
-      setTraceabilityConfig(newConfig);
-      // Remove from department materials
-      const newMaterials = { ...departmentMaterials };
-      delete newMaterials[dept];
-      setDepartmentMaterials(newMaterials);
+      setDepartmentConfig(newConfig);
     } else {
       setSelectedDepartments([...selectedDepartments, dept]);
+      // Initialize department configuration with defaults
+      if (!departmentConfig[dept]) {
+        setDepartmentConfig({
+          ...departmentConfig,
+          [dept]: {
+            materials: [],
+            technicianRequired: false,
+            qcStandards: [],
+          },
+        });
+      }
     }
   };
 
@@ -302,21 +403,6 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     setSelectedDepartments(newDepts);
   };
 
-  const toggleTraceabilityField = (dept: string, fieldId: string) => {
-    const currentFields = traceabilityConfig[dept] || [];
-    if (currentFields.includes(fieldId)) {
-      setTraceabilityConfig({
-        ...traceabilityConfig,
-        [dept]: currentFields.filter(f => f !== fieldId),
-      });
-    } else {
-      setTraceabilityConfig({
-        ...traceabilityConfig,
-        [dept]: [...currentFields, fieldId],
-      });
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh]" data-testid="dialog-part-routing-wizard">
@@ -331,7 +417,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
         </DialogHeader>
 
         <div className="flex items-center justify-center gap-2 py-4">
-          {[1, 2, 3, 4].map((s) => (
+          {[1, 2, 3].map((s) => (
             <div key={s} className="flex items-center gap-2">
               <div
                 className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
@@ -344,7 +430,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
               >
                 {s < step ? <Check className="h-4 w-4" /> : s}
               </div>
-              {s < 4 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+              {s < 3 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
             </div>
           ))}
         </div>
@@ -489,80 +575,13 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
             </div>
           )}
 
-          {/* Step 3: Configure Traceability Requirements */}
+          {/* Step 3: Department Configuration */}
           {step === 3 && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-lg font-semibold mb-2">Step 3: Traceability Requirements</h3>
+                <h3 className="text-lg font-semibold mb-2">Step 3: Department Configuration</h3>
                 <p className="text-sm text-muted-foreground">
-                  Select which traceability data operators must scan/enter at each department
-                </p>
-              </div>
-
-              {selectedItem && (
-                <Card className="bg-muted/30">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2">
-                      <Package className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-mono font-semibold">{selectedItem.agPartNumber}</span>
-                      <span className="text-sm">- {selectedItem.name}</span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {selectedDepartments.map((dept, index) => (
-                        <Badge key={dept} variant="outline">
-                          {index + 1}. {dept}
-                        </Badge>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              <div className="space-y-4">
-                {selectedDepartments.map((dept) => (
-                  <Card key={dept}>
-                    <CardHeader>
-                      <CardTitle className="text-base">{dept}</CardTitle>
-                      <CardDescription>
-                        Select required traceability fields for this department
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {TRACEABILITY_FIELDS.map((field) => (
-                        <div key={field.id} className="flex items-start space-x-3">
-                          <Checkbox
-                            id={`${dept}-${field.id}`}
-                            data-testid={`checkbox-${dept.toLowerCase().replace(/[\/\s]/g, '-')}-${field.id}`}
-                            checked={(traceabilityConfig[dept] || []).includes(field.id)}
-                            onCheckedChange={() => toggleTraceabilityField(dept, field.id)}
-                          />
-                          <div className="flex-1">
-                            <Label
-                              htmlFor={`${dept}-${field.id}`}
-                              className="text-sm font-medium cursor-pointer"
-                            >
-                              {field.label}
-                            </Label>
-                            <p className="text-xs text-muted-foreground">
-                              {field.description}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Department Materials Configuration */}
-          {step === 4 && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Step 4: Department Materials (Optional)</h3>
-                <p className="text-sm text-muted-foreground">
-                  Configure which inventory materials/parts are used in each department and their traceability requirements
+                  Configure materials, technician requirements, and QC standards for each department
                 </p>
               </div>
 
@@ -575,7 +594,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
               ) : (
                 <div className="space-y-4">
                   {selectedDepartments.map((dept) => {
-                    const materials = departmentMaterials[dept] || [];
+                    const config = getOrCreateDeptConfig(dept);
                     const filteredMaterialItems = inventoryItems.filter(item =>
                       (item.agPartNumber?.toLowerCase() || '').includes(materialSearchTerm.toLowerCase()) ||
                       (item.name?.toLowerCase() || '').includes(materialSearchTerm.toLowerCase())
@@ -585,86 +604,140 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                       <Card key={dept}>
                         <CardHeader>
                           <CardTitle className="text-base">{dept}</CardTitle>
-                          <CardDescription>
-                            Materials/parts used in this department ({materials.length} configured)
-                          </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                          {/* Show configured materials */}
-                          {materials.length > 0 && (
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">Configured Materials:</Label>
-                              {materials.map((material) => (
-                                <Card key={material.partId} className="p-3">
-                                  <div className="flex items-start justify-between mb-2">
-                                    <div>
-                                      <p className="font-mono font-semibold text-sm">{material.partNumber}</p>
-                                      <p className="text-xs text-muted-foreground">{material.partName}</p>
-                                    </div>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => removeMaterialFromDepartment(dept, material.partId)}
-                                      data-testid={`button-remove-material-${material.partId}`}
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    {TRACEABILITY_FIELDS.map((field) => (
-                                      <div key={field.id} className="flex items-center space-x-2">
-                                        <Checkbox
-                                          id={`${dept}-${material.partId}-${field.id}`}
-                                          checked={(material.requiredFields || []).includes(field.id)}
-                                          onCheckedChange={() => toggleMaterialTraceability(dept, material.partId, field.id)}
-                                        />
-                                        <Label
-                                          htmlFor={`${dept}-${material.partId}-${field.id}`}
-                                          className="text-xs cursor-pointer"
-                                        >
-                                          {field.label}
-                                        </Label>
+                        <CardContent className="space-y-6">
+                          {/* Materials Section */}
+                          <div>
+                            <h4 className="font-semibold mb-3 flex items-center gap-2">
+                              <Package className="h-4 w-4" />
+                              Materials Requiring Traceability ({config.materials.length})
+                            </h4>
+                            {config.materials.length > 0 && (
+                              <div className="space-y-2 mb-3">
+                                {config.materials.map((material) => (
+                                  <Card key={material.partId} className="p-3">
+                                    <div className="flex items-start justify-between mb-2">
+                                      <div>
+                                        <p className="font-mono font-semibold text-sm">{material.partNumber}</p>
+                                        <p className="text-xs text-muted-foreground">{material.partName}</p>
                                       </div>
-                                    ))}
-                                  </div>
-                                </Card>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Add material section */}
-                          <div className="border-t pt-4">
-                            <Label className="text-sm font-medium mb-2 block">Add Material to {dept}:</Label>
-                            <Input
-                              placeholder="Search inventory to add..."
-                              value={selectedDeptForMaterial === dept ? materialSearchTerm : ''}
-                              onChange={(e) => {
-                                setSelectedDeptForMaterial(dept);
-                                setMaterialSearchTerm(e.target.value);
-                              }}
-                              onFocus={() => setSelectedDeptForMaterial(dept)}
-                              className="mb-2"
-                            />
-                            {selectedDeptForMaterial === dept && materialSearchTerm && (
-                              <ScrollArea className="h-40 border rounded">
-                                {filteredMaterialItems.map((item) => (
-                                  <div
-                                    key={item.id}
-                                    className="p-2 hover:bg-muted cursor-pointer flex items-center justify-between"
-                                    onClick={() => {
-                                      addMaterialToDepartment(dept, item);
-                                      setMaterialSearchTerm('');
-                                      setSelectedDeptForMaterial('');
-                                    }}
-                                  >
-                                    <div>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => removeMaterialFromDepartment(dept, material.partId)}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {TRACEABILITY_FIELDS.map((field) => (
+                                        <div key={field.id} className="flex items-center space-x-2">
+                                          <Checkbox
+                                            id={`${dept}-${material.partId}-${field.id}`}
+                                            checked={(material.requiredFields || []).includes(field.id)}
+                                            onCheckedChange={() => toggleMaterialTraceability(dept, material.partId, field.id)}
+                                          />
+                                          <Label
+                                            htmlFor={`${dept}-${material.partId}-${field.id}`}
+                                            className="text-xs cursor-pointer"
+                                          >
+                                            {field.label}
+                                          </Label>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </Card>
+                                ))}
+                              </div>
+                            )}
+                            <div>
+                              <Label className="text-sm mb-2 block">Add Material:</Label>
+                              <Input
+                                placeholder="Search inventory..."
+                                value={selectedDeptForConfig === dept ? materialSearchTerm : ''}
+                                onChange={(e) => {
+                                  setSelectedDeptForConfig(dept);
+                                  setMaterialSearchTerm(e.target.value);
+                                }}
+                                onFocus={() => setSelectedDeptForConfig(dept)}
+                                className="mb-2"
+                              />
+                              {selectedDeptForConfig === dept && materialSearchTerm && (
+                                <ScrollArea className="h-32 border rounded">
+                                  {filteredMaterialItems.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="p-2 hover:bg-muted cursor-pointer"
+                                      onClick={() => {
+                                        addMaterialToDepartment(dept, item);
+                                        setMaterialSearchTerm('');
+                                        setSelectedDeptForConfig('');
+                                      }}
+                                    >
                                       <p className="font-mono text-sm">{item.agPartNumber}</p>
                                       <p className="text-xs text-muted-foreground">{item.name}</p>
                                     </div>
-                                  </div>
+                                  ))}
+                                </ScrollArea>
+                              )}
+                            </div>
+                          </div>
+
+                          <Separator />
+
+                          {/* Technician Section */}
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className="font-semibold">Technician Required</h4>
+                              <p className="text-sm text-muted-foreground">Require technician assignment for this department</p>
+                            </div>
+                            <Checkbox
+                              checked={config.technicianRequired}
+                              onCheckedChange={() => toggleTechnicianRequired(dept)}
+                            />
+                          </div>
+
+                          <Separator />
+
+                          {/* QC Standards Section */}
+                          <div>
+                            <h4 className="font-semibold mb-3">QC Standards ({config.qcStandards.length})</h4>
+                            {config.qcStandards.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mb-3">
+                                {config.qcStandards.map((standard) => (
+                                  <Badge key={standard} variant="secondary" className="flex items-center gap-1">
+                                    {standard}
+                                    <X
+                                      className="h-3 w-3 cursor-pointer hover:text-destructive"
+                                      onClick={() => removeQcStandard(dept, standard)}
+                                    />
+                                  </Badge>
                                 ))}
-                              </ScrollArea>
+                              </div>
                             )}
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Enter QC standard..."
+                                value={selectedDeptForConfig === dept ? qcStandardInput : ''}
+                                onChange={(e) => {
+                                  setSelectedDeptForConfig(dept);
+                                  setQcStandardInput(e.target.value);
+                                }}
+                                onFocus={() => setSelectedDeptForConfig(dept)}
+                                onKeyPress={(e) => {
+                                  if (e.key === 'Enter') {
+                                    addQcStandard(dept, qcStandardInput);
+                                  }
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => addQcStandard(dept, qcStandardInput)}
+                                disabled={!qcStandardInput.trim() || selectedDeptForConfig !== dept}
+                              >
+                                Add
+                              </Button>
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
@@ -691,7 +764,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
             <Button variant="outline" onClick={handleClose} data-testid="button-cancel">
               Cancel
             </Button>
-            {step < 4 ? (
+            {step < 3 ? (
               <Button onClick={handleNext} data-testid="button-next">
                 Next
                 <ChevronRight className="ml-2 h-4 w-4" />

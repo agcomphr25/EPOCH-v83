@@ -1341,4 +1341,174 @@ router.get(
   }
 );
 
+// ========== PART ROUTING ROUTES ==========
+
+// Create part routing
+router.post(
+  '/part-routings',
+  async (req: Request, res: Response) => {
+    try {
+      const { insertPartRoutingSchema } = await import('@/schema');
+      const validated = insertPartRoutingSchema.parse(req.body);
+      const routing = await storage.createPartRouting(validated);
+      res.json(routing);
+    } catch (error) {
+      console.error('Error creating part routing:', error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ error: 'Validation error', details: error.message });
+      }
+      res.status(500).json({ 
+        error: 'Failed to create part routing',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Get all part routings (with optional filters)
+router.get(
+  '/part-routings',
+  async (req: Request, res: Response) => {
+    try {
+      const { inventoryItemId, isActive } = req.query;
+      const routings = await storage.getPartRoutings({
+        inventoryItemId: inventoryItemId as string | undefined,
+        isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined
+      });
+      res.json(routings);
+    } catch (error) {
+      console.error('Error fetching part routings:', error);
+      res.status(500).json({ error: 'Failed to fetch part routings' });
+    }
+  }
+);
+
+// Get routing by ID
+router.get(
+  '/part-routings/:id',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const routing = await storage.getPartRouting(id);
+      
+      if (!routing) {
+        return res.status(404).json({ error: 'Part routing not found' });
+      }
+      
+      res.json(routing);
+    } catch (error) {
+      console.error('Error fetching part routing:', error);
+      res.status(500).json({ error: 'Failed to fetch part routing' });
+    }
+  }
+);
+
+// Get routing by inventory item ID
+router.get(
+  '/part-routings/by-item/:inventoryItemId',
+  async (req: Request, res: Response) => {
+    try {
+      const { inventoryItemId } = req.params;
+      const routing = await storage.getPartRoutingByInventoryItem(inventoryItemId);
+      
+      if (!routing) {
+        return res.status(404).json({ error: 'No active routing found for this item' });
+      }
+      
+      res.json(routing);
+    } catch (error) {
+      console.error('Error fetching part routing:', error);
+      res.status(500).json({ error: 'Failed to fetch part routing' });
+    }
+  }
+);
+
+// Update part routing
+router.put(
+  '/part-routings/:id',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { updatePartRoutingSchema } = await import('@/schema');
+      
+      // Validate against dedicated update schema (with refinements)
+      const validated = updatePartRoutingSchema.parse(req.body);
+      
+      // Storage now handles merging with existing record
+      const routing = await storage.updatePartRouting(id, validated);
+      res.json(routing);
+    } catch (error) {
+      console.error('Error updating part routing:', error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ error: 'Validation error', details: error.message });
+      }
+      res.status(500).json({ 
+        error: 'Failed to update part routing',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Delete part routing
+router.delete(
+  '/part-routings/:id',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      await storage.deletePartRouting(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting part routing:', error);
+      res.status(500).json({ error: 'Failed to delete part routing' });
+    }
+  }
+);
+
+// ========== TRACEABILITY ROUTES ==========
+
+// Add traceability data
+router.post(
+  '/serialized-items/:id/traceability',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { insertP2SerializedItemTraceabilitySchema } = await import('@/schema');
+      const data = { ...req.body, serializedItemId: id };
+      const validated = insertP2SerializedItemTraceabilitySchema.parse(data);
+      const record = await storage.addTraceabilityData(validated);
+      res.json(record);
+    } catch (error) {
+      console.error('Error adding traceability data:', error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ error: 'Validation error', details: error.message });
+      }
+      res.status(500).json({ 
+        error: 'Failed to add traceability data',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Get traceability data for item
+router.get(
+  '/serialized-items/:id/traceability',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { department } = req.query;
+      
+      const data = department
+        ? await storage.getTraceabilityForDepartment(id, department as string)
+        : await storage.getTraceabilityData(id);
+      
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching traceability data:', error);
+      res.status(500).json({ error: 'Failed to fetch traceability data' });
+    }
+  }
+);
+
 export default router;

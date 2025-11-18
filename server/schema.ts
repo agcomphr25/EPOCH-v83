@@ -4013,6 +4013,30 @@ export const insertPartRoutingSchema = createInsertSchema(partRoutings)
     createdBy: z.string().min(1, 'Created by is required'),
   });
 
+export const updatePartRoutingSchema = insertPartRoutingSchema
+  .partial()
+  .strict()
+  .refine(
+    (data) => {
+      // If departmentSequence is provided, it must not be empty
+      if ('departmentSequence' in data && data.departmentSequence !== undefined) {
+        return Array.isArray(data.departmentSequence) && data.departmentSequence.length > 0;
+      }
+      return true;
+    },
+    { message: 'Department sequence must contain at least one department when provided' }
+  )
+  .refine(
+    (data) => {
+      // If traceabilityConfig is provided, it must not be empty
+      if ('traceabilityConfig' in data && data.traceabilityConfig !== undefined) {
+        return typeof data.traceabilityConfig === 'object' && Object.keys(data.traceabilityConfig).length > 0;
+      }
+      return true;
+    },
+    { message: 'Traceability config must contain at least one department when provided' }
+  );
+
 export const insertP2SerializedItemTraceabilitySchema = createInsertSchema(p2SerializedItemTraceability)
   .omit({
     id: true,
@@ -4029,6 +4053,7 @@ export const insertP2SerializedItemTraceabilitySchema = createInsertSchema(p2Ser
 
 // Part Routing Types
 export type InsertPartRouting = z.infer<typeof insertPartRoutingSchema>;
+export type UpdatePartRouting = z.infer<typeof updatePartRoutingSchema>;
 export type PartRouting = typeof partRoutings.$inferSelect;
 export type InsertP2SerializedItemTraceability = z.infer<typeof insertP2SerializedItemTraceabilitySchema>;
 export type P2SerializedItemTraceability = typeof p2SerializedItemTraceability.$inferSelect;

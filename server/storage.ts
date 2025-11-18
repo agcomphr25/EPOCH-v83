@@ -47,6 +47,8 @@ import {
   p2ProductionOrders,
   p2SerializedItems,
   p2SerializedItemEvents,
+  partRoutings,
+  p2SerializedItemTraceability,
   P2_DEPARTMENT_STAGES,
   rfqRiskAssessments,
   molds,
@@ -1136,6 +1138,19 @@ export interface IStorage {
     username: string
   ): Promise<P2SerializedItem>;
   getP2SerializedItemHistory(id: string): Promise<P2SerializedItemEvent[]>;
+
+  // Part Routing CRUD
+  createPartRouting(data: InsertPartRouting): Promise<PartRouting>;
+  getPartRoutings(filters?: { inventoryItemId?: string; isActive?: boolean }): Promise<PartRouting[]>;
+  getPartRouting(id: string): Promise<PartRouting | undefined>;
+  getPartRoutingByInventoryItem(inventoryItemId: string): Promise<PartRouting | undefined>;
+  updatePartRouting(id: string, data: Partial<InsertPartRouting>): Promise<PartRouting>;
+  deletePartRouting(id: string): Promise<void>;
+
+  // P2 Serialized Item Traceability CRUD
+  addTraceabilityData(data: InsertP2SerializedItemTraceability): Promise<P2SerializedItemTraceability>;
+  getTraceabilityData(serializedItemId: string): Promise<P2SerializedItemTraceability[]>;
+  getTraceabilityForDepartment(serializedItemId: string, department: string): Promise<P2SerializedItemTraceability[]>;
 
   // Shipment Records CRUD
   createShipment(data: {
@@ -10598,6 +10613,116 @@ export class DatabaseStorage implements IStorage {
       .from(p2SerializedItemEvents)
       .where(eq(p2SerializedItemEvents.serializedItemId, id))
       .orderBy(p2SerializedItemEvents.createdAt);
+  }
+
+  // Part Routing CRUD
+  async createPartRouting(data: InsertPartRouting): Promise<PartRouting> {
+    const [routing] = await db
+      .insert(partRoutings)
+      .values(data)
+      .returning();
+    return routing;
+  }
+
+  async getPartRoutings(filters?: { inventoryItemId?: string; isActive?: boolean }): Promise<PartRouting[]> {
+    const conditions = [];
+    
+    if (filters?.inventoryItemId) {
+      conditions.push(eq(partRoutings.inventoryItemId, filters.inventoryItemId));
+    }
+    if (filters?.isActive !== undefined) {
+      conditions.push(eq(partRoutings.isActive, filters.isActive));
+    }
+
+    if (conditions.length === 0) {
+      return await db.select().from(partRoutings).orderBy(partRoutings.createdAt);
+    }
+
+    return await db
+      .select()
+      .from(partRoutings)
+      .where(and(...conditions))
+      .orderBy(partRoutings.createdAt);
+  }
+
+  async getPartRouting(id: string): Promise<PartRouting | undefined> {
+    const [routing] = await db
+      .select()
+      .from(partRoutings)
+      .where(eq(partRoutings.id, id));
+    return routing;
+  }
+
+  async getPartRoutingByInventoryItem(inventoryItemId: string): Promise<PartRouting | undefined> {
+    const [routing] = await db
+      .select()
+      .from(partRoutings)
+      .where(and(
+        eq(partRoutings.inventoryItemId, inventoryItemId),
+        eq(partRoutings.isActive, true)
+      ));
+    return routing;
+  }
+
+  async updatePartRouting(id: string, data: Partial<InsertPartRouting>): Promise<PartRouting> {
+    // Fetch existing routing
+    const existing = await this.getPartRouting(id);
+    if (!existing) {
+      throw new Error(`Part routing ${id} not found`);
+    }
+
+    // Merge validated fields with existing data
+    // Only update fields that are actually provided (not undefined)
+    const mergedData = {
+      ...existing,
+      ...data,
+      updatedAt: new Date(),
+    };
+
+    // Update with merged data
+    const [updated] = await db
+      .update(partRoutings)
+      .set(mergedData)
+      .where(eq(partRoutings.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new Error(`Failed to update part routing ${id}`);
+    }
+
+    return updated;
+  }
+
+  async deletePartRouting(id: string): Promise<void> {
+    await db.delete(partRoutings).where(eq(partRoutings.id, id));
+  }
+
+  // P2 Serialized Item Traceability CRUD
+  async addTraceabilityData(data: InsertP2SerializedItemTraceability): Promise<P2SerializedItemTraceability> {
+    const [record] = await db
+      .insert(p2SerializedItemTraceability)
+      .values(data)
+      .returning();
+    return record;
+  }
+
+  async getTraceabilityData(serializedItemId: string): Promise<P2SerializedItemTraceability[]> {
+    return await db
+      .select()
+      .from(p2SerializedItemTraceability)
+      .where(eq(p2SerializedItemTraceability.serializedItemId, serializedItemId))
+      .orderBy(p2SerializedItemTraceability.createdAt);
+  }
+
+  async getTraceabilityForDepartment(serializedItemId: string, department: string): Promise<P2SerializedItemTraceability[]> {
+    return await db
+      .select()
+      .from(p2SerializedItemTraceability)
+      .where(and(
+        eq(p2SerializedItemTraceability.serializedItemId, serializedItemId),
+        eq(p2SerializedItemTraceability.department, department)
+      ))
+      .orderBy(p2SerializedItemTraceability.createdAt);
   }
 
   // Shipment Records CRUD

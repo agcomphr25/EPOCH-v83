@@ -221,9 +221,10 @@ export async function extractTrainingContent(
     // Fallback: Use pdf-parse with proper error handling
     try {
       const { PDFParse } = await import('pdf-parse');
-      const parser = new PDFParse();
-      const pdfData = await parser.parse(fileBuffer);
-      content = pdfData.text || '';
+      const parser = new PDFParse({ data: fileBuffer });
+      await parser.parse();
+      const textResult = await parser.text();
+      content = textResult.text || '';
     } catch (error) {
       console.error('PDF parsing error:', error);
       throw new Error(
@@ -358,9 +359,10 @@ export async function extractCertificationContent(
     // Fallback: Use pdf-parse with proper error handling
     try {
       const { PDFParse } = await import('pdf-parse');
-      const parser = new PDFParse();
-      const pdfData = await parser.parse(fileBuffer);
-      content = pdfData.text || '';
+      const parser = new PDFParse({ data: fileBuffer });
+      await parser.parse();
+      const textResult = await parser.text();
+      content = textResult.text || '';
     } catch (error) {
       console.error('PDF parsing error:', error);
       throw new Error(
@@ -479,9 +481,10 @@ export async function extractTrainingMatrixData(
     // Fallback: Use pdf-parse with proper error handling
     try {
       const { PDFParse } = await import('pdf-parse');
-      const parser = new PDFParse();
-      const pdfData = await parser.parse(fileBuffer);
-      content = pdfData.text || '';
+      const parser = new PDFParse({ data: fileBuffer });
+      await parser.parse();
+      const textResult = await parser.text();
+      content = textResult.text || '';
     } catch (error) {
       console.error('PDF parsing error:', error);
       throw new Error(

@@ -279,6 +279,10 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
       const newConfig = { ...traceabilityConfig };
       delete newConfig[dept];
       setTraceabilityConfig(newConfig);
+      // Remove from department materials
+      const newMaterials = { ...departmentMaterials };
+      delete newMaterials[dept];
+      setDepartmentMaterials(newMaterials);
     } else {
       setSelectedDepartments([...selectedDepartments, dept]);
     }

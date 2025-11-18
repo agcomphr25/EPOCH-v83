@@ -1109,33 +1109,33 @@ export interface IStorage {
     department?: string;
     status?: string;
   }): Promise<P2SerializedItem[]>;
-  getP2SerializedItem(id: number): Promise<P2SerializedItem | undefined>;
+  getP2SerializedItem(id: string): Promise<P2SerializedItem | undefined>;
   getP2SerializedItemByBarcode(barcode: string): Promise<P2SerializedItem | undefined>;
   updateP2SerializedItem(
-    id: number,
+    id: string,
     data: Partial<InsertP2SerializedItem>
   ): Promise<P2SerializedItem>;
   transitionSerializedItem(
-    id: number,
+    id: string,
     nextDepartment: string,
     username: string,
     notes?: string
   ): Promise<P2SerializedItem>;
   holdSerializedItem(
-    id: number,
+    id: string,
     reason: string,
     username: string
   ): Promise<P2SerializedItem>;
   releaseSerializedItem(
-    id: number,
+    id: string,
     username: string
   ): Promise<P2SerializedItem>;
   scrapSerializedItem(
-    id: number,
+    id: string,
     reason: string,
     username: string
   ): Promise<P2SerializedItem>;
-  getP2SerializedItemHistory(id: number): Promise<P2SerializedItemEvent[]>;
+  getP2SerializedItemHistory(id: string): Promise<P2SerializedItemEvent[]>;
 
   // Shipment Records CRUD
   createShipment(data: {
@@ -10326,7 +10326,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(p2SerializedItems.createdAt);
   }
 
-  async getP2SerializedItem(id: number): Promise<P2SerializedItem | undefined> {
+  async getP2SerializedItem(id: string): Promise<P2SerializedItem | undefined> {
     const [item] = await db
       .select()
       .from(p2SerializedItems)
@@ -10343,7 +10343,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateP2SerializedItem(
-    id: number,
+    id: string,
     data: Partial<InsertP2SerializedItem>
   ): Promise<P2SerializedItem> {
     const [updated] = await db
@@ -10360,7 +10360,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async transitionSerializedItem(
-    id: number,
+    id: string,
     nextDepartment: string,
     username: string,
     notes?: string
@@ -10459,7 +10459,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async holdSerializedItem(
-    id: number,
+    id: string,
     reason: string,
     username: string
   ): Promise<P2SerializedItem> {
@@ -10504,7 +10504,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async releaseSerializedItem(
-    id: number,
+    id: string,
     username: string
   ): Promise<P2SerializedItem> {
     return await db.transaction(async (tx) => {
@@ -10548,7 +10548,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async scrapSerializedItem(
-    id: number,
+    id: string,
     reason: string,
     username: string
   ): Promise<P2SerializedItem> {
@@ -10592,7 +10592,7 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getP2SerializedItemHistory(id: number): Promise<P2SerializedItemEvent[]> {
+  async getP2SerializedItemHistory(id: string): Promise<P2SerializedItemEvent[]> {
     return await db
       .select()
       .from(p2SerializedItemEvents)

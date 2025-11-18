@@ -50,7 +50,7 @@ const P2_DEPARTMENTS = [
 type Department = typeof P2_DEPARTMENTS[number];
 
 interface P2SerializedItem {
-  id: number;
+  id: string;  // UUID
   serialNumber: string;
   barcode: string;
   poNumber: string;
@@ -69,7 +69,7 @@ interface P2SerializedItem {
 }
 
 interface P2SerializedItemEvent {
-  id: number;
+  id: string;  // UUID
   eventType: string;
   fromDepartment?: string;
   toDepartment?: string;
@@ -123,11 +123,16 @@ export default function P2DepartmentManager() {
     barcode,
     scannedBarcode,
     setBarcode,
-    resetBarcode,
-  } = useBarcodeInput({
-    onScan: handleBarcodeScan,
-    inputRef,
-  });
+    clearScan,
+  } = useBarcodeInput();
+
+  // Handle barcode scan when scannedBarcode changes
+  useEffect(() => {
+    if (scannedBarcode) {
+      handleBarcodeScan(scannedBarcode);
+      clearScan();
+    }
+  }, [scannedBarcode, clearScan, handleBarcodeScan]);
 
   // Fetch department queue
   const { data: queueItems = [], isLoading } = useQuery<P2SerializedItem[]>({
@@ -142,20 +147,26 @@ export default function P2DepartmentManager() {
 
   // Transition mutation
   const transitionMutation = useMutation({
-    mutationFn: (itemId: number) =>
+    mutationFn: (itemId: string) =>
       apiRequest(`/api/p2/serialized-items/${itemId}/transition`, {
         method: 'POST',
         body: { username: 'system' },
       }),
     onSuccess: () => {
-      // Invalidate all department queues
-      queryClient.invalidateQueries({ queryKey: ['/api/p2/departments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items'] });
+      // Invalidate both ACTIVE and HOLD queues since held items can be released then advanced
+      P2_DEPARTMENTS.forEach((dept) => {
+        queryClient.invalidateQueries({ 
+          queryKey: [`/api/p2/departments/${dept}/queue?status=ACTIVE`] 
+        });
+        queryClient.invalidateQueries({ 
+          queryKey: [`/api/p2/departments/${dept}/queue?status=HOLD`] 
+        });
+      });
       toast({
         title: 'Success',
         description: 'Item transitioned to next department',
       });
-      resetBarcode();
+      clearScan();
       setSelectedItem(null);
     },
     onError: (error: any) => {
@@ -169,14 +180,27 @@ export default function P2DepartmentManager() {
 
   // Hold mutation
   const holdMutation = useMutation({
-    mutationFn: ({ itemId, reason }: { itemId: number; reason: string }) =>
+    mutationFn: ({ itemId, reason }: { itemId: string; reason: string }) =>
       apiRequest(`/api/p2/serialized-items/${itemId}/hold`, {
         method: 'POST',
         body: { reason, username: 'system' },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/p2/departments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items'] });
+      // Invalidate both ACTIVE and HOLD queues since items move between statuses
+      P2_DEPARTMENTS.forEach((dept) => {
+        queryClient.invalidateQueries({ 
+          queryKey: [`/api/p2/departments/${dept}/queue?status=ACTIVE`] 
+        });
+        queryClient.invalidateQueries({ 
+          queryKey: [`/api/p2/departments/${dept}/queue?status=HOLD`] 
+        });
+      });
+      // Also invalidate history if we're viewing it
+      if (selectedItem) {
+        queryClient.invalidateQueries({
+          queryKey: [`/api/p2/serialized-items/${selectedItem.id}/history`]
+        });
+      }
       toast({
         title: 'Success',
         description: 'Item placed on hold',
@@ -196,14 +220,21 @@ export default function P2DepartmentManager() {
 
   // Release mutation
   const releaseMutation = useMutation({
-    mutationFn: (itemId: number) =>
+    mutationFn: (itemId: string) =>
       apiRequest(`/api/p2/serialized-items/${itemId}/release`, {
         method: 'POST',
         body: { username: 'system' },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/p2/departments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items'] });
+      // Invalidate both ACTIVE and HOLD queues since items move between statuses
+      P2_DEPARTMENTS.forEach((dept) => {
+        queryClient.invalidateQueries({ 
+          queryKey: [`/api/p2/departments/${dept}/queue?status=ACTIVE`] 
+        });
+        queryClient.invalidateQueries({ 
+          queryKey: [`/api/p2/departments/${dept}/queue?status=HOLD`] 
+        });
+      });
       toast({
         title: 'Success',
         description: 'Item released from hold',
@@ -221,14 +252,27 @@ export default function P2DepartmentManager() {
 
   // Scrap mutation
   const scrapMutation = useMutation({
-    mutationFn: ({ itemId, reason }: { itemId: number; reason: string }) =>
+    mutationFn: ({ itemId, reason }: { itemId: string; reason: string }) =>
       apiRequest(`/api/p2/serialized-items/${itemId}/scrap`, {
         method: 'POST',
         body: { reason, username: 'system' },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/p2/departments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items'] });
+      // Invalidate both ACTIVE and HOLD queues since scrapped items disappear from view
+      P2_DEPARTMENTS.forEach((dept) => {
+        queryClient.invalidateQueries({ 
+          queryKey: [`/api/p2/departments/${dept}/queue?status=ACTIVE`] 
+        });
+        queryClient.invalidateQueries({ 
+          queryKey: [`/api/p2/departments/${dept}/queue?status=HOLD`] 
+        });
+      });
+      // Also invalidate history if we're viewing it
+      if (selectedItem) {
+        queryClient.invalidateQueries({
+          queryKey: [`/api/p2/serialized-items/${selectedItem.id}/history`]
+        });
+      }
       toast({
         title: 'Success',
         description: 'Item scrapped',
@@ -423,6 +467,7 @@ export default function P2DepartmentManager() {
                         <TableHead>Customer</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Created</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -439,6 +484,55 @@ export default function P2DepartmentManager() {
                           <TableCell>{item.customerName}</TableCell>
                           <TableCell>{getStatusBadge(item.status)}</TableCell>
                           <TableCell>{new Date(item.createdAt).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                size="sm"
+                                data-testid={`button-advance-${item.id}`}
+                                onClick={() => transitionMutation.mutate(item.id)}
+                                disabled={transitionMutation.isPending || item.status !== 'ACTIVE'}
+                              >
+                                <ArrowRight className="mr-1 h-3 w-3" />
+                                Advance
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                data-testid={`button-hold-${item.id}`}
+                                onClick={() => {
+                                  setSelectedItem(item);
+                                  setShowHoldDialog(true);
+                                }}
+                                disabled={item.status !== 'ACTIVE'}
+                              >
+                                <Pause className="mr-1 h-3 w-3" />
+                                Hold
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                data-testid={`button-scrap-${item.id}`}
+                                onClick={() => {
+                                  setSelectedItem(item);
+                                  setShowScrapDialog(true);
+                                }}
+                              >
+                                <Trash2 className="mr-1 h-3 w-3" />
+                                Scrap
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                data-testid={`button-history-${item.id}`}
+                                onClick={() => {
+                                  setSelectedItem(item);
+                                  setShowHistory(true);
+                                }}
+                              >
+                                <History className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

@@ -3524,7 +3524,7 @@ export type P2DepartmentStage = typeof P2_DEPARTMENT_STAGES[number];
 
 // P2 Serialized Items - Individual tracked items from P2 PO items
 export const p2SerializedItems = pgTable('p2_serialized_items', {
-  id: serial('id').primaryKey(),
+  id: uuid('id').defaultRandom().primaryKey(),
   serialNumber: text('serial_number').notNull().unique(), // Unique serial for this item
   barcode: text('barcode').notNull().unique(), // Format: {PONumber}-{PartNumber}-{Sequence}
   poId: integer('po_id')
@@ -3566,8 +3566,8 @@ export const p2SerializedItems = pgTable('p2_serialized_items', {
 
 // P2 Serialized Item Events - Append-only audit log for all item transitions
 export const p2SerializedItemEvents = pgTable('p2_serialized_item_events', {
-  id: serial('id').primaryKey(),
-  serializedItemId: integer('serialized_item_id')
+  id: uuid('id').defaultRandom().primaryKey(),
+  serializedItemId: uuid('serialized_item_id')
     .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
     .notNull(),
   barcode: text('barcode').notNull(), // Denormalized for quick queries

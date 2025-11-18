@@ -225,6 +225,7 @@ router.post('/complete-training', async (req: Request, res: Response) => {
       trainerSignature,
       notes,
       criticalPointsCompleted,
+      workInstructionsCompleted,
     } = req.body;
 
     if (!employeeId || !certificationId || !trainingDate || !trainerName || !trainerSignature) {
@@ -235,7 +236,7 @@ router.post('/complete-training', async (req: Request, res: Response) => {
 
     // Get certification details for training matrix
     const certResult = await pool.query`
-      SELECT name, category, validity_period_months as "validityPeriodMonths"
+      SELECT name, category, validity_period_months as "validityPeriodMonths", requirements_data as "requirementsData"
       FROM certifications
       WHERE id = ${certificationId}
     `;
@@ -260,6 +261,18 @@ router.post('/complete-training', async (req: Request, res: Response) => {
       if (checkedCount < criticalPointsInCert) {
         return res.status(400).json({ 
           error: `All ${criticalPointsInCert} critical points must be completed. Only ${checkedCount} were checked.` 
+        });
+      }
+    }
+
+    // Validate work instructions are completed
+    const workInstructions = certification.requirementsData?.workInstructions || [];
+    if (workInstructions.length > 0) {
+      const completedCount = Object.values(workInstructionsCompleted || {}).filter(Boolean).length;
+      
+      if (completedCount < workInstructions.length) {
+        return res.status(400).json({ 
+          error: `All ${workInstructions.length} work instructions must be completed. Only ${completedCount} were marked as complete.` 
         });
       }
     }
@@ -299,6 +312,7 @@ router.post('/complete-training', async (req: Request, res: Response) => {
         trainer_signature,
         training_date,
         critical_points_completed,
+        work_instructions_completed,
         status,
         notes,
         is_active,
@@ -314,6 +328,7 @@ router.post('/complete-training', async (req: Request, res: Response) => {
         ${trainerSignature},
         ${trainingDate},
         ${JSON.stringify(criticalPointsCompleted)},
+        ${JSON.stringify(workInstructionsCompleted)},
         'ACTIVE',
         ${notes || null},
         true,

@@ -56,6 +56,9 @@ export default function CertificationFormModal({
   const [criticalPointsChecked, setCriticalPointsChecked] = useState<
     Record<number, boolean>
   >({});
+  const [workInstructionsCompleted, setWorkInstructionsCompleted] = useState<
+    Record<number, boolean>
+  >({});
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -76,7 +79,7 @@ export default function CertificationFormModal({
 
   // Use structured data if available, otherwise parse from requirements text
   const criticalPoints = selectedCert?.requirementsData?.criticalPoints
-    ? selectedCert.requirementsData.criticalPoints.map((point, index) => ({ 
+    ? selectedCert.requirementsData.criticalPoints.map((point: string, index: number) => ({ 
         id: index, 
         text: point 
       }))
@@ -146,6 +149,7 @@ export default function CertificationFormModal({
       notes: '',
     });
     setCriticalPointsChecked({});
+    setWorkInstructionsCompleted({});
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -170,13 +174,26 @@ export default function CertificationFormModal({
     }
 
     // Check if all critical points are checked
-    const allChecked = criticalPoints.every(
+    const allCriticalPointsChecked = criticalPoints.every(
       (point: any) => criticalPointsChecked[point.id]
     );
-    if (criticalPoints.length > 0 && !allChecked) {
+    if (criticalPoints.length > 0 && !allCriticalPointsChecked) {
       toast({
         title: 'Validation Error',
         description: 'All critical points must be checked',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Check if all work instructions are completed
+    const allWorkInstructionsCompleted = workInstructions.every(
+      (_instruction: string, index: number) => workInstructionsCompleted[index]
+    );
+    if (workInstructions.length > 0 && !allWorkInstructionsCompleted) {
+      toast({
+        title: 'Validation Error',
+        description: 'All work instructions must be marked as completed',
         variant: 'destructive',
       });
       return;
@@ -190,6 +207,7 @@ export default function CertificationFormModal({
       trainerSignature: formData.trainerSignature,
       notes: formData.notes,
       criticalPointsCompleted: criticalPointsChecked,
+      workInstructionsCompleted: workInstructionsCompleted,
     });
   };
 
@@ -201,6 +219,13 @@ export default function CertificationFormModal({
     setCriticalPointsChecked((prev) => ({
       ...prev,
       [pointId]: !prev[pointId],
+    }));
+  };
+
+  const toggleWorkInstruction = (instructionIndex: number) => {
+    setWorkInstructionsCompleted((prev) => ({
+      ...prev,
+      [instructionIndex]: !prev[instructionIndex],
     }));
   };
 
@@ -279,20 +304,35 @@ export default function CertificationFormModal({
                 </div>
               )}
 
-              {/* Work Instructions */}
+              {/* Work Instructions Competency Checklist */}
               {workInstructions.length > 0 && (
                 <div className="p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
-                  <h4 className="font-semibold text-blue-900 mb-2 flex items-center">
+                  <h4 className="font-semibold text-blue-900 mb-3 flex items-center">
                     <FileText className="w-5 h-5 mr-2" />
-                    Work Instructions
+                    Work Instructions - All Must Be Completed *
                   </h4>
-                  <ol className="list-decimal list-inside space-y-2">
+                  <div className="space-y-3">
                     {workInstructions.map((instruction: string, index: number) => (
-                      <li key={index} className="text-sm text-blue-900">
-                        {instruction}
-                      </li>
+                      <div
+                        key={index}
+                        className="flex items-start space-x-3"
+                      >
+                        <Checkbox
+                          id={`instruction-${index}`}
+                          checked={workInstructionsCompleted[index] || false}
+                          onCheckedChange={() => toggleWorkInstruction(index)}
+                          className="mt-1"
+                          data-testid={`checkbox-instruction-${index}`}
+                        />
+                        <label
+                          htmlFor={`instruction-${index}`}
+                          className="text-sm text-blue-900 cursor-pointer flex-1"
+                        >
+                          <span className="font-medium">{index + 1}.</span> {instruction}
+                        </label>
+                      </div>
                     ))}
-                  </ol>
+                  </div>
                 </div>
               )}
 

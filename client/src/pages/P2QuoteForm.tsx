@@ -26,10 +26,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, Plus, Trash2, Save, FileText, Printer } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ArrowLeft, Plus, Trash2, Save, FileText, Printer, Search } from 'lucide-react';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import type { InventoryItem } from '@shared/schema';
 
 interface QuoteLineItem {
   id: string;
@@ -66,16 +75,14 @@ export default function P2QuoteForm() {
   const [paymentTerms, setPaymentTerms] = useState('Net 30');
   const [notes, setNotes] = useState('');
   const [validityDays, setValidityDays] = useState('30');
-  const [lineItems, setLineItems] = useState<QuoteLineItem[]>([
-    {
-      id: crypto.randomUUID(),
-      lineNumber: 1,
-      quantity: 1,
-      description: '',
-      unitPrice: 0,
-      totalPrice: 0,
-    },
-  ]);
+  const [lineItems, setLineItems] = useState<QuoteLineItem[]>([]);
+
+  // Modal state for inventory item selection
+  const [isItemModalOpen, setIsItemModalOpen] = useState(false);
+  const [selectedInventoryItem, setSelectedInventoryItem] = useState<InventoryItem | null>(null);
+  const [itemQuantity, setItemQuantity] = useState('1');
+  const [profitMarginPercent, setProfitMarginPercent] = useState('30');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Fetch P2 customers for autocomplete
   const { data: p2Customers = [] } = useQuery<any[]>({
@@ -85,6 +92,12 @@ export default function P2QuoteForm() {
   // Fetch RFQ Risk Assessments
   const { data: rfqAssessments = [] } = useQuery<RFQAssessment[]>({
     queryKey: ['/api/customers/rfq-assessments'],
+  });
+
+  // Fetch inventory items from enhanced MRP system
+  const { data: inventoryItems = [], isLoading: isLoadingInventory } = useQuery<InventoryItem[]>({
+    queryKey: ['/api/enhanced/inventory/items'],
+    queryFn: () => apiRequest('/api/enhanced/inventory/items'),
   });
 
   // Filter for submitted RFQs only (case-insensitive)
@@ -122,20 +135,60 @@ export default function P2QuoteForm() {
     0
   );
 
-  const addLineItem = () => {
-    const newLineNumber = lineItems.length + 1;
-    setLineItems([
-      ...lineItems,
-      {
-        id: crypto.randomUUID(),
-        lineNumber: newLineNumber,
-        quantity: 1,
-        description: '',
-        unitPrice: 0,
-        totalPrice: 0,
-      },
-    ]);
+  const openAddItemModal = () => {
+    setSelectedInventoryItem(null);
+    setItemQuantity('1');
+    setProfitMarginPercent('30');
+    setSearchTerm('');
+    setIsItemModalOpen(true);
   };
+
+  const handleAddItemFromInventory = () => {
+    if (!selectedInventoryItem) {
+      toast({
+        title: 'No Item Selected',
+        description: 'Please select an inventory item first.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const quantity = Number(itemQuantity) || 1;
+    const cost = Number(selectedInventoryItem.costPer) || 0;
+    const profitMargin = Number(profitMarginPercent) || 0;
+    
+    // Calculate unit price: cost + (cost * profitMargin%)
+    const unitPrice = cost + (cost * (profitMargin / 100));
+    
+    const newLineNumber = lineItems.length + 1;
+    const newLineItem: QuoteLineItem = {
+      id: crypto.randomUUID(),
+      lineNumber: newLineNumber,
+      quantity,
+      description: `${selectedInventoryItem.name} (${selectedInventoryItem.agPartNumber})`,
+      unitPrice: Math.round(unitPrice * 100) / 100, // Round to 2 decimals
+      totalPrice: Math.round(quantity * unitPrice * 100) / 100,
+    };
+
+    setLineItems([...lineItems, newLineItem]);
+    setIsItemModalOpen(false);
+    
+    toast({
+      title: 'Line Item Added',
+      description: `Added ${selectedInventoryItem.name} to quote.`,
+    });
+  };
+
+  // Filter inventory items based on search term
+  const filteredInventoryItems = inventoryItems.filter(item => {
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      item.agPartNumber?.toLowerCase().includes(searchLower) ||
+      item.name?.toLowerCase().includes(searchLower) ||
+      item.sku?.toLowerCase().includes(searchLower)
+    );
+  });
 
   const removeLineItem = (id: string) => {
     const filtered = lineItems.filter((item) => item.id !== id);
@@ -356,12 +409,12 @@ export default function P2QuoteForm() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={addLineItem}
+                onClick={openAddItemModal}
                 className="no-print"
                 data-testid="button-add-line"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Line Item
+                Add Line Item from Inventory
               </Button>
             </div>
 
@@ -439,17 +492,15 @@ export default function P2QuoteForm() {
                         ${item.totalPrice.toFixed(2)}
                       </TableCell>
                       <TableCell className="no-print">
-                        {lineItems.length > 1 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeLineItem(item.id)}
-                            className="text-red-600 hover:text-red-800"
-                            data-testid={`button-delete-${item.lineNumber}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeLineItem(item.id)}
+                          className="text-red-600 hover:text-red-800"
+                          data-testid={`button-delete-${item.lineNumber}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -513,6 +564,160 @@ export default function P2QuoteForm() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Inventory Item Selection Modal */}
+      <Dialog open={isItemModalOpen} onOpenChange={setIsItemModalOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Item from Inventory</DialogTitle>
+            <DialogDescription>
+              Select an inventory item and configure pricing
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search by Part#, Name, or SKU..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+                data-testid="input-search-inventory"
+              />
+            </div>
+
+            {/* Inventory Items List */}
+            <div className="border rounded-lg max-h-64 overflow-y-auto">
+              {isLoadingInventory ? (
+                <div className="p-4 text-center text-gray-500">Loading inventory...</div>
+              ) : filteredInventoryItems.length === 0 ? (
+                <div className="p-4 text-center text-gray-500">No items found</div>
+              ) : (
+                <div className="divide-y">
+                  {filteredInventoryItems.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => setSelectedInventoryItem(item)}
+                      className={`p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
+                        selectedInventoryItem?.id === item.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                      }`}
+                      data-testid={`item-${item.agPartNumber}`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-medium">{item.name}</div>
+                          <div className="text-sm text-gray-500">
+                            Part#: {item.agPartNumber}
+                            {item.sku && ` • SKU: ${item.sku}`}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-green-600">
+                            ${Number(item.costPer || 0).toFixed(2)}
+                          </div>
+                          <div className="text-xs text-gray-500">Cost per {item.vendorUnit || 'unit'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Selected Item Details */}
+            {selectedInventoryItem && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-4">
+                <div>
+                  <h4 className="font-semibold text-blue-900">Selected Item</h4>
+                  <p className="text-sm text-blue-700">{selectedInventoryItem.name}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="item-quantity">Quantity</Label>
+                    <Input
+                      id="item-quantity"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={itemQuantity}
+                      onChange={(e) => setItemQuantity(e.target.value)}
+                      data-testid="input-item-quantity"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="profit-margin">Profit Margin (%)</Label>
+                    <Input
+                      id="profit-margin"
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={profitMarginPercent}
+                      onChange={(e) => setProfitMarginPercent(e.target.value)}
+                      data-testid="input-profit-margin"
+                    />
+                  </div>
+                </div>
+
+                {/* Pricing Summary */}
+                <div className="bg-white rounded p-3 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Base Cost:</span>
+                    <span className="font-medium">
+                      ${Number(selectedInventoryItem.costPer || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Profit Margin ({profitMarginPercent}%):</span>
+                    <span className="font-medium text-green-600">
+                      +${(Number(selectedInventoryItem.costPer || 0) * (Number(profitMarginPercent) / 100)).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold border-t pt-2">
+                    <span>Unit Price:</span>
+                    <span className="text-blue-600">
+                      ${(
+                        Number(selectedInventoryItem.costPer || 0) +
+                        Number(selectedInventoryItem.costPer || 0) * (Number(profitMarginPercent) / 100)
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold border-t pt-2">
+                    <span>Line Total:</span>
+                    <span className="text-purple-600">
+                      ${(
+                        (Number(selectedInventoryItem.costPer || 0) +
+                          Number(selectedInventoryItem.costPer || 0) * (Number(profitMarginPercent) / 100)) *
+                        Number(itemQuantity || 1)
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsItemModalOpen(false)}
+              data-testid="button-cancel-add-item"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddItemFromInventory}
+              disabled={!selectedInventoryItem}
+              data-testid="button-confirm-add-item"
+            >
+              Add to Quote
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <style>{`
         @media print {

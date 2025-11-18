@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
+import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import { db } from '../../db';
 import {
@@ -183,7 +184,9 @@ router.post('/modules/import-pdf', upload.single('file'), async (req, res) => {
 
     const createdBy = req.body.createdBy || 'system';
 
-    const trainingContent = await extractTrainingContent(req.file.buffer);
+    // Read the file from disk since we're using diskStorage
+    const pdfBuffer = fs.readFileSync(req.file.path);
+    const trainingContent = await extractTrainingContent(pdfBuffer);
 
     const [newModule] = await db
       .insert(trainingModules)
@@ -763,7 +766,9 @@ router.post('/matrix/import-csv', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const csvContent = req.file.buffer.toString('utf-8');
+    // Read the file from disk since we're using diskStorage
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const csvContent = fileBuffer.toString('utf-8');
     const lines = csvContent.split('\n').filter((line) => line.trim());
 
     const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
@@ -818,7 +823,9 @@ router.post('/matrix/import-pdf', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const matrixData = await extractTrainingMatrixData(req.file.buffer);
+    // Read the file from disk since we're using diskStorage
+    const pdfBuffer = fs.readFileSync(req.file.path);
+    const matrixData = await extractTrainingMatrixData(pdfBuffer);
     const imported = [];
 
     for (const entry of matrixData.entries) {

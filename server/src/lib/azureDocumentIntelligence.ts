@@ -26,6 +26,12 @@ function getClient(): DocumentAnalysisClient {
   return client;
 }
 
+function hasAzureCredentials(): boolean {
+  const endpoint = process.env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT;
+  const apiKey = process.env.AZURE_DOCUMENT_INTELLIGENCE_KEY;
+  return !!(endpoint && apiKey);
+}
+
 export type DocumentType =
   | 'invoice'
   | 'receipt'
@@ -206,9 +212,28 @@ export interface TrainingContent {
 export async function extractTrainingContent(
   fileBuffer: Buffer
 ): Promise<TrainingContent> {
-  const result = await analyzeDocument(fileBuffer, 'layout');
+  let content = '';
 
-  const content = result.content || '';
+  if (hasAzureCredentials()) {
+    const result = await analyzeDocument(fileBuffer, 'layout');
+    content = result.content || '';
+  } else {
+    // Fallback: Use pdf-parse with proper error handling
+    try {
+      const { PDFParse } = await import('pdf-parse');
+      // Convert Buffer to Uint8Array for pdf-parse
+      const uint8Array = new Uint8Array(fileBuffer);
+      const parser = new PDFParse({ data: uint8Array });
+      const textResult = await parser.getText();
+      content = textResult.text || '';
+      await parser.destroy();
+    } catch (error) {
+      console.error('PDF parsing error:', error);
+      // Re-throw the actual error for better debugging
+      throw error;
+    }
+  }
+
   const lines = content.split('\n').filter((line) => line.trim());
 
   const title = lines[0]?.trim() || 'Untitled Training Module';
@@ -321,14 +346,35 @@ export interface CertificationContent {
   requirements: string;
   jobPosition: string | null;
   workInstructions: string[];
+  ppe: string[];
+  criticalPoints: string[];
 }
 
 export async function extractCertificationContent(
   fileBuffer: Buffer
 ): Promise<CertificationContent> {
-  const result = await analyzeDocument(fileBuffer, 'document');
+  let content = '';
 
-  const content = result.content || '';
+  if (hasAzureCredentials()) {
+    const result = await analyzeDocument(fileBuffer, 'document');
+    content = result.content || '';
+  } else {
+    // Fallback: Use pdf-parse with proper error handling
+    try {
+      const { PDFParse } = await import('pdf-parse');
+      // Convert Buffer to Uint8Array for pdf-parse
+      const uint8Array = new Uint8Array(fileBuffer);
+      const parser = new PDFParse({ data: uint8Array });
+      const textResult = await parser.getText();
+      content = textResult.text || '';
+      await parser.destroy();
+    } catch (error) {
+      console.error('PDF parsing error:', error);
+      // Re-throw the actual error for better debugging
+      throw error;
+    }
+  }
+
   const lines = content.split('\n').filter((line) => line.trim());
 
   const name = lines[0]?.trim() || 'Untitled Certification';
@@ -373,28 +419,80 @@ export async function extractCertificationContent(
     ? requirementsMatch[1].trim()
     : content.substring(0, 500);
 
+  // Extract PPE (Personal Protective Equipment)
+  const ppe: string[] = [];
+  const ppePattern = /(?:PPE|personal protective equipment|safety equipment|required equipment):?\s*([\s\S]*?)(?:\n\n|critical points|work instructions|$)/gi;
+  const ppeMatches = Array.from(content.matchAll(ppePattern));
+
+  ppeMatches.forEach((match) => {
+    const ppeText = match[1].trim();
+    // Split by common delimiters: commas, semicolons, bullets, or newlines
+    const items = ppeText.split(/[,;\n•\-*]/).map(s => s.trim()).filter(s => s && s.length > 2 && s.length < 100);
+    ppe.push(...items);
+  });
+
+  // Also check for inline PPE mentions
+  if (ppe.length === 0) {
+    const inlinePpeMatch = content.match(/(?:wear|use|required):\s*([^.\n]+(?:gloves?|glasses|goggles|helmet|boots?|vest|sleeve)[^.\n]*)/gi);
+    if (inlinePpeMatch) {
+      inlinePpeMatch.forEach(match => {
+        const cleaned = match.replace(/(?:wear|use|required):\s*/i, '').trim();
+        if (cleaned.length > 2) ppe.push(cleaned);
+      });
+    }
+  }
+
+  // Extract Critical Points
+  const criticalPoints: string[] = [];
+  const criticalPattern = /(?:critical points?|safety critical|must|important):?\s*([\s\S]*?)(?:\n\n|work instructions|ppe|$)/gi;
+  const criticalMatches = Array.from(content.matchAll(criticalPattern));
+
+  criticalMatches.forEach((match) => {
+    const criticalText = match[1].trim();
+    // Look for numbered or bulleted lists
+    const numberedItems = criticalText.match(/(?:^|\n)\s*(?:\d+[\.\):]|[•\-*])\s*([^\n]+)/g);
+    if (numberedItems) {
+      numberedItems.forEach(item => {
+        const cleaned = item.replace(/(?:^|\n)\s*(?:\d+[\.\):]|[•\-*])\s*/, '').trim();
+        if (cleaned.length > 5) criticalPoints.push(cleaned);
+      });
+    } else {
+      // If no structured list, split by newlines
+      const items = criticalText.split(/\n/).map(s => s.trim()).filter(s => s && s.length > 5 && s.length < 200);
+      criticalPoints.push(...items);
+    }
+  });
+
+  // Extract Work Instructions
   const workInstructions: string[] = [];
   const instructionsPattern =
-    /(?:work instructions?|procedure|steps?|tasks?):?\s*([\s\S]*?)(?:\n\n|$)/gi;
+    /(?:work instructions?|procedure|steps?|tasks?|process):?\s*([\s\S]*?)(?:\n\n|critical points|ppe|$)/gi;
   const instructionsMatches = Array.from(content.matchAll(instructionsPattern));
 
   instructionsMatches.forEach((match) => {
     const instructionText = match[1].trim();
-    const steps = instructionText.split(/\n/).filter((s) => s.trim());
-    workInstructions.push(...steps);
+    // Look for numbered or bulleted lists
+    const numberedItems = instructionText.match(/(?:^|\n)\s*(?:\d+[\.\):]|[•\-*])\s*([^\n]+)/g);
+    if (numberedItems) {
+      numberedItems.forEach(item => {
+        const cleaned = item.replace(/(?:^|\n)\s*(?:\d+[\.\):]|[•\-*])\s*/, '').trim();
+        if (cleaned.length > 5) workInstructions.push(cleaned);
+      });
+    } else {
+      // If no structured list, split by newlines
+      const steps = instructionText.split(/\n/).map(s => s.trim()).filter(s => s && s.length > 5 && s.length < 300);
+      workInstructions.push(...steps);
+    }
   });
 
-  if (workInstructions.length === 0 && lines.length > 3) {
-    const startIdx = lines.findIndex(
-      (line) =>
-        line.toLowerCase().includes('instruction') ||
-        line.toLowerCase().includes('procedure') ||
-        line.toLowerCase().includes('step')
-    );
-    if (startIdx > 0 && startIdx < lines.length - 1) {
-      workInstructions.push(
-        ...lines.slice(startIdx + 1, Math.min(startIdx + 10, lines.length))
-      );
+  // Fallback: if no work instructions found, look for any numbered steps
+  if (workInstructions.length === 0) {
+    const allNumberedSteps = content.match(/(?:^|\n)\s*\d+[\.\)]\s*([^\n]{10,200})/g);
+    if (allNumberedSteps && allNumberedSteps.length > 2) {
+      allNumberedSteps.slice(0, 15).forEach(step => {
+        const cleaned = step.replace(/(?:^|\n)\s*\d+[\.\)]\s*/, '').trim();
+        workInstructions.push(cleaned);
+      });
     }
   }
 
@@ -407,6 +505,8 @@ export async function extractCertificationContent(
     requirements,
     jobPosition,
     workInstructions,
+    ppe,
+    criticalPoints,
   };
 }
 
@@ -428,14 +528,35 @@ export interface TrainingMatrixData {
 export async function extractTrainingMatrixData(
   fileBuffer: Buffer
 ): Promise<TrainingMatrixData> {
-  const result = await analyzeDocument(fileBuffer, 'layout');
+  let content = '';
+  let tables: any[] = [];
 
-  const content = result.content || '';
+  if (hasAzureCredentials()) {
+    const result = await analyzeDocument(fileBuffer, 'layout');
+    content = result.content || '';
+    tables = result.tables || [];
+  } else {
+    // Fallback: Use pdf-parse with proper error handling
+    try {
+      const { PDFParse } = await import('pdf-parse');
+      // Convert Buffer to Uint8Array for pdf-parse
+      const uint8Array = new Uint8Array(fileBuffer);
+      const parser = new PDFParse({ data: uint8Array });
+      const textResult = await parser.getText();
+      content = textResult.text || '';
+      await parser.destroy();
+    } catch (error) {
+      console.error('PDF parsing error:', error);
+      // Re-throw the actual error for better debugging
+      throw error;
+    }
+  }
+
   const entries: TrainingMatrixData['entries'] = [];
 
   // Try to extract table data if available
-  if (result.tables && result.tables.length > 0) {
-    const table = result.tables[0];
+  if (tables.length > 0) {
+    const table = tables[0];
 
     // Find header row to identify columns
     const headerCells = table.cells.filter((cell) => cell.rowIndex === 0);

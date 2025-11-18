@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+import { Link } from 'wouter';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -42,6 +43,8 @@ import {
   CheckCircle,
   Clock,
   XCircle,
+  Eye,
+  ExternalLink,
 } from 'lucide-react';
 
 interface TrainingModule {
@@ -92,6 +95,11 @@ interface Certification {
   name: string;
   description: string | null;
   category: string | null;
+  requirements: string | null;
+  issuingOrganization: string | null;
+  validityPeriodMonths: number | null;
+  isRequired: boolean | null;
+  isActive: boolean | null;
 }
 
 export default function TrainingManagement() {
@@ -105,6 +113,8 @@ export default function TrainingManagement() {
 
   // Certification tab state
   const [certPdfFile, setCertPdfFile] = useState<File | null>(null);
+  const [selectedCertification, setSelectedCertification] = useState<Certification | null>(null);
+  const [isCertDetailDialogOpen, setIsCertDetailDialogOpen] = useState(false);
 
   // Evaluation tab state
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
@@ -210,6 +220,34 @@ export default function TrainingManagement() {
     },
   });
 
+  // Delete certification mutation
+  const deleteCertificationMutation = useMutation({
+    mutationFn: async (certificationId: number) => {
+      const response = await fetch(`/api/certifications/${certificationId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete certification');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/certifications'] });
+      toast({
+        title: 'Certification Deleted',
+        description: 'Certification template has been deleted successfully',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Delete Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Create evaluation mutation
   const createEvaluationMutation = useMutation({
     mutationFn: async (evaluationData: any) => {
@@ -298,6 +336,12 @@ export default function TrainingManagement() {
     };
 
     createEvaluationMutation.mutate(evaluationData);
+  };
+
+  const handleDeleteCertification = (certificationId: number) => {
+    if (confirm('Are you sure you want to delete this certification template? This will not affect existing employee certifications.')) {
+      deleteCertificationMutation.mutate(certificationId);
+    }
   };
 
   return (
@@ -524,14 +568,66 @@ export default function TrainingManagement() {
                 {certifications.map((cert) => (
                   <Card key={cert.id} data-testid={`card-cert-${cert.id}`}>
                     <CardHeader>
-                      <CardTitle>{cert.name}</CardTitle>
-                      <CardDescription>
-                        {cert.description || 'No description'}
-                      </CardDescription>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <CardTitle>{cert.name}</CardTitle>
+                          <CardDescription>
+                            {cert.description || 'No description'}
+                          </CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedCertification(cert);
+                              setIsCertDetailDialogOpen(true);
+                            }}
+                            data-testid={`button-view-cert-${cert.id}`}
+                          >
+                            <Eye className="w-4 h-4 mr-2" />
+                            View Details
+                          </Button>
+                          <Link href="/employee-dashboard">
+                            <Button
+                              variant="default"
+                              size="sm"
+                              data-testid={`button-assign-cert-${cert.id}`}
+                            >
+                              <Users className="w-4 h-4 mr-2" />
+                              Assign to Employee
+                            </Button>
+                          </Link>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteCertification(cert.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            data-testid={`button-delete-template-${cert.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
                     </CardHeader>
                     <CardContent>
-                      {cert.category && (
-                        <Badge variant="secondary">{cert.category}</Badge>
+                      <div className="flex gap-2 flex-wrap">
+                        {cert.category && (
+                          <Badge variant="secondary">{cert.category}</Badge>
+                        )}
+                        {cert.isRequired && (
+                          <Badge variant="destructive">Required</Badge>
+                        )}
+                        {cert.validityPeriodMonths && (
+                          <Badge variant="outline">
+                            Valid for {cert.validityPeriodMonths} months
+                          </Badge>
+                        )}
+                      </div>
+                      {cert.requirements && (
+                        <p className="text-sm text-muted-foreground mt-3 line-clamp-2">
+                          <strong>Requirements:</strong> {cert.requirements}
+                        </p>
                       )}
                     </CardContent>
                   </Card>
@@ -539,6 +635,93 @@ export default function TrainingManagement() {
               </div>
             )}
           </div>
+
+          {/* Certification Details Dialog */}
+          <Dialog open={isCertDetailDialogOpen} onOpenChange={setIsCertDetailDialogOpen}>
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{selectedCertification?.name}</DialogTitle>
+                <DialogDescription>
+                  Certification Details
+                </DialogDescription>
+              </DialogHeader>
+              {selectedCertification && (
+                <div className="space-y-4">
+                  <div>
+                    <Label className="font-semibold">Description</Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {selectedCertification.description || 'No description provided'}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="font-semibold">Category</Label>
+                      <p className="text-sm mt-1">
+                        {selectedCertification.category || 'Not specified'}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="font-semibold">Validity Period</Label>
+                      <p className="text-sm mt-1">
+                        {selectedCertification.validityPeriodMonths
+                          ? `${selectedCertification.validityPeriodMonths} months`
+                          : 'No expiration'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="font-semibold">Issuing Organization</Label>
+                      <p className="text-sm mt-1">
+                        {selectedCertification.issuingOrganization || 'Not specified'}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="font-semibold">Status</Label>
+                      <div className="flex gap-2 mt-1">
+                        {selectedCertification.isRequired && (
+                          <Badge variant="destructive">Required</Badge>
+                        )}
+                        {selectedCertification.isActive ? (
+                          <Badge variant="default">Active</Badge>
+                        ) : (
+                          <Badge variant="secondary">Inactive</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedCertification.requirements && (
+                    <div>
+                      <Label className="font-semibold">Requirements & PPE</Label>
+                      <div className="mt-2 p-4 bg-muted rounded-md">
+                        <p className="text-sm whitespace-pre-wrap">
+                          {selectedCertification.requirements}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsCertDetailDialogOpen(false)}
+                    >
+                      Close
+                    </Button>
+                    <Link href="/employee-dashboard">
+                      <Button>
+                        <Users className="w-4 h-4 mr-2" />
+                        Assign to Employee
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="evaluations" className="mt-6">

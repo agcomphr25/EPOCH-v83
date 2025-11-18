@@ -599,7 +599,26 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // Certification Management
 router.get('/:id/certifications', async (req: Request, res: Response) => {
   try {
-    const employeeId = parseInt(req.params.id);
+    const idParam = req.params.id;
+    let employeeId: number;
+
+    // Check if the parameter is a numeric ID or employee code
+    if (isNaN(Number(idParam))) {
+      // It's an employee code, look up the numeric ID
+      const result = await pool.query`
+        SELECT id FROM employees WHERE employee_code = ${idParam}
+      `;
+      
+      if (!result || result.length === 0) {
+        return res.status(404).json({ error: 'Employee not found' });
+      }
+      
+      employeeId = result[0].id;
+    } else {
+      // It's a numeric ID
+      employeeId = parseInt(idParam);
+    }
+
     const certifications = await storage.getEmployeeCertifications(employeeId);
     res.json(certifications);
   } catch (error) {

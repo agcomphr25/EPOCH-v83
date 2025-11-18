@@ -36,7 +36,9 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
+  Route,
 } from 'lucide-react';
+import PartRoutingWizard from '@/components/PartRoutingWizard';
 
 const P2_DEPARTMENTS = [
   'Layup',
@@ -86,6 +88,7 @@ export default function P2DepartmentManager() {
   const [scrapReason, setScrapReason] = useState('');
   const [showHoldDialog, setShowHoldDialog] = useState(false);
   const [showScrapDialog, setShowScrapDialog] = useState(false);
+  const [showRoutingWizard, setShowRoutingWizard] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -316,13 +319,23 @@ export default function P2DepartmentManager() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">
-          P2 Department Manager
-        </h1>
-        <p className="text-muted-foreground">
-          Track and manage serialized items through manufacturing workflow
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight" data-testid="text-page-title">
+            P2 Department Manager
+          </h1>
+          <p className="text-muted-foreground">
+            Track and manage serialized items through manufacturing workflow
+          </p>
+        </div>
+        <Button
+          data-testid="button-configure-routing"
+          onClick={() => setShowRoutingWizard(true)}
+          className="flex items-center gap-2"
+        >
+          <Route className="h-4 w-4" />
+          Configure Part Routing
+        </Button>
       </div>
 
       {/* Barcode Scanner Section */}
@@ -661,6 +674,12 @@ export default function P2DepartmentManager() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Part Routing Wizard */}
+      <PartRoutingWizard
+        open={showRoutingWizard}
+        onOpenChange={setShowRoutingWizard}
+      />
     </div>
   );
 }

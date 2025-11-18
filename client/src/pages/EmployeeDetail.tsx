@@ -18,6 +18,10 @@ import {
   GraduationCap,
   CheckCircle2,
   Circle,
+  Upload,
+  Download,
+  Trash2,
+  File,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -75,6 +79,15 @@ interface Employee {
   tciAccess?: boolean;
 }
 
+interface CertificationFile {
+  id: string;
+  name: string;
+  path: string;
+  size: number;
+  mimeType: string;
+  uploadedAt: string;
+}
+
 interface Certification {
   id: number;
   employeeId: number;
@@ -84,6 +97,7 @@ interface Certification {
   certificateNumber: string;
   issuingAuthority: string;
   status: string;
+  uploadedFiles?: CertificationFile[];
   certification: {
     name: string;
     category: string;
@@ -128,6 +142,212 @@ interface TrainingMatrixEntry {
   lastCompleted: string | null;
   status: string;
   notes: string | null;
+}
+
+function CertificationCard({ 
+  cert, 
+  formatDate, 
+  getStatusBadge 
+}: { 
+  cert: Certification; 
+  formatDate: (date: string) => string;
+  getStatusBadge: (status: string) => JSX.Element;
+}) {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const uploadFileMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch(`/api/certifications/${cert.id}/upload-file`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to upload file');
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employee-certifications'] });
+      setSelectedFile(null);
+      toast({
+        title: 'Success',
+        description: 'File uploaded successfully',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const deleteFileMutation = useMutation({
+    mutationFn: async (fileId: string) => {
+      const response = await fetch(
+        `/api/certifications/${cert.id}/delete-file/${fileId}`,
+        {
+          method: 'DELETE',
+        }
+      );
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete file');
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employee-certifications'] });
+      toast({
+        title: 'Success',
+        description: 'File deleted successfully',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const handleUpload = () => {
+    if (selectedFile) {
+      uploadFileMutation.mutate(selectedFile);
+    }
+  };
+
+  const handleDownload = (fileId: string) => {
+    window.open(`/api/certifications/${cert.id}/download-file/${fileId}`, '_blank');
+  };
+
+  const handleDelete = (fileId: string) => {
+    if (confirm('Are you sure you want to delete this file?')) {
+      deleteFileMutation.mutate(fileId);
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  return (
+    <div className="border rounded-lg p-4 space-y-4">
+      <div className="flex items-start justify-between">
+        <div>
+          <h4 className="font-medium">
+            {cert.certification?.name || 'Unknown Certification'}
+          </h4>
+          <p className="text-sm text-gray-600">
+            {cert.issuingAuthority}
+          </p>
+          <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+            <span>
+              Obtained: {formatDate(cert.dateObtained)}
+            </span>
+            {cert.dateExpiry && (
+              <span>
+                Expires: {formatDate(cert.dateExpiry)}
+              </span>
+            )}
+            {cert.certificateNumber && (
+              <span>#{cert.certificateNumber}</span>
+            )}
+          </div>
+        </div>
+        {getStatusBadge(cert.status)}
+      </div>
+
+      {/* File Upload Section */}
+      <div className="border-t pt-4">
+        <h5 className="text-sm font-medium mb-2 flex items-center">
+          <File className="w-4 h-4 mr-2" />
+          Supporting Documents
+        </h5>
+
+        {/* Uploaded Files List */}
+        {cert.uploadedFiles && cert.uploadedFiles.length > 0 && (
+          <div className="space-y-2 mb-3">
+            {cert.uploadedFiles.map((file) => (
+              <div
+                key={file.id}
+                className="flex items-center justify-between p-2 bg-gray-50 rounded border"
+              >
+                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                  <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{file.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {formatFileSize(file.size)} • {new Date(file.uploadedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleDownload(file.id)}
+                    data-testid={`button-download-${file.id}`}
+                  >
+                    <Download className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleDelete(file.id)}
+                    disabled={deleteFileMutation.isPending}
+                    data-testid={`button-delete-${file.id}`}
+                  >
+                    <Trash2 className="w-4 h-4 text-red-600" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Upload New File */}
+        <div className="flex items-center space-x-2">
+          <Input
+            type="file"
+            onChange={handleFileSelect}
+            className="flex-1"
+            data-testid="input-upload-file"
+          />
+          <Button
+            size="sm"
+            onClick={handleUpload}
+            disabled={!selectedFile || uploadFileMutation.isPending}
+            data-testid="button-upload-file"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            {uploadFileMutation.isPending ? 'Uploading...' : 'Upload'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function EmployeeDetail() {
@@ -1106,33 +1326,12 @@ export default function EmployeeDetail() {
                   ) : (
                     <div className="space-y-4">
                       {certifications.map((cert: Certification) => (
-                        <div key={cert.id} className="border rounded-lg p-4">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h4 className="font-medium">
-                                {cert.certification?.name ||
-                                  'Unknown Certification'}
-                              </h4>
-                              <p className="text-sm text-gray-600">
-                                {cert.issuingAuthority}
-                              </p>
-                              <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
-                                <span>
-                                  Obtained: {formatDate(cert.dateObtained)}
-                                </span>
-                                {cert.dateExpiry && (
-                                  <span>
-                                    Expires: {formatDate(cert.dateExpiry)}
-                                  </span>
-                                )}
-                                {cert.certificateNumber && (
-                                  <span>#{cert.certificateNumber}</span>
-                                )}
-                              </div>
-                            </div>
-                            {getStatusBadge(cert.status)}
-                          </div>
-                        </div>
+                        <CertificationCard 
+                          key={cert.id} 
+                          cert={cert} 
+                          formatDate={formatDate}
+                          getStatusBadge={getStatusBadge}
+                        />
                       ))}
                     </div>
                   )}

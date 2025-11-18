@@ -183,19 +183,26 @@ export default function RFQRiskAssessment() {
 
   // Effect to load signature into canvas when signature data changes
   useEffect(() => {
-    if (formData.signature && signatureCanvasRef.current) {
-      try {
-        // Clear the canvas first to prevent duplicates
+    // Use a small delay to ensure canvas is fully mounted
+    const loadSignature = setTimeout(() => {
+      if (formData.signature && signatureCanvasRef.current) {
+        try {
+          console.log('Loading signature into canvas...');
+          // Clear the canvas first to prevent duplicates
+          signatureCanvasRef.current.clear();
+          // Load the signature
+          signatureCanvasRef.current.fromDataURL(formData.signature);
+          console.log('Signature loaded successfully');
+        } catch (error) {
+          console.error('Error loading signature:', error);
+        }
+      } else if (!formData.signature && signatureCanvasRef.current) {
+        // If there's no signature data, ensure canvas is clear
         signatureCanvasRef.current.clear();
-        // Load the signature
-        signatureCanvasRef.current.fromDataURL(formData.signature);
-      } catch (error) {
-        console.error('Error loading signature:', error);
       }
-    } else if (!formData.signature && signatureCanvasRef.current) {
-      // If there's no signature data, ensure canvas is clear
-      signatureCanvasRef.current.clear();
-    }
+    }, 100);
+
+    return () => clearTimeout(loadSignature);
   }, [formData.signature]);
 
   // Effect to handle mitigation actions requirement based on risk score
@@ -780,6 +787,10 @@ export default function RFQRiskAssessment() {
       }
       
       const assessment = await response.json();
+      console.log('Loaded assessment:', assessment);
+      console.log('Assessment formData:', assessment.formData);
+      console.log('Signature data exists:', !!assessment.formData?.signature);
+      console.log('Signature data length:', assessment.formData?.signature?.length || 0);
       
       // Populate form with saved data
       if (assessment.formData) {

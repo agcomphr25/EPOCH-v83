@@ -17,7 +17,7 @@ router.get('/', async (req: Request, res: Response) => {
         name,
         description,
         issuing_organization as "issuingOrganization",
-        validity_period as "validityPeriod",
+        validity_period_months as "validityPeriodMonths",
         category,
         requirements,
         is_active as "isActive",
@@ -243,6 +243,24 @@ router.post('/complete-training', async (req: Request, res: Response) => {
     }
 
     const certification = certResult[0];
+
+    // Parse critical points from requirements and validate all are completed
+    const requirementsText = certification.requirements || '';
+    const criticalPointsInCert = requirementsText
+      .split('\n')
+      .filter((line: string) => line.trim().match(/^\d+\./))
+      .length;
+
+    if (criticalPointsInCert > 0) {
+      // Count how many critical points were checked
+      const checkedCount = Object.values(criticalPointsCompleted || {}).filter(Boolean).length;
+      
+      if (checkedCount < criticalPointsInCert) {
+        return res.status(400).json({ 
+          error: `All ${criticalPointsInCert} critical points must be completed. Only ${checkedCount} were checked.` 
+        });
+      }
+    }
 
     // Get employee details
     const empResult = await pool.query`

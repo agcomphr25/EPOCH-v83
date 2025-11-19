@@ -2867,6 +2867,28 @@ export const vendorPOSettings = pgTable('vendor_po_settings', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// Optional Settings Library for Vendor POs
+export const vendorPOOptionalSettings = pgTable('vendor_po_optional_settings', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Per-PO Specific Settings
+export const vendorPOSpecificSettings = pgTable('vendor_po_specific_settings', {
+  id: serial('id').primaryKey(),
+  vendorPoId: integer('vendor_po_id')
+    .references(() => vendorPOs.id, { onDelete: 'cascade' })
+    .notNull()
+    .unique(),
+  selectedOptionalSettings: integer('selected_optional_settings').array(), // Array of IDs from vendorPOOptionalSettings
+  adHocSettings: text('ad_hoc_settings'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 export const communicationLogs = pgTable('communication_logs', {
   id: serial('id').primaryKey(),
   orderId: text('order_id'), // Made nullable for general communications
@@ -3156,6 +3178,33 @@ export const insertVendorPOSettingsSchema = createInsertSchema(vendorPOSettings)
   });
 export type InsertVendorPOSettings = z.infer<typeof insertVendorPOSettingsSchema>;
 export type VendorPOSettings = typeof vendorPOSettings.$inferSelect;
+
+export const insertVendorPOOptionalSettingSchema = createInsertSchema(vendorPOOptionalSettings)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    name: z.string().min(1, 'Name is required'),
+    description: z.string().optional().nullable(),
+  });
+export type InsertVendorPOOptionalSetting = z.infer<typeof insertVendorPOOptionalSettingSchema>;
+export type VendorPOOptionalSetting = typeof vendorPOOptionalSettings.$inferSelect;
+
+export const insertVendorPOSpecificSettingsSchema = createInsertSchema(vendorPOSpecificSettings)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    vendorPoId: z.number().int().positive('Vendor PO ID is required'),
+    selectedOptionalSettings: z.array(z.number().int()).default([]),
+    adHocSettings: z.string().optional().nullable(),
+  });
+export type InsertVendorPOSpecificSettings = z.infer<typeof insertVendorPOSpecificSettingsSchema>;
+export type VendorPOSpecificSettings = typeof vendorPOSpecificSettings.$inferSelect;
 
 // Order Attachments Table
 export const orderAttachments = pgTable('order_attachments', {

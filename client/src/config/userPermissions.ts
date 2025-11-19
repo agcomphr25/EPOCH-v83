@@ -48,6 +48,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-list',
       '/all-orders',
       '/customer-management',
+      '/inventory/parts-request',
     ],
   },
 
@@ -80,6 +81,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-list',
       '/orders',
       '/employee-portal',
+      '/inventory/parts-request',
     ],
   },
 
@@ -119,6 +121,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders',
       '/employee-portal',
       '/barcode-scanner',
+      '/inventory/parts-request',
     ],
   },
 
@@ -128,6 +131,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/gunsmith',
       '/orders-list',
       '/orders',
+      '/inventory/parts-request',
     ],
   },
 
@@ -137,6 +141,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-list',
       '/orders',
       '/employee-portal',
+      '/inventory/parts-request',
     ],
   },
 
@@ -171,6 +176,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-list',
       '/all-orders',
       '/maintenance',
+      '/inventory/parts-request',
     ],
   },
 };

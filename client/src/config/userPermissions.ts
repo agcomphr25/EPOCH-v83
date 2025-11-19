@@ -33,6 +33,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/production-queue',
       '/inventory/dashboard',
       '/inventory/manager',
+      '/inventory/consolidated-needs',
       '/customers',
       '/customer-management',
     ],
@@ -67,6 +68,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/production-queue',
       '/inventory/dashboard',
       '/inventory/manager',
+      '/inventory/consolidated-needs',
       '/orders-list',
       '/orders',
     ],
@@ -158,6 +160,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-list',
       '/orders',
       '/inventory/dashboard',
+      '/inventory/consolidated-needs',
     ],
   },
 

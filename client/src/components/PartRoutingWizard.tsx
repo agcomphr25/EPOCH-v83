@@ -73,10 +73,16 @@ interface QCStandard {
   requirement: string; // Specific requirement or specification
 }
 
+interface OvenCuring {
+  temperature: string; // Oven temperature (e.g., "350°F")
+  time: string; // Curing time (e.g., "2 hours")
+}
+
 interface DepartmentConfiguration {
   materials: MaterialRequirement[]; // Materials used in this department
   technicianRequired: boolean; // Whether technician is required for this department
   qcStandards: QCStandard[]; // QC standards with tolerance and requirements
+  ovenCuring?: OvenCuring; // Oven curing configuration (for Assembly/Disassembly)
 }
 
 interface PartRouting {
@@ -118,6 +124,10 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   const [qcStandardInput, setQcStandardInput] = useState<string>('');
   const [qcToleranceInput, setQcToleranceInput] = useState<string>('');
   const [qcRequirementInput, setQcRequirementInput] = useState<string>('');
+  
+  // UI state for oven curing input
+  const [ovenTemperatureInput, setOvenTemperatureInput] = useState<string>('');
+  const [ovenTimeInput, setOvenTimeInput] = useState<string>('');
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -204,6 +214,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     setQcStandardInput('');
     setQcToleranceInput('');
     setQcRequirementInput('');
+    setOvenTemperatureInput('');
+    setOvenTimeInput('');
   };
 
   const handleClose = () => {
@@ -411,6 +423,20 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
       [dept]: {
         ...config,
         qcStandards: config.qcStandards.filter((_, i) => i !== index),
+      },
+    });
+  };
+
+  const updateOvenCuring = (dept: string, temperature: string, time: string) => {
+    const config = getOrCreateDeptConfig(dept);
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        ovenCuring: temperature.trim() || time.trim() ? {
+          temperature: temperature.trim(),
+          time: time.trim(),
+        } : undefined,
       },
     });
   };
@@ -839,6 +865,84 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                               </Button>
                             </div>
                           </div>
+
+                          {/* Oven Curing Section - Only for Assemble/Disassembly */}
+                          {dept === 'Assemble/Disassembly' && (
+                            <>
+                              <Separator />
+                              <div>
+                                <h4 className="font-semibold mb-3">Oven Curing</h4>
+                                <p className="text-sm text-muted-foreground mb-3">
+                                  Configure oven curing temperature and time requirements
+                                </p>
+                                <div className="space-y-3">
+                                  <div>
+                                    <Label htmlFor={`oven-temp-${dept}`}>Temperature</Label>
+                                    <Input
+                                      id={`oven-temp-${dept}`}
+                                      data-testid="input-oven-temperature"
+                                      placeholder="e.g., 350°F"
+                                      value={selectedDeptForConfig === dept ? ovenTemperatureInput : config.ovenCuring?.temperature || ''}
+                                      onChange={(e) => {
+                                        setSelectedDeptForConfig(dept);
+                                        setOvenTemperatureInput(e.target.value);
+                                        const currentTime = config.ovenCuring?.time || ovenTimeInput;
+                                        updateOvenCuring(dept, e.target.value, currentTime);
+                                      }}
+                                      onFocus={() => {
+                                        setSelectedDeptForConfig(dept);
+                                        setOvenTemperatureInput(config.ovenCuring?.temperature || '');
+                                        setOvenTimeInput(config.ovenCuring?.time || '');
+                                      }}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label htmlFor={`oven-time-${dept}`}>Time</Label>
+                                    <Input
+                                      id={`oven-time-${dept}`}
+                                      data-testid="input-oven-time"
+                                      placeholder="e.g., 2 hours"
+                                      value={selectedDeptForConfig === dept ? ovenTimeInput : config.ovenCuring?.time || ''}
+                                      onChange={(e) => {
+                                        setSelectedDeptForConfig(dept);
+                                        setOvenTimeInput(e.target.value);
+                                        const currentTemp = config.ovenCuring?.temperature || ovenTemperatureInput;
+                                        updateOvenCuring(dept, currentTemp, e.target.value);
+                                      }}
+                                      onFocus={() => {
+                                        setSelectedDeptForConfig(dept);
+                                        setOvenTemperatureInput(config.ovenCuring?.temperature || '');
+                                        setOvenTimeInput(config.ovenCuring?.time || '');
+                                      }}
+                                    />
+                                  </div>
+                                  {config.ovenCuring && (config.ovenCuring.temperature || config.ovenCuring.time) && (
+                                    <Card className="p-3 bg-muted/30">
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex-1 space-y-1">
+                                          <p className="text-sm font-medium">Current Oven Curing Settings</p>
+                                          <div className="grid grid-cols-2 gap-2 text-xs">
+                                            {config.ovenCuring.temperature && (
+                                              <div>
+                                                <span className="text-muted-foreground">Temperature:</span>
+                                                <p className="font-mono">{config.ovenCuring.temperature}</p>
+                                              </div>
+                                            )}
+                                            {config.ovenCuring.time && (
+                                              <div>
+                                                <span className="text-muted-foreground">Time:</span>
+                                                <p className="font-mono">{config.ovenCuring.time}</p>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </Card>
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          )}
                         </CardContent>
                       </Card>
                     );

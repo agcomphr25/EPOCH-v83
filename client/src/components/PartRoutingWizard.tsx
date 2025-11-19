@@ -36,7 +36,9 @@ import {
   GripVertical,
   Flame,
   FileText,
+  UserCheck,
 } from 'lucide-react';
+import type { Employee, P2EmployeePartCertification } from '../../../server/schema';
 
 const P2_DEPARTMENTS = [
   'Layup',
@@ -83,7 +85,7 @@ interface OvenCuringStep {
 
 interface DepartmentConfiguration {
   materials: MaterialRequirement[]; // Materials used in this department
-  technicianRequired: boolean; // Whether technician is required for this department
+  assignedTechnicianId: number | null; // Assigned technician (employee) for this department
   qcStandards: QCStandard[]; // QC standards with tolerance and requirements
   ovenCuringSteps?: OvenCuringStep[]; // Oven curing steps (for Assembly/Disassembly)
   specialProcess?: string; // Special process notes (for Assembly/Disassembly)
@@ -152,7 +154,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
       if (!newConfig[dept]) {
         newConfig[dept] = {
           materials: [],
-          technicianRequired: false,
+          assignedTechnicianId: null,
           qcStandards: [],
         };
         hasChanges = true;
@@ -168,6 +170,18 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory'],
     enabled: open && (step === 1 || step === 3),
+  });
+
+  // Fetch employees for technician assignment
+  const { data: employees = [] } = useQuery<Employee[]>({
+    queryKey: ['/api/employees'],
+    enabled: open && step === 3,
+  });
+
+  // Fetch employee certifications
+  const { data: employeeCertifications = [] } = useQuery<P2EmployeePartCertification[]>({
+    queryKey: ['/api/training/p2-employee-certifications'],
+    enabled: open && step === 3,
   });
 
   // Filter inventory items by search
@@ -281,7 +295,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   const getOrCreateDeptConfig = (dept: string): DepartmentConfiguration => {
     return departmentConfig[dept] || {
       materials: [],
-      technicianRequired: false,
+      assignedTechnicianId: null,
       qcStandards: [],
     };
   };
@@ -377,15 +391,31 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     });
   };
 
-  const toggleTechnicianRequired = (dept: string) => {
+  const setAssignedTechnician = (dept: string, technicianId: string) => {
     const config = getOrCreateDeptConfig(dept);
     setDepartmentConfig({
       ...departmentConfig,
       [dept]: {
         ...config,
-        technicianRequired: !config.technicianRequired,
+        assignedTechnicianId: technicianId === '' ? null : parseInt(technicianId),
       },
     });
+  };
+
+  // Get certified employees for a specific department
+  const getCertifiedEmployees = (department: string): Employee[] => {
+    if (!selectedItem?.agPartNumber) return [];
+    
+    // Find certifications for this part and department
+    const certifiedEmployeeIds = employeeCertifications
+      .filter(cert => 
+        cert.partNumber === selectedItem.agPartNumber && 
+        cert.department === department
+      )
+      .map(cert => cert.employeeId);
+    
+    // Return employees who are certified
+    return employees.filter(emp => certifiedEmployeeIds.includes(emp.id));
   };
 
   const addQcStandard = (dept: string) => {
@@ -506,7 +536,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
           ...departmentConfig,
           [dept]: {
             materials: [],
-            technicianRequired: false,
+            assignedTechnicianId: null,
             qcStandards: [],
           },
         });
@@ -826,16 +856,48 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
 
                           <Separator />
 
-                          {/* Technician Section */}
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h4 className="font-semibold">Technician Required</h4>
-                              <p className="text-sm text-muted-foreground">Require technician assignment for this department</p>
-                            </div>
-                            <Checkbox
-                              checked={config.technicianRequired}
-                              onCheckedChange={() => toggleTechnicianRequired(dept)}
-                            />
+                          {/* Technician Assignment Section */}
+                          <div>
+                            <h4 className="font-semibold mb-2 flex items-center gap-2">
+                              <UserCheck className="h-4 w-4" />
+                              Assigned Technician
+                            </h4>
+                            <p className="text-sm text-muted-foreground mb-3">
+                              Assign a certified technician for this part and department
+                            </p>
+                            {(() => {
+                              const certifiedEmployees = getCertifiedEmployees(dept);
+                              
+                              if (certifiedEmployees.length === 0) {
+                                return (
+                                  <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
+                                    <p className="text-sm text-amber-800 dark:text-amber-300">
+                                      ⚠️ No employees are certified for {selectedItem?.agPartNumber || 'this part'} in the {dept} department.
+                                      Please add certifications in the P2 Certifications Manager first.
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              
+                              return (
+                                <Select
+                                  value={config.assignedTechnicianId?.toString() || ''}
+                                  onValueChange={(val) => setAssignedTechnician(dept, val)}
+                                >
+                                  <SelectTrigger data-testid={`select-technician-${dept}`}>
+                                    <SelectValue placeholder="Select certified technician" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="">No technician assigned</SelectItem>
+                                    {certifiedEmployees.map((emp) => (
+                                      <SelectItem key={emp.id} value={emp.id.toString()}>
+                                        {emp.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              );
+                            })()}
                           </div>
 
                           <Separator />

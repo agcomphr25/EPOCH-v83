@@ -44,7 +44,6 @@ const P2_DEPARTMENTS = [
   'Layup',
   'Assemble/Disassembly',
   'CNC',
-  'Lathe/Wrapping',
   'Finish',
   'Paint',
   'Final QC',

@@ -693,15 +693,6 @@ export default function RFQRiskAssessment() {
 
   // File upload handlers
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!editingAssessmentId) {
-      toast({
-        title: 'Save Required',
-        description: 'Please save the assessment before uploading files.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
@@ -718,24 +709,87 @@ export default function RFQRiskAssessment() {
     }
 
     setIsUploadingFile(true);
-    const formData = new FormData();
-    for (const file of Array.from(files)) {
-      formData.append('files', file);
-    }
 
     try {
-      const response = await fetch(`/api/customers/rfq-assessments/${editingAssessmentId}/attachments`, {
+      let assessmentId = editingAssessmentId;
+      let wasAutoSaved = false;
+
+      // Auto-save assessment if not already saved
+      if (!assessmentId) {
+        // Validate required fields before auto-saving
+        if (!formData.customerId || !formData.rfqNumber) {
+          toast({
+            title: 'Missing Information',
+            description: 'Please select a customer first before uploading files.',
+            variant: 'destructive',
+          });
+          setIsUploadingFile(false);
+          return;
+        }
+
+        // Validate mitigation actions if needed
+        if (!validateForm()) {
+          setIsUploadingFile(false);
+          return;
+        }
+
+        toast({
+          title: 'Auto-saving Assessment',
+          description: 'Saving assessment before uploading files...',
+        });
+
+        const payload = {
+          rfqNumber: formData.rfqNumber,
+          customerId: formData.customerId,
+          description: formData.description,
+          formData: formData,
+          totalOverallPoints: formData.totalOverallPoints,
+          adjustedRiskLevel: formData.adjustedRiskLevel,
+          riskDetermination: formData.riskDetermination,
+          bidDecision: formData.bidDecision,
+        };
+
+        const saveResponse = await fetch('/api/customers/rfq-assessments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!saveResponse.ok) {
+          const errorData = await saveResponse.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to auto-save assessment');
+        }
+
+        const savedAssessment = await saveResponse.json();
+        assessmentId = savedAssessment.id;
+        setEditingAssessmentId(assessmentId);
+        wasAutoSaved = true;
+        await refetchAssessments();
+      }
+
+      // Now upload the files
+      const uploadFormData = new FormData();
+      for (const file of Array.from(files)) {
+        uploadFormData.append('files', file);
+      }
+
+      const response = await fetch(`/api/customers/rfq-assessments/${assessmentId}/attachments`, {
         method: 'POST',
-        body: formData,
+        body: uploadFormData,
       });
 
       if (!response.ok) throw new Error('Upload failed');
 
       const result = await response.json();
       setAttachments(result.attachments || []);
+      
       toast({
         title: 'Success',
-        description: 'Files uploaded successfully.',
+        description: wasAutoSaved 
+          ? 'Assessment saved and files uploaded successfully.' 
+          : 'Files uploaded successfully.',
       });
       
       // Clear file input
@@ -746,7 +800,7 @@ export default function RFQRiskAssessment() {
       console.error('Upload error:', error);
       toast({
         title: 'Upload Failed',
-        description: 'Failed to upload files. Please try again.',
+        description: error instanceof Error ? error.message : 'Failed to upload files. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -1446,7 +1500,7 @@ export default function RFQRiskAssessment() {
                 type="button"
                 variant="outline"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={!editingAssessmentId || isUploadingFile || isViewingSubmitted}
+                disabled={isUploadingFile || isViewingSubmitted}
                 className="flex items-center gap-2"
                 data-testid="button-upload-pdf"
               >
@@ -1454,7 +1508,9 @@ export default function RFQRiskAssessment() {
                 {isUploadingFile ? 'Uploading...' : 'Upload PDF Files'}
               </Button>
               <p className="text-sm text-gray-500 mt-2">
-                {!editingAssessmentId ? 'Save the assessment first to upload files.' : 'Upload one or more PDF files (max 5 files, 10MB each).'}
+                {!editingAssessmentId 
+                  ? 'Assessment will be auto-saved when you upload files.' 
+                  : 'Upload one or more PDF files (max 5 files, 10MB each).'}
               </p>
             </div>
 

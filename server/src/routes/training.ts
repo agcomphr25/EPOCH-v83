@@ -1503,6 +1503,52 @@ router.patch('/p2-employee-certifications/:id', async (req, res) => {
   }
 });
 
+// Migrate existing P2 certifications to capabilities (one-time migration endpoint)
+router.post('/p2-employee-certifications/migrate-capabilities', async (req, res) => {
+  try {
+    console.log('🔄 Migrating existing P2 certifications to capabilities...');
+    
+    // Get all fully certified employees
+    const certifications = await db
+      .select()
+      .from(p2EmployeePartCertifications)
+      .where(
+        and(
+          eq(p2EmployeePartCertifications.drawingKnowledge, true),
+          eq(p2EmployeePartCertifications.specSheetUnderstanding, true),
+          eq(p2EmployeePartCertifications.procedureCompletion, true)
+        )
+      );
+    
+    console.log(`Found ${certifications.length} fully certified employees`);
+    
+    let granted = 0;
+    let skipped = 0;
+    
+    for (const cert of certifications) {
+      try {
+        await grantP2CertificationCapability(
+          cert.employeeId,
+          cert.partNumber,
+          cert.department
+        );
+        granted++;
+        console.log(`✅ Granted capability: ${cert.employeeName} - ${cert.partNumber} - ${cert.department}`);
+      } catch (error) {
+        // Might already exist, which is fine
+        skipped++;
+        console.log(`⏭️  Skipped: ${cert.employeeName} - ${cert.partNumber} - ${cert.department}`);
+      }
+    }
+    
+    console.log(`✅ Migration complete! Granted: ${granted}, Skipped: ${skipped}`);
+    res.json({ success: true, granted, skipped, total: certifications.length });
+  } catch (error: any) {
+    console.error('Migration error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete employee part certification
 router.delete('/p2-employee-certifications/:id', async (req, res) => {
   try {

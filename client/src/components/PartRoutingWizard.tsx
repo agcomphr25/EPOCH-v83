@@ -25,6 +25,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Route,
   Package,
@@ -34,6 +35,7 @@ import {
   X,
   GripVertical,
   Flame,
+  FileText,
 } from 'lucide-react';
 
 const P2_DEPARTMENTS = [
@@ -84,6 +86,7 @@ interface DepartmentConfiguration {
   technicianRequired: boolean; // Whether technician is required for this department
   qcStandards: QCStandard[]; // QC standards with tolerance and requirements
   ovenCuringSteps?: OvenCuringStep[]; // Oven curing steps (for Assembly/Disassembly)
+  specialProcess?: string; // Special process notes (for Assembly/Disassembly)
 }
 
 interface PartRouting {
@@ -469,6 +472,17 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
       [dept]: {
         ...config,
         ovenCuringSteps: config.ovenCuringSteps?.filter((_, i) => i !== index),
+      },
+    });
+  };
+
+  const updateSpecialProcess = (dept: string, value: string) => {
+    const config = getOrCreateDeptConfig(dept);
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        specialProcess: value,
       },
     });
   };
@@ -988,6 +1002,27 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                                     Add Curing Step
                                   </Button>
                                 </div>
+                              </div>
+
+                              <Separator />
+
+                              {/* Special Process Section */}
+                              <div>
+                                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                                  <FileText className="h-4 w-4" />
+                                  Special Process
+                                </h4>
+                                <p className="text-sm text-muted-foreground mb-3">
+                                  Add any special process instructions or requirements
+                                </p>
+                                <Textarea
+                                  data-testid="input-special-process"
+                                  placeholder="Enter special process details..."
+                                  value={config.specialProcess || ''}
+                                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateSpecialProcess(dept, e.target.value)}
+                                  rows={4}
+                                  className="resize-none"
+                                />
                               </div>
                             </>
                           )}

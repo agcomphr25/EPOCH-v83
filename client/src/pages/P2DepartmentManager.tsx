@@ -43,7 +43,7 @@ import PartRoutingWizard from '@/components/PartRoutingWizard';
 
 const P2_DEPARTMENTS = [
   'Layup',
-  'Assemble/Disassembly',
+  'Assembly/Disassembly',
   'CNC',
   'Finish',
   'Paint',

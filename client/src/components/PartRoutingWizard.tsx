@@ -42,7 +42,7 @@ import type { Employee, EmployeeCapability, Capability } from '../../../server/s
 
 const P2_DEPARTMENTS = [
   'Layup',
-  'Assemble/Disassembly',
+  'Assembly/Disassembly',
   'CNC',
   'Finish',
   'Paint',
@@ -1010,8 +1010,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                             </div>
                           </div>
 
-                          {/* Oven Curing Section - Only for Assemble/Disassembly */}
-                          {dept === 'Assemble/Disassembly' && (
+                          {/* Oven Curing Section - Only for Assembly/Disassembly */}
+                          {dept === 'Assembly/Disassembly' && (
                             <>
                               <Separator />
                               <div>

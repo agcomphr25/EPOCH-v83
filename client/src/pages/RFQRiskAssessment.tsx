@@ -852,6 +852,7 @@ export default function RFQRiskAssessment() {
     });
     setEditingAssessmentId(null);
     setIsViewingSubmitted(false);
+    setAttachments([]);
     
     // Clear signature canvas
     if (signatureCanvasRef.current) {

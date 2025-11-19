@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -110,8 +110,9 @@ export default function P2QuoteForm() {
   });
 
   // Filter for submitted RFQs only (case-insensitive)
-  const submittedRFQs = rfqAssessments.filter(
-    (rfq) => rfq.status?.toLowerCase() === 'submitted'
+  const submittedRFQs = useMemo(() => 
+    rfqAssessments.filter((rfq) => rfq.status?.toLowerCase() === 'submitted'),
+    [rfqAssessments]
   );
 
   // Load existing quote if id is in URL query params

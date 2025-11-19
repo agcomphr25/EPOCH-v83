@@ -631,20 +631,24 @@ export default function RFQRiskAssessment() {
       const savedAssessment = await response.json();
       console.log('Form data saved:', savedAssessment);
       
-      if (editingAssessmentId) {
-        alert('RFQ Risk Assessment updated successfully!');
-      } else {
-        alert('RFQ Risk Assessment saved successfully!');
-      }
+      // Keep the assessment loaded so user can upload PDFs immediately
+      setEditingAssessmentId(savedAssessment.id);
+      setAttachments(savedAssessment.attachments || []);
       
-      // Clear the form
-      clearForm();
-      
-      // Refresh the assessments list
+      // Refresh the assessments list in background
       await refetchAssessments();
       
-      // Switch to view tab to show the saved assessment
-      setActiveTab('view');
+      if (editingAssessmentId) {
+        toast({
+          title: 'Assessment Updated',
+          description: 'RFQ Risk Assessment updated successfully! You can now upload PDF attachments.',
+        });
+      } else {
+        toast({
+          title: 'Assessment Saved',
+          description: 'RFQ Risk Assessment saved successfully! You can now upload PDF attachments.',
+        });
+      }
     } catch (error) {
       console.error('Error saving RFQ Risk Assessment:', error);
       alert('Failed to save RFQ Risk Assessment. Please try again.');

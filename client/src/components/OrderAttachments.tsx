@@ -20,6 +20,7 @@ import {
   Download,
   Trash2,
   Eye,
+  Pencil,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -50,6 +51,9 @@ export function OrderAttachments({
   const [uploadNotes, setUploadNotes] = useState('');
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [renameAttachment, setRenameAttachment] = useState<OrderAttachment | null>(null);
+  const [newFileName, setNewFileName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -91,6 +95,28 @@ export function OrderAttachments({
         description: error instanceof Error ? error.message : 'Unknown error',
         variant: 'destructive',
       });
+    },
+  });
+
+  // Rename mutation
+  const renameMutation = useMutation({
+    mutationFn: ({ attachmentId, originalFileName }: { attachmentId: number; originalFileName: string }) =>
+      apiRequest(`/api/order-attachments/${attachmentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ originalFileName }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['order-attachments', orderId],
+      });
+      toast({ title: 'Attachment renamed successfully' });
+      setShowRenameDialog(false);
+      setRenameAttachment(null);
+      setNewFileName('');
+    },
+    onError: () => {
+      toast({ title: 'Failed to rename attachment', variant: 'destructive' });
     },
   });
 
@@ -219,6 +245,21 @@ export function OrderAttachments({
     }
   };
 
+  const handleRenameClick = (attachment: OrderAttachment) => {
+    setRenameAttachment(attachment);
+    setNewFileName(attachment.originalFileName);
+    setShowRenameDialog(true);
+  };
+
+  const handleRename = () => {
+    if (renameAttachment && newFileName.trim()) {
+      renameMutation.mutate({
+        attachmentId: renameAttachment.id,
+        originalFileName: newFileName.trim(),
+      });
+    }
+  };
+
   const handleUpload = () => {
     if (pendingFiles.length > 0) {
       uploadMutation.mutate({ files: pendingFiles, notes: uploadNotes });
@@ -325,6 +366,7 @@ export function OrderAttachments({
                         size="sm"
                         onClick={() => handleView(attachment)}
                         title="View PDF"
+                        data-testid={`button-view-${attachment.id}`}
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
@@ -334,19 +376,32 @@ export function OrderAttachments({
                       size="sm"
                       onClick={() => handleDownload(attachment)}
                       title="Download file"
+                      data-testid={`button-download-${attachment.id}`}
                     >
                       <Download className="h-4 w-4" />
                     </Button>
                     {!readonly && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(attachment.id)}
-                        disabled={deleteMutation.isPending}
-                        title="Delete attachment"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRenameClick(attachment)}
+                          title="Rename file"
+                          data-testid={`button-rename-${attachment.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(attachment.id)}
+                          disabled={deleteMutation.isPending}
+                          title="Delete attachment"
+                          data-testid={`button-delete-${attachment.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -419,6 +474,52 @@ export function OrderAttachments({
                 disabled={uploadMutation.isPending || pendingFiles.length === 0}
               >
                 {uploadMutation.isPending ? 'Uploading...' : 'Upload Files'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename File</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="new-filename">New file name</Label>
+              <Input
+                id="new-filename"
+                type="text"
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                placeholder="Enter new file name"
+                data-testid="input-new-filename"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newFileName.trim()) {
+                    handleRename();
+                  }
+                }}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Include the file extension (e.g., "Invoice.pdf")
+              </p>
+            </div>
+
+            <div className="flex justify-end space-x-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowRenameDialog(false)}
+                data-testid="button-cancel-rename"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRename}
+                disabled={renameMutation.isPending || !newFileName.trim()}
+                data-testid="button-confirm-rename"
+              >
+                {renameMutation.isPending ? 'Renaming...' : 'Rename'}
               </Button>
             </div>
           </div>

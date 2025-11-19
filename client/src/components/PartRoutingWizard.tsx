@@ -51,11 +51,14 @@ const P2_DEPARTMENTS = [
 ] as const;
 
 const TRACEABILITY_FIELDS = [
-  { id: 'lotNumber', label: 'Lot Number', description: 'Track material lot/batch identifier' },
-  { id: 'batchNumber', label: 'Batch Number', description: 'Track production batch number' },
-  { id: 'expirationDate', label: 'Expiration Date', description: 'Track material expiration' },
-  { id: 'serialNumber', label: 'Serial Number', description: 'Track component serial number' },
-  { id: 'revision', label: 'Revision', description: 'Track part revision level' },
+  { id: 'internalControlNumber', label: 'Internal Control Number', description: 'Internal tracking control number' },
+  { id: 'supplier', label: 'Supplier', description: 'Material supplier name' },
+  { id: 'inventoryPartNumber', label: 'Inventory Part Number', description: 'Inventory part/item number' },
+  { id: 'supplierBatchLot', label: 'Supplier Batch/Lot/C#', description: 'Supplier batch, lot, or certificate number' },
+  { id: 'manufacturer', label: 'Manufacturer', description: 'Material manufacturer' },
+  { id: 'rollNumber', label: 'Roll Number', description: 'Material roll number' },
+  { id: 'expirationDate', label: 'Expiration Date', description: 'Material expiration date' },
+  { id: 'receivedDate', label: 'Received Date', description: 'Date material was received' },
 ] as const;
 
 interface InventoryItem {

@@ -633,7 +633,7 @@ export interface IStorage {
   deleteConsumptionRate(id: number): Promise<void>;
 
   // Department-filtered Inventory
-  getInventoryItemsByDepartment(departmentName: string): Promise<InventoryItem[]>;
+  getInventoryItemsByDepartment(departmentName: string, isAdmin?: boolean): Promise<InventoryItem[]>;
 
   // Outstanding Orders
   getOutstandingOrders(): Promise<OrderDraft[]>;
@@ -4701,11 +4701,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Department-filtered Inventory
-  async getInventoryItemsByDepartment(departmentName: string): Promise<InventoryItem[]> {
+  async getInventoryItemsByDepartment(departmentName: string, isAdmin: boolean = false): Promise<InventoryItem[]> {
     const items = await db
       .select()
       .from(inventoryItems)
       .where(eq(inventoryItems.isActive, true));
+    
+    // Admin users (glennj, tasham, staciw) can see all active parts
+    if (isAdmin) {
+      return items;
+    }
     
     // Filter items that have this department in their assignedDepartments array
     return items.filter(item => {

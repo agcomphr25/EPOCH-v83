@@ -2,10 +2,22 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { insertCostCenterSchema } from '@shared/schema';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import {
   Card,
   CardContent,
@@ -71,6 +83,27 @@ interface Employee {
   lastName: string;
 }
 
+const costCenterFormSchema = insertCostCenterSchema.extend({
+  annualBudget: z.preprocess(
+    (val) => (val === '' || val === undefined || val === null ? null : parseFloat(val as string)),
+    z.number().positive().optional().nullable()
+  ),
+  monthlyBudget: z.preprocess(
+    (val) => (val === '' || val === undefined || val === null ? null : parseFloat(val as string)),
+    z.number().positive().optional().nullable()
+  ),
+  managerId: z.preprocess(
+    (val) => (val === '' || val === undefined || val === null ? null : parseInt(val as string)),
+    z.number().int().optional().nullable()
+  ),
+  description: z.preprocess(
+    (val) => (val === '' || val === undefined || val === null ? null : val),
+    z.string().optional().nullable()
+  ),
+});
+
+type CostCenterFormValues = z.infer<typeof costCenterFormSchema>;
+
 const COST_CENTER_TYPES = [
   { value: 'DEPARTMENT', label: 'Department', color: 'blue' },
   { value: 'PROJECT', label: 'Project', color: 'purple' },
@@ -85,44 +118,49 @@ const STATUS_OPTIONS = [
 
 export default function CostCenterManagement() {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const qClient = useQueryClient();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingCostCenter, setEditingCostCenter] = useState<CostCenter | null>(null);
   const [deletingCostCenter, setDeletingCostCenter] = useState<CostCenter | null>(null);
-  
-  // Form state
-  const [code, setCode] = useState('');
-  const [name, setName] = useState('');
-  const [type, setType] = useState<string>('DEPARTMENT');
-  const [status, setStatus] = useState<string>('ACTIVE');
-  const [annualBudget, setAnnualBudget] = useState('');
-  const [monthlyBudget, setMonthlyBudget] = useState('');
-  const [managerId, setManagerId] = useState<string>('');
-  const [description, setDescription] = useState('');
 
-  // Fetch cost centers
+  const form = useForm<CostCenterFormValues>({
+    resolver: zodResolver(costCenterFormSchema),
+    defaultValues: {
+      code: '',
+      name: '',
+      type: 'DEPARTMENT',
+      status: 'ACTIVE',
+      annualBudget: null,
+      monthlyBudget: null,
+      managerId: null,
+      description: null,
+    },
+  });
+
   const { data: costCenters = [], isLoading } = useQuery<CostCenter[]>({
     queryKey: ['/api/cost-centers'],
   });
 
-  // Fetch employees for manager dropdown
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ['/api/employees'],
   });
 
-  // Create mutation
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
       return apiRequest('/api/cost-centers', {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          code: data.code.toUpperCase().trim(),
+          name: data.name.trim(),
+        }),
         headers: { 'Content-Type': 'application/json' },
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cost-centers'] });
+      qClient.invalidateQueries({ queryKey: ['/api/cost-centers'] });
       toast({
         title: 'Cost Center Created',
         description: 'The cost center has been created successfully.',
@@ -138,17 +176,20 @@ export default function CostCenterManagement() {
     },
   });
 
-  // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
       return apiRequest(`/api/cost-centers/${id}`, {
         method: 'PUT',
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          code: data.code.toUpperCase().trim(),
+          name: data.name.trim(),
+        }),
         headers: { 'Content-Type': 'application/json' },
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cost-centers'] });
+      qClient.invalidateQueries({ queryKey: ['/api/cost-centers'] });
       toast({
         title: 'Cost Center Updated',
         description: 'The cost center has been updated successfully.',
@@ -164,7 +205,6 @@ export default function CostCenterManagement() {
     },
   });
 
-  // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       return apiRequest(`/api/cost-centers/${id}`, {
@@ -172,7 +212,7 @@ export default function CostCenterManagement() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cost-centers'] });
+      qClient.invalidateQueries({ queryKey: ['/api/cost-centers'] });
       toast({
         title: 'Cost Center Deleted',
         description: 'The cost center has been deleted successfully.',
@@ -192,24 +232,28 @@ export default function CostCenterManagement() {
   const handleOpenDialog = (costCenter?: CostCenter) => {
     if (costCenter) {
       setEditingCostCenter(costCenter);
-      setCode(costCenter.code);
-      setName(costCenter.name);
-      setType(costCenter.type);
-      setStatus(costCenter.status);
-      setAnnualBudget(costCenter.annualBudget?.toString() || '');
-      setMonthlyBudget(costCenter.monthlyBudget?.toString() || '');
-      setManagerId(costCenter.managerId?.toString() || '');
-      setDescription(costCenter.description || '');
+      form.reset({
+        code: costCenter.code,
+        name: costCenter.name,
+        type: costCenter.type,
+        status: costCenter.status,
+        annualBudget: costCenter.annualBudget,
+        monthlyBudget: costCenter.monthlyBudget,
+        managerId: costCenter.managerId,
+        description: costCenter.description,
+      });
     } else {
       setEditingCostCenter(null);
-      setCode('');
-      setName('');
-      setType('DEPARTMENT');
-      setStatus('ACTIVE');
-      setAnnualBudget('');
-      setMonthlyBudget('');
-      setManagerId('');
-      setDescription('');
+      form.reset({
+        code: '',
+        name: '',
+        type: 'DEPARTMENT',
+        status: 'ACTIVE',
+        annualBudget: null,
+        monthlyBudget: null,
+        managerId: null,
+        description: null,
+      });
     }
     setIsDialogOpen(true);
   };
@@ -217,20 +261,10 @@ export default function CostCenterManagement() {
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setEditingCostCenter(null);
+    form.reset();
   };
 
-  const handleSubmit = () => {
-    const data = {
-      code: code.toUpperCase().trim(),
-      name: name.trim(),
-      type,
-      status,
-      annualBudget: annualBudget ? parseFloat(annualBudget) : null,
-      monthlyBudget: monthlyBudget ? parseFloat(monthlyBudget) : null,
-      managerId: managerId ? parseInt(managerId) : null,
-      description: description.trim() || null,
-    };
-
+  const onSubmit = (data: CostCenterFormValues) => {
     if (editingCostCenter) {
       updateMutation.mutate({ id: editingCostCenter.id, data });
     } else {
@@ -252,10 +286,6 @@ export default function CostCenterManagement() {
   const getTypeBadgeColor = (type: string) => {
     const typeObj = COST_CENTER_TYPES.find(t => t.value === type);
     return typeObj?.color || 'gray';
-  };
-
-  const getStatusBadgeColor = (status: string) => {
-    return status === 'ACTIVE' ? 'green' : 'gray';
   };
 
   const formatCurrency = (amount: number | null) => {
@@ -362,7 +392,6 @@ export default function CostCenterManagement() {
         </CardContent>
       </Card>
 
-      {/* Create/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -376,144 +405,214 @@ export default function CostCenterManagement() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="code">Code *</Label>
-                <Input
-                  id="code"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  placeholder="e.g., LAYUP"
-                  maxLength={20}
-                  data-testid="input-code"
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="code"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Code *</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          value={field.value.toUpperCase()}
+                          onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                          placeholder="e.g., LAYUP"
+                          maxLength={20}
+                          data-testid="input-code"
+                        />
+                      </FormControl>
+                      <FormDescription>Short identifier (max 20 chars)</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-                <p className="text-xs text-gray-500 mt-1">Short identifier (max 20 chars)</p>
+                <FormField
+                  control={form.control}
+                  name="type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Type *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {COST_CENTER_TYPES.map((t) => (
+                            <SelectItem key={t.value} value={t.value}>
+                              {t.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
-              <div>
-                <Label htmlFor="type">Type *</Label>
-                <Select value={type} onValueChange={setType}>
-                  <SelectTrigger data-testid="select-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COST_CENTER_TYPES.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
 
-            <div>
-              <Label htmlFor="name">Name *</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Layup Department"
-                data-testid="input-name"
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name *</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder="e.g., Layup Department"
+                        data-testid="input-name"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="status">Status</Label>
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger data-testid="select-status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map((s) => (
-                      <SelectItem key={s.value} value={s.value}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="manager">Manager</Label>
-                <Select value={managerId} onValueChange={setManagerId}>
-                  <SelectTrigger data-testid="select-manager">
-                    <SelectValue placeholder="Select manager" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">None</SelectItem>
-                    {employees.map((emp) => (
-                      <SelectItem key={emp.id} value={emp.id.toString()}>
-                        {emp.firstName} {emp.lastName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="annualBudget" className="flex items-center gap-1">
-                  <DollarSign className="h-3 w-3" />
-                  Annual Budget
-                </Label>
-                <Input
-                  id="annualBudget"
-                  type="number"
-                  step="0.01"
-                  value={annualBudget}
-                  onChange={(e) => setAnnualBudget(e.target.value)}
-                  placeholder="0.00"
-                  data-testid="input-annual-budget"
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Status</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-status">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {STATUS_OPTIONS.map((s) => (
+                            <SelectItem key={s.value} value={s.value}>
+                              {s.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="managerId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Manager</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-manager">
+                            <SelectValue placeholder="Select manager" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          {employees.map((emp) => (
+                            <SelectItem key={emp.id} value={emp.id.toString()}>
+                              {emp.firstName} {emp.lastName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
               </div>
-              <div>
-                <Label htmlFor="monthlyBudget" className="flex items-center gap-1">
-                  <DollarSign className="h-3 w-3" />
-                  Monthly Budget
-                </Label>
-                <Input
-                  id="monthlyBudget"
-                  type="number"
-                  step="0.01"
-                  value={monthlyBudget}
-                  onChange={(e) => setMonthlyBudget(e.target.value)}
-                  placeholder="0.00"
-                  data-testid="input-monthly-budget"
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="annualBudget"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1">
+                        <DollarSign className="h-3 w-3" />
+                        Annual Budget
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          data-testid="input-annual-budget"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="monthlyBudget"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1">
+                        <DollarSign className="h-3 w-3" />
+                        Monthly Budget
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          data-testid="input-monthly-budget"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
               </div>
-            </div>
 
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Notes about this cost center..."
-                rows={3}
-                data-testid="textarea-description"
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        placeholder="Notes about this cost center..."
+                        rows={3}
+                        data-testid="textarea-description"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-          </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={handleCloseDialog} data-testid="button-cancel">
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={!code || !name || createMutation.isPending || updateMutation.isPending}
-              data-testid="button-save"
-            >
-              {editingCostCenter ? 'Update' : 'Create'} Cost Center
-            </Button>
-          </DialogFooter>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCloseDialog}
+                  data-testid="button-cancel"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createMutation.isPending || updateMutation.isPending}
+                  data-testid="button-save"
+                >
+                  {editingCostCenter ? 'Update' : 'Create'} Cost Center
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

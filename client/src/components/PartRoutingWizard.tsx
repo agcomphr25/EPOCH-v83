@@ -1146,9 +1146,9 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
           )}
         </ScrollArea>
 
-        <Separator />
+        <Separator className="flex-shrink-0" />
 
-        <DialogFooter className="flex justify-between items-center sm:justify-between">
+        <DialogFooter className="flex justify-between items-center sm:justify-between flex-shrink-0 pt-4">
           <div>
             {step > 1 && (
               <Button variant="outline" onClick={handleBack} data-testid="button-back">

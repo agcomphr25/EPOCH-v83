@@ -5972,6 +5972,13 @@ export const purchaseReviewChecklistSubmissions = pgTable('purchase_review_check
   customerId: text('customer_id'),
   quoteId: text('quote_id'),
   
+  // Form data stored as JSON
+  formData: jsonb('form_data'),
+  
+  // Status and metadata
+  status: text('status').default('DRAFT'),
+  createdBy: text('created_by'),
+  
   // Section A - Customer Information
   existingCustomer: text('existing_customer'),
   significantChanges: text('significant_changes'),

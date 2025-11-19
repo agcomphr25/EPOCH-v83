@@ -105,19 +105,25 @@ export default function PurchaseReviewChecklist() {
   // Submit checklist mutation
   const submitChecklistMutation = useMutation({
     mutationFn: async ({ data, isUpdate, updateId }: { data: any; isUpdate: boolean; updateId?: string }) => {
+      console.log('🟡 Mutation function called');
       if (isUpdate && updateId) {
-        return await apiRequest(`/api/purchase-review-submissions/${updateId}`, {
+        const result = await apiRequest(`/api/purchase-review-submissions/${updateId}`, {
           method: 'PUT',
           body: JSON.stringify(data),
         });
+        console.log('🟡 PUT result:', result);
+        return result;
       } else {
-        return await apiRequest('/api/purchase-review-submissions', {
+        const result = await apiRequest('/api/purchase-review-submissions', {
           method: 'POST',
           body: JSON.stringify(data),
         });
+        console.log('🟡 POST result:', result);
+        return result;
       }
     },
     onSuccess: (data, variables) => {
+      console.log('🟢 onSuccess called!', data, variables);
       const action = variables.isUpdate ? 'updated' : 'saved';
       toast({
         title: 'Success',
@@ -125,8 +131,15 @@ export default function PurchaseReviewChecklist() {
       });
       // Invalidate queries to refresh submissions list
       queryClient.invalidateQueries({ queryKey: ['/api/purchase-review-submissions'] });
+      
+      // Update the submission ID if this was a new save
+      if (!variables.isUpdate && data?.id) {
+        console.log('🟢 Setting submission ID to:', data.id);
+        setSubmissionId(data.id);
+      }
     },
     onError: (error: Error) => {
+      console.log('🔴 onError called!', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to save checklist. Please try again.',
@@ -281,15 +294,20 @@ export default function PurchaseReviewChecklist() {
   }, []);
 
   // Load signature when formData changes and signature exists
+  // Track if signature has been loaded to prevent duplicates
+  const [signatureLoaded, setSignatureLoaded] = useState(false);
+  
   useEffect(() => {
-    if (formData.signature && signatureCanvasRef.current) {
+    if (formData.signature && signatureCanvasRef.current && !signatureLoaded) {
       try {
+        signatureCanvasRef.current.clear(); // Clear canvas before loading
         signatureCanvasRef.current.fromDataURL(formData.signature);
+        setSignatureLoaded(true); // Mark as loaded to prevent re-loading
       } catch (error) {
         console.error('Error loading signature:', error);
       }
     }
-  }, [formData.signature]);
+  }, [formData.signature, signatureLoaded]);
 
   // Calculate amount when quantity, unit price, tooling, or additional cost changes
   useEffect(() => {
@@ -397,6 +415,8 @@ export default function PurchaseReviewChecklist() {
   const clearSignature = () => {
     if (signatureCanvasRef.current) {
       signatureCanvasRef.current.clear();
+      setSignatureLoaded(false); // Allow signature to be reloaded if needed
+      setFormData((prev) => ({ ...prev, signature: '' })); // Clear signature data
     }
   };
 
@@ -409,6 +429,7 @@ export default function PurchaseReviewChecklist() {
   };
 
   const handleSave = async () => {
+    console.log('🔵 handleSave called');
     // Save signature if present
     let updatedFormData = { ...formData };
     if (signatureCanvasRef.current && !signatureCanvasRef.current.isEmpty()) {
@@ -425,11 +446,24 @@ export default function PurchaseReviewChecklist() {
       status: 'DRAFT' as const,
     };
 
-    submitChecklistMutation.mutate({
-      data: submissionData,
-      isUpdate: !!submissionId,
-      updateId: submissionId || undefined,
-    });
+    console.log('🔵 Saving submission:', submissionData);
+    console.log('🔵 Is update?', !!submissionId, 'ID:', submissionId);
+
+    try {
+      submitChecklistMutation.mutate({
+        data: submissionData,
+        isUpdate: !!submissionId,
+        updateId: submissionId || undefined,
+      });
+      console.log('🔵 Mutation called successfully');
+    } catch (error) {
+      console.error('🔴 Error calling mutation:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save form. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handlePrint = () => {
@@ -495,6 +529,15 @@ export default function PurchaseReviewChecklist() {
               {submitChecklistMutation.isPending ? 'Saving...' : 'Save Form'}
             </Button>
             <Button
+              onClick={() => window.location.href = '/purchase-review-submissions'}
+              variant="outline"
+              className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300"
+              data-testid="button-view-saved-forms"
+            >
+              <FileText className="h-4 w-4" />
+              View Saved Forms
+            </Button>
+            <Button
               onClick={handlePrint}
               variant="outline"
               className="flex items-center gap-2"
@@ -536,28 +579,42 @@ export default function PurchaseReviewChecklist() {
 
             <div className="space-y-2">
               <Label htmlFor="quoteId">Select Quote</Label>
-              <Select
-                value={formData.quoteId}
-                onValueChange={(value) => handleInputChange('quoteId', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a quote (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {quotes.length === 0 ? (
-                    <SelectItem value="none" disabled>
-                      No quotes available
-                    </SelectItem>
-                  ) : (
-                    quotes.map((quote) => (
-                      <SelectItem key={quote.id} value={quote.id}>
-                        {quote.quoteNumber} - {quote.customerName} 
-                        {quote.description && ` (${quote.description})`}
+              <div className="flex gap-2">
+                <Select
+                  value={formData.quoteId}
+                  onValueChange={(value) => handleInputChange('quoteId', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a quote (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {quotes.length === 0 ? (
+                      <SelectItem value="none" disabled>
+                        No quotes available
                       </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+                    ) : (
+                      quotes.map((quote) => (
+                        <SelectItem key={quote.id} value={quote.id}>
+                          {quote.quoteNumber} - {quote.customerName} 
+                          {quote.description && ` (${quote.description})`}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {formData.quoteId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(`/p2-quote-form?id=${formData.quoteId}`, '_blank')}
+                    data-testid="button-view-quote"
+                  >
+                    <FileText className="h-4 w-4 mr-1" />
+                    View Quote
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -1477,6 +1477,10 @@ export interface IStorage {
     attachmentId: number
   ): Promise<OrderAttachment | undefined>;
   createOrderAttachment(data: InsertOrderAttachment): Promise<OrderAttachment>;
+  updateOrderAttachment(
+    attachmentId: number,
+    data: Partial<InsertOrderAttachment>
+  ): Promise<OrderAttachment>;
   deleteOrderAttachment(attachmentId: number): Promise<void>;
 
   // Add methods for finalized orders
@@ -11761,6 +11765,18 @@ export class DatabaseStorage implements IStorage {
     const [attachment] = await db
       .insert(orderAttachments)
       .values(data)
+      .returning();
+    return attachment;
+  }
+
+  async updateOrderAttachment(
+    attachmentId: number,
+    data: Partial<InsertOrderAttachment>
+  ): Promise<OrderAttachment> {
+    const [attachment] = await db
+      .update(orderAttachments)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(orderAttachments.id, attachmentId))
       .returning();
     return attachment;
   }

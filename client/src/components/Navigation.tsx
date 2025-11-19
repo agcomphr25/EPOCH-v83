@@ -46,6 +46,7 @@ import {
   FileSpreadsheet,
   Search,
   Award,
+  Building2,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -493,6 +494,12 @@ export default function Navigation() {
       label: 'Finance Dashboard',
       icon: BarChart,
       description: 'Financial overview and KPIs',
+    },
+    {
+      path: '/finance/cost-centers',
+      label: 'Cost Centers',
+      icon: Building2,
+      description: 'Manage cost centers for expense tracking and budgeting',
     },
     // {
     //   path: '/payment-management',

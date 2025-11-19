@@ -39,6 +39,7 @@ import APJournalPage from './pages/APJournalPage';
 import ARJournalPage from './pages/ARJournalPage';
 import COGSReportPage from './pages/COGSReportPage';
 import FinanceDashboardPage from './pages/FinanceDashboardPage';
+import CostCenterManagement from './pages/CostCenterManagement';
 import MonthlyFulfilledReport from './pages/MonthlyFulfilledReport';
 import BulkPaymentPage from './pages/BulkPaymentPage';
 import EnhancedFormsPage from './pages/EnhancedFormsPage';
@@ -507,6 +508,10 @@ function App() {
                   <Route
                     path="/finance/dashboard"
                     component={FinanceDashboardPage}
+                  />
+                  <Route
+                    path="/finance/cost-centers"
+                    component={CostCenterManagement}
                   />
                   <Route
                     path="/finance/monthly-fulfilled"

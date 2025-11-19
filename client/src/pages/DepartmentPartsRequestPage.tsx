@@ -63,11 +63,18 @@ type User = {
   departmentId?: number;
 };
 
+type Department = {
+  id: number;
+  name: string;
+};
+
 export default function DepartmentPartsRequestPage() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('');
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null);
   const [requestForm, setRequestForm] = useState({
     quantity: '',
     urgency: 'MEDIUM',
@@ -79,16 +86,29 @@ export default function DepartmentPartsRequestPage() {
     queryKey: ['/api/auth/session'],
   });
 
-  // Get inventory items assigned to user's department
+  // Check if user is admin
+  const isAdmin = user?.username ? ['glennj', 'tasham', 'staciw'].includes(user.username.toLowerCase()) : false;
+
+  // Get all departments (for admin users)
+  const { data: departments = [] } = useQuery<Department[]>({
+    queryKey: ['/api/departments'],
+    enabled: isAdmin,
+  });
+
+  // Use selected department for admin, or user's department for regular users
+  const effectiveDepartment = isAdmin ? selectedDepartment : (user?.department || '');
+  const effectiveDepartmentId = isAdmin ? selectedDepartmentId : (user?.departmentId || null);
+
+  // Get inventory items assigned to department (or all items for admin)
   const { data: departmentItems = [], isLoading: itemsLoading } = useQuery<InventoryItem[]>({
-    queryKey: [`/api/inventory/items/department/${user?.department}`],
-    enabled: !!user?.department,
+    queryKey: [`/api/inventory/items/department/${effectiveDepartment || 'all'}`],
+    enabled: isAdmin ? true : !!user?.department,
   });
 
   // Get user's parts requests
   const { data: userRequests = [], isLoading: requestsLoading } = useQuery<PartsRequest[]>({
-    queryKey: [`/api/parts-requests/department/${user?.departmentId}`],
-    enabled: !!user?.departmentId,
+    queryKey: [`/api/parts-requests/department/${effectiveDepartmentId}`],
+    enabled: !!effectiveDepartmentId,
   });
 
   // Submit parts request mutation
@@ -109,12 +129,17 @@ export default function DepartmentPartsRequestPage() {
       });
     },
     onSuccess: () => {
+      // Invalidate the appropriate department's request list (handles both admin and regular users)
       queryClient.invalidateQueries({ 
-        queryKey: [`/api/parts-requests/department/${user?.departmentId}`] 
+        queryKey: [`/api/parts-requests/department/${effectiveDepartmentId}`] 
+      });
+      // Also invalidate the inventory list to refresh stock levels
+      queryClient.invalidateQueries({ 
+        queryKey: [`/api/inventory/items/department/${effectiveDepartment || 'all'}`] 
       });
       toast({
         title: 'Request Submitted',
-        description: 'Your parts request has been submitted for approval.',
+        description: `Your parts request has been submitted for approval${isAdmin ? ` for ${effectiveDepartment}` : ''}.`,
       });
       setIsRequestDialogOpen(false);
       setSelectedItem(null);
@@ -144,6 +169,16 @@ export default function DepartmentPartsRequestPage() {
       return;
     }
 
+    // Admin users must select a department
+    if (isAdmin && (!effectiveDepartment || !effectiveDepartmentId)) {
+      toast({
+        title: 'Missing Department',
+        description: 'Please select a department to request parts for.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const quantity = parseInt(requestForm.quantity);
     if (isNaN(quantity) || quantity <= 0) {
       toast({
@@ -161,8 +196,8 @@ export default function DepartmentPartsRequestPage() {
       quantity,
       urgency: requestForm.urgency,
       reason: requestForm.reason,
-      department: user.department || '',
-      departmentId: user.departmentId || 0,
+      department: effectiveDepartment,
+      departmentId: effectiveDepartmentId || 0,
     });
   };
 
@@ -222,7 +257,8 @@ export default function DepartmentPartsRequestPage() {
     );
   }
 
-  if (!user.department) {
+  // Regular users need a department assigned
+  if (!isAdmin && !user.department) {
     return (
       <div className="p-8">
         <Card>
@@ -240,16 +276,49 @@ export default function DepartmentPartsRequestPage() {
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Parts Request</h1>
         <p className="text-muted-foreground mt-1">
-          Browse parts assigned to {user.department} and submit requests
+          {isAdmin 
+            ? 'Admin view: Select a department to browse and request parts' 
+            : `Browse parts assigned to ${user.department} and submit requests`}
         </p>
+        
+        {/* Department Selector for Admin Users */}
+        {isAdmin && (
+          <div className="mt-4 max-w-md">
+            <Select
+              value={selectedDepartment}
+              onValueChange={(value) => {
+                setSelectedDepartment(value);
+                const dept = departments.find(d => d.name === value);
+                setSelectedDepartmentId(dept?.id || null);
+              }}
+            >
+              <SelectTrigger data-testid="select-department">
+                <SelectValue placeholder="Select a department..." />
+              </SelectTrigger>
+              <SelectContent>
+                {departments.map((dept) => (
+                  <SelectItem key={dept.id} value={dept.name}>
+                    {dept.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {/* Available Parts Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Available Parts for {user.department}</CardTitle>
+          <CardTitle>
+            {isAdmin 
+              ? (selectedDepartment ? `Available Parts for ${selectedDepartment}` : 'Available Parts (Select a Department)')
+              : `Available Parts for ${user.department}`}
+          </CardTitle>
           <CardDescription>
-            Parts assigned to your department. Click "Request" to submit a parts request.
+            {isAdmin 
+              ? (selectedDepartment ? `Parts for ${selectedDepartment}. Click "Request" to submit a parts request.` : 'Select a department above to view available parts.')
+              : 'Parts assigned to your department. Click "Request" to submit a parts request.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -264,13 +333,17 @@ export default function DepartmentPartsRequestPage() {
           </div>
 
           {/* Parts Table */}
-          {itemsLoading ? (
+          {isAdmin && !selectedDepartment ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Please select a department above to view available parts.</p>
+            </div>
+          ) : itemsLoading ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground">Loading parts...</p>
             </div>
           ) : filteredItems.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-muted-foreground">No parts found for your department.</p>
+              <p className="text-muted-foreground">No parts found{isAdmin ? ' for this department' : ' for your department'}.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">

@@ -633,7 +633,12 @@ router.delete('/consumption-rates/:id', async (req: Request, res: Response) => {
 router.get('/inventory/items/department/:departmentName', async (req: Request, res: Response) => {
   try {
     const departmentName = req.params.departmentName;
-    const items = await storage.getInventoryItemsByDepartment(departmentName);
+    const username = req.user?.username;
+    
+    // Admin users (glennj, tasham, staciw) can see all parts regardless of department
+    const isAdmin = username ? ['glennj', 'tasham', 'staciw'].includes(username.toLowerCase()) : false;
+    
+    const items = await storage.getInventoryItemsByDepartment(departmentName, isAdmin);
     res.json(items);
   } catch (error) {
     console.error('Get inventory items by department error:', error);

@@ -281,15 +281,20 @@ export default function PurchaseReviewChecklist() {
   }, []);
 
   // Load signature when formData changes and signature exists
+  // Track if signature has been loaded to prevent duplicates
+  const [signatureLoaded, setSignatureLoaded] = useState(false);
+  
   useEffect(() => {
-    if (formData.signature && signatureCanvasRef.current) {
+    if (formData.signature && signatureCanvasRef.current && !signatureLoaded) {
       try {
+        signatureCanvasRef.current.clear(); // Clear canvas before loading
         signatureCanvasRef.current.fromDataURL(formData.signature);
+        setSignatureLoaded(true); // Mark as loaded to prevent re-loading
       } catch (error) {
         console.error('Error loading signature:', error);
       }
     }
-  }, [formData.signature]);
+  }, [formData.signature, signatureLoaded]);
 
   // Calculate amount when quantity, unit price, tooling, or additional cost changes
   useEffect(() => {
@@ -397,6 +402,8 @@ export default function PurchaseReviewChecklist() {
   const clearSignature = () => {
     if (signatureCanvasRef.current) {
       signatureCanvasRef.current.clear();
+      setSignatureLoaded(false); // Allow signature to be reloaded if needed
+      setFormData((prev) => ({ ...prev, signature: '' })); // Clear signature data
     }
   };
 
@@ -536,28 +543,42 @@ export default function PurchaseReviewChecklist() {
 
             <div className="space-y-2">
               <Label htmlFor="quoteId">Select Quote</Label>
-              <Select
-                value={formData.quoteId}
-                onValueChange={(value) => handleInputChange('quoteId', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a quote (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {quotes.length === 0 ? (
-                    <SelectItem value="none" disabled>
-                      No quotes available
-                    </SelectItem>
-                  ) : (
-                    quotes.map((quote) => (
-                      <SelectItem key={quote.id} value={quote.id}>
-                        {quote.quoteNumber} - {quote.customerName} 
-                        {quote.description && ` (${quote.description})`}
+              <div className="flex gap-2">
+                <Select
+                  value={formData.quoteId}
+                  onValueChange={(value) => handleInputChange('quoteId', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a quote (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {quotes.length === 0 ? (
+                      <SelectItem value="none" disabled>
+                        No quotes available
                       </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+                    ) : (
+                      quotes.map((quote) => (
+                        <SelectItem key={quote.id} value={quote.id}>
+                          {quote.quoteNumber} - {quote.customerName} 
+                          {quote.description && ` (${quote.description})`}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {formData.quoteId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(`/p2-quote-form?id=${formData.quoteId}`, '_blank')}
+                    data-testid="button-view-quote"
+                  >
+                    <FileText className="h-4 w-4 mr-1" />
+                    View Quote
+                  </Button>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

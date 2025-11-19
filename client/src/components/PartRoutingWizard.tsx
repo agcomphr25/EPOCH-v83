@@ -584,7 +584,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   return (
     <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh]" data-testid="dialog-part-routing-wizard">
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col" data-testid="dialog-part-routing-wizard">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Route className="h-5 w-5" />
@@ -614,7 +614,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
           ))}
         </div>
 
-        <ScrollArea className="h-[400px] pr-4">
+        <ScrollArea className="flex-1 min-h-0 pr-4">
           {/* Step 1: Select Inventory Item */}
           {step === 1 && (
             <div className="space-y-4">

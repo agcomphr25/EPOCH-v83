@@ -381,9 +381,16 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     const updated = config.materials.map(material => {
       if (material.partId === partId) {
         const newMethod: 'manual' | 'barcode' = material.entryMethod === 'manual' ? 'barcode' : 'manual';
+        
+        // When switching to barcode scan, automatically enable all traceability fields
+        const requiredFields = newMethod === 'barcode'
+          ? TRACEABILITY_FIELDS.map(field => field.id)
+          : material.requiredFields;
+        
         return {
           ...material,
           entryMethod: newMethod,
+          requiredFields,
         };
       }
       return material;
@@ -814,17 +821,25 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                                     </div>
                                     
                                     {/* Traceability Fields */}
+                                    {material.entryMethod === 'barcode' && (
+                                      <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
+                                        <p className="text-xs text-blue-800 dark:text-blue-300">
+                                          ✓ All traceability information is automatically captured when using barcode scanning
+                                        </p>
+                                      </div>
+                                    )}
                                     <div className="grid grid-cols-2 gap-2">
                                       {TRACEABILITY_FIELDS.map((field) => (
                                         <div key={field.id} className="flex items-center space-x-2">
                                           <Checkbox
                                             id={`${dept}-${material.partId}-${field.id}`}
                                             checked={(material.requiredFields || []).includes(field.id)}
+                                            disabled={material.entryMethod === 'barcode'}
                                             onCheckedChange={() => toggleMaterialTraceability(dept, material.partId, field.id)}
                                           />
                                           <Label
                                             htmlFor={`${dept}-${material.partId}-${field.id}`}
-                                            className="text-xs cursor-pointer"
+                                            className={`text-xs ${material.entryMethod === 'barcode' ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                                           >
                                             {field.label}
                                           </Label>

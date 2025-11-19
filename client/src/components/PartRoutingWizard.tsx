@@ -404,7 +404,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
       ...departmentConfig,
       [dept]: {
         ...config,
-        assignedTechnicianId: technicianId === '' ? null : parseInt(technicianId),
+        assignedTechnicianId: technicianId === '' || technicianId === 'NONE' ? null : parseInt(technicianId),
       },
     });
   };
@@ -895,14 +895,14 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                               
                               return (
                                 <Select
-                                  value={config.assignedTechnicianId?.toString() || ''}
+                                  value={config.assignedTechnicianId?.toString() || 'NONE'}
                                   onValueChange={(val) => setAssignedTechnician(dept, val)}
                                 >
                                   <SelectTrigger data-testid={`select-technician-${dept}`}>
                                     <SelectValue placeholder="Select certified technician" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="">No technician assigned</SelectItem>
+                                    <SelectItem value="NONE">No technician assigned</SelectItem>
                                     {certifiedEmployees.map((emp) => (
                                       <SelectItem key={emp.id} value={emp.id.toString()}>
                                         {emp.name}

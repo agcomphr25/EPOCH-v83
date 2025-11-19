@@ -1,0 +1,14 @@
+A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+
+Stack trace:
+Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at https://cc8648ad-d47f-4012-b059-7bf6da5773ee-00-qdm6iz50bwiz.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=880458c9:878:13
+    at renderWithHooks (https://cc8648ad-d47f-4012-b059-7bf6da5773ee-00-qdm6iz50bwiz.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=880458c9:11548:26)
+    at updateForwardRef (https://cc8648ad-d47f-4012-b059-7bf6da5773ee-00-qdm6iz50bwiz.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=880458c9:14325:28)
+    at beginWork (https://cc8648ad-d47f-4012-b059-7bf6da5773ee-00-qdm6iz50bwiz.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=880458c9:15946:22)
+    at beginWork$1 (https://cc8648ad-d47f-4012-b059-7bf6da5773ee-00-qdm6iz50bwiz.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=880458c9:19753:22)
+    at performUnitOfWork (https://cc8648ad-d47f-4012-b059-7bf6da5773ee-00-qdm6iz50bwiz.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=880458c9:19198:20)
+    at workLoopSync (https://cc8648ad-d47f-4012-b059-7bf6da5773ee-00-qdm6iz50bwiz.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=880458c9:19137:13)
+    at renderRootSync (https://cc8648ad-d47f-4012-b059-7bf6da5773ee-00-qdm6iz50bwiz.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=880458c9:19116:15)
+    at performSyncWorkOnRoot (https://cc8648ad-d47f-4012-b059-7bf6da5773ee-00-qdm6iz50bwiz.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=880458c9:18874:28)
+    at flushSyncCallbacks (https://cc8648ad-d47f-4012-b059-7bf6da5773ee

@@ -680,6 +680,7 @@ export interface IStorage {
   deleteCapability(id: number): Promise<void>;
 
   getEmployeeCapabilities(employeeId: number): Promise<EmployeeCapability[]>;
+  getAllEmployeeCapabilities(): Promise<EmployeeCapability[]>;
   grantCapability(data: InsertEmployeeCapability): Promise<EmployeeCapability>;
   revokeCapability(id: number): Promise<void>;
   toggleHardcodedCapability(
@@ -4904,6 +4905,12 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(employeeCapabilities)
       .where(eq(employeeCapabilities.employeeId, employeeId));
+  }
+
+  async getAllEmployeeCapabilities(): Promise<EmployeeCapability[]> {
+    return await db
+      .select()
+      .from(employeeCapabilities);
   }
 
   async grantCapability(

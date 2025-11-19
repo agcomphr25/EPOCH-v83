@@ -16,6 +16,8 @@ import {
   p2EmployeePartCertifications,
   p2PurchaseOrderItems,
   inventoryItems,
+  capabilities,
+  employeeCapabilities,
   insertTrainingModuleSchema,
   insertTrainingQuestionSchema,
   insertTrainingQuestionOptionSchema,
@@ -41,6 +43,86 @@ import {
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
+
+// Helper function to grant P2 certification capability to employee
+async function grantP2CertificationCapability(
+  employeeId: number,
+  partNumber: string,
+  department: string
+) {
+  // Create capability name: P2_CERT_PARTNUMBER_DEPARTMENT
+  const capabilityName = `P2_CERT_${partNumber.replace(/[^a-zA-Z0-9]/g, '_')}_${department.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  const displayName = `P2 Certification: ${partNumber} - ${department}`;
+  
+  // Find or create capability
+  let [capability] = await db
+    .select()
+    .from(capabilities)
+    .where(eq(capabilities.name, capabilityName));
+  
+  if (!capability) {
+    [capability] = await db
+      .insert(capabilities)
+      .values({
+        name: capabilityName,
+        displayName: displayName,
+        category: 'P2_CERTIFICATION',
+        description: `Certified to work on ${partNumber} in ${department} department`,
+        isActive: true,
+      })
+      .returning();
+  }
+  
+  // Grant capability to employee if not already granted
+  const [existing] = await db
+    .select()
+    .from(employeeCapabilities)
+    .where(
+      and(
+        eq(employeeCapabilities.employeeId, employeeId),
+        eq(employeeCapabilities.capabilityId, capability.id)
+      )
+    );
+  
+  if (!existing) {
+    await db
+      .insert(employeeCapabilities)
+      .values({
+        employeeId,
+        capabilityId: capability.id,
+        grantedBy: 'system',
+        isHardcoded: false,
+        useHardcodedValue: true,
+      });
+  }
+  
+  return capability;
+}
+
+// Helper function to revoke P2 certification capability from employee
+async function revokeP2CertificationCapability(
+  employeeId: number,
+  partNumber: string,
+  department: string
+) {
+  const capabilityName = `P2_CERT_${partNumber.replace(/[^a-zA-Z0-9]/g, '_')}_${department.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  
+  const [capability] = await db
+    .select()
+    .from(capabilities)
+    .where(eq(capabilities.name, capabilityName));
+  
+  if (capability) {
+    await db
+      .delete(employeeCapabilities)
+      .where(
+        and(
+          eq(employeeCapabilities.employeeId, employeeId),
+          eq(employeeCapabilities.capabilityId, capability.id)
+        )
+      );
+  }
+}
 
 // Get all training modules
 router.get('/modules', async (req, res) => {
@@ -1310,6 +1392,15 @@ router.post('/p2-employee-certifications', async (req, res) => {
       } as InsertP2EmployeePartCertification)
       .returning();
 
+    // Grant P2 certification capability ONLY if all three checkboxes are true
+    if (certifiedDate) {
+      await grantP2CertificationCapability(
+        validatedData.employeeId,
+        validatedData.partNumber,
+        validatedData.department
+      );
+    }
+
     res.status(201).json(newCertification);
   } catch (error: any) {
     console.error('Error creating employee certification:', error);
@@ -1341,9 +1432,17 @@ router.patch('/p2-employee-certifications/:id', async (req, res) => {
     const specSheetUnderstanding = validatedData.specSheetUnderstanding ?? existing.specSheetUnderstanding;
     const procedureCompletion = validatedData.procedureCompletion ?? existing.procedureCompletion;
 
+    // Determine if part number or department changed
+    const partNumberChanged = validatedData.partNumber && validatedData.partNumber !== existing.partNumber;
+    const departmentChanged = validatedData.department && validatedData.department !== existing.department;
+
+    // Check if all checkboxes are now true
+    const wasFullyCertified = existing.drawingKnowledge && existing.specSheetUnderstanding && existing.procedureCompletion;
+    const isNowFullyCertified = drawingKnowledge && specSheetUnderstanding && procedureCompletion;
+
     // If all three checkboxes are true, set certified date
     const certifiedDate =
-      drawingKnowledge && specSheetUnderstanding && procedureCompletion
+      isNowFullyCertified
         ? (validatedData.certifiedDate ?? existing.certifiedDate ?? new Date())
         : null;
 
@@ -1356,6 +1455,43 @@ router.patch('/p2-employee-certifications/:id', async (req, res) => {
       })
       .where(eq(p2EmployeePartCertifications.id, certId))
       .returning();
+
+    // Handle capability changes based on state transitions
+    if (partNumberChanged || departmentChanged) {
+      // Revoke old capability (if it existed)
+      if (wasFullyCertified) {
+        await revokeP2CertificationCapability(
+          existing.employeeId,
+          existing.partNumber,
+          existing.department
+        );
+      }
+      // Grant new capability (if fully certified)
+      if (isNowFullyCertified) {
+        await grantP2CertificationCapability(
+          existing.employeeId,
+          validatedData.partNumber || existing.partNumber,
+          validatedData.department || existing.department
+        );
+      }
+    } else {
+      // Just checkbox state changed
+      if (!wasFullyCertified && isNowFullyCertified) {
+        // Grant capability when certification becomes complete
+        await grantP2CertificationCapability(
+          existing.employeeId,
+          existing.partNumber,
+          existing.department
+        );
+      } else if (wasFullyCertified && !isNowFullyCertified) {
+        // Revoke capability when certification becomes incomplete
+        await revokeP2CertificationCapability(
+          existing.employeeId,
+          existing.partNumber,
+          existing.department
+        );
+      }
+    }
 
     res.json(updatedCertification);
   } catch (error: any) {
@@ -1372,14 +1508,27 @@ router.delete('/p2-employee-certifications/:id', async (req, res) => {
   try {
     const certId = parseInt(req.params.id);
 
-    const [deleted] = await db
-      .delete(p2EmployeePartCertifications)
-      .where(eq(p2EmployeePartCertifications.id, certId))
-      .returning();
+    // Get certification data before deleting (to revoke capability)
+    const [existing] = await db
+      .select()
+      .from(p2EmployeePartCertifications)
+      .where(eq(p2EmployeePartCertifications.id, certId));
 
-    if (!deleted) {
+    if (!existing) {
       return res.status(404).json({ error: 'Employee certification not found' });
     }
+
+    // Revoke P2 certification capability from the employee
+    await revokeP2CertificationCapability(
+      existing.employeeId,
+      existing.partNumber,
+      existing.department
+    );
+
+    // Delete the certification
+    await db
+      .delete(p2EmployeePartCertifications)
+      .where(eq(p2EmployeePartCertifications.id, certId));
 
     res.json({ success: true });
   } catch (error: any) {

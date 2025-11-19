@@ -38,7 +38,7 @@ import {
   FileText,
   UserCheck,
 } from 'lucide-react';
-import type { Employee, P2EmployeePartCertification } from '../../../server/schema';
+import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
 const P2_DEPARTMENTS = [
   'Layup',
@@ -178,9 +178,15 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     enabled: open && step === 3,
   });
 
-  // Fetch employee certifications
-  const { data: employeeCertifications = [] } = useQuery<P2EmployeePartCertification[]>({
-    queryKey: ['/api/training/p2-employee-certifications'],
+  // Fetch all capabilities
+  const { data: capabilities = [] } = useQuery<Capability[]>({
+    queryKey: ['/api/employees/capabilities'],
+    enabled: open && step === 3,
+  });
+
+  // Fetch employee capabilities (junction table)
+  const { data: employeeCapabilities = [] } = useQuery<EmployeeCapability[]>({
+    queryKey: ['/api/employees/employee-capabilities/all'],
     enabled: open && step === 3,
   });
 
@@ -406,15 +412,22 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   const getCertifiedEmployees = (department: string): Employee[] => {
     if (!selectedItem?.agPartNumber) return [];
     
-    // Find certifications for this part and department
-    const certifiedEmployeeIds = employeeCertifications
-      .filter(cert => 
-        cert.partNumber === selectedItem.agPartNumber && 
-        cert.department === department
-      )
-      .map(cert => cert.employeeId);
+    // Create the capability name that would match this part and department
+    const partNumberNormalized = selectedItem.agPartNumber.replace(/[^a-zA-Z0-9]/g, '_');
+    const departmentNormalized = department.replace(/[^a-zA-Z0-9]/g, '_');
+    const capabilityName = `P2_CERT_${partNumberNormalized}_${departmentNormalized}`;
     
-    // Return employees who are certified
+    // Find the capability ID for this certification
+    const capability = capabilities.find(cap => cap.name === capabilityName);
+    
+    if (!capability) return [];
+    
+    // Find employees who have this capability
+    const certifiedEmployeeIds = employeeCapabilities
+      .filter(ec => ec.capabilityId === capability.id)
+      .map(ec => ec.employeeId);
+    
+    // Return employees who have the capability
     return employees.filter(emp => certifiedEmployeeIds.includes(emp.id));
   };
 

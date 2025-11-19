@@ -133,6 +133,10 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   const [ovenTemperatureInput, setOvenTemperatureInput] = useState<string>('');
   const [ovenTimeInput, setOvenTimeInput] = useState<string>('');
   
+  // UI state for special process dialog
+  const [showSpecialProcessDialog, setShowSpecialProcessDialog] = useState(false);
+  const [specialProcessDept, setSpecialProcessDept] = useState<string>('');
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -525,6 +529,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh]" data-testid="dialog-part-routing-wizard">
         <DialogHeader>
@@ -1004,28 +1009,40 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                                 </div>
                               </div>
 
-                              <Separator />
-
-                              {/* Special Process Section */}
-                              <div>
-                                <h4 className="font-semibold mb-3 flex items-center gap-2">
-                                  <FileText className="h-4 w-4" />
-                                  Special Process
-                                </h4>
-                                <p className="text-sm text-muted-foreground mb-3">
-                                  Add any special process instructions or requirements
-                                </p>
-                                <Textarea
-                                  data-testid="input-special-process"
-                                  placeholder="Enter special process details..."
-                                  value={config.specialProcess || ''}
-                                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateSpecialProcess(dept, e.target.value)}
-                                  rows={4}
-                                  className="resize-none"
-                                />
-                              </div>
                             </>
                           )}
+
+                          <Separator />
+
+                          {/* Special Process Section - Available for All Departments */}
+                          <div>
+                            <h4 className="font-semibold mb-3 flex items-center gap-2">
+                              <FileText className="h-4 w-4" />
+                              Special Process
+                            </h4>
+                            <p className="text-sm text-muted-foreground mb-3">
+                              Configure special process requirements for this department
+                            </p>
+                            <div className="space-y-2">
+                              {config.specialProcess && (
+                                <Card className="p-3 bg-muted/30">
+                                  <p className="text-sm whitespace-pre-wrap">{config.specialProcess}</p>
+                                </Card>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSpecialProcessDept(dept);
+                                  setShowSpecialProcessDialog(true);
+                                }}
+                                data-testid={`button-configure-special-process-${dept.toLowerCase().replace(/[\/\s]/g, '-')}`}
+                              >
+                                <FileText className="mr-2 h-4 w-4" />
+                                {config.specialProcess ? 'Edit Special Process' : 'Configure Special Process'}
+                              </Button>
+                            </div>
+                          </div>
                         </CardContent>
                       </Card>
                     );
@@ -1070,5 +1087,74 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+      {/* Special Process Configuration Dialog */}
+      <Dialog open={showSpecialProcessDialog} onOpenChange={setShowSpecialProcessDialog}>
+        <DialogContent className="max-w-2xl" data-testid="dialog-special-process">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Configure Special Process
+            </DialogTitle>
+            <DialogDescription>
+              Define special process requirements and instructions for this department
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="rounded-lg border p-4 bg-muted/30">
+              <p className="text-sm text-muted-foreground">
+                This section will be expanded with detailed special process configuration options.
+                For now, you can add general notes.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="special-process-notes">Special Process Notes</Label>
+              <Textarea
+                id="special-process-notes"
+                data-testid="input-special-process-notes"
+                placeholder="Enter special process details, requirements, and instructions..."
+                value={specialProcessDept ? (departmentConfig[specialProcessDept]?.specialProcess || '') : ''}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                  if (specialProcessDept) {
+                    updateSpecialProcess(specialProcessDept, e.target.value);
+                  }
+                }}
+                rows={6}
+                className="resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowSpecialProcessDialog(false);
+                setSpecialProcessDept('');
+              }}
+              data-testid="button-cancel-special-process"
+            >
+              Close
+            </Button>
+            <Button
+              onClick={() => {
+                setShowSpecialProcessDialog(false);
+                setSpecialProcessDept('');
+                toast({
+                  title: 'Special Process Saved',
+                  description: 'Special process configuration has been updated',
+                });
+              }}
+              data-testid="button-save-special-process"
+            >
+              <Check className="mr-2 h-4 w-4" />
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -514,10 +514,11 @@ router.get('/departments', async (req: Request, res: Response) => {
       .where(eq(orderDepartmentTypes.isActive, true))
       .orderBy(orderDepartmentTypes.sortOrder);
     
-    // Map to simple id/name format expected by frontend
+    // Map to include both name and displayName for frontend
     const simpleDepartments = departments.map(dept => ({
       id: dept.id,
-      name: dept.displayName
+      name: dept.name,
+      displayName: dept.displayName
     }));
     res.json(simpleDepartments);
   } catch (error) {

@@ -364,14 +364,10 @@ export default function P2QuoteForm() {
 
   // File upload handlers
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!savedQuoteId) {
-      toast({ title: 'Save Required', description: 'Please save the quote before uploading files.', variant: 'destructive' });
-      return;
-    }
-
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
+    // Validate PDF files only
     for (const file of Array.from(files)) {
       if (file.type !== 'application/pdf') {
         toast({ title: 'Invalid File Type', description: 'Only PDF files are allowed.', variant: 'destructive' });
@@ -380,29 +376,111 @@ export default function P2QuoteForm() {
     }
 
     setIsUploadingFile(true);
-    const formData = new FormData();
-    for (const file of Array.from(files)) {
-      formData.append('files', file);
-    }
 
     try {
-      const response = await fetch(`/api/quotes/${savedQuoteId}/attachments`, {
+      let quoteId = savedQuoteId;
+      let wasAutoSaved = false;
+
+      // Auto-save quote if not already saved
+      if (!quoteId) {
+        // Validate required fields before auto-saving
+        if (!customerName && !customerCompany) {
+          toast({
+            title: 'Missing Information',
+            description: 'Please enter customer information first before uploading files.',
+            variant: 'destructive',
+          });
+          setIsUploadingFile(false);
+          return;
+        }
+
+        if (lineItems.length === 0) {
+          toast({
+            title: 'Missing Information',
+            description: 'Please add at least one line item before uploading files.',
+            variant: 'destructive',
+          });
+          setIsUploadingFile(false);
+          return;
+        }
+
+        toast({
+          title: 'Auto-saving Quote',
+          description: 'Saving quote before uploading files...',
+        });
+
+        const quoteData = {
+          id: savedQuoteId,
+          rfqNumber: quoteNumber,
+          customerId: '',
+          customerName,
+          customerCompany,
+          fromName,
+          fromEmail,
+          fromPhone,
+          paymentTerms,
+          notes,
+          validityDays,
+          lineItems: lineItems.map(item => ({
+            lineNumber: item.lineNumber,
+            quantity: item.quantity,
+            description: item.description,
+            unitPrice: item.unitPrice,
+            totalPrice: item.totalPrice,
+            inventoryItemId: item.inventoryItemId || null,
+            agPartNumber: item.agPartNumber || null,
+          })),
+        };
+
+        const saveResponse = await apiRequest('/api/quotes/save', {
+          method: 'POST',
+          body: JSON.stringify(quoteData),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        // Update local state with saved quote info
+        quoteId = saveResponse.id;
+        setSavedQuoteId(saveResponse.id);
+        setQuoteNumber(saveResponse.quoteNumber);
+        setQuoteStatus(saveResponse.status);
+        wasAutoSaved = true;
+      }
+
+      // Now upload the files
+      const uploadFormData = new FormData();
+      for (const file of Array.from(files)) {
+        uploadFormData.append('files', file);
+      }
+
+      const response = await fetch(`/api/quotes/${quoteId}/attachments`, {
         method: 'POST',
-        body: formData,
+        body: uploadFormData,
       });
 
       if (!response.ok) throw new Error('Upload failed');
 
       const result = await response.json();
       setAttachments(result.attachments || []);
-      toast({ title: 'Success', description: 'Files uploaded successfully.' });
+      
+      toast({ 
+        title: 'Success', 
+        description: wasAutoSaved 
+          ? 'Quote saved and files uploaded successfully.' 
+          : 'Files uploaded successfully.' 
+      });
       
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     } catch (error) {
       console.error('Upload error:', error);
-      toast({ title: 'Upload Failed', description: 'Failed to upload files. Please try again.', variant: 'destructive' });
+      toast({ 
+        title: 'Upload Failed', 
+        description: error instanceof Error ? error.message : 'Failed to upload files. Please try again.', 
+        variant: 'destructive' 
+      });
     } finally {
       setIsUploadingFile(false);
     }
@@ -875,7 +953,7 @@ export default function P2QuoteForm() {
                 type="button"
                 variant="outline"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={!savedQuoteId || isUploadingFile}
+                disabled={isUploadingFile}
                 className="flex items-center gap-2"
                 data-testid="button-upload-pdf"
               >
@@ -883,7 +961,9 @@ export default function P2QuoteForm() {
                 {isUploadingFile ? 'Uploading...' : 'Upload PDF Files'}
               </Button>
               <p className="text-sm text-gray-500 mt-2">
-                {!savedQuoteId ? '⚠️ Save the quote first to upload files.' : 'Upload one or more PDF files (max 5 files, 10MB each).'}
+                {!savedQuoteId 
+                  ? 'Quote will be auto-saved when you upload files.' 
+                  : 'Upload one or more PDF files (max 5 files, 10MB each).'}
               </p>
             </div>
 

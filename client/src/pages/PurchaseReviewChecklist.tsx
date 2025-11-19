@@ -502,6 +502,15 @@ export default function PurchaseReviewChecklist() {
               {submitChecklistMutation.isPending ? 'Saving...' : 'Save Form'}
             </Button>
             <Button
+              onClick={() => window.location.href = '/purchase-review-submissions'}
+              variant="outline"
+              className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300"
+              data-testid="button-view-saved-forms"
+            >
+              <FileText className="h-4 w-4" />
+              View Saved Forms
+            </Button>
+            <Button
               onClick={handlePrint}
               variant="outline"
               className="flex items-center gap-2"

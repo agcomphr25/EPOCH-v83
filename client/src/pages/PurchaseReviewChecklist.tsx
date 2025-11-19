@@ -77,17 +77,19 @@ export default function PurchaseReviewChecklist() {
       })),
   });
 
-  // Fetch quotes for dropdown
+  // Fetch RFQ Risk Assessments for dropdown (submitted only)
   const { data: quotes = [] } = useQuery({
-    queryKey: ['/api/quotes'],
+    queryKey: ['/api/customers/rfq-assessments'],
     select: (data: any[]) =>
-      data.map((quote) => ({
-        id: quote.id,
-        quoteNumber: quote.quoteNumber,
-        customerName: quote.customerName,
-        description: quote.description,
-        totalAmount: quote.totalAmount,
-      })),
+      data
+        .filter((rfq: any) => rfq.status?.toLowerCase() === 'submitted')
+        .map((rfq: any) => ({
+          id: rfq.id,
+          quoteNumber: rfq.rfqNumber,
+          customerName: rfq.customerName,
+          description: rfq.projectDescription || '',
+          totalAmount: 0,
+        })),
   });
 
   // Fetch inventory items for Item # autocomplete

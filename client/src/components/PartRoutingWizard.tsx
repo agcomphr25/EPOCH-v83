@@ -25,6 +25,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Route,
   Package,
@@ -33,7 +34,11 @@ import {
   Check,
   X,
   GripVertical,
+  Flame,
+  FileText,
+  UserCheck,
 } from 'lucide-react';
+import type { Employee, EmployeeCapability, Capability } from '../../../server/schema';
 
 const P2_DEPARTMENTS = [
   'Layup',
@@ -45,11 +50,14 @@ const P2_DEPARTMENTS = [
 ] as const;
 
 const TRACEABILITY_FIELDS = [
-  { id: 'lotNumber', label: 'Lot Number', description: 'Track material lot/batch identifier' },
-  { id: 'batchNumber', label: 'Batch Number', description: 'Track production batch number' },
-  { id: 'expirationDate', label: 'Expiration Date', description: 'Track material expiration' },
-  { id: 'serialNumber', label: 'Serial Number', description: 'Track component serial number' },
-  { id: 'revision', label: 'Revision', description: 'Track part revision level' },
+  { id: 'internalControlNumber', label: 'Internal Control Number', description: 'Internal tracking control number' },
+  { id: 'supplier', label: 'Supplier', description: 'Material supplier name' },
+  { id: 'inventoryPartNumber', label: 'Inventory Part Number', description: 'Inventory part/item number' },
+  { id: 'supplierBatchLot', label: 'Supplier Batch/Lot/C#', description: 'Supplier batch, lot, or certificate number' },
+  { id: 'manufacturer', label: 'Manufacturer', description: 'Material manufacturer' },
+  { id: 'rollNumber', label: 'Roll Number', description: 'Material roll number' },
+  { id: 'expirationDate', label: 'Expiration Date', description: 'Material expiration date' },
+  { id: 'receivedDate', label: 'Received Date', description: 'Date material was received' },
 ] as const;
 
 interface InventoryItem {
@@ -73,10 +81,17 @@ interface QCStandard {
   requirement: string; // Specific requirement or specification
 }
 
+interface OvenCuringStep {
+  temperature: string; // Oven temperature (e.g., "350°F")
+  time: string; // Curing time (e.g., "2 hours")
+}
+
 interface DepartmentConfiguration {
   materials: MaterialRequirement[]; // Materials used in this department
-  technicianRequired: boolean; // Whether technician is required for this department
+  assignedTechnicianId: number | null; // Assigned technician (employee) for this department
   qcStandards: QCStandard[]; // QC standards with tolerance and requirements
+  ovenCuringSteps?: OvenCuringStep[]; // Oven curing steps (for Assembly/Disassembly)
+  specialProcess?: string; // Special process notes (for Assembly/Disassembly)
 }
 
 interface PartRouting {
@@ -119,6 +134,14 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   const [qcToleranceInput, setQcToleranceInput] = useState<string>('');
   const [qcRequirementInput, setQcRequirementInput] = useState<string>('');
   
+  // UI state for oven curing input
+  const [ovenTemperatureInput, setOvenTemperatureInput] = useState<string>('');
+  const [ovenTimeInput, setOvenTimeInput] = useState<string>('');
+  
+  // UI state for special process dialog
+  const [showSpecialProcessDialog, setShowSpecialProcessDialog] = useState(false);
+  const [specialProcessDept, setSpecialProcessDept] = useState<string>('');
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -134,7 +157,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
       if (!newConfig[dept]) {
         newConfig[dept] = {
           materials: [],
-          technicianRequired: false,
+          assignedTechnicianId: null,
           qcStandards: [],
         };
         hasChanges = true;
@@ -150,6 +173,24 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory'],
     enabled: open && (step === 1 || step === 3),
+  });
+
+  // Fetch employees for technician assignment
+  const { data: employees = [] } = useQuery<Employee[]>({
+    queryKey: ['/api/employees'],
+    enabled: open && step === 3,
+  });
+
+  // Fetch all capabilities
+  const { data: capabilities = [] } = useQuery<Capability[]>({
+    queryKey: ['/api/employees/capabilities'],
+    enabled: open && step === 3,
+  });
+
+  // Fetch employee capabilities (junction table)
+  const { data: employeeCapabilities = [] } = useQuery<EmployeeCapability[]>({
+    queryKey: ['/api/employees/employee-capabilities/all'],
+    enabled: open && step === 3,
   });
 
   // Filter inventory items by search
@@ -204,6 +245,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     setQcStandardInput('');
     setQcToleranceInput('');
     setQcRequirementInput('');
+    setOvenTemperatureInput('');
+    setOvenTimeInput('');
   };
 
   const handleClose = () => {
@@ -261,7 +304,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   const getOrCreateDeptConfig = (dept: string): DepartmentConfiguration => {
     return departmentConfig[dept] || {
       materials: [],
-      technicianRequired: false,
+      assignedTechnicianId: null,
       qcStandards: [],
     };
   };
@@ -340,9 +383,16 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     const updated = config.materials.map(material => {
       if (material.partId === partId) {
         const newMethod: 'manual' | 'barcode' = material.entryMethod === 'manual' ? 'barcode' : 'manual';
+        
+        // When switching to barcode scan, automatically enable all traceability fields
+        const requiredFields = newMethod === 'barcode'
+          ? TRACEABILITY_FIELDS.map(field => field.id)
+          : material.requiredFields;
+        
         return {
           ...material,
           entryMethod: newMethod,
+          requiredFields,
         };
       }
       return material;
@@ -357,15 +407,38 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     });
   };
 
-  const toggleTechnicianRequired = (dept: string) => {
+  const setAssignedTechnician = (dept: string, technicianId: string) => {
     const config = getOrCreateDeptConfig(dept);
     setDepartmentConfig({
       ...departmentConfig,
       [dept]: {
         ...config,
-        technicianRequired: !config.technicianRequired,
+        assignedTechnicianId: technicianId === '' || technicianId === 'NONE' ? null : parseInt(technicianId),
       },
     });
+  };
+
+  // Get certified employees for a specific department
+  const getCertifiedEmployees = (department: string): Employee[] => {
+    if (!selectedItem?.agPartNumber) return [];
+    
+    // Create the capability name that would match this part and department
+    const partNumberNormalized = selectedItem.agPartNumber.replace(/[^a-zA-Z0-9]/g, '_');
+    const departmentNormalized = department.replace(/[^a-zA-Z0-9]/g, '_');
+    const capabilityName = `P2_CERT_${partNumberNormalized}_${departmentNormalized}`;
+    
+    // Find the capability ID for this certification
+    const capability = capabilities.find(cap => cap.name === capabilityName);
+    
+    if (!capability) return [];
+    
+    // Find employees who have this capability
+    const certifiedEmployeeIds = employeeCapabilities
+      .filter(ec => ec.capabilityId === capability.id)
+      .map(ec => ec.employeeId);
+    
+    // Return employees who have the capability
+    return employees.filter(emp => certifiedEmployeeIds.includes(emp.id));
   };
 
   const addQcStandard = (dept: string) => {
@@ -415,6 +488,62 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     });
   };
 
+  const addOvenCuringStep = (dept: string) => {
+    if (!ovenTemperatureInput.trim() || !ovenTimeInput.trim()) {
+      toast({
+        title: 'Missing Fields',
+        description: 'Please fill in both temperature and time',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    const config = getOrCreateDeptConfig(dept);
+    const newStep: OvenCuringStep = {
+      temperature: ovenTemperatureInput.trim(),
+      time: ovenTimeInput.trim(),
+    };
+
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        ovenCuringSteps: [...(config.ovenCuringSteps || []), newStep],
+      },
+    });
+    
+    // Clear inputs
+    setOvenTemperatureInput('');
+    setOvenTimeInput('');
+    
+    toast({
+      title: 'Curing Step Added',
+      description: `${newStep.temperature} for ${newStep.time}`,
+    });
+  };
+
+  const removeOvenCuringStep = (dept: string, index: number) => {
+    const config = getOrCreateDeptConfig(dept);
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        ovenCuringSteps: config.ovenCuringSteps?.filter((_, i) => i !== index),
+      },
+    });
+  };
+
+  const updateSpecialProcess = (dept: string, value: string) => {
+    const config = getOrCreateDeptConfig(dept);
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        specialProcess: value,
+      },
+    });
+  };
+
   const toggleDepartment = (dept: string) => {
     if (selectedDepartments.includes(dept)) {
       setSelectedDepartments(selectedDepartments.filter(d => d !== dept));
@@ -430,7 +559,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
           ...departmentConfig,
           [dept]: {
             materials: [],
-            technicianRequired: false,
+            assignedTechnicianId: null,
             qcStandards: [],
           },
         });
@@ -453,6 +582,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh]" data-testid="dialog-part-routing-wizard">
         <DialogHeader>
@@ -693,17 +823,25 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                                     </div>
                                     
                                     {/* Traceability Fields */}
+                                    {material.entryMethod === 'barcode' && (
+                                      <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md">
+                                        <p className="text-xs text-blue-800 dark:text-blue-300">
+                                          ✓ All traceability information is automatically captured when using barcode scanning
+                                        </p>
+                                      </div>
+                                    )}
                                     <div className="grid grid-cols-2 gap-2">
                                       {TRACEABILITY_FIELDS.map((field) => (
                                         <div key={field.id} className="flex items-center space-x-2">
                                           <Checkbox
                                             id={`${dept}-${material.partId}-${field.id}`}
                                             checked={(material.requiredFields || []).includes(field.id)}
+                                            disabled={material.entryMethod === 'barcode'}
                                             onCheckedChange={() => toggleMaterialTraceability(dept, material.partId, field.id)}
                                           />
                                           <Label
                                             htmlFor={`${dept}-${material.partId}-${field.id}`}
-                                            className="text-xs cursor-pointer"
+                                            className={`text-xs ${material.entryMethod === 'barcode' ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                                           >
                                             {field.label}
                                           </Label>
@@ -749,16 +887,48 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
 
                           <Separator />
 
-                          {/* Technician Section */}
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h4 className="font-semibold">Technician Required</h4>
-                              <p className="text-sm text-muted-foreground">Require technician assignment for this department</p>
-                            </div>
-                            <Checkbox
-                              checked={config.technicianRequired}
-                              onCheckedChange={() => toggleTechnicianRequired(dept)}
-                            />
+                          {/* Technician Assignment Section */}
+                          <div>
+                            <h4 className="font-semibold mb-2 flex items-center gap-2">
+                              <UserCheck className="h-4 w-4" />
+                              Assigned Technician
+                            </h4>
+                            <p className="text-sm text-muted-foreground mb-3">
+                              Assign a certified technician for this part and department
+                            </p>
+                            {(() => {
+                              const certifiedEmployees = getCertifiedEmployees(dept);
+                              
+                              if (certifiedEmployees.length === 0) {
+                                return (
+                                  <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
+                                    <p className="text-sm text-amber-800 dark:text-amber-300">
+                                      ⚠️ No employees are certified for {selectedItem?.agPartNumber || 'this part'} in the {dept} department.
+                                      Please add certifications in the P2 Certifications Manager first.
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              
+                              return (
+                                <Select
+                                  value={config.assignedTechnicianId?.toString() || 'NONE'}
+                                  onValueChange={(val) => setAssignedTechnician(dept, val)}
+                                >
+                                  <SelectTrigger data-testid={`select-technician-${dept}`}>
+                                    <SelectValue placeholder="Select certified technician" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="NONE">No technician assigned</SelectItem>
+                                    {certifiedEmployees.map((emp) => (
+                                      <SelectItem key={emp.id} value={emp.id.toString()}>
+                                        {emp.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              );
+                            })()}
                           </div>
 
                           <Separator />
@@ -839,6 +1009,133 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                               </Button>
                             </div>
                           </div>
+
+                          {/* Oven Curing Section - Only for Assemble/Disassembly */}
+                          {dept === 'Assemble/Disassembly' && (
+                            <>
+                              <Separator />
+                              <div>
+                                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                                  <Flame className="h-4 w-4" />
+                                  Oven Curing Steps ({config.ovenCuringSteps?.length || 0})
+                                </h4>
+                                <p className="text-sm text-muted-foreground mb-3">
+                                  Add temperature ramp ups and downs for the curing process
+                                </p>
+                                
+                                {/* Display existing curing steps */}
+                                {config.ovenCuringSteps && config.ovenCuringSteps.length > 0 && (
+                                  <div className="space-y-2 mb-3">
+                                    {config.ovenCuringSteps.map((step, idx) => (
+                                      <Card key={idx} className="p-3">
+                                        <div className="flex items-start justify-between mb-2">
+                                          <div className="flex-1">
+                                            <p className="font-medium text-sm">Step {idx + 1}</p>
+                                          </div>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0"
+                                            onClick={() => removeOvenCuringStep(dept, idx)}
+                                            data-testid={`button-remove-curing-step-${idx}`}
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                          <div>
+                                            <span className="text-muted-foreground">Temperature:</span>
+                                            <p className="font-mono">{step.temperature}</p>
+                                          </div>
+                                          <div>
+                                            <span className="text-muted-foreground">Time:</span>
+                                            <p className="font-mono">{step.time}</p>
+                                          </div>
+                                        </div>
+                                      </Card>
+                                    ))}
+                                  </div>
+                                )}
+                                
+                                {/* Add new curing step */}
+                                <div className="space-y-2">
+                                  <div>
+                                    <Label htmlFor={`oven-temp-${dept}`}>Temperature</Label>
+                                    <Input
+                                      id={`oven-temp-${dept}`}
+                                      data-testid="input-oven-temperature"
+                                      placeholder="e.g., 350°F"
+                                      value={selectedDeptForConfig === dept ? ovenTemperatureInput : ''}
+                                      onChange={(e) => {
+                                        setSelectedDeptForConfig(dept);
+                                        setOvenTemperatureInput(e.target.value);
+                                      }}
+                                      onFocus={() => setSelectedDeptForConfig(dept)}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label htmlFor={`oven-time-${dept}`}>Time</Label>
+                                    <Input
+                                      id={`oven-time-${dept}`}
+                                      data-testid="input-oven-time"
+                                      placeholder="e.g., 2 hours"
+                                      value={selectedDeptForConfig === dept ? ovenTimeInput : ''}
+                                      onChange={(e) => {
+                                        setSelectedDeptForConfig(dept);
+                                        setOvenTimeInput(e.target.value);
+                                      }}
+                                      onFocus={() => setSelectedDeptForConfig(dept)}
+                                    />
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => addOvenCuringStep(dept)}
+                                    disabled={
+                                      !ovenTemperatureInput.trim() || 
+                                      !ovenTimeInput.trim() || 
+                                      selectedDeptForConfig !== dept
+                                    }
+                                    data-testid="button-add-curing-step"
+                                  >
+                                    Add Curing Step
+                                  </Button>
+                                </div>
+                              </div>
+
+                            </>
+                          )}
+
+                          <Separator />
+
+                          {/* Special Process Section - Available for All Departments */}
+                          <div>
+                            <h4 className="font-semibold mb-3 flex items-center gap-2">
+                              <FileText className="h-4 w-4" />
+                              Special Process
+                            </h4>
+                            <p className="text-sm text-muted-foreground mb-3">
+                              Configure special process requirements for this department
+                            </p>
+                            <div className="space-y-2">
+                              {config.specialProcess && (
+                                <Card className="p-3 bg-muted/30">
+                                  <p className="text-sm whitespace-pre-wrap">{config.specialProcess}</p>
+                                </Card>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSpecialProcessDept(dept);
+                                  setShowSpecialProcessDialog(true);
+                                }}
+                                data-testid={`button-configure-special-process-${dept.toLowerCase().replace(/[\/\s]/g, '-')}`}
+                              >
+                                <FileText className="mr-2 h-4 w-4" />
+                                {config.specialProcess ? 'Edit Special Process' : 'Configure Special Process'}
+                              </Button>
+                            </div>
+                          </div>
                         </CardContent>
                       </Card>
                     );
@@ -883,5 +1180,74 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+      {/* Special Process Configuration Dialog */}
+      <Dialog open={showSpecialProcessDialog} onOpenChange={setShowSpecialProcessDialog}>
+        <DialogContent className="max-w-2xl" data-testid="dialog-special-process">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Configure Special Process
+            </DialogTitle>
+            <DialogDescription>
+              Define special process requirements and instructions for this department
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="rounded-lg border p-4 bg-muted/30">
+              <p className="text-sm text-muted-foreground">
+                This section will be expanded with detailed special process configuration options.
+                For now, you can add general notes.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="special-process-notes">Special Process Notes</Label>
+              <Textarea
+                id="special-process-notes"
+                data-testid="input-special-process-notes"
+                placeholder="Enter special process details, requirements, and instructions..."
+                value={specialProcessDept ? (departmentConfig[specialProcessDept]?.specialProcess || '') : ''}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                  if (specialProcessDept) {
+                    updateSpecialProcess(specialProcessDept, e.target.value);
+                  }
+                }}
+                rows={6}
+                className="resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowSpecialProcessDialog(false);
+                setSpecialProcessDept('');
+              }}
+              data-testid="button-cancel-special-process"
+            >
+              Close
+            </Button>
+            <Button
+              onClick={() => {
+                setShowSpecialProcessDialog(false);
+                setSpecialProcessDept('');
+                toast({
+                  title: 'Special Process Saved',
+                  description: 'Special process configuration has been updated',
+                });
+              }}
+              data-testid="button-save-special-process"
+            >
+              <Check className="mr-2 h-4 w-4" />
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

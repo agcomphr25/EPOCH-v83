@@ -1128,4 +1128,15 @@ router.post(
   }
 );
 
+// Get all employee capabilities (for filtering certified employees)
+router.get('/employee-capabilities/all', async (req: Request, res: Response) => {
+  try {
+    const allEmployeeCapabilities = await storage.getAllEmployeeCapabilities();
+    res.json(allEmployeeCapabilities);
+  } catch (error) {
+    console.error('Get all employee capabilities error:', error);
+    res.status(500).json({ error: 'Failed to fetch all employee capabilities' });
+  }
+});
+
 export default router;

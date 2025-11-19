@@ -1238,7 +1238,11 @@ export default function EmployeeDetail() {
                     ) : (
                       <div className="space-y-3">
                         {employeeCapabilities.map(
-                          (empCap: EmployeeCapability) => (
+                          (empCap: any) => {
+                            if (!empCap.capability) {
+                              return null;
+                            }
+                            return (
                             <div
                               key={empCap.id}
                               className="border rounded-lg p-4 bg-white hover:bg-gray-50 transition-colors"
@@ -1293,7 +1297,8 @@ export default function EmployeeDetail() {
                                 </Button>
                               </div>
                             </div>
-                          )
+                          );
+                          }
                         )}
                       </div>
                     )}

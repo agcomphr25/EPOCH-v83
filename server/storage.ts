@@ -22,6 +22,7 @@ import {
   vendorScopeItems,
   vendorScopeGroups,
   partsRequests,
+  departments,
   employees,
   qcDefinitions,
   qcSubmissions,
@@ -159,6 +160,8 @@ import {
   type InsertFollowupOrder,
   type PartsRequest,
   type InsertPartsRequest,
+  type Department,
+  type InsertDepartment,
   type Employee,
   type InsertEmployee,
   // User authentication types
@@ -677,6 +680,7 @@ export interface IStorage {
   deleteCapability(id: number): Promise<void>;
 
   getEmployeeCapabilities(employeeId: number): Promise<EmployeeCapability[]>;
+  getAllEmployeeCapabilities(): Promise<EmployeeCapability[]>;
   grantCapability(data: InsertEmployeeCapability): Promise<EmployeeCapability>;
   revokeCapability(id: number): Promise<void>;
   toggleHardcodedCapability(
@@ -4896,11 +4900,31 @@ export class DatabaseStorage implements IStorage {
 
   async getEmployeeCapabilities(
     employeeId: number
-  ): Promise<EmployeeCapability[]> {
+  ): Promise<any[]> {
+    const results = await db
+      .select({
+        id: employeeCapabilities.id,
+        employeeId: employeeCapabilities.employeeId,
+        capabilityId: employeeCapabilities.capabilityId,
+        grantedBy: employeeCapabilities.grantedBy,
+        isHardcoded: employeeCapabilities.isHardcoded,
+        useHardcodedValue: employeeCapabilities.useHardcodedValue,
+        notes: employeeCapabilities.notes,
+        createdAt: employeeCapabilities.createdAt,
+        updatedAt: employeeCapabilities.updatedAt,
+        capability: capabilities,
+      })
+      .from(employeeCapabilities)
+      .leftJoin(capabilities, eq(employeeCapabilities.capabilityId, capabilities.id))
+      .where(eq(employeeCapabilities.employeeId, employeeId));
+    
+    return results;
+  }
+
+  async getAllEmployeeCapabilities(): Promise<EmployeeCapability[]> {
     return await db
       .select()
-      .from(employeeCapabilities)
-      .where(eq(employeeCapabilities.employeeId, employeeId));
+      .from(employeeCapabilities);
   }
 
   async grantCapability(

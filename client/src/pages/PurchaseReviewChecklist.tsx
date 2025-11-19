@@ -60,6 +60,7 @@ const useSmartyStreetsAutocomplete = (query: string) => {
 export default function PurchaseReviewChecklist() {
   // Signature canvas reference
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
+  const [canvasKey, setCanvasKey] = useState(0);
   const { toast } = useToast();
   const [location] = useLocation();
   const [submissionId, setSubmissionId] = useState<string | null>(null);
@@ -300,9 +301,14 @@ export default function PurchaseReviewChecklist() {
   useEffect(() => {
     if (formData.signature && signatureCanvasRef.current && !signatureLoaded) {
       try {
-        signatureCanvasRef.current.clear(); // Clear canvas before loading
-        signatureCanvasRef.current.fromDataURL(formData.signature);
-        setSignatureLoaded(true); // Mark as loaded to prevent re-loading
+        // Use setTimeout to ensure canvas is fully mounted
+        setTimeout(() => {
+          if (signatureCanvasRef.current) {
+            signatureCanvasRef.current.clear(); // Clear canvas before loading
+            signatureCanvasRef.current.fromDataURL(formData.signature);
+            setSignatureLoaded(true); // Mark as loaded to prevent re-loading
+          }
+        }, 100);
       } catch (error) {
         console.error('Error loading signature:', error);
       }
@@ -413,18 +419,21 @@ export default function PurchaseReviewChecklist() {
 
   // Clear signature
   const clearSignature = () => {
-    if (signatureCanvasRef.current) {
-      signatureCanvasRef.current.clear();
-      setSignatureLoaded(false); // Allow signature to be reloaded if needed
-      setFormData((prev) => ({ ...prev, signature: '' })); // Clear signature data
-    }
+    setSignatureLoaded(false); // Allow signature to be reloaded if needed
+    setFormData((prev) => ({ ...prev, signature: '' })); // Clear signature data
+    // Force canvas remount to fix any internal state issues
+    setCanvasKey(prev => prev + 1);
   };
 
   // Save signature as base64
   const saveSignature = () => {
     if (signatureCanvasRef.current) {
-      const signatureData = signatureCanvasRef.current.toDataURL();
-      setFormData((prev) => ({ ...prev, signature: signatureData }));
+      try {
+        const signatureData = signatureCanvasRef.current.toDataURL();
+        setFormData((prev) => ({ ...prev, signature: signatureData }));
+      } catch (error) {
+        console.error('Error saving signature:', error);
+      }
     }
   };
 
@@ -1929,6 +1938,7 @@ export default function PurchaseReviewChecklist() {
                 <Label>Digital Signature</Label>
                 <div className="border border-gray-300 rounded-md p-2">
                   <SignatureCanvas
+                    key={canvasKey}
                     ref={signatureCanvasRef}
                     penColor="black"
                     canvasProps={{
@@ -1937,13 +1947,24 @@ export default function PurchaseReviewChecklist() {
                       className: 'signature-canvas border rounded w-full',
                     }}
                     onEnd={saveSignature}
+                    onBegin={() => {
+                      // Initialize canvas data if needed
+                      if (signatureCanvasRef.current) {
+                        try {
+                          // Touch the canvas to ensure it's initialized
+                          signatureCanvasRef.current.getCanvas();
+                        } catch (e) {
+                          console.error('Canvas initialization error:', e);
+                        }
+                      }
+                    }}
                   />
                 </div>
                 <div className="flex gap-2 mt-2">
-                  <Button size="sm" variant="outline" onClick={clearSignature}>
+                  <Button size="sm" variant="outline" onClick={clearSignature} data-testid="button-clear-signature">
                     Clear
                   </Button>
-                  <Button size="sm" variant="outline" onClick={saveSignature}>
+                  <Button size="sm" variant="outline" onClick={saveSignature} data-testid="button-save-signature">
                     Save Signature
                   </Button>
                 </div>

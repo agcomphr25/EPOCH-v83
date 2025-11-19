@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearch } from 'wouter';
+import { useSearch, Link } from 'wouter';
 import {
   Card,
   CardContent,
@@ -30,6 +30,7 @@ import {
   Target,
   Clock,
   CheckCircle,
+  List,
 } from 'lucide-react';
 
 // Import enhanced inventory components
@@ -303,6 +304,32 @@ export default function EnhancedInventoryMRPPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Consolidated Needs Card */}
+          <Link href="/inventory/consolidated-needs">
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-emerald-500"
+              data-testid="card-consolidated-needs"
+            >
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <List className="h-5 w-5 text-emerald-600" />
+                  Consolidated Needs
+                </CardTitle>
+                <CardDescription>
+                  View all department parts requests in one place
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="text-2xl font-bold text-emerald-600">
+                    Parts Requests
+                  </div>
+                  <List className="h-4 w-4 text-gray-400" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
       </div>
 

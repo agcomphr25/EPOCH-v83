@@ -1,5 +1,5 @@
 {
-  "id": "7449a31b-801e-4cbf-8611-d640063db8cf",
+  "id": "435ab0f2-eb24-4820-b426-b87342aba375",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -10692,6 +10692,611 @@
           ]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.p2_serialized_item_events": {
+      "name": "p2_serialized_item_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "serialized_item_id": {
+          "name": "serialized_item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "barcode": {
+          "name": "barcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_department": {
+          "name": "from_department",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_department": {
+          "name": "to_department",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "from_stage_index": {
+          "name": "from_stage_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_stage_index": {
+          "name": "to_stage_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "performed_by": {
+          "name": "performed_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "p2_serialized_item_events_barcode_idx": {
+          "name": "p2_serialized_item_events_barcode_idx",
+          "columns": [
+            {
+              "expression": "barcode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "p2_serialized_item_events_item_id_idx": {
+          "name": "p2_serialized_item_events_item_id_idx",
+          "columns": [
+            {
+              "expression": "serialized_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "p2_serialized_item_events_serialized_item_id_p2_serialized_items_id_fk": {
+          "name": "p2_serialized_item_events_serialized_item_id_p2_serialized_items_id_fk",
+          "tableFrom": "p2_serialized_item_events",
+          "tableTo": "p2_serialized_items",
+          "columnsFrom": [
+            "serialized_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.p2_serialized_item_traceability": {
+      "name": "p2_serialized_item_traceability",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "serialized_item_id": {
+          "name": "serialized_item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "department": {
+          "name": "department",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inventory_part_id": {
+          "name": "inventory_part_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "inventory_part_number": {
+          "name": "inventory_part_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "traceability_type": {
+          "name": "traceability_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traceability_label": {
+          "name": "traceability_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traceability_value": {
+          "name": "traceability_value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_by": {
+          "name": "recorded_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "p2_serialized_item_traceability_item_id_idx": {
+          "name": "p2_serialized_item_traceability_item_id_idx",
+          "columns": [
+            {
+              "expression": "serialized_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "p2_serialized_item_traceability_department_idx": {
+          "name": "p2_serialized_item_traceability_department_idx",
+          "columns": [
+            {
+              "expression": "department",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "p2_serialized_item_traceability_serialized_item_id_p2_serialized_items_id_fk": {
+          "name": "p2_serialized_item_traceability_serialized_item_id_p2_serialized_items_id_fk",
+          "tableFrom": "p2_serialized_item_traceability",
+          "tableTo": "p2_serialized_items",
+          "columnsFrom": [
+            "serialized_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.p2_serialized_items": {
+      "name": "p2_serialized_items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "serial_number": {
+          "name": "serial_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "barcode": {
+          "name": "barcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "po_id": {
+          "name": "po_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "po_item_id": {
+          "name": "po_item_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "po_number": {
+          "name": "po_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "part_number": {
+          "name": "part_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "part_name": {
+          "name": "part_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "customer_name": {
+          "name": "customer_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sequence_number": {
+          "name": "sequence_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "current_department": {
+          "name": "current_department",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Layup'"
+        },
+        "current_stage_index": {
+          "name": "current_stage_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ACTIVE'"
+        },
+        "department_history": {
+          "name": "department_history",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'[]'"
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "layup_completed_at": {
+          "name": "layup_completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assemble_disassembly_completed_at": {
+          "name": "assemble_disassembly_completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cnc_completed_at": {
+          "name": "cnc_completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finish_completed_at": {
+          "name": "finish_completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "paint_completed_at": {
+          "name": "paint_completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "final_qc_completed_at": {
+          "name": "final_qc_completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hold_reason": {
+          "name": "hold_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hold_by": {
+          "name": "hold_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hold_at": {
+          "name": "hold_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scrap_reason": {
+          "name": "scrap_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scrap_by": {
+          "name": "scrap_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "scrap_at": {
+          "name": "scrap_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "p2_serialized_items_po_id_p2_purchase_orders_id_fk": {
+          "name": "p2_serialized_items_po_id_p2_purchase_orders_id_fk",
+          "tableFrom": "p2_serialized_items",
+          "tableTo": "p2_purchase_orders",
+          "columnsFrom": [
+            "po_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "p2_serialized_items_po_item_id_p2_purchase_order_items_id_fk": {
+          "name": "p2_serialized_items_po_item_id_p2_purchase_order_items_id_fk",
+          "tableFrom": "p2_serialized_items",
+          "tableTo": "p2_purchase_order_items",
+          "columnsFrom": [
+            "po_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "p2_serialized_items_serial_number_unique": {
+          "name": "p2_serialized_items_serial_number_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "serial_number"
+          ]
+        },
+        "p2_serialized_items_barcode_unique": {
+          "name": "p2_serialized_items_barcode_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "barcode"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.part_routings": {
+      "name": "part_routings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "inventory_item_id": {
+          "name": "inventory_item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "part_number": {
+          "name": "part_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "part_name": {
+          "name": "part_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "department_sequence": {
+          "name": "department_sequence",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "traceability_config": {
+          "name": "traceability_config",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "department_config": {
+          "name": "department_config",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "part_routings_inventory_item_idx": {
+          "name": "part_routings_inventory_item_idx",
+          "columns": [
+            {
+              "expression": "inventory_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

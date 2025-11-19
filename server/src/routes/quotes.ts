@@ -3,6 +3,7 @@ import { db } from '../../db';
 import { quotes, quoteLineItems, insertQuoteSchema, insertQuoteLineItemSchema } from '../../schema';
 import { eq, desc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import { randomUUID } from 'crypto';
 import { uploadMiddleware } from '../../utils/fileUpload';
 import path from 'path';
 import fs from 'fs';
@@ -107,7 +108,7 @@ router.post('/api/quotes/save', async (req: Request, res: Response) => {
     if (items.length > 0) {
       for (const item of items) {
         const validation = insertQuoteLineItemSchema.safeParse({
-          quoteId: id || nanoid(), // Temporary ID for validation
+          quoteId: id || randomUUID(), // Temporary UUID for validation
           lineNumber: parseInt(String(item.lineNumber || 0)),
           quantity: parseFloat(String(item.quantity || 1)),
           description: String(item.description || ''),

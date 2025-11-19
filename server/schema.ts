@@ -5929,6 +5929,41 @@ export const insertQuoteLineItemSchema = createInsertSchema(quoteLineItems).omit
 export type QuoteLineItem = typeof quoteLineItems.$inferSelect;
 export type InsertQuoteLineItem = z.infer<typeof insertQuoteLineItemSchema>;
 
+// Cost Centers - Track business units, departments, and projects for expense allocation
+export const costCenters = pgTable('cost_centers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  code: text('code').notNull().unique(), // Short identifier (e.g., LAYUP, ADMIN)
+  name: text('name').notNull(), // Full name (e.g., Layup Department)
+  type: text('type').notNull(), // DEPARTMENT, PROJECT, OVERHEAD, ADMINISTRATIVE
+  status: text('status').notNull().default('ACTIVE'), // ACTIVE, INACTIVE
+  annualBudget: real('annual_budget'), // Optional annual budget
+  monthlyBudget: real('monthly_budget'), // Optional monthly budget
+  managerId: integer('manager_id').references(() => employees.id), // Employee responsible
+  description: text('description'), // Notes about this cost center
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert Schema
+export const insertCostCenterSchema = createInsertSchema(costCenters).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  code: z.string().min(1, 'Code is required').max(20, 'Code must be 20 characters or less'),
+  name: z.string().min(1, 'Name is required'),
+  type: z.enum(['DEPARTMENT', 'PROJECT', 'OVERHEAD', 'ADMINISTRATIVE']),
+  status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
+  annualBudget: z.number().positive().optional().nullable(),
+  monthlyBudget: z.number().positive().optional().nullable(),
+  managerId: z.number().positive().optional().nullable(),
+  description: z.string().optional().nullable(),
+});
+
+// Types
+export type CostCenter = typeof costCenters.$inferSelect;
+export type InsertCostCenter = z.infer<typeof insertCostCenterSchema>;
+
 // Purchase Review Checklist Submissions
 export const purchaseReviewChecklistSubmissions = pgTable('purchase_review_checklist_submissions', {
   id: uuid('id').defaultRandom().primaryKey(),

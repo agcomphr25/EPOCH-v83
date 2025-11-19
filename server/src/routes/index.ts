@@ -67,6 +67,7 @@ import cuttingTableRoutes from './cuttingTable';
 import controlledDocumentsRoutes from './controlledDocuments';
 import adminRoutes from './admin';
 import quotesRoutes from './quotes';
+import costCentersRoutes from './costCenters';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -139,6 +140,9 @@ export function registerRoutes(app: Express): Server {
 
   // Quote management routes
   app.use(quotesRoutes);
+
+  // Cost Center management routes
+  app.use(costCentersRoutes);
 
   // PDFME SYSTEM COMMENTED OUT - NOT IN USE
   // PDF Templates routes

@@ -22,6 +22,7 @@ import {
   vendorScopeItems,
   vendorScopeGroups,
   partsRequests,
+  departments,
   employees,
   qcDefinitions,
   qcSubmissions,
@@ -159,6 +160,8 @@ import {
   type InsertFollowupOrder,
   type PartsRequest,
   type InsertPartsRequest,
+  type Department,
+  type InsertDepartment,
   type Employee,
   type InsertEmployee,
   // User authentication types

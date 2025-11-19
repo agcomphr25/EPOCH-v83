@@ -1134,18 +1134,6 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Quotes routes
-  app.get('/api/quotes', async (req, res) => {
-    try {
-      const { storage } = await import('../../storage');
-      const quotes = await storage.getAllQuotes();
-      res.json(quotes);
-    } catch (_error) {
-      console.error('Get quotes _error:', _error);
-      res.status(500).json({ _error: 'Failed to fetch quotes' });
-    }
-  });
-
   // Purchase Review Checklist Submissions routes
   app.get('/api/purchase-review-submissions', async (req, res) => {
     try {

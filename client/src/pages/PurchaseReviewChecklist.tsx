@@ -105,19 +105,25 @@ export default function PurchaseReviewChecklist() {
   // Submit checklist mutation
   const submitChecklistMutation = useMutation({
     mutationFn: async ({ data, isUpdate, updateId }: { data: any; isUpdate: boolean; updateId?: string }) => {
+      console.log('🟡 Mutation function called');
       if (isUpdate && updateId) {
-        return await apiRequest(`/api/purchase-review-submissions/${updateId}`, {
+        const result = await apiRequest(`/api/purchase-review-submissions/${updateId}`, {
           method: 'PUT',
           body: JSON.stringify(data),
         });
+        console.log('🟡 PUT result:', result);
+        return result;
       } else {
-        return await apiRequest('/api/purchase-review-submissions', {
+        const result = await apiRequest('/api/purchase-review-submissions', {
           method: 'POST',
           body: JSON.stringify(data),
         });
+        console.log('🟡 POST result:', result);
+        return result;
       }
     },
     onSuccess: (data, variables) => {
+      console.log('🟢 onSuccess called!', data, variables);
       const action = variables.isUpdate ? 'updated' : 'saved';
       toast({
         title: 'Success',
@@ -125,8 +131,15 @@ export default function PurchaseReviewChecklist() {
       });
       // Invalidate queries to refresh submissions list
       queryClient.invalidateQueries({ queryKey: ['/api/purchase-review-submissions'] });
+      
+      // Update the submission ID if this was a new save
+      if (!variables.isUpdate && data?.id) {
+        console.log('🟢 Setting submission ID to:', data.id);
+        setSubmissionId(data.id);
+      }
     },
     onError: (error: Error) => {
+      console.log('🔴 onError called!', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to save checklist. Please try again.',

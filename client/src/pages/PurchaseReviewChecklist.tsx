@@ -77,19 +77,17 @@ export default function PurchaseReviewChecklist() {
       })),
   });
 
-  // Fetch RFQ Risk Assessments for dropdown (submitted only)
+  // Fetch quotes for dropdown
   const { data: quotes = [] } = useQuery({
-    queryKey: ['/api/customers/rfq-assessments'],
+    queryKey: ['/api/quotes'],
     select: (data: any[]) =>
-      data
-        .filter((rfq: any) => rfq.status?.toLowerCase() === 'submitted')
-        .map((rfq: any) => ({
-          id: rfq.id,
-          quoteNumber: rfq.rfqNumber,
-          customerName: rfq.customerName,
-          description: rfq.projectDescription || '',
-          totalAmount: 0,
-        })),
+      data.map((quote) => ({
+        id: quote.id,
+        quoteNumber: quote.quoteNumber,
+        customerName: quote.customerName,
+        description: quote.description,
+        totalAmount: quote.totalAmount,
+      })),
   });
 
   // Fetch inventory items for Item # autocomplete
@@ -418,6 +416,7 @@ export default function PurchaseReviewChecklist() {
   };
 
   const handleSave = async () => {
+    console.log('🔵 handleSave called');
     // Save signature if present
     let updatedFormData = { ...formData };
     if (signatureCanvasRef.current && !signatureCanvasRef.current.isEmpty()) {
@@ -434,11 +433,24 @@ export default function PurchaseReviewChecklist() {
       status: 'DRAFT' as const,
     };
 
-    submitChecklistMutation.mutate({
-      data: submissionData,
-      isUpdate: !!submissionId,
-      updateId: submissionId || undefined,
-    });
+    console.log('🔵 Saving submission:', submissionData);
+    console.log('🔵 Is update?', !!submissionId, 'ID:', submissionId);
+
+    try {
+      submitChecklistMutation.mutate({
+        data: submissionData,
+        isUpdate: !!submissionId,
+        updateId: submissionId || undefined,
+      });
+      console.log('🔵 Mutation called successfully');
+    } catch (error) {
+      console.error('🔴 Error calling mutation:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save form. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handlePrint = () => {

@@ -3634,11 +3634,14 @@ export function registerRoutes(app: Express): Server {
           const customers = await storage.getAllCustomers();
           customer = customers.find(
             (c) =>
-              c.id.toString() === order.customerId ||
+              c.id.toString() === order.customerId.toString() ||
               c.name === order.customerId
           );
+          if (!customer) {
+            console.log(`⚠️ Customer not found for ID: ${order.customerId}`);
+          }
         } catch (_e) {
-          console.error('Error fetching customer:', e);
+          console.error('Error fetching customer:', _e);
         }
       }
 
@@ -3655,10 +3658,14 @@ export function registerRoutes(app: Express): Server {
           baseModel = stockModels.find(
             (sm) =>
               sm.id === stockModelId ||
+              sm.id.toString() === stockModelId.toString() ||
               sm.name === stockModelId
           );
+          if (!baseModel) {
+            console.log(`⚠️ Stock model not found for ID: ${stockModelId}`);
+          }
         } catch (_e) {
-          console.error('Error fetching stock model:', e);
+          console.error('Error fetching stock model:', _e);
         }
       }
 
@@ -3697,7 +3704,6 @@ export function registerRoutes(app: Express): Server {
           : {
               name:
                 poItemData?.customerName ||
-                order.customerId ||
                 (order as any).customerName ||
                 'Unknown Customer',
               email: '',
@@ -3712,9 +3718,10 @@ export function registerRoutes(app: Express): Server {
             }
           : {
               name:
-                (order as any).modelId ||
-                (order as any).itemId ||
+                poItemData?.itemName ||
+                poItemData?.stockModelId ||
                 (order as any).itemName ||
+                (order as any).modelName ||
                 'Unknown Model',
               id: (order as any).modelId || (order as any).itemId || '',
               price: 0,
@@ -3773,16 +3780,15 @@ export function registerRoutes(app: Express): Server {
         customerName:
           poItemData?.customerName ||
           customer?.name ||
-          order.customerId ||
           (order as any).customerName ||
           'Unknown Customer',
         stockModel:
           baseModel?.displayName ||
           baseModel?.name ||
+          poItemData?.itemName ||
+          (order as any).itemName ||
           poItemData?.stockModelId ||
-          (order as any).modelId ||
-          (order as any).itemId ||
-          (order as any).itemName,
+          'Unknown Model',
         color: color || 'Not specified',
         actionLength:
           poItemData?.actionLength ||
@@ -3800,9 +3806,8 @@ export function registerRoutes(app: Express): Server {
           model:
             baseModel?.displayName ||
             baseModel?.name ||
-            poItemData?.stockModelId ||
-            (order as any).modelId ||
-            (order as any).itemId ||
+            poItemData?.itemName ||
+            (order as any).itemName ||
             'Unknown Model',
           actionLength: poItemData?.actionLength || (order as any).features?.action_length
             ? (poItemData?.actionLength || (order as any).features.action_length)

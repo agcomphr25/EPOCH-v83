@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -94,6 +94,7 @@ export default function NonconformanceFormModal({
   const [loading, setLoading] = useState(false);
   const [orderQuery, setOrderQuery] = useState('');
   const [orderResults, setOrderResults] = useState<OrderLookup[]>([]);
+  const lastSelectedOrderIdRef = useRef<string | null>(null);
 
   const [form, setForm] = useState({
     orderId: '',
@@ -124,6 +125,12 @@ export default function NonconformanceFormModal({
   });
 
   const [orderAddress, setOrderAddress] = useState<any>(null);
+
+  // Wrapper for onClose that resets the ref
+  const handleClose = () => {
+    lastSelectedOrderIdRef.current = null;
+    onClose();
+  };
 
   // Fetch address for a given order ID
   const fetchOrderAddress = async (orderId: string): Promise<boolean> => {
@@ -183,6 +190,9 @@ export default function NonconformanceFormModal({
   // Load record for edit
   useEffect(() => {
     if (isEdit && recordToEdit) {
+      // Set the ref to the current orderId to prevent hydration from overwriting
+      lastSelectedOrderIdRef.current = recordToEdit.orderId || null;
+      
       setForm({
         orderId: recordToEdit.orderId || '',
         serialNumber: recordToEdit.serialNumber || '',
@@ -217,7 +227,11 @@ export default function NonconformanceFormModal({
       if (recordToEdit.useOrderAddress && recordToEdit.orderId) {
         fetchOrderAddress(recordToEdit.orderId);
       } else if (recordToEdit.repairAddress) {
-        // If has manual address but not using order address, it's already in the form state
+        // If has manual address but not using order address, sync it to orderAddress for display consistency
+        // This allows the UI to show the manual address even though useOrderAddress is false
+        setOrderAddress(recordToEdit.repairAddress);
+      } else {
+        // No address at all
         setOrderAddress(null);
       }
     }
@@ -273,6 +287,12 @@ export default function NonconformanceFormModal({
     console.log('Selected order data:', selectedOrder); // Debug log to see available fields
     const orderId = selectedOrder.orderId || selectedOrder.id || '';
     
+    // Guard against duplicate handler firing using ref (prevents Select hydration from overwriting state)
+    if (orderId && orderId === lastSelectedOrderIdRef.current) {
+      console.log('Skipping duplicate order selection for', orderId);
+      return;
+    }
+    
     // Use functional setForm to guard against stale closures
     setForm((prev) => {
       // Guard against re-running when orderId already matches
@@ -300,6 +320,9 @@ export default function NonconformanceFormModal({
         useOrderAddress: false, // Keep false until fetch succeeds
       };
     });
+    
+    // Track this order ID in the ref to prevent duplicate handler firing
+    lastSelectedOrderIdRef.current = orderId;
     
     setOrderQuery('');
     setOrderResults([]);
@@ -384,7 +407,7 @@ export default function NonconformanceFormModal({
       }
 
       onSaved();
-      onClose();
+      handleClose();
     } catch (error) {
       console.error('Save error:', error);
       toast({
@@ -398,7 +421,7 @@ export default function NonconformanceFormModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -884,7 +907,7 @@ export default function NonconformanceFormModal({
         </div>
 
         <div className="flex justify-end space-x-3 pt-4">
-          <Button variant="outline" onClick={onClose} disabled={loading}>
+          <Button variant="outline" onClick={handleClose} disabled={loading}>
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={loading}>

@@ -1,3 +1,65 @@
 Your branch and 'origin/main' have diverged,
 and have 2 and 9 different commits each, respectively.
   (use "git pull" if you want to integrate the remote branch with yours)
+[feature-20251120-1552-my-change 1e9b96f2] feat: my-change
+ 1 file changed, 3 insertions(+)
+ create mode 100644 push_log_20251120-155232.txt
+branch 'feature-20251120-1552-my-change' set up to track 'origin/feature-20251120-1552-my-change'.
+> 1e9b96f2 (HEAD -> feature-20251120-1552-my-change, origin/feature-20251120-1552-my-change) feat: my-change
+> 0e48ee83 (main) Saved progress at the end of the loop
+> 15cff235 Restored to '8e4f05d2b589cf4a856fc2041e1e32cc0404a33b'
+< e2ca4328 (repl-0ce1429f-ab65-4d48-bef3-611aab96e0df/main, repl-0ce1429f-ab65-4d48-bef3-611aab96e0df/HEAD, origin/main, origin/HEAD) Published your App
+< df8e2ebf Published your App
+< 7237d4ba Add order entry and all orders cards to the management section
+< d0263f6d Update user dashboard by removing specific cards and refining order management
+< 646950bc Published your App
+< f0514f71 Update dashboard title to AG Dashboard
+< 770f68cf Add a gateway reports card to the dashboard for users
+< ff0a7d7b Published your App
+< 982cafa2 Fix type errors in the gateway reports page
+ attached_assets/image_1763564511502.png            |   Bin 145158 -> 0 bytes
+ attached_assets/image_1763570704340.png            |   Bin 70241 -> 0 bytes
+ attached_assets/image_1763571698285.png            |   Bin 92614 -> 0 bytes
+ attached_assets/image_1763572604019.png            |   Bin 58900 -> 0 bytes
+ attached_assets/image_1763573417438.png            |   Bin 87150 -> 0 bytes
+ attached_assets/image_1763576011916.png            |   Bin 74791 -> 0 bytes
+ attached_assets/image_1763576795510.png            |   Bin 75232 -> 0 bytes
+ attached_assets/image_1763579858518.png            |   Bin 19104 -> 0 bytes
+ attached_assets/image_1763582547731.png            |   Bin 73207 -> 0 bytes
+ attached_assets/image_1763584197722.png            |   Bin 59477 -> 0 bytes
+ attached_assets/image_1763585727726.png            |   Bin 121234 -> 0 bytes
+ attached_assets/image_1763623328670.png            |   Bin 55561 -> 0 bytes
+ client/src/App.tsx                                 |     2 -
+ client/src/components/Navigation.tsx               |     7 -
+ client/src/components/OrderAttachments.tsx         |   119 +-
+ client/src/components/PartRoutingWizard.tsx        |   187 +-
+ .../src/components/inventory/VendorPOManager.tsx   |   236 -
+ .../src/components/inventory/VendorPOSettings.tsx  |   352 +-
+ client/src/config/userPermissions.ts               |     6 -
+ client/src/pages/AdminPanelPage.tsx                |    65 +-
+ client/src/pages/DARLENEBTestDashboard.tsx         |    75 -
+ client/src/pages/DepartmentPartsRequestPage.tsx    |     5 +-
+ client/src/pages/EnhancedInventoryMRPPage.tsx      |    29 +-
+ client/src/pages/GatewayReportsPage.tsx            |   384 -
+ client/src/pages/P2DepartmentManager.tsx           |   103 +-
+ client/src/pages/PurchaseReviewChecklist.tsx       |   154 +-
+ client/src/pages/PurchaseReviewSubmissions.tsx     |   252 +-
+ client/src/pages/VendorManagement.tsx              |   110 +-
+ migrations/0001_nostalgic_bucky.sql                |    28 +
+ migrations/meta/0001_snapshot.json                 | 17383 +++++++++++++++++++
+ migrations/meta/_journal.json                      |     7 +
+ push_log_20251119-171731.txt                       |    30 +
+ push_log_20251119-225927.txt                       |     3 -
+ push_log_20251120-075723.txt                       |     3 -
+ ...1119-173426.txt => push_log_20251120-155232.txt |     2 +-
+ server/schema.ts                                   |   135 +-
+ server/src/routes/customers.ts                     |    46 +
+ server/src/routes/gatewayReports.ts                |    51 -
+ server/src/routes/index.ts                         |    18 +-
+ server/src/routes/inventory.ts                     |     5 +-
+ server/src/routes/orderAttachments.ts              |    29 -
+ server/src/routes/rtsSales.ts                      |    15 +-
+ server/src/routes/vendorPOs.ts                     |   143 +-
+ server/storage.ts                                  |   111 +-
+ 44 files changed, 18119 insertions(+), 1976 deletions(-)
+Open PR: https://github.com/agcomphr25/EPOCH-v83/compare/feature-20251120-1552-my-change?expand=1

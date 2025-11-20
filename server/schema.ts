@@ -3290,13 +3290,13 @@ export const insertNonconformanceRecordSchema = createInsertSchema(
     status: z.enum(['Open', 'Resolved']).default('Open'),
     useOrderAddress: z.boolean().optional().default(false),
     repairAddress: z.object({
-      street: z.string().optional(),
-      street2: z.string().optional(),
-      city: z.string().optional(),
-      state: z.string().optional(),
-      zipCode: z.string().optional(),
-      country: z.string().optional(),
-    }).optional(),
+      street: z.string().optional().nullable(),
+      street2: z.string().optional().nullable(),
+      city: z.string().optional().nullable(),
+      state: z.string().optional().nullable(),
+      zipCode: z.string().optional().nullable(),
+      country: z.string().optional().nullable(),
+    }).optional().nullable(),
   });
 
 // Types for Module 8

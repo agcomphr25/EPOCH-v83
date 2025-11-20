@@ -4,7 +4,7 @@ export interface BarcodeInputState {
   barcode: string;
   scannedBarcode: string | null;
   isValidBarcode: boolean;
-  barcodeType: 'P1_ORDER' | 'P2_ORDER' | 'INVENTORY' | 'UNKNOWN' | null;
+  barcodeType: 'P1_ORDER' | 'P2_ORDER' | 'P1_PO' | 'P2_PO' | 'INVENTORY' | 'UNKNOWN' | null;
 }
 
 export interface BarcodeInputActions {
@@ -16,6 +16,8 @@ export interface BarcodeInputActions {
 
 // Barcode validation patterns
 const BARCODE_PATTERNS = {
+  P1_PO: /^P1-P\d+-\d+-\d+$/i,
+  P2_PO: /^P2-P\d+-\d+-\d+$/i,
   P1_ORDER: /^P1-[A-Z]{2}\d+$/i,
   P2_ORDER: /^P2-[A-Z]{2}\d+$/i,
   INVENTORY: /^(PART|INV)-\w+$/i,

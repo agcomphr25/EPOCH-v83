@@ -58,12 +58,16 @@ const authorizationOptions = [
 ];
 
 const repairDepartmentOptions = [
-  'Layup',
+  'P1 Production Queue',
+  'Layup/Plugging',
+  'Barcode',
   'CNC',
-  'Paint',
+  'Gunsmith',
+  'Finish',
   'Finish QC',
-  'Assembly',
-  'Hardware',
+  'Paint',
+  'Shipping QC',
+  'Shipping',
 ];
 
 interface OrderLookup {

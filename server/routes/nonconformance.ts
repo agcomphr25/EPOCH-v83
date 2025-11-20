@@ -132,11 +132,12 @@ router.post('/', async (req, res) => {
           .update(allOrders)
           .set({
             currentDepartment: newRecord.repairDepartment,
+            status: 'IN_PROGRESS', // Set status to IN_PROGRESS so order appears in department queue
             updatedAt: new Date(),
           })
           .where(eq(allOrders.orderId, newRecord.orderId));
         
-        console.log(`✅ Moved order ${newRecord.orderId} to ${newRecord.repairDepartment} department for nonconformance repair`);
+        console.log(`✅ Moved order ${newRecord.orderId} to ${newRecord.repairDepartment} department for nonconformance repair (status: IN_PROGRESS)`);
       } catch (error) {
         console.error(`⚠️ Failed to move order ${newRecord.orderId} to repair department:`, error);
         // Don't fail the whole request if department update fails

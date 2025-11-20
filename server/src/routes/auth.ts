@@ -189,6 +189,130 @@ function generateSessionToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
+// Badge login endpoint - employees log in with just their employee code
+router.post('/badge-login', async (req, res) => {
+  try {
+    const { employeeCode } = req.body;
+
+    if (!employeeCode) {
+      return res.status(400).json({ error: 'Employee code is required' });
+    }
+
+    // Look up employee by employee code
+    const employeeResult = await pool.query`
+      SELECT id, employee_code as "employeeCode", name, email, user_role as "userRole", is_active as "isActive"
+      FROM employees
+      WHERE employee_code = ${employeeCode}
+    `;
+
+    if (!employeeResult || employeeResult.length === 0) {
+      return res.status(401).json({ error: 'Invalid employee code' });
+    }
+
+    const employee = employeeResult[0];
+
+    // Check if employee is active
+    if (!employee.isActive) {
+      return res.status(401).json({ error: 'Employee account is inactive' });
+    }
+
+    // Look up employee's badge action configuration to determine redirect
+    const badgeActionResult = await pool.query`
+      SELECT action_type as "actionType", action_config as "actionConfig"
+      FROM employee_badge_actions
+      WHERE employee_id = ${employee.id}
+        AND is_active = true
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+
+    // Determine redirect URL based on badge action
+    let redirectUrl = '/dashboard'; // Default
+
+    if (badgeActionResult && badgeActionResult.length > 0) {
+      const badgeAction = badgeActionResult[0];
+      const actionType = badgeAction.actionType;
+      const actionConfig = badgeAction.actionConfig;
+
+      switch (actionType) {
+        case 'QUICK_NAVIGATION':
+          // Redirect to configured page
+          redirectUrl = actionConfig?.targetPage || '/dashboard';
+          break;
+        case 'P1_DEPARTMENT_PROGRESS':
+          // Redirect to badge scanner to scan orders for department progression
+          redirectUrl = '/badge-scanner';
+          break;
+        case 'P2_DEPARTMENT_PROGRESS':
+          // Redirect to P2 department manager
+          redirectUrl = '/p2-department-manager';
+          break;
+        case 'CLOCK_IN_OUT':
+          // Redirect to employee portal or badge scanner
+          redirectUrl = '/employee-portal';
+          break;
+        default:
+          redirectUrl = '/dashboard';
+      }
+    }
+
+    // Create a user session for the employee
+    const user = {
+      id: employee.id,
+      username: employee.employeeCode, // Use employee code as username
+      role: employee.userRole || 'EMPLOYEE',
+    };
+
+    // Generate session token
+    const sessionToken = generateSessionToken();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    // Store session in database
+    await pool.query`
+      INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active)
+      VALUES (${sessionToken}, ${user.id}, ${user.username}, ${expiresAt}, true)
+      ON CONFLICT (session_token) DO UPDATE
+      SET expires_at = ${expiresAt}, is_active = true
+    `;
+
+    console.log('✅ Badge login session created for employee:', employee.name);
+
+    // Set HTTP-only cookie
+    const isProduction =
+      process.env.NODE_ENV === 'production' ||
+      process.env.REPL_DEPLOYMENT === 'true' ||
+      process.env.REPLIT_DEPLOYMENT === 'true';
+
+    const cookieOptions = {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax' as const,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/',
+    };
+
+    res.cookie('sessionToken', sessionToken, cookieOptions);
+
+    res.json({
+      success: true,
+      sessionToken,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+      },
+      employee: {
+        name: employee.name,
+        email: employee.email,
+      },
+      redirectUrl, // Send redirect URL to frontend
+    });
+  } catch (error) {
+    console.error('Badge login error:', error);
+    res.status(500).json({ error: 'Badge login failed' });
+  }
+});
+
 // Login endpoint
 router.post('/login', async (req, res) => {
   try {

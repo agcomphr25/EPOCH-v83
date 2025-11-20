@@ -22,6 +22,36 @@ import {
 
 const router = Router();
 
+// Helper function to generate next employee code
+async function generateNextEmployeeCode(): Promise<string> {
+  try {
+    const result = await pool.query`
+      SELECT employee_code as "employeeCode"
+      FROM employees
+      WHERE employee_code ~ '^EMP[0-9]+$'
+      ORDER BY 
+        CAST(SUBSTRING(employee_code FROM 4) AS INTEGER) DESC
+      LIMIT 1
+    `;
+
+    // pool.query with tagged templates returns array directly
+    if (!result || result.length === 0) {
+      return 'EMP001';
+    }
+
+    const lastCode = result[0].employeeCode;
+    const lastNumber = parseInt(lastCode.substring(3));
+    const nextNumber = lastNumber + 1;
+    return `EMP${nextNumber.toString().padStart(3, '0')}`;
+  } catch (error) {
+    console.error('Error generating employee code:', error);
+    // Fallback: use full timestamp + random suffix to ensure uniqueness
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000);
+    return `EMP${timestamp}${random}`;
+  }
+}
+
 // Employee Management Routes
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -561,7 +591,13 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const employeeData = insertEmployeeSchema.parse(req.body);
+    let employeeData = insertEmployeeSchema.parse(req.body);
+    
+    // Auto-generate employee code if not provided
+    if (!employeeData.employeeCode) {
+      employeeData.employeeCode = await generateNextEmployeeCode();
+    }
+    
     const newEmployee = await storage.createEmployee(employeeData);
     res.status(201).json(newEmployee);
   } catch (error) {
@@ -576,7 +612,24 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const employeeId = parseInt(req.params.id);
-    const updates = req.body;
+    let updates = req.body;
+    
+    // Normalize employeeCode - trim whitespace
+    if (typeof updates.employeeCode === 'string') {
+      updates.employeeCode = updates.employeeCode.trim();
+    }
+    
+    // Auto-generate employee code if missing/empty and employee doesn't have one
+    if (!updates.employeeCode || updates.employeeCode === '') {
+      const currentEmployee = await storage.getEmployee(employeeId);
+      if (!currentEmployee?.employeeCode) {
+        updates.employeeCode = await generateNextEmployeeCode();
+      } else {
+        // Keep existing code if available
+        delete updates.employeeCode;
+      }
+    }
+    
     const updatedEmployee = await storage.updateEmployee(employeeId, updates);
     res.json(updatedEmployee);
   } catch (error) {

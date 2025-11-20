@@ -71,20 +71,16 @@ router.get('/', async (req, res) => {
     }
 
     // Apply conditions and build final query
-    let finalQuery = baseQuery
+    let query = baseQuery;
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+    
+    const result = await query
       .orderBy(desc(nonconformanceRecords.createdAt))
       .limit(parseInt(limit as string))
       .offset(parseInt(offset as string));
-
-    if (conditions.length > 0) {
-      finalQuery = baseQuery
-        .where(and(...conditions))
-        .orderBy(desc(nonconformanceRecords.createdAt))
-        .limit(parseInt(limit as string))
-        .offset(parseInt(offset as string));
-    }
-
-    const result = await finalQuery;
 
     res.json(result);
   } catch (error) {

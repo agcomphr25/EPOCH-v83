@@ -36,7 +36,7 @@ import paymentsRoutes from './payments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
 import layupScheduleRoutes from './layupSchedule';
-// import gatewayReportsRoutes from './gatewayReports'; // Temporarily removed
+import gatewayReportsRoutes from './gatewayReports';
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import p1POQueueRoutes from './p1POQueue';
@@ -209,8 +209,8 @@ export function registerRoutes(app: Express): Server {
   // Layup schedule management routes
   app.use('/api/layup-schedule', layupScheduleRoutes);
 
-  // Gateway reports routes - temporarily removed
-  // app.use('/api/gateway-reports', gatewayReportsRoutes);
+  // Gateway reports routes
+  app.use('/api/gateway-reports', gatewayReportsRoutes);
 
   // Customer satisfaction survey routes
   app.use('/api/customer-satisfaction', customerSatisfactionRoutes);

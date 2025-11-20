@@ -36,6 +36,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/inventory/consolidated-needs',
       '/customers',
       '/customer-management',
+      '/gateway-reports',
     ],
   },
 
@@ -220,6 +221,11 @@ function hasRoleBasedAccess(route: string, userRole?: string): boolean {
 
   // Admin Panel route requires ADMIN or OWNER role
   if (route === '/admin/orders' && (role === 'ADMIN' || role === 'OWNER')) {
+    return true;
+  }
+
+  // Gateway Reports route requires ADMIN or OWNER role
+  if (route === '/gateway-reports' && (role === 'ADMIN' || role === 'OWNER')) {
     return true;
   }
 

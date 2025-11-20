@@ -584,8 +584,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   return (
     <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col" data-testid="dialog-part-routing-wizard">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl h-[90vh] flex flex-col overflow-hidden" data-testid="dialog-part-routing-wizard">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Route className="h-5 w-5" />
             {editRouting ? 'Edit Part Routing' : 'Create Part Routing'}
@@ -595,7 +595,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center justify-center gap-2 py-4">
+        <div className="flex items-center justify-center gap-2 py-4 flex-shrink-0">
           {[1, 2, 3].map((s) => (
             <div key={s} className="flex items-center gap-2">
               <div
@@ -614,7 +614,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
           ))}
         </div>
 
-        <ScrollArea className="flex-1 min-h-0 pr-4">
+        <ScrollArea className="flex-1 overflow-auto pr-4">
           {/* Step 1: Select Inventory Item */}
           {step === 1 && (
             <div className="space-y-4">

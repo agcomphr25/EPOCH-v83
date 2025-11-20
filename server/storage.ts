@@ -12425,7 +12425,7 @@ export class DatabaseStorage implements IStorage {
 
   // Gateway Reports CRUD Methods Implementation
   async getGatewayReportByWeek(weekStartDate: string): Promise<GatewayReport | null> {
-    const report = await this.db
+    const report = await db
       .select()
       .from(gatewayReports)
       .where(eq(gatewayReports.weekStartDate, weekStartDate))
@@ -12435,7 +12435,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getGatewayReportsTrends(startDate: string, endDate: string): Promise<GatewayReport[]> {
-    const reports = await this.db
+    const reports = await db
       .select()
       .from(gatewayReports)
       .where(
@@ -12455,7 +12455,7 @@ export class DatabaseStorage implements IStorage {
     
     if (existing) {
       // Update existing report
-      const updated = await this.db
+      const updated = await db
         .update(gatewayReports)
         .set({ ...data, updatedAt: sql`NOW()` })
         .where(eq(gatewayReports.weekStartDate, data.weekStartDate))
@@ -12464,7 +12464,7 @@ export class DatabaseStorage implements IStorage {
       return updated[0];
     } else {
       // Create new report
-      const created = await this.db
+      const created = await db
         .insert(gatewayReports)
         .values(data)
         .returning();

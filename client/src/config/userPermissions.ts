@@ -223,6 +223,7 @@ function hasRoleBasedAccess(route: string, userRole?: string): boolean {
     return true;
   }
 
+
   // Gateway Reports route requires ADMIN or OWNER role
   if (route === '/gateway-reports' && (role === 'ADMIN' || role === 'OWNER')) {
     return true;

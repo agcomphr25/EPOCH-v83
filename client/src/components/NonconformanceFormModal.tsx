@@ -135,44 +135,29 @@ export default function NonconformanceFormModal({
   // Fetch address for a given order ID
   const fetchOrderAddress = async (orderId: string): Promise<boolean> => {
     try {
-      const orderDetailsResponse = await apiRequest(`/api/all-orders/${orderId}`);
-      if (orderDetailsResponse) {
-        let foundAddress = null;
-        
-        // Check if order has alt ship to address
-        if (orderDetailsResponse.hasAltShipTo && orderDetailsResponse.altShipToAddress) {
-          foundAddress = orderDetailsResponse.altShipToAddress;
-        } else if (orderDetailsResponse.shippingAddress) {
-          // Use order's shipping address if available
-          foundAddress = orderDetailsResponse.shippingAddress;
-        } else if (orderDetailsResponse.customerAddress) {
-          // Try customer address from order if available
-          foundAddress = orderDetailsResponse.customerAddress;
-        }
-
-        if (foundAddress) {
-          setOrderAddress(foundAddress);
-          return true;
-        } else {
-          // No address found, notify user and keep manual mode with preserved address
-          setOrderAddress(null);
-          // Don't clear repairAddress - preserve manual data
-          toast({
-            title: 'No Address Found',
-            description: 'No shipping address found for this order. Please enter a manual repair address.',
-            variant: 'default',
-          });
-          return false;
-        }
+      const response = await apiRequest(`/api/orders/${orderId}/customer-address`);
+      
+      if (response && response.address) {
+        setOrderAddress(response.address);
+        return true;
+      } else {
+        // No address found, notify user and keep manual mode with preserved address
+        setOrderAddress(null);
+        // Don't clear repairAddress - preserve manual data
+        toast({
+          title: 'No Address Found',
+          description: 'No default customer address found for this order. Please enter a manual repair address.',
+          variant: 'default',
+        });
+        return false;
       }
-      return false;
     } catch (error) {
       console.error('Error fetching order address:', error);
       setOrderAddress(null);
       // Don't clear repairAddress - preserve manual data
       toast({
         title: 'Error Fetching Address',
-        description: 'Could not retrieve address for this order. Please enter a manual repair address.',
+        description: 'Could not retrieve customer address for this order. Please enter a manual repair address.',
         variant: 'destructive',
       });
       return false;

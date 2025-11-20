@@ -7,6 +7,7 @@ import {
   nonconformanceRecords,
   insertNonconformanceRecordSchema,
   orders,
+  allOrders,
 } from '../schema';
 
 const router = Router();
@@ -123,6 +124,24 @@ router.post('/', async (req, res) => {
         updatedAt: new Date(),
       })
       .returning();
+
+    // If this is a Repair disposition with a repair department, move the order to that department
+    if (newRecord.disposition === 'Repair' && newRecord.repairDepartment && newRecord.orderId) {
+      try {
+        await db
+          .update(allOrders)
+          .set({
+            currentDepartment: newRecord.repairDepartment,
+            updatedAt: new Date(),
+          })
+          .where(eq(allOrders.orderId, newRecord.orderId));
+        
+        console.log(`✅ Moved order ${newRecord.orderId} to ${newRecord.repairDepartment} department for nonconformance repair`);
+      } catch (error) {
+        console.error(`⚠️ Failed to move order ${newRecord.orderId} to repair department:`, error);
+        // Don't fail the whole request if department update fails
+      }
+    }
 
     res.status(201).json(newRecord);
   } catch (error) {

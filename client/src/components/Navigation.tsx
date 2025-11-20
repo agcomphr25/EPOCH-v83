@@ -701,6 +701,13 @@ export default function Navigation() {
       icon: Package,
       description: 'Track metal accessories inventory and production demands',
     },
+    {
+      path: '/gateway-reports',
+      label: 'Gateway Reports',
+      icon: TrendingUp,
+      description: 'Production activity tracking and trends',
+      restrictedTo: ['agrace'], // Only agrace; admins have access via role check
+    },
   ];
 
   const productionSchedulingItems = [

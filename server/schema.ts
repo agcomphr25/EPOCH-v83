@@ -6133,4 +6133,54 @@ export const insertPurchaseReviewChecklistSubmissionSchema = createInsertSchema(
 export type PurchaseReviewChecklistSubmission = typeof purchaseReviewChecklistSubmissions.$inferSelect;
 export type InsertPurchaseReviewChecklistSubmission = z.infer<typeof insertPurchaseReviewChecklistSubmissionSchema>;
 
+// Gateway Reports - Production manager weekly tracking
+export const gatewayReports = pgTable('gateway_reports', {
+  id: serial('id').primaryKey(),
+  weekStartDate: date('week_start_date').notNull().unique(), // Monday of the week
+  
+  // Buttpads - Daily counts (Mon-Fri)
+  buttpadsMonday: integer('buttpads_monday').default(0),
+  buttpadsTuesday: integer('buttpads_tuesday').default(0),
+  buttpadsWednesday: integer('buttpads_wednesday').default(0),
+  buttpadsThursday: integer('buttpads_thursday').default(0),
+  buttpadsFriday: integer('buttpads_friday').default(0),
+  
+  // Sandblasting - Daily counts (Mon-Fri)
+  sandblastingMonday: integer('sandblasting_monday').default(0),
+  sandblastingTuesday: integer('sandblasting_tuesday').default(0),
+  sandblastingWednesday: integer('sandblasting_wednesday').default(0),
+  sandblastingThursday: integer('sandblasting_thursday').default(0),
+  sandblastingFriday: integer('sandblasting_friday').default(0),
+  
+  // Texture - Daily counts (Mon-Fri)
+  textureMonday: integer('texture_monday').default(0),
+  textureTuesday: integer('texture_tuesday').default(0),
+  textureWednesday: integer('texture_wednesday').default(0),
+  textureThursday: integer('texture_thursday').default(0),
+  textureFriday: integer('texture_friday').default(0),
+  
+  // Duratec - Daily counts (Mon-Fri)
+  duratecMonday: integer('duratec_monday').default(0),
+  duratecTuesday: integer('duratec_tuesday').default(0),
+  duratecWednesday: integer('duratec_wednesday').default(0),
+  duratecThursday: integer('duratec_thursday').default(0),
+  duratecFriday: integer('duratec_friday').default(0),
+  
+  // Metadata
+  submittedBy: text('submitted_by'), // Username who entered/last updated the data
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert Schema
+export const insertGatewayReportSchema = createInsertSchema(gatewayReports).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types
+export type GatewayReport = typeof gatewayReports.$inferSelect;
+export type InsertGatewayReport = z.infer<typeof insertGatewayReportSchema>;
+
 export * from './calendar.schema';

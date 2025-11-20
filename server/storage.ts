@@ -92,7 +92,8 @@ import {
   allOrders,
   // Order attachments table
   orderAttachments,
-  // Gateway reports table - temporarily removed
+  // Gateway reports table
+  gatewayReports,
   // PO Products table
   poProducts,
   // Refund requests table
@@ -277,7 +278,9 @@ import {
   // Order attachment types
   type OrderAttachment,
   type InsertOrderAttachment,
-  // Gateway reports types - temporarily removed
+  // Gateway reports types
+  type GatewayReport,
+  type InsertGatewayReport,
   // PO Products types
   type POProduct,
   type InsertPOProduct,
@@ -1497,7 +1500,10 @@ export interface IStorage {
   // Department-based order methods
   getOrdersByDepartment(department: string): Promise<any[]>;
 
-  // Gateway Reports CRUD Methods - temporarily removed
+  // Gateway Reports CRUD Methods
+  getGatewayReportByWeek(weekStartDate: string): Promise<GatewayReport | null>;
+  getGatewayReportsTrends(startDate: string, endDate: string): Promise<GatewayReport[]>;
+  createOrUpdateGatewayReport(data: InsertGatewayReport): Promise<GatewayReport>;
 
   // PO Products CRUD Methods
   getAllPOProducts(): Promise<POProduct[]>;
@@ -12417,7 +12423,55 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Gateway Reports CRUD Methods Implementation - temporarily removed
+  // Gateway Reports CRUD Methods Implementation
+  async getGatewayReportByWeek(weekStartDate: string): Promise<GatewayReport | null> {
+    const report = await this.db
+      .select()
+      .from(gatewayReports)
+      .where(eq(gatewayReports.weekStartDate, weekStartDate))
+      .limit(1);
+    
+    return report[0] || null;
+  }
+
+  async getGatewayReportsTrends(startDate: string, endDate: string): Promise<GatewayReport[]> {
+    const reports = await this.db
+      .select()
+      .from(gatewayReports)
+      .where(
+        and(
+          gte(gatewayReports.weekStartDate, startDate),
+          lte(gatewayReports.weekStartDate, endDate)
+        )
+      )
+      .orderBy(asc(gatewayReports.weekStartDate));
+    
+    return reports;
+  }
+
+  async createOrUpdateGatewayReport(data: InsertGatewayReport): Promise<GatewayReport> {
+    // Check if report for this week already exists
+    const existing = await this.getGatewayReportByWeek(data.weekStartDate);
+    
+    if (existing) {
+      // Update existing report
+      const updated = await this.db
+        .update(gatewayReports)
+        .set({ ...data, updatedAt: sql`NOW()` })
+        .where(eq(gatewayReports.weekStartDate, data.weekStartDate))
+        .returning();
+      
+      return updated[0];
+    } else {
+      // Create new report
+      const created = await this.db
+        .insert(gatewayReports)
+        .values(data)
+        .returning();
+      
+      return created[0];
+    }
+  }
 
   // PO Products CRUD Methods
   async getAllPOProducts(): Promise<POProduct[]> {

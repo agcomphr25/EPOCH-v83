@@ -42,7 +42,7 @@ import type { Employee, EmployeeCapability, Capability } from '../../../server/s
 
 const P2_DEPARTMENTS = [
   'Layup',
-  'Assembly/Disassembly',
+  'Assemble/Disassembly',
   'CNC',
   'Finish',
   'Paint',
@@ -86,12 +86,19 @@ interface OvenCuringStep {
   time: string; // Curing time (e.g., "2 hours")
 }
 
+interface CustomDataField {
+  fieldName: string; // Display name (e.g., "Temperature", "Mold Number")
+  fieldType: 'text' | 'number' | 'date' | 'textarea'; // Type of input field
+  isRequired: boolean; // Whether the field is required
+}
+
 interface DepartmentConfiguration {
   materials: MaterialRequirement[]; // Materials used in this department
   assignedTechnicianId: number | null; // Assigned technician (employee) for this department
   qcStandards: QCStandard[]; // QC standards with tolerance and requirements
   ovenCuringSteps?: OvenCuringStep[]; // Oven curing steps (for Assembly/Disassembly)
   specialProcess?: string; // Special process notes (for Assembly/Disassembly)
+  customDataFields?: CustomDataField[]; // Custom data entry fields for technicians to fill in
 }
 
 interface PartRouting {
@@ -141,6 +148,11 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   // UI state for special process dialog
   const [showSpecialProcessDialog, setShowSpecialProcessDialog] = useState(false);
   const [specialProcessDept, setSpecialProcessDept] = useState<string>('');
+  
+  // UI state for custom data fields input
+  const [customFieldName, setCustomFieldName] = useState<string>('');
+  const [customFieldType, setCustomFieldType] = useState<'text' | 'number' | 'date' | 'textarea'>('text');
+  const [customFieldRequired, setCustomFieldRequired] = useState<boolean>(false);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -247,6 +259,9 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     setQcRequirementInput('');
     setOvenTemperatureInput('');
     setOvenTimeInput('');
+    setCustomFieldName('');
+    setCustomFieldType('text');
+    setCustomFieldRequired(false);
   };
 
   const handleClose = () => {
@@ -544,6 +559,53 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     });
   };
 
+  const addCustomDataField = (dept: string) => {
+    if (!customFieldName.trim()) {
+      toast({
+        title: 'Missing Field Name',
+        description: 'Please enter a field name',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    const config = getOrCreateDeptConfig(dept);
+    const newField: CustomDataField = {
+      fieldName: customFieldName.trim(),
+      fieldType: customFieldType,
+      isRequired: customFieldRequired,
+    };
+
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        customDataFields: [...(config.customDataFields || []), newField],
+      },
+    });
+    
+    // Clear inputs
+    setCustomFieldName('');
+    setCustomFieldType('text');
+    setCustomFieldRequired(false);
+    
+    toast({
+      title: 'Custom Field Added',
+      description: `"${newField.fieldName}" added to ${dept}`,
+    });
+  };
+
+  const removeCustomDataField = (dept: string, index: number) => {
+    const config = getOrCreateDeptConfig(dept);
+    setDepartmentConfig({
+      ...departmentConfig,
+      [dept]: {
+        ...config,
+        customDataFields: config.customDataFields?.filter((_, i) => i !== index),
+      },
+    });
+  };
+
   const toggleDepartment = (dept: string) => {
     if (selectedDepartments.includes(dept)) {
       setSelectedDepartments(selectedDepartments.filter(d => d !== dept));
@@ -584,8 +646,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   return (
     <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-4xl h-[90vh] flex flex-col overflow-hidden" data-testid="dialog-part-routing-wizard">
-        <DialogHeader className="flex-shrink-0">
+      <DialogContent className="max-w-4xl max-h-[90vh]" data-testid="dialog-part-routing-wizard">
+        <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Route className="h-5 w-5" />
             {editRouting ? 'Edit Part Routing' : 'Create Part Routing'}
@@ -595,7 +657,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center justify-center gap-2 py-4 flex-shrink-0">
+        <div className="flex items-center justify-center gap-2 py-4">
           {[1, 2, 3].map((s) => (
             <div key={s} className="flex items-center gap-2">
               <div
@@ -614,7 +676,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
           ))}
         </div>
 
-        <ScrollArea className="flex-1 overflow-auto pr-4">
+        <ScrollArea className="h-[400px] pr-4">
           {/* Step 1: Select Inventory Item */}
           {step === 1 && (
             <div className="space-y-4">
@@ -1010,8 +1072,8 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                             </div>
                           </div>
 
-                          {/* Oven Curing Section - Only for Assembly/Disassembly */}
-                          {dept === 'Assembly/Disassembly' && (
+                          {/* Oven Curing Section - Only for Assemble/Disassembly */}
+                          {dept === 'Assemble/Disassembly' && (
                             <>
                               <Separator />
                               <div>
@@ -1107,6 +1169,113 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
 
                           <Separator />
 
+                          {/* Custom Data Fields Section - Available for All Departments */}
+                          <div>
+                            <h4 className="font-semibold mb-3">Custom Data Entry Fields ({config.customDataFields?.length || 0})</h4>
+                            <p className="text-sm text-muted-foreground mb-3">
+                              Define custom fields that technicians will fill in when processing parts through this department
+                            </p>
+                            
+                            {/* Display existing custom fields */}
+                            {config.customDataFields && config.customDataFields.length > 0 && (
+                              <div className="space-y-2 mb-3">
+                                {config.customDataFields.map((field, idx) => (
+                                  <Card key={idx} className="p-3">
+                                    <div className="flex items-start justify-between mb-2">
+                                      <div className="flex-1">
+                                        <p className="font-medium text-sm">{field.fieldName}</p>
+                                        <div className="flex gap-2 items-center mt-1">
+                                          <Badge variant="outline" className="text-xs">
+                                            {field.fieldType}
+                                          </Badge>
+                                          {field.isRequired && (
+                                            <Badge variant="secondary" className="text-xs">
+                                              Required
+                                            </Badge>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0"
+                                        onClick={() => removeCustomDataField(dept, idx)}
+                                        data-testid={`button-remove-custom-field-${idx}`}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </Card>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {/* Add new custom field */}
+                            <div className="space-y-2">
+                              <div>
+                                <Label htmlFor={`custom-field-name-${dept}`}>Field Name</Label>
+                                <Input
+                                  id={`custom-field-name-${dept}`}
+                                  data-testid="input-custom-field-name"
+                                  placeholder="e.g., Temperature, Mold Number, Humidity"
+                                  value={selectedDeptForConfig === dept ? customFieldName : ''}
+                                  onChange={(e) => {
+                                    setSelectedDeptForConfig(dept);
+                                    setCustomFieldName(e.target.value);
+                                  }}
+                                  onFocus={() => setSelectedDeptForConfig(dept)}
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor={`custom-field-type-${dept}`}>Field Type</Label>
+                                <Select
+                                  value={selectedDeptForConfig === dept ? customFieldType : 'text'}
+                                  onValueChange={(val: 'text' | 'number' | 'date' | 'textarea') => {
+                                    setSelectedDeptForConfig(dept);
+                                    setCustomFieldType(val);
+                                  }}
+                                >
+                                  <SelectTrigger id={`custom-field-type-${dept}`} data-testid="select-custom-field-type">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="text">Text</SelectItem>
+                                    <SelectItem value="number">Number</SelectItem>
+                                    <SelectItem value="date">Date</SelectItem>
+                                    <SelectItem value="textarea">Text Area</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`custom-field-required-${dept}`}
+                                  checked={selectedDeptForConfig === dept ? customFieldRequired : false}
+                                  onCheckedChange={(checked) => {
+                                    setSelectedDeptForConfig(dept);
+                                    setCustomFieldRequired(checked as boolean);
+                                  }}
+                                  data-testid="checkbox-custom-field-required"
+                                />
+                                <Label htmlFor={`custom-field-required-${dept}`} className="cursor-pointer">
+                                  Required field
+                                </Label>
+                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => addCustomDataField(dept)}
+                                disabled={
+                                  !customFieldName.trim() || 
+                                  selectedDeptForConfig !== dept
+                                }
+                                data-testid="button-add-custom-field"
+                              >
+                                Add Custom Field
+                              </Button>
+                            </div>
+                          </div>
+
+                          <Separator />
+
                           {/* Special Process Section - Available for All Departments */}
                           <div>
                             <h4 className="font-semibold mb-3 flex items-center gap-2">
@@ -1146,9 +1315,9 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
           )}
         </ScrollArea>
 
-        <Separator className="flex-shrink-0" />
+        <Separator />
 
-        <DialogFooter className="flex justify-between items-center sm:justify-between flex-shrink-0 pt-4">
+        <DialogFooter className="flex justify-between items-center sm:justify-between">
           <div>
             {step > 1 && (
               <Button variant="outline" onClick={handleBack} data-testid="button-back">

@@ -60,7 +60,6 @@ const useSmartyStreetsAutocomplete = (query: string) => {
 export default function PurchaseReviewChecklist() {
   // Signature canvas reference
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
-  const [canvasKey, setCanvasKey] = useState(0);
   const { toast } = useToast();
   const [location] = useLocation();
   const [submissionId, setSubmissionId] = useState<string | null>(null);
@@ -106,25 +105,19 @@ export default function PurchaseReviewChecklist() {
   // Submit checklist mutation
   const submitChecklistMutation = useMutation({
     mutationFn: async ({ data, isUpdate, updateId }: { data: any; isUpdate: boolean; updateId?: string }) => {
-      console.log('🟡 Mutation function called');
       if (isUpdate && updateId) {
-        const result = await apiRequest(`/api/purchase-review-submissions/${updateId}`, {
+        return await apiRequest(`/api/purchase-review-submissions/${updateId}`, {
           method: 'PUT',
           body: JSON.stringify(data),
         });
-        console.log('🟡 PUT result:', result);
-        return result;
       } else {
-        const result = await apiRequest('/api/purchase-review-submissions', {
+        return await apiRequest('/api/purchase-review-submissions', {
           method: 'POST',
           body: JSON.stringify(data),
         });
-        console.log('🟡 POST result:', result);
-        return result;
       }
     },
     onSuccess: (data, variables) => {
-      console.log('🟢 onSuccess called!', data, variables);
       const action = variables.isUpdate ? 'updated' : 'saved';
       toast({
         title: 'Success',
@@ -132,15 +125,8 @@ export default function PurchaseReviewChecklist() {
       });
       // Invalidate queries to refresh submissions list
       queryClient.invalidateQueries({ queryKey: ['/api/purchase-review-submissions'] });
-      
-      // Update the submission ID if this was a new save
-      if (!variables.isUpdate && data?.id) {
-        console.log('🟢 Setting submission ID to:', data.id);
-        setSubmissionId(data.id);
-      }
     },
     onError: (error: Error) => {
-      console.log('🔴 onError called!', error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to save checklist. Please try again.',
@@ -295,25 +281,15 @@ export default function PurchaseReviewChecklist() {
   }, []);
 
   // Load signature when formData changes and signature exists
-  // Track if signature has been loaded to prevent duplicates
-  const [signatureLoaded, setSignatureLoaded] = useState(false);
-  
   useEffect(() => {
-    if (formData.signature && signatureCanvasRef.current && !signatureLoaded) {
+    if (formData.signature && signatureCanvasRef.current) {
       try {
-        // Use setTimeout to ensure canvas is fully mounted
-        setTimeout(() => {
-          if (signatureCanvasRef.current) {
-            signatureCanvasRef.current.clear(); // Clear canvas before loading
-            signatureCanvasRef.current.fromDataURL(formData.signature);
-            setSignatureLoaded(true); // Mark as loaded to prevent re-loading
-          }
-        }, 100);
+        signatureCanvasRef.current.fromDataURL(formData.signature);
       } catch (error) {
         console.error('Error loading signature:', error);
       }
     }
-  }, [formData.signature, signatureLoaded]);
+  }, [formData.signature]);
 
   // Calculate amount when quantity, unit price, tooling, or additional cost changes
   useEffect(() => {
@@ -419,26 +395,20 @@ export default function PurchaseReviewChecklist() {
 
   // Clear signature
   const clearSignature = () => {
-    setSignatureLoaded(false); // Allow signature to be reloaded if needed
-    setFormData((prev) => ({ ...prev, signature: '' })); // Clear signature data
-    // Force canvas remount to fix any internal state issues
-    setCanvasKey(prev => prev + 1);
+    if (signatureCanvasRef.current) {
+      signatureCanvasRef.current.clear();
+    }
   };
 
   // Save signature as base64
   const saveSignature = () => {
     if (signatureCanvasRef.current) {
-      try {
-        const signatureData = signatureCanvasRef.current.toDataURL();
-        setFormData((prev) => ({ ...prev, signature: signatureData }));
-      } catch (error) {
-        console.error('Error saving signature:', error);
-      }
+      const signatureData = signatureCanvasRef.current.toDataURL();
+      setFormData((prev) => ({ ...prev, signature: signatureData }));
     }
   };
 
   const handleSave = async () => {
-    console.log('🔵 handleSave called');
     // Save signature if present
     let updatedFormData = { ...formData };
     if (signatureCanvasRef.current && !signatureCanvasRef.current.isEmpty()) {
@@ -455,24 +425,11 @@ export default function PurchaseReviewChecklist() {
       status: 'DRAFT' as const,
     };
 
-    console.log('🔵 Saving submission:', submissionData);
-    console.log('🔵 Is update?', !!submissionId, 'ID:', submissionId);
-
-    try {
-      submitChecklistMutation.mutate({
-        data: submissionData,
-        isUpdate: !!submissionId,
-        updateId: submissionId || undefined,
-      });
-      console.log('🔵 Mutation called successfully');
-    } catch (error) {
-      console.error('🔴 Error calling mutation:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to save form. Please try again.',
-        variant: 'destructive',
-      });
-    }
+    submitChecklistMutation.mutate({
+      data: submissionData,
+      isUpdate: !!submissionId,
+      updateId: submissionId || undefined,
+    });
   };
 
   const handlePrint = () => {
@@ -538,15 +495,6 @@ export default function PurchaseReviewChecklist() {
               {submitChecklistMutation.isPending ? 'Saving...' : 'Save Form'}
             </Button>
             <Button
-              onClick={() => window.location.href = '/purchase-review-submissions'}
-              variant="outline"
-              className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300"
-              data-testid="button-view-saved-forms"
-            >
-              <FileText className="h-4 w-4" />
-              View Saved Forms
-            </Button>
-            <Button
               onClick={handlePrint}
               variant="outline"
               className="flex items-center gap-2"
@@ -588,42 +536,28 @@ export default function PurchaseReviewChecklist() {
 
             <div className="space-y-2">
               <Label htmlFor="quoteId">Select Quote</Label>
-              <div className="flex gap-2">
-                <Select
-                  value={formData.quoteId}
-                  onValueChange={(value) => handleInputChange('quoteId', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a quote (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {quotes.length === 0 ? (
-                      <SelectItem value="none" disabled>
-                        No quotes available
+              <Select
+                value={formData.quoteId}
+                onValueChange={(value) => handleInputChange('quoteId', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a quote (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {quotes.length === 0 ? (
+                    <SelectItem value="none" disabled>
+                      No quotes available
+                    </SelectItem>
+                  ) : (
+                    quotes.map((quote) => (
+                      <SelectItem key={quote.id} value={quote.id}>
+                        {quote.quoteNumber} - {quote.customerName} 
+                        {quote.description && ` (${quote.description})`}
                       </SelectItem>
-                    ) : (
-                      quotes.map((quote) => (
-                        <SelectItem key={quote.id} value={quote.id}>
-                          {quote.quoteNumber} - {quote.customerName} 
-                          {quote.description && ` (${quote.description})`}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-                {formData.quoteId && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open(`/p2-quote-form?id=${formData.quoteId}`, '_blank')}
-                    data-testid="button-view-quote"
-                  >
-                    <FileText className="h-4 w-4 mr-1" />
-                    View Quote
-                  </Button>
-                )}
-              </div>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
@@ -1938,7 +1872,6 @@ export default function PurchaseReviewChecklist() {
                 <Label>Digital Signature</Label>
                 <div className="border border-gray-300 rounded-md p-2">
                   <SignatureCanvas
-                    key={canvasKey}
                     ref={signatureCanvasRef}
                     penColor="black"
                     canvasProps={{
@@ -1947,24 +1880,13 @@ export default function PurchaseReviewChecklist() {
                       className: 'signature-canvas border rounded w-full',
                     }}
                     onEnd={saveSignature}
-                    onBegin={() => {
-                      // Initialize canvas data if needed
-                      if (signatureCanvasRef.current) {
-                        try {
-                          // Touch the canvas to ensure it's initialized
-                          signatureCanvasRef.current.getCanvas();
-                        } catch (e) {
-                          console.error('Canvas initialization error:', e);
-                        }
-                      }
-                    }}
                   />
                 </div>
                 <div className="flex gap-2 mt-2">
-                  <Button size="sm" variant="outline" onClick={clearSignature} data-testid="button-clear-signature">
+                  <Button size="sm" variant="outline" onClick={clearSignature}>
                     Clear
                   </Button>
-                  <Button size="sm" variant="outline" onClick={saveSignature} data-testid="button-save-signature">
+                  <Button size="sm" variant="outline" onClick={saveSignature}>
                     Save Signature
                   </Button>
                 </div>

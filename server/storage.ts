@@ -92,8 +92,7 @@ import {
   allOrders,
   // Order attachments table
   orderAttachments,
-  // Gateway reports table
-  gatewayReports,
+  // Gateway reports table - temporarily removed
   // PO Products table
   poProducts,
   // Refund requests table
@@ -278,9 +277,7 @@ import {
   // Order attachment types
   type OrderAttachment,
   type InsertOrderAttachment,
-  // Gateway reports types
-  type GatewayReport,
-  type InsertGatewayReport,
+  // Gateway reports types - temporarily removed
   // PO Products types
   type POProduct,
   type InsertPOProduct,
@@ -1160,6 +1157,11 @@ export interface IStorage {
   getTraceabilityData(serializedItemId: string): Promise<P2SerializedItemTraceability[]>;
   getTraceabilityForDepartment(serializedItemId: string, department: string): Promise<P2SerializedItemTraceability[]>;
 
+  // P2 Serialized Item Custom Data CRUD
+  addCustomData(data: InsertP2SerializedItemCustomData): Promise<P2SerializedItemCustomData>;
+  getCustomData(serializedItemId: string): Promise<P2SerializedItemCustomData[]>;
+  getCustomDataForDepartment(serializedItemId: string, department: string): Promise<P2SerializedItemCustomData[]>;
+
   // Shipment Records CRUD
   createShipment(data: {
     shipment: InsertShipmentRecord;
@@ -1480,10 +1482,6 @@ export interface IStorage {
     attachmentId: number
   ): Promise<OrderAttachment | undefined>;
   createOrderAttachment(data: InsertOrderAttachment): Promise<OrderAttachment>;
-  updateOrderAttachment(
-    attachmentId: number,
-    data: Partial<InsertOrderAttachment>
-  ): Promise<OrderAttachment>;
   deleteOrderAttachment(attachmentId: number): Promise<void>;
 
   // Add methods for finalized orders
@@ -1500,10 +1498,7 @@ export interface IStorage {
   // Department-based order methods
   getOrdersByDepartment(department: string): Promise<any[]>;
 
-  // Gateway Reports CRUD Methods
-  getGatewayReportByWeek(weekStartDate: string): Promise<GatewayReport | null>;
-  getGatewayReportsTrends(startDate: string, endDate: string): Promise<GatewayReport[]>;
-  createOrUpdateGatewayReport(data: InsertGatewayReport): Promise<GatewayReport>;
+  // Gateway Reports CRUD Methods - temporarily removed
 
   // PO Products CRUD Methods
   getAllPOProducts(): Promise<POProduct[]>;
@@ -10776,6 +10771,34 @@ export class DatabaseStorage implements IStorage {
       .orderBy(p2SerializedItemTraceability.createdAt);
   }
 
+  // P2 Serialized Item Custom Data CRUD
+  async addCustomData(data: InsertP2SerializedItemCustomData): Promise<P2SerializedItemCustomData> {
+    const [record] = await db
+      .insert(p2SerializedItemCustomData)
+      .values(data)
+      .returning();
+    return record;
+  }
+
+  async getCustomData(serializedItemId: string): Promise<P2SerializedItemCustomData[]> {
+    return await db
+      .select()
+      .from(p2SerializedItemCustomData)
+      .where(eq(p2SerializedItemCustomData.serializedItemId, serializedItemId))
+      .orderBy(p2SerializedItemCustomData.createdAt);
+  }
+
+  async getCustomDataForDepartment(serializedItemId: string, department: string): Promise<P2SerializedItemCustomData[]> {
+    return await db
+      .select()
+      .from(p2SerializedItemCustomData)
+      .where(and(
+        eq(p2SerializedItemCustomData.serializedItemId, serializedItemId),
+        eq(p2SerializedItemCustomData.department, department)
+      ))
+      .orderBy(p2SerializedItemCustomData.createdAt);
+  }
+
   // Shipment Records CRUD
   async createShipment(data: {
     shipment: InsertShipmentRecord;
@@ -11775,18 +11798,6 @@ export class DatabaseStorage implements IStorage {
     return attachment;
   }
 
-  async updateOrderAttachment(
-    attachmentId: number,
-    data: Partial<InsertOrderAttachment>
-  ): Promise<OrderAttachment> {
-    const [attachment] = await db
-      .update(orderAttachments)
-      .set({ ...data, updatedAt: new Date() })
-      .where(eq(orderAttachments.id, attachmentId))
-      .returning();
-    return attachment;
-  }
-
   async deleteOrderAttachment(attachmentId: number): Promise<void> {
     await db
       .delete(orderAttachments)
@@ -12423,55 +12434,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Gateway Reports CRUD Methods Implementation
-  async getGatewayReportByWeek(weekStartDate: string): Promise<GatewayReport | null> {
-    const report = await db
-      .select()
-      .from(gatewayReports)
-      .where(eq(gatewayReports.weekStartDate, weekStartDate))
-      .limit(1);
-    
-    return report[0] || null;
-  }
-
-  async getGatewayReportsTrends(startDate: string, endDate: string): Promise<GatewayReport[]> {
-    const reports = await db
-      .select()
-      .from(gatewayReports)
-      .where(
-        and(
-          gte(gatewayReports.weekStartDate, startDate),
-          lte(gatewayReports.weekStartDate, endDate)
-        )
-      )
-      .orderBy(asc(gatewayReports.weekStartDate));
-    
-    return reports;
-  }
-
-  async createOrUpdateGatewayReport(data: InsertGatewayReport): Promise<GatewayReport> {
-    // Check if report for this week already exists
-    const existing = await this.getGatewayReportByWeek(data.weekStartDate);
-    
-    if (existing) {
-      // Update existing report
-      const updated = await db
-        .update(gatewayReports)
-        .set({ ...data, updatedAt: sql`NOW()` })
-        .where(eq(gatewayReports.weekStartDate, data.weekStartDate))
-        .returning();
-      
-      return updated[0];
-    } else {
-      // Create new report
-      const created = await db
-        .insert(gatewayReports)
-        .values(data)
-        .returning();
-      
-      return created[0];
-    }
-  }
+  // Gateway Reports CRUD Methods Implementation - temporarily removed
 
   // PO Products CRUD Methods
   async getAllPOProducts(): Promise<POProduct[]> {

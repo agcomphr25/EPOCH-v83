@@ -43,7 +43,7 @@ import PartRoutingWizard from '@/components/PartRoutingWizard';
 
 const P2_DEPARTMENTS = [
   'Layup',
-  'Assembly/Disassembly',
+  'Assemble/Disassembly',
   'CNC',
   'Finish',
   'Paint',
@@ -88,6 +88,21 @@ interface MaterialRequirement {
   requiredFields: string[];
 }
 
+interface CustomDataField {
+  fieldName: string;
+  fieldType: 'text' | 'number' | 'date' | 'textarea';
+  isRequired: boolean;
+}
+
+interface DepartmentConfiguration {
+  materials: MaterialRequirement[];
+  assignedTechnicianId: number | null;
+  qcStandards: any[];
+  ovenCuringSteps?: any[];
+  specialProcess?: string;
+  customDataFields?: CustomDataField[];
+}
+
 interface PartRouting {
   id: string;
   inventoryItemId: string;
@@ -96,6 +111,7 @@ interface PartRouting {
   departmentSequence: string[];
   traceabilityConfig: Record<string, string[]>;
   departmentMaterials?: Record<string, MaterialRequirement[]>;
+  departmentConfig?: Record<string, DepartmentConfiguration>;
 }
 
 interface TraceabilityData {
@@ -126,6 +142,8 @@ export default function P2DepartmentManager() {
   const [pendingTransitionDepartment, setPendingTransitionDepartment] = useState<string | null>(null);
   const [requiredTraceabilityFields, setRequiredTraceabilityFields] = useState<string[]>([]);
   const [requiredMaterials, setRequiredMaterials] = useState<MaterialRequirement[]>([]);
+  const [customDataFields, setCustomDataFields] = useState<CustomDataField[]>([]);
+  const [customDataValues, setCustomDataValues] = useState<Record<string, string>>({});
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -198,11 +216,12 @@ export default function P2DepartmentManager() {
   };
 
   // Get required fields for a specific item and department (independent of state)
-  const getRequiredFieldsForItem = async (partNumber: string, department: string): Promise<{ itemFields: string[]; materials: MaterialRequirement[] }> => {
+  const getRequiredFieldsForItem = async (partNumber: string, department: string): Promise<{ itemFields: string[]; materials: MaterialRequirement[]; customFields: CustomDataField[] }> => {
     const routing: PartRouting = await apiRequest(`/api/part-routings/part/${partNumber}`);
     return {
       itemFields: routing.traceabilityConfig[department] || [],
       materials: routing.departmentMaterials?.[department] || [],
+      customFields: routing.departmentConfig?.[department]?.customDataFields || [],
     };
   };
 
@@ -237,13 +256,14 @@ export default function P2DepartmentManager() {
       // Fetch traceability requirements for this specific item
       const requirements = await getRequiredFieldsForItem(item.partNumber, item.currentDepartment);
       
-      if (requirements.itemFields.length > 0 || requirements.materials.length > 0) {
+      if (requirements.itemFields.length > 0 || requirements.materials.length > 0 || requirements.customFields.length > 0) {
         // Capture item and requirements for traceability dialog
         setSelectedItem(item);
         setPendingTransitionItemId(item.id);
         setPendingTransitionDepartment(item.currentDepartment);
         setRequiredTraceabilityFields(requirements.itemFields);
         setRequiredMaterials(requirements.materials);
+        setCustomDataFields(requirements.customFields);
         setShowTraceabilityDialog(true);
       } else {
         // No traceability required, proceed directly
@@ -963,6 +983,49 @@ export default function P2DepartmentManager() {
               </div>
             )}
 
+            {/* Custom Data Fields */}
+            {customDataFields.length > 0 && (
+              <div className="border-t pt-4 mt-4">
+                <h4 className="font-semibold mb-3">Custom Data Entry Fields</h4>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Fill in the required information for this department
+                </p>
+                <div className="space-y-3">
+                  {customDataFields.map((field, idx) => (
+                    <div key={idx}>
+                      <Label htmlFor={`custom-${idx}`}>
+                        {field.fieldName} {field.isRequired && '*'}
+                      </Label>
+                      {field.fieldType === 'textarea' ? (
+                        <Textarea
+                          id={`custom-${idx}`}
+                          data-testid={`input-custom-field-${idx}`}
+                          value={customDataValues[field.fieldName] || ''}
+                          onChange={(e) => setCustomDataValues({
+                            ...customDataValues,
+                            [field.fieldName]: e.target.value
+                          })}
+                          placeholder={`Enter ${field.fieldName.toLowerCase()}...`}
+                        />
+                      ) : (
+                        <Input
+                          id={`custom-${idx}`}
+                          data-testid={`input-custom-field-${idx}`}
+                          type={field.fieldType}
+                          value={customDataValues[field.fieldName] || ''}
+                          onChange={(e) => setCustomDataValues({
+                            ...customDataValues,
+                            [field.fieldName]: e.target.value
+                          })}
+                          placeholder={`Enter ${field.fieldName.toLowerCase()}...`}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => {
                 setShowTraceabilityDialog(false);
@@ -972,6 +1035,8 @@ export default function P2DepartmentManager() {
                 setPendingTransitionDepartment(null);
                 setRequiredTraceabilityFields([]);
                 setRequiredMaterials([]);
+                setCustomDataFields([]);
+                setCustomDataValues({});
               }}>
                 Cancel
               </Button>
@@ -1020,6 +1085,22 @@ export default function P2DepartmentManager() {
                     }
                   }
 
+                  // Validate custom data fields are filled
+                  const missingCustomFields = customDataFields.filter(field => {
+                    if (!field.isRequired) return false;
+                    const value = customDataValues[field.fieldName];
+                    return !value || value.trim() === '';
+                  });
+
+                  if (missingCustomFields.length > 0) {
+                    toast({
+                      title: 'Missing Custom Fields',
+                      description: `Please fill in all required custom fields: ${missingCustomFields.map(f => f.fieldName).join(', ')}`,
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
+
                   try {
                     // Save item-level traceability data first
                     if (requiredTraceabilityFields.length > 0) {
@@ -1046,6 +1127,18 @@ export default function P2DepartmentManager() {
                       }
                     }
 
+                    // Save custom data field values
+                    if (customDataFields.length > 0 && Object.keys(customDataValues).length > 0) {
+                      await apiRequest(`/api/p2/serialized-items/${pendingTransitionItemId}/custom-data`, {
+                        method: 'POST',
+                        body: {
+                          department: pendingTransitionDepartment,
+                          customData: customDataValues,
+                          recordedBy: 'system',
+                        },
+                      });
+                    }
+
                     // Proceed with transition after successful save
                     transitionMutation.mutate(pendingTransitionItemId);
                     
@@ -1057,6 +1150,8 @@ export default function P2DepartmentManager() {
                     setPendingTransitionDepartment(null);
                     setRequiredTraceabilityFields([]);
                     setRequiredMaterials([]);
+                    setCustomDataFields([]);
+                    setCustomDataValues({});
                   } catch (error: any) {
                     toast({
                       title: 'Error Saving Traceability',
@@ -1065,7 +1160,7 @@ export default function P2DepartmentManager() {
                     });
                   }
                 }}
-                disabled={saveTraceabilityMutation.isPending || transitionMutation.isPending || (requiredTraceabilityFields.length === 0 && requiredMaterials.length === 0)}
+                disabled={saveTraceabilityMutation.isPending || transitionMutation.isPending || (requiredTraceabilityFields.length === 0 && requiredMaterials.length === 0 && customDataFields.length === 0)}
               >
                 Save & Advance
               </Button>

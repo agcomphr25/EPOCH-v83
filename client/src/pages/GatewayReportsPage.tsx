@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import type { GatewayReport } from '../../../server/schema';
 
 interface WeeklyData {
   buttpadsMonday: number;
@@ -70,12 +71,12 @@ export default function GatewayReportsPage() {
   const weekStartDate = format(currentWeek, 'yyyy-MM-dd');
 
   // Fetch current week's data
-  const { data: weekData } = useQuery({
+  const { data: weekData } = useQuery<GatewayReport>({
     queryKey: [`/api/gateway-reports/week/${weekStartDate}`],
   });
 
   // Fetch trends data (6 months)
-  const { data: trendsData = [] } = useQuery({
+  const { data: trendsData = [] } = useQuery<GatewayReport[]>({
     queryKey: ['/api/gateway-reports/trends'],
   });
 

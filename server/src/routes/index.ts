@@ -68,6 +68,7 @@ import controlledDocumentsRoutes from './controlledDocuments';
 import adminRoutes from './admin';
 import quotesRoutes from './quotes';
 import costCentersRoutes from './costCenters';
+import employeeBadgesRoutes from './employeeBadges';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -143,6 +144,9 @@ export function registerRoutes(app: Express): Server {
 
   // Cost Center management routes
   app.use(costCentersRoutes);
+
+  // Employee Badge Actions routes
+  app.use('/api/employee-badges', employeeBadgesRoutes);
 
   // PDFME SYSTEM COMMENTED OUT - NOT IN USE
   // PDF Templates routes

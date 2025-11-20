@@ -169,30 +169,26 @@ export const orders = pgTable('orders', {
   customer: text('customer').notNull(),
   product: text('product').notNull(),
   quantity: integer('quantity').notNull(),
-  status: text('status').notNull(), // Legacy - will be removed after migration
-  statusId: integer('status_id').references(() => orderStatusTypes.id), // New FK reference
+  status: text('status').notNull(),
+  statusId: integer('status_id').references(() => orderStatusTypes.id),
   date: timestamp('date').notNull(),
-  orderDate: timestamp('order_date'),
   // Department progression fields
   currentDepartment: text('current_department')
     .default('P1 Production Queue')
-    .notNull(), // Default to P1 Production Queue until scheduled
-  currentDepartmentId: integer('current_department_id').references(
-    () => orderDepartmentTypes.id
-  ), // New FK reference
+    .notNull(),
+  currentDepartmentId: integer('current_department_id').references(() => orderDepartmentTypes.id),
   isOnSchedule: boolean('is_on_schedule').default(true),
-  priorityScore: integer('priority_score').default(50), // Lower = higher priority
-  rushTier: text('rush_tier'), // e.g., "STANDARD", "RUSH", "EXPEDITE"
-  poId: integer('po_id'), // Reference to purchase order
-  itemId: text('item_id'), // Item identifier
-  stockModelId: text('stock_model_id'), // Stock model reference
-  customerId: text('customer_id'), // Customer identifier
-  notes: text('notes'), // Order notes
-  shippedAt: timestamp('shipped_at'), // Shipping timestamp
+  priorityScore: integer('priority_score').default(50),
+  rushTier: text('rush_tier'),
+  poId: text('po_id'),
   dueDate: timestamp('due_date'),
+  departmentHistory: json('department_history'),
   // Track department completion timestamps
+  productionQueueCompletedAt: timestamp('production_queue_completed_at'),
+  layupPluggingCompletedAt: timestamp('layup_plugging_completed_at'),
   layupCompletedAt: timestamp('layup_completed_at'),
   pluggingCompletedAt: timestamp('plugging_completed_at'),
+  barcodeCompletedAt: timestamp('barcode_completed_at'),
   cncCompletedAt: timestamp('cnc_completed_at'),
   finishCompletedAt: timestamp('finish_completed_at'),
   gunsmithCompletedAt: timestamp('gunsmith_completed_at'),
@@ -202,10 +198,10 @@ export const orders = pgTable('orders', {
   // Scrapping fields
   scrapDate: timestamp('scrap_date'),
   scrapReason: text('scrap_reason'),
-  scrapDisposition: text('scrap_disposition'), // REPAIR, USE_AS_IS, SCRAP
-  scrapAuthorization: text('scrap_authorization'), // CUSTOMER, AG, MATT, GLENN, LAURIE
+  scrapDisposition: text('scrap_disposition'),
+  scrapAuthorization: text('scrap_authorization'),
   isReplacement: boolean('is_replacement').default(false),
-  replacedOrderId: text('replaced_order_id'), // Reference to original order if this is a replacement
+  replacedOrderId: text('replaced_order_id'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -6105,5 +6101,56 @@ export const insertPurchaseReviewChecklistSubmissionSchema = createInsertSchema(
 // Types
 export type PurchaseReviewChecklistSubmission = typeof purchaseReviewChecklistSubmissions.$inferSelect;
 export type InsertPurchaseReviewChecklistSubmission = z.infer<typeof insertPurchaseReviewChecklistSubmissionSchema>;
+
+// Employee Badge Actions - Configure custom badge scan actions per employee
+export const employeeBadgeActions = pgTable('employee_badge_actions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  employeeId: integer('employee_id').references(() => employees.id, { onDelete: 'cascade' }).notNull(),
+  actionType: text('action_type').notNull(), // 'P1_DEPARTMENT_PROGRESS', 'P2_DEPARTMENT_PROGRESS', 'QUICK_NAVIGATION', 'CLOCK_IN_OUT'
+  actionConfig: jsonb('action_config').notNull(), // Configuration specific to action type
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  employeeIdIdx: index('employee_badge_actions_employee_id_idx').on(table.employeeId),
+  isActiveIdx: index('employee_badge_actions_is_active_idx').on(table.isActive),
+}));
+
+// Insert Schema
+export const insertEmployeeBadgeActionSchema = createInsertSchema(employeeBadgeActions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types
+export type EmployeeBadgeAction = typeof employeeBadgeActions.$inferSelect;
+export type InsertEmployeeBadgeAction = z.infer<typeof insertEmployeeBadgeActionSchema>;
+
+// Badge Scan Audit Log - Track all badge scan events for accountability and troubleshooting
+export const badgeScanAuditLog = pgTable('badge_scan_audit_log', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  employeeId: integer('employee_id').references(() => employees.id, { onDelete: 'set null' }),
+  employeeCode: text('employee_code').notNull(), // Store code in case employee is deleted
+  actionType: text('action_type').notNull(), // Action type that was executed
+  actionPayload: jsonb('action_payload'), // Barcode scanned, target department, etc.
+  outcome: text('outcome').notNull(), // 'success', 'error', 'validation_failed'
+  errorMessage: text('error_message'), // Error details if outcome is not success
+  scannedAt: timestamp('scanned_at').defaultNow().notNull(),
+}, (table) => ({
+  employeeIdIdx: index('badge_scan_audit_log_employee_id_idx').on(table.employeeId),
+  scannedAtIdx: index('badge_scan_audit_log_scanned_at_idx').on(table.scannedAt),
+  outcomeIdx: index('badge_scan_audit_log_outcome_idx').on(table.outcome),
+}));
+
+// Insert Schema
+export const insertBadgeScanAuditLogSchema = createInsertSchema(badgeScanAuditLog).omit({
+  id: true,
+  scannedAt: true,
+});
+
+// Types
+export type BadgeScanAuditLog = typeof badgeScanAuditLog.$inferSelect;
+export type InsertBadgeScanAuditLog = z.infer<typeof insertBadgeScanAuditLogSchema>;
 
 export * from './calendar.schema';

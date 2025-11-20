@@ -486,6 +486,12 @@ export default function Navigation() {
       icon: Settings,
       description: 'Manage time clock entries and punches',
     },
+    {
+      path: '/badge-configuration',
+      label: 'Badge Configuration',
+      icon: Scan,
+      description: 'Configure employee badge actions and workflows',
+    },
   ];
 
   const financeItems = [

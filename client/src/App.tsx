@@ -42,6 +42,8 @@ import FinanceDashboardPage from './pages/FinanceDashboardPage';
 import CostCenterManagement from './pages/CostCenterManagement';
 import MonthlyFulfilledReport from './pages/MonthlyFulfilledReport';
 import BulkPaymentPage from './pages/BulkPaymentPage';
+import EmployeeBadgeConfiguration from './pages/EmployeeBadgeConfiguration';
+import BadgeScanner from './pages/BadgeScanner';
 import EnhancedFormsPage from './pages/EnhancedFormsPage';
 import EnhancedReportsPage from './pages/EnhancedReportsPage';
 import FormRendererPage from './pages/FormRendererPage';
@@ -481,6 +483,10 @@ function App() {
 
                   {/* Cutting Table Route */}
                   <Route path="/cutting-table" component={CuttingTable} />
+
+                  {/* Employee Badge Routes */}
+                  <Route path="/badge-configuration" component={EmployeeBadgeConfiguration} />
+                  <Route path="/badge-scanner" component={BadgeScanner} />
 
                   {/* Test Routes */}
                   <Route path="/module8-test" component={Module8TestPage} />

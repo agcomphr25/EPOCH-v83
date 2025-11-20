@@ -53,9 +53,11 @@ import { useToast } from '@/hooks/use-toast';
 import AddCertificationModal from '@/components/employee/AddCertificationModal';
 import CertificationFormModal from '@/components/employee/CertificationFormModal';
 import AddEvaluationModal from '@/components/employee/AddEvaluationModal';
+import EmployeeBadgeBarcode from '@/components/EmployeeBadgeBarcode';
 
 interface Employee {
   id: number;
+  employeeCode?: string;
   name: string;
   email: string;
   phone: string;
@@ -969,13 +971,14 @@ export default function EmployeeDetail() {
         {/* Main Content Tabs */}
         <div className="lg:col-span-2">
           <Tabs defaultValue="details" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-6">
+            <TabsList className="grid w-full grid-cols-7">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="permissions">Permissions</TabsTrigger>
               <TabsTrigger value="certifications">Certifications</TabsTrigger>
               <TabsTrigger value="evaluations">Evaluations</TabsTrigger>
               <TabsTrigger value="training">Training</TabsTrigger>
               <TabsTrigger value="documents">Documents</TabsTrigger>
+              <TabsTrigger value="badge">Badge</TabsTrigger>
             </TabsList>
 
             <TabsContent value="details">
@@ -985,6 +988,51 @@ export default function EmployeeDetail() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Employee Code</Label>
+                      {isEditing ? (
+                        <div className="flex gap-2">
+                          <Input
+                            value={editData.employeeCode || ''}
+                            onChange={(e) =>
+                              setEditData((prev) => ({
+                                ...prev,
+                                employeeCode: e.target.value,
+                              }))
+                            }
+                            placeholder="e.g., EMP001, TM001"
+                            className="flex-1"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              // Clear field to trigger auto-generation on save
+                              setEditData((prev) => ({
+                                ...prev,
+                                employeeCode: '',
+                              }));
+                              toast({
+                                title: "Auto-Generate Enabled",
+                                description: "Next sequential code (e.g., EMP001) will be generated when you save.",
+                              });
+                            }}
+                            data-testid="button-auto-generate-code"
+                            title="Clear field and auto-generate next sequential code on save"
+                          >
+                            Generate
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-900 mt-2">
+                          {employee.employeeCode || (
+                            <span className="text-yellow-600">⚠️ Not assigned (required for badge)</span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+
                     <div>
                       <Label>Employment Type</Label>
                       {isEditing ? (
@@ -1626,6 +1674,23 @@ export default function EmployeeDetail() {
                       Document management coming soon
                     </p>
                   </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="badge">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Employee Badge Barcode</CardTitle>
+                  <CardDescription>
+                    Print or download this employee's badge barcode for scanner access
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <EmployeeBadgeBarcode
+                    employeeCode={employee.employeeCode}
+                    employeeName={employee.name}
+                  />
                 </CardContent>
               </Card>
             </TabsContent>

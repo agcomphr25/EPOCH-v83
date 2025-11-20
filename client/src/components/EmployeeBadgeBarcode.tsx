@@ -1,0 +1,164 @@
+import { useEffect, useRef } from 'react';
+import JsBarcode from 'jsbarcode';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Download, Printer } from 'lucide-react';
+
+type Props = {
+  employeeCode: string;
+  employeeName: string;
+};
+
+export default function EmployeeBadgeBarcode({ employeeCode, employeeName }: Props) {
+  const barcodeRef = useRef<SVGSVGElement>(null);
+
+  useEffect(() => {
+    if (barcodeRef.current && employeeCode) {
+      try {
+        JsBarcode(barcodeRef.current, employeeCode, {
+          format: 'CODE128',
+          width: 2,
+          height: 60,
+          displayValue: true,
+          fontSize: 14,
+          margin: 10,
+        });
+      } catch (error) {
+        console.error('Error generating barcode:', error);
+      }
+    }
+  }, [employeeCode]);
+
+  const handleDownload = () => {
+    if (!barcodeRef.current) return;
+
+    const svgData = new XMLSerializer().serializeToString(barcodeRef.current);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx?.drawImage(img, 0, 0);
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `badge-${employeeCode}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+
+    img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+  };
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Employee Badge - ${employeeName}</title>
+          <style>
+            @page {
+              size: 4in 2in;
+              margin: 0;
+            }
+            body {
+              margin: 0;
+              padding: 20px;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              font-family: Arial, sans-serif;
+            }
+            h1 {
+              font-size: 18px;
+              margin-bottom: 10px;
+              text-align: center;
+            }
+            svg {
+              max-width: 100%;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>${employeeName}</h1>
+          ${barcodeRef.current?.outerHTML || ''}
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+  };
+
+  if (!employeeCode) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Employee Badge Barcode</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-col items-center justify-center p-8 bg-yellow-50 rounded border border-yellow-200">
+            <p className="text-sm font-medium text-yellow-800 text-center">
+              ⚠️ No Employee Code Assigned
+            </p>
+            <p className="text-xs text-yellow-700 mt-2 text-center">
+              Please assign an employee code to this employee in the Details tab to generate a badge barcode.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Employee Badge Barcode</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-col items-center justify-center p-4 bg-white rounded border">
+          <p className="text-sm font-medium mb-2">{employeeName}</p>
+          <svg ref={barcodeRef} data-testid="employee-barcode"></svg>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={handleDownload}
+            data-testid="button-download-badge"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Download
+          </Button>
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={handlePrint}
+            data-testid="button-print-badge"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Print
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Scan this barcode on the Badge Scanner page to quickly execute your configured action.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}

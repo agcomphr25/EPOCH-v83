@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Scan } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [badgeCode, setBadgeCode] = useState('');
+  const [isBadgeLoading, setIsBadgeLoading] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -79,6 +81,65 @@ export default function LoginPage() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleBadgeLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    if (!badgeCode.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please scan or enter your employee badge code',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsBadgeLoading(true);
+
+    try {
+      const response = await fetch('/api/auth/badge-login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ employeeCode: badgeCode.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (data.sessionToken) {
+          localStorage.setItem('sessionToken', data.sessionToken);
+        }
+
+        toast({
+          title: 'Welcome!',
+          description: `Logged in as ${data.employee?.name || badgeCode}`,
+        });
+
+        // Redirect to assigned task page (from badge configuration) or default dashboard
+        const redirectUrl = data.redirectUrl || getDashboardRoute(data.user.username);
+        setLocation(redirectUrl);
+      } else {
+        toast({
+          title: 'Badge Login Failed',
+          description: data.error || 'Invalid employee badge code',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Badge login error:', error);
+      toast({
+        title: 'Error',
+        description: 'An error occurred during badge login. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsBadgeLoading(false);
+      setBadgeCode('');
     }
   };
 
@@ -174,6 +235,53 @@ export default function LoginPage() {
               </svg>
               Sign in with Microsoft
             </Button>
+
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-gray-300 dark:border-gray-600" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white dark:bg-gray-800 px-2 text-gray-500 dark:text-gray-400">
+                  Employee Badge Login
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="badgeCode" className="flex items-center gap-2">
+                <Scan className="w-4 h-4" />
+                Badge Code
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="badgeCode"
+                  type="text"
+                  placeholder="Scan or type badge code..."
+                  value={badgeCode}
+                  onChange={(e) => setBadgeCode(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && badgeCode.trim()) {
+                      handleBadgeLogin();
+                    }
+                  }}
+                  disabled={isBadgeLoading}
+                  data-testid="input-badge-code"
+                  autoComplete="off"
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  onClick={() => handleBadgeLogin()}
+                  disabled={isBadgeLoading || !badgeCode.trim()}
+                  data-testid="button-badge-login"
+                >
+                  {isBadgeLoading ? 'Loading...' : 'Scan'}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Quick login for employees with badge codes (e.g., EMP001)
+              </p>
+            </div>
           </form>
         </CardContent>
       </Card>

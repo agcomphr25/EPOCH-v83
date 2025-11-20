@@ -3260,6 +3260,8 @@ export const nonconformanceRecords = pgTable('nonconformance_records', {
   hasCustomerPartsToReturn: boolean('has_customer_parts_to_return').default(false),
   addedToRts: boolean('added_to_rts').default(false),
   rtsAddedAt: timestamp('rts_added_at'),
+  useOrderAddress: boolean('use_order_address').default(false),
+  repairAddress: jsonb('repair_address'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -3286,6 +3288,15 @@ export const insertNonconformanceRecordSchema = createInsertSchema(
     dispositionDate: z.string().min(1, 'Disposition date is required'),
     notes: z.string().optional(),
     status: z.enum(['Open', 'Resolved']).default('Open'),
+    useOrderAddress: z.boolean().optional().default(false),
+    repairAddress: z.object({
+      street: z.string().optional().nullable(),
+      street2: z.string().optional().nullable(),
+      city: z.string().optional().nullable(),
+      state: z.string().optional().nullable(),
+      zipCode: z.string().optional().nullable(),
+      country: z.string().optional().nullable(),
+    }).optional().nullable(),
   });
 
 // Types for Module 8

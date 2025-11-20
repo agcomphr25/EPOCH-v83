@@ -26,8 +26,9 @@ export default function NonconformanceDashboard() {
     status: '',
     search: '',
   });
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const { records, loading, error, setRecords } = useNonconformance(filters);
+  const { records, loading, error, setRecords } = useNonconformance({ ...filters, refreshTrigger });
   const [modalOpen, setModalOpen] = useState(false);
   const [editRecord, setEditRecord] = useState(null);
 
@@ -53,8 +54,8 @@ export default function NonconformanceDashboard() {
   };
 
   const onRecordSaved = () => {
-    // Trigger refetch by resetting filters state
-    setFilters((prev) => ({ ...prev }));
+    // Trigger refetch by incrementing the refresh trigger
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   const getStatusBadge = (record: any) => {

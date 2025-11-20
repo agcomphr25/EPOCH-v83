@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../../db';
 import { pool } from '../../db';
-import { payments, allOrders, orders } from '../../../shared/schema';
-import { eq, sql, desc } from 'drizzle-orm';
+import { payments, allOrders, orders, customerAddresses } from '../../../shared/schema';
+import { eq, sql, desc, and } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
 import {
@@ -2902,6 +2902,46 @@ router.get('/reference/department-types', async (req: Request, res: Response) =>
   } catch (error) {
     console.error('Error fetching order department types:', error);
     res.status(500).json({ error: 'Failed to fetch order department types' });
+  }
+});
+
+// Get customer's default address for an order (for nonconformance repair address)
+router.get('/:orderId/customer-address', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    
+    // First, find the order to get the customer ID
+    const order = await storage.getOrderById(orderId);
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    if (!order.customerId) {
+      return res.json({ address: null });
+    }
+    
+    // Query customer_addresses table for the default shipping address
+    const defaultAddresses = await db
+      .select()
+      .from(customerAddresses)
+      .where(
+        and(
+          eq(customerAddresses.customerId, order.customerId),
+          eq(customerAddresses.isDefault, true)
+        )
+      )
+      .limit(1);
+    
+    const address = defaultAddresses.length > 0 ? defaultAddresses[0] : null;
+    
+    res.json({ address });
+  } catch (error) {
+    console.error('Error fetching customer address for order:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch customer address',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
   }
 });
 

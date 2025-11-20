@@ -2,24 +2,17 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
-  PlusCircle,
-  FileText,
-  FilePenLine,
   XCircle,
   Users,
-  User,
   Factory,
   RefreshCw,
   LogOut,
   Truck,
-  Package,
   Home,
   Star,
   GraduationCap,
   CreditCard,
   ClipboardList,
-  Plus,
-  List,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -88,48 +81,6 @@ export default function DARLENEBTestDashboard() {
         </CardHeader>
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Link href="/order-entry">
-              <div className="p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all cursor-pointer bg-white dark:bg-gray-800 h-full" data-testid="card-order-entry">
-                <div className="text-center">
-                  <Plus className="w-6 h-6 text-blue-600 dark:text-blue-400 mx-auto mb-2" />
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    Order Entry
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Create single orders
-                  </p>
-                </div>
-              </div>
-            </Link>
-
-            <Link href="/all-orders">
-              <div className="p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-green-400 dark:hover:border-green-500 hover:shadow-lg transition-all cursor-pointer bg-white dark:bg-gray-800 h-full" data-testid="card-all-orders">
-                <div className="text-center">
-                  <List className="w-6 h-6 text-green-600 dark:text-green-400 mx-auto mb-2" />
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    All Orders
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    View all created orders
-                  </p>
-                </div>
-              </div>
-            </Link>
-
-            <Link href="/nonconformance">
-              <div className="p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-red-400 dark:hover:border-red-500 hover:shadow-lg transition-all cursor-pointer bg-white dark:bg-gray-800 h-full" data-testid="card-nonconforming-tracker">
-                <div className="text-center">
-                  <XCircle className="w-6 h-6 text-red-600 dark:text-red-400 mx-auto mb-2" />
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    Nonconforming Tracker
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Track quality issues
-                  </p>
-                </div>
-              </div>
-            </Link>
-
             <Link href="/rts">
               <div className="p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-teal-400 dark:hover:border-teal-500 hover:shadow-lg transition-all cursor-pointer bg-white dark:bg-gray-800 h-full" data-testid="card-rts">
                 <div className="text-center">
@@ -149,48 +100,6 @@ export default function DARLENEBTestDashboard() {
 
       {/* Quick Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <Link href="/order-entry">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
-            <CardContent className="p-4 text-center">
-              <PlusCircle className="w-8 h-8 text-blue-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Order Entry
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Create new orders
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/all-orders">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
-            <CardContent className="p-4 text-center">
-              <FileText className="w-8 h-8 text-green-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                All Orders
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                View all orders
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/draft-orders">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-yellow-200">
-            <CardContent className="p-4 text-center">
-              <FilePenLine className="w-8 h-8 text-yellow-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Draft Orders
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Manage drafts
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-
         <Link href="/cancelled-orders">
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-red-200">
             <CardContent className="p-4 text-center">

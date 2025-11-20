@@ -112,7 +112,73 @@ export default function NonconformanceFormModal({
     repairDepartment: '',
     repairNotes: '',
     addedToRts: false,
+    useOrderAddress: false,
+    repairAddress: {
+      street: '',
+      street2: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: 'United States',
+    },
   });
+
+  const [orderAddress, setOrderAddress] = useState<any>(null);
+
+  // Fetch address for a given order ID
+  const fetchOrderAddress = async (orderId: string): Promise<boolean> => {
+    try {
+      const orderDetailsResponse = await apiRequest(`/api/all-orders/${orderId}`);
+      if (orderDetailsResponse) {
+        let foundAddress = null;
+        
+        // Check if order has alt ship to address
+        if (orderDetailsResponse.hasAltShipTo && orderDetailsResponse.altShipToAddress) {
+          foundAddress = orderDetailsResponse.altShipToAddress;
+        } else if (orderDetailsResponse.customerId) {
+          // Fetch customer's default address
+          const addressesResponse = await apiRequest(`/api/customers/${orderDetailsResponse.customerId}/addresses`);
+          const defaultAddress = addressesResponse?.find((addr: any) => addr.isDefault) || addressesResponse?.[0];
+          if (defaultAddress) {
+            foundAddress = {
+              street: defaultAddress.street,
+              street2: defaultAddress.street2,
+              city: defaultAddress.city,
+              state: defaultAddress.state,
+              zipCode: defaultAddress.zipCode,
+              country: defaultAddress.country,
+            };
+          }
+        }
+
+        if (foundAddress) {
+          setOrderAddress(foundAddress);
+          return true;
+        } else {
+          // No address found, notify user and keep manual mode with preserved address
+          setOrderAddress(null);
+          // Don't clear repairAddress - preserve manual data
+          toast({
+            title: 'No Address Found',
+            description: 'No shipping address found for this order. Please enter a manual repair address.',
+            variant: 'default',
+          });
+          return false;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('Error fetching order address:', error);
+      setOrderAddress(null);
+      // Don't clear repairAddress - preserve manual data
+      toast({
+        title: 'Error Fetching Address',
+        description: 'Could not retrieve address for this order. Please enter a manual repair address.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  };
 
   // Load record for edit
   useEffect(() => {
@@ -136,7 +202,24 @@ export default function NonconformanceFormModal({
         repairDepartment: recordToEdit.repairDepartment || '',
         repairNotes: recordToEdit.repairNotes || '',
         addedToRts: recordToEdit.addedToRts || false,
+        useOrderAddress: recordToEdit.useOrderAddress || false,
+        repairAddress: recordToEdit.repairAddress || {
+          street: '',
+          street2: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          country: 'United States',
+        },
       });
+
+      // If editing and record has useOrderAddress set, fetch the order address
+      if (recordToEdit.useOrderAddress && recordToEdit.orderId) {
+        fetchOrderAddress(recordToEdit.orderId);
+      } else if (recordToEdit.repairAddress) {
+        // If has manual address but not using order address, it's already in the form state
+        setOrderAddress(null);
+      }
     }
   }, [recordToEdit, isEdit]);
 
@@ -186,27 +269,51 @@ export default function NonconformanceFormModal({
     return () => clearTimeout(timeoutId);
   }, [orderQuery]);
 
-  const handleOrderSelect = (selectedOrder: any) => {
+  const handleOrderSelect = async (selectedOrder: any) => {
     console.log('Selected order data:', selectedOrder); // Debug log to see available fields
-    setForm({
-      ...form,
-      orderId: selectedOrder.orderId || selectedOrder.id || '',
-      serialNumber: selectedOrder.serialNumber || '',
-      customerName: selectedOrder.customerName || selectedOrder.customer || '',
-      poNumber:
-        selectedOrder.poNumber ||
-        selectedOrder.po ||
-        selectedOrder.customerPO ||
-        '',
-      stockModel:
-        selectedOrder.modelId ||
-        selectedOrder.stockModel ||
-        selectedOrder.model ||
-        selectedOrder.product ||
-        '',
+    const orderId = selectedOrder.orderId || selectedOrder.id || '';
+    
+    // Use functional setForm to guard against stale closures
+    setForm((prev) => {
+      // Guard against re-running when orderId already matches
+      if (orderId === prev.orderId) {
+        return prev;
+      }
+      
+      // Update order info but preserve manual address and keep useOrderAddress false initially
+      return {
+        ...prev,
+        orderId,
+        serialNumber: selectedOrder.serialNumber || '',
+        customerName: selectedOrder.customerName || selectedOrder.customer || '',
+        poNumber:
+          selectedOrder.poNumber ||
+          selectedOrder.po ||
+          selectedOrder.customerPO ||
+          '',
+        stockModel:
+          selectedOrder.modelId ||
+          selectedOrder.stockModel ||
+          selectedOrder.model ||
+          selectedOrder.product ||
+          '',
+        useOrderAddress: false, // Keep false until fetch succeeds
+      };
     });
+    
     setOrderQuery('');
     setOrderResults([]);
+
+    // Fetch the address for this order and only toggle useOrderAddress if successful
+    if (orderId) {
+      const addressFound = await fetchOrderAddress(orderId);
+      if (addressFound) {
+        // Only enable useOrderAddress if fetch was successful
+        setForm((prev) => ({ ...prev, useOrderAddress: true }));
+      }
+      // If fetch failed or no address found, fetchOrderAddress already showed toast
+      // and useOrderAddress remains false, preserving manual address mode
+    }
   };
 
   const handleSave = async () => {
@@ -229,16 +336,47 @@ export default function NonconformanceFormModal({
       return;
     }
 
+    // Validate address when disposition is "Repair"
+    if (form.disposition === 'Repair') {
+      if (!form.useOrderAddress) {
+        // Manual address is required
+        if (!form.repairAddress.street || !form.repairAddress.city || 
+            !form.repairAddress.state || !form.repairAddress.zipCode) {
+          toast({
+            title: 'Validation Error',
+            description: 'Please provide a complete repair address (street, city, state, and ZIP code)',
+            variant: 'destructive',
+          });
+          return;
+        }
+      } else if (!orderAddress) {
+        // Using order address but no address found
+        toast({
+          title: 'Validation Error',
+          description: 'No address found for the selected order. Please provide a manual address.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     setLoading(true);
     try {
+      // Prepare the form data for submission
+      const dataToSave = {
+        ...form,
+        // If using order address, store it in repairAddress for backend consistency
+        repairAddress: form.useOrderAddress && orderAddress ? orderAddress : form.repairAddress,
+      };
+
       if (isEdit) {
-        await updateRecord(recordToEdit.id, form);
+        await updateRecord(recordToEdit.id, dataToSave);
         toast({
           title: 'Success',
           description: 'Nonconformance record updated successfully',
         });
       } else {
-        await createRecord(form);
+        await createRecord(dataToSave);
         toast({
           title: 'Success',
           description: 'Nonconformance record created successfully',
@@ -521,6 +659,161 @@ export default function NonconformanceFormModal({
                   placeholder="Describe what needs to be repaired..."
                   rows={3}
                 />
+              </div>
+
+              {/* Address Selection */}
+              <div className="space-y-4 border-t pt-4">
+                <h4 className="font-medium text-blue-900 dark:text-blue-100">
+                  Repair Shipping Address
+                </h4>
+                {form.orderId && orderAddress && (
+                  <div className="flex items-center space-x-2" data-testid="checkbox-use-order-address">
+                    <Checkbox
+                      id="useOrderAddress"
+                      checked={form.useOrderAddress}
+                      onCheckedChange={(checked) => {
+                        setForm({ ...form, useOrderAddress: checked === true });
+                        // Clear orderAddress when toggling off to avoid accidental reuse
+                        if (!checked) {
+                          setOrderAddress(null);
+                        }
+                      }}
+                    />
+                    <Label htmlFor="useOrderAddress" className="cursor-pointer">
+                      Use address associated with order {form.orderId}
+                    </Label>
+                  </div>
+                )}
+
+                {form.useOrderAddress && orderAddress ? (
+                  <div className="p-3 bg-white dark:bg-gray-800 rounded border">
+                    <p className="text-sm font-medium mb-2">Order Address:</p>
+                    <p className="text-sm">
+                      {orderAddress.street}
+                      {orderAddress.street2 && <>, {orderAddress.street2}</>}
+                      <br />
+                      {orderAddress.city}, {orderAddress.state} {orderAddress.zipCode}
+                      <br />
+                      {orderAddress.country}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      {form.orderId && !orderAddress 
+                        ? 'No address found for this order. Please enter a repair address below.'
+                        : 'Enter the address where the item should be shipped for repair:'}
+                    </p>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div>
+                        <Label>Street Address</Label>
+                        <Input
+                          value={form.repairAddress.street}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              repairAddress: {
+                                ...form.repairAddress,
+                                street: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder="Street address"
+                          data-testid="input-repair-street"
+                        />
+                      </div>
+                      <div>
+                        <Label>Street Address 2 (optional)</Label>
+                        <Input
+                          value={form.repairAddress.street2}
+                          onChange={(e) =>
+                            setForm({
+                              ...form,
+                              repairAddress: {
+                                ...form.repairAddress,
+                                street2: e.target.value,
+                              },
+                            })
+                          }
+                          placeholder="Suite, unit, etc."
+                          data-testid="input-repair-street2"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label>City</Label>
+                          <Input
+                            value={form.repairAddress.city}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                repairAddress: {
+                                  ...form.repairAddress,
+                                  city: e.target.value,
+                                },
+                              })
+                            }
+                            placeholder="City"
+                            data-testid="input-repair-city"
+                          />
+                        </div>
+                        <div>
+                          <Label>State</Label>
+                          <Input
+                            value={form.repairAddress.state}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                repairAddress: {
+                                  ...form.repairAddress,
+                                  state: e.target.value,
+                                },
+                              })
+                            }
+                            placeholder="State"
+                            data-testid="input-repair-state"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label>ZIP Code</Label>
+                          <Input
+                            value={form.repairAddress.zipCode}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                repairAddress: {
+                                  ...form.repairAddress,
+                                  zipCode: e.target.value,
+                                },
+                              })
+                            }
+                            placeholder="ZIP code"
+                            data-testid="input-repair-zipcode"
+                          />
+                        </div>
+                        <div>
+                          <Label>Country</Label>
+                          <Input
+                            value={form.repairAddress.country}
+                            onChange={(e) =>
+                              setForm({
+                                ...form,
+                                repairAddress: {
+                                  ...form.repairAddress,
+                                  country: e.target.value,
+                                },
+                              })
+                            }
+                            placeholder="Country"
+                            data-testid="input-repair-country"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}

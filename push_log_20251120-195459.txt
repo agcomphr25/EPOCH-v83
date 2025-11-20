@@ -1,0 +1,47 @@
+D	attached_assets/image_1763564511502.png
+D	attached_assets/image_1763570704340.png
+D	attached_assets/image_1763571698285.png
+D	attached_assets/image_1763572604019.png
+D	attached_assets/image_1763573417438.png
+D	attached_assets/image_1763576011916.png
+D	attached_assets/image_1763576795510.png
+D	attached_assets/image_1763579858518.png
+D	attached_assets/image_1763582547731.png
+D	attached_assets/image_1763584197722.png
+D	attached_assets/image_1763585727726.png
+D	attached_assets/image_1763623328670.png
+D	attached_assets/image_1763651002418.png
+M	client/src/App.tsx
+M	client/src/components/Navigation.tsx
+M	client/src/components/OrderAttachments.tsx
+M	client/src/components/PartRoutingWizard.tsx
+M	client/src/components/inventory/VendorPOManager.tsx
+M	client/src/components/inventory/VendorPOSettings.tsx
+M	client/src/config/userPermissions.ts
+M	client/src/pages/AGTestDashboard.tsx
+M	client/src/pages/AdminPanelPage.tsx
+M	client/src/pages/DARLENEBTestDashboard.tsx
+M	client/src/pages/DepartmentPartsRequestPage.tsx
+M	client/src/pages/EnhancedInventoryMRPPage.tsx
+D	client/src/pages/GatewayReportsPage.tsx
+M	client/src/pages/P2DepartmentManager.tsx
+M	client/src/pages/PurchaseReviewChecklist.tsx
+M	client/src/pages/PurchaseReviewSubmissions.tsx
+M	client/src/pages/VendorManagement.tsx
+M	migrations/meta/_journal.json
+M	push_log_20251119-171731.txt
+D	push_log_20251119-173426.txt
+D	push_log_20251119-225927.txt
+D	push_log_20251120-075723.txt
+M	server/schema.ts
+M	server/src/routes/customers.ts
+D	server/src/routes/gatewayReports.ts
+M	server/src/routes/index.ts
+M	server/src/routes/inventory.ts
+M	server/src/routes/orderAttachments.ts
+M	server/src/routes/rtsSales.ts
+M	server/src/routes/vendorPOs.ts
+M	server/storage.ts
+Your branch and 'origin/main' have diverged,
+and have 2 and 5 different commits each, respectively.
+  (use "git pull" if you want to integrate the remote branch with yours)

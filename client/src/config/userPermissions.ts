@@ -223,6 +223,17 @@ function hasRoleBasedAccess(route: string, userRole?: string): boolean {
     return true;
   }
 
+
+  // Gateway Reports route requires ADMIN or OWNER role
+  if (route === '/gateway-reports' && (role === 'ADMIN' || role === 'OWNER')) {
+    return true;
+  }
+
+  // Enhanced Inventory & MRP route requires ADMIN or INVENTORY_MANAGER role
+  if (route === '/inventory/enhanced-mrp' && (role === 'ADMIN' || role === 'INVENTORY_MANAGER')) {
+    return true;
+  }
+
   // Add more role-based route mappings here as needed
 
   return false;

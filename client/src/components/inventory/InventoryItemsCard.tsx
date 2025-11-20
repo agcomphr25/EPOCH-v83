@@ -1984,9 +1984,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     )}
                   </div>
                 </th>
-                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
-                  Groups
-                </th>
                 <th
                   className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => handleSort('source')}
@@ -2121,12 +2118,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => {
-                const itemGroups = itemGroupsMap[item.id] || [];
-                const visibleGroups = itemGroups.slice(0, 3);
-                const remainingCount = itemGroups.length - 3;
-
-                return (
+              {items.map((item) => (
                   <tr
                     key={item.id}
                     className="hover:bg-gray-50 dark:hover:bg-gray-800"
@@ -2147,43 +2139,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       {item.name}
-                    </td>
-                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
-                      <div className="flex flex-wrap gap-1">
-                        {visibleGroups.map((group) => (
-                          <Badge
-                            key={group.id}
-                            variant="secondary"
-                            className="text-xs"
-                            data-testid={`badge-group-${group.id}`}
-                          >
-                            {group.name}
-                          </Badge>
-                        ))}
-                        {remainingCount > 0 && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs cursor-help"
-                                  data-testid={`badge-more-groups-${item.id}`}
-                                >
-                                  +{remainingCount} more
-                                </Badge>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <div className="flex flex-col gap-1">
-                                  {itemGroups.slice(3).map((group) => (
-                                    <div key={group.id}>{group.name}</div>
-                                  ))}
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                        {itemGroups.length === 0 && '-'}
-                      </div>
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       {item.source || '-'}
@@ -2307,8 +2262,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                       </div>
                     </td>
                   </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>

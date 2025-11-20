@@ -142,20 +142,12 @@ export default function NonconformanceFormModal({
         // Check if order has alt ship to address
         if (orderDetailsResponse.hasAltShipTo && orderDetailsResponse.altShipToAddress) {
           foundAddress = orderDetailsResponse.altShipToAddress;
-        } else if (orderDetailsResponse.customerId) {
-          // Fetch customer's default address
-          const addressesResponse = await apiRequest(`/api/customers/${orderDetailsResponse.customerId}/addresses`);
-          const defaultAddress = addressesResponse?.find((addr: any) => addr.isDefault) || addressesResponse?.[0];
-          if (defaultAddress) {
-            foundAddress = {
-              street: defaultAddress.street,
-              street2: defaultAddress.street2,
-              city: defaultAddress.city,
-              state: defaultAddress.state,
-              zipCode: defaultAddress.zipCode,
-              country: defaultAddress.country,
-            };
-          }
+        } else if (orderDetailsResponse.shippingAddress) {
+          // Use order's shipping address if available
+          foundAddress = orderDetailsResponse.shippingAddress;
+        } else if (orderDetailsResponse.customerAddress) {
+          // Try customer address from order if available
+          foundAddress = orderDetailsResponse.customerAddress;
         }
 
         if (foundAddress) {

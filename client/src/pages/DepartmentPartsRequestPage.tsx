@@ -66,7 +66,6 @@ type User = {
 type Department = {
   id: number;
   name: string;
-  displayName?: string;
 };
 
 export default function DepartmentPartsRequestPage() {
@@ -90,7 +89,7 @@ export default function DepartmentPartsRequestPage() {
   // Check if user is admin
   const isAdmin = user?.username ? ['glennj', 'tasham', 'staciw'].includes(user.username.toLowerCase()) : false;
 
-  // Get all manufacturing departments (for admin users)
+  // Get all departments (for admin users)
   const { data: departments = [] } = useQuery<Department[]>({
     queryKey: ['/api/departments'],
     enabled: isAdmin,
@@ -299,7 +298,7 @@ export default function DepartmentPartsRequestPage() {
               <SelectContent>
                 {departments.map((dept) => (
                   <SelectItem key={dept.id} value={dept.name}>
-                    {dept.displayName || dept.name}
+                    {dept.name}
                   </SelectItem>
                 ))}
               </SelectContent>

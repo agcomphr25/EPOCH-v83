@@ -136,7 +136,7 @@ export default function AdminPanelPage() {
     enabled: !!selectedOrderIdString && isPanelOpen,
   });
 
-  // Mutation for updating individual fields with optimistic updates
+  // Mutation for updating individual fields
   const updateFieldMutation = useMutation({
     mutationFn: async ({ orderId, fieldName, value }: { orderId: string; fieldName: string; value: any }) => {
       console.log('🚀 MUTATION CALLED:', { orderId, fieldName, value, valueType: typeof value });
@@ -145,69 +145,20 @@ export default function AdminPanelPage() {
         body: { fieldName, value },
       });
     },
-    onMutate: async ({ orderId, fieldName, value }) => {
-      // Cancel any outgoing refetches to prevent them from overwriting our optimistic update
-      await queryClient.cancelQueries({ queryKey: ['/api/orders/with-payment-status'] });
-      
-      // Snapshot the previous value for rollback
-      const previousOrders = queryClient.getQueryData<Order[]>(['/api/orders/with-payment-status']);
-      
-      // Optimistically update the cache
-      queryClient.setQueryData<Order[]>(['/api/orders/with-payment-status'], (old) => {
-        if (!old) return old;
-        
-        return old.map(order => {
-          if (order.orderId === orderId) {
-            const updates: Partial<Order> = { [fieldName]: value };
-            
-            // If updating status, also update currentStatus (display value)
-            if (fieldName === 'status') {
-              const statusType = statusTypes.find((s: any) => s.name === value);
-              if (statusType) {
-                updates.currentStatus = statusType.displayName;
-              }
-            }
-            
-            // If updating currentDepartment, ensure consistency
-            if (fieldName === 'currentDepartment') {
-              const deptType = departmentTypes.find((d: any) => d.name === value);
-              if (deptType) {
-                // currentDepartment is already the raw value, but ensure it's updated
-                updates.currentDepartment = value;
-              }
-            }
-            
-            // Update the order with both the field and any derived display values
-            return { ...order, ...updates };
-          }
-          return order;
-        });
+    onSuccess: async () => {
+      // Force refetch instead of just invalidating
+      await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      toast({
+        title: 'Success',
+        description: 'Order field updated successfully',
       });
-      
-      // Return context with the snapshot for potential rollback
-      return { previousOrders };
     },
-    onError: (error: any, variables, context) => {
-      // Rollback to previous state on error
-      if (context?.previousOrders) {
-        queryClient.setQueryData(['/api/orders/with-payment-status'], context.previousOrders);
-      }
-      
+    onError: (error: any) => {
       toast({
         title: 'Error',
         description: error.message || 'Failed to update order field',
         variant: 'destructive',
       });
-    },
-    onSuccess: () => {
-      toast({
-        title: 'Success',
-        description: 'Order updated successfully',
-      });
-    },
-    onSettled: () => {
-      // Always refetch after error or success to ensure server state is correct
-      queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
     },
   });
 

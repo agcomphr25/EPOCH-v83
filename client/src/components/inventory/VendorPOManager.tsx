@@ -51,9 +51,6 @@ import {
   Send,
   CheckCircle,
   XCircle,
-  Settings2,
-  Loader2,
-  Save,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import VendorPOItemSelector from './VendorPOItemSelector';
@@ -67,7 +64,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Checkbox } from '@/components/ui/checkbox';
 
 // Types based on our schema
 type VendorPO = {
@@ -237,14 +233,12 @@ function VendorPOCard({
   onDelete,
   onViewItems,
   onIssuePO,
-  onSettings,
 }: {
   vendorPo: VendorPO;
   onEdit: (vendorPo: VendorPO) => void;
   onDelete: (id: number) => void;
   onViewItems: (vendorPo: VendorPO) => void;
   onIssuePO: (id: number) => void;
-  onSettings: (vendorPo: VendorPO) => void;
 }) {
   return (
     <Card
@@ -333,15 +327,6 @@ function VendorPOCard({
               Issue PO
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onSettings(vendorPo)}
-            data-testid={`button-settings-${vendorPo.id}`}
-          >
-            <Settings2 className="w-4 h-4 mr-1" />
-            PO Settings
-          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -580,8 +565,6 @@ export default function VendorPOManager() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showStatusChangeDialog, setShowStatusChangeDialog] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string>('');
-  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-  const [selectedPOForSettings, setSelectedPOForSettings] = useState<VendorPO | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -724,11 +707,6 @@ export default function VendorPOManager() {
     setSelectedVendorPO(vendorPo);
     setShowDetailView(true);
     setActiveTab('items');
-  };
-
-  const handleSettings = (vendorPo: VendorPO) => {
-    setSelectedPOForSettings(vendorPo);
-    setShowSettingsDialog(true);
   };
 
   const handleFormSubmit = (data: CreateVendorPOData) => {
@@ -1196,7 +1174,6 @@ export default function VendorPOManager() {
               onDelete={handleDelete}
               onViewItems={handleViewItems}
               onIssuePO={handleIssuePO}
-              onSettings={handleSettings}
             />
           ))}
         </div>
@@ -1212,219 +1189,6 @@ export default function VendorPOManager() {
         }}
         onSubmit={handleFormSubmit}
       />
-
-      {/* PO Settings Modal */}
-      <POSettingsModal
-        isOpen={showSettingsDialog}
-        onClose={() => {
-          setShowSettingsDialog(false);
-          setSelectedPOForSettings(null);
-        }}
-        vendorPO={selectedPOForSettings}
-      />
     </div>
-  );
-}
-
-// PO Settings Modal Component
-function POSettingsModal({
-  isOpen,
-  onClose,
-  vendorPO,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  vendorPO: VendorPO | null;
-}) {
-  const [selectedSettings, setSelectedSettings] = useState<number[]>([]);
-  const [adHocSettings, setAdHocSettings] = useState<string>('');
-  const [isSaving, setIsSaving] = useState(false);
-  const queryClient = useQueryClient();
-
-  // Fetch optional settings library
-  const { data: optionalSettings = [], isLoading } = useQuery<{
-    id: number;
-    name: string;
-    description?: string;
-  }[]>({
-    queryKey: ['/api/vendor-pos/optional-settings'],
-    enabled: isOpen,
-  });
-
-  // Fetch existing PO-specific settings
-  const { data: poSettings } = useQuery<{
-    selectedOptionalSettings: number[];
-    adHocSettings: string;
-  }>({
-    queryKey: ['/api/vendor-pos', vendorPO?.id, 'settings'],
-    enabled: isOpen && !!vendorPO,
-    queryFn: async () => {
-      const response = await apiRequest(`/api/vendor-pos/${vendorPO!.id}/settings`);
-      return response;
-    },
-  });
-
-  // Set initial values when PO settings are loaded
-  useEffect(() => {
-    if (poSettings) {
-      setSelectedSettings(poSettings.selectedOptionalSettings || []);
-      setAdHocSettings(poSettings.adHocSettings || '');
-    } else {
-      setSelectedSettings([]);
-      setAdHocSettings('');
-    }
-  }, [poSettings, isOpen]);
-
-  const handleToggleSetting = (settingId: number) => {
-    setSelectedSettings((prev) =>
-      prev.includes(settingId)
-        ? prev.filter((id) => id !== settingId)
-        : [...prev, settingId]
-    );
-  };
-
-  const handleSave = async () => {
-    if (!vendorPO) return;
-
-    setIsSaving(true);
-    try {
-      await apiRequest(`/api/vendor-pos/${vendorPO.id}/settings`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          selectedOptionalSettings: selectedSettings,
-          adHocSettings: adHocSettings.trim(),
-        }),
-      });
-
-      queryClient.invalidateQueries({
-        queryKey: ['/api/vendor-pos', vendorPO.id, 'settings'],
-      });
-
-      toast.success('PO settings saved successfully');
-      onClose();
-    } catch (error) {
-      toast.error('Failed to save PO settings');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  if (!vendorPO) return null;
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle data-testid="dialog-title-po-settings">
-            PO Settings: {vendorPO.poNumber}
-          </DialogTitle>
-          <CardDescription>
-            Select optional settings and add custom requirements for this purchase order
-          </CardDescription>
-        </DialogHeader>
-
-        <div className="space-y-6 mt-4">
-          {/* Optional Settings Section */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Settings2 className="h-5 w-5 text-blue-600" />
-              <Label className="text-base font-semibold">Optional Settings</Label>
-            </div>
-            <p className="text-sm text-gray-500">
-              Select from the optional settings library
-            </p>
-
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-              </div>
-            ) : optionalSettings.length === 0 ? (
-              <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-md">
-                <p className="text-sm text-gray-500">
-                  No optional settings available. Add them in PO Settings → Optional Settings.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md p-3">
-                {optionalSettings.map((setting) => (
-                  <div
-                    key={setting.id}
-                    className="flex items-start gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded"
-                    data-testid={`setting-option-${setting.id}`}
-                  >
-                    <Checkbox
-                      id={`setting-${setting.id}`}
-                      checked={selectedSettings.includes(setting.id)}
-                      onCheckedChange={() => handleToggleSetting(setting.id)}
-                      data-testid={`checkbox-setting-${setting.id}`}
-                    />
-                    <div className="flex-1">
-                      <Label
-                        htmlFor={`setting-${setting.id}`}
-                        className="font-medium cursor-pointer"
-                      >
-                        {setting.name}
-                      </Label>
-                      {setting.description && (
-                        <p className="text-sm text-gray-500 mt-0.5">
-                          {setting.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Ad Hoc Settings Section */}
-          <div className="space-y-3">
-            <Label htmlFor="adhoc-settings" className="text-base font-semibold">
-              Custom Requirements (Ad Hoc)
-            </Label>
-            <p className="text-sm text-gray-500">
-              Add any specific requirements or notes for this PO
-            </p>
-            <Textarea
-              id="adhoc-settings"
-              value={adHocSettings}
-              onChange={(e) => setAdHocSettings(e.target.value)}
-              placeholder="e.g., Rush delivery, Special packaging instructions, Quality control requirements..."
-              className="min-h-[120px]"
-              data-testid="textarea-adhoc-settings"
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 mt-6">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            disabled={isSaving}
-            data-testid="button-cancel-po-settings"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={isSaving}
-            data-testid="button-save-po-settings"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                Save Settings
-              </>
-            )}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }

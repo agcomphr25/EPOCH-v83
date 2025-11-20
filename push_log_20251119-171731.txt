@@ -1,3 +1,33 @@
 Your branch is ahead of 'origin/main' by 16 commits.
   (use "git push" to publish your local commits)
 Already up to date.
+[feature-20251119-1717-my-change b285983b] feat: my-change
+ 1 file changed, 3 insertions(+)
+ create mode 100644 push_log_20251119-171731.txt
+branch 'feature-20251119-1717-my-change' set up to track 'origin/feature-20251119-1717-my-change'.
+> b285983b (HEAD -> feature-20251119-1717-my-change, origin/feature-20251119-1717-my-change) feat: my-change
+> c739d988 (gitsafe-backup/main, gitsafe-backup/HEAD, main) Remove standalone department for lathe wrapping operations
+> 20c8fbc1 Update material traceability fields for barcode scanning
+> 76ec5a78 Improve employee capability display and data retrieval
+> 4750dcc2 Automatically track all material information when using barcode scanning
+> d7f15b99 Fix technician assignment error by updating select item values
+> 401c59a1 Add migration endpoint to grant capabilities for existing certifications
+> cbca4761 Add Lathe/Wrapping to available departments in routing wizard
+> 79a8d79e Grant P2 certifications based on employee capabilities and filter technicians
+> 8a175298 Add technician assignment to part routing with certification checks
+> 41466f4d Make special process configurations available for all departments
+> 66994194 Add a special process field to department configuration for detailed instructions
+> 81f64bed Add multiple oven curing steps for parts with ramp-up and down profiles
+> da012ec1 Add oven curing configuration for assembly and disassembly processes
+> 6c5e6567 (repl-0ce1429f-ab65-4d48-bef3-611aab96e0df/main, repl-0ce1429f-ab65-4d48-bef3-611aab96e0df/HEAD) Published your App
+> 584f8c8e Saved progress at the end of the loop
+> aceeaa76 Add departments data to the parts requests system
+ ...-the-Select-val-1763571022952_1763571022952.txt |  14 +
+ client/src/components/PartRoutingWizard.tsx        | 410 +++++++++++++++++++--
+ client/src/pages/EmployeeDetail.tsx                |   9 +-
+ push_log_20251119-171731.txt                       |   3 +
+ server/src/routes/employees.ts                     |  11 +
+ server/src/routes/training.ts                      | 207 ++++++++++-
+ server/storage.ts                                  |  30 +-
+ 7 files changed, 651 insertions(+), 33 deletions(-)
+Open PR: https://github.com/agcomphr25/EPOCH-v83/compare/feature-20251119-1717-my-change?expand=1

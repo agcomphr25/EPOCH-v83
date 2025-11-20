@@ -1,3 +1,0 @@
-Your branch is ahead of 'origin/main' by 11 commits.
-  (use "git push" to publish your local commits)
-Already up to date.

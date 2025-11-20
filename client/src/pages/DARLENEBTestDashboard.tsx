@@ -17,9 +17,6 @@ import {
   Star,
   GraduationCap,
   CreditCard,
-  ClipboardList,
-  Plus,
-  List,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -74,78 +71,6 @@ export default function DARLENEBTestDashboard() {
           </Button>
         </div>
       </div>
-
-      {/* Order Management Card */}
-      <Card className="border-2 border-blue-300 dark:border-blue-700 mb-6">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900 dark:to-blue-800">
-          <CardTitle className="flex items-center gap-3 text-xl">
-            <ClipboardList className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-            Order Management
-          </CardTitle>
-          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-            Quick access to all order management tools
-          </p>
-        </CardHeader>
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Link href="/order-entry">
-              <div className="p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all cursor-pointer bg-white dark:bg-gray-800 h-full" data-testid="card-order-entry">
-                <div className="text-center">
-                  <Plus className="w-6 h-6 text-blue-600 dark:text-blue-400 mx-auto mb-2" />
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    Order Entry
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Create single orders
-                  </p>
-                </div>
-              </div>
-            </Link>
-
-            <Link href="/all-orders">
-              <div className="p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-green-400 dark:hover:border-green-500 hover:shadow-lg transition-all cursor-pointer bg-white dark:bg-gray-800 h-full" data-testid="card-all-orders">
-                <div className="text-center">
-                  <List className="w-6 h-6 text-green-600 dark:text-green-400 mx-auto mb-2" />
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    All Orders
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    View all created orders
-                  </p>
-                </div>
-              </div>
-            </Link>
-
-            <Link href="/nonconformance">
-              <div className="p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-red-400 dark:hover:border-red-500 hover:shadow-lg transition-all cursor-pointer bg-white dark:bg-gray-800 h-full" data-testid="card-nonconforming-tracker">
-                <div className="text-center">
-                  <XCircle className="w-6 h-6 text-red-600 dark:text-red-400 mx-auto mb-2" />
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    Nonconforming Tracker
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Track quality issues
-                  </p>
-                </div>
-              </div>
-            </Link>
-
-            <Link href="/rts">
-              <div className="p-4 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-teal-400 dark:hover:border-teal-500 hover:shadow-lg transition-all cursor-pointer bg-white dark:bg-gray-800 h-full" data-testid="card-rts">
-                <div className="text-center">
-                  <Truck className="w-6 h-6 text-teal-600 dark:text-teal-400 mx-auto mb-2" />
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    RTS (Ready to Ship)
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Manage shipments
-                  </p>
-                </div>
-              </div>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Quick Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">

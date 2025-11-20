@@ -914,7 +914,7 @@ export default function VendorManagement() {
             </DialogHeader>
 
             <Tabs defaultValue="main" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="main" data-testid="tab-main-info">
                   Main Info
                 </TabsTrigger>
@@ -926,6 +926,9 @@ export default function VendorManagement() {
                 </TabsTrigger>
                 <TabsTrigger value="scope" data-testid="tab-scope">
                   Scope Approval
+                </TabsTrigger>
+                <TabsTrigger value="po-settings" data-testid="tab-po-settings">
+                  PO Settings
                 </TabsTrigger>
                 <TabsTrigger value="evaluation" data-testid="tab-evaluation">
                   Evaluation & Notes
@@ -1658,7 +1661,110 @@ export default function VendorManagement() {
                 </Form>
               </TabsContent>
 
-              {/* Tab 4: Evaluation & Notes */}
+              {/* Tab 4: PO Settings */}
+              <TabsContent value="po-settings" className="space-y-4 mt-4">
+                <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-md p-4 mb-4">
+                  <div className="flex items-start gap-2">
+                    <FileText className="w-5 h-5 text-purple-600 mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-purple-900 dark:text-purple-100">Vendor-Specific PO Settings</h4>
+                      <p className="text-sm text-purple-700 dark:text-purple-300">
+                        Set default terms, payment conditions, and shipping instructions that will be used when creating purchase orders for this vendor. If left empty, global PO settings will be used.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <Form {...form}>
+                  <form
+                    onSubmit={form.handleSubmit(onSubmit)}
+                    className="space-y-4"
+                  >
+                    <FormField
+                      control={form.control}
+                      name="termsAndConditions"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Terms and Conditions</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              {...field}
+                              placeholder="Enter vendor-specific terms and conditions..."
+                              className="min-h-[120px]"
+                              data-testid="textarea-vendor-terms-conditions"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="paymentTerms"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Payment Terms</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              {...field}
+                              placeholder="e.g., Net 30 days from invoice date..."
+                              className="min-h-[100px]"
+                              data-testid="textarea-vendor-payment-terms"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="shippingInstructions"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Shipping Instructions</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              {...field}
+                              placeholder="e.g., Ship to warehouse dock, notify 24 hours before delivery..."
+                              className="min-h-[100px]"
+                              data-testid="textarea-vendor-shipping-instructions"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <DialogFooter>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleCloseModal}
+                        data-testid="button-cancel"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={
+                          createVendorMutation.isPending ||
+                          updateVendorMutation.isPending
+                        }
+                        data-testid="button-save"
+                      >
+                        {createVendorMutation.isPending ||
+                        updateVendorMutation.isPending
+                          ? 'Saving...'
+                          : 'Save'}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </TabsContent>
+
+              {/* Tab 5: Evaluation & Notes */}
               <TabsContent value="evaluation" className="space-y-4 mt-4">
                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-4 mb-4">
                   <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Monthly Vendor Evaluations (2025)</h4>

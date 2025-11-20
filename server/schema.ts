@@ -2867,28 +2867,6 @@ export const vendorPOSettings = pgTable('vendor_po_settings', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-// Optional Settings Library for Vendor POs
-export const vendorPOOptionalSettings = pgTable('vendor_po_optional_settings', {
-  id: serial('id').primaryKey(),
-  name: text('name').notNull(),
-  description: text('description'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
-
-// Per-PO Specific Settings
-export const vendorPOSpecificSettings = pgTable('vendor_po_specific_settings', {
-  id: serial('id').primaryKey(),
-  vendorPoId: integer('vendor_po_id')
-    .references(() => vendorPOs.id, { onDelete: 'cascade' })
-    .notNull()
-    .unique(),
-  selectedOptionalSettings: integer('selected_optional_settings').array(), // Array of IDs from vendorPOOptionalSettings
-  adHocSettings: text('ad_hoc_settings'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
-
 export const communicationLogs = pgTable('communication_logs', {
   id: serial('id').primaryKey(),
   orderId: text('order_id'), // Made nullable for general communications
@@ -3178,33 +3156,6 @@ export const insertVendorPOSettingsSchema = createInsertSchema(vendorPOSettings)
   });
 export type InsertVendorPOSettings = z.infer<typeof insertVendorPOSettingsSchema>;
 export type VendorPOSettings = typeof vendorPOSettings.$inferSelect;
-
-export const insertVendorPOOptionalSettingSchema = createInsertSchema(vendorPOOptionalSettings)
-  .omit({
-    id: true,
-    createdAt: true,
-    updatedAt: true,
-  })
-  .extend({
-    name: z.string().min(1, 'Name is required'),
-    description: z.string().optional().nullable(),
-  });
-export type InsertVendorPOOptionalSetting = z.infer<typeof insertVendorPOOptionalSettingSchema>;
-export type VendorPOOptionalSetting = typeof vendorPOOptionalSettings.$inferSelect;
-
-export const insertVendorPOSpecificSettingsSchema = createInsertSchema(vendorPOSpecificSettings)
-  .omit({
-    id: true,
-    createdAt: true,
-    updatedAt: true,
-  })
-  .extend({
-    vendorPoId: z.number().int().positive('Vendor PO ID is required'),
-    selectedOptionalSettings: z.array(z.number().int()).default([]),
-    adHocSettings: z.string().optional().nullable(),
-  });
-export type InsertVendorPOSpecificSettings = z.infer<typeof insertVendorPOSpecificSettingsSchema>;
-export type VendorPOSpecificSettings = typeof vendorPOSpecificSettings.$inferSelect;
 
 // Order Attachments Table
 export const orderAttachments = pgTable('order_attachments', {
@@ -3670,6 +3621,21 @@ export const p2SerializedItemTraceability = pgTable('p2_serialized_item_traceabi
   departmentIdx: index('p2_serialized_item_traceability_department_idx').on(table.department),
 }));
 
+// P2 Serialized Item Custom Data - Stores custom field values entered by technicians per department
+export const p2SerializedItemCustomData = pgTable('p2_serialized_item_custom_data', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  serializedItemId: uuid('serialized_item_id')
+    .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  department: text('department').notNull(), // Department where custom data was recorded
+  customData: jsonb('custom_data').notNull(), // Object mapping field names to values: { "Temperature": "350°F", "Mold Number": "M-123" }
+  recordedBy: text('recorded_by').notNull(), // Username who recorded the data
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  itemIdIdx: index('p2_serialized_item_custom_data_item_id_idx').on(table.serializedItemId),
+  departmentIdx: index('p2_serialized_item_custom_data_department_idx').on(table.department),
+}));
+
 // Production Orders - separate from regular orders for PO tracking
 export const productionOrders = pgTable('production_orders', {
   id: serial('id').primaryKey(),
@@ -4103,12 +4069,26 @@ export const insertP2SerializedItemTraceabilitySchema = createInsertSchema(p2Ser
     recordedBy: z.string().min(1, 'Recorded by is required'),
   });
 
+export const insertP2SerializedItemCustomDataSchema = createInsertSchema(p2SerializedItemCustomData)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    serializedItemId: z.string().uuid('Invalid serialized item ID'),
+    department: z.string().min(1, 'Department is required'),
+    customData: z.record(z.string()),
+    recordedBy: z.string().min(1, 'Recorded by is required'),
+  });
+
 // Part Routing Types
 export type InsertPartRouting = z.infer<typeof insertPartRoutingSchema>;
 export type UpdatePartRouting = z.infer<typeof updatePartRoutingSchema>;
 export type PartRouting = typeof partRoutings.$inferSelect;
 export type InsertP2SerializedItemTraceability = z.infer<typeof insertP2SerializedItemTraceabilitySchema>;
 export type P2SerializedItemTraceability = typeof p2SerializedItemTraceability.$inferSelect;
+export type InsertP2SerializedItemCustomData = z.infer<typeof insertP2SerializedItemCustomDataSchema>;
+export type P2SerializedItemCustomData = typeof p2SerializedItemCustomData.$inferSelect;
 
 // Production Order Types
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;
@@ -6021,13 +6001,6 @@ export const purchaseReviewChecklistSubmissions = pgTable('purchase_review_check
   customerId: text('customer_id'),
   quoteId: text('quote_id'),
   
-  // Form data stored as JSON
-  formData: jsonb('form_data'),
-  
-  // Status and metadata
-  status: text('status').default('DRAFT'),
-  createdBy: text('created_by'),
-  
   // Section A - Customer Information
   existingCustomer: text('existing_customer'),
   significantChanges: text('significant_changes'),
@@ -6132,55 +6105,5 @@ export const insertPurchaseReviewChecklistSubmissionSchema = createInsertSchema(
 // Types
 export type PurchaseReviewChecklistSubmission = typeof purchaseReviewChecklistSubmissions.$inferSelect;
 export type InsertPurchaseReviewChecklistSubmission = z.infer<typeof insertPurchaseReviewChecklistSubmissionSchema>;
-
-// Gateway Reports - Production manager weekly tracking
-export const gatewayReports = pgTable('gateway_reports', {
-  id: serial('id').primaryKey(),
-  weekStartDate: date('week_start_date').notNull().unique(), // Monday of the week
-  
-  // Buttpads - Daily counts (Mon-Fri)
-  buttpadsMonday: integer('buttpads_monday').default(0),
-  buttpadsTuesday: integer('buttpads_tuesday').default(0),
-  buttpadsWednesday: integer('buttpads_wednesday').default(0),
-  buttpadsThursday: integer('buttpads_thursday').default(0),
-  buttpadsFriday: integer('buttpads_friday').default(0),
-  
-  // Sandblasting - Daily counts (Mon-Fri)
-  sandblastingMonday: integer('sandblasting_monday').default(0),
-  sandblastingTuesday: integer('sandblasting_tuesday').default(0),
-  sandblastingWednesday: integer('sandblasting_wednesday').default(0),
-  sandblastingThursday: integer('sandblasting_thursday').default(0),
-  sandblastingFriday: integer('sandblasting_friday').default(0),
-  
-  // Texture - Daily counts (Mon-Fri)
-  textureMonday: integer('texture_monday').default(0),
-  textureTuesday: integer('texture_tuesday').default(0),
-  textureWednesday: integer('texture_wednesday').default(0),
-  textureThursday: integer('texture_thursday').default(0),
-  textureFriday: integer('texture_friday').default(0),
-  
-  // Duratec - Daily counts (Mon-Fri)
-  duratecMonday: integer('duratec_monday').default(0),
-  duratecTuesday: integer('duratec_tuesday').default(0),
-  duratecWednesday: integer('duratec_wednesday').default(0),
-  duratecThursday: integer('duratec_thursday').default(0),
-  duratecFriday: integer('duratec_friday').default(0),
-  
-  // Metadata
-  submittedBy: text('submitted_by'), // Username who entered/last updated the data
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-// Insert Schema
-export const insertGatewayReportSchema = createInsertSchema(gatewayReports).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-// Types
-export type GatewayReport = typeof gatewayReports.$inferSelect;
-export type InsertGatewayReport = z.infer<typeof insertGatewayReportSchema>;
 
 export * from './calendar.schema';

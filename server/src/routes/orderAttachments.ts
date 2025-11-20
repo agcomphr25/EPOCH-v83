@@ -146,35 +146,6 @@ router.post(
   }
 );
 
-// PATCH /api/order-attachments/:attachmentId - Update attachment (e.g., rename)
-router.patch('/:attachmentId', async (req, res) => {
-  try {
-    const attachmentId = parseInt(req.params.attachmentId);
-    const { originalFileName } = req.body;
-
-    if (!originalFileName || typeof originalFileName !== 'string') {
-      return res.status(400).json({ error: 'Original file name is required' });
-    }
-
-    // Get attachment to verify it exists
-    const attachment = await storage.getOrderAttachment(attachmentId);
-    if (!attachment) {
-      return res.status(404).json({ error: 'Attachment not found' });
-    }
-
-    // Update the attachment in database
-    const updatedAttachment = await storage.updateOrderAttachment(
-      attachmentId,
-      { originalFileName }
-    );
-
-    res.json(updatedAttachment);
-  } catch (error) {
-    console.error('Error updating order attachment:', error);
-    res.status(500).json({ error: 'Failed to update attachment' });
-  }
-});
-
 // DELETE /api/order-attachments/:attachmentId - Delete an attachment
 router.delete('/:attachmentId', async (req, res) => {
   try {

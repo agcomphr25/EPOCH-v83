@@ -1531,4 +1531,50 @@ router.get(
   }
 );
 
+// ========== CUSTOM DATA ROUTES ==========
+
+// Add custom data
+router.post(
+  '/serialized-items/:id/custom-data',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { insertP2SerializedItemCustomDataSchema } = await import('@/schema');
+      const data = { ...req.body, serializedItemId: id };
+      const validated = insertP2SerializedItemCustomDataSchema.parse(data);
+      const record = await storage.addCustomData(validated);
+      res.json(record);
+    } catch (error) {
+      console.error('Error adding custom data:', error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({ error: 'Validation error', details: error.message });
+      }
+      res.status(500).json({ 
+        error: 'Failed to add custom data',
+        details: (error as any).message
+      });
+    }
+  }
+);
+
+// Get custom data for item
+router.get(
+  '/serialized-items/:id/custom-data',
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { department } = req.query;
+      
+      const data = department
+        ? await storage.getCustomDataForDepartment(id, department as string)
+        : await storage.getCustomData(id);
+      
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching custom data:', error);
+      res.status(500).json({ error: 'Failed to fetch custom data' });
+    }
+  }
+);
+
 export default router;

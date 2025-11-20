@@ -36,7 +36,7 @@ import paymentsRoutes from './payments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
 import layupScheduleRoutes from './layupSchedule';
-import gatewayReportsRoutes from './gatewayReports';
+// import gatewayReportsRoutes from './gatewayReports'; // Temporarily removed
 import customerSatisfactionRoutes from './customerSatisfaction';
 import poProductsRoutes from './poProducts';
 import p1POQueueRoutes from './p1POQueue';
@@ -209,8 +209,8 @@ export function registerRoutes(app: Express): Server {
   // Layup schedule management routes
   app.use('/api/layup-schedule', layupScheduleRoutes);
 
-  // Gateway reports routes
-  app.use('/api/gateway-reports', gatewayReportsRoutes);
+  // Gateway reports routes - temporarily removed
+  // app.use('/api/gateway-reports', gatewayReportsRoutes);
 
   // Customer satisfaction survey routes
   app.use('/api/customer-satisfaction', customerSatisfactionRoutes);
@@ -1131,6 +1131,18 @@ export function registerRoutes(app: Express): Server {
     } catch (_error) {
       console.error('Get P2 customers _error:', _error);
       res.status(500).json({ _error: 'Failed to fetch P2 customers' });
+    }
+  });
+
+  // Quotes routes
+  app.get('/api/quotes', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const quotes = await storage.getAllQuotes();
+      res.json(quotes);
+    } catch (_error) {
+      console.error('Get quotes _error:', _error);
+      res.status(500).json({ _error: 'Failed to fetch quotes' });
     }
   });
 

@@ -62,7 +62,7 @@ export default function PurchaseReviewSubmissions() {
 
   const fetchSubmissions = async () => {
     try {
-      const response = await fetch('/api/purchase-review-submissions');
+      const response = await fetch('/api/purchase-review-checklists');
       if (response.ok) {
         const data = await response.json();
         setSubmissions(data);
@@ -103,7 +103,7 @@ export default function PurchaseReviewSubmissions() {
     if (!confirm('Are you sure you want to delete this submission?')) return;
 
     try {
-      const response = await fetch(`/api/purchase-review-submissions/${id}`, {
+      const response = await fetch(`/api/purchase-review-checklists/${id}`, {
         method: 'DELETE',
       });
 
@@ -128,7 +128,7 @@ export default function PurchaseReviewSubmissions() {
 
     try {
       const response = await fetch(
-        `/api/purchase-review-submissions/${editingSubmission.id}`,
+        `/api/purchase-review-checklists/${editingSubmission.id}`,
         {
           method: 'PUT',
           headers: {
@@ -450,243 +450,19 @@ export default function PurchaseReviewSubmissions() {
                                     </div>
                                   </div>
 
-                                  <div className="border-t pt-4 space-y-6">
-                                    {/* Section A - Customer Information */}
-                                    <div>
-                                      <h4 className="font-semibold text-lg mb-3 text-blue-700">
-                                        Section A - Customer Information
-                                      </h4>
-                                      <div className="grid grid-cols-2 gap-3 text-sm">
-                                        {selectedSubmission.formData?.companyName && (
-                                          <div>
-                                            <span className="font-medium">Company Name:</span>{' '}
-                                            {selectedSubmission.formData.companyName}
-                                          </div>
+                                  <div className="border-t pt-4">
+                                    <h4 className="font-medium mb-3">
+                                      Form Data:
+                                    </h4>
+                                    <div className="bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto">
+                                      <pre className="text-sm whitespace-pre-wrap">
+                                        {JSON.stringify(
+                                          selectedSubmission.formData,
+                                          null,
+                                          2
                                         )}
-                                        {selectedSubmission.formData?.address && (
-                                          <div>
-                                            <span className="font-medium">Address:</span>{' '}
-                                            {selectedSubmission.formData.address}
-                                          </div>
-                                        )}
-                                        {selectedSubmission.formData?.email && (
-                                          <div>
-                                            <span className="font-medium">Email:</span>{' '}
-                                            {selectedSubmission.formData.email}
-                                          </div>
-                                        )}
-                                        {selectedSubmission.formData?.phone && (
-                                          <div>
-                                            <span className="font-medium">Phone:</span>{' '}
-                                            {selectedSubmission.formData.phone}
-                                          </div>
-                                        )}
-                                        {selectedSubmission.formData?.poNumber && (
-                                          <div>
-                                            <span className="font-medium">PO Number:</span>{' '}
-                                            {selectedSubmission.formData.poNumber}
-                                          </div>
-                                        )}
-                                        {selectedSubmission.formData?.paymentTerms && (
-                                          <div>
-                                            <span className="font-medium">Payment Terms:</span>{' '}
-                                            {selectedSubmission.formData.paymentTerms}
-                                          </div>
-                                        )}
-                                      </div>
+                                      </pre>
                                     </div>
-
-                                    {/* Section B - Service/Product Information */}
-                                    {(selectedSubmission.formData?.quantityRequested || 
-                                      selectedSubmission.formData?.unitPrice ||
-                                      selectedSubmission.formData?.amount) && (
-                                      <div>
-                                        <h4 className="font-semibold text-lg mb-3 text-blue-700">
-                                          Section B - Service/Product Requested
-                                        </h4>
-                                        <div className="grid grid-cols-2 gap-3 text-sm">
-                                          {selectedSubmission.formData?.quantityRequested && (
-                                            <div>
-                                              <span className="font-medium">Quantity:</span>{' '}
-                                              {selectedSubmission.formData.quantityRequested}
-                                            </div>
-                                          )}
-                                          {selectedSubmission.formData?.unitOfMeasure && (
-                                            <div>
-                                              <span className="font-medium">Unit of Measure:</span>{' '}
-                                              {selectedSubmission.formData.unitOfMeasure}
-                                            </div>
-                                          )}
-                                          {selectedSubmission.formData?.unitPrice && (
-                                            <div>
-                                              <span className="font-medium">Unit Price:</span> $
-                                              {selectedSubmission.formData.unitPrice}
-                                            </div>
-                                          )}
-                                          {selectedSubmission.formData?.toolingPrice && (
-                                            <div>
-                                              <span className="font-medium">Tooling Price:</span> $
-                                              {selectedSubmission.formData.toolingPrice}
-                                            </div>
-                                          )}
-                                          {selectedSubmission.formData?.amount && (
-                                            <div className="col-span-2">
-                                              <span className="font-medium text-lg">Total Amount:</span>{' '}
-                                              <span className="text-lg font-bold text-green-600">
-                                                ${selectedSubmission.formData.amount}
-                                              </span>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Item Numbers */}
-                                    {(selectedSubmission.formData?.level1ItemNumber || 
-                                      selectedSubmission.formData?.level2ItemNumber ||
-                                      selectedSubmission.formData?.level3ItemNumber) && (
-                                      <div>
-                                        <h4 className="font-semibold text-lg mb-3 text-blue-700">
-                                          Item Numbers
-                                        </h4>
-                                        <div className="grid grid-cols-3 gap-3 text-sm">
-                                          {selectedSubmission.formData?.level1ItemNumber && (
-                                            <div>
-                                              <span className="font-medium">Level 1 Assembly:</span>{' '}
-                                              {selectedSubmission.formData.level1ItemNumber}
-                                            </div>
-                                          )}
-                                          {selectedSubmission.formData?.level2ItemNumber && (
-                                            <div>
-                                              <span className="font-medium">Level 2 CNC:</span>{' '}
-                                              {selectedSubmission.formData.level2ItemNumber}
-                                            </div>
-                                          )}
-                                          {selectedSubmission.formData?.level3ItemNumber && (
-                                            <div>
-                                              <span className="font-medium">Level 3 Manufacturing:</span>{' '}
-                                              {selectedSubmission.formData.level3ItemNumber}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Section E - Shipping */}
-                                    {(selectedSubmission.formData?.shipToInformation || 
-                                      selectedSubmission.formData?.deliverySchedule ||
-                                      selectedSubmission.formData?.shippingCompany) && (
-                                      <div>
-                                        <h4 className="font-semibold text-lg mb-3 text-blue-700">
-                                          Section E - Shipping
-                                        </h4>
-                                        <div className="grid grid-cols-2 gap-3 text-sm">
-                                          {selectedSubmission.formData?.shippingCompany && (
-                                            <div>
-                                              <span className="font-medium">Shipping Company:</span>{' '}
-                                              {selectedSubmission.formData.shippingCompany}
-                                            </div>
-                                          )}
-                                          {selectedSubmission.formData?.deliverySchedule && (
-                                            <div>
-                                              <span className="font-medium">Delivery Schedule:</span>{' '}
-                                              {selectedSubmission.formData.deliverySchedule}
-                                            </div>
-                                          )}
-                                          {selectedSubmission.formData?.shipToInformation && (
-                                            <div className="col-span-2">
-                                              <span className="font-medium">Ship To:</span>
-                                              <div className="mt-1 p-2 bg-gray-50 rounded">
-                                                {selectedSubmission.formData.shipToInformation}
-                                              </div>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Section F - Special Requirements */}
-                                    {(selectedSubmission.formData?.certifications?.length > 0 || 
-                                      selectedSubmission.formData?.dpasRating) && (
-                                      <div>
-                                        <h4 className="font-semibold text-lg mb-3 text-blue-700">
-                                          Section F - Special Requirements
-                                        </h4>
-                                        <div className="grid grid-cols-2 gap-3 text-sm">
-                                          {selectedSubmission.formData?.certifications?.length > 0 && (
-                                            <div>
-                                              <span className="font-medium">Certifications:</span>{' '}
-                                              {selectedSubmission.formData.certifications.join(', ')}
-                                            </div>
-                                          )}
-                                          {selectedSubmission.formData?.dpasRating && (
-                                            <div>
-                                              <span className="font-medium">DPAS Rating:</span> D
-                                              {selectedSubmission.formData.dpasRating}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Reviewer Information */}
-                                    {(selectedSubmission.formData?.reviewerName || 
-                                      selectedSubmission.formData?.acceptance ||
-                                      selectedSubmission.formData?.date) && (
-                                      <div>
-                                        <h4 className="font-semibold text-lg mb-3 text-blue-700">
-                                          Reviewer Information
-                                        </h4>
-                                        <div className="grid grid-cols-2 gap-3 text-sm">
-                                          {selectedSubmission.formData?.reviewerName && (
-                                            <div>
-                                              <span className="font-medium">Reviewer:</span>{' '}
-                                              {selectedSubmission.formData.reviewerName}
-                                            </div>
-                                          )}
-                                          {selectedSubmission.formData?.acceptance && (
-                                            <div>
-                                              <span className="font-medium">Acceptance:</span>{' '}
-                                              {selectedSubmission.formData.acceptance}
-                                            </div>
-                                          )}
-                                          {selectedSubmission.formData?.date && (
-                                            <div>
-                                              <span className="font-medium">Date:</span>{' '}
-                                              {new Date(selectedSubmission.formData.date).toLocaleDateString()}
-                                            </div>
-                                          )}
-                                          {selectedSubmission.formData?.signature && (
-                                            <div className="col-span-2">
-                                              <span className="font-medium">Signature:</span>
-                                              <div className="mt-2 border rounded p-2 bg-white">
-                                                <img 
-                                                  src={selectedSubmission.formData.signature} 
-                                                  alt="Digital Signature"
-                                                  className="max-h-32"
-                                                />
-                                              </div>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Raw JSON (Collapsed) */}
-                                    <details className="border-t pt-4">
-                                      <summary className="font-medium cursor-pointer text-gray-600 hover:text-gray-900">
-                                        View Raw JSON Data
-                                      </summary>
-                                      <div className="bg-gray-50 p-4 rounded-lg mt-2 max-h-96 overflow-y-auto">
-                                        <pre className="text-xs whitespace-pre-wrap">
-                                          {JSON.stringify(
-                                            selectedSubmission.formData,
-                                            null,
-                                            2
-                                          )}
-                                        </pre>
-                                      </div>
-                                    </details>
                                   </div>
                                 </div>
                               )}

@@ -1,16 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { 
-  insertVendorPOSchema, 
-  insertVendorPOItemSchema, 
-  insertVendorPOSettingsSchema,
-  insertVendorPOOptionalSettingSchema,
-  insertVendorPOSpecificSettingsSchema
-} from '@shared/schema';
+import { insertVendorPOSchema, insertVendorPOItemSchema, insertVendorPOSettingsSchema } from '@shared/schema';
 import { z } from 'zod';
 import { storage } from '../../storage';
-import { db } from '../../db';
-import { vendorPOOptionalSettings, vendorPOSpecificSettings } from '../../schema';
-import { eq } from 'drizzle-orm';
 
 const router = Router();
 
@@ -74,59 +65,6 @@ router.put('/settings', async (req: Request, res: Response) => {
         .json({ error: 'Invalid vendor PO settings data', details: error.errors });
     }
     res.status(500).json({ error: 'Failed to update vendor PO settings' });
-  }
-});
-
-// GET /api/vendor-pos/optional-settings - List all optional settings
-router.get('/optional-settings', async (req: Request, res: Response) => {
-  try {
-    const settings = await db
-      .select()
-      .from(vendorPOOptionalSettings)
-      .orderBy(vendorPOOptionalSettings.createdAt);
-    res.json(settings);
-  } catch (error) {
-    console.error('Get optional settings error:', error);
-    res.status(500).json({ error: 'Failed to retrieve optional settings' });
-  }
-});
-
-// POST /api/vendor-pos/optional-settings - Create a new optional setting
-router.post('/optional-settings', async (req: Request, res: Response) => {
-  try {
-    const data = insertVendorPOOptionalSettingSchema.parse(req.body);
-    const [setting] = await db
-      .insert(vendorPOOptionalSettings)
-      .values(data)
-      .returning();
-    res.status(201).json(setting);
-  } catch (error) {
-    console.error('Create optional setting error:', error);
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid optional setting data', details: error.errors });
-    }
-    res.status(500).json({ error: 'Failed to create optional setting' });
-  }
-});
-
-// DELETE /api/vendor-pos/optional-settings/:id - Delete an optional setting
-router.delete('/optional-settings/:id', async (req: Request, res: Response) => {
-  try {
-    const id = parseInt(req.params.id);
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'Invalid optional setting ID' });
-    }
-
-    await db
-      .delete(vendorPOOptionalSettings)
-      .where(eq(vendorPOOptionalSettings.id, id));
-    
-    res.json({ message: 'Optional setting deleted successfully' });
-  } catch (error) {
-    console.error('Delete optional setting error:', error);
-    res.status(500).json({ error: 'Failed to delete optional setting' });
   }
 });
 
@@ -292,85 +230,6 @@ router.delete('/items/:itemId', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Delete vendor PO item error:', error);
     res.status(500).json({ error: 'Failed to delete vendor PO item' });
-  }
-});
-
-// GET /api/vendor-pos/:id/settings - Get per-PO specific settings
-router.get('/:id/settings', async (req: Request, res: Response) => {
-  try {
-    const vendorPoId = parseInt(req.params.id);
-    if (isNaN(vendorPoId)) {
-      return res.status(400).json({ error: 'Invalid vendor PO ID' });
-    }
-
-    const [settings] = await db
-      .select()
-      .from(vendorPOSpecificSettings)
-      .where(eq(vendorPOSpecificSettings.vendorPoId, vendorPoId));
-
-    if (!settings) {
-      // Return default empty settings if none exist
-      return res.json({
-        selectedOptionalSettings: [],
-        adHocSettings: '',
-      });
-    }
-
-    res.json(settings);
-  } catch (error) {
-    console.error('Get PO specific settings error:', error);
-    res.status(500).json({ error: 'Failed to retrieve PO settings' });
-  }
-});
-
-// PUT /api/vendor-pos/:id/settings - Update per-PO specific settings
-router.put('/:id/settings', async (req: Request, res: Response) => {
-  try {
-    const vendorPoId = parseInt(req.params.id);
-    if (isNaN(vendorPoId)) {
-      return res.status(400).json({ error: 'Invalid vendor PO ID' });
-    }
-
-    const data = insertVendorPOSpecificSettingsSchema.parse({
-      ...req.body,
-      vendorPoId,
-    });
-
-    // Check if settings already exist
-    const [existing] = await db
-      .select()
-      .from(vendorPOSpecificSettings)
-      .where(eq(vendorPOSpecificSettings.vendorPoId, vendorPoId));
-
-    let settings;
-    if (existing) {
-      // Update existing settings
-      [settings] = await db
-        .update(vendorPOSpecificSettings)
-        .set({
-          selectedOptionalSettings: data.selectedOptionalSettings,
-          adHocSettings: data.adHocSettings,
-          updatedAt: new Date(),
-        })
-        .where(eq(vendorPOSpecificSettings.vendorPoId, vendorPoId))
-        .returning();
-    } else {
-      // Create new settings
-      [settings] = await db
-        .insert(vendorPOSpecificSettings)
-        .values(data)
-        .returning();
-    }
-
-    res.json(settings);
-  } catch (error) {
-    console.error('Update PO specific settings error:', error);
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid PO settings data', details: error.errors });
-    }
-    res.status(500).json({ error: 'Failed to update PO settings' });
   }
 });
 

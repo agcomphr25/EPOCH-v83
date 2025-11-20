@@ -22,7 +22,6 @@ import {
   Package,
   GraduationCap,
   ClipboardList,
-  TrendingUp,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -100,7 +99,7 @@ export default function AGTestDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-            AG Dashboard
+            AGTEST Dashboard
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             Production Pipeline Overview, Order Management & Layup Scheduling
@@ -287,25 +286,6 @@ export default function AGTestDashboard() {
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
               Review and manage consolidated parts requests
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-cyan-50 dark:hover:bg-cyan-900/20"
-          onClick={() => navigateTo('/gateway-reports')}
-          data-testid="card-gateway-reports"
-        >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <TrendingUp className="w-5 h-5 text-cyan-600" />
-                <span className="text-sm font-medium">Gateway Reports</span>
-              </div>
-              <ExternalLink className="w-4 h-4 text-gray-400" />
-            </div>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-              Production activity tracking and trends analysis
             </p>
           </CardContent>
         </Card>

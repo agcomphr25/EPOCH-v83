@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save, FileText } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -103,61 +104,74 @@ export default function VendorPOSettings() {
         </Button>
       </div>
 
-      <div className="grid gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Terms and Conditions</CardTitle>
-            <CardDescription>
-              Default terms and conditions that will appear at the bottom of all purchase orders
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              value={termsAndConditions}
-              onChange={(e) => setTermsAndConditions(e.target.value)}
-              placeholder="Enter default terms and conditions..."
-              className="min-h-[150px]"
-              data-testid="textarea-terms-conditions"
-            />
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="global" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="global" data-testid="tab-global-settings">
+            Global Settings
+          </TabsTrigger>
+          <TabsTrigger value="optional" data-testid="tab-optional-settings">
+            Optional Settings
+          </TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Payment Terms</CardTitle>
-            <CardDescription>
-              Default payment terms for vendor purchase orders
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              value={paymentTerms}
-              onChange={(e) => setPaymentTerms(e.target.value)}
-              placeholder="e.g., Net 30 days from invoice date..."
-              className="min-h-[100px]"
-              data-testid="textarea-payment-terms"
-            />
-          </CardContent>
-        </Card>
+        <TabsContent value="global" className="space-y-6 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Terms and Conditions</CardTitle>
+              <CardDescription>
+                Default terms and conditions that will appear at the bottom of all purchase orders
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                value={termsAndConditions}
+                onChange={(e) => setTermsAndConditions(e.target.value)}
+                placeholder="Enter default terms and conditions..."
+                className="min-h-[150px]"
+                data-testid="textarea-terms-conditions"
+              />
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Shipping Instructions</CardTitle>
-            <CardDescription>
-              Default shipping and delivery instructions
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              value={shippingInstructions}
-              onChange={(e) => setShippingInstructions(e.target.value)}
-              placeholder="e.g., Ship to warehouse dock, notify 24 hours before delivery..."
-              className="min-h-[100px]"
-              data-testid="textarea-shipping-instructions"
-            />
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment Terms</CardTitle>
+              <CardDescription>
+                Default payment terms for vendor purchase orders
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                value={paymentTerms}
+                onChange={(e) => setPaymentTerms(e.target.value)}
+                placeholder="e.g., Net 30 days from invoice date..."
+                className="min-h-[100px]"
+                data-testid="textarea-payment-terms"
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="optional" className="space-y-6 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Shipping Instructions</CardTitle>
+              <CardDescription>
+                Default shipping and delivery instructions
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                value={shippingInstructions}
+                onChange={(e) => setShippingInstructions(e.target.value)}
+                placeholder="e.g., Ship to warehouse dock, notify 24 hours before delivery..."
+                className="min-h-[100px]"
+                data-testid="textarea-shipping-instructions"
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

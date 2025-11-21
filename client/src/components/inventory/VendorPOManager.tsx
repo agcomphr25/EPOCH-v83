@@ -1000,6 +1000,20 @@ export default function VendorPOManager() {
               </div>
             ` : ''}
             
+            ${settings?.contactName || settings?.contactTitle || settings?.contactPhone || settings?.contactEmail ? `
+              <div style="margin-bottom: 30px; padding: 15px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
+                <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #555;">Purchasing Contact:</div>
+                ${settings.contactName ? `<div style="font-size: 13px; margin-bottom: 3px;"><strong>${settings.contactName}</strong>${settings.contactTitle ? `, ${settings.contactTitle}` : ''}</div>` : ''}
+                ${settings.contactPhone || settings.contactEmail ? `
+                  <div style="font-size: 13px; color: #666;">
+                    ${settings.contactPhone ? settings.contactPhone : ''}
+                    ${settings.contactPhone && settings.contactEmail ? ' | ' : ''}
+                    ${settings.contactEmail ? settings.contactEmail : ''}
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
+            
             <div class="header">
               <h1>PURCHASE ORDER</h1>
               <p>PO Number: ${selectedVendorPO.poNumber}</p>

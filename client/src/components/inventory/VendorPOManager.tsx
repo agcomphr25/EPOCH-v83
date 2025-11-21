@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -51,8 +52,12 @@ import {
   Send,
   CheckCircle,
   XCircle,
+  FileText,
+  Check,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { Checkbox } from '@/components/ui/checkbox';
 import VendorPOItemSelector from './VendorPOItemSelector';
 import {
   AlertDialog,
@@ -226,6 +231,178 @@ function getStatusColor(status: VendorPO['status']) {
   }
 }
 
+// Optional Settings Selector Component
+function OptionalSettingsSelector({ vendorPoId }: { vendorPoId: number }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
+  // Fetch all available optional settings
+  const { data: allSettings = [], isError: allSettingsError } = useQuery<any[]>({
+    queryKey: ['/api/vendor-pos/optional-settings'],
+    queryFn: () => apiRequest('/api/vendor-pos/optional-settings'),
+  });
+
+  // Fetch currently selected optional settings for this PO
+  const { data: currentSettings = [], isLoading, isError, refetch } = useQuery<any[]>({
+    queryKey: ['/api/vendor-pos', vendorPoId, 'optional-settings'],
+    queryFn: () => apiRequest(`/api/vendor-pos/${vendorPoId}/optional-settings`),
+    enabled: isOpen,
+  });
+
+  // Reset and initialize selected IDs when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      // Always start fresh when opening - reset to empty first
+      setSelectedIds([]);
+      
+      // Then load current settings if available and no error
+      if (!isLoading && !isError && currentSettings) {
+        setSelectedIds(currentSettings.map((s: any) => s.id));
+      }
+    } else {
+      // Clear when closing
+      setSelectedIds([]);
+    }
+  }, [isOpen, currentSettings, isLoading, isError]);
+
+  const updateMutation = useMutation({
+    mutationFn: async (optionalSettingIds: number[]) => {
+      return await apiRequest(`/api/vendor-pos/${vendorPoId}/optional-settings`, {
+        method: 'PUT',
+        body: JSON.stringify({ optionalSettingIds }),
+      });
+    },
+    onSuccess: () => {
+      // Invalidate both the PO's optional settings and the main PO list
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'optional-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      toast.success('Optional settings updated successfully');
+      setIsOpen(false);
+    },
+    onError: () => {
+      toast.error('Failed to update optional settings');
+    },
+  });
+
+  const handleToggle = (settingId: number) => {
+    setSelectedIds((prev) =>
+      prev.includes(settingId)
+        ? prev.filter((id) => id !== settingId)
+        : [...prev, settingId]
+    );
+  };
+
+  const handleSave = () => {
+    // Block save if there was an error loading current settings
+    if (isError) {
+      toast.error('Cannot save - failed to load current selections. Please retry.');
+      return;
+    }
+    updateMutation.mutate(selectedIds);
+  };
+
+  const handleRetry = () => {
+    refetch();
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" data-testid={`button-optional-settings-${vendorPoId}`}>
+          <FileText className="w-4 h-4 mr-1" />
+          Optional Statements
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Select Optional Statements</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 max-h-96 overflow-y-auto py-4">
+          {allSettingsError ? (
+            <div className="text-center py-8 text-red-600">
+              <XCircle className="h-12 w-12 mx-auto mb-2" />
+              <p>Failed to load available optional statements.</p>
+              <p className="text-sm mt-1">Please close the dialog and try again.</p>
+            </div>
+          ) : isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+            </div>
+          ) : isError ? (
+            <div className="text-center py-8 text-red-600">
+              <XCircle className="h-12 w-12 mx-auto mb-2" />
+              <p>Failed to load this PO's optional settings.</p>
+              <Button
+                onClick={handleRetry}
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                data-testid="button-retry-load"
+              >
+                Retry
+              </Button>
+            </div>
+          ) : allSettings.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <FileText className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+              <p>No optional statements available.</p>
+              <p className="text-sm mt-1">Create statements in PO Settings first.</p>
+            </div>
+          ) : (
+            allSettings.map((setting) => (
+              <div
+                key={setting.id}
+                className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                data-testid={`optional-setting-item-${setting.id}`}
+              >
+                <Checkbox
+                  id={`setting-${setting.id}`}
+                  checked={selectedIds.includes(setting.id)}
+                  onCheckedChange={() => handleToggle(setting.id)}
+                  data-testid={`checkbox-optional-setting-${setting.id}`}
+                />
+                <div className="flex-1">
+                  <label
+                    htmlFor={`setting-${setting.id}`}
+                    className="font-medium text-sm cursor-pointer"
+                  >
+                    {setting.name}
+                  </label>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    {setting.statement}
+                  </p>
+                </div>
+                {selectedIds.includes(setting.id) && (
+                  <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
+                )}
+              </div>
+            ))
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsOpen(false)} data-testid="button-cancel-optional-settings">
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSave} 
+            disabled={updateMutation.isPending}
+            data-testid="button-save-optional-settings"
+          >
+            {updateMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // Vendor PO card component
 function VendorPOCard({
   vendorPo,
@@ -291,7 +468,7 @@ function VendorPOCard({
           </div>
           {vendorPo.expectedDeliveryDate && (
             <div>
-              <span className="text-gray-500">Expected Delivery:</span>
+              <span className="text-gray-500">Requested Delivery Date:</span>
               <p
                 className="font-medium"
                 data-testid={`text-delivery-date-${vendorPo.id}`}
@@ -315,6 +492,7 @@ function VendorPOCard({
             <Eye className="w-4 h-4 mr-1" />
             Manage Items
           </Button>
+          <OptionalSettingsSelector vendorPoId={vendorPo.id} />
           {vendorPo.status === 'Draft' && (
             <Button
               variant="default"
@@ -452,7 +630,7 @@ function VendorPOForm({
       </div>
 
       <div>
-        <Label htmlFor="expectedDeliveryDate">Expected Delivery Date</Label>
+        <Label htmlFor="expectedDeliveryDate">Requested Delivery Date</Label>
         <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
           <PopoverTrigger asChild>
             <Button
@@ -732,28 +910,54 @@ export default function VendorPOManager() {
     if (!selectedVendorPO) return;
     
     try {
+      console.log('Starting PO view generation...');
+      
       // Fetch line items for this PO
       const items: VendorPOItem[] = await apiRequest(`/api/vendor-pos/${selectedVendorPO.id}/items`);
+      console.log('Fetched items:', items);
       
       // Fetch vendor details to get vendor-specific PO settings
       const vendor: any = await apiRequest(`/api/vendors/${selectedVendorPO.vendorId}`);
+      console.log('Fetched vendor:', vendor);
       
-      // Fetch global PO settings as fallback
+      // Fetch global PO settings
       const globalSettings: any = await apiRequest('/api/vendor-pos/settings');
+      console.log('Fetched global settings:', globalSettings);
       
-      // Use vendor-specific settings if available, otherwise fall back to global settings
+      // Fetch central company settings
+      const companySettings: any = await apiRequest('/api/vendor-pos/company-settings');
+      console.log('Fetched company settings:', companySettings);
+      
+      // Fetch optional settings attached to this PO
+      const optionalSettings: any[] = await apiRequest(`/api/vendor-pos/${selectedVendorPO.id}/optional-settings`);
+      console.log('Fetched optional settings:', optionalSettings);
+      
+      // Combine company info + PO contact info + PO terms
       const settings = {
+        companyName: companySettings?.companyName || '',
+        companyAddress: companySettings?.companyAddress || '',
+        companyPhone: companySettings?.companyPhone || '',
+        companyEmail: companySettings?.companyEmail || '',
+        companyWebsite: companySettings?.companyWebsite || '',
+        contactName: globalSettings?.contactName || '',
+        contactTitle: globalSettings?.contactTitle || '',
+        contactPhone: globalSettings?.contactPhone || '',
+        contactEmail: globalSettings?.contactEmail || '',
         termsAndConditions: vendor?.termsAndConditions || globalSettings?.termsAndConditions || '',
         paymentTerms: vendor?.paymentTerms || globalSettings?.paymentTerms || '',
         shippingInstructions: vendor?.shippingInstructions || globalSettings?.shippingInstructions || '',
       };
       
+      console.log('Building HTML content...');
+      
       // Create a simple HTML structure for PDF conversion
       const printWindow = window.open('', '', 'height=600,width=800');
       if (!printWindow) {
-        toast.error('Please allow popups for PDF generation');
+        toast.error('Please allow popups to view the Purchase Order');
         return;
       }
+      
+      console.log('Popup window opened successfully');
       
       const htmlContent = `
         <!DOCTYPE html>
@@ -762,6 +966,9 @@ export default function VendorPOManager() {
             <title>Purchase Order - ${selectedVendorPO.poNumber}</title>
             <style>
               body { font-family: Arial, sans-serif; padding: 40px; }
+              .company-header { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #333; }
+              .company-header h1 { margin: 0 0 10px 0; font-size: 26px; color: #333; }
+              .company-header p { margin: 3px 0; color: #555; font-size: 13px; }
               .header { text-align: center; margin-bottom: 30px; }
               .header h1 { margin: 0; font-size: 24px; }
               .info-section { margin-bottom: 20px; }
@@ -778,6 +985,35 @@ export default function VendorPOManager() {
             </style>
           </head>
           <body>
+            ${settings?.companyName || settings?.companyAddress || settings?.companyPhone || settings?.companyEmail ? `
+              <div class="company-header">
+                ${settings.companyName ? `<h1>${settings.companyName}</h1>` : ''}
+                ${settings.companyAddress ? `<p style="white-space: pre-wrap;">${settings.companyAddress}</p>` : ''}
+                ${settings.companyPhone || settings.companyEmail ? `
+                  <p>
+                    ${settings.companyPhone ? settings.companyPhone : ''}
+                    ${settings.companyPhone && settings.companyEmail ? ' | ' : ''}
+                    ${settings.companyEmail ? settings.companyEmail : ''}
+                  </p>
+                ` : ''}
+                ${settings.companyWebsite ? `<p>${settings.companyWebsite}</p>` : ''}
+              </div>
+            ` : ''}
+            
+            ${settings?.contactName || settings?.contactTitle || settings?.contactPhone || settings?.contactEmail ? `
+              <div style="margin-bottom: 30px; padding: 15px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
+                <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; color: #555;">Purchasing Contact:</div>
+                ${settings.contactName ? `<div style="font-size: 13px; margin-bottom: 3px;"><strong>${settings.contactName}</strong>${settings.contactTitle ? `, ${settings.contactTitle}` : ''}</div>` : ''}
+                ${settings.contactPhone || settings.contactEmail ? `
+                  <div style="font-size: 13px; color: #666;">
+                    ${settings.contactPhone ? settings.contactPhone : ''}
+                    ${settings.contactPhone && settings.contactEmail ? ' | ' : ''}
+                    ${settings.contactEmail ? settings.contactEmail : ''}
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
+            
             <div class="header">
               <h1>PURCHASE ORDER</h1>
               <p>PO Number: ${selectedVendorPO.poNumber}</p>
@@ -793,7 +1029,7 @@ export default function VendorPOManager() {
                 <div>${selectedVendorPO.status}</div>
               </div>
               <div class="info-row">
-                <div class="info-label">Expected Delivery:</div>
+                <div class="info-label">Requested Delivery Date:</div>
                 <div>${selectedVendorPO.expectedDeliveryDate || 'N/A'}</div>
               </div>
               <div class="info-row">
@@ -823,9 +1059,9 @@ export default function VendorPOManager() {
                     <td>${item.lineNumber}</td>
                     <td>${item.agPartNumber || '-'}</td>
                     <td>${item.description || '-'}</td>
-                    <td>${item.quantity}</td>
-                    <td>$${item.unitPrice.toFixed(2)}</td>
-                    <td>$${item.totalPrice.toFixed(2)}</td>
+                    <td>${item.quantity || 0}</td>
+                    <td>$${item.unitPrice != null ? item.unitPrice.toFixed(2) : '0.00'}</td>
+                    <td>$${item.totalPrice != null ? item.totalPrice.toFixed(2) : '0.00'}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -833,7 +1069,7 @@ export default function VendorPOManager() {
             
             <div class="totals">
               <div class="total-line">
-                Total: $${selectedVendorPO.totalCost.toFixed(2)}
+                Total: $${selectedVendorPO.totalCost != null ? selectedVendorPO.totalCost.toFixed(2) : '0.00'}
               </div>
             </div>
             
@@ -844,7 +1080,7 @@ export default function VendorPOManager() {
               </div>
             ` : ''}
             
-            ${settings?.termsAndConditions || settings?.paymentTerms || settings?.shippingInstructions ? `
+            ${settings?.termsAndConditions || settings?.paymentTerms || settings?.shippingInstructions || optionalSettings.length > 0 ? `
               <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #ddd;">
                 ${settings?.paymentTerms ? `
                   <div style="margin-bottom: 15px;">
@@ -866,24 +1102,40 @@ export default function VendorPOManager() {
                     <div style="white-space: pre-wrap; margin-top: 5px;">${settings.termsAndConditions}</div>
                   </div>
                 ` : ''}
+                
+                ${optionalSettings.length > 0 ? `
+                  <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; font-size: 14px;">Additional Requirements:</div>
+                    ${optionalSettings.map((setting, index) => `
+                      <div style="margin-top: 10px; padding-left: 10px;">
+                        <div style="font-weight: bold; font-size: 12px;">${index + 1}. ${setting.name}</div>
+                        <div style="white-space: pre-wrap; margin-top: 5px; font-size: 12px;">${setting.statement}</div>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
               </div>
             ` : ''}
           </body>
         </html>
       `;
       
+      console.log('Writing HTML to popup window...');
       printWindow.document.write(htmlContent);
       printWindow.document.close();
+      console.log('HTML written successfully');
       
-      // Wait a bit for content to load, then trigger print
-      setTimeout(() => {
-        printWindow.print();
-        toast.success('PDF ready for download');
-      }, 250);
+      // Window stays open for viewing - user can print if they want
+      toast.success('Purchase Order opened in new window');
       
     } catch (error) {
       console.error('PDF generation error:', error);
-      toast.error('Failed to generate PDF');
+      console.error('Error details:', {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      toast.error('Failed to view Purchase Order: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -1011,10 +1263,10 @@ export default function VendorPOManager() {
               variant="outline"
               size="sm"
               onClick={handleDownloadPDF}
-              data-testid="button-download-pdf"
+              data-testid="button-view-po"
             >
-              <FileDown className="w-4 h-4 mr-2" />
-              Download PDF
+              <Eye className="w-4 h-4 mr-2" />
+              View PO
             </Button>
           </div>
         </div>

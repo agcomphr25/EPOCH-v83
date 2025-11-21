@@ -64,6 +64,14 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
     - **Department Progression**: Items flow through customized department sequences with status tracking (ACTIVE, ON_HOLD, SCRAPPED)
     - **Production-Ready Error Handling**: 404 errors (no routing) allow advancement, all other errors block with clear user feedback
 -   **Cost Center Management System**: Financial tracking infrastructure for department-based expense allocation and budgeting.
+-   **Vendor PO Optional Settings System**: Flexible optional statements system for Purchase Orders with CRUD management and multiselect interface. Features include:
+    - **Reusable Statement Library**: Create/edit/delete optional statements in PO Settings that can be reused across multiple purchase orders
+    - **2-Tab PO Settings Interface**: Global Settings (Terms & Conditions, Payment Terms, Shipping Instructions) and Optional Settings management
+    - **PO-Level Multiselect**: Individual POs can selectively attach optional statements via checkbox dialog
+    - **Database Architecture**: Uses `optional_settings` and `po_optional_settings` (junction table) with proper foreign key relationships
+    - **Type-Safe API**: Zod-validated endpoints with proper insert schemas from @shared/schema
+    - **Error Handling**: Comprehensive error states, retry functionality, and proper cache invalidation
+    - **Route Ordering**: Critical route ordering ensures /optional-settings endpoints are matched before generic /:id routes
 
 ### Technical Implementations
 -   **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

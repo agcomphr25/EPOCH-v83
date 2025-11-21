@@ -504,14 +504,17 @@ export default function CostCenterManagement() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Manager</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select 
+                        onValueChange={(value) => field.onChange(value === 'none' ? null : value)} 
+                        value={field.value?.toString() || 'none'}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-manager">
                             <SelectValue placeholder="Select manager" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">None</SelectItem>
+                          <SelectItem value="none">None</SelectItem>
                           {employees.map((emp) => (
                             <SelectItem key={emp.id} value={emp.id.toString()}>
                               {emp.firstName} {emp.lastName}
@@ -538,6 +541,7 @@ export default function CostCenterManagement() {
                       <FormControl>
                         <Input
                           {...field}
+                          value={field.value ?? ''}
                           type="number"
                           step="0.01"
                           placeholder="0.00"
@@ -560,6 +564,7 @@ export default function CostCenterManagement() {
                       <FormControl>
                         <Input
                           {...field}
+                          value={field.value ?? ''}
                           type="number"
                           step="0.01"
                           placeholder="0.00"
@@ -581,6 +586,7 @@ export default function CostCenterManagement() {
                     <FormControl>
                       <Textarea
                         {...field}
+                        value={field.value ?? ''}
                         placeholder="Notes about this cost center..."
                         rows={3}
                         data-testid="textarea-description"

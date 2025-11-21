@@ -28,13 +28,21 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-interface VendorPOSettings {
+interface CompanySettings {
   id?: number;
   companyName?: string;
   companyAddress?: string;
   companyPhone?: string;
   companyEmail?: string;
   companyWebsite?: string;
+}
+
+interface VendorPOSettings {
+  id?: number;
+  contactName?: string;
+  contactTitle?: string;
+  contactPhone?: string;
+  contactEmail?: string;
   termsAndConditions: string;
   paymentTerms: string;
   shippingInstructions: string;
@@ -52,12 +60,17 @@ interface OptionalSetting {
 
 export default function VendorPOSettings() {
   const { toast } = useToast();
-  // Company Contact Information
+  // Company Information (central)
   const [companyName, setCompanyName] = useState('');
   const [companyAddress, setCompanyAddress] = useState('');
   const [companyPhone, setCompanyPhone] = useState('');
   const [companyEmail, setCompanyEmail] = useState('');
   const [companyWebsite, setCompanyWebsite] = useState('');
+  // PO Contact Person
+  const [contactName, setContactName] = useState('');
+  const [contactTitle, setContactTitle] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
   // PO Terms
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [paymentTerms, setPaymentTerms] = useState('');
@@ -67,18 +80,31 @@ export default function VendorPOSettings() {
     queryKey: ['/api/vendor-pos/settings'],
   });
 
+  const { data: companySettingsData } = useQuery<CompanySettings>({
+    queryKey: ['/api/vendor-pos/company-settings'],
+  });
+
   useEffect(() => {
     if (settings) {
-      setCompanyName(settings.companyName || '');
-      setCompanyAddress(settings.companyAddress || '');
-      setCompanyPhone(settings.companyPhone || '');
-      setCompanyEmail(settings.companyEmail || '');
-      setCompanyWebsite(settings.companyWebsite || '');
+      setContactName(settings.contactName || '');
+      setContactTitle(settings.contactTitle || '');
+      setContactPhone(settings.contactPhone || '');
+      setContactEmail(settings.contactEmail || '');
       setTermsAndConditions(settings.termsAndConditions || '');
       setPaymentTerms(settings.paymentTerms || '');
       setShippingInstructions(settings.shippingInstructions || '');
     }
   }, [settings]);
+
+  useEffect(() => {
+    if (companySettingsData) {
+      setCompanyName(companySettingsData.companyName || '');
+      setCompanyAddress(companySettingsData.companyAddress || '');
+      setCompanyPhone(companySettingsData.companyPhone || '');
+      setCompanyEmail(companySettingsData.companyEmail || '');
+      setCompanyWebsite(companySettingsData.companyWebsite || '');
+    }
+  }, [companySettingsData]);
 
   const updateSettingsMutation = useMutation({
     mutationFn: async (data: Partial<VendorPOSettings>) => {
@@ -103,13 +129,33 @@ export default function VendorPOSettings() {
     },
   });
 
+  const updateCompanyMutation = useMutation({
+    mutationFn: async (data: Partial<CompanySettings>) => {
+      return await apiRequest('/api/vendor-pos/company-settings', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos/company-settings'] });
+    },
+  });
+
   const handleSave = () => {
-    updateSettingsMutation.mutate({
+    // Save both company settings and PO settings
+    updateCompanyMutation.mutate({
       companyName,
       companyAddress,
       companyPhone,
       companyEmail,
       companyWebsite,
+    });
+
+    updateSettingsMutation.mutate({
+      contactName,
+      contactTitle,
+      contactPhone,
+      contactEmail,
       termsAndConditions,
       paymentTerms,
       shippingInstructions,
@@ -168,9 +214,9 @@ export default function VendorPOSettings() {
         <TabsContent value="global" className="space-y-6 mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Company Contact Information</CardTitle>
+              <CardTitle>Company Information</CardTitle>
               <CardDescription>
-                Your company information that will appear at the top of all purchase orders
+                Company-wide contact information (updated in one place, used across all POs)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -197,7 +243,7 @@ export default function VendorPOSettings() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="company-phone">Phone</Label>
+                  <Label htmlFor="company-phone">Main Phone</Label>
                   <Input
                     id="company-phone"
                     value={companyPhone}
@@ -207,7 +253,7 @@ export default function VendorPOSettings() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="company-email">Email</Label>
+                  <Label htmlFor="company-email">Main Email</Label>
                   <Input
                     id="company-email"
                     type="email"
@@ -227,6 +273,62 @@ export default function VendorPOSettings() {
                   placeholder="https://www.company.com"
                   data-testid="input-company-website"
                 />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Purchase Order Contact Person</CardTitle>
+              <CardDescription>
+                Specific contact person for vendor purchase orders
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="contact-name">Contact Name</Label>
+                  <Input
+                    id="contact-name"
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                    placeholder="John Smith"
+                    data-testid="input-contact-name"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="contact-title">Contact Title</Label>
+                  <Input
+                    id="contact-title"
+                    value={contactTitle}
+                    onChange={(e) => setContactTitle(e.target.value)}
+                    placeholder="Purchasing Manager"
+                    data-testid="input-contact-title"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="contact-phone">Contact Phone</Label>
+                  <Input
+                    id="contact-phone"
+                    value={contactPhone}
+                    onChange={(e) => setContactPhone(e.target.value)}
+                    placeholder="(555) 987-6543"
+                    data-testid="input-contact-phone"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="contact-email">Contact Email</Label>
+                  <Input
+                    id="contact-email"
+                    type="email"
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    placeholder="purchasing@company.com"
+                    data-testid="input-contact-email"
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>

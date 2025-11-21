@@ -105,6 +105,10 @@ import {
   vendorMonthlyEvaluations,
   vendorPOs,
   vendorPOItems,
+  vendorPOSettings,
+  companySettings,
+  optionalSettings,
+  poOptionalSettings,
   // Follow-up orders table
   followupOrders,
   // Invoice numbers tracking table
@@ -327,6 +331,9 @@ import {
   vendorPOSettings,
   type VendorPOSettings,
   type InsertVendorPOSettings,
+  companySettings,
+  type CompanySettings,
+  type InsertCompanySettings,
   optionalSettings,
   type OptionalSetting,
   type InsertOptionalSetting,
@@ -1639,6 +1646,10 @@ export interface IStorage {
   // Vendor PO Settings
   getVendorPOSettings(): Promise<any | undefined>;
   updateVendorPOSettings(data: any): Promise<any>;
+
+  // Central Company Settings
+  getCompanySettings(): Promise<any | undefined>;
+  updateCompanySettings(data: any): Promise<any>;
 
   // Optional Settings CRUD
   getAllOptionalSettings(): Promise<any[]>;
@@ -6970,6 +6981,40 @@ export class DatabaseStorage implements IStorage {
       // Create new settings if none exist
       const [newSettings] = await db
         .insert(vendorPOSettings)
+        .values(data)
+        .returning();
+      return newSettings;
+    }
+  }
+
+  // Central Company Settings
+  async getCompanySettings(): Promise<any | undefined> {
+    const [settings] = await db
+      .select()
+      .from(companySettings)
+      .limit(1);
+    return settings;
+  }
+
+  async updateCompanySettings(data: any): Promise<any> {
+    // Get the first (and should be only) settings record
+    const [existingSettings] = await db
+      .select()
+      .from(companySettings)
+      .limit(1);
+    
+    if (existingSettings) {
+      // Update existing settings
+      const [updatedSettings] = await db
+        .update(companySettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(companySettings.id, existingSettings.id))
+        .returning();
+      return updatedSettings;
+    } else {
+      // Create new settings if none exist
+      const [newSettings] = await db
+        .insert(companySettings)
         .values(data)
         .returning();
       return newSettings;

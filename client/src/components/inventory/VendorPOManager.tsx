@@ -920,21 +920,29 @@ export default function VendorPOManager() {
       const vendor: any = await apiRequest(`/api/vendors/${selectedVendorPO.vendorId}`);
       console.log('Fetched vendor:', vendor);
       
-      // Fetch global PO settings as fallback
+      // Fetch global PO settings
       const globalSettings: any = await apiRequest('/api/vendor-pos/settings');
       console.log('Fetched global settings:', globalSettings);
+      
+      // Fetch central company settings
+      const companySettings: any = await apiRequest('/api/vendor-pos/company-settings');
+      console.log('Fetched company settings:', companySettings);
       
       // Fetch optional settings attached to this PO
       const optionalSettings: any[] = await apiRequest(`/api/vendor-pos/${selectedVendorPO.id}/optional-settings`);
       console.log('Fetched optional settings:', optionalSettings);
       
-      // Use vendor-specific settings if available, otherwise fall back to global settings
+      // Combine company info + PO contact info + PO terms
       const settings = {
-        companyName: globalSettings?.companyName || '',
-        companyAddress: globalSettings?.companyAddress || '',
-        companyPhone: globalSettings?.companyPhone || '',
-        companyEmail: globalSettings?.companyEmail || '',
-        companyWebsite: globalSettings?.companyWebsite || '',
+        companyName: companySettings?.companyName || '',
+        companyAddress: companySettings?.companyAddress || '',
+        companyPhone: companySettings?.companyPhone || '',
+        companyEmail: companySettings?.companyEmail || '',
+        companyWebsite: companySettings?.companyWebsite || '',
+        contactName: globalSettings?.contactName || '',
+        contactTitle: globalSettings?.contactTitle || '',
+        contactPhone: globalSettings?.contactPhone || '',
+        contactEmail: globalSettings?.contactEmail || '',
         termsAndConditions: vendor?.termsAndConditions || globalSettings?.termsAndConditions || '',
         paymentTerms: vendor?.paymentTerms || globalSettings?.paymentTerms || '',
         shippingInstructions: vendor?.shippingInstructions || globalSettings?.shippingInstructions || '',

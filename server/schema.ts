@@ -2853,15 +2853,26 @@ export const vendorPOItems = pgTable('vendor_po_items', {
   uniquePoLine: unique().on(table.vendorPoId, table.lineNumber),
 }));
 
-// Vendor PO Settings (singleton table for global PO settings)
-export const vendorPOSettings = pgTable('vendor_po_settings', {
+// Central Company Settings (singleton table for company-wide information)
+export const companySettings = pgTable('company_settings', {
   id: serial('id').primaryKey(),
-  // Company Contact Information
   companyName: text('company_name'),
   companyAddress: text('company_address'),
   companyPhone: text('company_phone'),
   companyEmail: text('company_email'),
   companyWebsite: text('company_website'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Vendor PO Settings (singleton table for global PO settings)
+export const vendorPOSettings = pgTable('vendor_po_settings', {
+  id: serial('id').primaryKey(),
+  // PO Contact Person
+  contactName: text('contact_name'),
+  contactTitle: text('contact_title'),
+  contactPhone: text('contact_phone'),
+  contactEmail: text('contact_email'),
   // PO Terms and Instructions
   termsAndConditions: text('terms_and_conditions'),
   paymentTerms: text('payment_terms'),
@@ -3184,6 +3195,16 @@ export const insertVendorPOSettingsSchema = createInsertSchema(vendorPOSettings)
   });
 export type InsertVendorPOSettings = z.infer<typeof insertVendorPOSettingsSchema>;
 export type VendorPOSettings = typeof vendorPOSettings.$inferSelect;
+
+export const insertCompanySettingsSchema = createInsertSchema(companySettings)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  });
+
+export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;
+export type CompanySettings = typeof companySettings.$inferSelect;
 
 export const insertOptionalSettingSchema = createInsertSchema(optionalSettings)
   .omit({

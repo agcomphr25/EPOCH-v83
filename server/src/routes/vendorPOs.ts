@@ -74,6 +74,49 @@ router.put('/settings', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/vendor-pos/company-settings - Get central company settings
+router.get('/company-settings', async (req: Request, res: Response) => {
+  try {
+    const settings = await storage.getCompanySettings();
+    if (!settings) {
+      return res.json({
+        companyName: '',
+        companyAddress: '',
+        companyPhone: '',
+        companyEmail: '',
+        companyWebsite: '',
+      });
+    }
+    res.json(settings);
+  } catch (error) {
+    console.error('Get company settings error:', error);
+    res.status(500).json({ error: 'Failed to retrieve company settings' });
+  }
+});
+
+// PUT /api/vendor-pos/company-settings - Update central company settings
+router.put('/company-settings', async (req: Request, res: Response) => {
+  try {
+    const data = z.object({
+      companyName: z.string().optional(),
+      companyAddress: z.string().optional(),
+      companyPhone: z.string().optional(),
+      companyEmail: z.string().optional(),
+      companyWebsite: z.string().optional(),
+    }).parse(req.body);
+    const settings = await storage.updateCompanySettings(data);
+    res.json(settings);
+  } catch (error) {
+    console.error('Update company settings error:', error);
+    if (error instanceof z.ZodError) {
+      return res
+        .status(400)
+        .json({ error: 'Invalid company settings data', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to update company settings' });
+  }
+});
+
 // ============ Optional Settings Routes ============
 // NOTE: These routes MUST come before the /:id route to avoid route conflicts
 

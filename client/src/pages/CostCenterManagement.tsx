@@ -71,7 +71,6 @@ interface CostCenter {
   monthlyBudget: number | null;
   managerId: number | null;
   managerName: string | null;
-  managerLastName: string | null;
   description: string | null;
   createdAt: string;
   updatedAt: string;
@@ -79,8 +78,7 @@ interface CostCenter {
 
 interface Employee {
   id: number;
-  firstName: string;
-  lastName: string;
+  name: string;
 }
 
 const costCenterFormSchema = insertCostCenterSchema.extend({
@@ -354,9 +352,7 @@ export default function CostCenterManagement() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {costCenter.managerName && costCenter.managerLastName
-                        ? `${costCenter.managerName} ${costCenter.managerLastName}`
-                        : '-'}
+                      {costCenter.managerName || '-'}
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       {formatCurrency(costCenter.annualBudget)}
@@ -517,7 +513,7 @@ export default function CostCenterManagement() {
                           <SelectItem value="none">None</SelectItem>
                           {employees.map((emp) => (
                             <SelectItem key={emp.id} value={emp.id.toString()}>
-                              {emp.firstName} {emp.lastName}
+                              {emp.name}
                             </SelectItem>
                           ))}
                         </SelectContent>

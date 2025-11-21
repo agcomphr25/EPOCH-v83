@@ -17,6 +17,8 @@ import {
   Star,
   GraduationCap,
   CreditCard,
+  List,
+  ClipboardList,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -72,147 +74,177 @@ export default function DARLENEBTestDashboard() {
         </div>
       </div>
 
-      {/* Quick Navigation Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <Link href="/order-entry">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
-            <CardContent className="p-4 text-center">
-              <PlusCircle className="w-8 h-8 text-blue-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Order Entry
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Create new orders
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+      {/* Order Management Section */}
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+          <ClipboardList className="w-5 h-5 text-blue-600" />
+          Order Management
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Link href="/order-entry">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
+              <CardContent className="p-4 text-center">
+                <PlusCircle className="w-8 h-8 text-blue-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Order Entry
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Create single orders
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
 
-        <Link href="/all-orders">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
-            <CardContent className="p-4 text-center">
-              <FileText className="w-8 h-8 text-green-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                All Orders
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                View all orders
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+          <Link href="/orders-list">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
+              <CardContent className="p-4 text-center">
+                <List className="w-8 h-8 text-green-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  All Orders
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  View all created orders
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
 
-        <Link href="/draft-orders">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-yellow-200">
-            <CardContent className="p-4 text-center">
-              <FilePenLine className="w-8 h-8 text-yellow-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Draft Orders
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Manage drafts
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+          <Link href="/nonconformance">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-red-200">
+              <CardContent className="p-4 text-center">
+                <XCircle className="w-8 h-8 text-red-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Nonconforming Tracker
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Track quality issues
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
 
-        <Link href="/cancelled-orders">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-red-200">
-            <CardContent className="p-4 text-center">
-              <XCircle className="w-8 h-8 text-red-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Cancelled Orders
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                View cancelled orders
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+          <Link href="/rts">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-teal-200">
+              <CardContent className="p-4 text-center">
+                <Truck className="w-8 h-8 text-teal-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  RTS (Ready to Ship)
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Manage shipments
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
+      </div>
 
-        <Link href="/customer-management">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-orange-200">
-            <CardContent className="p-4 text-center">
-              <Users className="w-8 h-8 text-orange-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Customer Management
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Manage customers
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+      {/* Other Functions */}
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+          <Package className="w-5 h-5 text-purple-600" />
+          Additional Tools
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 
-        <Link href="/refund-request">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-200">
-            <CardContent className="p-4 text-center">
-              <RefreshCw className="w-8 h-8 text-purple-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Request Refund
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Process refunds
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+          <Link href="/draft-orders">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-yellow-200">
+              <CardContent className="p-4 text-center">
+                <FilePenLine className="w-8 h-8 text-yellow-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Draft Orders
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Manage drafts
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
 
-        <Link href="/shipping-tracker">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-teal-200">
-            <CardContent className="p-4 text-center">
-              <Truck className="w-8 h-8 text-teal-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Shipping Tracker
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Track shipments
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+            <Link href="/customer-management">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-orange-200">
+              <CardContent className="p-4 text-center">
+                <Users className="w-8 h-8 text-orange-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Customer Management
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Manage customers
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
 
-        <Link href="/customer-satisfaction">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-indigo-200">
-            <CardContent className="p-4 text-center">
-              <Star className="w-8 h-8 text-indigo-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Customer Satisfaction
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                View feedback
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+          <Link href="/refund-request">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-200">
+              <CardContent className="p-4 text-center">
+                <RefreshCw className="w-8 h-8 text-purple-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Request Refund
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Process refunds
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
 
-        <Link href="/training">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-emerald-200">
-            <CardContent className="p-4 text-center">
-              <GraduationCap className="w-8 h-8 text-emerald-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Training Modules
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Complete training courses
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+          <Link href="/shipping-tracker">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-teal-200">
+              <CardContent className="p-4 text-center">
+                <Truck className="w-8 h-8 text-teal-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Shipping Tracker
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Track shipments
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
 
-        <Link href="/finance/bulk-payment">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
-            <CardContent className="p-4 text-center">
-              <CreditCard className="w-8 h-8 text-blue-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Bulk Payment
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Process bulk payments
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+          <Link href="/customer-satisfaction">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-indigo-200">
+              <CardContent className="p-4 text-center">
+                <Star className="w-8 h-8 text-indigo-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Customer Satisfaction
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  View feedback
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/training">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-emerald-200">
+              <CardContent className="p-4 text-center">
+                <GraduationCap className="w-8 h-8 text-emerald-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Training Modules
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Complete training courses
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/finance/bulk-payment">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
+              <CardContent className="p-4 text-center">
+                <CreditCard className="w-8 h-8 text-blue-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Bulk Payment
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Process bulk payments
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
       </div>
 
       {/* Production Pipeline Overview */}

@@ -910,17 +910,23 @@ export default function VendorPOManager() {
     if (!selectedVendorPO) return;
     
     try {
+      console.log('Starting PO view generation...');
+      
       // Fetch line items for this PO
       const items: VendorPOItem[] = await apiRequest(`/api/vendor-pos/${selectedVendorPO.id}/items`);
+      console.log('Fetched items:', items);
       
       // Fetch vendor details to get vendor-specific PO settings
       const vendor: any = await apiRequest(`/api/vendors/${selectedVendorPO.vendorId}`);
+      console.log('Fetched vendor:', vendor);
       
       // Fetch global PO settings as fallback
       const globalSettings: any = await apiRequest('/api/vendor-pos/settings');
+      console.log('Fetched global settings:', globalSettings);
       
       // Fetch optional settings attached to this PO
       const optionalSettings: any[] = await apiRequest(`/api/vendor-pos/${selectedVendorPO.id}/optional-settings`);
+      console.log('Fetched optional settings:', optionalSettings);
       
       // Use vendor-specific settings if available, otherwise fall back to global settings
       const settings = {
@@ -929,12 +935,16 @@ export default function VendorPOManager() {
         shippingInstructions: vendor?.shippingInstructions || globalSettings?.shippingInstructions || '',
       };
       
+      console.log('Building HTML content...');
+      
       // Create a simple HTML structure for PDF conversion
       const printWindow = window.open('', '', 'height=600,width=800');
       if (!printWindow) {
-        toast.error('Please allow popups for PDF generation');
+        toast.error('Please allow popups to view the Purchase Order');
         return;
       }
+      
+      console.log('Popup window opened successfully');
       
       const htmlContent = `
         <!DOCTYPE html>
@@ -1065,15 +1075,22 @@ export default function VendorPOManager() {
         </html>
       `;
       
+      console.log('Writing HTML to popup window...');
       printWindow.document.write(htmlContent);
       printWindow.document.close();
+      console.log('HTML written successfully');
       
       // Window stays open for viewing - user can print if they want
       toast.success('Purchase Order opened in new window');
       
     } catch (error) {
       console.error('PDF generation error:', error);
-      toast.error('Failed to generate PDF');
+      console.error('Error details:', {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      toast.error('Failed to view Purchase Order: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 

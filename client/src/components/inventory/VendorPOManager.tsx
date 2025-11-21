@@ -51,8 +51,11 @@ import {
   Send,
   CheckCircle,
   XCircle,
+  FileText,
+  Check,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { Checkbox } from '@/components/ui/checkbox';
 import VendorPOItemSelector from './VendorPOItemSelector';
 import {
   AlertDialog,
@@ -226,6 +229,178 @@ function getStatusColor(status: VendorPO['status']) {
   }
 }
 
+// Optional Settings Selector Component
+function OptionalSettingsSelector({ vendorPoId }: { vendorPoId: number }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
+  // Fetch all available optional settings
+  const { data: allSettings = [], isError: allSettingsError } = useQuery<any[]>({
+    queryKey: ['/api/vendor-pos/optional-settings'],
+    queryFn: () => apiRequest('/api/vendor-pos/optional-settings'),
+  });
+
+  // Fetch currently selected optional settings for this PO
+  const { data: currentSettings = [], isLoading, isError, refetch } = useQuery<any[]>({
+    queryKey: ['/api/vendor-pos', vendorPoId, 'optional-settings'],
+    queryFn: () => apiRequest(`/api/vendor-pos/${vendorPoId}/optional-settings`),
+    enabled: isOpen,
+  });
+
+  // Reset and initialize selected IDs when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      // Always start fresh when opening - reset to empty first
+      setSelectedIds([]);
+      
+      // Then load current settings if available and no error
+      if (!isLoading && !isError && currentSettings) {
+        setSelectedIds(currentSettings.map((s: any) => s.id));
+      }
+    } else {
+      // Clear when closing
+      setSelectedIds([]);
+    }
+  }, [isOpen, currentSettings, isLoading, isError]);
+
+  const updateMutation = useMutation({
+    mutationFn: async (optionalSettingIds: number[]) => {
+      return await apiRequest(`/api/vendor-pos/${vendorPoId}/optional-settings`, {
+        method: 'PUT',
+        body: JSON.stringify({ optionalSettingIds }),
+      });
+    },
+    onSuccess: () => {
+      // Invalidate both the PO's optional settings and the main PO list
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'optional-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      toast.success('Optional settings updated successfully');
+      setIsOpen(false);
+    },
+    onError: () => {
+      toast.error('Failed to update optional settings');
+    },
+  });
+
+  const handleToggle = (settingId: number) => {
+    setSelectedIds((prev) =>
+      prev.includes(settingId)
+        ? prev.filter((id) => id !== settingId)
+        : [...prev, settingId]
+    );
+  };
+
+  const handleSave = () => {
+    // Block save if there was an error loading current settings
+    if (isError) {
+      toast.error('Cannot save - failed to load current selections. Please retry.');
+      return;
+    }
+    updateMutation.mutate(selectedIds);
+  };
+
+  const handleRetry = () => {
+    refetch();
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" data-testid={`button-optional-settings-${vendorPoId}`}>
+          <FileText className="w-4 h-4 mr-1" />
+          Optional Statements
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Select Optional Statements</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 max-h-96 overflow-y-auto py-4">
+          {allSettingsError ? (
+            <div className="text-center py-8 text-red-600">
+              <XCircle className="h-12 w-12 mx-auto mb-2" />
+              <p>Failed to load available optional statements.</p>
+              <p className="text-sm mt-1">Please close the dialog and try again.</p>
+            </div>
+          ) : isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+            </div>
+          ) : isError ? (
+            <div className="text-center py-8 text-red-600">
+              <XCircle className="h-12 w-12 mx-auto mb-2" />
+              <p>Failed to load this PO's optional settings.</p>
+              <Button
+                onClick={handleRetry}
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                data-testid="button-retry-load"
+              >
+                Retry
+              </Button>
+            </div>
+          ) : allSettings.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <FileText className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+              <p>No optional statements available.</p>
+              <p className="text-sm mt-1">Create statements in PO Settings first.</p>
+            </div>
+          ) : (
+            allSettings.map((setting) => (
+              <div
+                key={setting.id}
+                className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                data-testid={`optional-setting-item-${setting.id}`}
+              >
+                <Checkbox
+                  id={`setting-${setting.id}`}
+                  checked={selectedIds.includes(setting.id)}
+                  onCheckedChange={() => handleToggle(setting.id)}
+                  data-testid={`checkbox-optional-setting-${setting.id}`}
+                />
+                <div className="flex-1">
+                  <label
+                    htmlFor={`setting-${setting.id}`}
+                    className="font-medium text-sm cursor-pointer"
+                  >
+                    {setting.name}
+                  </label>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    {setting.statement}
+                  </p>
+                </div>
+                {selectedIds.includes(setting.id) && (
+                  <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
+                )}
+              </div>
+            ))
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsOpen(false)} data-testid="button-cancel-optional-settings">
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSave} 
+            disabled={updateMutation.isPending}
+            data-testid="button-save-optional-settings"
+          >
+            {updateMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // Vendor PO card component
 function VendorPOCard({
   vendorPo,
@@ -315,6 +490,7 @@ function VendorPOCard({
             <Eye className="w-4 h-4 mr-1" />
             Manage Items
           </Button>
+          <OptionalSettingsSelector vendorPoId={vendorPo.id} />
           {vendorPo.status === 'Draft' && (
             <Button
               variant="default"

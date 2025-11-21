@@ -1986,34 +1986,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                 </th>
                 <th
                   className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  onClick={() => handleSort('costPer')}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSort('costPer')}
-                  tabIndex={0}
-                  role="button"
-                  aria-sort={
-                    sortColumn === 'costPer'
-                      ? sortDirection === 'asc'
-                        ? 'ascending'
-                        : 'descending'
-                      : 'none'
-                  }
-                  data-testid="header-costPer"
-                >
-                  <div className="flex items-center gap-2">
-                    Cost per
-                    {sortColumn === 'costPer' ? (
-                      sortDirection === 'asc' ? (
-                        <ArrowUp className="h-4 w-4" />
-                      ) : (
-                        <ArrowDown className="h-4 w-4" />
-                      )
-                    ) : (
-                      <ArrowUpDown className="h-4 w-4 text-gray-400" />
-                    )}
-                  </div>
-                </th>
-                <th
-                  className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   onClick={() => handleSort('source')}
                   onKeyDown={(e) => e.key === 'Enter' && handleSort('source')}
                   tabIndex={0}
@@ -2030,6 +2002,34 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                   <div className="flex items-center gap-2">
                     Source
                     {sortColumn === 'source' ? (
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="h-4 w-4" />
+                      ) : (
+                        <ArrowDown className="h-4 w-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-4 w-4 text-gray-400" />
+                    )}
+                  </div>
+                </th>
+                <th
+                  className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  onClick={() => handleSort('costPer')}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSort('costPer')}
+                  tabIndex={0}
+                  role="button"
+                  aria-sort={
+                    sortColumn === 'costPer'
+                      ? sortDirection === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  }
+                  data-testid="header-costPer"
+                >
+                  <div className="flex items-center gap-2">
+                    Cost per
+                    {sortColumn === 'costPer' ? (
                       sortDirection === 'asc' ? (
                         <ArrowUp className="h-4 w-4" />
                       ) : (
@@ -2141,10 +2141,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                       {item.name}
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
-                      {item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}
+                      {item.source || '-'}
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
-                      {item.source || '-'}
+                      {item.costPer ? `$${item.costPer.toFixed(2)}` : '-'}
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       {item.supplierPartNumber || '-'}

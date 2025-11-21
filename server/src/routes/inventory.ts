@@ -1832,4 +1832,30 @@ router.get('/other-docs/:filename', async (req: Request, res: Response) => {
   }
 });
 
+// ===== OUTSIDE PROCESSING ROUTES =====
+
+// GET /api/inventory/outside-processing/locations - Get all outside processing locations
+router.get('/outside-processing/locations', async (req: Request, res: Response) => {
+  try {
+    // TODO: Implement outside processing locations storage
+    // For now, return an empty array
+    res.json([]);
+  } catch (error) {
+    console.error('Get outside processing locations error:', error);
+    res.status(500).json({ error: 'Failed to fetch outside processing locations' });
+  }
+});
+
+// GET /api/inventory/outside-processing/jobs - Get all outside processing jobs
+router.get('/outside-processing/jobs', async (req: Request, res: Response) => {
+  try {
+    // TODO: Implement outside processing jobs storage
+    // For now, return an empty array
+    res.json([]);
+  } catch (error) {
+    console.error('Get outside processing jobs error:', error);
+    res.status(500).json({ error: 'Failed to fetch outside processing jobs' });
+  }
+});
+
 export default router;

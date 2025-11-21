@@ -51,6 +51,7 @@ export default function EnhancedInventoryMRPPage() {
     useState(false);
   const [isVendorPOModalOpen, setIsVendorPOModalOpen] = useState(false);
   const [isPOSettingsModalOpen, setIsPOSettingsModalOpen] = useState(false);
+  const [isOutsideProcessingModalOpen, setIsOutsideProcessingModalOpen] = useState(false);
   const [initialPartNumber, setInitialPartNumber] = useState<string | null>(null);
 
   // Auto-open inventory modal if partNumber is in URL
@@ -70,6 +71,8 @@ export default function EnhancedInventoryMRPPage() {
       setIsVendorPOModalOpen(true);
     } else if (cardType === 'po-settings') {
       setIsPOSettingsModalOpen(true);
+    } else if (cardType === 'outside-processing') {
+      setIsOutsideProcessingModalOpen(true);
     } else {
       setActiveCard(activeCard === cardType ? null : cardType);
     }
@@ -444,6 +447,22 @@ export default function EnhancedInventoryMRPPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Outside Processing Modal */}
+      <Dialog
+        open={isOutsideProcessingModalOpen}
+        onOpenChange={setIsOutsideProcessingModalOpen}
+      >
+        <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Truck className="h-5 w-5" />
+              Outside Processing
+            </DialogTitle>
+          </DialogHeader>
+          <OutsideProcessingCard />
+        </DialogContent>
+      </Dialog>
+
       {/* Expanded Card Content */}
       {activeCard && (
         <div className="mt-8">
@@ -487,12 +506,6 @@ export default function EnhancedInventoryMRPPage() {
                       Purchase Order Suggestions
                     </>
                   )}
-                  {activeCard === 'outside-processing' && (
-                    <>
-                      <Truck className="h-5 w-5" />
-                      Outside Processing
-                    </>
-                  )}
                 </CardTitle>
                 <Button
                   variant="outline"
@@ -515,7 +528,6 @@ export default function EnhancedInventoryMRPPage() {
               {activeCard === 'mrp-calculation' && <MRPCalculationCard />}
               {activeCard === 'mrp-shortages' && <MRPShortagesCard />}
               {activeCard === 'po-suggestions' && <POSuggestionsCard />}
-              {activeCard === 'outside-processing' && <OutsideProcessingCard />}
             </CardContent>
           </Card>
         </div>

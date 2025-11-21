@@ -69,7 +69,11 @@ import adminRoutes from './admin';
 import quotesRoutes from './quotes';
 import costCentersRoutes from './costCenters';
 import employeeBadgesRoutes from './employeeBadges';
+
 import watchRulesRoutes from './watchRules';
+
+import p2TravelerRoutes from './p2Traveler';
+
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -149,8 +153,13 @@ export function registerRoutes(app: Express): Server {
   // Employee Badge Actions routes
   app.use('/api/employee-badges', employeeBadgesRoutes);
 
+
   // Customer Watch Rules routes
   app.use('/api/watch-rules', watchRulesRoutes);
+
+  // P2 Traveler routes
+  app.use('/api/p2-traveler', p2TravelerRoutes);
+
 
   // PDFME SYSTEM COMMENTED OUT - NOT IN USE
   // PDF Templates routes

@@ -414,33 +414,35 @@ export default function WatchRulesPage() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="customer">Customer *</Label>
-              <div className="space-y-2">
-                <Input
-                  placeholder="Search customers..."
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                  data-testid="input-customer-search"
-                />
-                <Select value={customerId} onValueChange={handleCustomerSelect}>
-                  <SelectTrigger data-testid="select-customer">
-                    <SelectValue placeholder="Select a customer">
-                      {customerName || 'Select a customer'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filteredCustomers.slice(0, 50).map((customer) => (
+              <Select value={customerId} onValueChange={handleCustomerSelect}>
+                <SelectTrigger data-testid="select-customer">
+                  <SelectValue placeholder="Select a customer">
+                    {customerName || 'Select a customer'}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <div className="px-2 pb-2 sticky top-0 bg-white dark:bg-gray-950 border-b">
+                    <Input
+                      placeholder="Search customers..."
+                      value={customerSearch}
+                      onChange={(e) => setCustomerSearch(e.target.value)}
+                      className="h-8"
+                      data-testid="input-customer-search"
+                    />
+                  </div>
+                  {filteredCustomers.length === 0 ? (
+                    <div className="px-2 py-6 text-center text-sm text-gray-500">
+                      No customers found
+                    </div>
+                  ) : (
+                    filteredCustomers.map((customer) => (
                       <SelectItem key={customer.id} value={customer.id.toString()}>
                         {customer.name}
                       </SelectItem>
-                    ))}
-                    {filteredCustomers.length === 0 && (
-                      <SelectItem value="none" disabled>
-                        No customers found
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

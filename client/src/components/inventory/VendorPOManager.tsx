@@ -468,7 +468,7 @@ function VendorPOCard({
           </div>
           {vendorPo.expectedDeliveryDate && (
             <div>
-              <span className="text-gray-500">Expected Delivery:</span>
+              <span className="text-gray-500">Requested Delivery Date:</span>
               <p
                 className="font-medium"
                 data-testid={`text-delivery-date-${vendorPo.id}`}
@@ -630,7 +630,7 @@ function VendorPOForm({
       </div>
 
       <div>
-        <Label htmlFor="expectedDeliveryDate">Expected Delivery Date</Label>
+        <Label htmlFor="expectedDeliveryDate">Requested Delivery Date</Label>
         <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
           <PopoverTrigger asChild>
             <Button
@@ -1029,7 +1029,7 @@ export default function VendorPOManager() {
                 <div>${selectedVendorPO.status}</div>
               </div>
               <div class="info-row">
-                <div class="info-label">Expected Delivery:</div>
+                <div class="info-label">Requested Delivery Date:</div>
                 <div>${selectedVendorPO.expectedDeliveryDate || 'N/A'}</div>
               </div>
               <div class="info-row">

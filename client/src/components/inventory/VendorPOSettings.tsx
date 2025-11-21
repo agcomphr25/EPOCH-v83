@@ -217,6 +217,7 @@ function OptionalSettingsManager() {
 
   const { data: optionalSettings = [], isLoading } = useQuery<OptionalSetting[]>({
     queryKey: ['/api/vendor-pos/optional-settings'],
+    queryFn: () => apiRequest('/api/vendor-pos/optional-settings'),
   });
 
   const createMutation = useMutation({

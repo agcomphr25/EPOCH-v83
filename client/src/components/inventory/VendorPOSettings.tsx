@@ -150,9 +150,7 @@ export default function VendorPOSettings() {
               />
             </CardContent>
           </Card>
-        </TabsContent>
 
-        <TabsContent value="optional" className="space-y-6 mt-4">
           <Card>
             <CardHeader>
               <CardTitle>Shipping Instructions</CardTitle>
@@ -170,6 +168,12 @@ export default function VendorPOSettings() {
               />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="optional" className="space-y-6 mt-4">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+            <p className="text-sm">Optional statements will be added here in a future update.</p>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

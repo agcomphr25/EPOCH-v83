@@ -1,4 +1,5 @@
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,11 +20,17 @@ import {
   CreditCard,
   List,
   ClipboardList,
+  Eye,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
+import WatchRuleCards from '@/components/WatchRuleCards';
 
 export default function DARLENEBTestDashboard() {
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+    queryKey: ['currentUser'],
+  });
+
   const handleLogout = () => {
     // Clear authentication tokens
     localStorage.removeItem('sessionToken');
@@ -138,6 +145,17 @@ export default function DARLENEBTestDashboard() {
           </Link>
         </div>
       </div>
+
+      {/* Special Customer Watch Section */}
+      {currentUser?.username && (
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+            <Eye className="w-5 h-5 text-purple-600" />
+            Special Customer Watch
+          </h2>
+          <WatchRuleCards userId={currentUser.username} />
+        </div>
+      )}
 
       {/* Other Functions */}
       <div className="mb-6">

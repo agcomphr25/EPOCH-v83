@@ -68,6 +68,7 @@ import JENSTestDashboard from './pages/JENSTestDashboard';
 import STACIWTestDashboard from './pages/STACIWTestDashboard';
 import DARLENEBTestDashboard from './pages/DARLENEBTestDashboard';
 import TIMSTestDashboard from './pages/TIMSTestDashboard';
+import WatchRulesPage from './pages/WatchRulesPage';
 import BRADWTestDashboard from './pages/BRADWTestDashboard';
 import FALEESHAHTestDashboard from './pages/FALEESHAHTestDashboard';
 import JOEYBTestDashboard from './pages/JOEYBTestDashboard';
@@ -480,6 +481,9 @@ function App() {
                     path="/joeyb-dashboard"
                     component={JOEYBTestDashboard}
                   />
+
+                  {/* Watch Rules Management Route */}
+                  <Route path="/watch-rules" component={WatchRulesPage} />
 
                   {/* Cutting Table Route */}
                   <Route path="/cutting-table" component={CuttingTable} />

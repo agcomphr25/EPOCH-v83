@@ -1,5 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { insertVendorPOSchema, insertVendorPOItemSchema, insertVendorPOSettingsSchema } from '@shared/schema';
+import { 
+  insertVendorPOSchema, 
+  insertVendorPOItemSchema, 
+  insertVendorPOSettingsSchema,
+  insertOptionalSettingSchema,
+  insertPOOptionalSettingSchema
+} from '@shared/schema';
 import { z } from 'zod';
 import { storage } from '../../storage';
 
@@ -273,6 +279,144 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
       return res.status(400).json({ error: error.message });
     }
     res.status(500).json({ error: 'Failed to record PO receipt' });
+  }
+});
+
+// ============ Optional Settings Routes ============
+
+// GET /api/vendor-pos/optional-settings - Get all optional settings
+router.get('/optional-settings', async (req: Request, res: Response) => {
+  try {
+    const settings = await storage.getAllOptionalSettings();
+    res.json(settings);
+  } catch (error) {
+    console.error('Get optional settings error:', error);
+    res.status(500).json({ error: 'Failed to retrieve optional settings' });
+  }
+});
+
+// GET /api/vendor-pos/optional-settings/:id - Get a single optional setting
+router.get('/optional-settings/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid optional setting ID' });
+    }
+
+    const setting = await storage.getOptionalSetting(id);
+    if (!setting) {
+      return res.status(404).json({ error: 'Optional setting not found' });
+    }
+
+    res.json(setting);
+  } catch (error) {
+    console.error('Get optional setting error:', error);
+    res.status(500).json({ error: 'Failed to retrieve optional setting' });
+  }
+});
+
+// POST /api/vendor-pos/optional-settings - Create a new optional setting
+router.post('/optional-settings', async (req: Request, res: Response) => {
+  try {
+    const data = insertOptionalSettingSchema.parse(req.body);
+    const setting = await storage.createOptionalSetting(data);
+    res.status(201).json(setting);
+  } catch (error) {
+    console.error('Create optional setting error:', error);
+    if (error instanceof z.ZodError) {
+      return res
+        .status(400)
+        .json({ error: 'Invalid optional setting data', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to create optional setting' });
+  }
+});
+
+// PUT /api/vendor-pos/optional-settings/:id - Update an optional setting
+router.put('/optional-settings/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid optional setting ID' });
+    }
+
+    const data = insertOptionalSettingSchema.partial().parse(req.body);
+    const setting = await storage.updateOptionalSetting(id, data);
+
+    if (!setting) {
+      return res.status(404).json({ error: 'Optional setting not found' });
+    }
+
+    res.json(setting);
+  } catch (error) {
+    console.error('Update optional setting error:', error);
+    if (error instanceof z.ZodError) {
+      return res
+        .status(400)
+        .json({ error: 'Invalid optional setting data', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to update optional setting' });
+  }
+});
+
+// DELETE /api/vendor-pos/optional-settings/:id - Delete an optional setting
+router.delete('/optional-settings/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid optional setting ID' });
+    }
+
+    await storage.deleteOptionalSetting(id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete optional setting error:', error);
+    res.status(500).json({ error: 'Failed to delete optional setting' });
+  }
+});
+
+// ============ PO Optional Settings Routes ============
+
+// GET /api/vendor-pos/:id/optional-settings - Get all optional settings for a PO
+router.get('/:id/optional-settings', async (req: Request, res: Response) => {
+  try {
+    const vendorPoId = parseInt(req.params.id);
+    if (isNaN(vendorPoId)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const settings = await storage.getPOOptionalSettings(vendorPoId);
+    res.json(settings);
+  } catch (error) {
+    console.error('Get PO optional settings error:', error);
+    res.status(500).json({ error: 'Failed to retrieve PO optional settings' });
+  }
+});
+
+// PUT /api/vendor-pos/:id/optional-settings - Update all optional settings for a PO (bulk update)
+router.put('/:id/optional-settings', async (req: Request, res: Response) => {
+  try {
+    const vendorPoId = parseInt(req.params.id);
+    if (isNaN(vendorPoId)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const updateSchema = z.object({
+      optionalSettingIds: z.array(z.number().int().positive()),
+    });
+
+    const { optionalSettingIds } = updateSchema.parse(req.body);
+
+    await storage.updatePOOptionalSettings(vendorPoId, optionalSettingIds);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Update PO optional settings error:', error);
+    if (error instanceof z.ZodError) {
+      return res
+        .status(400)
+        .json({ error: 'Invalid optional settings data', details: error.errors });
+    }
+    res.status(500).json({ error: 'Failed to update PO optional settings' });
   }
 });
 

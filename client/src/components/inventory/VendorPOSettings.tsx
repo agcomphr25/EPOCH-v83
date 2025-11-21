@@ -30,6 +30,11 @@ import {
 
 interface VendorPOSettings {
   id?: number;
+  companyName?: string;
+  companyAddress?: string;
+  companyPhone?: string;
+  companyEmail?: string;
+  companyWebsite?: string;
   termsAndConditions: string;
   paymentTerms: string;
   shippingInstructions: string;
@@ -47,6 +52,13 @@ interface OptionalSetting {
 
 export default function VendorPOSettings() {
   const { toast } = useToast();
+  // Company Contact Information
+  const [companyName, setCompanyName] = useState('');
+  const [companyAddress, setCompanyAddress] = useState('');
+  const [companyPhone, setCompanyPhone] = useState('');
+  const [companyEmail, setCompanyEmail] = useState('');
+  const [companyWebsite, setCompanyWebsite] = useState('');
+  // PO Terms
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [paymentTerms, setPaymentTerms] = useState('');
   const [shippingInstructions, setShippingInstructions] = useState('');
@@ -57,6 +69,11 @@ export default function VendorPOSettings() {
 
   useEffect(() => {
     if (settings) {
+      setCompanyName(settings.companyName || '');
+      setCompanyAddress(settings.companyAddress || '');
+      setCompanyPhone(settings.companyPhone || '');
+      setCompanyEmail(settings.companyEmail || '');
+      setCompanyWebsite(settings.companyWebsite || '');
       setTermsAndConditions(settings.termsAndConditions || '');
       setPaymentTerms(settings.paymentTerms || '');
       setShippingInstructions(settings.shippingInstructions || '');
@@ -88,6 +105,11 @@ export default function VendorPOSettings() {
 
   const handleSave = () => {
     updateSettingsMutation.mutate({
+      companyName,
+      companyAddress,
+      companyPhone,
+      companyEmail,
+      companyWebsite,
       termsAndConditions,
       paymentTerms,
       shippingInstructions,
@@ -144,6 +166,71 @@ export default function VendorPOSettings() {
         </TabsList>
 
         <TabsContent value="global" className="space-y-6 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Company Contact Information</CardTitle>
+              <CardDescription>
+                Your company information that will appear at the top of all purchase orders
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="company-name">Company Name</Label>
+                <Input
+                  id="company-name"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="Enter your company name..."
+                  data-testid="input-company-name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="company-address">Company Address</Label>
+                <Textarea
+                  id="company-address"
+                  value={companyAddress}
+                  onChange={(e) => setCompanyAddress(e.target.value)}
+                  placeholder="Enter your company address..."
+                  className="min-h-[80px]"
+                  data-testid="textarea-company-address"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="company-phone">Phone</Label>
+                  <Input
+                    id="company-phone"
+                    value={companyPhone}
+                    onChange={(e) => setCompanyPhone(e.target.value)}
+                    placeholder="(555) 123-4567"
+                    data-testid="input-company-phone"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="company-email">Email</Label>
+                  <Input
+                    id="company-email"
+                    type="email"
+                    value={companyEmail}
+                    onChange={(e) => setCompanyEmail(e.target.value)}
+                    placeholder="contact@company.com"
+                    data-testid="input-company-email"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="company-website">Website (Optional)</Label>
+                <Input
+                  id="company-website"
+                  value={companyWebsite}
+                  onChange={(e) => setCompanyWebsite(e.target.value)}
+                  placeholder="https://www.company.com"
+                  data-testid="input-company-website"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Terms and Conditions</CardTitle>

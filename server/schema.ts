@@ -2856,6 +2856,13 @@ export const vendorPOItems = pgTable('vendor_po_items', {
 // Vendor PO Settings (singleton table for global PO settings)
 export const vendorPOSettings = pgTable('vendor_po_settings', {
   id: serial('id').primaryKey(),
+  // Company Contact Information
+  companyName: text('company_name'),
+  companyAddress: text('company_address'),
+  companyPhone: text('company_phone'),
+  companyEmail: text('company_email'),
+  companyWebsite: text('company_website'),
+  // PO Terms and Instructions
   termsAndConditions: text('terms_and_conditions'),
   paymentTerms: text('payment_terms'),
   shippingInstructions: text('shipping_instructions'),

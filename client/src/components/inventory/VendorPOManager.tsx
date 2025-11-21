@@ -930,6 +930,11 @@ export default function VendorPOManager() {
       
       // Use vendor-specific settings if available, otherwise fall back to global settings
       const settings = {
+        companyName: globalSettings?.companyName || '',
+        companyAddress: globalSettings?.companyAddress || '',
+        companyPhone: globalSettings?.companyPhone || '',
+        companyEmail: globalSettings?.companyEmail || '',
+        companyWebsite: globalSettings?.companyWebsite || '',
         termsAndConditions: vendor?.termsAndConditions || globalSettings?.termsAndConditions || '',
         paymentTerms: vendor?.paymentTerms || globalSettings?.paymentTerms || '',
         shippingInstructions: vendor?.shippingInstructions || globalSettings?.shippingInstructions || '',
@@ -953,6 +958,9 @@ export default function VendorPOManager() {
             <title>Purchase Order - ${selectedVendorPO.poNumber}</title>
             <style>
               body { font-family: Arial, sans-serif; padding: 40px; }
+              .company-header { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #333; }
+              .company-header h1 { margin: 0 0 10px 0; font-size: 26px; color: #333; }
+              .company-header p { margin: 3px 0; color: #555; font-size: 13px; }
               .header { text-align: center; margin-bottom: 30px; }
               .header h1 { margin: 0; font-size: 24px; }
               .info-section { margin-bottom: 20px; }
@@ -969,6 +977,21 @@ export default function VendorPOManager() {
             </style>
           </head>
           <body>
+            ${settings?.companyName || settings?.companyAddress || settings?.companyPhone || settings?.companyEmail ? `
+              <div class="company-header">
+                ${settings.companyName ? `<h1>${settings.companyName}</h1>` : ''}
+                ${settings.companyAddress ? `<p style="white-space: pre-wrap;">${settings.companyAddress}</p>` : ''}
+                ${settings.companyPhone || settings.companyEmail ? `
+                  <p>
+                    ${settings.companyPhone ? settings.companyPhone : ''}
+                    ${settings.companyPhone && settings.companyEmail ? ' | ' : ''}
+                    ${settings.companyEmail ? settings.companyEmail : ''}
+                  </p>
+                ` : ''}
+                ${settings.companyWebsite ? `<p>${settings.companyWebsite}</p>` : ''}
+              </div>
+            ` : ''}
+            
             <div class="header">
               <h1>PURCHASE ORDER</h1>
               <p>PO Number: ${selectedVendorPO.poNumber}</p>

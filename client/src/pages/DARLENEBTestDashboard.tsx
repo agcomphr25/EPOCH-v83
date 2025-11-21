@@ -147,12 +147,25 @@ export default function DARLENEBTestDashboard() {
       </div>
 
       {/* Special Customer Watch Section */}
-      {currentUser?.username && (
+      {currentUser?.username === 'darleneb' && (
         <div className="mb-6">
-          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
-            <Eye className="w-5 h-5 text-purple-600" />
-            Special Customer Watch
-          </h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+              <Eye className="w-5 h-5 text-purple-600" />
+              Customer Watch Rules
+            </h2>
+            <Link href="/watch-rules">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2 hover:bg-purple-50 hover:border-purple-300"
+                data-testid="button-manage-watch-rules"
+              >
+                <FileText className="w-4 h-4" />
+                Manage Rules
+              </Button>
+            </Link>
+          </div>
           <WatchRuleCards userId={currentUser.username} />
         </div>
       )}

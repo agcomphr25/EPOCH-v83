@@ -1014,9 +1014,9 @@ export default function VendorPOManager() {
                     <td>${item.lineNumber}</td>
                     <td>${item.agPartNumber || '-'}</td>
                     <td>${item.description || '-'}</td>
-                    <td>${item.quantity}</td>
-                    <td>$${item.unitPrice.toFixed(2)}</td>
-                    <td>$${item.totalPrice.toFixed(2)}</td>
+                    <td>${item.quantity || 0}</td>
+                    <td>$${item.unitPrice != null ? item.unitPrice.toFixed(2) : '0.00'}</td>
+                    <td>$${item.totalPrice != null ? item.totalPrice.toFixed(2) : '0.00'}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -1024,7 +1024,7 @@ export default function VendorPOManager() {
             
             <div class="totals">
               <div class="total-line">
-                Total: $${selectedVendorPO.totalCost.toFixed(2)}
+                Total: $${selectedVendorPO.totalCost != null ? selectedVendorPO.totalCost.toFixed(2) : '0.00'}
               </div>
             </div>
             

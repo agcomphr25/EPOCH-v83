@@ -919,6 +919,9 @@ export default function VendorPOManager() {
       // Fetch global PO settings as fallback
       const globalSettings: any = await apiRequest('/api/vendor-pos/settings');
       
+      // Fetch optional settings attached to this PO
+      const optionalSettings: any[] = await apiRequest(`/api/vendor-pos/${selectedVendorPO.id}/optional-settings`);
+      
       // Use vendor-specific settings if available, otherwise fall back to global settings
       const settings = {
         termsAndConditions: vendor?.termsAndConditions || globalSettings?.termsAndConditions || '',
@@ -1022,7 +1025,7 @@ export default function VendorPOManager() {
               </div>
             ` : ''}
             
-            ${settings?.termsAndConditions || settings?.paymentTerms || settings?.shippingInstructions ? `
+            ${settings?.termsAndConditions || settings?.paymentTerms || settings?.shippingInstructions || optionalSettings.length > 0 ? `
               <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #ddd;">
                 ${settings?.paymentTerms ? `
                   <div style="margin-bottom: 15px;">
@@ -1044,6 +1047,18 @@ export default function VendorPOManager() {
                     <div style="white-space: pre-wrap; margin-top: 5px;">${settings.termsAndConditions}</div>
                   </div>
                 ` : ''}
+                
+                ${optionalSettings.length > 0 ? `
+                  <div style="margin-bottom: 15px;">
+                    <div style="font-weight: bold; font-size: 14px;">Additional Requirements:</div>
+                    ${optionalSettings.map((setting, index) => `
+                      <div style="margin-top: 10px; padding-left: 10px;">
+                        <div style="font-weight: bold; font-size: 12px;">${index + 1}. ${setting.name}</div>
+                        <div style="white-space: pre-wrap; margin-top: 5px; font-size: 12px;">${setting.statement}</div>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
               </div>
             ` : ''}
           </body>
@@ -1053,11 +1068,8 @@ export default function VendorPOManager() {
       printWindow.document.write(htmlContent);
       printWindow.document.close();
       
-      // Wait a bit for content to load, then trigger print
-      setTimeout(() => {
-        printWindow.print();
-        toast.success('PDF ready for download');
-      }, 250);
+      // Window stays open for viewing - user can print if they want
+      toast.success('Purchase Order opened in new window');
       
     } catch (error) {
       console.error('PDF generation error:', error);
@@ -1189,10 +1201,10 @@ export default function VendorPOManager() {
               variant="outline"
               size="sm"
               onClick={handleDownloadPDF}
-              data-testid="button-download-pdf"
+              data-testid="button-view-po"
             >
-              <FileDown className="w-4 h-4 mr-2" />
-              Download PDF
+              <Eye className="w-4 h-4 mr-2" />
+              View PO
             </Button>
           </div>
         </div>

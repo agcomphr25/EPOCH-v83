@@ -327,6 +327,12 @@ import {
   vendorPOSettings,
   type VendorPOSettings,
   type InsertVendorPOSettings,
+  optionalSettings,
+  type OptionalSetting,
+  type InsertOptionalSetting,
+  poOptionalSettings,
+  type POOptionalSetting,
+  type InsertPOOptionalSetting,
   // PDF Template types
   pdfTemplates,
   type PdfTemplate,
@@ -1633,6 +1639,19 @@ export interface IStorage {
   // Vendor PO Settings
   getVendorPOSettings(): Promise<any | undefined>;
   updateVendorPOSettings(data: any): Promise<any>;
+
+  // Optional Settings CRUD
+  getAllOptionalSettings(): Promise<any[]>;
+  getOptionalSetting(id: number): Promise<any | undefined>;
+  createOptionalSetting(data: any): Promise<any>;
+  updateOptionalSetting(id: number, data: any): Promise<any>;
+  deleteOptionalSetting(id: number): Promise<void>;
+  
+  // PO Optional Settings (junction table)
+  getPOOptionalSettings(vendorPoId: number): Promise<any[]>;
+  addPOOptionalSetting(vendorPoId: number, optionalSettingId: number): Promise<any>;
+  removePOOptionalSetting(vendorPoId: number, optionalSettingId: number): Promise<void>;
+  updatePOOptionalSettings(vendorPoId: number, optionalSettingIds: number[]): Promise<void>;
 
   // PDF Templates CRUD
   getAllPdfTemplates(): Promise<PdfTemplate[]>;
@@ -6954,6 +6973,103 @@ export class DatabaseStorage implements IStorage {
         .values(data)
         .returning();
       return newSettings;
+    }
+  }
+
+  // Optional Settings CRUD
+  async getAllOptionalSettings(): Promise<OptionalSetting[]> {
+    return await db
+      .select()
+      .from(optionalSettings)
+      .orderBy(optionalSettings.sortOrder, optionalSettings.name);
+  }
+
+  async getOptionalSetting(id: number): Promise<OptionalSetting | undefined> {
+    const [setting] = await db
+      .select()
+      .from(optionalSettings)
+      .where(eq(optionalSettings.id, id))
+      .limit(1);
+    return setting;
+  }
+
+  async createOptionalSetting(data: InsertOptionalSetting): Promise<OptionalSetting> {
+    const [newSetting] = await db
+      .insert(optionalSettings)
+      .values(data)
+      .returning();
+    return newSetting;
+  }
+
+  async updateOptionalSetting(id: number, data: Partial<InsertOptionalSetting>): Promise<OptionalSetting> {
+    const [updatedSetting] = await db
+      .update(optionalSettings)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(optionalSettings.id, id))
+      .returning();
+    return updatedSetting;
+  }
+
+  async deleteOptionalSetting(id: number): Promise<void> {
+    await db
+      .delete(optionalSettings)
+      .where(eq(optionalSettings.id, id));
+  }
+
+  // PO Optional Settings (junction table)
+  async getPOOptionalSettings(vendorPoId: number): Promise<OptionalSetting[]> {
+    const results = await db
+      .select({
+        id: optionalSettings.id,
+        name: optionalSettings.name,
+        statement: optionalSettings.statement,
+        sortOrder: optionalSettings.sortOrder,
+        isActive: optionalSettings.isActive,
+        createdAt: optionalSettings.createdAt,
+        updatedAt: optionalSettings.updatedAt,
+      })
+      .from(poOptionalSettings)
+      .innerJoin(optionalSettings, eq(poOptionalSettings.optionalSettingId, optionalSettings.id))
+      .where(eq(poOptionalSettings.vendorPoId, vendorPoId))
+      .orderBy(optionalSettings.sortOrder, optionalSettings.name);
+    return results;
+  }
+
+  async addPOOptionalSetting(vendorPoId: number, optionalSettingId: number): Promise<POOptionalSetting> {
+    const [newLink] = await db
+      .insert(poOptionalSettings)
+      .values({ vendorPoId, optionalSettingId })
+      .returning();
+    return newLink;
+  }
+
+  async removePOOptionalSetting(vendorPoId: number, optionalSettingId: number): Promise<void> {
+    await db
+      .delete(poOptionalSettings)
+      .where(
+        and(
+          eq(poOptionalSettings.vendorPoId, vendorPoId),
+          eq(poOptionalSettings.optionalSettingId, optionalSettingId)
+        )
+      );
+  }
+
+  async updatePOOptionalSettings(vendorPoId: number, optionalSettingIds: number[]): Promise<void> {
+    // Delete all existing links for this PO
+    await db
+      .delete(poOptionalSettings)
+      .where(eq(poOptionalSettings.vendorPoId, vendorPoId));
+    
+    // Insert new links if any
+    if (optionalSettingIds.length > 0) {
+      await db
+        .insert(poOptionalSettings)
+        .values(
+          optionalSettingIds.map(optionalSettingId => ({
+            vendorPoId,
+            optionalSettingId,
+          }))
+        );
     }
   }
 

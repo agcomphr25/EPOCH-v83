@@ -2863,6 +2863,31 @@ export const vendorPOSettings = pgTable('vendor_po_settings', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// Optional Settings - Reusable statements that can be added to individual POs
+export const optionalSettings = pgTable('optional_settings', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  statement: text('statement').notNull(),
+  sortOrder: integer('sort_order').default(0),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// PO Optional Settings - Junction table linking POs to optional settings
+export const poOptionalSettings = pgTable('po_optional_settings', {
+  id: serial('id').primaryKey(),
+  vendorPoId: integer('vendor_po_id')
+    .references(() => vendorPOs.id, { onDelete: 'cascade' })
+    .notNull(),
+  optionalSettingId: integer('optional_setting_id')
+    .references(() => optionalSettings.id, { onDelete: 'cascade' })
+    .notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  uniquePoSetting: unique().on(table.vendorPoId, table.optionalSettingId),
+}));
+
 export const communicationLogs = pgTable('communication_logs', {
   id: serial('id').primaryKey(),
   orderId: text('order_id'), // Made nullable for general communications
@@ -3152,6 +3177,33 @@ export const insertVendorPOSettingsSchema = createInsertSchema(vendorPOSettings)
   });
 export type InsertVendorPOSettings = z.infer<typeof insertVendorPOSettingsSchema>;
 export type VendorPOSettings = typeof vendorPOSettings.$inferSelect;
+
+export const insertOptionalSettingSchema = createInsertSchema(optionalSettings)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    name: z.string().min(1, 'Name is required'),
+    statement: z.string().min(1, 'Statement is required'),
+    sortOrder: z.number().int().default(0),
+    isActive: z.boolean().default(true),
+  });
+export type InsertOptionalSetting = z.infer<typeof insertOptionalSettingSchema>;
+export type OptionalSetting = typeof optionalSettings.$inferSelect;
+
+export const insertPOOptionalSettingSchema = createInsertSchema(poOptionalSettings)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    vendorPoId: z.number().int().positive('Vendor PO ID is required'),
+    optionalSettingId: z.number().int().positive('Optional Setting ID is required'),
+  });
+export type InsertPOOptionalSetting = z.infer<typeof insertPOOptionalSettingSchema>;
+export type POOptionalSetting = typeof poOptionalSettings.$inferSelect;
 
 // Order Attachments Table
 export const orderAttachments = pgTable('order_attachments', {

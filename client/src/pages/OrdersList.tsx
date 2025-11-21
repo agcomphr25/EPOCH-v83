@@ -176,9 +176,11 @@ interface StockModel {
 export default function OrdersList() {
   console.log('OrdersList component rendering - with CSV export');
 
-  // Read search parameter from URL
+  // Read search parameters from URL
   const searchParams = new URLSearchParams(window.location.search);
   const initialSearchTerm = searchParams.get('search') || '';
+  const initialDepartmentFilter = searchParams.get('department') || 'all';
+  const urlCustomerId = searchParams.get('customerId') || '';
 
   const [selectedOrderBarcode, setSelectedOrderBarcode] = useState<{
     orderId: string;
@@ -188,8 +190,9 @@ export default function OrdersList() {
   const [selectedOrderForKickback, setSelectedOrderForKickback] =
     useState<Order | null>(null);
   const [isKickbackDialogOpen, setIsKickbackDialogOpen] = useState(false);
-  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
+  const [departmentFilter, setDepartmentFilter] = useState<string>(initialDepartmentFilter);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [customerIdFilter, setCustomerIdFilter] = useState<string>(urlCustomerId);
   const [sortBy, setSortBy] = useState<string>('orderDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [communicationModal, setCommunicationModal] = useState<{
@@ -753,6 +756,13 @@ export default function OrdersList() {
         });
       }
 
+      // Apply customer ID filter (from URL parameter)
+      if (customerIdFilter) {
+        filtered = filtered.filter((order) => {
+          return order.customerId === customerIdFilter;
+        });
+      }
+
       // Apply department filter
       if (departmentFilter !== 'all') {
         filtered = filtered.filter((order) => {
@@ -823,7 +833,7 @@ export default function OrdersList() {
     // Reset to page 1 when filters change
     React.useEffect(() => {
       setCurrentPage(1);
-    }, [searchTerm, departmentFilter, statusFilter, sortBy, sortOrder]);
+    }, [searchTerm, departmentFilter, statusFilter, sortBy, sortOrder, customerIdFilter]);
 
     // Calculate pagination - MEMOIZED to prevent re-renders
     const paginationData = React.useMemo(() => {

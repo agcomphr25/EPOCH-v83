@@ -6244,4 +6244,32 @@ export const insertBadgeScanAuditLogSchema = createInsertSchema(badgeScanAuditLo
 export type BadgeScanAuditLog = typeof badgeScanAuditLog.$inferSelect;
 export type InsertBadgeScanAuditLog = z.infer<typeof insertBadgeScanAuditLogSchema>;
 
+// Customer Watch Rules - Configurable monitoring rules for specific customers and departments
+export const customerWatchRules = pgTable('customer_watch_rules', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull(), // User who created this rule (e.g., 'darleneb')
+  customerId: text('customer_id').notNull(), // Customer ID to watch
+  customerName: text('customer_name').notNull(), // Customer name for display
+  departmentId: integer('department_id').references(() => orderDepartmentTypes.id), // Department to watch
+  departmentName: text('department_name').notNull(), // Department name for display
+  label: text('label'), // Optional custom label for the rule
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  userIdIdx: index('customer_watch_rules_user_id_idx').on(table.userId),
+  isActiveIdx: index('customer_watch_rules_is_active_idx').on(table.isActive),
+}));
+
+// Insert Schema
+export const insertCustomerWatchRuleSchema = createInsertSchema(customerWatchRules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types
+export type CustomerWatchRule = typeof customerWatchRules.$inferSelect;
+export type InsertCustomerWatchRule = z.infer<typeof insertCustomerWatchRuleSchema>;
+
 export * from './calendar.schema';

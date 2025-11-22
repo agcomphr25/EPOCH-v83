@@ -40,6 +40,7 @@ import ARJournalPage from './pages/ARJournalPage';
 import COGSReportPage from './pages/COGSReportPage';
 import FinanceDashboardPage from './pages/FinanceDashboardPage';
 import CostCenterManagement from './pages/CostCenterManagement';
+import CostAccountingPage from './pages/CostAccountingPage';
 import MonthlyFulfilledReport from './pages/MonthlyFulfilledReport';
 import BulkPaymentPage from './pages/BulkPaymentPage';
 import EmployeeBadgeConfiguration from './pages/EmployeeBadgeConfiguration';
@@ -328,6 +329,9 @@ function App() {
                   <Route path="/vendors" component={VendorManagement} />
                   <Route path="/vendor-pos" component={VendorPOPage} />
                   
+                  {/* Cost Accounting Routes */}
+                  <Route path="/cost-accounting" component={CostAccountingPage} />
+                  
                   {/* PDFME SYSTEM COMMENTED OUT - NOT IN USE */}
                   {/* PDF Template Routes */}
                   {/* <Route path="/pdf-templates" component={PDFTemplateManager} /> */}
@@ -522,6 +526,10 @@ function App() {
                   <Route
                     path="/finance/cost-centers"
                     component={CostCenterManagement}
+                  />
+                  <Route
+                    path="/finance/cost-accounting"
+                    component={CostAccountingPage}
                   />
                   <Route
                     path="/finance/monthly-fulfilled"

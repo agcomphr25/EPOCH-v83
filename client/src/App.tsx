@@ -329,6 +329,9 @@ function App() {
                   <Route path="/vendors" component={VendorManagement} />
                   <Route path="/vendor-pos" component={VendorPOPage} />
                   
+                  {/* Cost Accounting Routes */}
+                  <Route path="/cost-accounting" component={CostAccountingPage} />
+                  
                   {/* PDFME SYSTEM COMMENTED OUT - NOT IN USE */}
                   {/* PDF Template Routes */}
                   {/* <Route path="/pdf-templates" component={PDFTemplateManager} /> */}

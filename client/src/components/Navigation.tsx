@@ -47,6 +47,7 @@ import {
   Search,
   Award,
   Building2,
+  Calculator,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -506,6 +507,12 @@ export default function Navigation() {
       label: 'Cost Centers',
       icon: Building2,
       description: 'Manage cost centers for expense tracking and budgeting',
+    },
+    {
+      path: '/finance/cost-accounting',
+      label: 'Cost Accounting',
+      icon: Calculator,
+      description: 'Manage chart of accounts, monthly entries, and cost allocations',
     },
     // {
     //   path: '/payment-management',

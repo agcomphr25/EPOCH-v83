@@ -68,6 +68,7 @@ import controlledDocumentsRoutes from './controlledDocuments';
 import adminRoutes from './admin';
 import quotesRoutes from './quotes';
 import costCentersRoutes from './costCenters';
+import costAccountingRoutes from './costAccounting';
 import employeeBadgesRoutes from './employeeBadges';
 import watchRulesRoutes from './watchRules';
 import { getAccessToken } from '../utils/upsShipping';
@@ -145,6 +146,9 @@ export function registerRoutes(app: Express): Server {
 
   // Cost Center management routes
   app.use(costCentersRoutes);
+
+  // Cost Accounting routes
+  app.use('/api/cost-accounting', costAccountingRoutes);
 
   // Employee Badge Actions routes
   app.use('/api/employee-badges', employeeBadgesRoutes);

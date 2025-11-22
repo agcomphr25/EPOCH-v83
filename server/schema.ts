@@ -6272,4 +6272,132 @@ export const insertCustomerWatchRuleSchema = createInsertSchema(customerWatchRul
 export type CustomerWatchRule = typeof customerWatchRules.$inferSelect;
 export type InsertCustomerWatchRule = z.infer<typeof insertCustomerWatchRuleSchema>;
 
+// ===========================
+// COST ACCOUNTING MODULE
+// ===========================
+
+// Account Categories - Classifications for chart of accounts
+export const accountCategories = pgTable('account_categories', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull().unique(), // e.g., 'Assets', 'Liabilities', 'Revenue', 'COGS', 'Operating Expenses'
+  code: text('code').notNull().unique(), // e.g., '1000', '2000', '3000', '4000', '5000'
+  type: text('type').notNull(), // 'asset', 'liability', 'equity', 'revenue', 'expense', 'cogs'
+  description: text('description'),
+  sortOrder: integer('sort_order').default(0),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertAccountCategorySchema = createInsertSchema(accountCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AccountCategory = typeof accountCategories.$inferSelect;
+export type InsertAccountCategory = z.infer<typeof insertAccountCategorySchema>;
+
+// Chart of Accounts - Individual accounting line items
+export const accounts = pgTable('accounts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  accountNumber: text('account_number').notNull().unique(), // Auto-generated (e.g., '5100-001')
+  name: text('name').notNull(), // e.g., 'Direct Materials - Carbon Fiber'
+  categoryId: uuid('category_id').references(() => accountCategories.id).notNull(),
+  description: text('description'),
+  isAllocated: boolean('is_allocated').default(false), // True for items like overhead, indirect materials
+  allocationBasis: text('allocation_basis'), // 'direct_labor_hours', 'machine_hours', 'direct_materials', etc.
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  categoryIdIdx: index('accounts_category_id_idx').on(table.categoryId),
+  isActiveIdx: index('accounts_is_active_idx').on(table.isActive),
+}));
+
+export const insertAccountSchema = createInsertSchema(accounts).omit({
+  id: true,
+  accountNumber: true, // Auto-generated
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Account = typeof accounts.$inferSelect;
+export type InsertAccount = z.infer<typeof insertAccountSchema>;
+
+// Monthly Account Entries - Actual monthly amounts for each account
+export const monthlyAccountEntries = pgTable('monthly_account_entries', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'cascade' }).notNull(),
+  year: integer('year').notNull(),
+  month: integer('month').notNull(), // 1-12
+  amount: numeric('amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  notes: text('notes'),
+  source: text('source').default('manual'), // 'manual', 'quickbooks', 'imported'
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  accountIdIdx: index('monthly_entries_account_id_idx').on(table.accountId),
+  yearMonthIdx: index('monthly_entries_year_month_idx').on(table.year, table.month),
+  uniqueAccountYearMonth: unique('unique_account_year_month').on(table.accountId, table.year, table.month),
+}));
+
+export const insertMonthlyAccountEntrySchema = createInsertSchema(monthlyAccountEntries).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MonthlyAccountEntry = typeof monthlyAccountEntries.$inferSelect;
+export type InsertMonthlyAccountEntry = z.infer<typeof insertMonthlyAccountEntrySchema>;
+
+// Allocation Rules - Define how to allocate overhead, indirect materials, etc.
+export const allocationRules = pgTable('allocation_rules', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(), // e.g., 'Manufacturing Overhead Allocation'
+  sourceAccountId: uuid('source_account_id').references(() => accounts.id).notNull(), // Account to allocate from
+  allocationBasis: text('allocation_basis').notNull(), // 'direct_labor_hours', 'machine_hours', 'direct_materials', etc.
+  targetAccountIds: uuid('target_account_ids').array(), // Accounts to allocate to
+  allocationMethod: text('allocation_method').notNull(), // 'proportional', 'equal', 'custom'
+  customRatios: jsonb('custom_ratios'), // Custom allocation ratios if method is 'custom'
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  sourceAccountIdIdx: index('allocation_rules_source_account_id_idx').on(table.sourceAccountId),
+  isActiveIdx: index('allocation_rules_is_active_idx').on(table.isActive),
+}));
+
+export const insertAllocationRuleSchema = createInsertSchema(allocationRules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AllocationRule = typeof allocationRules.$inferSelect;
+export type InsertAllocationRule = z.infer<typeof insertAllocationRuleSchema>;
+
+// Allocation Results - Store calculated allocations for each period
+export const allocationResults = pgTable('allocation_results', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  ruleId: uuid('rule_id').references(() => allocationRules.id, { onDelete: 'cascade' }).notNull(),
+  year: integer('year').notNull(),
+  month: integer('month').notNull(),
+  totalAmount: numeric('total_amount', { precision: 12, scale: 2 }).notNull(),
+  allocations: jsonb('allocations').notNull(), // { accountId: amount, ... }
+  calculatedAt: timestamp('calculated_at').defaultNow(),
+}, (table) => ({
+  ruleIdIdx: index('allocation_results_rule_id_idx').on(table.ruleId),
+  yearMonthIdx: index('allocation_results_year_month_idx').on(table.year, table.month),
+  uniqueRuleYearMonth: unique('unique_rule_year_month').on(table.ruleId, table.year, table.month),
+}));
+
+export const insertAllocationResultSchema = createInsertSchema(allocationResults).omit({
+  id: true,
+  calculatedAt: true,
+});
+
+export type AllocationResult = typeof allocationResults.$inferSelect;
+export type InsertAllocationResult = z.infer<typeof insertAllocationResultSchema>;
+
 export * from './calendar.schema';

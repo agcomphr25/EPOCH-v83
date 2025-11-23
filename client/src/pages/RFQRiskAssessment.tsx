@@ -672,6 +672,21 @@ export default function RFQRiskAssessment() {
     window.print();
   };
 
+  const handleViewPdf = () => {
+    if (!editingAssessmentId) {
+      toast({
+        title: 'Save Required',
+        description: 'Please save the assessment before viewing the PDF.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Open PDF in new tab
+    const pdfUrl = `/api/customers/rfq-assessments/${editingAssessmentId}/pdf`;
+    window.open(pdfUrl, '_blank');
+  };
+
   // Helper function to get risk badge color
   const getRiskBadgeColor = (riskDetermination: string | null) => {
     if (!riskDetermination) return 'secondary';
@@ -1009,6 +1024,16 @@ export default function RFQRiskAssessment() {
               >
                 <Printer className="h-4 w-4" />
                 Print
+              </Button>
+              <Button 
+                onClick={handleViewPdf}
+                variant="outline" 
+                className="flex items-center gap-2"
+                data-testid="button-view-pdf"
+                disabled={!editingAssessmentId}
+              >
+                <Eye className="h-4 w-4" />
+                View PDF
               </Button>
               <Button 
                 variant="outline" 

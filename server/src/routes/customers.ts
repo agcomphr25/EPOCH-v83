@@ -452,6 +452,344 @@ router.get('/rfq-assessments/:id/attachments/:fileName', async (req: Request, re
   }
 });
 
+// RFQ Risk Assessment PDF Generation
+router.get('/rfq-assessments/:id/pdf', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const assessment = await storage.getRFQRiskAssessmentById(id);
+    
+    if (!assessment) {
+      return res.status(404).json({ error: 'RFQ Risk Assessment not found' });
+    }
+
+    // Import PDF generation utilities
+    const { PDFDocument, StandardFonts } = await import('pdf-lib');
+    const {
+      PAGE_SIZES,
+      DEFAULT_MARGIN,
+      getPrintableArea,
+      FONT_SIZES,
+      SPACING,
+      COLORS,
+      drawStandardHeader,
+      wrapText,
+      LINE_HEIGHTS,
+    } = await import('../../utils/pdf/pdfConfig');
+
+    // Create a new PDF document
+    const pdfDoc = await PDFDocument.create();
+    const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    // Initialize first page
+    let page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
+    let dims = getPrintableArea(...page.getSize());
+    let currentY = await drawStandardHeader(page, pdfDoc, regularFont, boldFont, dims.margin + dims.height);
+
+    // Shared startNewPage helper
+    const startNewPage = async () => {
+      page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
+      dims = getPrintableArea(...page.getSize());
+      currentY = await drawStandardHeader(page, pdfDoc, regularFont, boldFont, dims.margin + dims.height);
+    };
+
+    // Shared checkNewPage helper
+    const checkNewPage = async (requiredSpace: number) => {
+      if (currentY - requiredSpace < dims.margin) {
+        await startNewPage();
+      }
+    };
+
+    // Document title
+    const titleText = 'RFQ Risk Assessment';
+    const titleWidth = boldFont.widthOfTextAtSize(titleText, FONT_SIZES.TITLE_LARGE);
+    page.drawText(titleText, {
+      x: (dims.width / 2) - (titleWidth / 2) + dims.margin,
+      y: currentY,
+      size: FONT_SIZES.TITLE_LARGE,
+      font: boldFont,
+      color: COLORS.TEXT_PRIMARY,
+    });
+    currentY -= SPACING.SECTION_GAP_LARGE;
+
+    // RFQ Information
+    const formData: any = assessment.formData || {};
+    
+    await checkNewPage(LINE_HEIGHTS.BODY * 3);
+    
+    page.drawText(`RFQ Number: ${assessment.rfqNumber || 'N/A'}`, {
+      x: dims.margin,
+      y: currentY,
+      size: FONT_SIZES.BODY_LARGE,
+      font: boldFont,
+    });
+    currentY -= LINE_HEIGHTS.BODY;
+    
+    page.drawText(`Customer: ${assessment.customerName || formData.customerName || 'N/A'}`, {
+      x: dims.margin,
+      y: currentY,
+      size: FONT_SIZES.BODY_LARGE,
+      font: regularFont,
+    });
+    currentY -= LINE_HEIGHTS.BODY;
+    
+    // Description with text wrapping
+    if (assessment.description || formData.description) {
+      const descriptionText = assessment.description || formData.description;
+      const descLines = wrapText(`Description: ${descriptionText}`, dims.width, FONT_SIZES.BODY_MEDIUM, regularFont);
+      
+      await checkNewPage(descLines.length * LINE_HEIGHTS.BODY + SPACING.SECTION_GAP_MEDIUM);
+      
+      for (const line of descLines) {
+        page.drawText(line, {
+          x: dims.margin,
+          y: currentY,
+          size: FONT_SIZES.BODY_MEDIUM,
+          font: regularFont,
+        });
+        currentY -= LINE_HEIGHTS.BODY;
+      }
+      currentY -= SPACING.SECTION_GAP_SMALL;
+    }
+
+    // Helper to get risk level display
+    const getRiskDisplay = (value: string) => {
+      if (!value) return 'Not specified';
+      return value.charAt(0).toUpperCase() + value.slice(1);
+    };
+
+    // Helper function to draw risk section with pagination
+    const drawRiskSection = async (title: string, risks: Array<{label: string, value: string}>) => {
+      const requiredSpace = (risks.length + 2) * LINE_HEIGHTS.BODY + SPACING.SECTION_GAP_SMALL;
+      await checkNewPage(requiredSpace);
+      
+      page.drawText(title, {
+        x: dims.margin,
+        y: currentY,
+        size: FONT_SIZES.SECTION_HEADER,
+        font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
+      });
+      currentY -= LINE_HEIGHTS.SECTION;
+
+      for (const risk of risks) {
+        await checkNewPage(LINE_HEIGHTS.BODY);
+        
+        const riskText = `${risk.label}: ${getRiskDisplay(risk.value)}`;
+        page.drawText(riskText, {
+          x: dims.margin + 20,
+          y: currentY,
+          size: FONT_SIZES.BODY_MEDIUM,
+          font: regularFont,
+        });
+        currentY -= LINE_HEIGHTS.BODY;
+      }
+      
+      currentY -= SPACING.SECTION_GAP_SMALL;
+    };
+
+    // Internal Risks
+    const internalRisks = [
+      { label: 'Trained Staff', value: formData.trainedStaff },
+      { label: 'Equipment Requirements', value: formData.equipmentRequirements },
+      { label: 'Manufacturing Space', value: formData.manufacturingSpace },
+      { label: 'Regulatory Requirements', value: formData.regulatoryRequirements },
+      { label: 'Conflicting Priorities', value: formData.conflictingPriorities },
+      { label: 'Customer Concentration', value: formData.customerConcentration },
+      { label: 'Climate/Environmental', value: formData.climateEnvironmental },
+    ];
+    
+    await drawRiskSection('Internal Risks', internalRisks);
+    
+    await checkNewPage(LINE_HEIGHTS.BODY);
+    page.drawText(`Internal Subtotal: ${formData.internalSubtotal || 0} points`, {
+      x: dims.margin + 20,
+      y: currentY,
+      size: FONT_SIZES.BODY_LARGE,
+      font: boldFont,
+    });
+    currentY -= SPACING.SECTION_GAP_MEDIUM;
+
+    // External Risks
+    const externalRisks = [
+      { label: 'Supply Chain Disruptions', value: formData.supplyChainDisruptions },
+      { label: 'Supplier Variability', value: formData.supplierVariability },
+      { label: 'Contract Provisions', value: formData.contractProvisions },
+      { label: 'Timelines', value: formData.timelines },
+      { label: 'Quality Expectations', value: formData.qualityExpectations },
+    ];
+    
+    await drawRiskSection('External Risks', externalRisks);
+    
+    await checkNewPage(LINE_HEIGHTS.BODY);
+    page.drawText(`External Subtotal: ${formData.externalSubtotal || 0} points`, {
+      x: dims.margin + 20,
+      y: currentY,
+      size: FONT_SIZES.BODY_LARGE,
+      font: boldFont,
+    });
+    currentY -= SPACING.SECTION_GAP_MEDIUM;
+
+    // Mitigation Actions with text wrapping
+    if (formData.mitigationActionA || formData.mitigationActionB || formData.mitigationActionC) {
+      await checkNewPage(150);
+      
+      page.drawText('Mitigation Actions', {
+        x: dims.margin,
+        y: currentY,
+        size: FONT_SIZES.SECTION_HEADER,
+        font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
+      });
+      currentY -= LINE_HEIGHTS.SECTION;
+
+      const drawMitigationAction = async (label: string, action: string, reduction: string) => {
+        if (action && action !== 'n/a') {
+          const actionLines = wrapText(`${label}: ${action} (Risk Reduction: ${reduction || 0} points)`, 
+            dims.width - 20, FONT_SIZES.BODY_MEDIUM, regularFont);
+          
+          await checkNewPage(actionLines.length * LINE_HEIGHTS.BODY);
+          
+          for (const line of actionLines) {
+            page.drawText(line, {
+              x: dims.margin + 20,
+              y: currentY,
+              size: FONT_SIZES.BODY_MEDIUM,
+              font: regularFont,
+            });
+            currentY -= LINE_HEIGHTS.BODY;
+          }
+        }
+      };
+
+      await drawMitigationAction('Action A', formData.mitigationActionA, formData.mitigationReductionA);
+      await drawMitigationAction('Action B', formData.mitigationActionB, formData.mitigationReductionB);
+      await drawMitigationAction('Action C', formData.mitigationActionC, formData.mitigationReductionC);
+
+      currentY -= SPACING.SECTION_GAP_SMALL;
+    }
+
+    // Risk Summary Box
+    await checkNewPage(120);
+    currentY -= SPACING.SECTION_GAP_SMALL;
+    const boxHeight = 100;
+    page.drawRectangle({
+      x: dims.margin,
+      y: currentY - boxHeight,
+      width: dims.width,
+      height: boxHeight,
+      borderColor: COLORS.BORDER_BLACK,
+      borderWidth: 2,
+    });
+
+    let boxY = currentY - 15;
+    page.drawText(`Total Overall Points: ${assessment.totalOverallPoints || 0}`, {
+      x: dims.margin + 10,
+      y: boxY,
+      size: FONT_SIZES.BODY_LARGE,
+      font: boldFont,
+    });
+    boxY -= LINE_HEIGHTS.BODY;
+
+    page.drawText(`Adjusted Risk Level: ${assessment.adjustedRiskLevel || 0}`, {
+      x: dims.margin + 10,
+      y: boxY,
+      size: FONT_SIZES.BODY_LARGE,
+      font: boldFont,
+    });
+    boxY -= LINE_HEIGHTS.BODY;
+
+    page.drawText(`Risk Determination: ${assessment.riskDetermination || 'N/A'}`, {
+      x: dims.margin + 10,
+      y: boxY,
+      size: FONT_SIZES.BODY_LARGE,
+      font: boldFont,
+      color: assessment.riskDetermination?.includes('High') ? COLORS.ACCENT_RED : COLORS.TEXT_PRIMARY,
+    });
+    boxY -= LINE_HEIGHTS.BODY;
+
+    if (assessment.bidDecision) {
+      page.drawText(`Bid Decision: ${assessment.bidDecision}`, {
+        x: dims.margin + 10,
+        y: boxY,
+        size: FONT_SIZES.BODY_LARGE,
+        font: boldFont,
+      });
+    }
+
+    currentY -= boxHeight + SPACING.SECTION_GAP_MEDIUM;
+
+    // Signature section
+    await checkNewPage(100);
+    if (formData.signature || formData.printedName || formData.date) {
+      page.drawText('Approval Signature', {
+        x: dims.margin,
+        y: currentY,
+        size: FONT_SIZES.SECTION_HEADER,
+        font: boldFont,
+      });
+      currentY -= LINE_HEIGHTS.SECTION;
+
+      if (formData.printedName) {
+        page.drawText(`Name: ${formData.printedName}`, {
+          x: dims.margin + 20,
+          y: currentY,
+          size: FONT_SIZES.BODY_MEDIUM,
+          font: regularFont,
+        });
+        currentY -= LINE_HEIGHTS.BODY;
+      }
+
+      if (formData.date) {
+        page.drawText(`Date: ${formData.date}`, {
+          x: dims.margin + 20,
+          y: currentY,
+          size: FONT_SIZES.BODY_MEDIUM,
+          font: regularFont,
+        });
+        currentY -= LINE_HEIGHTS.BODY;
+      }
+
+      if (formData.signature) {
+        page.drawText('[Digital Signature Present]', {
+          x: dims.margin + 20,
+          y: currentY,
+          size: FONT_SIZES.BODY_SMALL,
+          font: regularFont,
+          color: COLORS.TEXT_SECONDARY,
+        });
+      }
+    }
+
+    // Footer on all pages
+    const pages = pdfDoc.getPages();
+    pages.forEach((pg, index) => {
+      const footerY = 40;
+      const footerText = `FO Form 11 • Version 1.4 10/23/2024 • Page ${index + 1} of ${pages.length}`;
+      const footerWidth = regularFont.widthOfTextAtSize(footerText, FONT_SIZES.BODY_SMALL);
+      const pageWidth = pg.getSize().width;
+      pg.drawText(footerText, {
+        x: (pageWidth - footerWidth) / 2,
+        y: footerY,
+        size: FONT_SIZES.BODY_SMALL,
+        font: regularFont,
+        color: COLORS.TEXT_TERTIARY,
+      });
+    });
+
+    // Serialize the PDF
+    const pdfBytes = await pdfDoc.save();
+
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="RFQ_${assessment.rfqNumber}_Risk_Assessment.pdf"`);
+    res.send(Buffer.from(pdfBytes));
+  } catch (error) {
+    console.error('Generate RFQ PDF error:', error);
+    res.status(500).json({ error: 'Failed to generate PDF' });
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);

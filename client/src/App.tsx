@@ -144,6 +144,7 @@ import CuttingTable from './pages/CuttingTable';
 import MetalAccessoriesTracker from './pages/MetalAccessoriesTracker';
 import DocumentIntelligence from './pages/DocumentIntelligence';
 import SignOrderPage from './pages/SignOrderPage';
+import PDFSettings from './pages/PDFSettings';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -426,6 +427,7 @@ function App() {
                   <Route path="/employee" component={EmployeeDashboard} />
                   <Route path="/user-management" component={UserManagement} />
                   <Route path="/settings" component={Settings} />
+                  <Route path="/pdf-settings" component={PDFSettings} />
                   <Route
                     path="/employee-portal"
                     component={EmployeePortalPage}

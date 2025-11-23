@@ -6400,4 +6400,69 @@ export const insertAllocationResultSchema = createInsertSchema(allocationResults
 export type AllocationResult = typeof allocationResults.$inferSelect;
 export type InsertAllocationResult = z.infer<typeof insertAllocationResultSchema>;
 
+// PDF Configuration Settings (Singleton table - should only have one row)
+export const pdfConfigSettings = pgTable('pdf_config_settings', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  margins: jsonb('margins').notNull().default({
+    STANDARD: 40,
+    COMPACT: 30,
+    WIDE: 50,
+  }),
+  fontSizes: jsonb('font_sizes').notNull().default({
+    TITLE_LARGE: 18,
+    TITLE_MEDIUM: 16,
+    TITLE_SMALL: 14,
+    SECTION_HEADER: 12,
+    BODY_LARGE: 10,
+    BODY_MEDIUM: 9,
+    BODY_SMALL: 8,
+    TINY: 7,
+  }),
+  lineHeights: jsonb('line_heights').notNull().default({
+    TITLE: 25,
+    SECTION: 20,
+    BODY: 15,
+    COMPACT: 12,
+    DENSE: 10,
+  }),
+  spacing: jsonb('spacing').notNull().default({
+    SECTION_GAP_LARGE: 40,
+    SECTION_GAP_MEDIUM: 30,
+    SECTION_GAP_SMALL: 20,
+    SECTION_GAP_TINY: 15,
+    COLUMN_GAP: 20,
+    BOX_PADDING: 8,
+    BOX_PADDING_SMALL: 5,
+    LINE_SPACING_LARGE: 15,
+    LINE_SPACING_MEDIUM: 13,
+    LINE_SPACING_SMALL: 11,
+    LINE_SPACING_COMPACT: 9,
+  }),
+  colors: jsonb('colors').notNull().default({
+    TEXT_PRIMARY: { r: 0, g: 0, b: 0 },
+    TEXT_SECONDARY: { r: 0.3, g: 0.3, b: 0.3 },
+    TEXT_TERTIARY: { r: 0.5, g: 0.5, b: 0.5 },
+    TEXT_LIGHT: { r: 0.6, g: 0.6, b: 0.6 },
+    BG_TABLE_HEADER: { r: 0.9, g: 0.9, b: 0.9 },
+    BG_WHITE: { r: 1, g: 1, b: 1 },
+    BG_LIGHT_GRAY: { r: 0.95, g: 0.95, b: 0.95 },
+    BORDER_BLACK: { r: 0, g: 0, b: 0 },
+    BORDER_GRAY: { r: 0.7, g: 0.7, b: 0.7 },
+    BORDER_LIGHT: { r: 0.85, g: 0.85, b: 0.85 },
+    ACCENT_RED: { r: 0.8, g: 0, b: 0 },
+    ACCENT_BLUE: { r: 0, g: 0, b: 0.8 },
+    ACCENT_GREEN: { r: 0, g: 0.6, b: 0 },
+  }),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  updatedBy: text('updated_by'),
+});
+
+export const insertPdfConfigSettingsSchema = createInsertSchema(pdfConfigSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type PdfConfigSettings = typeof pdfConfigSettings.$inferSelect;
+export type InsertPdfConfigSettings = z.infer<typeof insertPdfConfigSettingsSchema>;
+
 export * from './calendar.schema';

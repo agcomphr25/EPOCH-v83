@@ -96,8 +96,7 @@ router.post(
       });
 
       currentY -= SPACING.LINE_SPACING_MEDIUM;
-      const addressParts = COMPANY_INFO.ADDRESS.split(',');
-      page.drawText(addressParts[0].trim(), {
+      page.drawText(COMPANY_INFO.ADDRESS, {
         x: margin,
         y: currentY,
         size: FONT_SIZES.BODY_LARGE,
@@ -106,7 +105,7 @@ router.post(
       });
 
       currentY -= SPACING.LINE_SPACING_MEDIUM;
-      page.drawText(`${addressParts[1].trim()}, USA`, {
+      page.drawText('USA', {
         x: margin,
         y: currentY,
         size: FONT_SIZES.BODY_LARGE,

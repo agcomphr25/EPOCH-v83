@@ -137,9 +137,7 @@ import CustomerSatisfaction from './pages/CustomerSatisfaction';
 import AdminPanelPage from './pages/AdminPanelPage';
 import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
-// PDFME SYSTEM COMMENTED OUT - NOT IN USE
-// import PDFTemplateManager from './pages/PDFTemplateManager';
-// import PDFTemplateDesigner from './pages/PDFTemplateDesigner';
+import PDFTemplateManager from './pages/PDFTemplateManager';
 import CuttingTable from './pages/CuttingTable';
 import MetalAccessoriesTracker from './pages/MetalAccessoriesTracker';
 import DocumentIntelligence from './pages/DocumentIntelligence';
@@ -333,11 +331,8 @@ function App() {
                   {/* Cost Accounting Routes */}
                   <Route path="/cost-accounting" component={CostAccountingPage} />
                   
-                  {/* PDFME SYSTEM COMMENTED OUT - NOT IN USE */}
                   {/* PDF Template Routes */}
-                  {/* <Route path="/pdf-templates" component={PDFTemplateManager} /> */}
-                  {/* <Route path="/pdf-template-designer" component={PDFTemplateDesigner} /> */}
-                  {/* <Route path="/pdf-template-designer/:id" component={PDFTemplateDesigner} /> */}
+                  <Route path="/pdf-templates" component={PDFTemplateManager} />
                   
                   {/* Item Groups Management */}
                   <Route path="/manage-groups" component={ManageGroups} />

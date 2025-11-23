@@ -15,9 +15,7 @@ import rtsSalesRoutes from './rtsSales';
 import customersRoutes from './customers';
 import vendorsRoutes from './vendors';
 import vendorPOsRoutes from './vendorPOs';
-// PDFME SYSTEM COMMENTED OUT - NOT IN USE
-// import pdfTemplatesRoutes from './pdfTemplates';
-// import pdfGenerationRoutes from './pdfGeneration';
+import pdfTemplatesRoutes from './pdfTemplates';
 import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
@@ -162,7 +160,7 @@ export function registerRoutes(app: Express): Server {
 
   // PDFME SYSTEM COMMENTED OUT - NOT IN USE
   // PDF Templates routes
-  // app.use('/api/pdf-templates', pdfTemplatesRoutes);
+  app.use(pdfTemplatesRoutes);
 
   // PDF Generation routes
   // app.use('/api/generate-pdf', pdfGenerationRoutes);

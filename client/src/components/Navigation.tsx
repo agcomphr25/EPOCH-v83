@@ -253,10 +253,10 @@ export default function Navigation() {
       description: 'Advanced order management and editing for administrators',
     },
     {
-      path: '/pdf-settings',
-      label: 'PDF Settings',
-      icon: Settings,
-      description: 'Configure PDF generation parameters (margins, fonts, colors)',
+      path: '/pdf-templates',
+      label: 'PDF Templates',
+      icon: FileText,
+      description: 'Manage PDF templates with custom logos and styling for P1, P2, RFQ, etc.',
     },
 
     // Documentation button disabled per user request - was causing problems

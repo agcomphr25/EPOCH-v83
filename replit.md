@@ -27,6 +27,7 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 -   **Modular Routing**: Backend routes are organized into specialized modules.
 -   **Atomic Order ID Reservation**: Database-based atomic reservation system for unique, sequential Order ID generation.
 -   **Asset Path Resolution**: Centralized asset path resolver for consistent file access.
+-   **Centralized PDF Configuration**: Standardized PDF generation system (`server/utils/pdf/pdfConfig.ts`) with consistent margins (40pt), font sizes, spacing, colors, and layout patterns across all PDF documents (Sales Orders, Commercial Invoices, Vendor POs, QC Checklists, Layup Schedules). Includes reusable helper functions for logos, headers, tables, and text wrapping.
 -   **UI/UX**: Leverages ShadCN UI components with Tailwind CSS and Framer Motion for animations.
 -   **CI/CD**: Implemented with pre-commit hooks (Husky + lint-staged) and GitHub Actions.
 -   **BOM System**: Robust Bill of Materials system with UUID-based architecture and revision control.

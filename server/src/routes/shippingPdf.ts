@@ -5,6 +5,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { resolveAssetPath } from '../utils/assetPaths';
+import {
+  PAGE_SIZES,
+  DEFAULT_MARGIN,
+  getPrintableArea,
+  FONT_SIZES,
+  SPACING,
+  COLORS,
+  COMPANY_INFO,
+  embedCompanyLogo as embedLogo,
+  LOGO_CONFIG,
+  getLogoDimensions,
+} from '../../utils/pdf/pdfConfig';
 
 const router = Router();
 
@@ -28,21 +40,8 @@ interface OrderFeatures {
   [key: string]: string | string[] | undefined;
 }
 
-// Helper function to load and embed company logo
-async function embedCompanyLogo(pdfDoc: PDFDocument) {
-  try {
-    const logoPath = resolveAssetPath('logo_updated.png');
-    if (fs.existsSync(logoPath)) {
-      const logoImageBytes = fs.readFileSync(logoPath);
-      return await pdfDoc.embedPng(logoImageBytes);
-    } else {
-      console.warn('Logo file not found at:', logoPath);
-    }
-  } catch (error: unknown) {
-    console.warn('Could not load company logo:', error);
-  }
-  return null;
-}
+// Use centralized logo embedding from pdfConfig
+const embedCompanyLogo = embedLogo;
 
 // UPS API Configuration - Use environment variable or default to test
 const UPS_ENV = process.env.UPS_ENV || 'test';
@@ -348,29 +347,23 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Create a new PDF document optimized for printing
+    // Create a new PDF document with standard settings
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([612, 792]); // Standard US Letter size (8.5" x 11")
+    const page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
     const { width, height } = page.getSize();
-
-    // Define print-friendly margins
-    const margin = 40;
-    const printableWidth = width - margin * 2;
-    const printableHeight = height - margin * 2;
+    const { margin, width: printableWidth, height: printableHeight } = getPrintableArea(width, height);
 
     // Load fonts
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Header with company logo - optimized for printing
+    // Header with company logo
     let currentY = height - margin;
 
-    // Load and embed company logo
+    // Load and embed company logo using centralized function
     const logo = await embedCompanyLogo(pdfDoc);
     if (logo) {
-      // Scale logo to fit nicely in header
-      const logoWidth = 150;
-      const logoHeight = logoWidth * (logo.height / logo.width);
+      const { width: logoWidth, height: logoHeight } = getLogoDimensions(logo);
 
       page.drawImage(logo, {
         x: margin,
@@ -379,112 +372,125 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
         height: logoHeight,
       });
 
-      currentY -= logoHeight + 10;
+      currentY -= logoHeight + LOGO_CONFIG.VERTICAL_SPACING;
     } else {
       // Fallback to text if logo fails to load
-      page.drawText('AG COMPOSITES', {
+      page.drawText(COMPANY_INFO.NAME, {
         x: margin,
         y: currentY,
-        size: 18,
+        size: FONT_SIZES.TITLE_LARGE,
         font: boldFont,
-        color: rgb(0, 0, 0),
+        color: COLORS.TEXT_PRIMARY,
       });
-      currentY -= 25;
+      currentY -= SPACING.SECTION_GAP_SMALL;
     }
 
     page.drawText('Quality Control Inspection Report', {
       x: margin,
       y: currentY,
-      size: 14,
+      size: FONT_SIZES.TITLE_SMALL,
       font: boldFont,
-      color: rgb(0, 0, 0),
+      color: COLORS.TEXT_PRIMARY,
     });
 
-    // Document control box - positioned for better printing
-    const docBoxX = width - margin - 200;
+    // Document control box
+    const docBoxWidth = 200;
+    const docBoxHeight = 80;
+    const docBoxX = width - margin - docBoxWidth;
+    
     page.drawRectangle({
       x: docBoxX,
       y: currentY - 10,
-      width: 200,
-      height: 80,
-      borderColor: rgb(0, 0, 0),
+      width: docBoxWidth,
+      height: docBoxHeight,
+      borderColor: COLORS.BORDER_BLACK,
       borderWidth: 1,
     });
 
     page.drawText('Document No:', {
-      x: docBoxX + 5,
+      x: docBoxX + SPACING.BOX_PADDING_SMALL,
       y: currentY + 50,
-      size: 10,
+      size: FONT_SIZES.BODY_LARGE,
       font: boldFont,
+      color: COLORS.TEXT_PRIMARY,
     });
 
     page.drawText(`QC-${orderId}`, {
       x: docBoxX + 80,
       y: currentY + 50,
-      size: 10,
+      size: FONT_SIZES.BODY_LARGE,
       font: font,
+      color: COLORS.TEXT_SECONDARY,
     });
 
     page.drawText('Revision:', {
-      x: docBoxX + 5,
+      x: docBoxX + SPACING.BOX_PADDING_SMALL,
       y: currentY + 35,
-      size: 10,
+      size: FONT_SIZES.BODY_LARGE,
       font: boldFont,
+      color: COLORS.TEXT_PRIMARY,
     });
 
     page.drawText('Rev. A', {
       x: docBoxX + 80,
       y: currentY + 35,
-      size: 10,
+      size: FONT_SIZES.BODY_LARGE,
       font: font,
+      color: COLORS.TEXT_SECONDARY,
     });
 
     page.drawText('Date:', {
-      x: docBoxX + 5,
+      x: docBoxX + SPACING.BOX_PADDING_SMALL,
       y: currentY + 20,
-      size: 10,
+      size: FONT_SIZES.BODY_LARGE,
       font: boldFont,
+      color: COLORS.TEXT_PRIMARY,
     });
 
     page.drawText(new Date().toLocaleDateString(), {
       x: docBoxX + 80,
       y: currentY + 20,
-      size: 10,
+      size: FONT_SIZES.BODY_LARGE,
       font: font,
+      color: COLORS.TEXT_SECONDARY,
     });
 
     page.drawText('Page 1 of 1', {
-      x: docBoxX + 5,
+      x: docBoxX + SPACING.BOX_PADDING_SMALL,
       y: currentY + 5,
-      size: 8,
+      size: FONT_SIZES.BODY_SMALL,
       font: font,
+      color: COLORS.TEXT_SECONDARY,
     });
 
-    // Order information section - simplified for shipping
+    // Order information section
     currentY -= 100;
     page.drawText('ORDER INFORMATION', {
       x: margin,
       y: currentY,
-      size: 12,
+      size: FONT_SIZES.SECTION_HEADER,
       font: boldFont,
+      color: COLORS.TEXT_PRIMARY,
     });
 
-    // Draw a border around order info - simplified layout
+    // Draw a border around order info
+    const orderInfoHeight = 40;
     page.drawRectangle({
       x: margin,
       y: currentY - 50,
       width: printableWidth,
-      height: 40,
-      borderColor: rgb(0, 0, 0),
+      height: orderInfoHeight,
+      borderColor: COLORS.BORDER_BLACK,
       borderWidth: 1,
     });
 
-    currentY -= 25;
+    currentY -= SPACING.SECTION_GAP_SMALL;
     page.drawText(`Order ID: ${orderId}`, {
-      x: margin + 5,
+      x: margin + SPACING.BOX_PADDING_SMALL,
       y: currentY,
-      size: 10,
+      size: FONT_SIZES.BODY_LARGE,
       font: boldFont,
+      color: COLORS.TEXT_PRIMARY,
     });
 
     page.drawText(
@@ -492,8 +498,9 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
       {
         x: margin + 250,
         y: currentY,
-        size: 10,
+        size: FONT_SIZES.BODY_LARGE,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       }
     );
 
@@ -689,29 +696,30 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
 
     checklistItems.forEach((item, index) => {
       // Checkbox
+      const checkboxSize = 12;
       page.drawRectangle({
         x: margin,
-        y: currentY - 12,
-        width: 12,
-        height: 12,
-        borderColor: rgb(0, 0, 0),
+        y: currentY - checkboxSize,
+        width: checkboxSize,
+        height: checkboxSize,
+        borderColor: COLORS.BORDER_BLACK,
         borderWidth: 1,
       });
 
       // Item text - handle multi-line items
       const itemLines = item.split('\n');
-      let lineY = currentY - 8;
+      let lineY = currentY - SPACING.BOX_PADDING;
 
       itemLines.forEach((line, lineIndex) => {
         // Don't add prefix since numbering is already included in the text
         page.drawText(line, {
           x: margin + 20,
           y: lineY,
-          size: 8,
+          size: FONT_SIZES.BODY_SMALL,
           font: lineIndex === 0 ? boldFont : font,
-          color: rgb(0, 0, 0),
+          color: COLORS.TEXT_PRIMARY,
         });
-        lineY -= 12;
+        lineY -= SPACING.LINE_SPACING_COMPACT;
       });
 
       currentY -= itemLines.length * 12 + 18;

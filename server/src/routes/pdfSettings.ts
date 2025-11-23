@@ -82,8 +82,11 @@ router.get('/api/pdf-settings', async (req, res) => {
 // Update PDF configuration settings (upsert - update if exists, create if not)
 router.post('/api/pdf-settings', async (req, res) => {
   try {
-    // Validate the request body (without updatedBy which we'll add)
-    const validatedData = insertPdfConfigSettingsSchema.parse(req.body);
+    // Strip server-managed fields that may be echoed back from the client
+    const { id, updatedAt, updatedBy: _clientUpdatedBy, ...clientData } = req.body;
+    
+    // Validate the cleaned request body
+    const validatedData = insertPdfConfigSettingsSchema.parse(clientData);
 
     // Check if a record exists
     const existing = await db.select().from(pdfConfigSettings).limit(1);

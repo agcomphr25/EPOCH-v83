@@ -429,46 +429,157 @@ router.get('/api/quotes/:id/pdf', async (req: Request, res: Response) => {
       .where(eq(quoteLineItems.quoteId, quoteId))
       .orderBy(quoteLineItems.lineNumber);
 
-    // Import PDF generation utilities
-    const { PDFDocument, StandardFonts } = await import('pdf-lib');
+    // Load P2 template (if available)
     const {
-      PAGE_SIZES,
-      DEFAULT_MARGIN,
-      getPrintableArea,
-      FONT_SIZES,
-      SPACING,
-      COLORS,
-      drawStandardHeader,
-      drawSectionHeader,
-      drawKeyValuePair,
-      drawTableHeader,
-      wrapText,
-      LINE_HEIGHTS,
-    } = await import('../../utils/pdf/pdfConfig');
+      loadActiveTemplate,
+      embedTemplateLogo,
+      getTemplateFontSizes,
+      getTemplateSpacing,
+      getTemplateColors,
+      getTemplateLineHeights,
+      getTemplateCompanyInfo,
+      getTemplateMargins,
+    } = await import('../../utils/pdf/templateLoader');
+    
+    const template = await loadActiveTemplate('p2_purchase_order');
+    console.log('📄 [P2 PDF] Using template:', template?.name || 'Default');
+
+    // Import PDF generation utilities
+    const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+    const { PAGE_SIZES, getPrintableArea } = await import('../../utils/pdf/pdfConfig');
+    
+    // Get template-specific or default settings
+    const MARGINS = getTemplateMargins(template);
+    const FONT_SIZES = getTemplateFontSizes(template);
+    const SPACING = getTemplateSpacing(template);
+    const COLORS = getTemplateColors(template);
+    const LINE_HEIGHTS = getTemplateLineHeights(template);
+    const COMPANY_INFO = getTemplateCompanyInfo(template);
+    const LOGO_CONFIG = { WIDTH: 150, VERTICAL_SPACING: 15 };
+    
+    const DEFAULT_MARGIN = MARGINS.STANDARD;
 
     // Create PDF document
     const pdfDoc = await PDFDocument.create();
     const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+    // Embed logo once and reuse (performance + layout fix)
+    const embeddedLogo = await embedTemplateLogo(pdfDoc, template);
+    
     // Initialize first page
     let page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
     const pageSize = page.getSize();
     let dims = getPrintableArea(pageSize.width, pageSize.height);
-    let currentY = await drawStandardHeader(page, pdfDoc, regularFont, boldFont, dims.margin + dims.height);
-
+    let currentY = dims.margin + dims.height;
+    
+    // Shared header drawing function (reuses embedded logo)
+    const drawTemplateHeader = () => {
+      currentY = dims.margin + dims.height;
+      if (embeddedLogo) {
+        const logoWidth = LOGO_CONFIG.WIDTH;
+        const logoHeight = logoWidth * (embeddedLogo.height / embeddedLogo.width);
+        
+        page.drawImage(embeddedLogo, {
+          x: dims.margin,
+          y: currentY - logoHeight,
+          width: logoWidth,
+          height: logoHeight,
+        });
+        
+        currentY -= logoHeight + LOGO_CONFIG.VERTICAL_SPACING;
+        page.drawText(COMPANY_INFO.ADDRESS, {
+          x: dims.margin,
+          y: currentY,
+          size: FONT_SIZES.BODY_SMALL,
+          font: regularFont,
+          color: COLORS.TEXT_SECONDARY,
+        });
+        currentY -= LINE_HEIGHTS.COMPACT;
+        page.drawText(`Phone: ${COMPANY_INFO.PHONE} | Email: ${COMPANY_INFO.EMAIL}`, {
+          x: dims.margin,
+          y: currentY,
+          size: FONT_SIZES.BODY_SMALL,
+          font: regularFont,
+          color: COLORS.TEXT_SECONDARY,
+        });
+        currentY -= SPACING.SECTION_GAP_SMALL;
+      } else {
+        page.drawText(COMPANY_INFO.NAME, {
+          x: dims.margin,
+          y: currentY,
+          size: FONT_SIZES.TITLE_LARGE,
+          font: boldFont,
+          color: COLORS.TEXT_PRIMARY,
+        });
+        currentY -= SPACING.SECTION_GAP_SMALL;
+      }
+    };
+    
+    // Draw initial header
+    drawTemplateHeader();
+    
     // Shared page management helpers
-    const startNewPage = async () => {
+    const startNewPage = () => {
       page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
       const pageSize = page.getSize();
       dims = getPrintableArea(pageSize.width, pageSize.height);
-      currentY = await drawStandardHeader(page, pdfDoc, regularFont, boldFont, dims.margin + dims.height);
+      drawTemplateHeader();
     };
 
     const checkNewPage = async (requiredSpace: number) => {
       if (currentY - requiredSpace < dims.margin) {
         await startNewPage();
       }
+    };
+    
+    // Helper functions for drawing (template-aware wrappers)
+    const wrapText = (text: string, maxWidth: number, fontSize: number, font: any): string[] => {
+      const paragraphs = text.split(/\r?\n/);
+      const allLines: string[] = [];
+      for (const paragraph of paragraphs) {
+        if (!paragraph.trim()) {
+          allLines.push('');
+          continue;
+        }
+        const words = paragraph.split(' ');
+        let currentLine = '';
+        for (const word of words) {
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+          if (testWidth > maxWidth && currentLine) {
+            allLines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine = testLine;
+          }
+        }
+        if (currentLine) {
+          allLines.push(currentLine);
+        }
+      }
+      return allLines;
+    };
+    
+    const drawSectionHeader = (pg: any, text: string, x: number, y: number, font: any): number => {
+      pg.drawText(text, {
+        x,
+        y,
+        size: FONT_SIZES.SECTION_HEADER,
+        font,
+        color: COLORS.TEXT_PRIMARY,
+      });
+      return LINE_HEIGHTS.SECTION;
+    };
+    
+    const drawKeyValuePair = (pg: any, key: string, value: string, x: number, y: number, regFont: any, boldFontParam?: any): number => {
+      pg.drawText(`${key}: ${value}`, {
+        x,
+        y,
+        size: FONT_SIZES.BODY_MEDIUM,
+        font: boldFontParam || regFont,
+      });
+      return LINE_HEIGHTS.BODY;
     };
 
     // Document title
@@ -485,13 +596,7 @@ router.get('/api/quotes/:id/pdf', async (req: Request, res: Response) => {
 
     // Quote Information Section
     await checkNewPage(80);
-    const quoteInfoHeight = drawSectionHeader(
-      page,
-      'Quote Information',
-      dims.margin,
-      currentY,
-      boldFont
-    );
+    const quoteInfoHeight = drawSectionHeader(page, 'Quote Information', dims.margin, currentY, boldFont);
     currentY -= quoteInfoHeight;
 
     const quoteInfoItems = [
@@ -505,15 +610,7 @@ router.get('/api/quotes/:id/pdf', async (req: Request, res: Response) => {
 
     for (const item of quoteInfoItems) {
       await checkNewPage(LINE_HEIGHTS.BODY);
-      const itemHeight = drawKeyValuePair(
-        page,
-        item.label,
-        item.value,
-        dims.margin,
-        currentY,
-        regularFont,
-        boldFont
-      );
+      const itemHeight = drawKeyValuePair(page, item.label, item.value, dims.margin, currentY, regularFont, boldFont);
       currentY -= itemHeight;
     }
 
@@ -522,13 +619,7 @@ router.get('/api/quotes/:id/pdf', async (req: Request, res: Response) => {
     // Line Items Section
     if (lineItems.length > 0) {
       await checkNewPage(100);
-      const lineItemsHeaderHeight = drawSectionHeader(
-        page,
-        'Line Items',
-        dims.margin,
-        currentY,
-        boldFont
-      );
+      const lineItemsHeaderHeight = drawSectionHeader(page, 'Line Items', dims.margin, currentY, boldFont);
       currentY -= lineItemsHeaderHeight;
       currentY -= 10; // Small gap after header
 
@@ -592,28 +683,14 @@ router.get('/api/quotes/:id/pdf', async (req: Request, res: Response) => {
 
     // Quote Total
     await checkNewPage(40);
-    const totalHeight = drawKeyValuePair(
-      page,
-      'Quote Total',
-      `$${quote.totalAmount.toFixed(2)}`,
-      dims.margin,
-      currentY,
-      boldFont,
-      boldFont
-    );
+    const totalHeight = drawKeyValuePair(page, 'Quote Total', `$${quote.totalAmount.toFixed(2)}`, dims.margin, currentY, boldFont, boldFont);
     currentY -= totalHeight;
     currentY -= SPACING.SECTION_GAP_MEDIUM;
 
     // Notes Section
     if (quote.notes) {
       await checkNewPage(60);
-      const notesHeaderHeight = drawSectionHeader(
-        page,
-        'Notes',
-        dims.margin,
-        currentY,
-        boldFont
-      );
+      const notesHeaderHeight = drawSectionHeader(page, 'Notes', dims.margin, currentY, boldFont);
       currentY -= notesHeaderHeight;
 
       const wrappedNotes = wrapText(quote.notes, dims.width - 20, FONT_SIZES.BODY_MEDIUM, regularFont);

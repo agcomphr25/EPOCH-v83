@@ -73,6 +73,16 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
     - **Type-Safe API**: Zod-validated endpoints with proper insert schemas from @shared/schema
     - **Error Handling**: Comprehensive error states, retry functionality, and proper cache invalidation
     - **Route Ordering**: Critical route ordering ensures /optional-settings endpoints are matched before generic /:id routes
+-   **PDF Template Library System**: Comprehensive template management system enabling separate PDF configurations for different business contexts (P1 Production Orders, P2 Purchase Orders, RFQ Risk Assessments, etc.) without code changes. Features include:
+    - **Multi-Template Support**: Create unlimited templates per document type (P2, RFQ, P1, Sales Order, Commercial Invoice, Layup Schedule) with one active template per type enforcement
+    - **Custom Branding**: Upload and manage custom logos per template, supporting PNG, JPG, and JPEG formats
+    - **Comprehensive Styling Controls**: Configure margins, font sizes, spacing, line heights, and colors via intuitive UI with collapsible sections
+    - **Company Information**: Customize company name, address, phone, and email per template for different business entities or brands
+    - **Template Manager UI** (`/pdf-templates`): Full CRUD interface with search/filter, create/edit/delete operations, and logo upload with instant preview
+    - **Security Hardening**: Path traversal protection, filename sanitization, and one-active-template-per-type validation
+    - **Backend Integration**: Template loader utility (`server/utils/pdf/templateLoader.ts`) with automatic fallback to defaults if no template exists
+    - **PDF Generator Integration**: P2 Quote PDFs and RFQ Risk Assessment PDFs now load active templates dynamically, using template-specific logos, company info, and styling
+    - **Seeding System**: Default template seeding script (`server/scripts/seedPDFTemplates.ts`) to initialize system with standard templates
 
 ### Technical Implementations
 -   **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

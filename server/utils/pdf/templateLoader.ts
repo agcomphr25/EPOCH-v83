@@ -15,13 +15,13 @@ export type TemplateType = 'p1_production' | 'p2_purchase_order' | 'rfq_risk_ass
 
 interface TemplateConfig {
   id: string;
-  templateName: string;
+  name: string;
   templateType: TemplateType;
-  companyName: string;
+  companyName: string | null;
   companyAddress: string | null;
   companyPhone: string | null;
   companyEmail: string | null;
-  logoFilename: string | null;
+  logoPath: string | null;
   margins: Record<string, number>;
   fontSizes: Record<string, number>;
   spacing: Record<string, number>;
@@ -51,13 +51,13 @@ export async function loadActiveTemplate(templateType: TemplateType): Promise<Te
 
     return {
       id: template.id,
-      templateName: template.templateName,
+      name: template.name,
       templateType: template.templateType as TemplateType,
       companyName: template.companyName,
       companyAddress: template.companyAddress,
       companyPhone: template.companyPhone,
       companyEmail: template.companyEmail,
-      logoFilename: template.logoFilename,
+      logoPath: template.logoPath,
       margins: template.margins as Record<string, number>,
       fontSizes: template.fontSizes as Record<string, number>,
       spacing: template.spacing as Record<string, number>,
@@ -73,14 +73,38 @@ export async function loadActiveTemplate(templateType: TemplateType): Promise<Te
 /**
  * Embed template logo in PDF document
  * Falls back to default behavior if template has no logo
+ * SECURITY: Sanitizes logo path to prevent directory traversal attacks
  */
 export async function embedTemplateLogo(pdfDoc: PDFDocument, template: TemplateConfig | null) {
-  if (!template?.logoFilename) {
+  if (!template?.logoPath) {
     return null;
   }
 
   try {
-    const logoPath = path.join(process.cwd(), 'attached_assets', 'pdf_logos', template.logoFilename);
+    // SECURITY: Sanitize filename to prevent path traversal attacks
+    const safeFilename = path.basename(template.logoPath);
+    
+    // Validate filename format: must start with alphanumeric, single extension only, no hidden files
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*\.(png|jpg|jpeg)$/i.test(safeFilename)) {
+      console.warn(`⚠️ [Template Loader] Invalid logo filename format: ${template.logoPath}`);
+      return null;
+    }
+    
+    // Additional check: reject filenames with double extensions or suspicious patterns
+    const parsed = path.parse(safeFilename);
+    if (parsed.name.includes('.')) {
+      console.warn(`⚠️ [Template Loader] Rejected filename with double extension: ${safeFilename}`);
+      return null;
+    }
+    
+    const logoPath = path.join(process.cwd(), 'attached_assets', 'pdf_logos', safeFilename);
+    
+    // Verify the resolved path is still within the pdf_logos directory
+    const logoDir = path.join(process.cwd(), 'attached_assets', 'pdf_logos');
+    if (!logoPath.startsWith(logoDir)) {
+      console.error(`🚨 [Template Loader] Path traversal attempt detected: ${template.logoPath}`);
+      return null;
+    }
     
     if (!fs.existsSync(logoPath)) {
       console.warn(`⚠️ [Template Loader] Logo file not found: ${logoPath}`);
@@ -90,7 +114,7 @@ export async function embedTemplateLogo(pdfDoc: PDFDocument, template: TemplateC
     const logoImageBytes = fs.readFileSync(logoPath);
     
     // Determine image type from extension
-    const ext = path.extname(template.logoFilename).toLowerCase();
+    const ext = path.extname(safeFilename).toLowerCase();
     let embeddedLogo;
     
     if (ext === '.png') {
@@ -102,7 +126,7 @@ export async function embedTemplateLogo(pdfDoc: PDFDocument, template: TemplateC
       return null;
     }
 
-    console.log(`✅ [Template Loader] Logo embedded successfully: ${template.logoFilename}`);
+    console.log(`✅ [Template Loader] Logo embedded successfully: ${safeFilename}`);
     return embeddedLogo;
   } catch (error) {
     console.error('❌ [Template Loader] Error embedding logo:', error);

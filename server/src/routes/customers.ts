@@ -462,46 +462,177 @@ router.get('/rfq-assessments/:id/pdf', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'RFQ Risk Assessment not found' });
     }
 
-    // Import PDF generation utilities
-    const { PDFDocument, StandardFonts } = await import('pdf-lib');
+    // Load RFQ template (if available)
     const {
-      PAGE_SIZES,
-      DEFAULT_MARGIN,
-      getPrintableArea,
-      FONT_SIZES,
-      SPACING,
-      COLORS,
-      drawStandardHeader,
-      drawSectionHeader,
-      drawKeyValuePair,
-      drawInfoBox,
-      wrapText,
-      LINE_HEIGHTS,
-    } = await import('../../utils/pdf/pdfConfig');
+      loadActiveTemplate,
+      embedTemplateLogo,
+      getTemplateFontSizes,
+      getTemplateSpacing,
+      getTemplateColors,
+      getTemplateLineHeights,
+      getTemplateCompanyInfo,
+      getTemplateMargins,
+    } = await import('../../utils/pdf/templateLoader');
+    
+    const template = await loadActiveTemplate('rfq_risk_assessment');
+    console.log('📄 [RFQ PDF] Using template:', template?.name || 'Default');
+
+    // Import PDF generation utilities
+    const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+    const { PAGE_SIZES, getPrintableArea } = await import('../../utils/pdf/pdfConfig');
+    
+    // Get template-specific or default settings
+    const MARGINS = getTemplateMargins(template);
+    const FONT_SIZES = getTemplateFontSizes(template);
+    const SPACING = getTemplateSpacing(template);
+    const COLORS = getTemplateColors(template);
+    const LINE_HEIGHTS = getTemplateLineHeights(template);
+    const COMPANY_INFO = getTemplateCompanyInfo(template);
+    const LOGO_CONFIG = { WIDTH: 150, VERTICAL_SPACING: 15 };
+    
+    const DEFAULT_MARGIN = MARGINS.STANDARD;
 
     // Create a new PDF document
     const pdfDoc = await PDFDocument.create();
     const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+    // Embed logo once and reuse (performance + layout fix)
+    const embeddedLogo = await embedTemplateLogo(pdfDoc, template);
+
     // Initialize first page
     let page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
     const pageSize = page.getSize();
     let dims = getPrintableArea(pageSize.width, pageSize.height);
-    let currentY = await drawStandardHeader(page, pdfDoc, regularFont, boldFont, dims.margin + dims.height);
+    let currentY = dims.margin + dims.height;
+    
+    // Shared header drawing function (reuses embedded logo)
+    const drawTemplateHeader = () => {
+      currentY = dims.margin + dims.height;
+      if (embeddedLogo) {
+        const logoWidth = LOGO_CONFIG.WIDTH;
+        const logoHeight = logoWidth * (embeddedLogo.height / embeddedLogo.width);
+        
+        page.drawImage(embeddedLogo, {
+          x: dims.margin,
+          y: currentY - logoHeight,
+          width: logoWidth,
+          height: logoHeight,
+        });
+        
+        currentY -= logoHeight + LOGO_CONFIG.VERTICAL_SPACING;
+        page.drawText(COMPANY_INFO.ADDRESS, {
+          x: dims.margin,
+          y: currentY,
+          size: FONT_SIZES.BODY_SMALL,
+          font: regularFont,
+          color: COLORS.TEXT_SECONDARY,
+        });
+        currentY -= LINE_HEIGHTS.COMPACT;
+        page.drawText(`Phone: ${COMPANY_INFO.PHONE} | Email: ${COMPANY_INFO.EMAIL}`, {
+          x: dims.margin,
+          y: currentY,
+          size: FONT_SIZES.BODY_SMALL,
+          font: regularFont,
+          color: COLORS.TEXT_SECONDARY,
+        });
+        currentY -= SPACING.SECTION_GAP_SMALL;
+      } else {
+        page.drawText(COMPANY_INFO.NAME, {
+          x: dims.margin,
+          y: currentY,
+          size: FONT_SIZES.TITLE_LARGE,
+          font: boldFont,
+          color: COLORS.TEXT_PRIMARY,
+        });
+        currentY -= SPACING.SECTION_GAP_SMALL;
+      }
+    };
+    
+    // Draw initial header
+    drawTemplateHeader();
 
     // Shared startNewPage helper
-    const startNewPage = async () => {
+    const startNewPage = () => {
       page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
       const pageSize = page.getSize();
       dims = getPrintableArea(pageSize.width, pageSize.height);
-      currentY = await drawStandardHeader(page, pdfDoc, regularFont, boldFont, dims.margin + dims.height);
+      drawTemplateHeader();
     };
 
     // Shared checkNewPage helper
     const checkNewPage = async (requiredSpace: number) => {
       if (currentY - requiredSpace < dims.margin) {
         await startNewPage();
+      }
+    };
+    
+    // Helper functions for drawing (template-aware wrappers matching pdfConfig signatures)
+    const wrapText = (text: string, maxWidth: number, fontSize: number, font: any): string[] => {
+      const paragraphs = text.split(/\r?\n/);
+      const allLines: string[] = [];
+      for (const paragraph of paragraphs) {
+        if (!paragraph.trim()) {
+          allLines.push('');
+          continue;
+        }
+        const words = paragraph.split(' ');
+        let currentLine = '';
+        for (const word of words) {
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+          if (testWidth > maxWidth && currentLine) {
+            allLines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine = testLine;
+          }
+        }
+        if (currentLine) {
+          allLines.push(currentLine);
+        }
+      }
+      return allLines;
+    };
+    
+    const drawSectionHeader = (pg: any, text: string, x: number, y: number, font: any): number => {
+      pg.drawText(text, {
+        x,
+        y,
+        size: FONT_SIZES.SECTION_HEADER,
+        font,
+        color: COLORS.TEXT_PRIMARY,
+      });
+      return LINE_HEIGHTS.SECTION;
+    };
+    
+    const drawKeyValuePair = (pg: any, key: string, value: string, x: number, y: number, regFont: any, boldFontParam?: any): number => {
+      pg.drawText(`${key}: ${value}`, {
+        x,
+        y,
+        size: FONT_SIZES.BODY_MEDIUM,
+        font: boldFontParam || regFont,
+      });
+      return LINE_HEIGHTS.BODY;
+    };
+    
+    const drawInfoBox = (pg: any, x: number, y: number, width: number, height: number, title?: string, font?: any) => {
+      pg.drawRectangle({
+        x,
+        y,
+        width,
+        height,
+        borderColor: COLORS.BORDER_BLACK,
+        borderWidth: 1,
+      });
+      if (title && font) {
+        pg.drawText(title, {
+          x,
+          y: y + height + SPACING.LINE_SPACING_SMALL,
+          size: FONT_SIZES.TITLE_MEDIUM,
+          font,
+          color: COLORS.TEXT_PRIMARY,
+        });
       }
     };
 

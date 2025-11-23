@@ -1016,7 +1016,7 @@ export default function VendorPOManager() {
             
             <div class="header">
               <h1>PURCHASE ORDER</h1>
-              <p>PO Number: ${selectedVendorPO.poNumber}</p>
+              <p>PO Number: ${selectedVendorPO.poNumber.replace('VPO-', '')}</p>
             </div>
             
             <div class="info-section">

@@ -545,7 +545,7 @@ router.get('/api/quotes/:id/pdf', async (req: Request, res: Response) => {
           color: COLORS.TEXT_PRIMARY,
         });
         
-        const descWrapped = wrapText(item.description, dims.width - 200, FONT_SIZES.BODY_MEDIUM, regularFont);
+        const descWrapped = wrapText(item.description || '', dims.width - 200, FONT_SIZES.BODY_MEDIUM, regularFont);
         let descY = currentY;
         for (const line of descWrapped) {
           page.drawText(line, {

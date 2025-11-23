@@ -252,6 +252,12 @@ export default function Navigation() {
       icon: Shield,
       description: 'Advanced order management and editing for administrators',
     },
+    {
+      path: '/pdf-settings',
+      label: 'PDF Settings',
+      icon: Settings,
+      description: 'Configure PDF generation parameters (margins, fonts, colors)',
+    },
 
     // Documentation button disabled per user request - was causing problems
     // {

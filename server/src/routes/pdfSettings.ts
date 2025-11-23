@@ -2,6 +2,7 @@ import express from 'express';
 import { db } from '../../db';
 import { pdfConfigSettings, insertPdfConfigSettingsSchema } from '../../schema';
 import { eq } from 'drizzle-orm';
+import { clearSettingsCache } from '../../utils/pdf/pdfConfig';
 
 const router = express.Router();
 
@@ -81,19 +82,20 @@ router.get('/api/pdf-settings', async (req, res) => {
 // Update PDF configuration settings (upsert - update if exists, create if not)
 router.post('/api/pdf-settings', async (req, res) => {
   try {
-    const validatedData = insertPdfConfigSettingsSchema.parse({
-      ...req.body,
-      updatedBy: req.user?.username || 'system',
-    });
+    // Validate the request body (without updatedBy which we'll add)
+    const validatedData = insertPdfConfigSettingsSchema.parse(req.body);
 
     // Check if a record exists
     const existing = await db.select().from(pdfConfigSettings).limit(1);
     
     let result;
+    const updatedBy = req.user?.username || 'system';
+    
     if (existing.length === 0) {
       // Insert new record
       [result] = await db.insert(pdfConfigSettings).values({
         ...validatedData,
+        updatedBy,
       }).returning();
     } else {
       // Update existing record
@@ -101,11 +103,15 @@ router.post('/api/pdf-settings', async (req, res) => {
         .update(pdfConfigSettings)
         .set({
           ...validatedData,
+          updatedBy,
           updatedAt: new Date(),
         })
         .where(eq(pdfConfigSettings.id, existing[0].id))
         .returning();
     }
+    
+    // Clear cache to ensure new settings take effect immediately
+    clearSettingsCache();
     
     res.json(result);
   } catch (error) {
@@ -189,6 +195,9 @@ router.post('/api/pdf-settings/reset', async (req, res) => {
         .where(eq(pdfConfigSettings.id, existing[0].id))
         .returning();
     }
+    
+    // Clear cache to ensure reset values take effect immediately
+    clearSettingsCache();
     
     res.json(result);
   } catch (error) {

@@ -33,6 +33,15 @@ let lastFetch: number = 0;
 const CACHE_TTL = 60000; // Cache for 1 minute
 
 /**
+ * Clear the PDF settings cache
+ * Call this after updating settings in the database
+ */
+export function clearSettingsCache() {
+  cachedSettings = null;
+  lastFetch = 0;
+}
+
+/**
  * Load PDF configuration from database with caching
  * Falls back to hard-coded defaults if database is unavailable
  */

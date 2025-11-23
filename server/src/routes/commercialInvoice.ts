@@ -1,6 +1,18 @@
 import { Router, Request, Response } from 'express';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { storage } from '../../storage';
+import {
+  PAGE_SIZES,
+  DEFAULT_MARGIN,
+  getPrintableArea,
+  FONT_SIZES,
+  SPACING,
+  COLORS,
+  COMPANY_INFO,
+  drawStandardHeader,
+  drawInfoBox,
+  wrapText,
+} from '../../utils/pdf/pdfConfig';
 
 const router = Router();
 
@@ -32,337 +44,370 @@ router.post(
         return res.status(404).json({ error: 'Order not found' });
       }
 
-      // Create PDF document
+      // Create PDF document with standard page size
       const pdfDoc = await PDFDocument.create();
-      const page = pdfDoc.addPage([612, 792]); // US Letter
+      const page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
       const { width, height } = page.getSize();
+      const { margin } = getPrintableArea(width, height);
 
       // Load fonts
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-      let currentY = height - 50;
+      // Draw standard header with logo
+      let currentY = await drawStandardHeader(
+        page,
+        pdfDoc,
+        font,
+        boldFont,
+        height - margin,
+        margin
+      );
 
-      // Header
+      currentY -= SPACING.SECTION_GAP_MEDIUM;
+
+      // Document title
       page.drawText('COMMERCIAL INVOICE', {
-        x: 50,
+        x: margin,
         y: currentY,
-        size: 18,
+        size: FONT_SIZES.TITLE_LARGE,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
-      currentY -= 40;
+      currentY -= SPACING.SECTION_GAP_MEDIUM;
 
       // Company information
       page.drawText('SHIPPER/EXPORTER:', {
-        x: 50,
+        x: margin,
         y: currentY,
-        size: 12,
+        size: FONT_SIZES.SECTION_HEADER,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
-      currentY -= 20;
-      page.drawText('AG Composites', {
-        x: 50,
+      currentY -= SPACING.LINE_SPACING_LARGE;
+      page.drawText(COMPANY_INFO.NAME, {
+        x: margin,
         y: currentY,
-        size: 10,
+        size: FONT_SIZES.BODY_LARGE,
         font: font,
+        color: COLORS.TEXT_SECONDARY,
       });
 
-      currentY -= 15;
-      page.drawText('230 Hamer Rd', {
-        x: 50,
+      currentY -= SPACING.LINE_SPACING_MEDIUM;
+      const addressParts = COMPANY_INFO.ADDRESS.split(',');
+      page.drawText(addressParts[0].trim(), {
+        x: margin,
         y: currentY,
-        size: 10,
+        size: FONT_SIZES.BODY_LARGE,
         font: font,
+        color: COLORS.TEXT_SECONDARY,
       });
 
-      currentY -= 15;
-      page.drawText('Owens Crossroads, AL 35763, USA', {
-        x: 50,
+      currentY -= SPACING.LINE_SPACING_MEDIUM;
+      page.drawText(`${addressParts[1].trim()}, USA`, {
+        x: margin,
         y: currentY,
-        size: 10,
+        size: FONT_SIZES.BODY_LARGE,
         font: font,
+        color: COLORS.TEXT_SECONDARY,
       });
 
       // Invoice details box
-      const invoiceBoxX = width - 200;
-      page.drawRectangle({
-        x: invoiceBoxX,
-        y: currentY - 10,
-        width: 180,
-        height: 100,
-        borderColor: rgb(0, 0, 0),
-        borderWidth: 1,
-      });
+      const invoiceBoxWidth = 200;
+      const invoiceBoxHeight = 100;
+      const invoiceBoxX = width - margin - invoiceBoxWidth;
+      
+      drawInfoBox(page, invoiceBoxX, currentY - 10, invoiceBoxWidth, invoiceBoxHeight);
 
       page.drawText('Invoice No:', {
-        x: invoiceBoxX + 5,
+        x: invoiceBoxX + SPACING.BOX_PADDING_SMALL,
         y: currentY + 65,
-        size: 10,
+        size: FONT_SIZES.BODY_LARGE,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
       page.drawText(`CI-${orderId}`, {
-        x: invoiceBoxX + 5,
+        x: invoiceBoxX + SPACING.BOX_PADDING_SMALL,
         y: currentY + 50,
-        size: 10,
+        size: FONT_SIZES.BODY_LARGE,
         font: font,
+        color: COLORS.TEXT_SECONDARY,
       });
 
       page.drawText('Date:', {
-        x: invoiceBoxX + 5,
+        x: invoiceBoxX + SPACING.BOX_PADDING_SMALL,
         y: currentY + 35,
-        size: 10,
+        size: FONT_SIZES.BODY_LARGE,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
       page.drawText(new Date().toLocaleDateString(), {
-        x: invoiceBoxX + 5,
+        x: invoiceBoxX + SPACING.BOX_PADDING_SMALL,
         y: currentY + 20,
-        size: 10,
+        size: FONT_SIZES.BODY_LARGE,
         font: font,
+        color: COLORS.TEXT_SECONDARY,
       });
 
       page.drawText('Terms: EXW', {
-        x: invoiceBoxX + 5,
+        x: invoiceBoxX + SPACING.BOX_PADDING_SMALL,
         y: currentY + 5,
-        size: 10,
+        size: FONT_SIZES.BODY_LARGE,
         font: font,
+        color: COLORS.TEXT_SECONDARY,
       });
 
-      currentY -= 80;
+      currentY -= invoiceBoxHeight + SPACING.SECTION_GAP_SMALL;
 
       // Consignee information
       page.drawText('CONSIGNEE:', {
-        x: 50,
+        x: margin,
         y: currentY,
-        size: 12,
+        size: FONT_SIZES.SECTION_HEADER,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
-      currentY -= 20;
+      currentY -= SPACING.LINE_SPACING_LARGE;
       if (order.customer_name) {
         page.drawText(order.customer_name, {
-          x: 50,
+          x: margin,
           y: currentY,
-          size: 10,
+          size: FONT_SIZES.BODY_LARGE,
           font: font,
+          color: COLORS.TEXT_SECONDARY,
         });
-        currentY -= 15;
+        currentY -= SPACING.LINE_SPACING_MEDIUM;
       }
 
       page.drawText(`Destination: ${shipToCountry}`, {
-        x: 50,
+        x: margin,
         y: currentY,
-        size: 10,
+        size: FONT_SIZES.BODY_LARGE,
         font: font,
+        color: COLORS.TEXT_SECONDARY,
       });
 
-      currentY -= 40;
+      currentY -= SPACING.SECTION_GAP_MEDIUM;
 
       // Items table
       page.drawText('DESCRIPTION OF GOODS:', {
-        x: 50,
+        x: margin,
         y: currentY,
-        size: 12,
+        size: FONT_SIZES.SECTION_HEADER,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
-      currentY -= 30;
+      currentY -= SPACING.SECTION_GAP_SMALL;
+
+      const tableWidth = width - margin * 2;
+      const headerHeight = 25;
 
       // Table headers
       page.drawRectangle({
-        x: 50,
-        y: currentY - 25,
-        width: width - 100,
-        height: 25,
-        color: rgb(0.9, 0.9, 0.9),
-        borderColor: rgb(0, 0, 0),
+        x: margin,
+        y: currentY - headerHeight,
+        width: tableWidth,
+        height: headerHeight,
+        color: COLORS.BG_TABLE_HEADER,
+        borderColor: COLORS.BORDER_BLACK,
         borderWidth: 1,
       });
 
+      const headerY = currentY - SPACING.LINE_SPACING_MEDIUM;
       page.drawText('Description', {
-        x: 55,
-        y: currentY - 15,
-        size: 10,
+        x: margin + SPACING.BOX_PADDING_SMALL,
+        y: headerY,
+        size: FONT_SIZES.BODY_LARGE,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
       page.drawText('Origin', {
-        x: 250,
-        y: currentY - 15,
-        size: 10,
+        x: margin + 200,
+        y: headerY,
+        size: FONT_SIZES.BODY_LARGE,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
       page.drawText('HTS Code', {
-        x: 320,
-        y: currentY - 15,
-        size: 10,
+        x: margin + 270,
+        y: headerY,
+        size: FONT_SIZES.BODY_LARGE,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
       page.drawText('Qty', {
-        x: 420,
-        y: currentY - 15,
-        size: 10,
+        x: margin + 370,
+        y: headerY,
+        size: FONT_SIZES.BODY_LARGE,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
       page.drawText('Unit Value', {
-        x: 460,
-        y: currentY - 15,
-        size: 10,
+        x: margin + 410,
+        y: headerY,
+        size: FONT_SIZES.BODY_LARGE,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
       page.drawText('Total Value', {
-        x: 520,
-        y: currentY - 15,
-        size: 10,
+        x: margin + 470,
+        y: headerY,
+        size: FONT_SIZES.BODY_LARGE,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
       // Item row
-      currentY -= 45;
+      currentY -= headerHeight + SPACING.LINE_SPACING_LARGE;
+      const itemRowHeight = 20;
+      
       page.drawRectangle({
-        x: 50,
-        y: currentY - 20,
-        width: width - 100,
-        height: 20,
-        borderColor: rgb(0, 0, 0),
+        x: margin,
+        y: currentY - itemRowHeight,
+        width: tableWidth,
+        height: itemRowHeight,
+        borderColor: COLORS.BORDER_BLACK,
         borderWidth: 1,
       });
 
+      const rowY = currentY - SPACING.BOX_PADDING;
       page.drawText(customsDescription, {
-        x: 55,
-        y: currentY - 10,
-        size: 9,
+        x: margin + SPACING.BOX_PADDING_SMALL,
+        y: rowY,
+        size: FONT_SIZES.BODY_MEDIUM,
         font: font,
+        color: COLORS.TEXT_SECONDARY,
       });
 
       page.drawText(originCountry, {
-        x: 250,
-        y: currentY - 10,
-        size: 9,
+        x: margin + 200,
+        y: rowY,
+        size: FONT_SIZES.BODY_MEDIUM,
         font: font,
+        color: COLORS.TEXT_SECONDARY,
       });
 
       page.drawText(harmonizedCode, {
-        x: 320,
-        y: currentY - 10,
-        size: 9,
+        x: margin + 270,
+        y: rowY,
+        size: FONT_SIZES.BODY_MEDIUM,
         font: font,
+        color: COLORS.TEXT_SECONDARY,
       });
 
       page.drawText('1', {
-        x: 420,
-        y: currentY - 10,
-        size: 9,
+        x: margin + 370,
+        y: rowY,
+        size: FONT_SIZES.BODY_MEDIUM,
         font: font,
+        color: COLORS.TEXT_SECONDARY,
       });
 
       const unitValue = customsValue || order.priceOverride || 0;
       page.drawText(`$${unitValue.toFixed(2)}`, {
-        x: 460,
-        y: currentY - 10,
-        size: 9,
+        x: margin + 410,
+        y: rowY,
+        size: FONT_SIZES.BODY_MEDIUM,
         font: font,
+        color: COLORS.TEXT_SECONDARY,
       });
 
       page.drawText(`$${unitValue.toFixed(2)}`, {
-        x: 520,
-        y: currentY - 10,
-        size: 9,
+        x: margin + 470,
+        y: rowY,
+        size: FONT_SIZES.BODY_MEDIUM,
         font: font,
+        color: COLORS.TEXT_SECONDARY,
       });
 
       // Total
-      currentY -= 40;
+      currentY -= itemRowHeight + SPACING.SECTION_GAP_MEDIUM;
       page.drawText('TOTAL DECLARED VALUE:', {
-        x: 400,
+        x: margin + 350,
         y: currentY,
-        size: 12,
+        size: FONT_SIZES.SECTION_HEADER,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
       page.drawText(`USD $${unitValue.toFixed(2)}`, {
-        x: 520,
+        x: margin + 470,
         y: currentY,
-        size: 12,
+        size: FONT_SIZES.SECTION_HEADER,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
       // Certification
-      currentY -= 60;
+      currentY -= SPACING.SECTION_GAP_LARGE + SPACING.SECTION_GAP_SMALL;
       page.drawText('CERTIFICATION:', {
-        x: 50,
+        x: margin,
         y: currentY,
-        size: 12,
+        size: FONT_SIZES.SECTION_HEADER,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
-      currentY -= 20;
+      currentY -= SPACING.LINE_SPACING_LARGE;
       const certText = `I hereby certify that the information on this invoice is true and correct and that the contents and value of this shipment are as stated above.`;
 
-      // Word wrap certification text
-      const words = certText.split(' ');
-      let line = '';
-      words.forEach((word) => {
-        const testLine = line + (line ? ' ' : '') + word;
-        if (testLine.length > 80) {
-          page.drawText(line, {
-            x: 50,
-            y: currentY,
-            size: 9,
-            font: font,
-          });
-          currentY -= 15;
-          line = word;
-        } else {
-          line = testLine;
-        }
+      // Word wrap certification text using helper function
+      const { width: printableWidth } = getPrintableArea(width, height);
+      const wrappedLines = wrapText(certText, printableWidth, FONT_SIZES.BODY_MEDIUM, font);
+      
+      wrappedLines.forEach(line => {
+        page.drawText(line, {
+          x: margin,
+          y: currentY,
+          size: FONT_SIZES.BODY_MEDIUM,
+          font: font,
+          color: COLORS.TEXT_SECONDARY,
+        });
+        currentY -= SPACING.LINE_SPACING_MEDIUM;
       });
 
-      if (line) {
-        page.drawText(line, {
-          x: 50,
-          y: currentY,
-          size: 9,
-          font: font,
-        });
-      }
-
-      currentY -= 40;
+      currentY -= SPACING.SECTION_GAP_SMALL;
 
       // Signature line
       page.drawText('Signature:', {
-        x: 50,
+        x: margin,
         y: currentY,
-        size: 10,
+        size: FONT_SIZES.BODY_LARGE,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
       page.drawLine({
-        start: { x: 120, y: currentY - 5 },
-        end: { x: 300, y: currentY - 5 },
+        start: { x: margin + 70, y: currentY - 5 },
+        end: { x: margin + 250, y: currentY - 5 },
         thickness: 1,
-        color: rgb(0, 0, 0),
+        color: COLORS.BORDER_BLACK,
       });
 
       page.drawText('Date:', {
-        x: 320,
+        x: margin + 270,
         y: currentY,
-        size: 10,
+        size: FONT_SIZES.BODY_LARGE,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
 
       page.drawLine({
-        start: { x: 350, y: currentY - 5 },
-        end: { x: 450, y: currentY - 5 },
+        start: { x: margin + 300, y: currentY - 5 },
+        end: { x: margin + 400, y: currentY - 5 },
         thickness: 1,
-        color: rgb(0, 0, 0),
+        color: COLORS.BORDER_BLACK,
       });
 
       // Generate PDF

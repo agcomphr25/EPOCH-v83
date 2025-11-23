@@ -486,13 +486,15 @@ router.get('/rfq-assessments/:id/pdf', async (req: Request, res: Response) => {
 
     // Initialize first page
     let page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
-    let dims = getPrintableArea(...page.getSize());
+    const pageSize = page.getSize();
+    let dims = getPrintableArea(pageSize.width, pageSize.height);
     let currentY = await drawStandardHeader(page, pdfDoc, regularFont, boldFont, dims.margin + dims.height);
 
     // Shared startNewPage helper
     const startNewPage = async () => {
       page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
-      dims = getPrintableArea(...page.getSize());
+      const pageSize = page.getSize();
+      dims = getPrintableArea(pageSize.width, pageSize.height);
       currentY = await drawStandardHeader(page, pdfDoc, regularFont, boldFont, dims.margin + dims.height);
     };
 

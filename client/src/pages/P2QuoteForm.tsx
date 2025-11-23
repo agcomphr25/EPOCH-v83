@@ -34,7 +34,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Plus, Trash2, Save, FileText, Printer, Search, Upload } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, FileText, Printer, Search, Upload, Eye } from 'lucide-react';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -285,6 +285,21 @@ export default function P2QuoteForm() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleViewPDF = () => {
+    if (!savedQuoteId) {
+      toast({
+        title: 'No Quote Selected',
+        description: 'Please save the quote first to view the PDF.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Open PDF in new tab
+    const pdfUrl = `/api/quotes/${savedQuoteId}/pdf`;
+    window.open(pdfUrl, '_blank');
   };
 
   const handleSave = async () => {
@@ -639,6 +654,15 @@ export default function P2QuoteForm() {
                   Draft
                 </div>
               )}
+              <Button
+                variant="outline"
+                onClick={handleViewPDF}
+                disabled={!savedQuoteId}
+                data-testid="button-view-pdf"
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                View PDF
+              </Button>
               <Button
                 variant="outline"
                 onClick={handlePrint}

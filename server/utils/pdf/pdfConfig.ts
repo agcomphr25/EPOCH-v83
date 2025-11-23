@@ -1,6 +1,8 @@
 import { PDFDocument, PDFPage, PDFFont, rgb, RGB } from 'pdf-lib';
 import * as fs from 'fs';
 import { resolveAssetPath } from '../../src/utils/assetPaths';
+import { db } from '../../db';
+import { pdfConfigSettings } from '../../schema';
 
 /**
  * Centralized PDF Configuration Module
@@ -8,8 +10,167 @@ import { resolveAssetPath } from '../../src/utils/assetPaths';
  * This module provides standardized settings for all PDF generation functions
  * to ensure consistency in spacing, layout, fonts, and visual appearance.
  * 
+ * Settings can be customized via the database (pdf_config_settings table).
+ * If no custom settings exist, defaults are used.
+ * 
  * Based on the standards established in the Sales Order PDF.
  */
+
+// ============================================
+// DATABASE SETTINGS LOADER
+// ============================================
+
+interface DBSettings {
+  margins?: Record<string, number>;
+  fontSizes?: Record<string, number>;
+  lineHeights?: Record<string, number>;
+  spacing?: Record<string, number>;
+  colors?: Record<string, { r: number; g: number; b: number }>;
+}
+
+let cachedSettings: DBSettings | null = null;
+let lastFetch: number = 0;
+const CACHE_TTL = 60000; // Cache for 1 minute
+
+/**
+ * Clear the PDF settings cache
+ * Call this after updating settings in the database
+ */
+export function clearSettingsCache() {
+  cachedSettings = null;
+  lastFetch = 0;
+}
+
+/**
+ * Load PDF configuration from database with caching
+ * Falls back to hard-coded defaults if database is unavailable
+ */
+async function loadSettings(): Promise<DBSettings> {
+  const now = Date.now();
+  
+  // Return cached settings if still valid
+  if (cachedSettings && (now - lastFetch) < CACHE_TTL) {
+    return cachedSettings;
+  }
+  
+  try {
+    const settings = await db.select().from(pdfConfigSettings).limit(1);
+    
+    if (settings.length > 0) {
+      cachedSettings = {
+        margins: settings[0].margins as Record<string, number>,
+        fontSizes: settings[0].fontSizes as Record<string, number>,
+        lineHeights: settings[0].lineHeights as Record<string, number>,
+        spacing: settings[0].spacing as Record<string, number>,
+        colors: settings[0].colors as Record<string, { r: number; g: number; b: number }>,
+      };
+      lastFetch = now;
+      return cachedSettings;
+    }
+  } catch (error) {
+    console.warn('⚠️ [PDF Config] Failed to load settings from database, using defaults:', error);
+  }
+  
+  // Return empty object to trigger fallback to defaults
+  return {};
+}
+
+// ============================================
+// DYNAMIC CONFIGURATION GETTERS
+// ============================================
+
+/**
+ * Get margins with database override or defaults
+ */
+export async function getMargins() {
+  const settings = await loadSettings();
+  return settings.margins || {
+    STANDARD: 40,
+    COMPACT: 30,
+    WIDE: 50,
+  };
+}
+
+/**
+ * Get font sizes with database override or defaults
+ */
+export async function getFontSizes() {
+  const settings = await loadSettings();
+  return settings.fontSizes || {
+    TITLE_LARGE: 18,
+    TITLE_MEDIUM: 16,
+    TITLE_SMALL: 14,
+    SECTION_HEADER: 12,
+    BODY_LARGE: 10,
+    BODY_MEDIUM: 9,
+    BODY_SMALL: 8,
+    TINY: 7,
+  };
+}
+
+/**
+ * Get line heights with database override or defaults
+ */
+export async function getLineHeights() {
+  const settings = await loadSettings();
+  return settings.lineHeights || {
+    TITLE: 25,
+    SECTION: 20,
+    BODY: 15,
+    COMPACT: 12,
+    DENSE: 10,
+  };
+}
+
+/**
+ * Get spacing with database override or defaults
+ */
+export async function getSpacing() {
+  const settings = await loadSettings();
+  return settings.spacing || {
+    SECTION_GAP_LARGE: 40,
+    SECTION_GAP_MEDIUM: 30,
+    SECTION_GAP_SMALL: 20,
+    SECTION_GAP_TINY: 15,
+    COLUMN_GAP: 20,
+    BOX_PADDING: 8,
+    BOX_PADDING_SMALL: 5,
+    LINE_SPACING_LARGE: 15,
+    LINE_SPACING_MEDIUM: 13,
+    LINE_SPACING_SMALL: 11,
+    LINE_SPACING_COMPACT: 9,
+  };
+}
+
+/**
+ * Get colors with database override or defaults
+ * Converts color objects to RGB instances
+ */
+export async function getColors() {
+  const settings = await loadSettings();
+  const colorData = settings.colors || {
+    TEXT_PRIMARY: { r: 0, g: 0, b: 0 },
+    TEXT_SECONDARY: { r: 0.3, g: 0.3, b: 0.3 },
+    TEXT_TERTIARY: { r: 0.5, g: 0.5, b: 0.5 },
+    TEXT_LIGHT: { r: 0.6, g: 0.6, b: 0.6 },
+    BG_TABLE_HEADER: { r: 0.9, g: 0.9, b: 0.9 },
+    BG_WHITE: { r: 1, g: 1, b: 1 },
+    BG_LIGHT_GRAY: { r: 0.95, g: 0.95, b: 0.95 },
+    BORDER_BLACK: { r: 0, g: 0, b: 0 },
+    BORDER_GRAY: { r: 0.7, g: 0.7, b: 0.7 },
+    BORDER_LIGHT: { r: 0.85, g: 0.85, b: 0.85 },
+    ACCENT_RED: { r: 0.8, g: 0, b: 0 },
+    ACCENT_BLUE: { r: 0, g: 0, b: 0.8 },
+    ACCENT_GREEN: { r: 0, g: 0.6, b: 0 },
+  };
+  
+  // Convert color objects to RGB instances
+  const colors: Record<string, RGB> = {};
+  for (const [key, value] of Object.entries(colorData)) {
+    colors[key] = rgb(value.r, value.g, value.b);
+  }
+  return colors;
+}
 
 // ============================================
 // PAGE LAYOUT CONFIGURATION
@@ -20,6 +181,7 @@ export const PAGE_SIZES = {
   LETTER_LANDSCAPE: [792, 612] as [number, number],
 };
 
+// Legacy exports for backward compatibility (use get functions above for database-aware settings)
 export const MARGINS = {
   STANDARD: 40,
   COMPACT: 30,
@@ -358,4 +520,76 @@ export function wrapText(
 export function getCenteredX(text: string, pageWidth: number, fontSize: number, font: PDFFont): number {
   const textWidth = font.widthOfTextAtSize(text, fontSize);
   return (pageWidth - textWidth) / 2;
+}
+
+/**
+ * Draw a section header and return consumed height
+ */
+export function drawSectionHeader(
+  page: PDFPage,
+  text: string,
+  x: number,
+  y: number,
+  boldFont: PDFFont
+): number {
+  page.drawText(text, {
+    x,
+    y,
+    size: FONT_SIZES.SECTION_HEADER,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+  
+  return LINE_HEIGHTS.SECTION;
+}
+
+/**
+ * Draw a key-value pair and return consumed height
+ */
+export function drawKeyValuePair(
+  page: PDFPage,
+  key: string,
+  value: string,
+  x: number,
+  y: number,
+  regularFont: PDFFont,
+  boldFont?: PDFFont
+): number {
+  const keyText = `${key}: ${value}`;
+  page.drawText(keyText, {
+    x,
+    y,
+    size: FONT_SIZES.BODY_MEDIUM,
+    font: boldFont || regularFont,
+  });
+  
+  return LINE_HEIGHTS.BODY;
+}
+
+/**
+ * Draw a simple table with key-value rows
+ * Returns total consumed height
+ */
+export function drawSimpleTable(
+  page: PDFPage,
+  rows: Array<{ label: string; value: string }>,
+  x: number,
+  startY: number,
+  regularFont: PDFFont,
+  indentLevel: number = 0
+): number {
+  let currentY = startY;
+  const indent = indentLevel * 20;
+  
+  rows.forEach(row => {
+    page.drawText(`${row.label}: ${row.value}`, {
+      x: x + indent,
+      y: currentY,
+      size: FONT_SIZES.BODY_MEDIUM,
+      font: regularFont,
+    });
+    currentY -= LINE_HEIGHTS.BODY;
+  });
+  
+  return startY - currentY;
 }

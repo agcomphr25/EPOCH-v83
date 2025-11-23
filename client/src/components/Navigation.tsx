@@ -252,6 +252,12 @@ export default function Navigation() {
       icon: Shield,
       description: 'Advanced order management and editing for administrators',
     },
+    {
+      path: '/pdf-templates',
+      label: 'PDF Templates',
+      icon: FileText,
+      description: 'Manage PDF templates with custom logos and styling for P1, P2, RFQ, etc.',
+    },
 
     // Documentation button disabled per user request - was causing problems
     // {

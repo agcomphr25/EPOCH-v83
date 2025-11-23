@@ -137,13 +137,12 @@ import CustomerSatisfaction from './pages/CustomerSatisfaction';
 import AdminPanelPage from './pages/AdminPanelPage';
 import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
-// PDFME SYSTEM COMMENTED OUT - NOT IN USE
-// import PDFTemplateManager from './pages/PDFTemplateManager';
-// import PDFTemplateDesigner from './pages/PDFTemplateDesigner';
+import PDFTemplateManager from './pages/PDFTemplateManager';
 import CuttingTable from './pages/CuttingTable';
 import MetalAccessoriesTracker from './pages/MetalAccessoriesTracker';
 import DocumentIntelligence from './pages/DocumentIntelligence';
 import SignOrderPage from './pages/SignOrderPage';
+import PDFSettings from './pages/PDFSettings';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -332,11 +331,8 @@ function App() {
                   {/* Cost Accounting Routes */}
                   <Route path="/cost-accounting" component={CostAccountingPage} />
                   
-                  {/* PDFME SYSTEM COMMENTED OUT - NOT IN USE */}
                   {/* PDF Template Routes */}
-                  {/* <Route path="/pdf-templates" component={PDFTemplateManager} /> */}
-                  {/* <Route path="/pdf-template-designer" component={PDFTemplateDesigner} /> */}
-                  {/* <Route path="/pdf-template-designer/:id" component={PDFTemplateDesigner} /> */}
+                  <Route path="/pdf-templates" component={PDFTemplateManager} />
                   
                   {/* Item Groups Management */}
                   <Route path="/manage-groups" component={ManageGroups} />
@@ -426,6 +422,7 @@ function App() {
                   <Route path="/employee" component={EmployeeDashboard} />
                   <Route path="/user-management" component={UserManagement} />
                   <Route path="/settings" component={Settings} />
+                  <Route path="/pdf-settings" component={PDFSettings} />
                   <Route
                     path="/employee-portal"
                     component={EmployeePortalPage}

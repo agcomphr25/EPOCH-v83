@@ -5966,32 +5966,7 @@ export const insertInvoiceNumberSchema = createInsertSchema(invoiceNumbers).omit
 export type InvoiceNumber = typeof invoiceNumbers.$inferSelect;
 export type InsertInvoiceNumber = z.infer<typeof insertInvoiceNumberSchema>;
 
-// PDFME SYSTEM COMMENTED OUT - NOT IN USE
-// PDF Templates - Visual template designer for PDF generation
-export const pdfTemplates = pgTable('pdf_templates', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(), // e.g., "Vendor Purchase Order", "Sales Order"
-  type: text('type').notNull(), // vendor_po, sales_order, invoice, packing_slip, etc.
-  description: text('description'),
-  templateJson: jsonb('template_json').notNull(), // template structure (formerly pdfme)
-  basePdfUrl: text('base_pdf_url'), // Optional: URL to base PDF if using existing template
-  isActive: boolean('is_active').default(true),
-  isDefault: boolean('is_default').default(false), // Default template for this type
-  createdBy: text('created_by').notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-// Insert Schema
-export const insertPdfTemplateSchema = createInsertSchema(pdfTemplates).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-// Types
-export type PdfTemplate = typeof pdfTemplates.$inferSelect;
-export type InsertPdfTemplate = z.infer<typeof insertPdfTemplateSchema>;
+// PDFME SYSTEM COMMENTED OUT - NOT IN USE - Table replaced with new pdf_templates design below
 
 // Quotes - Customer quotes for P2 business (stub for future implementation)
 export const quotes = pgTable('quotes', {
@@ -6399,5 +6374,152 @@ export const insertAllocationResultSchema = createInsertSchema(allocationResults
 
 export type AllocationResult = typeof allocationResults.$inferSelect;
 export type InsertAllocationResult = z.infer<typeof insertAllocationResultSchema>;
+
+// PDF Configuration Settings (Singleton table - should only have one row)
+export const pdfConfigSettings = pgTable('pdf_config_settings', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  margins: jsonb('margins').notNull().default({
+    STANDARD: 40,
+    COMPACT: 30,
+    WIDE: 50,
+  }),
+  fontSizes: jsonb('font_sizes').notNull().default({
+    TITLE_LARGE: 18,
+    TITLE_MEDIUM: 16,
+    TITLE_SMALL: 14,
+    SECTION_HEADER: 12,
+    BODY_LARGE: 10,
+    BODY_MEDIUM: 9,
+    BODY_SMALL: 8,
+    TINY: 7,
+  }),
+  lineHeights: jsonb('line_heights').notNull().default({
+    TITLE: 25,
+    SECTION: 20,
+    BODY: 15,
+    COMPACT: 12,
+    DENSE: 10,
+  }),
+  spacing: jsonb('spacing').notNull().default({
+    SECTION_GAP_LARGE: 40,
+    SECTION_GAP_MEDIUM: 30,
+    SECTION_GAP_SMALL: 20,
+    SECTION_GAP_TINY: 15,
+    COLUMN_GAP: 20,
+    BOX_PADDING: 8,
+    BOX_PADDING_SMALL: 5,
+    LINE_SPACING_LARGE: 15,
+    LINE_SPACING_MEDIUM: 13,
+    LINE_SPACING_SMALL: 11,
+    LINE_SPACING_COMPACT: 9,
+  }),
+  colors: jsonb('colors').notNull().default({
+    TEXT_PRIMARY: { r: 0, g: 0, b: 0 },
+    TEXT_SECONDARY: { r: 0.3, g: 0.3, b: 0.3 },
+    TEXT_TERTIARY: { r: 0.5, g: 0.5, b: 0.5 },
+    TEXT_LIGHT: { r: 0.6, g: 0.6, b: 0.6 },
+    BG_TABLE_HEADER: { r: 0.9, g: 0.9, b: 0.9 },
+    BG_WHITE: { r: 1, g: 1, b: 1 },
+    BG_LIGHT_GRAY: { r: 0.95, g: 0.95, b: 0.95 },
+    BORDER_BLACK: { r: 0, g: 0, b: 0 },
+    BORDER_GRAY: { r: 0.7, g: 0.7, b: 0.7 },
+    BORDER_LIGHT: { r: 0.85, g: 0.85, b: 0.85 },
+    ACCENT_RED: { r: 0.8, g: 0, b: 0 },
+    ACCENT_BLUE: { r: 0, g: 0, b: 0.8 },
+    ACCENT_GREEN: { r: 0, g: 0.6, b: 0 },
+  }),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  updatedBy: text('updated_by'),
+});
+
+export const insertPdfConfigSettingsSchema = createInsertSchema(pdfConfigSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type PdfConfigSettings = typeof pdfConfigSettings.$inferSelect;
+export type InsertPdfConfigSettings = z.infer<typeof insertPdfConfigSettingsSchema>;
+
+// PDF Templates - Template library for different PDF types with custom logos and styling
+export const pdfTemplates = pgTable('pdf_templates', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull().unique(),
+  templateType: text('template_type').notNull(), // 'P1', 'P2', 'RFQ', 'SALES_ORDER', 'INVOICE', etc.
+  description: text('description'),
+  logoPath: text('logo_path'), // Path to uploaded logo file
+  companyName: text('company_name'),
+  companyAddress: text('company_address'),
+  companyPhone: text('company_phone'),
+  companyEmail: text('company_email'),
+  companyWebsite: text('company_website'),
+  headerText: text('header_text'),
+  footerText: text('footer_text'),
+  margins: jsonb('margins').notNull().default({
+    STANDARD: 40,
+    COMPACT: 30,
+    WIDE: 50,
+  }),
+  fontSizes: jsonb('font_sizes').notNull().default({
+    TITLE_LARGE: 18,
+    TITLE_MEDIUM: 16,
+    TITLE_SMALL: 14,
+    SECTION_HEADER: 12,
+    BODY_LARGE: 10,
+    BODY_MEDIUM: 9,
+    BODY_SMALL: 8,
+    TINY: 7,
+  }),
+  lineHeights: jsonb('line_heights').notNull().default({
+    TITLE: 25,
+    SECTION: 20,
+    BODY: 15,
+    COMPACT: 12,
+    DENSE: 10,
+  }),
+  spacing: jsonb('spacing').notNull().default({
+    SECTION_GAP_LARGE: 40,
+    SECTION_GAP_MEDIUM: 30,
+    SECTION_GAP_SMALL: 20,
+    SECTION_GAP_TINY: 15,
+    COLUMN_GAP: 20,
+    BOX_PADDING: 8,
+    BOX_PADDING_SMALL: 5,
+    LINE_SPACING_LARGE: 15,
+    LINE_SPACING_MEDIUM: 13,
+    LINE_SPACING_SMALL: 11,
+    LINE_SPACING_COMPACT: 9,
+  }),
+  colors: jsonb('colors').notNull().default({
+    TEXT_PRIMARY: { r: 0, g: 0, b: 0 },
+    TEXT_SECONDARY: { r: 0.3, g: 0.3, b: 0.3 },
+    TEXT_TERTIARY: { r: 0.5, g: 0.5, b: 0.5 },
+    TEXT_LIGHT: { r: 0.6, g: 0.6, b: 0.6 },
+    BG_TABLE_HEADER: { r: 0.9, g: 0.9, b: 0.9 },
+    BG_WHITE: { r: 1, g: 1, b: 1 },
+    BG_LIGHT_GRAY: { r: 0.95, g: 0.95, b: 0.95 },
+    BORDER_BLACK: { r: 0, g: 0, b: 0 },
+    BORDER_GRAY: { r: 0.7, g: 0.7, b: 0.7 },
+    BORDER_LIGHT: { r: 0.85, g: 0.85, b: 0.85 },
+    ACCENT_RED: { r: 0.8, g: 0, b: 0 },
+    ACCENT_BLUE: { r: 0, g: 0, b: 0.8 },
+    ACCENT_GREEN: { r: 0, g: 0.6, b: 0 },
+  }),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  createdBy: text('created_by'),
+  updatedBy: text('updated_by'),
+}, (table) => ({
+  templateTypeIdx: index('pdf_templates_type_idx').on(table.templateType),
+}));
+
+export const insertPdfTemplateSchema = createInsertSchema(pdfTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PdfTemplate = typeof pdfTemplates.$inferSelect;
+export type InsertPdfTemplate = z.infer<typeof insertPdfTemplateSchema>;
 
 export * from './calendar.schema';

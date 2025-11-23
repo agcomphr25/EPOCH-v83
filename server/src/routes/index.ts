@@ -15,9 +15,7 @@ import rtsSalesRoutes from './rtsSales';
 import customersRoutes from './customers';
 import vendorsRoutes from './vendors';
 import vendorPOsRoutes from './vendorPOs';
-// PDFME SYSTEM COMMENTED OUT - NOT IN USE
-// import pdfTemplatesRoutes from './pdfTemplates';
-// import pdfGenerationRoutes from './pdfGeneration';
+import pdfTemplatesRoutes from './pdfTemplates';
 import qualityRoutes from './quality';
 import documentsRoutes from './documents';
 import moldsRoutes from './molds';
@@ -71,6 +69,7 @@ import costCentersRoutes from './costCenters';
 import costAccountingRoutes from './costAccounting';
 import employeeBadgesRoutes from './employeeBadges';
 import watchRulesRoutes from './watchRules';
+import pdfSettingsRoutes from './pdfSettings';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -153,12 +152,15 @@ export function registerRoutes(app: Express): Server {
   // Employee Badge Actions routes
   app.use('/api/employee-badges', employeeBadgesRoutes);
 
+  // PDF Configuration Settings routes
+  app.use(pdfSettingsRoutes);
+
   // Customer Watch Rules routes
   app.use('/api/watch-rules', watchRulesRoutes);
 
   // PDFME SYSTEM COMMENTED OUT - NOT IN USE
   // PDF Templates routes
-  // app.use('/api/pdf-templates', pdfTemplatesRoutes);
+  app.use(pdfTemplatesRoutes);
 
   // PDF Generation routes
   // app.use('/api/generate-pdf', pdfGenerationRoutes);

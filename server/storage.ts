@@ -6698,22 +6698,28 @@ export class DatabaseStorage implements IStorage {
   async createVendorPO(data: any): Promise<any> {
     // Auto-generate PO number if not provided
     if (!data.poNumber) {
-      // Get the latest vendor PO to generate next number
+      // Get current year (last 2 digits)
+      const currentYear = new Date().getFullYear().toString().slice(-2);
+      
+      // Get the latest vendor PO for this year
       const latestPO = await db
         .select({ poNumber: vendorPOs.poNumber })
         .from(vendorPOs)
-        .where(sql`${vendorPOs.poNumber} LIKE 'VPO-%'`)
+        .where(sql`${vendorPOs.poNumber} LIKE ${`VPO-${currentYear}%`}`)
         .orderBy(desc(vendorPOs.id))
         .limit(1);
       
       let nextNumber = 1;
       if (latestPO.length > 0 && latestPO[0].poNumber) {
-        const match = latestPO[0].poNumber.match(/VPO-(\d+)/);
+        // Extract the sequential part (last 3 digits) from format VPO-YYNNN
+        const match = latestPO[0].poNumber.match(/VPO-\d{2}(\d{3})/);
         if (match) {
           nextNumber = parseInt(match[1]) + 1;
         }
       }
-      data.poNumber = `VPO-${String(nextNumber).padStart(6, '0')}`;
+      
+      // Format: VPO-YYNNN (e.g., VPO-25001, VPO-25099)
+      data.poNumber = `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
     }
     
     // Auto-generate barcode if not provided

@@ -359,3 +359,75 @@ export function getCenteredX(text: string, pageWidth: number, fontSize: number, 
   const textWidth = font.widthOfTextAtSize(text, fontSize);
   return (pageWidth - textWidth) / 2;
 }
+
+/**
+ * Draw a section header and return consumed height
+ */
+export function drawSectionHeader(
+  page: PDFPage,
+  text: string,
+  x: number,
+  y: number,
+  boldFont: PDFFont
+): number {
+  page.drawText(text, {
+    x,
+    y,
+    size: FONT_SIZES.SECTION_HEADER,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+  
+  return LINE_HEIGHTS.SECTION;
+}
+
+/**
+ * Draw a key-value pair and return consumed height
+ */
+export function drawKeyValuePair(
+  page: PDFPage,
+  key: string,
+  value: string,
+  x: number,
+  y: number,
+  regularFont: PDFFont,
+  boldFont?: PDFFont
+): number {
+  const keyText = `${key}: ${value}`;
+  page.drawText(keyText, {
+    x,
+    y,
+    size: FONT_SIZES.BODY_MEDIUM,
+    font: boldFont || regularFont,
+  });
+  
+  return LINE_HEIGHTS.BODY;
+}
+
+/**
+ * Draw a simple table with key-value rows
+ * Returns total consumed height
+ */
+export function drawSimpleTable(
+  page: PDFPage,
+  rows: Array<{ label: string; value: string }>,
+  x: number,
+  startY: number,
+  regularFont: PDFFont,
+  indentLevel: number = 0
+): number {
+  let currentY = startY;
+  const indent = indentLevel * 20;
+  
+  rows.forEach(row => {
+    page.drawText(`${row.label}: ${row.value}`, {
+      x: x + indent,
+      y: currentY,
+      size: FONT_SIZES.BODY_MEDIUM,
+      font: regularFont,
+    });
+    currentY -= LINE_HEIGHTS.BODY;
+  });
+  
+  return startY - currentY;
+}

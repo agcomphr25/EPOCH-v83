@@ -472,6 +472,9 @@ router.get('/rfq-assessments/:id/pdf', async (req: Request, res: Response) => {
       SPACING,
       COLORS,
       drawStandardHeader,
+      drawSectionHeader,
+      drawKeyValuePair,
+      drawInfoBox,
       wrapText,
       LINE_HEIGHTS,
     } = await import('../../utils/pdf/pdfConfig');
@@ -558,31 +561,21 @@ router.get('/rfq-assessments/:id/pdf', async (req: Request, res: Response) => {
       return value.charAt(0).toUpperCase() + value.slice(1);
     };
 
-    // Helper function to draw risk section with pagination
-    const drawRiskSection = async (title: string, risks: Array<{label: string, value: string}>) => {
-      const requiredSpace = (risks.length + 2) * LINE_HEIGHTS.BODY + SPACING.SECTION_GAP_SMALL;
-      await checkNewPage(requiredSpace);
+    // Section renderer: Risk section with per-row pagination
+    const renderRiskSection = async (title: string, risks: Array<{label: string, value: string}>) => {
+      // Check space for header
+      await checkNewPage(LINE_HEIGHTS.SECTION);
       
-      page.drawText(title, {
-        x: dims.margin,
-        y: currentY,
-        size: FONT_SIZES.SECTION_HEADER,
-        font: boldFont,
-        color: COLORS.TEXT_PRIMARY,
-      });
-      currentY -= LINE_HEIGHTS.SECTION;
+      // Draw section header using shared helper
+      const headerHeight = drawSectionHeader(page, title, dims.margin, currentY, boldFont);
+      currentY -= headerHeight;
 
+      // Draw each risk row with individual pagination check
       for (const risk of risks) {
         await checkNewPage(LINE_HEIGHTS.BODY);
-        
-        const riskText = `${risk.label}: ${getRiskDisplay(risk.value)}`;
-        page.drawText(riskText, {
-          x: dims.margin + 20,
-          y: currentY,
-          size: FONT_SIZES.BODY_MEDIUM,
-          font: regularFont,
-        });
-        currentY -= LINE_HEIGHTS.BODY;
+        const value = getRiskDisplay(risk.value);
+        const rowHeight = drawKeyValuePair(page, risk.label, value, dims.margin + 20, currentY, regularFont);
+        currentY -= rowHeight;
       }
       
       currentY -= SPACING.SECTION_GAP_SMALL;
@@ -599,16 +592,11 @@ router.get('/rfq-assessments/:id/pdf', async (req: Request, res: Response) => {
       { label: 'Climate/Environmental', value: formData.climateEnvironmental },
     ];
     
-    await drawRiskSection('Internal Risks', internalRisks);
+    await renderRiskSection('Internal Risks', internalRisks);
     
     await checkNewPage(LINE_HEIGHTS.BODY);
-    page.drawText(`Internal Subtotal: ${formData.internalSubtotal || 0} points`, {
-      x: dims.margin + 20,
-      y: currentY,
-      size: FONT_SIZES.BODY_LARGE,
-      font: boldFont,
-    });
-    currentY -= SPACING.SECTION_GAP_MEDIUM;
+    drawKeyValuePair(page, 'Internal Subtotal', `${formData.internalSubtotal || 0} points`, dims.margin + 20, currentY, regularFont, boldFont);
+    currentY -= LINE_HEIGHTS.BODY + SPACING.SECTION_GAP_MEDIUM;
 
     // External Risks
     const externalRisks = [
@@ -619,134 +607,124 @@ router.get('/rfq-assessments/:id/pdf', async (req: Request, res: Response) => {
       { label: 'Quality Expectations', value: formData.qualityExpectations },
     ];
     
-    await drawRiskSection('External Risks', externalRisks);
+    await renderRiskSection('External Risks', externalRisks);
     
     await checkNewPage(LINE_HEIGHTS.BODY);
-    page.drawText(`External Subtotal: ${formData.externalSubtotal || 0} points`, {
-      x: dims.margin + 20,
-      y: currentY,
-      size: FONT_SIZES.BODY_LARGE,
-      font: boldFont,
-    });
-    currentY -= SPACING.SECTION_GAP_MEDIUM;
+    drawKeyValuePair(page, 'External Subtotal', `${formData.externalSubtotal || 0} points`, dims.margin + 20, currentY, regularFont, boldFont);
+    currentY -= LINE_HEIGHTS.BODY + SPACING.SECTION_GAP_MEDIUM;
 
-    // Mitigation Actions with text wrapping
-    if (formData.mitigationActionA || formData.mitigationActionB || formData.mitigationActionC) {
-      await checkNewPage(150);
+    // Section renderer: Mitigation Actions with per-line pagination
+    const renderMitigationActions = async () => {
+      const actions = [
+        { label: 'Action A', action: formData.mitigationActionA, reduction: formData.mitigationReductionA },
+        { label: 'Action B', action: formData.mitigationActionB, reduction: formData.mitigationReductionB },
+        { label: 'Action C', action: formData.mitigationActionC, reduction: formData.mitigationReductionC },
+      ].filter(a => a.action && a.action !== 'n/a');
       
-      page.drawText('Mitigation Actions', {
-        x: dims.margin,
-        y: currentY,
-        size: FONT_SIZES.SECTION_HEADER,
-        font: boldFont,
-        color: COLORS.TEXT_PRIMARY,
-      });
-      currentY -= LINE_HEIGHTS.SECTION;
-
-      const drawMitigationAction = async (label: string, action: string, reduction: string) => {
-        if (action && action !== 'n/a') {
-          const actionLines = wrapText(`${label}: ${action} (Risk Reduction: ${reduction || 0} points)`, 
-            dims.width - 20, FONT_SIZES.BODY_MEDIUM, regularFont);
-          
-          await checkNewPage(actionLines.length * LINE_HEIGHTS.BODY);
-          
-          for (const line of actionLines) {
-            page.drawText(line, {
-              x: dims.margin + 20,
-              y: currentY,
-              size: FONT_SIZES.BODY_MEDIUM,
-              font: regularFont,
-            });
-            currentY -= LINE_HEIGHTS.BODY;
-          }
+      if (actions.length === 0) return;
+      
+      // Check space for header
+      await checkNewPage(LINE_HEIGHTS.SECTION);
+      
+      // Draw section header using shared helper
+      const headerHeight = drawSectionHeader(page, 'Mitigation Actions', dims.margin, currentY, boldFont);
+      currentY -= headerHeight;
+      
+      // Draw each mitigation action with per-line pagination
+      for (const action of actions) {
+        const lines = wrapText(
+          `${action.label}: ${action.action} (Risk Reduction: ${action.reduction || 0} points)`,
+          dims.width - 20,
+          FONT_SIZES.BODY_MEDIUM,
+          regularFont
+        );
+        
+        for (const line of lines) {
+          await checkNewPage(LINE_HEIGHTS.BODY);
+          page.drawText(line, {
+            x: dims.margin + 20,
+            y: currentY,
+            size: FONT_SIZES.BODY_MEDIUM,
+            font: regularFont,
+          });
+          currentY -= LINE_HEIGHTS.BODY;
         }
-      };
-
-      await drawMitigationAction('Action A', formData.mitigationActionA, formData.mitigationReductionA);
-      await drawMitigationAction('Action B', formData.mitigationActionB, formData.mitigationReductionB);
-      await drawMitigationAction('Action C', formData.mitigationActionC, formData.mitigationReductionC);
-
+      }
+      
       currentY -= SPACING.SECTION_GAP_SMALL;
-    }
+    };
+    
+    await renderMitigationActions();
 
-    // Risk Summary Box
-    await checkNewPage(120);
-    currentY -= SPACING.SECTION_GAP_SMALL;
-    const boxHeight = 100;
-    page.drawRectangle({
-      x: dims.margin,
-      y: currentY - boxHeight,
-      width: dims.width,
-      height: boxHeight,
-      borderColor: COLORS.BORDER_BLACK,
-      borderWidth: 2,
-    });
-
-    let boxY = currentY - 15;
-    page.drawText(`Total Overall Points: ${assessment.totalOverallPoints || 0}`, {
-      x: dims.margin + 10,
-      y: boxY,
-      size: FONT_SIZES.BODY_LARGE,
-      font: boldFont,
-    });
-    boxY -= LINE_HEIGHTS.BODY;
-
-    page.drawText(`Adjusted Risk Level: ${assessment.adjustedRiskLevel || 0}`, {
-      x: dims.margin + 10,
-      y: boxY,
-      size: FONT_SIZES.BODY_LARGE,
-      font: boldFont,
-    });
-    boxY -= LINE_HEIGHTS.BODY;
-
-    page.drawText(`Risk Determination: ${assessment.riskDetermination || 'N/A'}`, {
-      x: dims.margin + 10,
-      y: boxY,
-      size: FONT_SIZES.BODY_LARGE,
-      font: boldFont,
-      color: assessment.riskDetermination?.includes('High') ? COLORS.ACCENT_RED : COLORS.TEXT_PRIMARY,
-    });
-    boxY -= LINE_HEIGHTS.BODY;
-
-    if (assessment.bidDecision) {
-      page.drawText(`Bid Decision: ${assessment.bidDecision}`, {
+    // Section renderer: Risk Summary Box
+    const renderSummaryBox = async () => {
+      const boxHeight = 100;
+      await checkNewPage(boxHeight + SPACING.SECTION_GAP_MEDIUM);
+      
+      currentY -= SPACING.SECTION_GAP_SMALL;
+      
+      // Use shared drawInfoBox helper
+      drawInfoBox(page, dims.margin, currentY - boxHeight, dims.width, boxHeight);
+      
+      // Draw summary content
+      let boxY = currentY - 15;
+      page.drawText(`Total Overall Points: ${assessment.totalOverallPoints || 0}`, {
         x: dims.margin + 10,
         y: boxY,
         size: FONT_SIZES.BODY_LARGE,
         font: boldFont,
       });
-    }
+      boxY -= LINE_HEIGHTS.BODY;
 
-    currentY -= boxHeight + SPACING.SECTION_GAP_MEDIUM;
-
-    // Signature section
-    await checkNewPage(100);
-    if (formData.signature || formData.printedName || formData.date) {
-      page.drawText('Approval Signature', {
-        x: dims.margin,
-        y: currentY,
-        size: FONT_SIZES.SECTION_HEADER,
+      page.drawText(`Adjusted Risk Level: ${assessment.adjustedRiskLevel || 0}`, {
+        x: dims.margin + 10,
+        y: boxY,
+        size: FONT_SIZES.BODY_LARGE,
         font: boldFont,
       });
-      currentY -= LINE_HEIGHTS.SECTION;
+      boxY -= LINE_HEIGHTS.BODY;
+
+      page.drawText(`Risk Determination: ${assessment.riskDetermination || 'N/A'}`, {
+        x: dims.margin + 10,
+        y: boxY,
+        size: FONT_SIZES.BODY_LARGE,
+        font: boldFont,
+        color: assessment.riskDetermination?.includes('High') ? COLORS.ACCENT_RED : COLORS.TEXT_PRIMARY,
+      });
+      boxY -= LINE_HEIGHTS.BODY;
+
+      if (assessment.bidDecision) {
+        page.drawText(`Bid Decision: ${assessment.bidDecision}`, {
+          x: dims.margin + 10,
+          y: boxY,
+          size: FONT_SIZES.BODY_LARGE,
+          font: boldFont,
+        });
+      }
+
+      currentY -= boxHeight + SPACING.SECTION_GAP_MEDIUM;
+    };
+    
+    await renderSummaryBox();
+
+    // Section renderer: Signature
+    const renderSignature = async () => {
+      if (!formData.signature && !formData.printedName && !formData.date) return;
+      
+      const requiredSpace = LINE_HEIGHTS.SECTION + (3 * LINE_HEIGHTS.BODY);
+      await checkNewPage(requiredSpace);
+      
+      // Draw section header using shared helper
+      const headerHeight = drawSectionHeader(page, 'Approval Signature', dims.margin, currentY, boldFont);
+      currentY -= headerHeight;
 
       if (formData.printedName) {
-        page.drawText(`Name: ${formData.printedName}`, {
-          x: dims.margin + 20,
-          y: currentY,
-          size: FONT_SIZES.BODY_MEDIUM,
-          font: regularFont,
-        });
+        drawKeyValuePair(page, 'Name', formData.printedName, dims.margin + 20, currentY, regularFont);
         currentY -= LINE_HEIGHTS.BODY;
       }
 
       if (formData.date) {
-        page.drawText(`Date: ${formData.date}`, {
-          x: dims.margin + 20,
-          y: currentY,
-          size: FONT_SIZES.BODY_MEDIUM,
-          font: regularFont,
-        });
+        drawKeyValuePair(page, 'Date', formData.date, dims.margin + 20, currentY, regularFont);
         currentY -= LINE_HEIGHTS.BODY;
       }
 
@@ -759,7 +737,9 @@ router.get('/rfq-assessments/:id/pdf', async (req: Request, res: Response) => {
           color: COLORS.TEXT_SECONDARY,
         });
       }
-    }
+    };
+    
+    await renderSignature();
 
     // Footer on all pages
     const pages = pdfDoc.getPages();

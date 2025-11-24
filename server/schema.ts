@@ -5905,6 +5905,13 @@ export const manufacturingQueue = pgTable('manufacturing_queue', {
   notes: text('notes'),
   startedAt: timestamp('started_at'),
   completedAt: timestamp('completed_at'),
+  // Traceability fields for materials used in manufacturing
+  fabricLot: text('fabric_lot'), // Fabric lot number for traceability
+  fabricBatch: text('fabric_batch'), // Fabric batch number
+  fabricRoll: text('fabric_roll'), // Fabric roll number
+  materialDetails: text('material_details'), // Additional material information (type, supplier, etc.)
+  completionNotes: text('completion_notes'), // Operator notes when completing the item
+  completedBy: text('completed_by'), // Username of operator who completed the item
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({

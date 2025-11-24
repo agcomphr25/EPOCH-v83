@@ -59,7 +59,7 @@ import P2TravelerPage from './pages/P2TravelerPage';
 import POProductsPage from './pages/POProductsPage';
 import ProductionTracking from './pages/ProductionTracking';
 import BarcodeScannerPage from './pages/BarcodeScannerPage';
-import P2LayupSchedulerPage from './pages/P2LayupSchedulerPage';
+import P2SerializedItemSchedulerPage from './pages/P2SerializedItemSchedulerPage';
 import AllOrdersPage from './pages/AllOrdersPage';
 import OrderReports from './pages/OrderReports';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
@@ -668,8 +668,8 @@ function App() {
                     component={SimplifiedLayupScheduler}
                   />
                   <Route
-                    path="/p2-layup-scheduler"
-                    component={P2LayupSchedulerPage}
+                    path="/p2-serialized-scheduler"
+                    component={P2SerializedItemSchedulerPage}
                   />
                   <Route
                     path="/production-queue"

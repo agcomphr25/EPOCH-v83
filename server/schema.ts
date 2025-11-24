@@ -4636,8 +4636,8 @@ export const p2ProductionOrders = pgTable('p2_production_orders', {
   p2PoItemId: integer('p2_po_item_id')
     .references(() => p2PurchaseOrderItems.id)
     .notNull(),
-  bomDefinitionId: text('bom_definition_id'), // Store BOM definition ID as text for compatibility
-  bomItemId: text('bom_item_id'), // Store BOM item ID as text for compatibility
+  bomDefinitionId: uuid('bom_definition_id'), // Foreign key to BOM definition
+  bomItemId: uuid('bom_item_id'), // Foreign key to BOM item
   sku: text('sku').notNull(), // From BOM definition
   partName: text('part_name').notNull(), // From BOM item
   quantity: integer('quantity').notNull(), // BOM item quantity * PO quantity

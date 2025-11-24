@@ -1,0 +1,122 @@
+Ahhh, that explains it. No wonder everything felt inconsistent.
+Right now in production:
+
+
+p2_production_orders.bom_definition_id = integer
+
+
+Some other table (your BOM definitions table) has id = uuid
+
+
+Your schema / migrations are trying to do:
+ALTER COLUMN "bom_definition_id" SET DATA TYPE uuid;
+and Postgres says: “integer cannot be cast automatically to type uuid”
+
+
+So the conflict is really: integer → uuid, not text.
+
+What I’d recommend now
+I’m going to assume the correct long-term design is:
+
+p2_production_orders.bom_definition_id should be a uuid foreign key to your BOM definition table.
+
+If that’s true, the cleanest fix is:
+1. Make your schema match that design
+In your Drizzle (or ORM) schema, make sure you have:
+// in p2ProductionOrders
+uuid("bomDefinitionId") // or bom_definition_id
+  // .references(() => bomDefinitions.id)
+  // .notNull() or optional as needed
+
+Remove any text("bomDefinitionId") or integer("bomDefinitionId") definitions you added while debugging.
+2. Decide how much you care about existing integer data
+Look at p2_production_orders.bom_definition_id in Production:
+
+
+If they’re just 1, 5, 18, etc and you don’t care about preserving them (test data / old system), do Option A.
+
+
+If they’re real and you must keep relationships, you need a mapping step (Option B).
+
+
+
+Option A – you don’t care about the existing integers (easiest)
+In the Production Database (via SQL console or Replit DB Studio “Run SQL”):
+ALTER TABLE "p2_production_orders"
+DROP COLUMN "bom_definition_id";
+
+ALTER TABLE "p2_production_orders"
+ADD COLUMN "bom_definition_id" uuid;
+-- optionally:
+-- ADD CONSTRAINT p2_production_orders_bom_fk
+--   FOREIGN KEY ("bom_definition_id") REFERENCES "bom_definitions"("id");
+
+Now production has a fresh uuid column with all NULLs.
+Then:
+# in your workspace
+npm run db:generate   # or db:push/db:migrate, whatever you use
+
+Re-run deployment. Because both schema and prod now agree on uuid, Replit should stop generating the failing “SET DATA TYPE uuid” migration and validation should pass.
+
+Option B – you need to preserve the integer → uuid mapping
+This only works if you actually know how to map those integers to the proper BOM UUIDs.
+Rough pattern:
+
+
+Add a new uuid column:
+ALTER TABLE "p2_production_orders"
+ADD COLUMN "bom_definition_uuid" uuid;
+
+
+
+Populate it from some mapping table. For example, if there’s an old table like legacy_boms(id integer, new_id uuid):
+UPDATE "p2_production_orders" po
+SET "bom_definition_uuid" = lb.new_id
+FROM legacy_boms lb
+WHERE po.bom_definition_id = lb.id;
+
+
+
+Once you’re confident all rows are filled correctly:
+ALTER TABLE "p2_production_orders"
+DROP COLUMN "bom_definition_id";
+
+ALTER TABLE "p2_production_orders"
+RENAME COLUMN "bom_definition_uuid" TO "bom_definition_id";
+
+
+
+Add FK if needed, then redeploy as in Option A.
+
+
+
+3. Make sure dev DB matches production
+Whatever you do to production, do the same structure change to development (types only; data can differ). For dev, you can be more brutal, e.g.:
+ALTER TABLE "p2_production_orders" DROP COLUMN "bom_definition_id";
+ALTER TABLE "p2_production_orders" ADD COLUMN "bom_definition_id" uuid;
+
+Then regenerate migrations one more time:
+npm run db:generate   # or db:push/migrate
+
+
+TL;DR
+
+
+The real mismatch is integer in prod vs uuid in schema.
+
+
+Pick a path:
+
+
+Don’t care about old ints → drop column, re-add as uuid (Option A).
+
+
+Need mapping → new uuid column, copy data, swap (Option B).
+
+
+
+
+Make both schema + dev DB match final design, regenerate migrations, and deploy.
+
+
+If you tell me whether those 1/5/18 values are important or just junk, I can write the exact SQL you should paste into the Replit DB console.

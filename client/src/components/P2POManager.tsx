@@ -48,6 +48,7 @@ import {
   Upload,
   X,
   ExternalLink,
+  Factory,
 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { format } from 'date-fns';
@@ -198,6 +199,40 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
       });
     },
   });
+
+  const generateProductionOrdersMutation = useMutation({
+    mutationFn: (purchaseOrderId: number) =>
+      apiRequest(`/api/orders/production-orders/generate/${purchaseOrderId}`, {
+        method: 'POST',
+      }),
+    onSuccess: (data: any) => {
+      const orderCount = Array.isArray(data) ? data.length : 0;
+      toast({
+        title: 'Success',
+        description: `Generated ${orderCount} production order${orderCount !== 1 ? 's' : ''} from BOM explosion`,
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2-production-orders'],
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'BOM Explosion Failed',
+        description: error.message || 'Failed to generate production orders. Make sure the PO has items with valid BOMs.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleGenerateProductionOrders = (po: P2PurchaseOrder) => {
+    if (
+      confirm(
+        `Generate production orders for ${po.poNumber}?\n\nThis will explode the BOM for all items in this purchase order and create individual production orders.`
+      )
+    ) {
+      generateProductionOrdersMutation.mutate(po.id);
+    }
+  };
 
   const handleSubmit = (data: P2PurchaseOrderForm) => {
     if (selectedPO) {
@@ -684,18 +719,35 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                     {po.notes}
                   </p>
                 )}
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => onManageItems?.(po.id, po.poNumber)}
+                    data-testid={`button-manage-items-${po.id}`}
                   >
                     Manage Items
                   </Button>
+                  {po.status === 'OPEN' && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => handleGenerateProductionOrders(po)}
+                      disabled={generateProductionOrdersMutation.isPending}
+                      data-testid={`button-generate-production-orders-${po.id}`}
+                      title="Explode BOM and create production orders"
+                    >
+                      <Factory className="h-4 w-4 mr-2" />
+                      {generateProductionOrdersMutation.isPending
+                        ? 'Generating...'
+                        : 'Generate Production Orders'}
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => openEditDialog(po)}
+                    data-testid={`button-edit-po-${po.id}`}
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -704,6 +756,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                     size="sm"
                     onClick={() => deleteMutation.mutate(po.id)}
                     disabled={deleteMutation.isPending}
+                    data-testid={`button-delete-po-${po.id}`}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

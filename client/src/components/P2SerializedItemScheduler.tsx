@@ -9,6 +9,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
 import { ChevronLeft, ChevronRight, Printer, Calendar, Download } from 'lucide-react';
 import {
@@ -532,21 +538,55 @@ export default function P2SerializedItemScheduler() {
             <div className="grid grid-cols-6 gap-4">
               {/* Unscheduled items queue */}
               <div className="col-span-1 border-r pr-4">
-                <h3 className="font-semibold text-sm mb-3 text-gray-700 dark:text-gray-300">
-                  Unscheduled Items
-                  <Badge variant="secondary" className="ml-2">{unscheduledItems.length}</Badge>
-                </h3>
-                <div className="max-h-[600px] overflow-y-auto space-y-2">
-                  {loadingItems && <div className="text-sm text-gray-500">Loading...</div>}
-                  {unscheduledItems.map((item) => (
-                    <DraggableSerializedItem key={item.id} item={item} />
-                  ))}
-                  {unscheduledItems.length === 0 && !loadingItems && (
-                    <div className="text-sm text-gray-500 text-center py-8">
-                      No unscheduled items
-                    </div>
-                  )}
+                <div className="mb-3">
+                  <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    Unscheduled Items
+                    <Badge variant="secondary">{unscheduledItems.length}</Badge>
+                  </h3>
                 </div>
+                
+                {loadingItems && <div className="text-sm text-gray-500">Loading...</div>}
+                
+                {unscheduledItems.length === 0 && !loadingItems && (
+                  <div className="text-sm text-gray-500 text-center py-8">
+                    No unscheduled items
+                  </div>
+                )}
+
+                {unscheduledItems.length > 0 && !loadingItems && (
+                  <Accordion type="multiple" className="w-full" defaultValue={Array.from(new Set(unscheduledItems.map(item => item.poNumber)))}>
+                    {/* Group items by PO Number */}
+                    {Array.from(new Set(unscheduledItems.map(item => item.poNumber))).map((poNumber) => {
+                      const poItems = unscheduledItems.filter(item => item.poNumber === poNumber);
+                      const firstItem = poItems[0];
+                      
+                      return (
+                        <AccordionItem key={poNumber} value={poNumber} className="border-b-0">
+                          <AccordionTrigger className="py-2 px-3 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md hover:no-underline">
+                            <div className="flex flex-col items-start text-left">
+                              <div className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+                                PO #{poNumber}
+                              </div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400">
+                                {firstItem.customerName}
+                              </div>
+                              <div className="text-xs text-orange-600 dark:text-orange-400 font-medium mt-0.5">
+                                {poItems.length} item{poItems.length !== 1 ? 's' : ''} to schedule
+                              </div>
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent className="pt-2 pb-1">
+                            <div className="max-h-[400px] overflow-y-auto space-y-2 px-1">
+                              {poItems.map((item) => (
+                                <DraggableSerializedItem key={item.id} item={item} />
+                              ))}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      );
+                    })}
+                  </Accordion>
+                )}
               </div>
 
               {/* Weekly calendar */}

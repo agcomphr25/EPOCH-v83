@@ -3,6 +3,8 @@ import { db } from '../../db';
 import { 
   p2LayupSchedules, 
   p2SerializedItems,
+  p2PurchaseOrders,
+  p2PurchaseOrderItems,
   insertP2LayupScheduleSchema 
 } from '../../schema';
 import { eq, and, gte, lte, desc, inArray } from 'drizzle-orm';
@@ -135,10 +137,10 @@ router.post('/layup-schedules', async (req: Request, res: Response) => {
       };
     });
 
-    // Insert all schedules
+    // Insert all schedules (type assertion safe because validation ensures required fields are present)
     const createdSchedules = await db
       .insert(p2LayupSchedules)
-      .values(validatedSchedules)
+      .values(validatedSchedules as any)
       .returning();
 
     res.status(201).json(Array.isArray(data) ? createdSchedules : createdSchedules[0]);
@@ -547,6 +549,88 @@ router.post('/layup-schedules/print-barcodes', async (req: Request, res: Respons
     res.send(Buffer.from(pdfBytes));
   } catch (error: any) {
     console.error('Error generating barcode labels:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/p2/layup-schedules/generate-serialized-items/:poItemId - Generate serialized items from a P2 PO item
+router.post('/layup-schedules/generate-serialized-items/:poItemId', async (req: Request, res: Response) => {
+  try {
+    const { poItemId } = req.params;
+    const poItemIdNum = parseInt(poItemId);
+
+    if (isNaN(poItemIdNum)) {
+      return res.status(400).json({ error: 'Invalid PO item ID' });
+    }
+
+    // Fetch the PO item with PO details
+    const poItems = await db
+      .select()
+      .from(p2PurchaseOrderItems)
+      .where(eq(p2PurchaseOrderItems.id, poItemIdNum))
+      .leftJoin(p2PurchaseOrders, eq(p2PurchaseOrderItems.poId, p2PurchaseOrders.id));
+
+    if (!poItems || poItems.length === 0) {
+      return res.status(404).json({ error: 'PO item not found' });
+    }
+
+    const poItem = poItems[0].p2_purchase_order_items;
+    const po = poItems[0].p2_purchase_orders;
+
+    if (!po) {
+      return res.status(404).json({ error: 'Associated purchase order not found' });
+    }
+
+    // Check if serialized items already exist for this PO item
+    const existingItems = await db
+      .select()
+      .from(p2SerializedItems)
+      .where(eq(p2SerializedItems.poItemId, poItemIdNum));
+
+    if (existingItems.length > 0) {
+      return res.status(400).json({ 
+        error: `Serialized items already exist for this PO item (${existingItems.length} items found). Delete existing items first if you need to regenerate.`
+      });
+    }
+
+    // Generate serialized items for the quantity specified in the PO item
+    const itemsToCreate = [];
+    for (let i = 1; i <= poItem.quantity; i++) {
+      const barcode = `${po.poNumber}-${poItem.partNumber}-${i.toString().padStart(4, '0')}`;
+      const serialNumber = `${po.poNumber}-${i.toString().padStart(4, '0')}`;
+
+      itemsToCreate.push({
+        serialNumber,
+        barcode,
+        poId: po.id,
+        poItemId: poItem.id,
+        poNumber: po.poNumber,
+        partNumber: poItem.partNumber,
+        partName: poItem.partName,
+        customerId: po.customerId,
+        customerName: po.customerName,
+        sequenceNumber: i,
+        currentDepartment: 'Layup',
+        currentStageIndex: 0,
+        status: 'ACTIVE',
+        departmentHistory: [],
+        metadata: poItem.specifications ? { specifications: poItem.specifications } : null,
+      });
+    }
+
+    // Insert all serialized items in batch
+    const createdItems = await db
+      .insert(p2SerializedItems)
+      .values(itemsToCreate)
+      .returning();
+
+    res.json({
+      message: `Successfully generated ${createdItems.length} serialized items`,
+      count: createdItems.length,
+      items: createdItems,
+    });
+  } catch (error: any) {
+    console.error('Error generating serialized items:', error);
     res.status(500).json({ error: error.message });
   }
 });

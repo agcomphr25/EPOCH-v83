@@ -169,6 +169,29 @@ export function P2POItemsManager({
     },
   });
 
+  const generateSerializedItemsMutation = useMutation({
+    mutationFn: (poItemId: number) =>
+      apiRequest(`/api/p2/layup-schedules/generate-serialized-items/${poItemId}`, {
+        method: 'POST',
+      }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2/layup-schedules/unscheduled'],
+      });
+      toast({
+        title: 'Success',
+        description: `Generated ${data.count} serialized items ready for layup scheduling`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to generate serialized items',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const resetForm = () => {
     setFormData({
       partNumber: '',
@@ -416,6 +439,17 @@ export function P2POItemsManager({
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => generateSerializedItemsMutation.mutate(item.id)}
+                            disabled={generateSerializedItemsMutation.isPending}
+                            className="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
+                            title="Generate serialized items for layup scheduling"
+                            data-testid={`button-generate-${item.id}`}
+                          >
+                            <Package className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"

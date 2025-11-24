@@ -23,7 +23,17 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, getISOWeek, getYear } from 'date-fns';
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, getISOWeek, getYear, getMonth } from 'date-fns';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 
 // Gateway report schema for data entry
 const gatewayReportSchema = z.object({
@@ -913,45 +923,117 @@ export default function GatewayReports() {
             <CardHeader>
               <CardTitle>Monthly Breakdown ({year})</CardTitle>
               <CardDescription>
-                Production totals by month
+                Production totals by month (current month first)
               </CardDescription>
             </CardHeader>
             <CardContent>
               {statsData ? (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Month</TableHead>
-                        <TableHead className="text-right">Buttpads</TableHead>
-                        <TableHead className="text-right">Sandblasting</TableHead>
-                        <TableHead className="text-right">Duratec</TableHead>
-                        <TableHead className="text-right">Texture</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((month) => {
-                        const monthName = format(new Date(year, month - 1), 'MMMM');
-                        return (
-                          <TableRow key={month}>
-                            <TableCell className="font-medium">{monthName}</TableCell>
-                            <TableCell className="text-right">
-                              {statsData.stats.buttpads.byMonth[month] || 0}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {statsData.stats.sandblasting.byMonth[month] || 0}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {statsData.stats.duratec.byMonth[month] || 0}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {statsData.stats.texture.byMonth[month] || 0}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                <div className="space-y-6">
+                  {/* Monthly Chart */}
+                  <div className="h-96">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={(() => {
+                          const currentMonth = getMonth(new Date()) + 1;
+                          const months = [];
+                          
+                          // Generate months starting from current month going backwards
+                          for (let i = 0; i < 12; i++) {
+                            let monthNum = currentMonth - i;
+                            let displayYear = year;
+                            
+                            // Handle previous year months
+                            if (monthNum <= 0) {
+                              monthNum += 12;
+                              displayYear = year - 1;
+                            }
+                            
+                            const monthName = format(new Date(displayYear, monthNum - 1), 'MMM yyyy');
+                            months.push({
+                              month: monthName,
+                              Buttpads: statsData.stats.buttpads.byMonth[monthNum] || 0,
+                              Sandblasting: statsData.stats.sandblasting.byMonth[monthNum] || 0,
+                              Duratec: statsData.stats.duratec.byMonth[monthNum] || 0,
+                              Texture: statsData.stats.texture.byMonth[monthNum] || 0,
+                            });
+                          }
+                          
+                          return months;
+                        })()}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="Buttpads" fill="#3b82f6" />
+                        <Bar dataKey="Sandblasting" fill="#10b981" />
+                        <Bar dataKey="Duratec" fill="#f59e0b" />
+                        <Bar dataKey="Texture" fill="#8b5cf6" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Monthly Table */}
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Month</TableHead>
+                          <TableHead className="text-right">Buttpads</TableHead>
+                          <TableHead className="text-right">Sandblasting</TableHead>
+                          <TableHead className="text-right">Duratec</TableHead>
+                          <TableHead className="text-right">Texture</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(() => {
+                          const currentMonth = getMonth(new Date()) + 1;
+                          const months = [];
+                          
+                          // Generate months starting from current month going backwards
+                          for (let i = 0; i < 12; i++) {
+                            let monthNum = currentMonth - i;
+                            let displayYear = year;
+                            
+                            // Handle previous year months
+                            if (monthNum <= 0) {
+                              monthNum += 12;
+                              displayYear = year - 1;
+                            }
+                            
+                            const monthName = format(new Date(displayYear, monthNum - 1), 'MMMM yyyy');
+                            months.push({
+                              monthNum,
+                              monthName,
+                              displayYear,
+                            });
+                          }
+                          
+                          return months;
+                        })().map((monthInfo, idx) => {
+                          return (
+                            <TableRow key={idx}>
+                              <TableCell className="font-medium">{monthInfo.monthName}</TableCell>
+                              <TableCell className="text-right">
+                                {statsData.stats.buttpads.byMonth[monthInfo.monthNum] || 0}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {statsData.stats.sandblasting.byMonth[monthInfo.monthNum] || 0}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {statsData.stats.duratec.byMonth[monthInfo.monthNum] || 0}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {statsData.stats.texture.byMonth[monthInfo.monthNum] || 0}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">Loading monthly data...</div>

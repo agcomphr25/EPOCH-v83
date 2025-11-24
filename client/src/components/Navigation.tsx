@@ -730,12 +730,6 @@ export default function Navigation() {
       description: 'Fabric cutting production planning for two production lines',
     },
     {
-      path: '/p2-layup-scheduler',
-      label: 'P2 Layup Scheduler',
-      icon: Calendar,
-      description: 'Schedule and manage P2 layup production orders',
-    },
-    {
       path: '/p2-serialized-scheduler',
       label: 'P2 Serialized Item Scheduler',
       icon: Calendar,

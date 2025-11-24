@@ -58,7 +58,6 @@ import P2DepartmentManager from './pages/P2DepartmentManager';
 import POProductsPage from './pages/POProductsPage';
 import ProductionTracking from './pages/ProductionTracking';
 import BarcodeScannerPage from './pages/BarcodeScannerPage';
-import P2LayupSchedulerPage from './pages/P2LayupSchedulerPage';
 import P2SerializedItemSchedulerPage from './pages/P2SerializedItemSchedulerPage';
 import AllOrdersPage from './pages/AllOrdersPage';
 import OrderReports from './pages/OrderReports';
@@ -665,10 +664,6 @@ function App() {
                   <Route
                     path="/simplified-layup-scheduler"
                     component={SimplifiedLayupScheduler}
-                  />
-                  <Route
-                    path="/p2-layup-scheduler"
-                    component={P2LayupSchedulerPage}
                   />
                   <Route
                     path="/p2-serialized-scheduler"

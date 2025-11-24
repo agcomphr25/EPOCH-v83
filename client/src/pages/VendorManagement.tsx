@@ -244,6 +244,20 @@ export default function VendorManagement() {
     },
   });
 
+  // Fetch YTD overall average summary
+  const { data: ytdSummary } = useQuery<{
+    overallAveragePercent: number;
+    totalScores: number;
+    recordedScoreCount: number;
+  }>({
+    queryKey: ['/api/vendors/evaluations/ytd-summary'],
+    queryFn: async () => {
+      const res = await fetch('/api/vendors/evaluations/ytd-summary');
+      if (!res.ok) throw new Error('Failed to fetch YTD summary');
+      return res.json();
+    },
+  });
+
   // Create vendor mutation
   const createVendorMutation = useMutation({
     mutationFn: async (data: VendorFormData) => {
@@ -852,25 +866,11 @@ export default function VendorManagement() {
           <h1 className="text-3xl font-bold" data-testid="text-page-title">
             Vendor Management
           </h1>
-          {vendorsData && (() => {
-            const vendorsWithScores = vendorsData.data.filter(v => 
-              v.qualityScore || v.costScore || v.deliveryScore || v.responseScore
-            );
-            if (vendorsWithScores.length === 0) return null;
-            
-            const totalPoints = vendorsWithScores.reduce((sum, vendor) => {
-              return sum + (vendor.qualityScore ?? 0) + (vendor.costScore ?? 0) + 
-                     (vendor.deliveryScore ?? 0) + (vendor.responseScore ?? 0);
-            }, 0);
-            const maxPossiblePoints = vendorsWithScores.length * 20;
-            const overallAverage = ((totalPoints / maxPossiblePoints) * 100).toFixed(1);
-            
-            return (
-              <div className="text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full font-semibold">
-                Overall Average: {overallAverage}%
-              </div>
-            );
-          })()}
+          {ytdSummary && ytdSummary.recordedScoreCount > 0 && (
+            <div className="text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full font-semibold">
+              Overall Average (YTD): {ytdSummary.overallAveragePercent}%
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <Button

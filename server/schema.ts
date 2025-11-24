@@ -6642,4 +6642,53 @@ export const insertPdfTemplateSchema = createInsertSchema(pdfTemplates).omit({
 export type PdfTemplate = typeof pdfTemplates.$inferSelect;
 export type InsertPdfTemplate = z.infer<typeof insertPdfTemplateSchema>;
 
+// Gateway Reports - Weekly production tracking for 4 functions (Mon-Fri only)
+export const gatewayReports = pgTable('gateway_reports', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  weekStartDate: date('week_start_date').notNull(), // Monday of the week
+  year: integer('year').notNull(),
+  weekNumber: integer('week_number').notNull(), // ISO week number
+  // Buttpads daily totals (Mon-Fri)
+  buttpadsMon: integer('buttpads_mon').notNull().default(0),
+  buttpadsTue: integer('buttpads_tue').notNull().default(0),
+  buttpadsWed: integer('buttpads_wed').notNull().default(0),
+  buttpadsThu: integer('buttpads_thu').notNull().default(0),
+  buttpadsFri: integer('buttpads_fri').notNull().default(0),
+  // Sandblasting daily totals (Mon-Fri)
+  sandblastingMon: integer('sandblasting_mon').notNull().default(0),
+  sandblastingTue: integer('sandblasting_tue').notNull().default(0),
+  sandblastingWed: integer('sandblasting_wed').notNull().default(0),
+  sandblastingThu: integer('sandblasting_thu').notNull().default(0),
+  sandblastingFri: integer('sandblasting_fri').notNull().default(0),
+  // Duratec daily totals (Mon-Fri)
+  duratecMon: integer('duratec_mon').notNull().default(0),
+  duratecTue: integer('duratec_tue').notNull().default(0),
+  duratecWed: integer('duratec_wed').notNull().default(0),
+  duratecThu: integer('duratec_thu').notNull().default(0),
+  duratecFri: integer('duratec_fri').notNull().default(0),
+  // Texture daily totals (Mon-Fri)
+  textureMon: integer('texture_mon').notNull().default(0),
+  textureTue: integer('texture_tue').notNull().default(0),
+  textureWed: integer('texture_wed').notNull().default(0),
+  textureThu: integer('texture_thu').notNull().default(0),
+  textureFri: integer('texture_fri').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  createdBy: text('created_by'),
+  updatedBy: text('updated_by'),
+}, (table) => ({
+  weekStartIdx: index('gateway_reports_week_start_idx').on(table.weekStartDate),
+  yearWeekIdx: index('gateway_reports_year_week_idx').on(table.year, table.weekNumber),
+  uniqueWeekStart: unique('unique_week_start').on(table.weekStartDate),
+}));
+
+export const insertGatewayReportSchema = createInsertSchema(gatewayReports).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type GatewayReport = typeof gatewayReports.$inferSelect;
+export type InsertGatewayReport = z.infer<typeof insertGatewayReportSchema>;
+
 export * from './calendar.schema';

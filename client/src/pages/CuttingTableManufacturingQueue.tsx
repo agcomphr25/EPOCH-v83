@@ -101,9 +101,10 @@ export default function CuttingTableManufacturingQueue() {
   });
 
   // Look up fabric inventory when barcode is scanned
+  // Minimum length increased to match expected barcode format: FI-P2-YYYYMMDD-XXXX (18 chars)
   const { data: fabricInventory, isError: isFabricError, error: fabricError } = useQuery<FabricInventory>({
     queryKey: [`/api/cutting-table/fabric-inventory-by-barcode/${fabricBarcode}`],
-    enabled: isProductionDialogOpen && !!fabricBarcode && fabricBarcode.length > 3,
+    enabled: isProductionDialogOpen && !!fabricBarcode && fabricBarcode.length >= 15,
     retry: false,
   });
 

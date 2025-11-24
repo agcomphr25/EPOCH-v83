@@ -1471,7 +1471,7 @@ export const insertAllOrderSchema = createInsertSchema(allOrders)
     // Verification field
     isVerified: z.boolean().default(false),
     // BOM Reference
-    bomDefinitionId: z.string().uuid().optional().nullable(),
+    bomDefinitionId: z.string().optional().nullable(),
   });
 
 export const insertLinkedOrderGroupSchema = createInsertSchema(linkedOrderGroups)

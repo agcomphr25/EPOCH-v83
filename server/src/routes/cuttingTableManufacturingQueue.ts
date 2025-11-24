@@ -12,10 +12,24 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
   try {
     const { status } = req.query;
     
-    const conditions = [eq(manufacturingQueue.department, 'Cutting Table')];
+    let whereClause;
     
-    if (status && status !== 'ALL') {
-      conditions.push(eq(manufacturingQueue.status, status as string));
+    if (status === 'ACTIVE') {
+      // Show both PENDING and IN_PROGRESS items
+      whereClause = and(
+        eq(manufacturingQueue.department, 'Cutting Table'),
+        or(
+          eq(manufacturingQueue.status, 'PENDING'),
+          eq(manufacturingQueue.status, 'IN_PROGRESS')
+        )
+      );
+    } else if (status && status !== 'ALL') {
+      whereClause = and(
+        eq(manufacturingQueue.department, 'Cutting Table'),
+        eq(manufacturingQueue.status, status as string)
+      );
+    } else {
+      whereClause = eq(manufacturingQueue.department, 'Cutting Table');
     }
     
     const queueItems = await db
@@ -25,7 +39,7 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
       })
       .from(manufacturingQueue)
       .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
-      .where(and(...conditions))
+      .where(whereClause)
       .orderBy(manufacturingQueue.priority, manufacturingQueue.createdAt);
     
     const formattedItems = queueItems.map(row => ({

@@ -67,7 +67,7 @@ type FabricInventory = {
 
 export default function CuttingTableManufacturingQueue() {
   const { toast } = useToast();
-  const [selectedStatus, setSelectedStatus] = useState<string>('PENDING');
+  const [selectedStatus, setSelectedStatus] = useState<string>('ACTIVE');
   const [selectedItem, setSelectedItem] = useState<QueueItemWithInventory | null>(null);
   const [isProductionDialogOpen, setIsProductionDialogOpen] = useState(false);
   const [isLabelsDialogOpen, setIsLabelsDialogOpen] = useState(false);
@@ -512,6 +512,7 @@ export default function CuttingTableManufacturingQueue() {
                   <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="ACTIVE">Active (Pending + In Progress)</SelectItem>
                   <SelectItem value="ALL">All Status</SelectItem>
                   <SelectItem value="PENDING">Pending</SelectItem>
                   <SelectItem value="IN_PROGRESS">In Progress</SelectItem>

@@ -3723,6 +3723,41 @@ export const p2SerializedItemCustomData = pgTable('p2_serialized_item_custom_dat
   departmentIdx: index('p2_serialized_item_custom_data_department_idx').on(table.department),
 }));
 
+// P2 Layup Schedules - Schedule P2 serialized items for layup with full traceability
+export const p2LayupSchedules = pgTable('p2_layup_schedules', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  serializedItemId: uuid('serialized_item_id')
+    .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  barcode: text('barcode').notNull(), // Denormalized for quick queries
+  poNumber: text('po_number').notNull(), // Denormalized from serialized item
+  partNumber: text('part_number').notNull(), // Denormalized from serialized item
+  partName: text('part_name').notNull(), // Denormalized for display
+  customerId: text('customer_id').notNull(), // Denormalized from serialized item
+  customerName: text('customer_name').notNull(), // Denormalized from serialized item
+  scheduledDate: date('scheduled_date').notNull(), // Date this item is scheduled for layup
+  scheduledBy: text('scheduled_by').notNull(), // Username who created the schedule
+  assignedTechnician: text('assigned_technician'), // Optional technician assignment
+  status: text('status').notNull().default('SCHEDULED'), // SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED
+  cuttingPacketId: text('cutting_packet_id'), // Link to cutting table packet for material traceability
+  cuttingPacketNumber: text('cutting_packet_number'), // Denormalized packet number for display
+  startedAt: timestamp('started_at'), // When layup work actually started
+  startedBy: text('started_by'), // Who started the layup work
+  completedAt: timestamp('completed_at'), // When layup was completed
+  completedBy: text('completed_by'), // Who completed the layup
+  cancelledAt: timestamp('cancelled_at'), // When schedule was cancelled
+  cancelledBy: text('cancelled_by'), // Who cancelled the schedule
+  cancelReason: text('cancel_reason'), // Reason for cancellation
+  notes: text('notes'), // Additional notes about this schedule
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  serializedItemIdx: index('p2_layup_schedules_item_id_idx').on(table.serializedItemId),
+  scheduledDateIdx: index('p2_layup_schedules_date_idx').on(table.scheduledDate),
+  barcodeIdx: index('p2_layup_schedules_barcode_idx').on(table.barcode),
+  statusIdx: index('p2_layup_schedules_status_idx').on(table.status),
+}));
+
 // Production Orders - separate from regular orders for PO tracking
 export const productionOrders = pgTable('production_orders', {
   id: serial('id').primaryKey(),
@@ -4168,6 +4203,34 @@ export const insertP2SerializedItemCustomDataSchema = createInsertSchema(p2Seria
     recordedBy: z.string().min(1, 'Recorded by is required'),
   });
 
+export const insertP2LayupScheduleSchema = createInsertSchema(p2LayupSchedules)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+    startedAt: true,
+    startedBy: true,
+    completedAt: true,
+    completedBy: true,
+    cancelledAt: true,
+    cancelledBy: true,
+  })
+  .extend({
+    serializedItemId: z.string().uuid('Invalid serialized item ID'),
+    barcode: z.string().min(1, 'Barcode is required'),
+    poNumber: z.string().optional(),
+    partNumber: z.string().optional(),
+    partName: z.string().optional(),
+    customerId: z.string().optional(),
+    customerName: z.string().optional(),
+    scheduledDate: z.string().min(1, 'Scheduled date is required'),
+    scheduledBy: z.string().optional(),
+    assignedTechnician: z.string().optional(),
+    notes: z.string().optional(),
+    cuttingPacketId: z.string().optional(),
+    status: z.enum(['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']).default('SCHEDULED'),
+  });
+
 // Part Routing Types
 export type InsertPartRouting = z.infer<typeof insertPartRoutingSchema>;
 export type UpdatePartRouting = z.infer<typeof updatePartRoutingSchema>;
@@ -4176,6 +4239,8 @@ export type InsertP2SerializedItemTraceability = z.infer<typeof insertP2Serializ
 export type P2SerializedItemTraceability = typeof p2SerializedItemTraceability.$inferSelect;
 export type InsertP2SerializedItemCustomData = z.infer<typeof insertP2SerializedItemCustomDataSchema>;
 export type P2SerializedItemCustomData = typeof p2SerializedItemCustomData.$inferSelect;
+export type InsertP2LayupSchedule = z.infer<typeof insertP2LayupScheduleSchema>;
+export type P2LayupSchedule = typeof p2LayupSchedules.$inferSelect;
 
 // Production Order Types
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;

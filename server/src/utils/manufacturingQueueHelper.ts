@@ -39,34 +39,40 @@ export async function autoPopulateManufacturingQueue(
       return null;
     }
 
-    // Check for existing queue entries for this PO line to prevent duplicates
-    // Look for entries that reference this PO and are not cancelled/completed
+    // Check for existing queue entries for this SPECIFIC PO line to prevent duplicates
+    // Use vendorPoId + lineNumber for precise duplicate detection
     const existingQueueEntry = await db.query.manufacturingQueue.findFirst({
       where: and(
-        eq(manufacturingQueue.inventoryItemId, inventoryItem.id),
+        eq(manufacturingQueue.vendorPoId, poItemData.vendorPoId),
+        eq(manufacturingQueue.vendorPoLineNumber, poItemData.lineNumber),
         or(
           eq(manufacturingQueue.status, 'PENDING'),
           eq(manufacturingQueue.status, 'IN_PROGRESS')
-        ),
-        // Match by notes containing the PO reference (not ideal but works for now)
-        // TODO: Add vendorPoId and lineNumber columns to manufacturingQueue table for better tracking
+        )
       ),
     });
 
     if (existingQueueEntry) {
-      console.log(`Skipping duplicate queue entry for ${inventoryItem.agPartNumber} - existing entry found (ID: ${existingQueueEntry.id})`);
+      console.log(`⚠️ Skipping duplicate queue entry for PO #${poItemData.vendorPoId} Line #${poItemData.lineNumber} - existing entry found (Queue ID: ${existingQueueEntry.id})`);
       return null;
     }
 
-    // Create manufacturing queue entry
+    // Create manufacturing queue entry with PO tracking
+    // Convert expectedDeliveryDate string to Date object if present
+    const dueDate = vendorPO?.expectedDeliveryDate 
+      ? new Date(vendorPO.expectedDeliveryDate) 
+      : null;
+    
     const queueData = insertManufacturingQueueSchema.parse({
       inventoryItemId: inventoryItem.id,
+      vendorPoId: poItemData.vendorPoId,
+      vendorPoLineNumber: poItemData.lineNumber,
       department: inventoryItem.manufacturingDepartment,
       quantityRequested: poItemData.quantity,
       quantityCompleted: 0,
       status: 'PENDING',
       priority: 50, // Default medium priority
-      dueDate: vendorPO?.expectedDeliveryDate || null,
+      dueDate,
       assignedTo: null,
       notes: `Auto-generated from Vendor PO #${poItemData.vendorPoId}, Line #${poItemData.lineNumber}`,
     });
@@ -76,7 +82,7 @@ export async function autoPopulateManufacturingQueue(
       .values(queueData)
       .returning();
 
-    console.log(`✅ Auto-created manufacturing queue entry for ${inventoryItem.agPartNumber} in ${inventoryItem.manufacturingDepartment} (Queue ID: ${newQueueItem.id})`);
+    console.log(`✅ Auto-created manufacturing queue entry for ${inventoryItem.agPartNumber} in ${inventoryItem.manufacturingDepartment} (Queue ID: ${newQueueItem.id}, PO #${poItemData.vendorPoId} Line #${poItemData.lineNumber})`);
     
     return newQueueItem;
   } catch (error) {
@@ -108,20 +114,17 @@ export async function syncManufacturingQueueOnUpdate(
       return;
     }
 
-    // Find the related queue entry by notes (contains PO reference)
-    // TODO: Improve this with proper foreign key relationships
-    const queueEntries = await db.query.manufacturingQueue.findMany({
-      where: or(
-        eq(manufacturingQueue.status, 'PENDING'),
-        eq(manufacturingQueue.status, 'IN_PROGRESS')
+    // Find the related queue entry using proper foreign key columns
+    const matchingEntry = await db.query.manufacturingQueue.findFirst({
+      where: and(
+        eq(manufacturingQueue.vendorPoId, vendorPoId),
+        eq(manufacturingQueue.vendorPoLineNumber, lineNumber),
+        or(
+          eq(manufacturingQueue.status, 'PENDING'),
+          eq(manufacturingQueue.status, 'IN_PROGRESS')
+        )
       ),
     });
-
-    // Filter by notes containing the PO reference
-    const matchingEntry = queueEntries.find(entry => 
-      entry.notes?.includes(`Vendor PO #${vendorPoId}`) && 
-      entry.notes?.includes(`Line #${lineNumber}`)
-    );
 
     if (matchingEntry) {
       // Update the requested quantity
@@ -133,7 +136,9 @@ export async function syncManufacturingQueueOnUpdate(
         })
         .where(eq(manufacturingQueue.id, matchingEntry.id));
 
-      console.log(`✅ Synced manufacturing queue (ID: ${matchingEntry.id}) quantity from ${oldQuantity} to ${newQuantity}`);
+      console.log(`✅ Synced manufacturing queue (Queue ID: ${matchingEntry.id}, PO #${vendorPoId} Line #${lineNumber}) quantity from ${oldQuantity} to ${newQuantity}`);
+    } else {
+      console.log(`⚠️ No active queue entry found for PO #${vendorPoId} Line #${lineNumber} to sync`);
     }
   } catch (error) {
     console.error('❌ Failed to sync manufacturing queue on PO update:', error);

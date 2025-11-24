@@ -157,7 +157,7 @@ export const allOrders = pgTable('all_orders', {
   isRtsOrder: boolean('is_rts_order').default(false), // True if this order was created from RTS inventory sale
   rtsSaleId: uuid('rts_sale_id'), // Reference to RTS sale if applicable
   // BOM Reference for Costing and MRP
-  bomDefinitionId: uuid('bom_definition_id').references(() => bomDefinitions.id), // Links order to BOM for costing/MRP
+  bomDefinitionId: text('bom_definition_id'), // Store BOM definition ID as text for production compatibility
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -4680,8 +4680,8 @@ export const insertP2ProductionOrderSchema = createInsertSchema(
     orderId: z.string().min(1, 'Order ID is required'),
     p2PoId: z.number().min(1, 'P2 PO ID is required'),
     p2PoItemId: z.number().min(1, 'P2 PO Item ID is required'),
-    bomDefinitionId: z.string().uuid('BOM Definition ID must be a valid UUID'),
-    bomItemId: z.string().uuid('BOM Item ID must be a valid UUID'),
+    bomDefinitionId: z.string().min(1, 'BOM Definition ID is required'),
+    bomItemId: z.string().min(1, 'BOM Item ID is required'),
     sku: z.string().min(1, 'SKU is required'),
     partName: z.string().min(1, 'Part name is required'),
     quantity: z.number().min(1, 'Quantity must be at least 1'),

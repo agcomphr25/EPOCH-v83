@@ -6471,8 +6471,56 @@ export class DatabaseStorage implements IStorage {
     const total = Number(countResult.count);
     const pageCount = Math.ceil(total / pageSize) || 1;
 
+    // Fetch YTD scores for the vendors in this page
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    
+    const vendorIds = data.map(v => v.id);
+    
+    const ytdScores = vendorIds.length > 0 ? await db
+      .select({
+        vendorId: vendorMonthlyEvaluations.vendorId,
+        totalScore: sql<number>`
+          COALESCE(SUM(quality_score), 0) +
+          COALESCE(SUM(cost_score), 0) +
+          COALESCE(SUM(delivery_score), 0) +
+          COALESCE(SUM(response_score), 0)
+        `,
+        recordedScoreCount: sql<number>`
+          (COUNT(quality_score) +
+           COUNT(cost_score) +
+           COUNT(delivery_score) +
+           COUNT(response_score))
+        `,
+      })
+      .from(vendorMonthlyEvaluations)
+      .where(
+        and(
+          sql`${vendorMonthlyEvaluations.vendorId} = ANY(${vendorIds})`,
+          eq(vendorMonthlyEvaluations.year, currentYear),
+          sql`${vendorMonthlyEvaluations.month} <= ${currentMonth}`
+        )
+      )
+      .groupBy(vendorMonthlyEvaluations.vendorId)
+    : [];
+
+    // Create a map of vendor ID to YTD total score
+    const ytdScoreMap = new Map(
+      ytdScores.map(score => [
+        score.vendorId,
+        score.recordedScoreCount > 0 ? score.totalScore : null
+      ])
+    );
+
+    // Enrich vendor data with YTD total scores
+    const enrichedData = data.map(vendor => ({
+      ...vendor,
+      ytdTotalScore: ytdScoreMap.get(vendor.id) ?? null,
+    }));
+
     return {
-      data,
+      data: enrichedData,
       meta: { page, pageSize, total, pageCount },
     };
   }

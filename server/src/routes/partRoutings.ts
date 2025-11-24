@@ -31,6 +31,26 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// Get part routing by part number (MUST be before /:id route)
+router.get('/by-part/:partNumber', async (req: Request, res: Response) => {
+  try {
+    const { partNumber } = req.params;
+    const routing = await storage.getPartRoutingByPartNumber(partNumber);
+    
+    if (!routing) {
+      return res.status(404).json({ error: 'Part routing not found' });
+    }
+    
+    res.json(routing);
+  } catch (error: any) {
+    console.error('Error fetching part routing by part number:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch part routing',
+      message: error.message 
+    });
+  }
+});
+
 // Get part routing by ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
@@ -44,26 +64,6 @@ router.get('/:id', async (req: Request, res: Response) => {
     res.json(routing);
   } catch (error: any) {
     console.error('Error fetching part routing:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch part routing',
-      message: error.message 
-    });
-  }
-});
-
-// Get part routing by part number
-router.get('/by-part/:partNumber', async (req: Request, res: Response) => {
-  try {
-    const { partNumber } = req.params;
-    const routing = await storage.getPartRoutingByPartNumber(partNumber);
-    
-    if (!routing) {
-      return res.status(404).json({ error: 'Part routing not found' });
-    }
-    
-    res.json(routing);
-  } catch (error: any) {
-    console.error('Error fetching part routing by part number:', error);
     res.status(500).json({ 
       error: 'Failed to fetch part routing',
       message: error.message 

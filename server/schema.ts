@@ -3723,9 +3723,6 @@ export const p2SerializedItemCustomData = pgTable('p2_serialized_item_custom_dat
   departmentIdx: index('p2_serialized_item_custom_data_department_idx').on(table.department),
 }));
 
-// P2 Layup Schedules - Schedule P2 serialized items for layup with full traceability
-export const p2LayupSchedules = pgTable('p2_layup_schedules', {
-
 // P2 Work Tasks - Tracks individual task sessions with start/end times for AS9100 traceability
 export const p2WorkTasks = pgTable('p2_work_tasks', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -3754,12 +3751,8 @@ export const p2WorkTasks = pgTable('p2_work_tasks', {
   notes: text('notes'), // Additional notes about this schedule
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-}, (table) => ({
-  serializedItemIdx: index('p2_layup_schedules_item_id_idx').on(table.serializedItemId),
-  scheduledDateIdx: index('p2_layup_schedules_date_idx').on(table.scheduledDate),
-  barcodeIdx: index('p2_layup_schedules_barcode_idx').on(table.barcode),
-  statusIdx: index('p2_layup_schedules_status_idx').on(table.status),
-
+  
+  // Work task fields
   partNumber: text('part_number').notNull(), // Denormalized for display
   partName: text('part_name').notNull(), // Denormalized for display
   department: text('department').notNull(), // Department where task was performed

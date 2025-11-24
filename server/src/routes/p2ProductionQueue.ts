@@ -63,7 +63,7 @@ router.get('/', async (req, res) => {
       );
 
     const filters = [];
-    if (status && typeof status === 'string') {
+    if (status && typeof status === 'string' && status !== 'all' && status !== 'undefined') {
       filters.push(eq(p2ProductionOrders.status, status));
     }
 

@@ -4651,10 +4651,10 @@ export const p2ProductionOrders = pgTable('p2_production_orders', {
     .references(() => p2PurchaseOrderItems.id)
     .notNull(),
   bomDefinitionId: uuid('bom_definition_id')
-    .references(() => bomDefinitions.id)
+    .references(() => boms.id)
     .notNull(),
   bomItemId: uuid('bom_item_id')
-    .references(() => bomItems.id)
+    .references(() => bomLines.id)
     .notNull(),
   sku: text('sku').notNull(), // From BOM definition
   partName: text('part_name').notNull(), // From BOM item

@@ -1,0 +1,229 @@
+VM58:8 [Coframe] Replit Enterprise watcher loaded
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+/t/ag-composites/projects/ATd3o9DU:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+/t/ag-composites/projects/ATd3o9DU:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+/t/ag-composites/projects/ATd3o9DU:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+6826ee80229a66c6.js:2 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+6826ee80229a66c6.js:2 Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+6826ee80229a66c6.js:2 [LaunchDarkly] LaunchDarkly client initialized
+6826ee80229a66c6.js:2 Cache data may be lost when replacing the orgReplPresenceSessionEvents field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgPresenceSessionInitEvent and OrgPresenceSessionPingEvent have an ID or a custom merge function, or define a custom merge function for the Subscription.orgReplPresenceSessionEvents field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgPresenceSessionInitEvent","sessions":[{"__ref":"OrgPresenceSession:28ea8884-c52f-463f-a95c-3c116d613fa2"},{"__ref":"OrgPresenceSession:bcb5af0d-5809-49a2-9405-d686eb5b96c3"},{"__ref":"OrgPresenceSession:fabe0604-629f-4198-8373-d33bd7d295eb"}]}
+  incoming: {"__typename":"OrgPresenceSessionPingEvent","session":{"__ref":"OrgPresenceSession:bcb5af0d-5809-49a2-9405-d686eb5b96c3"}}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 6826ee80229a66c6.js:2
+/t/ag-composites/projects/ATd3o9DU:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+6826ee80229a66c6.js:2 Cache data may be lost when replacing the dealContext field of a Org object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgDealContext have an ID or a custom merge function, or define a custom merge function for the Org.dealContext field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgDealContext","dealType":"default","salesContactEmail":null}
+  incoming: {"__typename":"OrgDealContext","dealType":"default"}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 6826ee80229a66c6.js:2
+ Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'ambient-light-sensor'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'battery'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'execution-while-not-rendered'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'execution-while-out-of-viewport'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'layout-animations'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'legacy-image-formats'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'navigation-override'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'oversized-images'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'publickey-credentials'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'speaker-selection'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'unoptimized-images'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'unsized-media'.
+z @ ed1e693c96a75807.js:2
+ Unrecognized feature: 'pointer-lock'.
+z @ ed1e693c96a75807.js:2
+ Allow attribute will take precedence over 'allowfullscreen'.
+z @ ed1e693c96a75807.js:2
+ Allow attribute will take precedence over 'allowpaymentrequest'.
+z @ ed1e693c96a75807.js:2
+ Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+z @ ed1e693c96a75807.js:2
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Unrecognized feature: 'battery'.
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html?initialPath=%2F&id=%3Arfu%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: Object
+injected.js:37 React hooks: Object
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 Redirecting tasham to /admin-dashboard
+injected.js:37 🌐 API Request to /api/enhanced/inventory/items (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/inventory/groups (timeout: 120000ms, deployment: false)
+injected.js:37 🌐 API Request to /api/inventory/items-groups-map (timeout: 120000ms, deployment: false)
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 ✅ API Response from /api/inventory/items-groups-map: 200
+injected.js:37 ✅ API Response from /api/inventory/groups: 200
+injected.js:37 ✅ API Response from /api/enhanced/inventory/items: 200
+injected.js:37 🌐 API Request to /api/inventory/items/T500/cost-history (timeout: 120000ms, deployment: false)
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 ✅ API Response from /api/inventory/items/T500/cost-history: 200
+injected.js:37 🌐 API Request to /api/enhanced/inventory/items (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/enhanced/inventory/items: 200
+injected.js:37 🌐 API Request to /api/inventory/items/T501/cost-history (timeout: 120000ms, deployment: false)
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 ✅ API Response from /api/inventory/items/T501/cost-history: 200
+injected.js:37 🌐 API Request to /api/enhanced/inventory/items (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/enhanced/inventory/items: 200
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ injected.js:37
+5dc0abf7-0e7b-4732-982c-6846d611a376-00-50qpwv0hdw1q.spock.replit.dev/api/inventory/items/2655:1  Failed to load resource: the server responded with a status of 400 (Bad Request)
+injected.js:37 [vite] hot updated: /src/pages/OrdersList.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=0axJVrEK4DwMvZJKByY1X
+injected.js:37 [vite] hot updated: /src/pages/CostCenterManagement.tsx
+injected.js:37 [vite] hot updated: /src/pages/ManageGroups.tsx
+injected.js:37 [vite] hot updated: /src/pages/CostAccountingPage.tsx
+injected.js:37 [vite] hot updated: /src/pages/VendorManagement.tsx
+injected.js:37 [vite] hot updated: /src/pages/PDFTemplateManager.tsx
+injected.js:37 [vite] hot updated: /src/components/KickbackTracking.tsx
+injected.js:37 [vite] hot updated: /src/components/CustomerTypeManager.tsx
+injected.js:37 [vite] hot updated: /src/components/PersistentDiscountManager.tsx
+injected.js:37 [vite] hot updated: /src/components/QCManager.tsx
+injected.js:37 [vite] hot updated: /src/components/MaintenanceManager.tsx
+injected.js:37 [vite] hot updated: /src/components/KickbackReportModal.tsx
+injected.js:37 [vite] hot updated: /src/pages/OrdersList.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=0axJVrEK4DwMvZJKByY1X
+injected.js:37 [vite] hot updated: /src/pages/CostCenterManagement.tsx
+injected.js:37 [vite] hot updated: /src/pages/ManageGroups.tsx
+injected.js:37 [vite] hot updated: /src/pages/CostAccountingPage.tsx
+injected.js:37 [vite] hot updated: /src/pages/VendorManagement.tsx
+injected.js:37 [vite] hot updated: /src/pages/PDFTemplateManager.tsx
+injected.js:37 [vite] hot updated: /src/components/KickbackTracking.tsx
+injected.js:37 [vite] hot updated: /src/components/CustomerTypeManager.tsx
+injected.js:37 [vite] hot updated: /src/components/PersistentDiscountManager.tsx
+injected.js:37 [vite] hot updated: /src/components/QCManager.tsx
+injected.js:37 [vite] hot updated: /src/components/MaintenanceManager.tsx
+injected.js:37 [vite] hot updated: /src/components/KickbackReportModal.tsx
+injected.js:37 [vite] hot updated: /src/pages/OrdersList.tsx
+injected.js:37 [vite] hot updated: /src/index.css?v=0axJVrEK4DwMvZJKByY1X
+injected.js:37 [vite] hot updated: /src/pages/CostCenterManagement.tsx
+injected.js:37 [vite] hot updated: /src/pages/ManageGroups.tsx
+injected.js:37 [vite] hot updated: /src/pages/CostAccountingPage.tsx
+injected.js:37 [vite] hot updated: /src/pages/VendorManagement.tsx
+injected.js:37 [vite] hot updated: /src/pages/PDFTemplateManager.tsx
+injected.js:37 [vite] hot updated: /src/components/KickbackTracking.tsx
+injected.js:37 [vite] hot updated: /src/components/CustomerTypeManager.tsx
+injected.js:37 [vite] hot updated: /src/components/PersistentDiscountManager.tsx
+injected.js:37 [vite] hot updated: /src/components/QCManager.tsx
+injected.js:37 [vite] hot updated: /src/components/MaintenanceManager.tsx
+injected.js:37 [vite] hot updated: /src/components/KickbackReportModal.tsx
+injected.js:37 🌐 API Request to /api/part-routings (timeout: 120000ms, deployment: false)
+5dc0abf7-0e7b-4732-982c-6846d611a376-00-50qpwv0hdw1q.spock.replit.dev/api/part-routings:1  Failed to load resource: the server responded with a status of 400 (Bad Request)
+injected.js:37 ✅ API Response from /api/part-routings: 400
+injected.js:37 💥 API Request failed for /api/part-routings: Error: Validation error
+    at apiRequest (queryClient.ts:124:13)
+(anonymous) @ injected.js:37
+chunk-NFC5BX5N.js?v=880458c9:377 [Violation] 'message' handler took 523ms

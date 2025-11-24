@@ -3,6 +3,7 @@ import { storage } from '../../storage';
 import { db } from '../../db';
 import { manufacturingQueue, inventoryItems } from '../../schema';
 import { eq, and, or } from 'drizzle-orm';
+import { generateBarcodeImage } from '../utils/barcodeGenerator';
 
 const router = express.Router();
 
@@ -143,11 +144,28 @@ router.post('/:id/generate-labels', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Inventory item not found' });
     }
     
-    // Generate label data
+    // Generate label data with barcode images
     const labels = [];
     const quantity = quantityToLabel || queueItem.quantityCompleted || 1;
     
     for (let i = 1; i <= quantity; i++) {
+      const barcodeValue = `${inventoryItem.agPartNumber}-Q${queueItem.id}-${i}`;
+      
+      // Generate barcode image
+      let barcodeImage;
+      try {
+        barcodeImage = generateBarcodeImage(barcodeValue, {
+          width: 2,
+          height: 50,
+          displayValue: true,
+          fontSize: 12,
+          margin: 5,
+        });
+      } catch (error) {
+        console.error(`Error generating barcode for ${barcodeValue}:`, error);
+        barcodeImage = null;
+      }
+      
       labels.push({
         itemId: i,
         partNumber: inventoryItem.agPartNumber,
@@ -158,7 +176,8 @@ router.post('/:id/generate-labels', async (req: Request, res: Response) => {
         fabricRoll: queueItem.fabricRoll,
         completedBy: queueItem.completedBy,
         completedAt: queueItem.completedAt,
-        barcode: `${inventoryItem.agPartNumber}-Q${queueItem.id}-${i}`,
+        barcodeValue,
+        barcodeImage, // Base64-encoded PNG image
       });
     }
     

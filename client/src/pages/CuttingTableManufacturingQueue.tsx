@@ -135,7 +135,7 @@ export default function CuttingTableManufacturingQueue() {
     },
   });
 
-  // Complete item mutation
+  // Complete item mutation (supports partial completion)
   const completeItemMutation = useMutation({
     mutationFn: async (data: {
       id: number;
@@ -152,17 +152,25 @@ export default function CuttingTableManufacturingQueue() {
         body: JSON.stringify(data),
       });
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ 
         queryKey: ['/api/cutting-table-mfg-queue/cutting-table'],
         exact: false 
       });
       setIsProductionDialogOpen(false);
       resetProductionForm();
-      toast({
-        title: 'Production recorded',
-        description: 'Item has been marked as completed with traceability data.',
-      });
+      
+      if (data.isPartialCompletion) {
+        toast({
+          title: 'Partial production recorded',
+          description: `Completed ${data.quantityCompleted} items. ${data.remainingQuantity} remaining in progress.`,
+        });
+      } else {
+        toast({
+          title: 'Production completed',
+          description: 'All items completed with traceability data.',
+        });
+      }
     },
     onError: () => {
       toast({
@@ -371,7 +379,10 @@ export default function CuttingTableManufacturingQueue() {
 
   const handleOpenProductionDialog = (item: QueueItemWithInventory) => {
     setSelectedItem(item);
-    setQuantityCompleted(item.quantityRequested.toString());
+    // Calculate remaining quantity (requested - already completed)
+    const alreadyCompleted = item.quantityCompleted || 0;
+    const remaining = item.quantityRequested - alreadyCompleted;
+    setQuantityCompleted(remaining.toString());
     setCompletedBy(currentUser?.username || '');
     setIsProductionDialogOpen(true);
   };
@@ -576,6 +587,12 @@ export default function CuttingTableManufacturingQueue() {
             <DialogDescription>
               Enter production quantity and material traceability information for{' '}
               {selectedItem?.partNumber} - {selectedItem?.partName}
+              {selectedItem && (selectedItem.quantityCompleted || 0) > 0 && (
+                <span className="block mt-1 text-blue-600 font-medium">
+                  Progress: {selectedItem.quantityCompleted || 0}/{selectedItem.quantityRequested} completed 
+                  ({selectedItem.quantityRequested - (selectedItem.quantityCompleted || 0)} remaining)
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4 overflow-y-auto flex-1">

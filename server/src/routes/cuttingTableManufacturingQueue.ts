@@ -42,7 +42,7 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
   }
 });
 
-// Complete manufacturing queue item with traceability data
+// Complete manufacturing queue item with traceability data (supports partial completion)
 router.post('/:id/complete', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -60,13 +60,30 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Quantity completed must be greater than 0' });
     }
     
+    // Get the current queue item to check requested quantity
+    const currentItem = await db.query.manufacturingQueue.findFirst({
+      where: eq(manufacturingQueue.id, parseInt(id)),
+    });
+    
+    if (!currentItem) {
+      return res.status(404).json({ error: 'Manufacturing queue item not found' });
+    }
+    
+    // Calculate total completed (existing + new)
+    const previousCompleted = currentItem.quantityCompleted || 0;
+    const newTotalCompleted = previousCompleted + quantityCompleted;
+    const quantityRequested = currentItem.quantityRequested;
+    
+    // Determine if this is a full or partial completion
+    const isFullyCompleted = newTotalCompleted >= quantityRequested;
+    
     // Update the manufacturing queue item
     const [updated] = await db
       .update(manufacturingQueue)
       .set({
-        quantityCompleted,
-        status: 'COMPLETED',
-        completedAt: new Date(),
+        quantityCompleted: newTotalCompleted,
+        status: isFullyCompleted ? 'COMPLETED' : 'IN_PROGRESS',
+        completedAt: isFullyCompleted ? new Date() : null,
         fabricLot,
         fabricBatch,
         fabricRoll,
@@ -82,7 +99,12 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Manufacturing queue item not found' });
     }
     
-    res.json(updated);
+    // Return additional info for partial completions
+    res.json({
+      ...updated,
+      isPartialCompletion: !isFullyCompleted,
+      remainingQuantity: isFullyCompleted ? 0 : quantityRequested - newTotalCompleted,
+    });
   } catch (error) {
     console.error('Error completing manufacturing queue item:', error);
     res.status(500).json({ error: 'Failed to complete manufacturing queue item' });

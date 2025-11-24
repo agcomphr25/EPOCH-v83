@@ -1689,8 +1689,8 @@ export default function VendorManagement() {
                           <FormItem>
                             <FormLabel>Quality</FormLabel>
                             <Select
-                              value={field.value?.toString() || ''}
-                              onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                              value={field.value?.toString() || 'na'}
+                              onValueChange={(value) => field.onChange(value === 'na' ? null : parseInt(value))}
                             >
                               <FormControl>
                                 <SelectTrigger data-testid="select-quality-score">
@@ -1703,7 +1703,7 @@ export default function VendorManagement() {
                                 <SelectItem value="3">3</SelectItem>
                                 <SelectItem value="2">2</SelectItem>
                                 <SelectItem value="1">1</SelectItem>
-                                <SelectItem value="">N/A</SelectItem>
+                                <SelectItem value="na">N/A</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -1718,8 +1718,8 @@ export default function VendorManagement() {
                           <FormItem>
                             <FormLabel>Cost</FormLabel>
                             <Select
-                              value={field.value?.toString() || ''}
-                              onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                              value={field.value?.toString() || 'na'}
+                              onValueChange={(value) => field.onChange(value === 'na' ? null : parseInt(value))}
                             >
                               <FormControl>
                                 <SelectTrigger data-testid="select-cost-score">
@@ -1732,7 +1732,7 @@ export default function VendorManagement() {
                                 <SelectItem value="3">3</SelectItem>
                                 <SelectItem value="2">2</SelectItem>
                                 <SelectItem value="1">1</SelectItem>
-                                <SelectItem value="">N/A</SelectItem>
+                                <SelectItem value="na">N/A</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -1747,8 +1747,8 @@ export default function VendorManagement() {
                           <FormItem>
                             <FormLabel>Delivery</FormLabel>
                             <Select
-                              value={field.value?.toString() || ''}
-                              onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                              value={field.value?.toString() || 'na'}
+                              onValueChange={(value) => field.onChange(value === 'na' ? null : parseInt(value))}
                             >
                               <FormControl>
                                 <SelectTrigger data-testid="select-delivery-score">
@@ -1761,7 +1761,7 @@ export default function VendorManagement() {
                                 <SelectItem value="3">3</SelectItem>
                                 <SelectItem value="2">2</SelectItem>
                                 <SelectItem value="1">1</SelectItem>
-                                <SelectItem value="">N/A</SelectItem>
+                                <SelectItem value="na">N/A</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -1776,8 +1776,8 @@ export default function VendorManagement() {
                           <FormItem>
                             <FormLabel>Response</FormLabel>
                             <Select
-                              value={field.value?.toString() || ''}
-                              onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                              value={field.value?.toString() || 'na'}
+                              onValueChange={(value) => field.onChange(value === 'na' ? null : parseInt(value))}
                             >
                               <FormControl>
                                 <SelectTrigger data-testid="select-response-score">
@@ -1790,7 +1790,7 @@ export default function VendorManagement() {
                                 <SelectItem value="3">3</SelectItem>
                                 <SelectItem value="2">2</SelectItem>
                                 <SelectItem value="1">1</SelectItem>
-                                <SelectItem value="">N/A</SelectItem>
+                                <SelectItem value="na">N/A</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />

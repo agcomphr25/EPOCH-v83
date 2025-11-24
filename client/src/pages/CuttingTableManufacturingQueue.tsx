@@ -222,62 +222,95 @@ export default function CuttingTableManufacturingQueue() {
             <!DOCTYPE html>
             <html>
             <head>
-              <title>Packet Labels</title>
+              <title>Packet Labels - Avery 5163</title>
               <style>
+                /* Avery 5163 Labels: 2" x 4", 10 per sheet (2 columns x 5 rows) */
                 @media print {
-                  @page { margin: 0.25in; size: 4in 3in; }
+                  @page { 
+                    margin: 0.5in 0.1875in; /* Avery 5163 margins */
+                    size: letter;
+                  }
                   body { margin: 0; }
                   .no-print { display: none; }
-                  .label { page-break-after: always; }
-                  .label:last-child { page-break-after: avoid; }
+                  .labels-container {
+                    display: grid;
+                    grid-template-columns: repeat(2, 4in);
+                    grid-auto-rows: 2in;
+                    gap: 0;
+                    justify-content: center;
+                  }
+                  .label {
+                    page-break-inside: avoid;
+                    box-shadow: none;
+                    border: none;
+                  }
+                }
+                @media screen {
+                  body {
+                    background: #f5f5f5;
+                    padding: 20px;
+                  }
+                  .label {
+                    border: 1px dashed #ccc;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                    margin: 5px;
+                  }
                 }
                 body {
                   font-family: Arial, sans-serif;
                   margin: 0;
-                  padding: 20px;
-                  background: #f5f5f5;
                 }
                 .labels-container {
-                  display: flex;
-                  flex-wrap: wrap;
-                  gap: 20px;
+                  display: grid;
+                  grid-template-columns: repeat(2, 4in);
+                  grid-auto-rows: 2in;
+                  gap: 0;
                   justify-content: center;
                 }
                 .label {
+                  width: 4in;
+                  height: 2in;
+                  padding: 0.15in;
+                  box-sizing: border-box;
                   background: white;
-                  padding: 15px;
-                  border: 2px solid #333;
-                  width: 3.5in;
+                  display: flex;
+                  flex-direction: column;
+                  justify-content: center;
+                  align-items: center;
                   text-align: center;
-                  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                  overflow: hidden;
                 }
                 .label-header {
-                  font-size: 12px;
+                  font-size: 9px;
                   font-weight: bold;
-                  margin-bottom: 8px;
+                  margin-bottom: 3px;
                   color: #333;
                 }
                 .label-info {
-                  font-size: 11px;
-                  margin: 3px 0;
-                  color: #555;
+                  font-size: 10px;
+                  margin: 1px 0;
+                  color: #333;
+                }
+                .label-info strong {
+                  font-size: 12px;
                 }
                 .barcode-container {
-                  margin: 10px 0;
+                  margin: 4px 0;
+                  max-width: 3.5in;
                 }
                 .barcode-container img {
                   max-width: 100%;
-                  height: auto;
+                  height: 35px;
                 }
                 .barcode-text {
-                  font-size: 10px;
+                  font-size: 8px;
                   font-family: monospace;
-                  letter-spacing: 1px;
+                  letter-spacing: 0.5px;
                 }
                 .item-number {
-                  font-size: 10px;
-                  color: #888;
-                  margin-top: 8px;
+                  font-size: 8px;
+                  color: #666;
+                  margin-top: 2px;
                 }
                 .print-btn {
                   display: block;
@@ -291,10 +324,19 @@ export default function CuttingTableManufacturingQueue() {
                   font-size: 16px;
                 }
                 .print-btn:hover { background: #0056b3; }
+                .label-size-info {
+                  text-align: center;
+                  margin-bottom: 15px;
+                  font-size: 14px;
+                  color: #666;
+                }
               </style>
             </head>
             <body>
-              <button class="print-btn no-print" onclick="window.print()">Print Labels</button>
+              <div class="no-print">
+                <button class="print-btn" onclick="window.print()">Print Labels</button>
+                <p class="label-size-info">Formatted for Avery 5163 labels (2" x 4", 10 per sheet)</p>
+              </div>
               <div class="labels-container">${labelsHtml}</div>
             </body>
             </html>

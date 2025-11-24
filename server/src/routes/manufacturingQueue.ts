@@ -11,6 +11,15 @@ router.get('/', async (req, res) => {
   try {
     const { department, status } = req.query;
     
+    // Build where conditions
+    const conditions = [];
+    if (department) {
+      conditions.push(eq(manufacturingQueue.department, department as string));
+    }
+    if (status) {
+      conditions.push(eq(manufacturingQueue.status, status as string));
+    }
+    
     let query = db
       .select({
         id: manufacturingQueue.id,
@@ -42,12 +51,9 @@ router.get('/', async (req, res) => {
       .from(manufacturingQueue)
       .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id));
     
-    // Apply filters
-    if (department) {
-      query = query.where(eq(manufacturingQueue.department, department as string));
-    }
-    if (status) {
-      query = query.where(eq(manufacturingQueue.status, status as string));
+    // Apply combined filters if any
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
     }
     
     // Order by priority (lower number = higher priority), then by due date

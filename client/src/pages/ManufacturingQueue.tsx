@@ -76,6 +76,12 @@ export default function ManufacturingQueue() {
   // Fetch queue items
   const { data: queueItems = [], isLoading } = useQuery<QueueItemWithInventory[]>({
     queryKey: ['/api/manufacturing-queue', selectedDepartment, selectedStatus],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (selectedDepartment) params.append('department', selectedDepartment);
+      if (selectedStatus) params.append('status', selectedStatus);
+      return apiRequest(`/api/manufacturing-queue?${params.toString()}`);
+    },
     enabled: true,
   });
 

@@ -1482,13 +1482,19 @@ export function registerRoutes(app: Express): Server {
 
         const fileUrl = `/uploads/p2-po-attachments/${req.file.filename}`;
         
-        // Add the new attachment to the existing array
-        const currentAttachments = po.attachments || [];
+        // Add the new attachment to the existing array using JSONB functions
+        const currentAttachments = Array.isArray(po.attachments) ? po.attachments : [];
         const updatedAttachments = [...currentAttachments, fileUrl];
         
-        await storage.updateP2PurchaseOrder(parseInt(id), {
-          attachments: updatedAttachments,
-        });
+        // Use SQL to properly update JSONB array
+        const { db } = await import('../../db');
+        const { p2PurchaseOrders } = await import('../../schema');
+        const { eq, sql } = await import('drizzle-orm');
+        
+        await db
+          .update(p2PurchaseOrders)
+          .set({ attachments: sql`${JSON.stringify(updatedAttachments)}::jsonb` })
+          .where(eq(p2PurchaseOrders.id, parseInt(id)));
 
         res.status(200).json({
           url: fileUrl,
@@ -1521,14 +1527,20 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Remove the attachment from the array
-      const currentAttachments = po.attachments || [];
+      const currentAttachments = Array.isArray(po.attachments) ? po.attachments : [];
       const updatedAttachments = currentAttachments.filter(
         (url: string) => url !== attachmentUrl
       );
       
-      await storage.updateP2PurchaseOrder(parseInt(id), {
-        attachments: updatedAttachments,
-      });
+      // Use SQL to properly update JSONB array
+      const { db } = await import('../../db');
+      const { p2PurchaseOrders } = await import('../../schema');
+      const { eq, sql } = await import('drizzle-orm');
+      
+      await db
+        .update(p2PurchaseOrders)
+        .set({ attachments: sql`${JSON.stringify(updatedAttachments)}::jsonb` })
+        .where(eq(p2PurchaseOrders.id, parseInt(id)));
 
       // Try to delete the physical file
       const filename = attachmentUrl.split('/').pop();

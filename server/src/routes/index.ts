@@ -68,6 +68,7 @@ import quotesRoutes from './quotes';
 import costCentersRoutes from './costCenters';
 import costAccountingRoutes from './costAccounting';
 import employeeBadgesRoutes from './employeeBadges';
+import manufacturingQueueRoutes from './manufacturingQueue';
 
 import watchRulesRoutes from './watchRules';
 
@@ -299,6 +300,9 @@ export function registerRoutes(app: Express): Server {
 
   // Cutting Table routes
   app.use('/api/cutting-table', cuttingTableRoutes);
+
+  // Manufacturing Queue routes
+  app.use('/api/manufacturing-queue', manufacturingQueueRoutes);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

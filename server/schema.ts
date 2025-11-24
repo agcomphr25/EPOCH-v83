@@ -5884,6 +5884,30 @@ export const cuttingCutRecords = pgTable('cutting_cut_records', {
   productCategoryIdx: index('cutting_cut_records_category_idx').on(table.productCategoryId),
 }));
 
+// Manufacturing Queue - Track items that need to be manufactured by department
+export const manufacturingQueue = pgTable('manufacturing_queue', {
+  id: serial('id').primaryKey(),
+  inventoryItemId: integer('inventory_item_id')
+    .references(() => inventoryItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  department: text('department').notNull(), // CNC, Cutting Table, or Cores
+  quantityRequested: integer('quantity_requested').notNull().default(1),
+  quantityCompleted: integer('quantity_completed').default(0),
+  priority: integer('priority').default(50), // 1-100, lower = higher priority
+  status: text('status').notNull().default('PENDING'), // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+  dueDate: timestamp('due_date'),
+  requestedBy: text('requested_by'),
+  assignedTo: text('assigned_to'),
+  notes: text('notes'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  departmentStatusIdx: index('manufacturing_queue_department_status_idx').on(table.department, table.status),
+  dueDateIdx: index('manufacturing_queue_due_date_idx').on(table.dueDate),
+}));
+
 // Cutting Table Insert Schemas
 export const insertCuttingMaterialSchema = createInsertSchema(cuttingMaterials).omit({
   id: true,
@@ -5960,6 +5984,12 @@ export const insertCuttingFabricInventoryTransactionSchema = createInsertSchema(
   updatedAt: true,
 });
 
+export const insertManufacturingQueueSchema = createInsertSchema(manufacturingQueue).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Cutting Table Types
 export type CuttingMaterial = typeof cuttingMaterials.$inferSelect;
 export type InsertCuttingMaterial = z.infer<typeof insertCuttingMaterialSchema>;
@@ -5993,6 +6023,9 @@ export type InsertCuttingPacketSessionLot = z.infer<typeof insertCuttingPacketSe
 
 export type CuttingFabricInventoryTransaction = typeof cuttingFabricInventoryTransactions.$inferSelect;
 export type InsertCuttingFabricInventoryTransaction = z.infer<typeof insertCuttingFabricInventoryTransactionSchema>;
+
+export type ManufacturingQueue = typeof manufacturingQueue.$inferSelect;
+export type InsertManufacturingQueue = z.infer<typeof insertManufacturingQueueSchema>;
 
 // Controlled Documents - Master Document Register
 export const controlledDocuments = pgTable('controlled_documents', {

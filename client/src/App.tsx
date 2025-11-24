@@ -55,6 +55,7 @@ import ManageGroups from './pages/ManageGroups';
 import PurchaseOrders from './pages/PurchaseOrders';
 import P2PurchaseOrders from './pages/P2PurchaseOrders';
 import P2DepartmentManager from './pages/P2DepartmentManager';
+import P2TravelerPage from './pages/P2TravelerPage';
 import POProductsPage from './pages/POProductsPage';
 import ProductionTracking from './pages/ProductionTracking';
 import BarcodeScannerPage from './pages/BarcodeScannerPage';
@@ -567,6 +568,7 @@ function App() {
 
                   {/* P2 Forms Routes */}
                   <Route path="/p2-forms" component={P2Forms} />
+                  <Route path="/p2-traveler" component={P2TravelerPage} />
                   <Route
                     path="/master-document-register"
                     component={MasterDocumentRegister}

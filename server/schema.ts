@@ -3723,6 +3723,40 @@ export const p2SerializedItemCustomData = pgTable('p2_serialized_item_custom_dat
   departmentIdx: index('p2_serialized_item_custom_data_department_idx').on(table.department),
 }));
 
+// P2 Work Tasks - Tracks individual task sessions with start/end times for AS9100 traceability
+export const p2WorkTasks = pgTable('p2_work_tasks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  serializedItemId: uuid('serialized_item_id')
+    .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  barcode: text('barcode').notNull(), // Denormalized for quick queries
+  partNumber: text('part_number').notNull(), // Denormalized for display
+  partName: text('part_name').notNull(), // Denormalized for display
+  department: text('department').notNull(), // Department where task was performed
+  employeeId: integer('employee_id')
+    .references(() => employees.id, { onDelete: 'restrict' })
+    .notNull(), // FK to employees table with restrict to prevent deletion of employees with task history
+  employeeCode: text('employee_code').notNull(), // Employee badge code
+  employeeName: text('employee_name').notNull(), // Denormalized for display
+  certificationId: integer('certification_id')
+    .references(() => p2EmployeePartCertifications.id, { onDelete: 'set null' }), // Link to certification used for audit trail
+  status: text('status').notNull().default('IN_PROGRESS'), // IN_PROGRESS, COMPLETED, PAUSED
+  startedAt: timestamp('started_at').notNull().defaultNow(), // Task start timestamp
+  completedAt: timestamp('completed_at'), // Task completion timestamp
+  durationMinutes: integer('duration_minutes'), // Calculated duration in minutes
+  traceabilityData: jsonb('traceability_data'), // Materials/components scanned/entered: [{ inventoryPartId, partNumber, type, label, value }]
+  customData: jsonb('custom_data'), // Custom field values entered by technician
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  itemIdIdx: index('p2_work_tasks_item_id_idx').on(table.serializedItemId),
+  employeeIdIdx: index('p2_work_tasks_employee_id_idx').on(table.employeeId),
+  statusIdx: index('p2_work_tasks_status_idx').on(table.status),
+  departmentIdx: index('p2_work_tasks_department_idx').on(table.department),
+  itemStatusIdx: index('p2_work_tasks_item_status_idx').on(table.serializedItemId, table.status), // Composite index for active task checks
+}));
+
 // Production Orders - separate from regular orders for PO tracking
 export const productionOrders = pgTable('production_orders', {
   id: serial('id').primaryKey(),
@@ -4168,6 +4202,31 @@ export const insertP2SerializedItemCustomDataSchema = createInsertSchema(p2Seria
     recordedBy: z.string().min(1, 'Recorded by is required'),
   });
 
+export const insertP2WorkTaskSchema = createInsertSchema(p2WorkTasks)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    serializedItemId: z.string().uuid('Invalid serialized item ID'),
+    barcode: z.string().min(1, 'Barcode is required'),
+    partNumber: z.string().min(1, 'Part number is required'),
+    partName: z.string().min(1, 'Part name is required'),
+    department: z.string().min(1, 'Department is required'),
+    employeeId: z.number().min(1, 'Employee ID is required'),
+    employeeCode: z.string().min(1, 'Employee code is required'),
+    employeeName: z.string().min(1, 'Employee name is required'),
+    certificationId: z.number().optional().nullable(),
+    status: z.enum(['IN_PROGRESS', 'COMPLETED', 'PAUSED']).default('IN_PROGRESS'),
+    startedAt: z.coerce.date().optional(),
+    completedAt: z.coerce.date().optional().nullable(),
+    durationMinutes: z.number().optional().nullable(),
+    traceabilityData: z.any().optional().nullable(),
+    customData: z.any().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  });
+
 // Part Routing Types
 export type InsertPartRouting = z.infer<typeof insertPartRoutingSchema>;
 export type UpdatePartRouting = z.infer<typeof updatePartRoutingSchema>;
@@ -4176,6 +4235,8 @@ export type InsertP2SerializedItemTraceability = z.infer<typeof insertP2Serializ
 export type P2SerializedItemTraceability = typeof p2SerializedItemTraceability.$inferSelect;
 export type InsertP2SerializedItemCustomData = z.infer<typeof insertP2SerializedItemCustomDataSchema>;
 export type P2SerializedItemCustomData = typeof p2SerializedItemCustomData.$inferSelect;
+export type InsertP2WorkTask = z.infer<typeof insertP2WorkTaskSchema>;
+export type P2WorkTask = typeof p2WorkTasks.$inferSelect;
 
 // Production Order Types
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;

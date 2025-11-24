@@ -651,6 +651,13 @@ export default function Navigation() {
         'P2 customer management and purchase orders with Part #, Quantity, Price',
     },
     {
+      path: '/p2-production-queue',
+      label: 'P2 Production Queue',
+      icon: Factory,
+      description:
+        'View production orders from BOMs, schedule layup dates, and track manufacturing progress',
+    },
+    {
       path: '/p2-department-manager',
       label: 'P2 Department Manager',
       icon: ClipboardList,

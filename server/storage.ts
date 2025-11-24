@@ -6497,7 +6497,7 @@ export class DatabaseStorage implements IStorage {
       .from(vendorMonthlyEvaluations)
       .where(
         and(
-          sql`${vendorMonthlyEvaluations.vendorId} = ANY(${vendorIds})`,
+          inArray(vendorMonthlyEvaluations.vendorId, vendorIds),
           eq(vendorMonthlyEvaluations.year, currentYear),
           sql`${vendorMonthlyEvaluations.month} <= ${currentMonth}`
         )

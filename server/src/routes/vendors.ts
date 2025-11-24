@@ -51,10 +51,28 @@ const vendorApprovalUpload = multer({
 
 // Helper function to sync vendor-level scores from monthly evaluations
 async function syncVendorScoresFromEvaluations(vendorId: number) {
+  // Get current month and year
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // JavaScript months are 0-indexed
+  
   // Get all evaluations for this vendor
   const allEvaluations = await storage.getVendorMonthlyEvaluations(vendorId);
   
-  // Filter to only evaluations with at least one score, then sort by year/month descending
+  // Check if there's an evaluation for the CURRENT month
+  const currentMonthEval = allEvaluations.find(ev => 
+    ev.year === currentYear && 
+    ev.month === currentMonth &&
+    (ev.qualityScore !== null || 
+     ev.costScore !== null || 
+     ev.deliveryScore !== null || 
+     ev.responseScore !== null)
+  );
+  
+  // Set evaluated=true only if current month has scores
+  const isEvaluated = !!currentMonthEval;
+  
+  // Get the latest evaluation for displaying scores (not necessarily current month)
   const evaluationsWithScores = allEvaluations.filter(ev => 
     ev.qualityScore !== null || 
     ev.costScore !== null || 
@@ -71,13 +89,13 @@ async function syncVendorScoresFromEvaluations(vendorId: number) {
     // Format evaluation date as YYYY-MM-DD
     const evalDate = `${latestEval.year}-${String(latestEval.month).padStart(2, '0')}-01`;
     
-    // Update vendor with latest evaluation scores
+    // Update vendor: latest scores but evaluated status based on current month
     await storage.updateVendor(vendorId, {
       qualityScore: latestEval.qualityScore,
       costScore: latestEval.costScore,
       deliveryScore: latestEval.deliveryScore,
       responseScore: latestEval.responseScore,
-      evaluated: true,
+      evaluated: isEvaluated,
       evaluationDate: evalDate,
     });
   } else {

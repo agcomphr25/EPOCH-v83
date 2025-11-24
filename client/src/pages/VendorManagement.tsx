@@ -2086,8 +2086,8 @@ export default function VendorManagement() {
                       )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400 text-center">
-                      {(vendor as any).ytdTotalScore !== null && (vendor as any).ytdTotalScore !== undefined
-                        ? (vendor as any).ytdTotalScore.toFixed(1)
+                      {(vendor as any).ytdTotalScore 
+                        ? Number((vendor as any).ytdTotalScore).toFixed(1)
                         : '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">

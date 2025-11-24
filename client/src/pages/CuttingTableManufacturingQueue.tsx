@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import {
@@ -80,6 +80,7 @@ export default function CuttingTableManufacturingQueue() {
   // Production form state
   const [quantityCompleted, setQuantityCompleted] = useState('');
   const [fabricBarcode, setFabricBarcode] = useState('');
+  const previousFabricBarcode = useRef<string>('');
   const [fabricLot, setFabricLot] = useState('');
   const [fabricBatch, setFabricBatch] = useState('');
   const [fabricRoll, setFabricRoll] = useState('');
@@ -100,9 +101,9 @@ export default function CuttingTableManufacturingQueue() {
   });
 
   // Look up fabric inventory when barcode is scanned
-  const { data: fabricInventory } = useQuery<FabricInventory>({
+  const { data: fabricInventory, isError: isFabricError, error: fabricError } = useQuery<FabricInventory>({
     queryKey: [`/api/cutting-table/fabric-inventory-by-barcode/${fabricBarcode}`],
-    enabled: !!fabricBarcode && fabricBarcode.length > 3,
+    enabled: isProductionDialogOpen && !!fabricBarcode && fabricBarcode.length > 3,
     retry: false,
   });
 
@@ -206,6 +207,13 @@ export default function CuttingTableManufacturingQueue() {
     setCompletionNotes('');
     setCompletedBy('');
     setSelectedItem(null);
+    previousFabricBarcode.current = '';
+    
+    // Clear fabric inventory query cache
+    queryClient.removeQueries({ 
+      queryKey: ['/api/cutting-table/fabric-inventory-by-barcode'],
+      exact: false,
+    });
   };
 
   // Auto-populate traceability fields when fabric inventory is found
@@ -215,7 +223,8 @@ export default function CuttingTableManufacturingQueue() {
 
   // When fabric inventory is loaded, auto-populate the traceability fields
   useEffect(() => {
-    if (fabricInventory) {
+    // Only auto-populate if this is a new barcode scan (not cached data)
+    if (fabricInventory && fabricBarcode && fabricBarcode !== previousFabricBarcode.current) {
       setFabricBatch(fabricInventory.batchNumber || '');
       setFabricLot(fabricInventory.fabric || '');
       setFabricRoll(fabricInventory.source || '');
@@ -223,13 +232,27 @@ export default function CuttingTableManufacturingQueue() {
         `${fabricInventory.fabric || ''}${fabricInventory.source ? ' - ' + fabricInventory.source : ''}`
       );
       
-      // Show success toast
+      // Show success toast only for new data
       toast({
         title: 'Fabric Found',
         description: `Loaded traceability data for ${fabricInventory.fabric}`,
       });
+      
+      // Update previous barcode ref
+      previousFabricBarcode.current = fabricBarcode;
     }
-  }, [fabricInventory]);
+  }, [fabricInventory, fabricBarcode, toast]);
+
+  // Handle fabric lookup errors
+  useEffect(() => {
+    if (isFabricError && fabricBarcode) {
+      toast({
+        title: 'Fabric Not Found',
+        description: `No fabric inventory found for barcode: ${fabricBarcode}. You can still enter traceability data manually.`,
+        variant: 'destructive',
+      });
+    }
+  }, [isFabricError, fabricBarcode, toast]);
 
   const handleOpenProductionDialog = (item: QueueItemWithInventory) => {
     setSelectedItem(item);
@@ -422,7 +445,16 @@ export default function CuttingTableManufacturingQueue() {
       </Card>
 
       {/* Production Entry Dialog */}
-      <Dialog open={isProductionDialogOpen} onOpenChange={setIsProductionDialogOpen}>
+      <Dialog 
+        open={isProductionDialogOpen} 
+        onOpenChange={(open) => {
+          setIsProductionDialogOpen(open);
+          // Reset form when dialog is closed to prevent stale data
+          if (!open) {
+            resetProductionForm();
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl" data-testid="dialog-production-entry">
           <DialogHeader>
             <DialogTitle>Record Production & Traceability</DialogTitle>

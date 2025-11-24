@@ -58,6 +58,8 @@ import {
   layupSchedule,
   bomDefinitions,
   bomItems,
+  boms,
+  bomRevisions,
   bomLines,
   orderIdReservations,
   orderIdSequences,
@@ -10350,42 +10352,70 @@ export class DatabaseStorage implements IStorage {
 
     // Process each PO item
     for (const poItem of poItems) {
-      // Get the BOM definition for this SKU
-      const bomDefs = await db
+      // Get the BOM from the robust BOM system
+      // Match using parentPartAgNumber which corresponds to the part number
+      const bomRecords = await db
         .select()
-        .from(bomDefinitions)
-        .where(eq(bomDefinitions.sku, poItem.partNumber));
+        .from(boms)
+        .where(and(
+          eq(boms.parentPartAgNumber, poItem.partNumber),
+          eq(boms.isActive, true)
+        ));
 
-      if (bomDefs.length === 0) {
-        console.warn(`No BOM definition found for SKU: ${poItem.partNumber}`);
+      if (bomRecords.length === 0) {
+        console.warn(`No BOM found for part number: ${poItem.partNumber}`);
         continue;
       }
 
-      const bomDef = bomDefs[0];
+      const bom = bomRecords[0];
 
-      // Get all BOM items for this definition
-      const bomItemsList = await db
+      // Get the most recent active revision (prefer released, otherwise latest)
+      const revisions = await db
         .select()
-        .from(bomItems)
-        .where(and(eq(bomItems.bomId, bomDef.id), eq(bomItems.isActive, true)));
+        .from(bomRevisions)
+        .where(eq(bomRevisions.bomId, bom.id))
+        .orderBy(sql`CASE WHEN ${bomRevisions.isReleased} THEN 0 ELSE 1 END`, sql`${bomRevisions.createdAt} DESC`);
 
-      // Create production orders for each BOM item
-      for (let i = 0; i < bomItemsList.length; i++) {
-        const bomItem = bomItemsList[i];
+      if (revisions.length === 0) {
+        console.warn(`No BOM revision found for BOM ${bom.code}`);
+        continue;
+      }
 
-        // Skip materials - only create production orders for manufactured parts
-        if (bomItem.itemType === 'material') {
-          console.log(
-            `Skipping material item: ${bomItem.partName} - quantity tracking only`
-          );
-          continue;
-        }
+      const revision = revisions[0];
 
-        const totalQuantity = bomItem.quantity * poItem.quantity;
+      // Get all BOM lines (components) for this revision
+      const lines = await db
+        .select()
+        .from(bomLines)
+        .where(eq(bomLines.revisionId, revision.id))
+        .orderBy(bomLines.operationSeq);
+
+      if (lines.length === 0) {
+        console.warn(`No BOM lines found for BOM ${bom.code} revision ${revision.revCode}`);
+        continue;
+      }
+
+      // Create production orders for each BOM line
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        // Calculate total quantity needed (qty per unit * PO quantity)
+        const qtyPer = Number(line.qtyPer) || 1;
+        const totalQuantity = Math.ceil(qtyPer * poItem.quantity);
+
+        // Get part details from inventory
+        const partInfo = await db
+          .select()
+          .from(inventoryItems)
+          .where(eq(inventoryItems.agPartNumber, line.childPartAgNumber))
+          .limit(1);
+
+        const partName = partInfo.length > 0 ? partInfo[0].name : line.childPartAgNumber;
+        const firstDept = partInfo.length > 0 ? (partInfo[0].productionLineDept || 'Layup') : 'Layup';
 
         // Create individual production orders (1 unit each) instead of bulk orders
         for (let unitIndex = 1; unitIndex <= totalQuantity; unitIndex++) {
-          // Generate unique order ID: P2-{PO#}-{item#}-{bomItem#}-{unit#}
+          // Generate unique order ID: P2-{PO#}-{item#}-{line#}-{unit#}
           const orderIdSuffix = String(i + 1).padStart(3, '0');
           const unitSuffix = String(unitIndex).padStart(3, '0');
           const orderId = `P2-${po.poNumber}-${poItem.id}-${orderIdSuffix}-${unitSuffix}`;
@@ -10394,16 +10424,16 @@ export class DatabaseStorage implements IStorage {
             orderId,
             p2PoId: poId,
             p2PoItemId: poItem.id,
-            bomDefinitionId: bomDef.id,
-            bomItemId: bomItem.id,
+            bomDefinitionId: bom.id, // Store BOM ID
+            bomItemId: line.id, // Store BOM Line ID
             sku: poItem.partNumber,
-            partName: bomItem.partName,
+            partName: partName,
             quantity: 1, // Individual orders with quantity of 1
-            department: bomItem.firstDept as any,
+            department: firstDept as any,
             status: 'PENDING',
             priority: 50,
             dueDate: po.dueDate || undefined,
-            notes: `Generated from P2 PO ${po.poNumber} - ${bomDef.modelName} (${bomDef.revision}) - Unit ${unitIndex} of ${totalQuantity}`,
+            notes: `Generated from P2 PO ${po.poNumber} - ${bom.code} (${revision.revCode}) - Component ${line.childPartAgNumber} - Unit ${unitIndex} of ${totalQuantity}`,
           };
 
           const productionOrder =

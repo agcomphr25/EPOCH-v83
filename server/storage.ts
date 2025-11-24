@@ -122,6 +122,7 @@ import {
   monthlyAccountEntries,
   allocationRules,
   allocationResults,
+  gatewayReports,
 
   // Types
   type Order,

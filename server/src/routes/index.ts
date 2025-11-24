@@ -73,7 +73,7 @@ import watchRulesRoutes from './watchRules';
 
 
 import p2TravelerRoutes from './p2Traveler';
-
+import p2ProductionQueueRoutes from './p2ProductionQueue';
 
 import pdfSettingsRoutes from './pdfSettings';
 import p2LayupSchedulesRoutes from './p2LayupSchedules';
@@ -140,6 +140,9 @@ export function registerRoutes(app: Express): Server {
   
   // P2 Layup Schedule routes (MUST come before P2 customer routes to avoid /:id catch-all)
   app.use('/api/p2', p2LayupSchedulesRoutes);
+  
+  // P2 Production Queue routes
+  app.use('/api/p2-production-queue', p2ProductionQueueRoutes);
   
   // P2 Customer management routes (mount same router for P2-specific endpoints)
   app.use('/api/p2', customersRoutes);

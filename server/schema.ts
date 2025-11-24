@@ -3725,6 +3725,38 @@ export const p2SerializedItemCustomData = pgTable('p2_serialized_item_custom_dat
 
 // P2 Layup Schedules - Schedule P2 serialized items for layup with full traceability
 export const p2LayupSchedules = pgTable('p2_layup_schedules', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  serializedItemId: uuid('serialized_item_id')
+    .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  barcode: text('barcode').notNull(),
+  poNumber: text('po_number').notNull(),
+  partNumber: text('part_number').notNull(),
+  partName: text('part_name').notNull(),
+  customerId: text('customer_id').notNull(),
+  customerName: text('customer_name').notNull(),
+  scheduledDate: date('scheduled_date').notNull(),
+  scheduledBy: text('scheduled_by').notNull(),
+  assignedTechnician: text('assigned_technician'),
+  status: text('status').notNull().default('SCHEDULED'),
+  cuttingPacketId: text('cutting_packet_id'),
+  cuttingPacketNumber: text('cutting_packet_number'),
+  startedAt: timestamp('started_at'),
+  startedBy: text('started_by'),
+  completedAt: timestamp('completed_at'),
+  completedBy: text('completed_by'),
+  cancelledAt: timestamp('cancelled_at'),
+  cancelledBy: text('cancelled_by'),
+  cancelReason: text('cancel_reason'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  serializedItemIdx: index('p2_layup_schedules_item_id_idx').on(table.serializedItemId),
+  scheduledDateIdx: index('p2_layup_schedules_date_idx').on(table.scheduledDate),
+  barcodeIdx: index('p2_layup_schedules_barcode_idx').on(table.barcode),
+  statusIdx: index('p2_layup_schedules_status_idx').on(table.status),
+}));
 
 // P2 Work Tasks - Tracks individual task sessions with start/end times for AS9100 traceability
 export const p2WorkTasks = pgTable('p2_work_tasks', {
@@ -3734,38 +3766,14 @@ export const p2WorkTasks = pgTable('p2_work_tasks', {
     .notNull(),
   barcode: text('barcode').notNull(), // Denormalized for quick queries
   poNumber: text('po_number').notNull(), // Denormalized from serialized item
-  partNumber: text('part_number').notNull(), // Denormalized from serialized item
+  partNumber: text('part_number').notNull(), // Denormalized for display
   partName: text('part_name').notNull(), // Denormalized for display
   customerId: text('customer_id').notNull(), // Denormalized from serialized item
   customerName: text('customer_name').notNull(), // Denormalized from serialized item
-  scheduledDate: date('scheduled_date').notNull(), // Date this item is scheduled for layup
-  scheduledBy: text('scheduled_by').notNull(), // Username who created the schedule
-  assignedTechnician: text('assigned_technician'), // Optional technician assignment
-  status: text('status').notNull().default('SCHEDULED'), // SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED
-  cuttingPacketId: text('cutting_packet_id'), // Link to cutting table packet for material traceability
-  cuttingPacketNumber: text('cutting_packet_number'), // Denormalized packet number for display
-  startedAt: timestamp('started_at'), // When layup work actually started
-  startedBy: text('started_by'), // Who started the layup work
-  completedAt: timestamp('completed_at'), // When layup was completed
-  completedBy: text('completed_by'), // Who completed the layup
-  cancelledAt: timestamp('cancelled_at'), // When schedule was cancelled
-  cancelledBy: text('cancelled_by'), // Who cancelled the schedule
-  cancelReason: text('cancel_reason'), // Reason for cancellation
-  notes: text('notes'), // Additional notes about this schedule
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-}, (table) => ({
-  serializedItemIdx: index('p2_layup_schedules_item_id_idx').on(table.serializedItemId),
-  scheduledDateIdx: index('p2_layup_schedules_date_idx').on(table.scheduledDate),
-  barcodeIdx: index('p2_layup_schedules_barcode_idx').on(table.barcode),
-  statusIdx: index('p2_layup_schedules_status_idx').on(table.status),
-
-  partNumber: text('part_number').notNull(), // Denormalized for display
-  partName: text('part_name').notNull(), // Denormalized for display
   department: text('department').notNull(), // Department where task was performed
   employeeId: integer('employee_id')
     .references(() => employees.id, { onDelete: 'restrict' })
-    .notNull(), // FK to employees table with restrict to prevent deletion of employees with task history
+    .notNull(),
   employeeCode: text('employee_code').notNull(), // Employee badge code
   employeeName: text('employee_name').notNull(), // Denormalized for display
   certificationId: integer('certification_id')
@@ -3784,7 +3792,7 @@ export const p2WorkTasks = pgTable('p2_work_tasks', {
   employeeIdIdx: index('p2_work_tasks_employee_id_idx').on(table.employeeId),
   statusIdx: index('p2_work_tasks_status_idx').on(table.status),
   departmentIdx: index('p2_work_tasks_department_idx').on(table.department),
-  itemStatusIdx: index('p2_work_tasks_item_status_idx').on(table.serializedItemId, table.status), // Composite index for active task checks
+  itemStatusIdx: index('p2_work_tasks_item_status_idx').on(table.serializedItemId, table.status),
 }));
 
 // Production Orders - separate from regular orders for PO tracking
@@ -4643,18 +4651,20 @@ export const p2ProductionOrders = pgTable('p2_production_orders', {
     .references(() => p2PurchaseOrderItems.id)
     .notNull(),
   bomDefinitionId: uuid('bom_definition_id')
-    .references(() => bomDefinitions.id)
+    .references(() => boms.id)
     .notNull(),
   bomItemId: uuid('bom_item_id')
-    .references(() => bomItems.id)
+    .references(() => bomLines.id)
     .notNull(),
   sku: text('sku').notNull(), // From BOM definition
   partName: text('part_name').notNull(), // From BOM item
   quantity: integer('quantity').notNull(), // BOM item quantity * PO quantity
+  quantityManufactured: integer('quantity_manufactured').default(0).notNull(), // Track how many have been made
   department: text('department').notNull(), // From BOM item firstDept
   status: text('status').default('PENDING').notNull(), // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
   priority: integer('priority').default(50), // 1-100, lower = higher priority
   dueDate: timestamp('due_date'),
+  scheduledLayupDate: timestamp('scheduled_layup_date'), // When this part is scheduled for layup
   startedAt: timestamp('started_at'),
   completedAt: timestamp('completed_at'),
   notes: text('notes'),
@@ -4679,6 +4689,7 @@ export const insertP2ProductionOrderSchema = createInsertSchema(
     sku: z.string().min(1, 'SKU is required'),
     partName: z.string().min(1, 'Part name is required'),
     quantity: z.number().min(1, 'Quantity must be at least 1'),
+    quantityManufactured: z.number().min(0).default(0),
     department: z.enum([
       'Layup',
       'Assembly/Disassembly',
@@ -4692,6 +4703,7 @@ export const insertP2ProductionOrderSchema = createInsertSchema(
       .default('PENDING'),
     priority: z.number().min(1).max(100).default(50),
     dueDate: z.string().datetime().optional(),
+    scheduledLayupDate: z.string().datetime().optional(),
     notes: z.string().optional(),
   });
 

@@ -18,6 +18,7 @@ import { Link } from 'wouter';
 import type { InventoryItem, ItemGroup } from '@shared/schema';
 
 import InventoryItemCostHistory from './InventoryItemCostHistory';
+import TraceabilityConfigModal from './TraceabilityConfigModal';
 
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -77,6 +78,7 @@ interface InventoryFormData {
   utilizedInPL1: boolean;
   utilizedInPL2: boolean;
   traceabilityRequired: boolean;
+  traceabilityFields: string[];
   utilizedInFacilities: boolean;
   utilizedInAdmin: boolean;
   utilizedInServices: boolean;
@@ -107,6 +109,10 @@ const InventoryForm = ({
   currentTdsFileName,
   otherDocsFile,
   currentOtherDocsFileName,
+  onTraceabilityClick,
+  isTraceabilityModalOpen,
+  onCloseTraceabilityModal,
+  onSaveTraceabilityFields,
 }: {
   formData: InventoryFormData;
   onSubmit: (e: React.FormEvent) => void;
@@ -130,6 +136,10 @@ const InventoryForm = ({
   currentTdsFileName: string | null;
   otherDocsFile: File | null;
   currentOtherDocsFileName: string | null;
+  onTraceabilityClick: () => void;
+  isTraceabilityModalOpen: boolean;
+  onCloseTraceabilityModal: () => void;
+  onSaveTraceabilityFields: (fields: string[]) => void;
 }) => (
   <form
     onSubmit={onSubmit}
@@ -530,17 +540,38 @@ const InventoryForm = ({
         </div>
         {formData.utilizedInPL2 && (
           <div className="flex items-center space-x-2 ml-6">
-            <Checkbox
-              id="traceabilityRequired"
-              checked={formData.traceabilityRequired}
-              onCheckedChange={(checked) =>
-                onCheckboxChange('traceabilityRequired', checked as boolean)
-              }
-              data-testid="checkbox-traceabilityRequired"
-            />
-            <Label htmlFor="traceabilityRequired" className="cursor-pointer">
-              Traceability Required
-            </Label>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="traceabilityRequired"
+                checked={formData.traceabilityRequired}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    onTraceabilityClick();
+                  } else {
+                    onCheckboxChange('traceabilityRequired', false);
+                    onSaveTraceabilityFields([]);
+                  }
+                }}
+                data-testid="checkbox-traceabilityRequired"
+              />
+              <Label
+                htmlFor="traceabilityRequired"
+                className="cursor-pointer"
+                onClick={(e) => {
+                  if (formData.traceabilityRequired) {
+                    e.preventDefault();
+                    onTraceabilityClick();
+                  }
+                }}
+              >
+                Traceability Required
+                {formData.traceabilityFields.length > 0 && (
+                  <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
+                    ({formData.traceabilityFields.length} field{formData.traceabilityFields.length !== 1 ? 's' : ''})
+                  </span>
+                )}
+              </Label>
+            </div>
           </div>
         )}
         <div className="flex items-center space-x-2">
@@ -855,6 +886,13 @@ const InventoryForm = ({
         {editingItem ? 'Update' : 'Create'} Item
       </Button>
     </div>
+
+    <TraceabilityConfigModal
+      isOpen={isTraceabilityModalOpen}
+      onClose={onCloseTraceabilityModal}
+      onSave={onSaveTraceabilityFields}
+      initialFields={formData.traceabilityFields}
+    />
   </form>
 );
 
@@ -919,6 +957,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     utilizedInPL1: false,
     utilizedInPL2: false,
     traceabilityRequired: false,
+    traceabilityFields: [],
     utilizedInFacilities: false,
     utilizedInAdmin: false,
     utilizedInServices: false,
@@ -935,6 +974,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   const [currentTdsFileName, setCurrentTdsFileName] = useState<string | null>(null);
   const [otherDocsFile, setOtherDocsFile] = useState<File | null>(null);
   const [currentOtherDocsFileName, setCurrentOtherDocsFileName] = useState<string | null>(null);
+  const [isTraceabilityModalOpen, setIsTraceabilityModalOpen] = useState(false);
 
   // Sync legacy department field with first assigned department
   useEffect(() => {
@@ -1352,6 +1392,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       utilizedInPL1: false,
       utilizedInPL2: false,
       traceabilityRequired: false,
+      traceabilityFields: [],
       utilizedInFacilities: false,
       utilizedInAdmin: false,
       utilizedInServices: false,
@@ -1387,6 +1428,32 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
 
   const handleCheckboxChange = useCallback((name: string, checked: boolean) => {
     setFormData((prev) => ({ ...prev, [name]: checked }));
+  }, []);
+
+  const [wasTraceabilityCheckedBeforeModal, setWasTraceabilityCheckedBeforeModal] = useState(false);
+
+  const handleTraceabilityClick = useCallback(() => {
+    setWasTraceabilityCheckedBeforeModal(formData.traceabilityRequired);
+    setIsTraceabilityModalOpen(true);
+  }, [formData.traceabilityRequired]);
+
+  const handleCloseTraceabilityModal = useCallback(() => {
+    setIsTraceabilityModalOpen(false);
+    // If modal was opened from a new checkbox click (not previously checked), uncheck on cancel
+    if (!wasTraceabilityCheckedBeforeModal) {
+      setFormData((prev) => ({
+        ...prev,
+        traceabilityRequired: false,
+      }));
+    }
+  }, [wasTraceabilityCheckedBeforeModal]);
+
+  const handleSaveTraceabilityFields = useCallback((fields: string[]) => {
+    setFormData((prev) => ({
+      ...prev,
+      traceabilityRequired: true,
+      traceabilityFields: fields,
+    }));
   }, []);
 
   const handleSdsFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1459,6 +1526,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         utilizedInPL1: formData.utilizedInPL1,
         utilizedInPL2: formData.utilizedInPL2,
         traceabilityRequired: formData.traceabilityRequired,
+        traceabilityFields: formData.traceabilityFields,
         utilizedInFacilities: formData.utilizedInFacilities,
         utilizedInAdmin: formData.utilizedInAdmin,
         utilizedInServices: formData.utilizedInServices,
@@ -1514,6 +1582,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       utilizedInPL1: item.utilizedInPL1 || false,
       utilizedInPL2: item.utilizedInPL2 || false,
       traceabilityRequired: item.traceabilityRequired || false,
+      traceabilityFields: (item as any).traceabilityFields || [],
       utilizedInFacilities: item.utilizedInFacilities || false,
       utilizedInAdmin: item.utilizedInAdmin || false,
       utilizedInServices: item.utilizedInServices || false,
@@ -1761,6 +1830,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                 currentTdsFileName={currentTdsFileName}
                 otherDocsFile={otherDocsFile}
                 currentOtherDocsFileName={currentOtherDocsFileName}
+                onTraceabilityClick={handleTraceabilityClick}
+                isTraceabilityModalOpen={isTraceabilityModalOpen}
+                onCloseTraceabilityModal={handleCloseTraceabilityModal}
+                onSaveTraceabilityFields={handleSaveTraceabilityFields}
               />
             </DialogContent>
           </Dialog>
@@ -2333,6 +2406,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
             currentTdsFileName={currentTdsFileName}
             otherDocsFile={otherDocsFile}
             currentOtherDocsFileName={currentOtherDocsFileName}
+            onTraceabilityClick={handleTraceabilityClick}
+            isTraceabilityModalOpen={isTraceabilityModalOpen}
+            onCloseTraceabilityModal={handleCloseTraceabilityModal}
+            onSaveTraceabilityFields={handleSaveTraceabilityFields}
           />
           {editingItem?.agPartNumber && (
             <div className="mt-6 border-t pt-6">

@@ -965,6 +965,7 @@ export interface IStorage {
   updateVendorMonthlyEvaluation(id: number, data: Partial<InsertVendorMonthlyEvaluation>): Promise<VendorMonthlyEvaluation>;
   deleteVendorMonthlyEvaluation(id: number): Promise<void>;
   bulkCreateVendorMonthlyEvaluations(data: InsertVendorMonthlyEvaluation[]): Promise<VendorMonthlyEvaluation[]>;
+  getVendorEvaluationsYtdSummary(year: number, currentMonth: number): Promise<{overallAveragePercent: number; totalScores: number; recordedScoreCount: number}>;
 
   // Follow-up order methods
   createFollowupOrder(data: InsertFollowupOrder): Promise<FollowupOrder>;
@@ -6470,8 +6471,56 @@ export class DatabaseStorage implements IStorage {
     const total = Number(countResult.count);
     const pageCount = Math.ceil(total / pageSize) || 1;
 
+    // Fetch YTD scores for the vendors in this page
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    
+    const vendorIds = data.map(v => v.id);
+    
+    const ytdScores = vendorIds.length > 0 ? await db
+      .select({
+        vendorId: vendorMonthlyEvaluations.vendorId,
+        totalScore: sql<number>`
+          COALESCE(SUM(quality_score), 0) +
+          COALESCE(SUM(cost_score), 0) +
+          COALESCE(SUM(delivery_score), 0) +
+          COALESCE(SUM(response_score), 0)
+        `,
+        recordedScoreCount: sql<number>`
+          (COUNT(quality_score) +
+           COUNT(cost_score) +
+           COUNT(delivery_score) +
+           COUNT(response_score))
+        `,
+      })
+      .from(vendorMonthlyEvaluations)
+      .where(
+        and(
+          inArray(vendorMonthlyEvaluations.vendorId, vendorIds),
+          eq(vendorMonthlyEvaluations.year, currentYear),
+          sql`${vendorMonthlyEvaluations.month} <= ${currentMonth}`
+        )
+      )
+      .groupBy(vendorMonthlyEvaluations.vendorId)
+    : [];
+
+    // Create a map of vendor ID to YTD total score
+    const ytdScoreMap = new Map(
+      ytdScores.map(score => [
+        score.vendorId,
+        score.recordedScoreCount > 0 ? score.totalScore : null
+      ])
+    );
+
+    // Enrich vendor data with YTD total scores
+    const enrichedData = data.map(vendor => ({
+      ...vendor,
+      ytdTotalScore: ytdScoreMap.get(vendor.id) ?? null,
+    }));
+
     return {
-      data,
+      data: enrichedData,
       meta: { page, pageSize, total, pageCount },
     };
   }
@@ -6592,6 +6641,46 @@ export class DatabaseStorage implements IStorage {
   async bulkCreateVendorMonthlyEvaluations(data: InsertVendorMonthlyEvaluation[]): Promise<VendorMonthlyEvaluation[]> {
     if (data.length === 0) return [];
     return await db.insert(vendorMonthlyEvaluations).values(data).returning();
+  }
+
+  async getVendorEvaluationsYtdSummary(year: number, currentMonth: number): Promise<{overallAveragePercent: number; totalScores: number; recordedScoreCount: number}> {
+    // Use SQL aggregation to sum scores and count non-null values
+    const result = await db
+      .select({
+        totalScores: sql<number>`
+          COALESCE(SUM(quality_score), 0) +
+          COALESCE(SUM(cost_score), 0) +
+          COALESCE(SUM(delivery_score), 0) +
+          COALESCE(SUM(response_score), 0)
+        `.as('totalScores'),
+        recordedScoreCount: sql<number>`
+          (COUNT(quality_score) +
+           COUNT(cost_score) +
+           COUNT(delivery_score) +
+           COUNT(response_score))
+        `.as('recordedScoreCount')
+      })
+      .from(vendorMonthlyEvaluations)
+      .where(
+        and(
+          eq(vendorMonthlyEvaluations.year, year),
+          sql`${vendorMonthlyEvaluations.month} <= ${currentMonth}`
+        )
+      );
+    
+    const { totalScores, recordedScoreCount } = result[0] || { totalScores: 0, recordedScoreCount: 0 };
+    
+    // Calculate percentage: (totalScores / (recordedScoreCount * 5)) * 100
+    // Each score is out of 5, so max possible = recordedScoreCount * 5
+    const overallAveragePercent = recordedScoreCount > 0
+      ? (totalScores / (recordedScoreCount * 5)) * 100
+      : 0;
+    
+    return {
+      overallAveragePercent: Math.round(overallAveragePercent * 10) / 10, // Round to 1 decimal
+      totalScores,
+      recordedScoreCount
+    };
   }
 
   // Vendor PO CRUD

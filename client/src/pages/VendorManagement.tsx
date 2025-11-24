@@ -244,6 +244,20 @@ export default function VendorManagement() {
     },
   });
 
+  // Fetch YTD overall average summary
+  const { data: ytdSummary } = useQuery<{
+    overallAveragePercent: number;
+    totalScores: number;
+    recordedScoreCount: number;
+  }>({
+    queryKey: ['/api/vendors/evaluations/ytd-summary'],
+    queryFn: async () => {
+      const res = await fetch('/api/vendors/evaluations/ytd-summary');
+      if (!res.ok) throw new Error('Failed to fetch YTD summary');
+      return res.json();
+    },
+  });
+
   // Create vendor mutation
   const createVendorMutation = useMutation({
     mutationFn: async (data: VendorFormData) => {
@@ -852,25 +866,11 @@ export default function VendorManagement() {
           <h1 className="text-3xl font-bold" data-testid="text-page-title">
             Vendor Management
           </h1>
-          {vendorsData && (() => {
-            const vendorsWithScores = vendorsData.data.filter(v => 
-              v.qualityScore || v.costScore || v.deliveryScore || v.responseScore
-            );
-            if (vendorsWithScores.length === 0) return null;
-            
-            const totalPoints = vendorsWithScores.reduce((sum, vendor) => {
-              return sum + (vendor.qualityScore ?? 0) + (vendor.costScore ?? 0) + 
-                     (vendor.deliveryScore ?? 0) + (vendor.responseScore ?? 0);
-            }, 0);
-            const maxPossiblePoints = vendorsWithScores.length * 20;
-            const overallAverage = ((totalPoints / maxPossiblePoints) * 100).toFixed(1);
-            
-            return (
-              <div className="text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full font-semibold">
-                Overall Average: {overallAverage}%
-              </div>
-            );
-          })()}
+          {ytdSummary && ytdSummary.recordedScoreCount > 0 && (
+            <div className="text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full font-semibold">
+              Overall Average (YTD): {ytdSummary.overallAveragePercent}%
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <Button
@@ -1689,8 +1689,8 @@ export default function VendorManagement() {
                           <FormItem>
                             <FormLabel>Quality</FormLabel>
                             <Select
-                              value={field.value?.toString() || ''}
-                              onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                              value={field.value?.toString() || 'na'}
+                              onValueChange={(value) => field.onChange(value === 'na' ? null : parseInt(value))}
                             >
                               <FormControl>
                                 <SelectTrigger data-testid="select-quality-score">
@@ -1698,11 +1698,12 @@ export default function VendorManagement() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="5">5 – Excellent</SelectItem>
-                                <SelectItem value="4">4 – Good</SelectItem>
-                                <SelectItem value="3">3 – Acceptable</SelectItem>
-                                <SelectItem value="2">2 – Needs improvement</SelectItem>
-                                <SelectItem value="1">1 – Poor</SelectItem>
+                                <SelectItem value="5">5</SelectItem>
+                                <SelectItem value="4">4</SelectItem>
+                                <SelectItem value="3">3</SelectItem>
+                                <SelectItem value="2">2</SelectItem>
+                                <SelectItem value="1">1</SelectItem>
+                                <SelectItem value="na">N/A</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -1717,8 +1718,8 @@ export default function VendorManagement() {
                           <FormItem>
                             <FormLabel>Cost</FormLabel>
                             <Select
-                              value={field.value?.toString() || ''}
-                              onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                              value={field.value?.toString() || 'na'}
+                              onValueChange={(value) => field.onChange(value === 'na' ? null : parseInt(value))}
                             >
                               <FormControl>
                                 <SelectTrigger data-testid="select-cost-score">
@@ -1726,11 +1727,12 @@ export default function VendorManagement() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="5">5 – Excellent</SelectItem>
-                                <SelectItem value="4">4 – Good</SelectItem>
-                                <SelectItem value="3">3 – Acceptable</SelectItem>
-                                <SelectItem value="2">2 – Needs improvement</SelectItem>
-                                <SelectItem value="1">1 – Poor</SelectItem>
+                                <SelectItem value="5">5</SelectItem>
+                                <SelectItem value="4">4</SelectItem>
+                                <SelectItem value="3">3</SelectItem>
+                                <SelectItem value="2">2</SelectItem>
+                                <SelectItem value="1">1</SelectItem>
+                                <SelectItem value="na">N/A</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -1745,8 +1747,8 @@ export default function VendorManagement() {
                           <FormItem>
                             <FormLabel>Delivery</FormLabel>
                             <Select
-                              value={field.value?.toString() || ''}
-                              onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                              value={field.value?.toString() || 'na'}
+                              onValueChange={(value) => field.onChange(value === 'na' ? null : parseInt(value))}
                             >
                               <FormControl>
                                 <SelectTrigger data-testid="select-delivery-score">
@@ -1754,11 +1756,12 @@ export default function VendorManagement() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="5">5 – Excellent</SelectItem>
-                                <SelectItem value="4">4 – Good</SelectItem>
-                                <SelectItem value="3">3 – Acceptable</SelectItem>
-                                <SelectItem value="2">2 – Needs improvement</SelectItem>
-                                <SelectItem value="1">1 – Poor</SelectItem>
+                                <SelectItem value="5">5</SelectItem>
+                                <SelectItem value="4">4</SelectItem>
+                                <SelectItem value="3">3</SelectItem>
+                                <SelectItem value="2">2</SelectItem>
+                                <SelectItem value="1">1</SelectItem>
+                                <SelectItem value="na">N/A</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -1773,8 +1776,8 @@ export default function VendorManagement() {
                           <FormItem>
                             <FormLabel>Response</FormLabel>
                             <Select
-                              value={field.value?.toString() || ''}
-                              onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                              value={field.value?.toString() || 'na'}
+                              onValueChange={(value) => field.onChange(value === 'na' ? null : parseInt(value))}
                             >
                               <FormControl>
                                 <SelectTrigger data-testid="select-response-score">
@@ -1782,11 +1785,12 @@ export default function VendorManagement() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="5">5 – Excellent</SelectItem>
-                                <SelectItem value="4">4 – Good</SelectItem>
-                                <SelectItem value="3">3 – Acceptable</SelectItem>
-                                <SelectItem value="2">2 – Needs improvement</SelectItem>
-                                <SelectItem value="1">1 – Poor</SelectItem>
+                                <SelectItem value="5">5</SelectItem>
+                                <SelectItem value="4">4</SelectItem>
+                                <SelectItem value="3">3</SelectItem>
+                                <SelectItem value="2">2</SelectItem>
+                                <SelectItem value="1">1</SelectItem>
+                                <SelectItem value="na">N/A</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -2082,19 +2086,9 @@ export default function VendorManagement() {
                       )}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400 text-center">
-                      {(() => {
-                        const scores = [
-                          vendor.qualityScore,
-                          vendor.costScore,
-                          vendor.deliveryScore,
-                          vendor.responseScore
-                        ].filter(score => score !== null && score !== undefined);
-                        
-                        if (scores.length === 0) return '—';
-                        
-                        const total = scores.reduce((sum, score) => sum + score, 0);
-                        return total.toFixed(1);
-                      })()}
+                      {(vendor as any).ytdTotalScore 
+                        ? Number((vendor as any).ytdTotalScore).toFixed(1)
+                        : '—'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end gap-2">
@@ -2401,8 +2395,8 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
 
   const handleCellClick = (month: number, field: string) => {
     const evaluation = getEvaluationForMonth(month);
-    const value = evaluation?.[field] || '';
-    setCellValue(value.toString());
+    const value = evaluation?.[field];
+    setCellValue(value ? value.toString() : 'na');
     setEditingCell({ month, field });
   };
 
@@ -2471,18 +2465,45 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
 
     if (isEditing) {
       return (
-        <Input
-          type="number"
-          min="1"
-          max="5"
+        <Select
           value={cellValue}
-          onChange={(e) => setCellValue(e.target.value)}
-          onBlur={() => handleCellUpdate(month, field)}
-          onKeyDown={(e) => handleKeyDown(e, month, field)}
-          className="w-12 h-8 text-center p-1"
-          autoFocus
-          data-testid={`input-${field}-${month}`}
-        />
+          onValueChange={(newValue) => {
+            setCellValue(newValue);
+            // Auto-save on selection
+            const numValue = newValue === 'na' ? null : parseInt(newValue);
+            const evaluation = getEvaluationForMonth(month);
+            const baseData: any = {
+              vendorId,
+              month,
+              year: selectedYear,
+              qualityScore: evaluation?.qualityScore ?? null,
+              costScore: evaluation?.costScore ?? null,
+              deliveryScore: evaluation?.deliveryScore ?? null,
+              responseScore: evaluation?.responseScore ?? null,
+            };
+            baseData[field] = numValue;
+            const newPendingChanges = new Map(pendingChanges);
+            newPendingChanges.set(key, baseData);
+            setPendingChanges(newPendingChanges);
+            setEditingCell(null);
+          }}
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setEditingCell(null);
+          }}
+        >
+          <SelectTrigger className="w-16 h-8 text-center p-1" data-testid={`select-${field}-${month}`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="5">5</SelectItem>
+            <SelectItem value="4">4</SelectItem>
+            <SelectItem value="3">3</SelectItem>
+            <SelectItem value="2">2</SelectItem>
+            <SelectItem value="1">1</SelectItem>
+            <SelectItem value="na">N/A</SelectItem>
+          </SelectContent>
+        </Select>
       );
     }
 

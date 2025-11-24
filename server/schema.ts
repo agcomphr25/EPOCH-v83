@@ -3725,6 +3725,9 @@ export const p2SerializedItemCustomData = pgTable('p2_serialized_item_custom_dat
 
 // P2 Layup Schedules - Schedule P2 serialized items for layup with full traceability
 export const p2LayupSchedules = pgTable('p2_layup_schedules', {
+
+// P2 Work Tasks - Tracks individual task sessions with start/end times for AS9100 traceability
+export const p2WorkTasks = pgTable('p2_work_tasks', {
   id: uuid('id').defaultRandom().primaryKey(),
   serializedItemId: uuid('serialized_item_id')
     .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
@@ -3756,6 +3759,32 @@ export const p2LayupSchedules = pgTable('p2_layup_schedules', {
   scheduledDateIdx: index('p2_layup_schedules_date_idx').on(table.scheduledDate),
   barcodeIdx: index('p2_layup_schedules_barcode_idx').on(table.barcode),
   statusIdx: index('p2_layup_schedules_status_idx').on(table.status),
+
+  partNumber: text('part_number').notNull(), // Denormalized for display
+  partName: text('part_name').notNull(), // Denormalized for display
+  department: text('department').notNull(), // Department where task was performed
+  employeeId: integer('employee_id')
+    .references(() => employees.id, { onDelete: 'restrict' })
+    .notNull(), // FK to employees table with restrict to prevent deletion of employees with task history
+  employeeCode: text('employee_code').notNull(), // Employee badge code
+  employeeName: text('employee_name').notNull(), // Denormalized for display
+  certificationId: integer('certification_id')
+    .references(() => p2EmployeePartCertifications.id, { onDelete: 'set null' }), // Link to certification used for audit trail
+  status: text('status').notNull().default('IN_PROGRESS'), // IN_PROGRESS, COMPLETED, PAUSED
+  startedAt: timestamp('started_at').notNull().defaultNow(), // Task start timestamp
+  completedAt: timestamp('completed_at'), // Task completion timestamp
+  durationMinutes: integer('duration_minutes'), // Calculated duration in minutes
+  traceabilityData: jsonb('traceability_data'), // Materials/components scanned/entered: [{ inventoryPartId, partNumber, type, label, value }]
+  customData: jsonb('custom_data'), // Custom field values entered by technician
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  itemIdIdx: index('p2_work_tasks_item_id_idx').on(table.serializedItemId),
+  employeeIdIdx: index('p2_work_tasks_employee_id_idx').on(table.employeeId),
+  statusIdx: index('p2_work_tasks_status_idx').on(table.status),
+  departmentIdx: index('p2_work_tasks_department_idx').on(table.department),
+  itemStatusIdx: index('p2_work_tasks_item_status_idx').on(table.serializedItemId, table.status), // Composite index for active task checks
 }));
 
 // Production Orders - separate from regular orders for PO tracking
@@ -4204,6 +4233,8 @@ export const insertP2SerializedItemCustomDataSchema = createInsertSchema(p2Seria
   });
 
 export const insertP2LayupScheduleSchema = createInsertSchema(p2LayupSchedules)
+
+export const insertP2WorkTaskSchema = createInsertSchema(p2WorkTasks)
   .omit({
     id: true,
     createdAt: true,
@@ -4229,6 +4260,20 @@ export const insertP2LayupScheduleSchema = createInsertSchema(p2LayupSchedules)
     notes: z.string().optional(),
     cuttingPacketId: z.string().optional(),
     status: z.enum(['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']).default('SCHEDULED'),
+    partNumber: z.string().min(1, 'Part number is required'),
+    partName: z.string().min(1, 'Part name is required'),
+    department: z.string().min(1, 'Department is required'),
+    employeeId: z.number().min(1, 'Employee ID is required'),
+    employeeCode: z.string().min(1, 'Employee code is required'),
+    employeeName: z.string().min(1, 'Employee name is required'),
+    certificationId: z.number().optional().nullable(),
+    status: z.enum(['IN_PROGRESS', 'COMPLETED', 'PAUSED']).default('IN_PROGRESS'),
+    startedAt: z.coerce.date().optional(),
+    completedAt: z.coerce.date().optional().nullable(),
+    durationMinutes: z.number().optional().nullable(),
+    traceabilityData: z.any().optional().nullable(),
+    customData: z.any().optional().nullable(),
+    notes: z.string().optional().nullable(),
   });
 
 // Part Routing Types
@@ -4241,6 +4286,8 @@ export type InsertP2SerializedItemCustomData = z.infer<typeof insertP2Serialized
 export type P2SerializedItemCustomData = typeof p2SerializedItemCustomData.$inferSelect;
 export type InsertP2LayupSchedule = z.infer<typeof insertP2LayupScheduleSchema>;
 export type P2LayupSchedule = typeof p2LayupSchedules.$inferSelect;
+export type InsertP2WorkTask = z.infer<typeof insertP2WorkTaskSchema>;
+export type P2WorkTask = typeof p2WorkTasks.$inferSelect;
 
 // Production Order Types
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;

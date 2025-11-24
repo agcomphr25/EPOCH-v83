@@ -254,6 +254,31 @@ export default function LoginPage() {
                 Quick login for employees with badge codes (e.g., EMP001)
               </p>
             </div>
+
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-gray-300 dark:border-gray-600" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white dark:bg-gray-800 px-2 text-gray-500 dark:text-gray-400">
+                  Production Floor
+                </span>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => setLocation('/p2-traveler')}
+              data-testid="button-p2-traveler"
+            >
+              <Scan className="w-4 h-4 mr-2" />
+              P2 Traveler
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              Production tracking with AS9100 traceability
+            </p>
           </form>
         </CardContent>
       </Card>

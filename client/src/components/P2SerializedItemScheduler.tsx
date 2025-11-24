@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, isSameDay } from 'date-fns';
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, isSameDay, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -464,9 +464,12 @@ export default function P2SerializedItemScheduler() {
               <div className="col-span-5">
                 <div className="grid grid-cols-5 gap-3">
                   {weekDays.map((day) => {
-                    const daySchedules = schedules.filter(s => 
-                      isSameDay(new Date(s.scheduledDate), day)
-                    );
+                    const daySchedules = schedules.filter(s => {
+                      // Parse the date string properly (YYYY-MM-DD format from database)
+                      const scheduleDate = format(parseISO(s.scheduledDate + 'T00:00:00'), 'yyyy-MM-dd');
+                      const targetDate = format(day, 'yyyy-MM-dd');
+                      return scheduleDate === targetDate;
+                    });
                     return (
                       <div key={day.toISOString()}>
                         <div className="flex justify-between items-center mb-2">

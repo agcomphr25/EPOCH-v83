@@ -1698,11 +1698,12 @@ export default function VendorManagement() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="5">5 – Excellent</SelectItem>
-                                <SelectItem value="4">4 – Good</SelectItem>
-                                <SelectItem value="3">3 – Acceptable</SelectItem>
-                                <SelectItem value="2">2 – Needs improvement</SelectItem>
-                                <SelectItem value="1">1 – Poor</SelectItem>
+                                <SelectItem value="5">5</SelectItem>
+                                <SelectItem value="4">4</SelectItem>
+                                <SelectItem value="3">3</SelectItem>
+                                <SelectItem value="2">2</SelectItem>
+                                <SelectItem value="1">1</SelectItem>
+                                <SelectItem value="">N/A</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -1726,11 +1727,12 @@ export default function VendorManagement() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="5">5 – Excellent</SelectItem>
-                                <SelectItem value="4">4 – Good</SelectItem>
-                                <SelectItem value="3">3 – Acceptable</SelectItem>
-                                <SelectItem value="2">2 – Needs improvement</SelectItem>
-                                <SelectItem value="1">1 – Poor</SelectItem>
+                                <SelectItem value="5">5</SelectItem>
+                                <SelectItem value="4">4</SelectItem>
+                                <SelectItem value="3">3</SelectItem>
+                                <SelectItem value="2">2</SelectItem>
+                                <SelectItem value="1">1</SelectItem>
+                                <SelectItem value="">N/A</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -1754,11 +1756,12 @@ export default function VendorManagement() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="5">5 – Excellent</SelectItem>
-                                <SelectItem value="4">4 – Good</SelectItem>
-                                <SelectItem value="3">3 – Acceptable</SelectItem>
-                                <SelectItem value="2">2 – Needs improvement</SelectItem>
-                                <SelectItem value="1">1 – Poor</SelectItem>
+                                <SelectItem value="5">5</SelectItem>
+                                <SelectItem value="4">4</SelectItem>
+                                <SelectItem value="3">3</SelectItem>
+                                <SelectItem value="2">2</SelectItem>
+                                <SelectItem value="1">1</SelectItem>
+                                <SelectItem value="">N/A</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -1782,11 +1785,12 @@ export default function VendorManagement() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="5">5 – Excellent</SelectItem>
-                                <SelectItem value="4">4 – Good</SelectItem>
-                                <SelectItem value="3">3 – Acceptable</SelectItem>
-                                <SelectItem value="2">2 – Needs improvement</SelectItem>
-                                <SelectItem value="1">1 – Poor</SelectItem>
+                                <SelectItem value="5">5</SelectItem>
+                                <SelectItem value="4">4</SelectItem>
+                                <SelectItem value="3">3</SelectItem>
+                                <SelectItem value="2">2</SelectItem>
+                                <SelectItem value="1">1</SelectItem>
+                                <SelectItem value="">N/A</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />

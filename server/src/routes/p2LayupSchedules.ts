@@ -617,7 +617,7 @@ router.post('/layup-schedules/generate-serialized-items/:poItemId', async (req: 
         customerId: po.customerId,
         customerName: po.customerName,
         sequenceNumber: i,
-        currentDepartment: 'Layup',
+        currentDepartment: 'Pending Layup',
         currentStageIndex: 0,
         status: 'ACTIVE',
         departmentHistory: [],
@@ -638,6 +638,54 @@ router.post('/layup-schedules/generate-serialized-items/:poItemId', async (req: 
     });
   } catch (error: any) {
     console.error('Error generating serialized items:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/p2/layup-schedules/send-to-layup/:poItemId - Move serialized items to Layup department
+router.post('/layup-schedules/send-to-layup/:poItemId', async (req: Request, res: Response) => {
+  try {
+    const { poItemId } = req.params;
+    const poItemIdNum = parseInt(poItemId);
+
+    if (isNaN(poItemIdNum)) {
+      return res.status(400).json({ error: 'Invalid PO item ID' });
+    }
+
+    // Get all serialized items for this PO item that are in Pending Layup
+    const itemsToUpdate = await db
+      .select()
+      .from(p2SerializedItems)
+      .where(
+        and(
+          eq(p2SerializedItems.poItemId, poItemIdNum),
+          eq(p2SerializedItems.currentDepartment, 'Pending Layup')
+        )
+      );
+
+    if (itemsToUpdate.length === 0) {
+      return res.status(404).json({ 
+        error: 'No items in Pending Layup status found for this PO item'
+      });
+    }
+
+    // Update all items to Layup department
+    await db
+      .update(p2SerializedItems)
+      .set({ currentDepartment: 'Layup' })
+      .where(
+        and(
+          eq(p2SerializedItems.poItemId, poItemIdNum),
+          eq(p2SerializedItems.currentDepartment, 'Pending Layup')
+        )
+      );
+
+    res.json({
+      message: `Successfully moved ${itemsToUpdate.length} items to Layup department`,
+      count: itemsToUpdate.length,
+    });
+  } catch (error: any) {
+    console.error('Error moving items to Layup:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowLeft, Plus, Pencil, Trash2, Package } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Package, Send } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
@@ -180,13 +180,36 @@ export function P2POItemsManager({
       });
       toast({
         title: 'Success',
-        description: `Generated ${data.count} serialized items ready for layup scheduling`,
+        description: `Generated ${data.count} serialized items in Pending Layup status`,
       });
     },
     onError: (error: any) => {
       toast({
         title: 'Error',
         description: error.message || 'Failed to generate serialized items',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const sendToLayupMutation = useMutation({
+    mutationFn: (poItemId: number) =>
+      apiRequest(`/api/p2/layup-schedules/send-to-layup/${poItemId}`, {
+        method: 'POST',
+      }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2/layup-schedules/unscheduled'],
+      });
+      toast({
+        title: 'Success',
+        description: `${data.count} items sent to Layup Scheduler`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to send items to Layup',
         variant: 'destructive',
       });
     },
@@ -445,10 +468,21 @@ export function P2POItemsManager({
                             onClick={() => generateSerializedItemsMutation.mutate(item.id)}
                             disabled={generateSerializedItemsMutation.isPending}
                             className="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
-                            title="Generate serialized items for layup scheduling"
+                            title="Generate serialized items (Pending Layup status)"
                             data-testid={`button-generate-${item.id}`}
                           >
                             <Package className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => sendToLayupMutation.mutate(item.id)}
+                            disabled={sendToLayupMutation.isPending}
+                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                            title="Send generated items to Layup Scheduler"
+                            data-testid={`button-send-to-layup-${item.id}`}
+                          >
+                            <Send className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"

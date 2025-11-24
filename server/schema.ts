@@ -6027,32 +6027,7 @@ export const insertInvoiceNumberSchema = createInsertSchema(invoiceNumbers).omit
 export type InvoiceNumber = typeof invoiceNumbers.$inferSelect;
 export type InsertInvoiceNumber = z.infer<typeof insertInvoiceNumberSchema>;
 
-// PDFME SYSTEM COMMENTED OUT - NOT IN USE
-// PDF Templates - Visual template designer for PDF generation
-export const pdfTemplates = pgTable('pdf_templates', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(), // e.g., "Vendor Purchase Order", "Sales Order"
-  type: text('type').notNull(), // vendor_po, sales_order, invoice, packing_slip, etc.
-  description: text('description'),
-  templateJson: jsonb('template_json').notNull(), // template structure (formerly pdfme)
-  basePdfUrl: text('base_pdf_url'), // Optional: URL to base PDF if using existing template
-  isActive: boolean('is_active').default(true),
-  isDefault: boolean('is_default').default(false), // Default template for this type
-  createdBy: text('created_by').notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-// Insert Schema
-export const insertPdfTemplateSchema = createInsertSchema(pdfTemplates).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-// Types
-export type PdfTemplate = typeof pdfTemplates.$inferSelect;
-export type InsertPdfTemplate = z.infer<typeof insertPdfTemplateSchema>;
+// PDFME SYSTEM COMMENTED OUT - NOT IN USE - Table replaced with new pdf_templates design below
 
 // Quotes - Customer quotes for P2 business (stub for future implementation)
 export const quotes = pgTable('quotes', {
@@ -6332,5 +6307,280 @@ export const insertCustomerWatchRuleSchema = createInsertSchema(customerWatchRul
 // Types
 export type CustomerWatchRule = typeof customerWatchRules.$inferSelect;
 export type InsertCustomerWatchRule = z.infer<typeof insertCustomerWatchRuleSchema>;
+
+// ===========================
+// COST ACCOUNTING MODULE
+// ===========================
+
+// Account Categories - Classifications for chart of accounts
+export const accountCategories = pgTable('account_categories', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull().unique(), // e.g., 'Assets', 'Liabilities', 'Revenue', 'COGS', 'Operating Expenses'
+  code: text('code').notNull().unique(), // e.g., '1000', '2000', '3000', '4000', '5000'
+  type: text('type').notNull(), // 'asset', 'liability', 'equity', 'revenue', 'expense', 'cogs'
+  description: text('description'),
+  sortOrder: integer('sort_order').default(0),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertAccountCategorySchema = createInsertSchema(accountCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AccountCategory = typeof accountCategories.$inferSelect;
+export type InsertAccountCategory = z.infer<typeof insertAccountCategorySchema>;
+
+// Chart of Accounts - Individual accounting line items
+export const accounts = pgTable('accounts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  accountNumber: text('account_number').notNull().unique(), // Auto-generated (e.g., '5100-001')
+  name: text('name').notNull(), // e.g., 'Direct Materials - Carbon Fiber'
+  categoryId: uuid('category_id').references(() => accountCategories.id).notNull(),
+  description: text('description'),
+  isAllocated: boolean('is_allocated').default(false), // True for items like overhead, indirect materials
+  allocationBasis: text('allocation_basis'), // 'direct_labor_hours', 'machine_hours', 'direct_materials', etc.
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  categoryIdIdx: index('accounts_category_id_idx').on(table.categoryId),
+  isActiveIdx: index('accounts_is_active_idx').on(table.isActive),
+}));
+
+export const insertAccountSchema = createInsertSchema(accounts).omit({
+  id: true,
+  accountNumber: true, // Auto-generated
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Account = typeof accounts.$inferSelect;
+export type InsertAccount = z.infer<typeof insertAccountSchema>;
+
+// Monthly Account Entries - Actual monthly amounts for each account
+export const monthlyAccountEntries = pgTable('monthly_account_entries', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'cascade' }).notNull(),
+  year: integer('year').notNull(),
+  month: integer('month').notNull(), // 1-12
+  amount: numeric('amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  notes: text('notes'),
+  source: text('source').default('manual'), // 'manual', 'quickbooks', 'imported'
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  accountIdIdx: index('monthly_entries_account_id_idx').on(table.accountId),
+  yearMonthIdx: index('monthly_entries_year_month_idx').on(table.year, table.month),
+  uniqueAccountYearMonth: unique('unique_account_year_month').on(table.accountId, table.year, table.month),
+}));
+
+export const insertMonthlyAccountEntrySchema = createInsertSchema(monthlyAccountEntries).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MonthlyAccountEntry = typeof monthlyAccountEntries.$inferSelect;
+export type InsertMonthlyAccountEntry = z.infer<typeof insertMonthlyAccountEntrySchema>;
+
+// Allocation Rules - Define how to allocate overhead, indirect materials, etc.
+export const allocationRules = pgTable('allocation_rules', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(), // e.g., 'Manufacturing Overhead Allocation'
+  sourceAccountId: uuid('source_account_id').references(() => accounts.id).notNull(), // Account to allocate from
+  allocationBasis: text('allocation_basis').notNull(), // 'direct_labor_hours', 'machine_hours', 'direct_materials', etc.
+  targetAccountIds: uuid('target_account_ids').array(), // Accounts to allocate to
+  allocationMethod: text('allocation_method').notNull(), // 'proportional', 'equal', 'custom'
+  customRatios: jsonb('custom_ratios'), // Custom allocation ratios if method is 'custom'
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  sourceAccountIdIdx: index('allocation_rules_source_account_id_idx').on(table.sourceAccountId),
+  isActiveIdx: index('allocation_rules_is_active_idx').on(table.isActive),
+}));
+
+export const insertAllocationRuleSchema = createInsertSchema(allocationRules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AllocationRule = typeof allocationRules.$inferSelect;
+export type InsertAllocationRule = z.infer<typeof insertAllocationRuleSchema>;
+
+// Allocation Results - Store calculated allocations for each period
+export const allocationResults = pgTable('allocation_results', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  ruleId: uuid('rule_id').references(() => allocationRules.id, { onDelete: 'cascade' }).notNull(),
+  year: integer('year').notNull(),
+  month: integer('month').notNull(),
+  totalAmount: numeric('total_amount', { precision: 12, scale: 2 }).notNull(),
+  allocations: jsonb('allocations').notNull(), // { accountId: amount, ... }
+  calculatedAt: timestamp('calculated_at').defaultNow(),
+}, (table) => ({
+  ruleIdIdx: index('allocation_results_rule_id_idx').on(table.ruleId),
+  yearMonthIdx: index('allocation_results_year_month_idx').on(table.year, table.month),
+  uniqueRuleYearMonth: unique('unique_rule_year_month').on(table.ruleId, table.year, table.month),
+}));
+
+export const insertAllocationResultSchema = createInsertSchema(allocationResults).omit({
+  id: true,
+  calculatedAt: true,
+});
+
+export type AllocationResult = typeof allocationResults.$inferSelect;
+export type InsertAllocationResult = z.infer<typeof insertAllocationResultSchema>;
+
+// PDF Configuration Settings (Singleton table - should only have one row)
+export const pdfConfigSettings = pgTable('pdf_config_settings', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  margins: jsonb('margins').notNull().default({
+    STANDARD: 40,
+    COMPACT: 30,
+    WIDE: 50,
+  }),
+  fontSizes: jsonb('font_sizes').notNull().default({
+    TITLE_LARGE: 18,
+    TITLE_MEDIUM: 16,
+    TITLE_SMALL: 14,
+    SECTION_HEADER: 12,
+    BODY_LARGE: 10,
+    BODY_MEDIUM: 9,
+    BODY_SMALL: 8,
+    TINY: 7,
+  }),
+  lineHeights: jsonb('line_heights').notNull().default({
+    TITLE: 25,
+    SECTION: 20,
+    BODY: 15,
+    COMPACT: 12,
+    DENSE: 10,
+  }),
+  spacing: jsonb('spacing').notNull().default({
+    SECTION_GAP_LARGE: 40,
+    SECTION_GAP_MEDIUM: 30,
+    SECTION_GAP_SMALL: 20,
+    SECTION_GAP_TINY: 15,
+    COLUMN_GAP: 20,
+    BOX_PADDING: 8,
+    BOX_PADDING_SMALL: 5,
+    LINE_SPACING_LARGE: 15,
+    LINE_SPACING_MEDIUM: 13,
+    LINE_SPACING_SMALL: 11,
+    LINE_SPACING_COMPACT: 9,
+  }),
+  colors: jsonb('colors').notNull().default({
+    TEXT_PRIMARY: { r: 0, g: 0, b: 0 },
+    TEXT_SECONDARY: { r: 0.3, g: 0.3, b: 0.3 },
+    TEXT_TERTIARY: { r: 0.5, g: 0.5, b: 0.5 },
+    TEXT_LIGHT: { r: 0.6, g: 0.6, b: 0.6 },
+    BG_TABLE_HEADER: { r: 0.9, g: 0.9, b: 0.9 },
+    BG_WHITE: { r: 1, g: 1, b: 1 },
+    BG_LIGHT_GRAY: { r: 0.95, g: 0.95, b: 0.95 },
+    BORDER_BLACK: { r: 0, g: 0, b: 0 },
+    BORDER_GRAY: { r: 0.7, g: 0.7, b: 0.7 },
+    BORDER_LIGHT: { r: 0.85, g: 0.85, b: 0.85 },
+    ACCENT_RED: { r: 0.8, g: 0, b: 0 },
+    ACCENT_BLUE: { r: 0, g: 0, b: 0.8 },
+    ACCENT_GREEN: { r: 0, g: 0.6, b: 0 },
+  }),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  updatedBy: text('updated_by'),
+});
+
+export const insertPdfConfigSettingsSchema = createInsertSchema(pdfConfigSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type PdfConfigSettings = typeof pdfConfigSettings.$inferSelect;
+export type InsertPdfConfigSettings = z.infer<typeof insertPdfConfigSettingsSchema>;
+
+// PDF Templates - Template library for different PDF types with custom logos and styling
+export const pdfTemplates = pgTable('pdf_templates', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull().unique(),
+  templateType: text('template_type').notNull(), // 'P1', 'P2', 'RFQ', 'SALES_ORDER', 'INVOICE', etc.
+  description: text('description'),
+  logoPath: text('logo_path'), // Path to uploaded logo file
+  companyName: text('company_name'),
+  companyAddress: text('company_address'),
+  companyPhone: text('company_phone'),
+  companyEmail: text('company_email'),
+  companyWebsite: text('company_website'),
+  headerText: text('header_text'),
+  footerText: text('footer_text'),
+  margins: jsonb('margins').notNull().default({
+    STANDARD: 40,
+    COMPACT: 30,
+    WIDE: 50,
+  }),
+  fontSizes: jsonb('font_sizes').notNull().default({
+    TITLE_LARGE: 18,
+    TITLE_MEDIUM: 16,
+    TITLE_SMALL: 14,
+    SECTION_HEADER: 12,
+    BODY_LARGE: 10,
+    BODY_MEDIUM: 9,
+    BODY_SMALL: 8,
+    TINY: 7,
+  }),
+  lineHeights: jsonb('line_heights').notNull().default({
+    TITLE: 25,
+    SECTION: 20,
+    BODY: 15,
+    COMPACT: 12,
+    DENSE: 10,
+  }),
+  spacing: jsonb('spacing').notNull().default({
+    SECTION_GAP_LARGE: 40,
+    SECTION_GAP_MEDIUM: 30,
+    SECTION_GAP_SMALL: 20,
+    SECTION_GAP_TINY: 15,
+    COLUMN_GAP: 20,
+    BOX_PADDING: 8,
+    BOX_PADDING_SMALL: 5,
+    LINE_SPACING_LARGE: 15,
+    LINE_SPACING_MEDIUM: 13,
+    LINE_SPACING_SMALL: 11,
+    LINE_SPACING_COMPACT: 9,
+  }),
+  colors: jsonb('colors').notNull().default({
+    TEXT_PRIMARY: { r: 0, g: 0, b: 0 },
+    TEXT_SECONDARY: { r: 0.3, g: 0.3, b: 0.3 },
+    TEXT_TERTIARY: { r: 0.5, g: 0.5, b: 0.5 },
+    TEXT_LIGHT: { r: 0.6, g: 0.6, b: 0.6 },
+    BG_TABLE_HEADER: { r: 0.9, g: 0.9, b: 0.9 },
+    BG_WHITE: { r: 1, g: 1, b: 1 },
+    BG_LIGHT_GRAY: { r: 0.95, g: 0.95, b: 0.95 },
+    BORDER_BLACK: { r: 0, g: 0, b: 0 },
+    BORDER_GRAY: { r: 0.7, g: 0.7, b: 0.7 },
+    BORDER_LIGHT: { r: 0.85, g: 0.85, b: 0.85 },
+    ACCENT_RED: { r: 0.8, g: 0, b: 0 },
+    ACCENT_BLUE: { r: 0, g: 0, b: 0.8 },
+    ACCENT_GREEN: { r: 0, g: 0.6, b: 0 },
+  }),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  createdBy: text('created_by'),
+  updatedBy: text('updated_by'),
+}, (table) => ({
+  templateTypeIdx: index('pdf_templates_type_idx').on(table.templateType),
+}));
+
+export const insertPdfTemplateSchema = createInsertSchema(pdfTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PdfTemplate = typeof pdfTemplates.$inferSelect;
+export type InsertPdfTemplate = z.infer<typeof insertPdfTemplateSchema>;
 
 export * from './calendar.schema';

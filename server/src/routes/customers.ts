@@ -452,6 +452,457 @@ router.get('/rfq-assessments/:id/attachments/:fileName', async (req: Request, re
   }
 });
 
+// RFQ Risk Assessment PDF Generation
+router.get('/rfq-assessments/:id/pdf', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const assessment = await storage.getRFQRiskAssessmentById(id);
+    
+    if (!assessment) {
+      return res.status(404).json({ error: 'RFQ Risk Assessment not found' });
+    }
+
+    // Load RFQ template (if available)
+    const {
+      loadActiveTemplate,
+      embedTemplateLogo,
+      getTemplateFontSizes,
+      getTemplateSpacing,
+      getTemplateColors,
+      getTemplateLineHeights,
+      getTemplateCompanyInfo,
+      getTemplateMargins,
+    } = await import('../../utils/pdf/templateLoader');
+    
+    const template = await loadActiveTemplate('rfq_risk_assessment');
+    console.log('📄 [RFQ PDF] Using template:', template?.name || 'Default');
+
+    // Import PDF generation utilities
+    const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+    const { PAGE_SIZES, getPrintableArea } = await import('../../utils/pdf/pdfConfig');
+    
+    // Get template-specific or default settings
+    const MARGINS = getTemplateMargins(template);
+    const FONT_SIZES = getTemplateFontSizes(template);
+    const SPACING = getTemplateSpacing(template);
+    const COLORS = getTemplateColors(template);
+    const LINE_HEIGHTS = getTemplateLineHeights(template);
+    const COMPANY_INFO = getTemplateCompanyInfo(template);
+    const LOGO_CONFIG = { WIDTH: 150, VERTICAL_SPACING: 15 };
+    
+    const DEFAULT_MARGIN = MARGINS.STANDARD;
+
+    // Create a new PDF document
+    const pdfDoc = await PDFDocument.create();
+    const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    // Embed logo once and reuse (performance + layout fix)
+    const embeddedLogo = await embedTemplateLogo(pdfDoc, template);
+
+    // Initialize first page
+    let page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
+    const pageSize = page.getSize();
+    let dims = getPrintableArea(pageSize.width, pageSize.height);
+    let currentY = dims.margin + dims.height;
+    
+    // Shared header drawing function (reuses embedded logo)
+    const drawTemplateHeader = () => {
+      currentY = dims.margin + dims.height;
+      if (embeddedLogo) {
+        const logoWidth = LOGO_CONFIG.WIDTH;
+        const logoHeight = logoWidth * (embeddedLogo.height / embeddedLogo.width);
+        
+        page.drawImage(embeddedLogo, {
+          x: dims.margin,
+          y: currentY - logoHeight,
+          width: logoWidth,
+          height: logoHeight,
+        });
+        
+        currentY -= logoHeight + LOGO_CONFIG.VERTICAL_SPACING;
+        page.drawText(COMPANY_INFO.ADDRESS, {
+          x: dims.margin,
+          y: currentY,
+          size: FONT_SIZES.BODY_SMALL,
+          font: regularFont,
+          color: COLORS.TEXT_SECONDARY,
+        });
+        currentY -= LINE_HEIGHTS.COMPACT;
+        page.drawText(`Phone: ${COMPANY_INFO.PHONE} | Email: ${COMPANY_INFO.EMAIL}`, {
+          x: dims.margin,
+          y: currentY,
+          size: FONT_SIZES.BODY_SMALL,
+          font: regularFont,
+          color: COLORS.TEXT_SECONDARY,
+        });
+        currentY -= SPACING.SECTION_GAP_SMALL;
+      } else {
+        page.drawText(COMPANY_INFO.NAME, {
+          x: dims.margin,
+          y: currentY,
+          size: FONT_SIZES.TITLE_LARGE,
+          font: boldFont,
+          color: COLORS.TEXT_PRIMARY,
+        });
+        currentY -= SPACING.SECTION_GAP_SMALL;
+      }
+    };
+    
+    // Draw initial header
+    drawTemplateHeader();
+
+    // Shared startNewPage helper
+    const startNewPage = () => {
+      page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
+      const pageSize = page.getSize();
+      dims = getPrintableArea(pageSize.width, pageSize.height);
+      drawTemplateHeader();
+    };
+
+    // Shared checkNewPage helper
+    const checkNewPage = async (requiredSpace: number) => {
+      if (currentY - requiredSpace < dims.margin) {
+        await startNewPage();
+      }
+    };
+    
+    // Helper functions for drawing (template-aware wrappers matching pdfConfig signatures)
+    const wrapText = (text: string, maxWidth: number, fontSize: number, font: any): string[] => {
+      const paragraphs = text.split(/\r?\n/);
+      const allLines: string[] = [];
+      for (const paragraph of paragraphs) {
+        if (!paragraph.trim()) {
+          allLines.push('');
+          continue;
+        }
+        const words = paragraph.split(' ');
+        let currentLine = '';
+        for (const word of words) {
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+          if (testWidth > maxWidth && currentLine) {
+            allLines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine = testLine;
+          }
+        }
+        if (currentLine) {
+          allLines.push(currentLine);
+        }
+      }
+      return allLines;
+    };
+    
+    const drawSectionHeader = (pg: any, text: string, x: number, y: number, font: any): number => {
+      pg.drawText(text, {
+        x,
+        y,
+        size: FONT_SIZES.SECTION_HEADER,
+        font,
+        color: COLORS.TEXT_PRIMARY,
+      });
+      return LINE_HEIGHTS.SECTION;
+    };
+    
+    const drawKeyValuePair = (pg: any, key: string, value: string, x: number, y: number, regFont: any, boldFontParam?: any): number => {
+      pg.drawText(`${key}: ${value}`, {
+        x,
+        y,
+        size: FONT_SIZES.BODY_MEDIUM,
+        font: boldFontParam || regFont,
+      });
+      return LINE_HEIGHTS.BODY;
+    };
+    
+    const drawInfoBox = (pg: any, x: number, y: number, width: number, height: number, title?: string, font?: any) => {
+      pg.drawRectangle({
+        x,
+        y,
+        width,
+        height,
+        borderColor: COLORS.BORDER_BLACK,
+        borderWidth: 1,
+      });
+      if (title && font) {
+        pg.drawText(title, {
+          x,
+          y: y + height + SPACING.LINE_SPACING_SMALL,
+          size: FONT_SIZES.TITLE_MEDIUM,
+          font,
+          color: COLORS.TEXT_PRIMARY,
+        });
+      }
+    };
+
+    // Document title
+    const titleText = 'RFQ Risk Assessment';
+    const titleWidth = boldFont.widthOfTextAtSize(titleText, FONT_SIZES.TITLE_LARGE);
+    page.drawText(titleText, {
+      x: (dims.width / 2) - (titleWidth / 2) + dims.margin,
+      y: currentY,
+      size: FONT_SIZES.TITLE_LARGE,
+      font: boldFont,
+      color: COLORS.TEXT_PRIMARY,
+    });
+    currentY -= SPACING.SECTION_GAP_LARGE;
+
+    // RFQ Information
+    const formData: any = assessment.formData || {};
+    
+    await checkNewPage(LINE_HEIGHTS.BODY * 3);
+    
+    page.drawText(`RFQ Number: ${assessment.rfqNumber || 'N/A'}`, {
+      x: dims.margin,
+      y: currentY,
+      size: FONT_SIZES.BODY_LARGE,
+      font: boldFont,
+    });
+    currentY -= LINE_HEIGHTS.BODY;
+    
+    page.drawText(`Customer: ${assessment.customerName || formData.customerName || 'N/A'}`, {
+      x: dims.margin,
+      y: currentY,
+      size: FONT_SIZES.BODY_LARGE,
+      font: regularFont,
+    });
+    currentY -= LINE_HEIGHTS.BODY;
+    
+    // Description with text wrapping
+    if (assessment.description || formData.description) {
+      const descriptionText = assessment.description || formData.description;
+      const descLines = wrapText(`Description: ${descriptionText}`, dims.width, FONT_SIZES.BODY_MEDIUM, regularFont);
+      
+      await checkNewPage(descLines.length * LINE_HEIGHTS.BODY + SPACING.SECTION_GAP_MEDIUM);
+      
+      for (const line of descLines) {
+        page.drawText(line, {
+          x: dims.margin,
+          y: currentY,
+          size: FONT_SIZES.BODY_MEDIUM,
+          font: regularFont,
+        });
+        currentY -= LINE_HEIGHTS.BODY;
+      }
+      currentY -= SPACING.SECTION_GAP_SMALL;
+    }
+
+    // Helper to get risk level display
+    const getRiskDisplay = (value: string) => {
+      if (!value) return 'Not specified';
+      return value.charAt(0).toUpperCase() + value.slice(1);
+    };
+
+    // Section renderer: Risk section with per-row pagination
+    const renderRiskSection = async (title: string, risks: Array<{label: string, value: string}>) => {
+      // Check space for header
+      await checkNewPage(LINE_HEIGHTS.SECTION);
+      
+      // Draw section header using shared helper
+      const headerHeight = drawSectionHeader(page, title, dims.margin, currentY, boldFont);
+      currentY -= headerHeight;
+
+      // Draw each risk row with individual pagination check
+      for (const risk of risks) {
+        await checkNewPage(LINE_HEIGHTS.BODY);
+        const value = getRiskDisplay(risk.value);
+        const rowHeight = drawKeyValuePair(page, risk.label, value, dims.margin + 20, currentY, regularFont);
+        currentY -= rowHeight;
+      }
+      
+      currentY -= SPACING.SECTION_GAP_SMALL;
+    };
+
+    // Internal Risks
+    const internalRisks = [
+      { label: 'Trained Staff', value: formData.trainedStaff },
+      { label: 'Equipment Requirements', value: formData.equipmentRequirements },
+      { label: 'Manufacturing Space', value: formData.manufacturingSpace },
+      { label: 'Regulatory Requirements', value: formData.regulatoryRequirements },
+      { label: 'Conflicting Priorities', value: formData.conflictingPriorities },
+      { label: 'Customer Concentration', value: formData.customerConcentration },
+      { label: 'Climate/Environmental', value: formData.climateEnvironmental },
+    ];
+    
+    await renderRiskSection('Internal Risks', internalRisks);
+    
+    await checkNewPage(LINE_HEIGHTS.BODY);
+    drawKeyValuePair(page, 'Internal Subtotal', `${formData.internalSubtotal || 0} points`, dims.margin + 20, currentY, regularFont, boldFont);
+    currentY -= LINE_HEIGHTS.BODY + SPACING.SECTION_GAP_MEDIUM;
+
+    // External Risks
+    const externalRisks = [
+      { label: 'Supply Chain Disruptions', value: formData.supplyChainDisruptions },
+      { label: 'Supplier Variability', value: formData.supplierVariability },
+      { label: 'Contract Provisions', value: formData.contractProvisions },
+      { label: 'Timelines', value: formData.timelines },
+      { label: 'Quality Expectations', value: formData.qualityExpectations },
+    ];
+    
+    await renderRiskSection('External Risks', externalRisks);
+    
+    await checkNewPage(LINE_HEIGHTS.BODY);
+    drawKeyValuePair(page, 'External Subtotal', `${formData.externalSubtotal || 0} points`, dims.margin + 20, currentY, regularFont, boldFont);
+    currentY -= LINE_HEIGHTS.BODY + SPACING.SECTION_GAP_MEDIUM;
+
+    // Section renderer: Mitigation Actions with per-line pagination
+    const renderMitigationActions = async () => {
+      const actions = [
+        { label: 'Action A', action: formData.mitigationActionA, reduction: formData.mitigationReductionA },
+        { label: 'Action B', action: formData.mitigationActionB, reduction: formData.mitigationReductionB },
+        { label: 'Action C', action: formData.mitigationActionC, reduction: formData.mitigationReductionC },
+      ].filter(a => a.action && a.action !== 'n/a');
+      
+      if (actions.length === 0) return;
+      
+      // Check space for header
+      await checkNewPage(LINE_HEIGHTS.SECTION);
+      
+      // Draw section header using shared helper
+      const headerHeight = drawSectionHeader(page, 'Mitigation Actions', dims.margin, currentY, boldFont);
+      currentY -= headerHeight;
+      
+      // Draw each mitigation action with per-line pagination
+      for (const action of actions) {
+        const lines = wrapText(
+          `${action.label}: ${action.action} (Risk Reduction: ${action.reduction || 0} points)`,
+          dims.width - 20,
+          FONT_SIZES.BODY_MEDIUM,
+          regularFont
+        );
+        
+        for (const line of lines) {
+          await checkNewPage(LINE_HEIGHTS.BODY);
+          page.drawText(line, {
+            x: dims.margin + 20,
+            y: currentY,
+            size: FONT_SIZES.BODY_MEDIUM,
+            font: regularFont,
+          });
+          currentY -= LINE_HEIGHTS.BODY;
+        }
+      }
+      
+      currentY -= SPACING.SECTION_GAP_SMALL;
+    };
+    
+    await renderMitigationActions();
+
+    // Section renderer: Risk Summary Box
+    const renderSummaryBox = async () => {
+      const boxHeight = 100;
+      await checkNewPage(boxHeight + SPACING.SECTION_GAP_MEDIUM);
+      
+      currentY -= SPACING.SECTION_GAP_SMALL;
+      
+      // Use shared drawInfoBox helper
+      drawInfoBox(page, dims.margin, currentY - boxHeight, dims.width, boxHeight);
+      
+      // Draw summary content
+      let boxY = currentY - 15;
+      page.drawText(`Total Overall Points: ${assessment.totalOverallPoints || 0}`, {
+        x: dims.margin + 10,
+        y: boxY,
+        size: FONT_SIZES.BODY_LARGE,
+        font: boldFont,
+      });
+      boxY -= LINE_HEIGHTS.BODY;
+
+      page.drawText(`Adjusted Risk Level: ${assessment.adjustedRiskLevel || 0}`, {
+        x: dims.margin + 10,
+        y: boxY,
+        size: FONT_SIZES.BODY_LARGE,
+        font: boldFont,
+      });
+      boxY -= LINE_HEIGHTS.BODY;
+
+      page.drawText(`Risk Determination: ${assessment.riskDetermination || 'N/A'}`, {
+        x: dims.margin + 10,
+        y: boxY,
+        size: FONT_SIZES.BODY_LARGE,
+        font: boldFont,
+        color: assessment.riskDetermination?.includes('High') ? COLORS.ACCENT_RED : COLORS.TEXT_PRIMARY,
+      });
+      boxY -= LINE_HEIGHTS.BODY;
+
+      if (assessment.bidDecision) {
+        page.drawText(`Bid Decision: ${assessment.bidDecision}`, {
+          x: dims.margin + 10,
+          y: boxY,
+          size: FONT_SIZES.BODY_LARGE,
+          font: boldFont,
+        });
+      }
+
+      currentY -= boxHeight + SPACING.SECTION_GAP_MEDIUM;
+    };
+    
+    await renderSummaryBox();
+
+    // Section renderer: Signature
+    const renderSignature = async () => {
+      if (!formData.signature && !formData.printedName && !formData.date) return;
+      
+      const requiredSpace = LINE_HEIGHTS.SECTION + (3 * LINE_HEIGHTS.BODY);
+      await checkNewPage(requiredSpace);
+      
+      // Draw section header using shared helper
+      const headerHeight = drawSectionHeader(page, 'Approval Signature', dims.margin, currentY, boldFont);
+      currentY -= headerHeight;
+
+      if (formData.printedName) {
+        drawKeyValuePair(page, 'Name', formData.printedName, dims.margin + 20, currentY, regularFont);
+        currentY -= LINE_HEIGHTS.BODY;
+      }
+
+      if (formData.date) {
+        drawKeyValuePair(page, 'Date', formData.date, dims.margin + 20, currentY, regularFont);
+        currentY -= LINE_HEIGHTS.BODY;
+      }
+
+      if (formData.signature) {
+        page.drawText('[Digital Signature Present]', {
+          x: dims.margin + 20,
+          y: currentY,
+          size: FONT_SIZES.BODY_SMALL,
+          font: regularFont,
+          color: COLORS.TEXT_SECONDARY,
+        });
+      }
+    };
+    
+    await renderSignature();
+
+    // Footer on all pages
+    const pages = pdfDoc.getPages();
+    pages.forEach((pg, index) => {
+      const footerY = 40;
+      const footerText = `FO Form 11 • Version 1.4 10/23/2024 • Page ${index + 1} of ${pages.length}`;
+      const footerWidth = regularFont.widthOfTextAtSize(footerText, FONT_SIZES.BODY_SMALL);
+      const pageWidth = pg.getSize().width;
+      pg.drawText(footerText, {
+        x: (pageWidth - footerWidth) / 2,
+        y: footerY,
+        size: FONT_SIZES.BODY_SMALL,
+        font: regularFont,
+        color: COLORS.TEXT_TERTIARY,
+      });
+    });
+
+    // Serialize the PDF
+    const pdfBytes = await pdfDoc.save();
+
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="RFQ_${assessment.rfqNumber}_Risk_Assessment.pdf"`);
+    res.send(Buffer.from(pdfBytes));
+  } catch (error) {
+    console.error('Generate RFQ PDF error:', error);
+    res.status(500).json({ error: 'Failed to generate PDF' });
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const customerId = parseInt(req.params.id);

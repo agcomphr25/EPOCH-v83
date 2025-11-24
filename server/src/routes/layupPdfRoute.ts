@@ -1,5 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
+import {
+  PAGE_SIZES,
+  DEFAULT_MARGIN,
+  FONT_SIZES,
+  SPACING,
+  COLORS,
+  getCenteredX,
+} from '../../utils/pdf/pdfConfig';
 
 const router = Router();
 
@@ -230,41 +238,40 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       return false;
     };
 
-    // Create PDF document
+    // Create PDF document (landscape for card layout)
     const pdfDoc = await PDFDocument.create();
-    let page = pdfDoc.addPage([792, 612]); // Landscape orientation for card layout
+    let page = pdfDoc.addPage(PAGE_SIZES.LETTER_LANDSCAPE);
     const { width, height } = page.getSize();
+    const margin = DEFAULT_MARGIN;
 
     // Load fonts
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const smallFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
     // Header
     const title = 'Detailed Layup Schedule Report';
-    const titleSize = 18;
-    const titleWidth = boldFont.widthOfTextAtSize(title, titleSize);
+    const titleX = getCenteredX(title, width, FONT_SIZES.TITLE_LARGE, boldFont);
 
     page.drawText(title, {
-      x: (width - titleWidth) / 2,
-      y: height - 40,
-      size: titleSize,
+      x: titleX,
+      y: height - margin,
+      size: FONT_SIZES.TITLE_LARGE,
       font: boldFont,
-      color: rgb(0, 0, 0),
+      color: COLORS.TEXT_PRIMARY,
     });
 
     // Report date and filters
     const reportDate = `Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`;
     page.drawText(reportDate, {
-      x: 50,
-      y: height - 70,
-      size: 10,
+      x: margin,
+      y: height - margin - SPACING.SECTION_GAP_SMALL,
+      size: FONT_SIZES.BODY_LARGE,
       font: regularFont,
-      color: rgb(0.5, 0.5, 0.5),
+      color: COLORS.TEXT_TERTIARY,
     });
 
     // Summary stats
-    const summaryY = height - 100;
+    const summaryY = height - margin - SPACING.SECTION_GAP_MEDIUM;
     const stats = [
       `Total Orders: ${allLayupOrders.length}`,
       `Active Molds: ${molds.filter((m) => m.enabled).length}`,
@@ -273,28 +280,28 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       `P1 Purchase Orders: ${p1LayupOrders.length}`,
     ];
 
-    let statsX = 50;
-    stats.forEach((stat, index) => {
+    let statsX = margin;
+    stats.forEach((stat) => {
       page.drawText(stat, {
         x: statsX,
         y: summaryY,
-        size: 9,
+        size: FONT_SIZES.BODY_MEDIUM,
         font: regularFont,
-        color: rgb(0.3, 0.3, 0.3),
+        color: COLORS.TEXT_SECONDARY,
       });
       statsX += 140;
     });
 
     // Card layout header
-    const headerY = height - 140;
+    const headerY = height - margin - SPACING.SECTION_GAP_LARGE - SPACING.SECTION_GAP_MEDIUM;
     page.drawText(
       'Orders displayed as cards matching the Layup Scheduler format:',
       {
-        x: 50,
+        x: margin,
         y: headerY,
-        size: 12,
+        size: FONT_SIZES.SECTION_HEADER,
         font: boldFont,
-        color: rgb(0, 0, 0),
+        color: COLORS.TEXT_PRIMARY,
       }
     );
 
@@ -336,19 +343,23 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       const heavyFill = getHeavyFillDisplay(order.features);
       const modelDisplay = getModelDisplayName(modelId);
 
-      // Determine card color based on source
-      let bgColor = rgb(0.95, 0.95, 1); // light blue for regular orders
-      let borderColor = rgb(0.7, 0.7, 1);
-      let textColor = rgb(0, 0, 0.8);
+      // Determine card color based on source (using standard colors where possible)
+      let bgColor = COLORS.BG_LIGHT_GRAY; // default
+      let borderColor = COLORS.BORDER_GRAY;
+      let textColor = COLORS.ACCENT_BLUE;
 
       if (order.source === 'p1_purchase_order') {
-        bgColor = rgb(0.95, 1, 0.95); // light green for P1 orders
-        borderColor = rgb(0.6, 0.9, 0.6);
-        textColor = rgb(0, 0.6, 0);
+        bgColor = COLORS.BG_LIGHT_GRAY;
+        borderColor = COLORS.ACCENT_GREEN;
+        textColor = COLORS.ACCENT_GREEN;
       } else if (order.source === 'production_order') {
-        bgColor = rgb(1, 0.95, 0.9); // light orange for production orders
-        borderColor = rgb(1, 0.8, 0.6);
-        textColor = rgb(0.8, 0.5, 0);
+        bgColor = COLORS.BG_LIGHT_GRAY;
+        borderColor = COLORS.ACCENT_RED;
+        textColor = COLORS.ACCENT_RED;
+      } else {
+        bgColor = COLORS.BG_LIGHT_GRAY;
+        borderColor = COLORS.ACCENT_BLUE;
+        textColor = COLORS.ACCENT_BLUE;
       }
 
       // Draw card background
@@ -368,9 +379,9 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       // Order ID (large, bold)
       const orderId = order.orderId || 'No ID';
       page.drawText(orderId, {
-        x: cardX + 5,
+        x: cardX + SPACING.BOX_PADDING_SMALL,
         y: textY,
-        size: 11,
+        size: FONT_SIZES.BODY_LARGE + 1,
         font: boldFont,
         color: textColor,
       });
@@ -380,17 +391,17 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
         page.drawText('P1', {
           x: cardX + cardWidth - 20,
           y: textY,
-          size: 8,
+          size: FONT_SIZES.BODY_SMALL,
           font: boldFont,
-          color: rgb(0, 0.4, 0),
+          color: COLORS.ACCENT_GREEN,
         });
       } else if (order.source === 'production_order') {
         page.drawText('PO', {
           x: cardX + cardWidth - 20,
           y: textY,
-          size: 8,
+          size: FONT_SIZES.BODY_SMALL,
           font: boldFont,
-          color: rgb(0.6, 0.3, 0),
+          color: COLORS.ACCENT_RED,
         });
       }
 
@@ -406,11 +417,11 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
           modelText = `${materialType} ${modelText}`;
         }
         page.drawText(modelText, {
-          x: cardX + 5,
+          x: cardX + SPACING.BOX_PADDING_SMALL,
           y: textY,
-          size: 8,
+          size: FONT_SIZES.BODY_SMALL,
           font: regularFont,
-          color: rgb(0.2, 0.2, 0.2),
+          color: COLORS.TEXT_SECONDARY,
         });
       }
 
@@ -419,11 +430,11 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       // Action Length
       if (actionLength) {
         page.drawText(`Action: ${actionLength}`, {
-          x: cardX + 5,
+          x: cardX + SPACING.BOX_PADDING_SMALL,
           y: textY,
-          size: 8,
+          size: FONT_SIZES.BODY_SMALL,
           font: regularFont,
-          color: rgb(0.3, 0.3, 0.3),
+          color: COLORS.TEXT_SECONDARY,
         });
       }
 
@@ -432,11 +443,11 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       // Length of Pull (LOP)
       if (lopDisplay) {
         page.drawText(`LOP: ${lopDisplay}`, {
-          x: cardX + 5,
+          x: cardX + SPACING.BOX_PADDING_SMALL,
           y: textY,
-          size: 8,
+          size: FONT_SIZES.BODY_SMALL,
           font: regularFont,
-          color: rgb(0.3, 0.3, 0.3),
+          color: COLORS.TEXT_SECONDARY,
         });
       }
 
@@ -445,11 +456,11 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       // Heavy Fill
       if (heavyFill) {
         page.drawText('Heavy Fill', {
-          x: cardX + 5,
+          x: cardX + SPACING.BOX_PADDING_SMALL,
           y: textY,
-          size: 8,
+          size: FONT_SIZES.BODY_SMALL,
           font: boldFont,
-          color: rgb(0.8, 0.4, 0),
+          color: COLORS.ACCENT_RED,
         });
         textY -= lineHeight;
       }
@@ -460,11 +471,11 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
           ? order.customer.substring(0, 13) + '..'
           : order.customer || 'Unknown';
       page.drawText(`${customer}`, {
-        x: cardX + 5,
+        x: cardX + SPACING.BOX_PADDING_SMALL,
         y: cardY - cardHeight + 12,
-        size: 7,
+        size: FONT_SIZES.TINY,
         font: regularFont,
-        color: rgb(0.4, 0.4, 0.4),
+        color: COLORS.TEXT_LIGHT,
       });
 
       if (order.dueDate) {
@@ -473,11 +484,11 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
           day: 'd',
         });
         page.drawText(`Due: ${dueDate}`, {
-          x: cardX + 5,
+          x: cardX + SPACING.BOX_PADDING_SMALL,
           y: cardY - cardHeight + 4,
-          size: 7,
+          size: FONT_SIZES.TINY,
           font: regularFont,
-          color: rgb(0.6, 0.6, 0.6),
+          color: COLORS.TEXT_LIGHT,
         });
       }
 
@@ -496,11 +507,11 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
 
     const legendY = Math.max(currentY, 120);
     page.drawText('Card Format Legend:', {
-      x: 50,
+      x: margin,
       y: legendY,
-      size: 12,
+      size: FONT_SIZES.SECTION_HEADER,
       font: boldFont,
-      color: rgb(0, 0, 0),
+      color: COLORS.TEXT_PRIMARY,
     });
 
     const legendItems = [
@@ -514,11 +525,11 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
 
     legendItems.forEach((item, index) => {
       page.drawText(item, {
-        x: 50,
-        y: legendY - 15 - index * 12,
-        size: 8,
+        x: margin,
+        y: legendY - SPACING.LINE_SPACING_MEDIUM - index * SPACING.LINE_SPACING_COMPACT,
+        size: FONT_SIZES.BODY_SMALL,
         font: regularFont,
-        color: rgb(0.3, 0.3, 0.3),
+        color: COLORS.TEXT_SECONDARY,
       });
     });
 
@@ -528,11 +539,11 @@ router.get('/layup-schedule/pdf', async (req: Request, res: Response) => {
       const currentPage = pdfDoc.getPage(i);
       const footerText = `Page ${i + 1} of ${pageCount} • Layup Schedule • ${new Date().toLocaleString()}`;
       currentPage.drawText(footerText, {
-        x: 50,
-        y: 30,
-        size: 8,
+        x: margin,
+        y: SPACING.SECTION_GAP_SMALL - 10,
+        size: FONT_SIZES.BODY_SMALL,
         font: regularFont,
-        color: rgb(0.5, 0.5, 0.5),
+        color: COLORS.TEXT_TERTIARY,
       });
     }
 
@@ -584,35 +595,36 @@ router.get('/mold-utilization/pdf', async (req: Request, res: Response) => {
     });
 
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([612, 792]);
+    const page = pdfDoc.addPage(PAGE_SIZES.LETTER_PORTRAIT);
     const { width, height } = page.getSize();
+    const margin = DEFAULT_MARGIN;
 
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
     // Header
     const title = 'Mold Utilization Report';
-    const titleSize = 20;
-    const titleWidth = boldFont.widthOfTextAtSize(title, titleSize);
+    const titleX = getCenteredX(title, width, FONT_SIZES.TITLE_LARGE, boldFont);
 
     page.drawText(title, {
-      x: (width - titleWidth) / 2,
-      y: height - 50,
-      size: titleSize,
+      x: titleX,
+      y: height - margin,
+      size: FONT_SIZES.TITLE_LARGE,
       font: boldFont,
-      color: rgb(0, 0, 0),
+      color: COLORS.TEXT_PRIMARY,
     });
 
     // Report details
     page.drawText(`Generated: ${new Date().toLocaleDateString()}`, {
-      x: 50,
-      y: height - 90,
-      size: 10,
+      x: margin,
+      y: height - margin - SPACING.SECTION_GAP_MEDIUM,
+      size: FONT_SIZES.BODY_LARGE,
       font: regularFont,
+      color: COLORS.TEXT_SECONDARY,
     });
 
     // Table headers
-    const headerY = height - 130;
+    const headerY = height - margin - SPACING.SECTION_GAP_LARGE - SPACING.SECTION_GAP_SMALL;
     const headers = [
       'Mold ID',
       'Model',
@@ -621,22 +633,23 @@ router.get('/mold-utilization/pdf', async (req: Request, res: Response) => {
       'Utilization %',
     ];
     const columnWidths = [80, 120, 80, 80, 100];
-    let currentX = 50;
+    let currentX = margin;
 
     headers.forEach((header, index) => {
       page.drawText(header, {
         x: currentX,
         y: headerY,
-        size: 12,
+        size: FONT_SIZES.SECTION_HEADER,
         font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
       });
       currentX += columnWidths[index];
     });
 
     // Table data
-    let currentY = headerY - 25;
+    let currentY = headerY - SPACING.SECTION_GAP_SMALL;
     utilizationData.forEach((data) => {
-      currentX = 50;
+      currentX = margin;
       const rowData = [
         data.moldId,
         data.modelName || 'N/A',
@@ -649,13 +662,14 @@ router.get('/mold-utilization/pdf', async (req: Request, res: Response) => {
         page.drawText(text, {
           x: currentX,
           y: currentY,
-          size: 10,
+          size: FONT_SIZES.BODY_LARGE,
           font: regularFont,
+          color: COLORS.TEXT_SECONDARY,
         });
         currentX += columnWidths[colIndex];
       });
 
-      currentY -= 20;
+      currentY -= SPACING.LINE_SPACING_LARGE;
     });
 
     const pdfBytes = await pdfDoc.save();

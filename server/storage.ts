@@ -116,6 +116,12 @@ import {
   // Shipment tracking tables
   shipmentRecords,
   shipmentItems,
+  // Cost accounting tables
+  accountCategories,
+  accounts,
+  monthlyAccountEntries,
+  allocationRules,
+  allocationResults,
 
   // Types
   type Order,
@@ -381,6 +387,17 @@ import {
   cuttingCutRecords,
   type CuttingCutRecord,
   type InsertCuttingCutRecord,
+  // Cost accounting types
+  type AccountCategory,
+  type InsertAccountCategory,
+  type Account,
+  type InsertAccount,
+  type MonthlyAccountEntry,
+  type InsertMonthlyAccountEntry,
+  type AllocationRule,
+  type InsertAllocationRule,
+  type AllocationResult,
+  type InsertAllocationResult,
 } from './schema';
 import { db, pool } from './db';
 import {
@@ -1761,6 +1778,45 @@ export interface IStorage {
   createCuttingCutRecord(data: InsertCuttingCutRecord): Promise<CuttingCutRecord>;
   updateCuttingCutRecord(id: string, data: Partial<InsertCuttingCutRecord>): Promise<CuttingCutRecord>;
   deleteCuttingCutRecord(id: string): Promise<void>;
+
+  // Cost Accounting - Account Categories CRUD
+  getAllAccountCategories(): Promise<AccountCategory[]>;
+  getAccountCategory(id: string): Promise<AccountCategory | undefined>;
+  createAccountCategory(data: InsertAccountCategory): Promise<AccountCategory>;
+  updateAccountCategory(id: string, data: Partial<InsertAccountCategory>): Promise<AccountCategory>;
+  deleteAccountCategory(id: string): Promise<void>;
+
+  // Cost Accounting - Accounts CRUD
+  getAllAccounts(): Promise<Account[]>;
+  getAccount(id: string): Promise<Account | undefined>;
+  getAccountsByCategoryId(categoryId: string): Promise<Account[]>;
+  createAccount(data: InsertAccount): Promise<Account>;
+  updateAccount(id: string, data: Partial<InsertAccount>): Promise<Account>;
+  deleteAccount(id: string): Promise<void>;
+
+  // Cost Accounting - Monthly Account Entries CRUD
+  getAllMonthlyAccountEntries(): Promise<MonthlyAccountEntry[]>;
+  getMonthlyAccountEntry(id: string): Promise<MonthlyAccountEntry | undefined>;
+  getMonthlyAccountEntriesByAccount(accountId: string): Promise<MonthlyAccountEntry[]>;
+  getMonthlyAccountEntriesByPeriod(year: number, month: number): Promise<MonthlyAccountEntry[]>;
+  createMonthlyAccountEntry(data: InsertMonthlyAccountEntry): Promise<MonthlyAccountEntry>;
+  updateMonthlyAccountEntry(id: string, data: Partial<InsertMonthlyAccountEntry>): Promise<MonthlyAccountEntry>;
+  deleteMonthlyAccountEntry(id: string): Promise<void>;
+
+  // Cost Accounting - Allocation Rules CRUD
+  getAllAllocationRules(): Promise<AllocationRule[]>;
+  getAllocationRule(id: string): Promise<AllocationRule | undefined>;
+  createAllocationRule(data: InsertAllocationRule): Promise<AllocationRule>;
+  updateAllocationRule(id: string, data: Partial<InsertAllocationRule>): Promise<AllocationRule>;
+  deleteAllocationRule(id: string): Promise<void>;
+
+  // Cost Accounting - Allocation Results CRUD
+  getAllAllocationResults(): Promise<AllocationResult[]>;
+  getAllocationResult(id: string): Promise<AllocationResult | undefined>;
+  getAllocationResultsByPeriod(year: number, month: number): Promise<AllocationResult[]>;
+  createAllocationResult(data: InsertAllocationResult): Promise<AllocationResult>;
+  deleteAllocationResult(id: string): Promise<void>;
+  calculateAllocations(year: number, month: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -6642,22 +6698,28 @@ export class DatabaseStorage implements IStorage {
   async createVendorPO(data: any): Promise<any> {
     // Auto-generate PO number if not provided
     if (!data.poNumber) {
-      // Get the latest vendor PO to generate next number
+      // Get current year (last 2 digits)
+      const currentYear = new Date().getFullYear().toString().slice(-2);
+      
+      // Get the latest vendor PO for this year
       const latestPO = await db
         .select({ poNumber: vendorPOs.poNumber })
         .from(vendorPOs)
-        .where(sql`${vendorPOs.poNumber} LIKE 'VPO-%'`)
+        .where(sql`${vendorPOs.poNumber} LIKE ${`VPO-${currentYear}%`}`)
         .orderBy(desc(vendorPOs.id))
         .limit(1);
       
       let nextNumber = 1;
       if (latestPO.length > 0 && latestPO[0].poNumber) {
-        const match = latestPO[0].poNumber.match(/VPO-(\d+)/);
+        // Extract the sequential part (last 3 digits) from format VPO-YYNNN
+        const match = latestPO[0].poNumber.match(/VPO-\d{2}(\d{3})/);
         if (match) {
           nextNumber = parseInt(match[1]) + 1;
         }
       }
-      data.poNumber = `VPO-${String(nextNumber).padStart(6, '0')}`;
+      
+      // Format: VPO-YYNNN (e.g., VPO-25001, VPO-25099)
+      data.poNumber = `VPO-${currentYear}${String(nextNumber).padStart(3, '0')}`;
     }
     
     // Auto-generate barcode if not provided
@@ -13910,6 +13972,305 @@ export class DatabaseStorage implements IStorage {
   async deletePurchaseReviewSubmission(id: string): Promise<void> {
     const { purchaseReviewChecklistSubmissions } = await import('./schema');
     await db.delete(purchaseReviewChecklistSubmissions).where(eq(purchaseReviewChecklistSubmissions.id, id));
+  }
+
+  // ========================================
+  // COST ACCOUNTING METHODS
+  // ========================================
+
+  // Account Categories
+  async getAllAccountCategories(): Promise<AccountCategory[]> {
+    return await db.select().from(accountCategories).orderBy(asc(accountCategories.sortOrder));
+  }
+
+  async getAccountCategory(id: string): Promise<AccountCategory | undefined> {
+    const [category] = await db.select().from(accountCategories).where(eq(accountCategories.id, id));
+    return category || undefined;
+  }
+
+  async createAccountCategory(data: InsertAccountCategory): Promise<AccountCategory> {
+    const [category] = await db.insert(accountCategories).values(data).returning();
+    return category;
+  }
+
+  async updateAccountCategory(id: string, data: Partial<InsertAccountCategory>): Promise<AccountCategory> {
+    const [category] = await db
+      .update(accountCategories)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(accountCategories.id, id))
+      .returning();
+    return category;
+  }
+
+  async deleteAccountCategory(id: string): Promise<void> {
+    await db.delete(accountCategories).where(eq(accountCategories.id, id));
+  }
+
+  // Accounts
+  async getAllAccounts(): Promise<Account[]> {
+    return await db.select().from(accounts).where(eq(accounts.isActive, true));
+  }
+
+  async getAccount(id: string): Promise<Account | undefined> {
+    const [account] = await db.select().from(accounts).where(eq(accounts.id, id));
+    return account || undefined;
+  }
+
+  async getAccountsByCategoryId(categoryId: string): Promise<Account[]> {
+    return await db
+      .select()
+      .from(accounts)
+      .where(and(eq(accounts.categoryId, categoryId), eq(accounts.isActive, true)));
+  }
+
+  async createAccount(data: InsertAccount): Promise<Account> {
+    // Generate account number based on category
+    const [category] = await db
+      .select()
+      .from(accountCategories)
+      .where(eq(accountCategories.id, data.categoryId));
+    
+    if (!category) {
+      throw new Error('Category not found');
+    }
+
+    // Get all accounts with the same category code pattern to find max number
+    const existingAccounts = await db
+      .select({ accountNumber: accounts.accountNumber })
+      .from(accounts)
+      .where(eq(accounts.categoryId, data.categoryId));
+    
+    // Find the maximum sequence number for this category
+    let maxSequence = 0;
+    const prefix = `${category.code}-`;
+    
+    for (const acc of existingAccounts) {
+      if (acc.accountNumber.startsWith(prefix)) {
+        const sequencePart = acc.accountNumber.substring(prefix.length);
+        const sequence = parseInt(sequencePart, 10);
+        if (!isNaN(sequence) && sequence > maxSequence) {
+          maxSequence = sequence;
+        }
+      }
+    }
+    
+    const nextNumber = maxSequence + 1;
+    const accountNumber = `${category.code}-${String(nextNumber).padStart(3, '0')}`;
+
+    const [account] = await db
+      .insert(accounts)
+      .values({
+        ...data,
+        accountNumber,
+      })
+      .returning();
+    return account;
+  }
+
+  async updateAccount(id: string, data: Partial<InsertAccount>): Promise<Account> {
+    const [account] = await db
+      .update(accounts)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(accounts.id, id))
+      .returning();
+    return account;
+  }
+
+  async deleteAccount(id: string): Promise<void> {
+    // Soft delete - just mark as inactive
+    await db
+      .update(accounts)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(accounts.id, id));
+  }
+
+  // Monthly Account Entries
+  async getAllMonthlyAccountEntries(): Promise<MonthlyAccountEntry[]> {
+    return await db
+      .select()
+      .from(monthlyAccountEntries)
+      .orderBy(desc(monthlyAccountEntries.year), desc(monthlyAccountEntries.month));
+  }
+
+  async getMonthlyAccountEntry(id: string): Promise<MonthlyAccountEntry | undefined> {
+    const [entry] = await db.select().from(monthlyAccountEntries).where(eq(monthlyAccountEntries.id, id));
+    return entry || undefined;
+  }
+
+  async getMonthlyAccountEntriesByAccount(accountId: string): Promise<MonthlyAccountEntry[]> {
+    return await db
+      .select()
+      .from(monthlyAccountEntries)
+      .where(eq(monthlyAccountEntries.accountId, accountId))
+      .orderBy(desc(monthlyAccountEntries.year), desc(monthlyAccountEntries.month));
+  }
+
+  async getMonthlyAccountEntriesByPeriod(year: number, month: number): Promise<MonthlyAccountEntry[]> {
+    return await db
+      .select()
+      .from(monthlyAccountEntries)
+      .where(
+        and(
+          eq(monthlyAccountEntries.year, year),
+          eq(monthlyAccountEntries.month, month)
+        )
+      );
+  }
+
+  async createMonthlyAccountEntry(data: InsertMonthlyAccountEntry): Promise<MonthlyAccountEntry> {
+    const [entry] = await db.insert(monthlyAccountEntries).values(data).returning();
+    return entry;
+  }
+
+  async updateMonthlyAccountEntry(id: string, data: Partial<InsertMonthlyAccountEntry>): Promise<MonthlyAccountEntry> {
+    const [entry] = await db
+      .update(monthlyAccountEntries)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(monthlyAccountEntries.id, id))
+      .returning();
+    return entry;
+  }
+
+  async deleteMonthlyAccountEntry(id: string): Promise<void> {
+    await db.delete(monthlyAccountEntries).where(eq(monthlyAccountEntries.id, id));
+  }
+
+  // Allocation Rules
+  async getAllAllocationRules(): Promise<AllocationRule[]> {
+    return await db.select().from(allocationRules).where(eq(allocationRules.isActive, true));
+  }
+
+  async getAllocationRule(id: string): Promise<AllocationRule | undefined> {
+    const [rule] = await db.select().from(allocationRules).where(eq(allocationRules.id, id));
+    return rule || undefined;
+  }
+
+  async createAllocationRule(data: InsertAllocationRule): Promise<AllocationRule> {
+    const [rule] = await db.insert(allocationRules).values(data).returning();
+    return rule;
+  }
+
+  async updateAllocationRule(id: string, data: Partial<InsertAllocationRule>): Promise<AllocationRule> {
+    const [rule] = await db
+      .update(allocationRules)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(allocationRules.id, id))
+      .returning();
+    return rule;
+  }
+
+  async deleteAllocationRule(id: string): Promise<void> {
+    // Soft delete - just mark as inactive
+    await db
+      .update(allocationRules)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(allocationRules.id, id));
+  }
+
+  // Allocation Results
+  async getAllAllocationResults(): Promise<AllocationResult[]> {
+    return await db
+      .select()
+      .from(allocationResults)
+      .orderBy(desc(allocationResults.year), desc(allocationResults.month));
+  }
+
+  async getAllocationResult(id: string): Promise<AllocationResult | undefined> {
+    const [result] = await db.select().from(allocationResults).where(eq(allocationResults.id, id));
+    return result || undefined;
+  }
+
+  async getAllocationResultsByPeriod(year: number, month: number): Promise<AllocationResult[]> {
+    return await db
+      .select()
+      .from(allocationResults)
+      .where(
+        and(
+          eq(allocationResults.year, year),
+          eq(allocationResults.month, month)
+        )
+      );
+  }
+
+  async createAllocationResult(data: InsertAllocationResult): Promise<AllocationResult> {
+    const [result] = await db.insert(allocationResults).values(data).returning();
+    return result;
+  }
+
+  async deleteAllocationResult(id: string): Promise<void> {
+    await db.delete(allocationResults).where(eq(allocationResults.id, id));
+  }
+
+  // Calculate Allocations for a given period
+  async calculateAllocations(year: number, month: number): Promise<void> {
+    // Get all active allocation rules
+    const rules = await this.getAllAllocationRules();
+
+    for (const rule of rules) {
+      // Get the source account's monthly entry
+      const [sourceEntry] = await db
+        .select()
+        .from(monthlyAccountEntries)
+        .where(
+          and(
+            eq(monthlyAccountEntries.accountId, rule.sourceAccountId),
+            eq(monthlyAccountEntries.year, year),
+            eq(monthlyAccountEntries.month, month)
+          )
+        );
+
+      if (!sourceEntry) continue;
+
+      const totalAmount = parseFloat(sourceEntry.amount);
+      const allocations: Record<string, number> = {};
+
+      // Calculate allocations based on method
+      if (rule.allocationMethod === 'equal' && rule.targetAccountIds) {
+        const amountPerAccount = totalAmount / rule.targetAccountIds.length;
+        rule.targetAccountIds.forEach((accountId) => {
+          allocations[accountId] = amountPerAccount;
+        });
+      } else if (rule.allocationMethod === 'custom' && rule.customRatios) {
+        const ratios = rule.customRatios as Record<string, number>;
+        Object.entries(ratios).forEach(([accountId, ratio]) => {
+          allocations[accountId] = totalAmount * ratio;
+        });
+      }
+      // TODO: Implement 'proportional' method based on allocation basis
+
+      // Delete existing allocation result for this period if it exists
+      const existingResults = await db
+        .select()
+        .from(allocationResults)
+        .where(
+          and(
+            eq(allocationResults.ruleId, rule.id),
+            eq(allocationResults.year, year),
+            eq(allocationResults.month, month)
+          )
+        );
+
+      if (existingResults.length > 0) {
+        await db
+          .delete(allocationResults)
+          .where(
+            and(
+              eq(allocationResults.ruleId, rule.id),
+              eq(allocationResults.year, year),
+              eq(allocationResults.month, month)
+            )
+          );
+      }
+
+      // Create new allocation result
+      await this.createAllocationResult({
+        ruleId: rule.id,
+        year,
+        month,
+        totalAmount: totalAmount.toString(),
+        allocations,
+      });
+    }
   }
 }
 

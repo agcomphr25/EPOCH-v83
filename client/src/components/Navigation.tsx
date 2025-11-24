@@ -47,6 +47,7 @@ import {
   Search,
   Award,
   Building2,
+  Calculator,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -250,6 +251,12 @@ export default function Navigation() {
       label: 'Admin Panel',
       icon: Shield,
       description: 'Advanced order management and editing for administrators',
+    },
+    {
+      path: '/pdf-templates',
+      label: 'PDF Templates',
+      icon: FileText,
+      description: 'Manage PDF templates with custom logos and styling for P1, P2, RFQ, etc.',
     },
 
     // Documentation button disabled per user request - was causing problems
@@ -506,6 +513,12 @@ export default function Navigation() {
       label: 'Cost Centers',
       icon: Building2,
       description: 'Manage cost centers for expense tracking and budgeting',
+    },
+    {
+      path: '/finance/cost-accounting',
+      label: 'Cost Accounting',
+      icon: Calculator,
+      description: 'Manage chart of accounts, monthly entries, and cost allocations',
     },
     // {
     //   path: '/payment-management',

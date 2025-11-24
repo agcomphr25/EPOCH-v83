@@ -4659,10 +4659,12 @@ export const p2ProductionOrders = pgTable('p2_production_orders', {
   sku: text('sku').notNull(), // From BOM definition
   partName: text('part_name').notNull(), // From BOM item
   quantity: integer('quantity').notNull(), // BOM item quantity * PO quantity
+  quantityManufactured: integer('quantity_manufactured').default(0).notNull(), // Track how many have been made
   department: text('department').notNull(), // From BOM item firstDept
   status: text('status').default('PENDING').notNull(), // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
   priority: integer('priority').default(50), // 1-100, lower = higher priority
   dueDate: timestamp('due_date'),
+  scheduledLayupDate: timestamp('scheduled_layup_date'), // When this part is scheduled for layup
   startedAt: timestamp('started_at'),
   completedAt: timestamp('completed_at'),
   notes: text('notes'),
@@ -4687,6 +4689,7 @@ export const insertP2ProductionOrderSchema = createInsertSchema(
     sku: z.string().min(1, 'SKU is required'),
     partName: z.string().min(1, 'Part name is required'),
     quantity: z.number().min(1, 'Quantity must be at least 1'),
+    quantityManufactured: z.number().min(0).default(0),
     department: z.enum([
       'Layup',
       'Assembly/Disassembly',
@@ -4700,6 +4703,7 @@ export const insertP2ProductionOrderSchema = createInsertSchema(
       .default('PENDING'),
     priority: z.number().min(1).max(100).default(50),
     dueDate: z.string().datetime().optional(),
+    scheduledLayupDate: z.string().datetime().optional(),
     notes: z.string().optional(),
   });
 

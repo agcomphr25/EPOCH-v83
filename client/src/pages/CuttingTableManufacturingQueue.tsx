@@ -182,9 +182,123 @@ export default function CuttingTableManufacturingQueue() {
       });
     },
     onSuccess: (data) => {
+      // Open print window with labels
+      if (data.labels && data.labels.length > 0) {
+        const printWindow = window.open('', '_blank', 'width=800,height=600');
+        if (printWindow) {
+          const labelsHtml = data.labels.map((label: {
+            itemId: number;
+            partNumber: string;
+            partName: string;
+            fabricLot?: string;
+            fabricBatch?: string;
+            fabricRoll?: string;
+            barcodeValue: string;
+            barcodeImage?: string;
+          }) => `
+            <div class="label">
+              <div class="label-header">AG Composites - Packet Label</div>
+              <div class="label-info"><strong>${label.partNumber}</strong></div>
+              <div class="label-info">${label.partName}</div>
+              ${label.fabricLot ? `<div class="label-info">Lot: ${label.fabricLot}</div>` : ''}
+              ${label.fabricBatch ? `<div class="label-info">Batch: ${label.fabricBatch}</div>` : ''}
+              ${label.fabricRoll ? `<div class="label-info">Roll: ${label.fabricRoll}</div>` : ''}
+              <div class="barcode-container">
+                ${label.barcodeImage ? `<img src="${label.barcodeImage}" alt="Barcode" />` : `<div class="barcode-text">${label.barcodeValue}</div>`}
+              </div>
+              <div class="item-number">${label.itemId} of ${data.count}</div>
+            </div>
+          `).join('');
+
+          printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Packet Labels</title>
+              <style>
+                @media print {
+                  @page { margin: 0.25in; size: 4in 3in; }
+                  body { margin: 0; }
+                  .no-print { display: none; }
+                  .label { page-break-after: always; }
+                  .label:last-child { page-break-after: avoid; }
+                }
+                body {
+                  font-family: Arial, sans-serif;
+                  margin: 0;
+                  padding: 20px;
+                  background: #f5f5f5;
+                }
+                .labels-container {
+                  display: flex;
+                  flex-wrap: wrap;
+                  gap: 20px;
+                  justify-content: center;
+                }
+                .label {
+                  background: white;
+                  padding: 15px;
+                  border: 2px solid #333;
+                  width: 3.5in;
+                  text-align: center;
+                  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                .label-header {
+                  font-size: 12px;
+                  font-weight: bold;
+                  margin-bottom: 8px;
+                  color: #333;
+                }
+                .label-info {
+                  font-size: 11px;
+                  margin: 3px 0;
+                  color: #555;
+                }
+                .barcode-container {
+                  margin: 10px 0;
+                }
+                .barcode-container img {
+                  max-width: 100%;
+                  height: auto;
+                }
+                .barcode-text {
+                  font-size: 10px;
+                  font-family: monospace;
+                  letter-spacing: 1px;
+                }
+                .item-number {
+                  font-size: 10px;
+                  color: #888;
+                  margin-top: 8px;
+                }
+                .print-btn {
+                  display: block;
+                  margin: 20px auto;
+                  padding: 12px 24px;
+                  background: #007bff;
+                  color: white;
+                  border: none;
+                  border-radius: 4px;
+                  cursor: pointer;
+                  font-size: 16px;
+                }
+                .print-btn:hover { background: #0056b3; }
+              </style>
+            </head>
+            <body>
+              <button class="print-btn no-print" onclick="window.print()">Print Labels</button>
+              <div class="labels-container">${labelsHtml}</div>
+            </body>
+            </html>
+          `);
+          printWindow.document.close();
+        }
+      }
+      
+      setIsLabelsDialogOpen(false);
       toast({
         title: 'Labels generated',
-        description: `Generated ${data.count} barcode labels. Ready to print.`,
+        description: `Generated ${data.count} barcode labels. Print window opened.`,
       });
       // In a real implementation, this would trigger the actual label printing
       console.log('Label data:', data.labels);
@@ -303,7 +417,7 @@ export default function CuttingTableManufacturingQueue() {
     
     const quantity = selectedItem.quantityCompleted || selectedItem.quantityRequested;
     generateLabelsMutation.mutate({ id: selectedItem.id, quantity });
-    setIsLabelsDialogOpen(false);
+    // Dialog is closed in onSuccess after labels are generated and print window opened
   };
 
   const getStatusBadge = (status: string) => {

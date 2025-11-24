@@ -6774,15 +6774,58 @@ export class DatabaseStorage implements IStorage {
 
   async createVendorPOItem(data: any): Promise<any> {
     const [item] = await db.insert(vendorPOItems).values(data).returning();
+    
+    // Auto-populate manufacturing queue if this is a manufactured part
+    try {
+      const { autoPopulateManufacturingQueue } = await import('./src/utils/manufacturingQueueHelper');
+      const vendorPO = data.vendorPoId ? await this.getVendorPO(data.vendorPoId) : null;
+      await autoPopulateManufacturingQueue(
+        {
+          agPartNumber: data.agPartNumber,
+          quantity: data.quantity,
+          vendorPoId: data.vendorPoId,
+          lineNumber: data.lineNumber,
+        },
+        vendorPO
+      );
+    } catch (error) {
+      console.error('Error auto-populating manufacturing queue:', error);
+      // Don't fail PO item creation if queue population fails
+    }
+    
     return item;
   }
 
   async updateVendorPOItem(id: number, data: any): Promise<any> {
+    // Get old data first for quantity sync
+    const [oldItem] = await db
+      .select()
+      .from(vendorPOItems)
+      .where(eq(vendorPOItems.id, id));
+    
     const [item] = await db
       .update(vendorPOItems)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(vendorPOItems.id, id))
       .returning();
+    
+    // Sync manufacturing queue if quantity changed
+    if (oldItem && data.quantity !== undefined && data.quantity !== oldItem.quantity) {
+      try {
+        const { syncManufacturingQueueOnUpdate } = await import('./src/utils/manufacturingQueueHelper');
+        await syncManufacturingQueueOnUpdate(
+          id,
+          oldItem.quantity,
+          data.quantity,
+          oldItem.vendorPoId,
+          oldItem.lineNumber
+        );
+      } catch (error) {
+        console.error('Error syncing manufacturing queue on update:', error);
+        // Don't fail PO item update if queue sync fails
+      }
+    }
+    
     return item;
   }
 

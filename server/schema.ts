@@ -5892,6 +5892,8 @@ export const manufacturingQueue = pgTable('manufacturing_queue', {
     .notNull(),
   vendorPoId: integer('vendor_po_id'), // Reference to vendor PO that generated this queue entry
   vendorPoLineNumber: integer('vendor_po_line_number'), // Line number in the PO
+  p2PoId: integer('p2_po_id'), // Reference to P2 PO that generated this queue entry
+  p2PoItemId: integer('p2_po_item_id'), // Reference to P2 PO item
   department: text('department').notNull(), // CNC, Cutting Table, or Cores
   quantityRequested: integer('quantity_requested').notNull().default(1),
   quantityCompleted: integer('quantity_completed').default(0),
@@ -5909,6 +5911,7 @@ export const manufacturingQueue = pgTable('manufacturing_queue', {
   departmentStatusIdx: index('manufacturing_queue_department_status_idx').on(table.department, table.status),
   dueDateIdx: index('manufacturing_queue_due_date_idx').on(table.dueDate),
   vendorPoIdx: index('manufacturing_queue_vendor_po_idx').on(table.vendorPoId, table.vendorPoLineNumber),
+  p2PoIdx: index('manufacturing_queue_p2_po_idx').on(table.p2PoId, table.p2PoItemId),
 }));
 
 // Cutting Table Insert Schemas

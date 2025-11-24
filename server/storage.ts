@@ -6779,15 +6779,17 @@ export class DatabaseStorage implements IStorage {
     try {
       const { autoPopulateManufacturingQueue } = await import('./src/utils/manufacturingQueueHelper');
       const vendorPO = data.vendorPoId ? await this.getVendorPO(data.vendorPoId) : null;
-      await autoPopulateManufacturingQueue(
-        {
-          agPartNumber: data.agPartNumber,
-          quantity: data.quantity,
-          vendorPoId: data.vendorPoId,
-          lineNumber: data.lineNumber,
-        },
-        vendorPO
-      );
+      const dueDate = vendorPO?.expectedDeliveryDate 
+        ? new Date(vendorPO.expectedDeliveryDate) 
+        : null;
+      
+      await autoPopulateManufacturingQueue({
+        inventoryPartNumber: data.agPartNumber,
+        quantity: data.quantity,
+        vendorPoId: data.vendorPoId,
+        vendorPoLineNumber: data.lineNumber,
+        dueDate,
+      });
     } catch (error) {
       console.error('Error auto-populating manufacturing queue:', error);
       // Don't fail PO item creation if queue population fails
@@ -10291,6 +10293,15 @@ export class DatabaseStorage implements IStorage {
       .insert(p2PurchaseOrderItems)
       .values(data)
       .returning();
+
+    // Auto-populate manufacturing queue if this is a manufactured part
+    await autoPopulateManufacturingQueue({
+      inventoryPartNumber: item.partNumber,
+      quantity: item.quantity,
+      p2PoId: item.poId,
+      p2PoItemId: item.id,
+    });
+
     return item;
   }
 

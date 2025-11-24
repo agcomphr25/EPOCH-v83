@@ -4,32 +4,32 @@ import { insertManufacturingQueueSchema } from '../../schema';
 import { eq, and, or } from 'drizzle-orm';
 
 /**
- * Auto-populates manufacturing queue when a vendor PO item is created for a manufactured part
+ * Auto-populates manufacturing queue when a PO item is created for a manufactured part
+ * Supports both Vendor POs and P2 POs
  * 
- * @param poItemData - The vendor PO item data containing agPartNumber, quantity, vendorPoId, lineNumber
- * @param vendorPO - The vendor PO object (optional, for extracting due date)
+ * @param params - Parameters object supporting both vendor and P2 POs
  * @returns The created queue item or null if not applicable
  */
 export async function autoPopulateManufacturingQueue(
-  poItemData: {
-    agPartNumber: string | null;
+  params: {
+    inventoryPartNumber: string | null;
     quantity: number;
-    vendorPoId: number;
-    lineNumber: number;
-  },
-  vendorPO?: {
-    expectedDeliveryDate?: string | null;
-  } | null
+    vendorPoId?: number;
+    vendorPoLineNumber?: number;
+    p2PoId?: number;
+    p2PoItemId?: number;
+    dueDate?: Date | null;
+  }
 ): Promise<any | null> {
   try {
     // Skip if no part number
-    if (!poItemData.agPartNumber) {
+    if (!params.inventoryPartNumber) {
       return null;
     }
 
     // Query inventory item to check if it's manufactured
     const inventoryItem = await db.query.inventoryItems.findFirst({
-      where: eq(inventoryItems.agPartNumber, poItemData.agPartNumber),
+      where: eq(inventoryItems.agPartNumber, params.inventoryPartNumber),
     });
 
     // Only proceed if item is manufactured and has a manufacturing department
@@ -39,42 +39,67 @@ export async function autoPopulateManufacturingQueue(
       return null;
     }
 
-    // Check for existing queue entries for this SPECIFIC PO line to prevent duplicates
-    // Use vendorPoId + lineNumber for precise duplicate detection
-    const existingQueueEntry = await db.query.manufacturingQueue.findFirst({
-      where: and(
-        eq(manufacturingQueue.vendorPoId, poItemData.vendorPoId),
-        eq(manufacturingQueue.vendorPoLineNumber, poItemData.lineNumber),
-        or(
-          eq(manufacturingQueue.status, 'PENDING'),
-          eq(manufacturingQueue.status, 'IN_PROGRESS')
+    // Build duplicate detection conditions based on PO type
+    const duplicateConditions = [];
+    if (params.vendorPoId && params.vendorPoLineNumber !== undefined) {
+      duplicateConditions.push(
+        and(
+          eq(manufacturingQueue.vendorPoId, params.vendorPoId),
+          eq(manufacturingQueue.vendorPoLineNumber, params.vendorPoLineNumber)
         )
-      ),
-    });
-
-    if (existingQueueEntry) {
-      console.log(`⚠️ Skipping duplicate queue entry for PO #${poItemData.vendorPoId} Line #${poItemData.lineNumber} - existing entry found (Queue ID: ${existingQueueEntry.id})`);
-      return null;
+      );
+    }
+    if (params.p2PoId && params.p2PoItemId) {
+      duplicateConditions.push(
+        and(
+          eq(manufacturingQueue.p2PoId, params.p2PoId),
+          eq(manufacturingQueue.p2PoItemId, params.p2PoItemId)
+        )
+      );
     }
 
-    // Create manufacturing queue entry with PO tracking
-    // Convert expectedDeliveryDate string to Date object if present
-    const dueDate = vendorPO?.expectedDeliveryDate 
-      ? new Date(vendorPO.expectedDeliveryDate) 
-      : null;
+    // Check for existing queue entries to prevent duplicates
+    if (duplicateConditions.length > 0) {
+      const existingQueueEntry = await db.query.manufacturingQueue.findFirst({
+        where: and(
+          or(...duplicateConditions),
+          or(
+            eq(manufacturingQueue.status, 'PENDING'),
+            eq(manufacturingQueue.status, 'IN_PROGRESS')
+          )
+        ),
+      });
+
+      if (existingQueueEntry) {
+        const poType = params.vendorPoId ? 'Vendor' : 'P2';
+        const poId = params.vendorPoId || params.p2PoId;
+        console.log(`⚠️ Skipping duplicate queue entry for ${poType} PO #${poId} - existing entry found (Queue ID: ${existingQueueEntry.id})`);
+        return null;
+      }
+    }
+
+    // Build notes based on PO type
+    let notes = '';
+    if (params.vendorPoId && params.vendorPoLineNumber !== undefined) {
+      notes = `Auto-generated from Vendor PO #${params.vendorPoId}, Line #${params.vendorPoLineNumber}`;
+    } else if (params.p2PoId && params.p2PoItemId) {
+      notes = `Auto-generated from P2 PO #${params.p2PoId}, Item #${params.p2PoItemId}`;
+    }
     
     const queueData = insertManufacturingQueueSchema.parse({
       inventoryItemId: inventoryItem.id,
-      vendorPoId: poItemData.vendorPoId,
-      vendorPoLineNumber: poItemData.lineNumber,
+      vendorPoId: params.vendorPoId || null,
+      vendorPoLineNumber: params.vendorPoLineNumber ?? null,
+      p2PoId: params.p2PoId || null,
+      p2PoItemId: params.p2PoItemId || null,
       department: inventoryItem.manufacturingDepartment,
-      quantityRequested: poItemData.quantity,
+      quantityRequested: params.quantity,
       quantityCompleted: 0,
       status: 'PENDING',
       priority: 50, // Default medium priority
-      dueDate,
+      dueDate: params.dueDate || null,
       assignedTo: null,
-      notes: `Auto-generated from Vendor PO #${poItemData.vendorPoId}, Line #${poItemData.lineNumber}`,
+      notes,
     });
 
     const [newQueueItem] = await db
@@ -82,7 +107,9 @@ export async function autoPopulateManufacturingQueue(
       .values(queueData)
       .returning();
 
-    console.log(`✅ Auto-created manufacturing queue entry for ${inventoryItem.agPartNumber} in ${inventoryItem.manufacturingDepartment} (Queue ID: ${newQueueItem.id}, PO #${poItemData.vendorPoId} Line #${poItemData.lineNumber})`);
+    const poType = params.vendorPoId ? 'Vendor' : 'P2';
+    const poId = params.vendorPoId || params.p2PoId;
+    console.log(`✅ Auto-created manufacturing queue entry for ${inventoryItem.agPartNumber} in ${inventoryItem.manufacturingDepartment} (Queue ID: ${newQueueItem.id}, ${poType} PO #${poId})`);
     
     return newQueueItem;
   } catch (error) {

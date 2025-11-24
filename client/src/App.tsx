@@ -55,6 +55,7 @@ import ManageGroups from './pages/ManageGroups';
 import PurchaseOrders from './pages/PurchaseOrders';
 import P2PurchaseOrders from './pages/P2PurchaseOrders';
 import P2ProductionQueuePage from './pages/P2ProductionQueuePage';
+import CuttingTableProductionQueue from './pages/CuttingTableProductionQueue';
 import P2DepartmentManager from './pages/P2DepartmentManager';
 import P2TravelerPage from './pages/P2TravelerPage';
 import POProductsPage from './pages/POProductsPage';
@@ -572,6 +573,7 @@ function App() {
                   <Route path="/p2-forms" component={P2Forms} />
                   <Route path="/p2-traveler" component={P2TravelerPage} />
                   <Route path="/p2-production-queue" component={P2ProductionQueuePage} />
+                  <Route path="/cutting-table-queue" component={CuttingTableProductionQueue} />
                   <Route
                     path="/master-document-register"
                     component={MasterDocumentRegister}

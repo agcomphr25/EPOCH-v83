@@ -384,16 +384,23 @@ router.post('/layup-schedules/bulk-schedule', async (req: Request, res: Response
 // POST /api/p2/layup-schedules/print-barcodes - Generate barcode labels PDF
 router.post('/layup-schedules/print-barcodes', async (req: Request, res: Response) => {
   try {
-    const { scheduleIds, scheduledDate } = req.body;
+    const { scheduleIds, scheduledDate, scheduledDates } = req.body;
     
     let schedules: any[] = [];
 
-    // Get schedules either by IDs or by scheduled date
+    // Get schedules either by IDs, by multiple dates, or by single date
     if (scheduleIds && Array.isArray(scheduleIds) && scheduleIds.length > 0) {
       schedules = await db
         .select()
         .from(p2LayupSchedules)
         .where(inArray(p2LayupSchedules.id, scheduleIds));
+    } else if (scheduledDates && Array.isArray(scheduledDates) && scheduledDates.length > 0) {
+      // Handle multiple dates
+      schedules = await db
+        .select()
+        .from(p2LayupSchedules)
+        .where(inArray(p2LayupSchedules.scheduledDate, scheduledDates))
+        .orderBy(p2LayupSchedules.scheduledDate, p2LayupSchedules.customerName, p2LayupSchedules.partNumber);
     } else if (scheduledDate) {
       schedules = await db
         .select()
@@ -401,7 +408,7 @@ router.post('/layup-schedules/print-barcodes', async (req: Request, res: Respons
         .where(eq(p2LayupSchedules.scheduledDate, scheduledDate))
         .orderBy(p2LayupSchedules.customerName, p2LayupSchedules.partNumber);
     } else {
-      return res.status(400).json({ error: 'Either scheduleIds or scheduledDate is required' });
+      return res.status(400).json({ error: 'Either scheduleIds, scheduledDates, or scheduledDate is required' });
     }
 
     if (schedules.length === 0) {

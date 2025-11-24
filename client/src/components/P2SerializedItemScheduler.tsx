@@ -5,6 +5,7 @@ import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -272,6 +273,7 @@ function OldDroppableDateCellNOTUSED({
 export default function P2SerializedItemScheduler() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [selectedSchedules, setSelectedSchedules] = useState<string[]>([]);
+  const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -365,6 +367,19 @@ export default function P2SerializedItemScheduler() {
     });
   }
 
+  // Toggle day selection
+  function toggleDaySelection(dateStr: string) {
+    setSelectedDays(prev => {
+      const next = new Set(prev);
+      if (next.has(dateStr)) {
+        next.delete(dateStr);
+      } else {
+        next.add(dateStr);
+      }
+      return next;
+    });
+  }
+
   // Print barcodes for selected date
   async function printBarcodes(date: Date) {
     try {
@@ -399,6 +414,68 @@ export default function P2SerializedItemScheduler() {
     }
   }
 
+  // Print barcodes for all selected days
+  async function printSelectedDays() {
+    if (selectedDays.size === 0) {
+      toast({
+        title: 'No Days Selected',
+        description: 'Please select at least one day to print',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // Get all schedules for selected days
+      const selectedScheduleItems = schedules.filter(s => 
+        selectedDays.has(format(parseISO(s.scheduledDate + 'T00:00:00'), 'yyyy-MM-dd'))
+      );
+
+      if (selectedScheduleItems.length === 0) {
+        toast({
+          title: 'No Items',
+          description: 'Selected days have no scheduled items',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Print all selected days in a single PDF
+      const scheduledDates = Array.from(selectedDays).sort();
+      const response = await fetch('/api/p2/layup-schedules/print-barcodes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduledDates }),
+      });
+
+      if (!response.ok) throw new Error('Failed to generate barcodes');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `p2-layup-barcodes-selected-days.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: 'Success',
+        description: `Downloaded ${selectedScheduleItems.length} barcode labels from ${selectedDays.size} days`,
+      });
+      
+      // Clear selection
+      setSelectedDays(new Set());
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to print barcodes',
+        variant: 'destructive',
+      });
+    }
+  }
+
   const activeItem = activeId ? unscheduledItems.find(item => item.id === activeId) : null;
 
   return (
@@ -409,6 +486,18 @@ export default function P2SerializedItemScheduler() {
             <div className="flex justify-between items-center">
               <CardTitle>P2 Layup Scheduler - Composite Parts</CardTitle>
               <div className="flex gap-2">
+                {selectedDays.size > 0 && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={printSelectedDays}
+                    data-testid="button-print-selected-days"
+                    className="bg-orange-600 hover:bg-orange-700"
+                  >
+                    <Printer className="w-4 h-4 mr-1" />
+                    Print Selected ({selectedDays.size})
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -464,6 +553,8 @@ export default function P2SerializedItemScheduler() {
               <div className="col-span-5">
                 <div className="grid grid-cols-5 gap-3">
                   {weekDays.map((day) => {
+                    const dayStr = format(day, 'yyyy-MM-dd');
+                    const isSelected = selectedDays.has(dayStr);
                     const daySchedules = schedules.filter(s => {
                       // Parse the date string properly (YYYY-MM-DD format from database)
                       const scheduleDate = format(parseISO(s.scheduledDate + 'T00:00:00'), 'yyyy-MM-dd');
@@ -472,8 +563,16 @@ export default function P2SerializedItemScheduler() {
                     });
                     return (
                       <div key={day.toISOString()}>
-                        <div className="flex justify-between items-center mb-2">
-                          <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300">
+                        <div className="flex items-center gap-2 mb-2">
+                          {daySchedules.length > 0 && (
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleDaySelection(dayStr)}
+                              data-testid={`checkbox-${dayStr}`}
+                              className="h-4 w-4"
+                            />
+                          )}
+                          <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300 flex-1">
                             {format(day, 'EEEE')}
                           </h3>
                           {daySchedules.length > 0 && (

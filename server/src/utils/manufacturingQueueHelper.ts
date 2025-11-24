@@ -1,7 +1,7 @@
 import { db } from '../../db';
-import { inventoryItems, manufacturingQueue } from '../../schema';
+import { inventoryItems, manufacturingQueue, boms, bomRevisions, bomLines } from '../../schema';
 import { insertManufacturingQueueSchema } from '../../schema';
-import { eq, and, or } from 'drizzle-orm';
+import { eq, and, or, desc } from 'drizzle-orm';
 
 /**
  * Auto-populates manufacturing queue when a PO item is created for a manufactured part
@@ -169,5 +169,128 @@ export async function syncManufacturingQueueOnUpdate(
     }
   } catch (error) {
     console.error('❌ Failed to sync manufacturing queue on PO update:', error);
+  }
+}
+
+/**
+ * Explodes BOM for a P2 PO item and creates manufacturing queue entries for all manufactured components
+ * 
+ * @param params - P2 PO item data
+ * @returns Array of created queue items
+ */
+export async function explodeBOMForManufacturing(params: {
+  partNumber: string;
+  quantity: number;
+  p2PoId: number;
+  p2PoItemId: number;
+  dueDate?: Date | null;
+}): Promise<any[]> {
+  try {
+    const createdQueueItems = [];
+
+    // Step 1: Find the BOM for this part
+    const bom = await db.query.boms.findFirst({
+      where: eq(boms.parentPartAgNumber, params.partNumber),
+    });
+
+    if (!bom) {
+      console.log(`ℹ️ No BOM found for part ${params.partNumber} - skipping BOM explosion`);
+      return [];
+    }
+
+    // Step 2: Get the latest active BOM revision
+    const latestRevision = await db.query.bomRevisions.findFirst({
+      where: and(
+        eq(bomRevisions.bomId, bom.id),
+        eq(bomRevisions.isReleased, true)
+      ),
+      orderBy: [desc(bomRevisions.createdAt)],
+    });
+
+    if (!latestRevision) {
+      console.log(`⚠️ No released BOM revision found for part ${params.partNumber}`);
+      return [];
+    }
+
+    // Step 3: Get all BOM lines (components) for this revision
+    const bomComponents = await db
+      .select({
+        childPartNumber: bomLines.childPartAgNumber,
+        qtyPer: bomLines.qtyPer,
+      })
+      .from(bomLines)
+      .where(eq(bomLines.revisionId, latestRevision.id));
+
+    if (bomComponents.length === 0) {
+      console.log(`ℹ️ BOM for part ${params.partNumber} has no components`);
+      return [];
+    }
+
+    console.log(`🔍 Found ${bomComponents.length} components in BOM for part ${params.partNumber}`);
+
+    // Step 4: For each component, check if it's manufactured and create queue entry
+    for (const component of bomComponents) {
+      const inventoryItem = await db.query.inventoryItems.findFirst({
+        where: eq(inventoryItems.agPartNumber, component.childPartNumber),
+      });
+
+      // Only create queue entries for manufactured components
+      if (inventoryItem?.type === 'Manufactured' && inventoryItem.manufacturingDepartment) {
+        // Calculate required quantity: P2 PO quantity × BOM qty_per
+        const requiredQty = params.quantity * parseFloat(component.qtyPer);
+
+        // Check for duplicates
+        const existingEntry = await db.query.manufacturingQueue.findFirst({
+          where: and(
+            eq(manufacturingQueue.p2PoId, params.p2PoId),
+            eq(manufacturingQueue.p2PoItemId, params.p2PoItemId),
+            eq(manufacturingQueue.inventoryItemId, inventoryItem.id),
+            or(
+              eq(manufacturingQueue.status, 'PENDING'),
+              eq(manufacturingQueue.status, 'IN_PROGRESS')
+            )
+          ),
+        });
+
+        if (existingEntry) {
+          console.log(`⚠️ Skipping duplicate queue entry for ${component.childPartNumber} from P2 PO #${params.p2PoId}`);
+          continue;
+        }
+
+        // Create manufacturing queue entry
+        const queueData = insertManufacturingQueueSchema.parse({
+          inventoryItemId: inventoryItem.id,
+          p2PoId: params.p2PoId,
+          p2PoItemId: params.p2PoItemId,
+          department: inventoryItem.manufacturingDepartment,
+          quantityRequested: requiredQty,
+          quantityCompleted: 0,
+          status: 'PENDING',
+          priority: 50,
+          dueDate: params.dueDate || null,
+          notes: `Auto-generated from P2 PO #${params.p2PoId} BOM explosion for ${params.partNumber} (${params.quantity} units × ${component.qtyPer} per unit)`,
+        });
+
+        const [newQueueItem] = await db
+          .insert(manufacturingQueue)
+          .values(queueData)
+          .returning();
+
+        createdQueueItems.push(newQueueItem);
+
+        console.log(`✅ BOM explosion: Created queue entry for ${component.childPartNumber} in ${inventoryItem.manufacturingDepartment} (Qty: ${requiredQty}, Queue ID: ${newQueueItem.id})`);
+      }
+    }
+
+    if (createdQueueItems.length > 0) {
+      console.log(`🎯 BOM explosion complete: Created ${createdQueueItems.length} manufacturing queue entries for P2 PO #${params.p2PoId}`);
+    } else {
+      console.log(`ℹ️ BOM explosion found no manufactured components for part ${params.partNumber}`);
+    }
+
+    return createdQueueItems;
+  } catch (error) {
+    console.error('❌ Failed to explode BOM for manufacturing queue:', error);
+    return [];
   }
 }

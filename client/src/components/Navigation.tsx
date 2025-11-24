@@ -666,6 +666,13 @@ export default function Navigation() {
         'View production orders from BOMs, schedule layup dates, and track manufacturing progress',
     },
     {
+      path: '/manufacturing-queue',
+      label: 'Manufacturing Queue',
+      icon: Factory,
+      description:
+        'View and manage manufactured parts queue by department (Cutting Table, CNC, Cores)',
+    },
+    {
       path: '/part-routing-management',
       label: 'Part Routing Management',
       icon: Route,

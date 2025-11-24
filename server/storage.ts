@@ -10294,13 +10294,34 @@ export class DatabaseStorage implements IStorage {
       .values(data)
       .returning();
 
-    // Auto-populate manufacturing queue if this is a manufactured part
-    await autoPopulateManufacturingQueue({
-      inventoryPartNumber: item.partNumber,
-      quantity: item.quantity,
-      p2PoId: item.poId,
-      p2PoItemId: item.id,
-    });
+    try {
+      // Get the P2 PO to extract due date
+      const p2Po = await this.getP2PurchaseOrder(item.poId);
+      const dueDate = p2Po?.expectedDelivery ? new Date(p2Po.expectedDelivery) : null;
+
+      // Step 1: Check if this part itself is manufactured (direct)
+      const { autoPopulateManufacturingQueue } = await import('./src/utils/manufacturingQueueHelper');
+      await autoPopulateManufacturingQueue({
+        inventoryPartNumber: item.partNumber,
+        quantity: item.quantity,
+        p2PoId: item.poId,
+        p2PoItemId: item.id,
+        dueDate,
+      });
+
+      // Step 2: BOM Explosion - Check if this part has a BOM with manufactured components
+      const { explodeBOMForManufacturing } = await import('./src/utils/manufacturingQueueHelper');
+      await explodeBOMForManufacturing({
+        partNumber: item.partNumber,
+        quantity: item.quantity,
+        p2PoId: item.poId,
+        p2PoItemId: item.id,
+        dueDate,
+      });
+    } catch (error) {
+      console.error('Error auto-populating manufacturing queue for P2 PO item:', error);
+      // Don't fail PO item creation if queue population fails
+    }
 
     return item;
   }

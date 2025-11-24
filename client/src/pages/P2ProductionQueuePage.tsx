@@ -62,12 +62,11 @@ interface ProductionOrder {
   scheduledLayupDate: string | null;
   startedAt: string | null;
   completedAt: string | null;
-  bomItem: {
-    partName: string;
-    quantity: number;
-    firstDept: string;
-    itemType: string;
-  };
+  bomLine: {
+    childPartAgNumber: string;
+    qtyPer: string;
+    operationSeq: number;
+  } | null;
 }
 
 interface Parent {
@@ -79,9 +78,9 @@ interface Parent {
   };
   bom: {
     id: string;
-    sku: string;
-    modelName: string;
-    revision: string;
+    parentPartAgNumber: string;
+    code: string;
+    description: string;
   } | null;
   routing: {
     departmentSequence: string[];
@@ -362,12 +361,11 @@ export default function P2ProductionQueuePage() {
                     {poGroup.parents.map((parent) => {
                       const parentKey = `${poGroup.purchaseOrder.id}-${parent.poItem.id}`;
                       const isParentExpanded = expandedParents.has(parentKey);
-                      const totalNeeded =
-                        parent.poItem.quantity *
-                        parent.productionOrders.reduce(
-                          (sum, po) => sum + po.bomItem.quantity,
-                          0
-                        );
+                      // Total needed is sum of all production order quantities
+                      const totalNeeded = parent.productionOrders.reduce(
+                        (sum, po) => sum + po.quantity,
+                        0
+                      );
                       const totalManufactured = parent.productionOrders.reduce(
                         (sum, po) => sum + po.quantityManufactured,
                         0
@@ -396,7 +394,7 @@ export default function P2ProductionQueuePage() {
                                 <div className="text-sm text-muted-foreground">
                                   Quantity: {parent.poItem.quantity} •{' '}
                                   {parent.bom
-                                    ? `BOM: ${parent.bom.modelName} (Rev ${parent.bom.revision})`
+                                    ? `BOM: ${parent.bom.code}${parent.bom.description ? ` - ${parent.bom.description}` : ''}`
                                     : 'No BOM'}
                                 </div>
                               </div>
@@ -436,11 +434,11 @@ export default function P2ProductionQueuePage() {
                                   {parent.productionOrders.map((po) => (
                                     <TableRow key={po.id}>
                                       <TableCell className="font-medium">
-                                        {po.bomItem.partName}
+                                        {po.partName}
                                       </TableCell>
                                       <TableCell>
                                         <Badge variant="outline">
-                                          {po.bomItem.itemType}
+                                          {po.bomLine?.childPartAgNumber || 'N/A'}
                                         </Badge>
                                       </TableCell>
                                       <TableCell>{po.department}</TableCell>
@@ -523,7 +521,7 @@ export default function P2ProductionQueuePage() {
             <DialogTitle>Schedule Layup Date</DialogTitle>
             <DialogDescription>
               Set the scheduled layup date for{' '}
-              {scheduleDialog.productionOrder?.bomItem.partName}
+              {scheduleDialog.productionOrder?.partName}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">

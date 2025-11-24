@@ -4,8 +4,8 @@ import {
   p2ProductionOrders, 
   p2PurchaseOrders, 
   p2PurchaseOrderItems,
-  bomDefinitions,
-  bomItems,
+  boms,
+  bomLines,
   partRoutings
 } from '../../schema';
 import { eq, sql, and, inArray } from 'drizzle-orm';
@@ -32,17 +32,16 @@ router.get('/', async (req, res) => {
           quantity: p2PurchaseOrderItems.quantity,
         },
         bom: {
-          id: bomDefinitions.id,
-          sku: bomDefinitions.sku,
-          modelName: bomDefinitions.modelName,
-          revision: bomDefinitions.revision,
+          id: boms.id,
+          parentPartAgNumber: boms.parentPartAgNumber,
+          code: boms.code,
+          description: boms.description,
         },
-        bomItem: {
-          id: bomItems.id,
-          partName: bomItems.partName,
-          quantity: bomItems.quantity,
-          firstDept: bomItems.firstDept,
-          itemType: bomItems.itemType,
+        bomLine: {
+          id: bomLines.id,
+          childPartAgNumber: bomLines.childPartAgNumber,
+          qtyPer: bomLines.qtyPer,
+          operationSeq: bomLines.operationSeq,
         },
       })
       .from(p2ProductionOrders)
@@ -55,12 +54,12 @@ router.get('/', async (req, res) => {
         eq(p2ProductionOrders.p2PoItemId, p2PurchaseOrderItems.id)
       )
       .leftJoin(
-        bomDefinitions,
-        eq(p2ProductionOrders.bomDefinitionId, bomDefinitions.id)
+        boms,
+        eq(p2ProductionOrders.bomDefinitionId, boms.id)
       )
       .leftJoin(
-        bomItems,
-        eq(p2ProductionOrders.bomItemId, bomItems.id)
+        bomLines,
+        eq(p2ProductionOrders.bomItemId, bomLines.id)
       );
 
     const filters = [];
@@ -126,7 +125,7 @@ router.get('/', async (req, res) => {
 
         acc[poId].parents[poItemId].productionOrders.push({
           ...row.productionOrder,
-          bomItem: row.bomItem,
+          bomLine: row.bomLine,
         });
 
         return acc;

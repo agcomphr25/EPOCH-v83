@@ -45,6 +45,7 @@ import {
   Printer,
   Package,
 } from 'lucide-react';
+import { BarcodeInputField } from '@/components/BarcodeInputField';
 import type { ManufacturingQueue } from '@shared/schema';
 
 type QueueItemWithInventory = ManufacturingQueue & {
@@ -413,42 +414,42 @@ export default function CuttingTableManufacturingQueue() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="fabricLot">Fabric Lot Number</Label>
-                <Input
+                <BarcodeInputField
                   id="fabricLot"
                   value={fabricLot}
-                  onChange={(e) => setFabricLot(e.target.value)}
-                  placeholder="e.g., LOT-2023-001"
+                  onChange={setFabricLot}
+                  placeholder="e.g., LOT-2023-001 or scan barcode"
                   data-testid="input-fabric-lot"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="fabricBatch">Fabric Batch Number</Label>
-                <Input
+                <BarcodeInputField
                   id="fabricBatch"
                   value={fabricBatch}
-                  onChange={(e) => setFabricBatch(e.target.value)}
-                  placeholder="e.g., BATCH-456"
+                  onChange={setFabricBatch}
+                  placeholder="e.g., BATCH-456 or scan barcode"
                   data-testid="input-fabric-batch"
                 />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="fabricRoll">Fabric Roll Number</Label>
-              <Input
+              <BarcodeInputField
                 id="fabricRoll"
                 value={fabricRoll}
-                onChange={(e) => setFabricRoll(e.target.value)}
-                placeholder="e.g., ROLL-789"
+                onChange={setFabricRoll}
+                placeholder="e.g., ROLL-789 or scan barcode"
                 data-testid="input-fabric-roll"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="materialDetails">Material Details</Label>
-              <Input
+              <BarcodeInputField
                 id="materialDetails"
                 value={materialDetails}
-                onChange={(e) => setMaterialDetails(e.target.value)}
-                placeholder="Material type, supplier, etc."
+                onChange={setMaterialDetails}
+                placeholder="Material type, supplier, or scan barcode"
                 data-testid="input-material-details"
               />
             </div>

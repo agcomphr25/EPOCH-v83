@@ -145,6 +145,7 @@ import MetalAccessoriesTracker from './pages/MetalAccessoriesTracker';
 import DocumentIntelligence from './pages/DocumentIntelligence';
 import SignOrderPage from './pages/SignOrderPage';
 import PDFSettings from './pages/PDFSettings';
+import GatewayReports from './pages/GatewayReports';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -697,6 +698,7 @@ function App() {
                     component={AGBottomMetalReport}
                   />
                   <Route path="/shipping-tracker" component={ShippingTracker} />
+                  <Route path="/gateway-reports" component={GatewayReports} />
 
                   {/* Department Queue Management Routes */}
                   <Route

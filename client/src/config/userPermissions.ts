@@ -36,6 +36,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/inventory/consolidated-needs',
       '/customers',
       '/customer-management',
+      '/gateway-reports',
     ],
   },
 

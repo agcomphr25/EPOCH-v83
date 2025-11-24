@@ -12,6 +12,7 @@ import {
   FilePenLine,
   ClipboardList,
   BarChart,
+  BarChart3,
   ChevronDown,
   ChevronRight,
   FormInput,
@@ -405,6 +406,12 @@ export default function Navigation() {
       label: 'Shipping Tracker',
       icon: Package,
       description: 'Track stocks shipped by company week',
+    },
+    {
+      path: '/gateway-reports',
+      label: 'Gateway Reports',
+      icon: BarChart3,
+      description: 'Track daily production totals for Buttpads, Sandblasting, Duratec, and Texture',
     },
     {
       path: '/master-document-register',

@@ -989,7 +989,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: vendorsResponse } = useQuery<{ data: any[] }>({
     queryKey: ['/api/vendors'],
-    queryFn: () => apiRequest('/api/vendors?pageSize=200'),
   });
 
   const vendors = vendorsResponse?.data || [];

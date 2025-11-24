@@ -574,7 +574,6 @@ function VendorPOForm({
   // Fetch vendors for the dropdown
   const { data: vendorsResponse } = useQuery({
     queryKey: ['/api/vendors'],
-    queryFn: () => apiRequest('/api/vendors'),
   });
   const vendors = vendorsResponse?.data || [];
 

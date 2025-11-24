@@ -736,6 +736,12 @@ export default function Navigation() {
       description: 'Schedule and manage P2 layup production orders',
     },
     {
+      path: '/p2-serialized-scheduler',
+      label: 'P2 Serialized Item Scheduler',
+      icon: Calendar,
+      description: 'Drag-and-drop scheduler for P2 serialized items with barcode labels',
+    },
+    {
       path: '/production-tracking',
       label: 'Production Tracking',
       icon: TrendingUp,

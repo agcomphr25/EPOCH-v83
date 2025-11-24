@@ -6596,9 +6596,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getVendorEvaluationsYtdSummary(year: number, currentMonth: number): Promise<{overallAveragePercent: number; totalScores: number; recordedScoreCount: number}> {
-    // Get all evaluations for the given year up to current month
-    const evaluations = await db
-      .select()
+    // Use SQL aggregation to sum scores and count non-null values
+    const result = await db
+      .select({
+        totalScores: sql<number>`
+          COALESCE(SUM(quality_score), 0) +
+          COALESCE(SUM(cost_score), 0) +
+          COALESCE(SUM(delivery_score), 0) +
+          COALESCE(SUM(response_score), 0)
+        `.as('totalScores'),
+        recordedScoreCount: sql<number>`
+          (COUNT(quality_score) +
+           COUNT(cost_score) +
+           COUNT(delivery_score) +
+           COUNT(response_score))
+        `.as('recordedScoreCount')
+      })
       .from(vendorMonthlyEvaluations)
       .where(
         and(
@@ -6607,25 +6620,7 @@ export class DatabaseStorage implements IStorage {
         )
       );
     
-    // Calculate total scores and count, excluding null values
-    let totalScores = 0;
-    let recordedScoreCount = 0;
-    
-    for (const evaluation of evaluations) {
-      const scores = [
-        evaluation.qualityScore,
-        evaluation.costScore,
-        evaluation.deliveryScore,
-        evaluation.responseScore
-      ].filter(score => score !== null && score !== undefined);
-      
-      // Skip months where all scores are null
-      if (scores.length === 0) continue;
-      
-      // Add up the scores
-      totalScores += scores.reduce((sum, score) => sum + score, 0);
-      recordedScoreCount += scores.length;
-    }
+    const { totalScores, recordedScoreCount } = result[0] || { totalScores: 0, recordedScoreCount: 0 };
     
     // Calculate percentage: (totalScores / (recordedScoreCount * 5)) * 100
     // Each score is out of 5, so max possible = recordedScoreCount * 5

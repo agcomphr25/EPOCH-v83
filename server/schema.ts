@@ -526,6 +526,7 @@ export const inventoryItems = pgTable('inventory_items', {
   isPacketPart: boolean('is_packet_part').default(false), // Part of cutting table packet
   isFabric: boolean('is_fabric').default(false), // Fabric for cutting table
   type: text('type'), // Type: Purchased or Manufactured
+  manufacturingDepartment: text('manufacturing_department'), // Manufacturing department: CNC, Cutting Table, or Cores (required when type is Manufactured)
   vendorId: integer('vendor_id').references(() => vendors.id), // Primary vendor for this part
   hasSds: boolean('has_sds').default(false), // Has Safety Data Sheet
   sdsFilePath: text('sds_file_path'), // Path to uploaded SDS PDF file

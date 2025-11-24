@@ -365,6 +365,22 @@ router.post('/upload/approval', vendorApprovalUpload.single('file'), async (req:
 
 // Vendor Monthly Evaluations Routes
 
+// GET /api/vendors/evaluations/ytd-summary - Get YTD overall average for all vendors
+router.get('/evaluations/ytd-summary', async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // JavaScript months are 0-indexed
+    
+    const summary = await storage.getVendorEvaluationsYtdSummary(currentYear, currentMonth);
+    
+    res.json(summary);
+  } catch (error) {
+    console.error('Get vendor YTD summary error:', error);
+    res.status(500).json({ error: 'Failed to fetch vendor YTD summary' });
+  }
+});
+
 // GET /api/vendors/:vendorId/evaluations - Get monthly evaluations for a vendor
 router.get('/:vendorId/evaluations', async (req: Request, res: Response) => {
   try {

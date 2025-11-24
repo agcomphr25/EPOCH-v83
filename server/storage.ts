@@ -965,6 +965,7 @@ export interface IStorage {
   updateVendorMonthlyEvaluation(id: number, data: Partial<InsertVendorMonthlyEvaluation>): Promise<VendorMonthlyEvaluation>;
   deleteVendorMonthlyEvaluation(id: number): Promise<void>;
   bulkCreateVendorMonthlyEvaluations(data: InsertVendorMonthlyEvaluation[]): Promise<VendorMonthlyEvaluation[]>;
+  getVendorEvaluationsYtdSummary(year: number, currentMonth: number): Promise<{overallAveragePercent: number; totalScores: number; recordedScoreCount: number}>;
 
   // Follow-up order methods
   createFollowupOrder(data: InsertFollowupOrder): Promise<FollowupOrder>;
@@ -6592,6 +6593,51 @@ export class DatabaseStorage implements IStorage {
   async bulkCreateVendorMonthlyEvaluations(data: InsertVendorMonthlyEvaluation[]): Promise<VendorMonthlyEvaluation[]> {
     if (data.length === 0) return [];
     return await db.insert(vendorMonthlyEvaluations).values(data).returning();
+  }
+
+  async getVendorEvaluationsYtdSummary(year: number, currentMonth: number): Promise<{overallAveragePercent: number; totalScores: number; recordedScoreCount: number}> {
+    // Get all evaluations for the given year up to current month
+    const evaluations = await db
+      .select()
+      .from(vendorMonthlyEvaluations)
+      .where(
+        and(
+          eq(vendorMonthlyEvaluations.year, year),
+          sql`${vendorMonthlyEvaluations.month} <= ${currentMonth}`
+        )
+      );
+    
+    // Calculate total scores and count, excluding null values
+    let totalScores = 0;
+    let recordedScoreCount = 0;
+    
+    for (const evaluation of evaluations) {
+      const scores = [
+        evaluation.qualityScore,
+        evaluation.costScore,
+        evaluation.deliveryScore,
+        evaluation.responseScore
+      ].filter(score => score !== null && score !== undefined);
+      
+      // Skip months where all scores are null
+      if (scores.length === 0) continue;
+      
+      // Add up the scores
+      totalScores += scores.reduce((sum, score) => sum + score, 0);
+      recordedScoreCount += scores.length;
+    }
+    
+    // Calculate percentage: (totalScores / (recordedScoreCount * 5)) * 100
+    // Each score is out of 5, so max possible = recordedScoreCount * 5
+    const overallAveragePercent = recordedScoreCount > 0
+      ? (totalScores / (recordedScoreCount * 5)) * 100
+      : 0;
+    
+    return {
+      overallAveragePercent: Math.round(overallAveragePercent * 10) / 10, // Round to 1 decimal
+      totalScores,
+      recordedScoreCount
+    };
   }
 
   // Vendor PO CRUD

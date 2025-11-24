@@ -49,6 +49,7 @@ import {
   Award,
   Building2,
   Calculator,
+  Route,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -663,6 +664,13 @@ export default function Navigation() {
       icon: Factory,
       description:
         'View production orders from BOMs, schedule layup dates, and track manufacturing progress',
+    },
+    {
+      path: '/part-routing-management',
+      label: 'Part Routing Management',
+      icon: Route,
+      description:
+        'Configure department sequences and traceability requirements for manufactured parts',
     },
     {
       path: '/p2-department-manager',

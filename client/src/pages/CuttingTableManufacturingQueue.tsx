@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import {
@@ -53,6 +53,18 @@ type QueueItemWithInventory = ManufacturingQueue & {
   partName: string | null;
 };
 
+type FabricInventory = {
+  id: string;
+  barcode: string;
+  fabric: string | null;
+  source: string | null;
+  batchNumber: string | null;
+  location: string | null;
+  productionLineId: string | null;
+  quantity: number;
+  conformanceDocumentLink: string | null;
+};
+
 export default function CuttingTableManufacturingQueue() {
   const { toast } = useToast();
   const [selectedStatus, setSelectedStatus] = useState<string>('PENDING');
@@ -67,6 +79,7 @@ export default function CuttingTableManufacturingQueue() {
 
   // Production form state
   const [quantityCompleted, setQuantityCompleted] = useState('');
+  const [fabricBarcode, setFabricBarcode] = useState('');
   const [fabricLot, setFabricLot] = useState('');
   const [fabricBatch, setFabricBatch] = useState('');
   const [fabricRoll, setFabricRoll] = useState('');
@@ -84,6 +97,13 @@ export default function CuttingTableManufacturingQueue() {
       }
       return apiRequest(`/api/cutting-table-mfg-queue/cutting-table?${params.toString()}`);
     },
+  });
+
+  // Look up fabric inventory when barcode is scanned
+  const { data: fabricInventory } = useQuery<FabricInventory>({
+    queryKey: [`/api/cutting-table/fabric-inventory-by-barcode/${fabricBarcode}`],
+    enabled: !!fabricBarcode && fabricBarcode.length > 3,
+    retry: false,
   });
 
   // Start item mutation
@@ -178,6 +198,7 @@ export default function CuttingTableManufacturingQueue() {
 
   const resetProductionForm = () => {
     setQuantityCompleted('');
+    setFabricBarcode('');
     setFabricLot('');
     setFabricBatch('');
     setFabricRoll('');
@@ -186,6 +207,29 @@ export default function CuttingTableManufacturingQueue() {
     setCompletedBy('');
     setSelectedItem(null);
   };
+
+  // Auto-populate traceability fields when fabric inventory is found
+  const handleFabricBarcodeScanned = (barcode: string) => {
+    setFabricBarcode(barcode);
+  };
+
+  // When fabric inventory is loaded, auto-populate the traceability fields
+  useEffect(() => {
+    if (fabricInventory) {
+      setFabricBatch(fabricInventory.batchNumber || '');
+      setFabricLot(fabricInventory.fabric || '');
+      setFabricRoll(fabricInventory.source || '');
+      setMaterialDetails(
+        `${fabricInventory.fabric || ''}${fabricInventory.source ? ' - ' + fabricInventory.source : ''}`
+      );
+      
+      // Show success toast
+      toast({
+        title: 'Fabric Found',
+        description: `Loaded traceability data for ${fabricInventory.fabric}`,
+      });
+    }
+  }, [fabricInventory]);
 
   const handleOpenProductionDialog = (item: QueueItemWithInventory) => {
     setSelectedItem(item);
@@ -388,6 +432,23 @@ export default function CuttingTableManufacturingQueue() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Fabric Barcode Scanner - Auto-fills all traceability fields */}
+            <div className="p-4 border-2 border-blue-200 bg-blue-50 rounded-lg space-y-2">
+              <Label htmlFor="fabricBarcode" className="text-blue-900 font-semibold">
+                Scan Fabric Barcode (Auto-fills traceability data)
+              </Label>
+              <BarcodeInputField
+                id="fabricBarcode"
+                value={fabricBarcode}
+                onChange={handleFabricBarcodeScanned}
+                placeholder="Scan fabric inventory barcode to auto-fill traceability info..."
+                data-testid="input-fabric-barcode"
+              />
+              <p className="text-xs text-blue-700">
+                Scanning the fabric barcode will automatically populate lot, batch, roll, and material details below.
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="quantity">Quantity Completed*</Label>
@@ -411,47 +472,51 @@ export default function CuttingTableManufacturingQueue() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="fabricLot">Fabric Lot Number</Label>
-                <BarcodeInputField
-                  id="fabricLot"
-                  value={fabricLot}
-                  onChange={setFabricLot}
-                  placeholder="e.g., LOT-2023-001 or scan barcode"
-                  data-testid="input-fabric-lot"
+            
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-semibold mb-3 text-gray-700">Fabric Traceability Information</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fabricLot">Fabric Lot Number</Label>
+                  <Input
+                    id="fabricLot"
+                    value={fabricLot}
+                    onChange={(e) => setFabricLot(e.target.value)}
+                    placeholder="Auto-filled from barcode scan"
+                    data-testid="input-fabric-lot"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fabricBatch">Fabric Batch Number</Label>
+                  <Input
+                    id="fabricBatch"
+                    value={fabricBatch}
+                    onChange={(e) => setFabricBatch(e.target.value)}
+                    placeholder="Auto-filled from barcode scan"
+                    data-testid="input-fabric-batch"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2 mt-4">
+                <Label htmlFor="fabricRoll">Fabric Roll/Source</Label>
+                <Input
+                  id="fabricRoll"
+                  value={fabricRoll}
+                  onChange={(e) => setFabricRoll(e.target.value)}
+                  placeholder="Auto-filled from barcode scan"
+                  data-testid="input-fabric-roll"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="fabricBatch">Fabric Batch Number</Label>
-                <BarcodeInputField
-                  id="fabricBatch"
-                  value={fabricBatch}
-                  onChange={setFabricBatch}
-                  placeholder="e.g., BATCH-456 or scan barcode"
-                  data-testid="input-fabric-batch"
+              <div className="space-y-2 mt-4">
+                <Label htmlFor="materialDetails">Material Details</Label>
+                <Input
+                  id="materialDetails"
+                  value={materialDetails}
+                  onChange={(e) => setMaterialDetails(e.target.value)}
+                  placeholder="Auto-filled from barcode scan"
+                  data-testid="input-material-details"
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="fabricRoll">Fabric Roll Number</Label>
-              <BarcodeInputField
-                id="fabricRoll"
-                value={fabricRoll}
-                onChange={setFabricRoll}
-                placeholder="e.g., ROLL-789 or scan barcode"
-                data-testid="input-fabric-roll"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="materialDetails">Material Details</Label>
-              <BarcodeInputField
-                id="materialDetails"
-                value={materialDetails}
-                onChange={setMaterialDetails}
-                placeholder="Material type, supplier, or scan barcode"
-                data-testid="input-material-details"
-              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="completionNotes">Completion Notes</Label>

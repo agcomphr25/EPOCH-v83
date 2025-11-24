@@ -1100,28 +1100,21 @@ function BOMsTab({ searchTerm, setSearchTerm }: { searchTerm: string; setSearchT
                             <FormField
                               control={editForm.control}
                               name="description"
-                              render={({ field }) => {
-                                const hasReleasedRevisions = selectedBom?.revisions?.some((rev: any) => rev.isReleased);
-                                return (
-                                  <FormItem>
-                                    <FormLabel>Description</FormLabel>
-                                    <FormControl>
-                                      <Textarea 
-                                        {...field} 
-                                        disabled={hasReleasedRevisions}
-                                        data-testid="input-edit-bom-description" 
-                                      />
-                                    </FormControl>
-                                    <FormDescription>
-                                      {hasReleasedRevisions 
-                                        ? 'Description locked - BOM has released revisions' 
-                                        : 'You can edit the description while in draft status'
-                                      }
-                                    </FormDescription>
-                                    <FormMessage />
-                                  </FormItem>
-                                );
-                              }}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Description</FormLabel>
+                                  <FormControl>
+                                    <Textarea 
+                                      {...field} 
+                                      data-testid="input-edit-bom-description" 
+                                    />
+                                  </FormControl>
+                                  <FormDescription>
+                                    Edit the BOM description
+                                  </FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
                             />
                             <div className="space-y-4 pt-4 border-t">
                               <div className="flex items-center justify-between">

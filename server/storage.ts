@@ -10412,7 +10412,7 @@ export class DatabaseStorage implements IStorage {
           .limit(1);
 
         const partName = partInfo.length > 0 ? partInfo[0].name : line.childPartAgNumber;
-        const firstDept = partInfo.length > 0 ? (partInfo[0].productionLineDept || 'Layup') : 'Layup';
+        const firstDept = partInfo.length > 0 ? (partInfo[0].manufacturingDepartment || 'Layup') : 'Layup';
 
         // Create individual production orders (1 unit each) instead of bulk orders
         for (let unitIndex = 1; unitIndex <= totalQuantity; unitIndex++) {

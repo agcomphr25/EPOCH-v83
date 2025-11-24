@@ -14,7 +14,7 @@ const router = Router();
 
 router.get('/', async (req, res) => {
   try {
-    const { status, poId } = req.query;
+    const { status, poId, department } = req.query;
 
     const baseQuery = db
       .select({
@@ -72,6 +72,10 @@ router.get('/', async (req, res) => {
       if (!isNaN(poIdNum)) {
         filters.push(eq(p2ProductionOrders.p2PoId, poIdNum));
       }
+    }
+
+    if (department && typeof department === 'string' && department !== 'all') {
+      filters.push(eq(p2ProductionOrders.department, department));
     }
 
     const results = filters.length > 0

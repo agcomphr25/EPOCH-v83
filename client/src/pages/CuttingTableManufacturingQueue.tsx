@@ -456,7 +456,7 @@ export default function CuttingTableManufacturingQueue() {
           }
         }}
       >
-        <DialogContent className="max-w-2xl" data-testid="dialog-production-entry">
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col" data-testid="dialog-production-entry">
           <DialogHeader>
             <DialogTitle>Record Production & Traceability</DialogTitle>
             <DialogDescription>
@@ -464,7 +464,7 @@ export default function CuttingTableManufacturingQueue() {
               {selectedItem?.partNumber} - {selectedItem?.partName}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 overflow-y-auto flex-1">
             {/* Fabric Barcode Scanner - Auto-fills all traceability fields */}
             <div className="p-4 border-2 border-blue-200 bg-blue-50 rounded-lg space-y-2">
               <Label htmlFor="fabricBarcode" className="text-blue-900 font-semibold">

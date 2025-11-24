@@ -2405,8 +2405,8 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
 
   const handleCellClick = (month: number, field: string) => {
     const evaluation = getEvaluationForMonth(month);
-    const value = evaluation?.[field] || '';
-    setCellValue(value.toString());
+    const value = evaluation?.[field];
+    setCellValue(value ? value.toString() : 'na');
     setEditingCell({ month, field });
   };
 
@@ -2475,18 +2475,45 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
 
     if (isEditing) {
       return (
-        <Input
-          type="number"
-          min="1"
-          max="5"
+        <Select
           value={cellValue}
-          onChange={(e) => setCellValue(e.target.value)}
-          onBlur={() => handleCellUpdate(month, field)}
-          onKeyDown={(e) => handleKeyDown(e, month, field)}
-          className="w-12 h-8 text-center p-1"
-          autoFocus
-          data-testid={`input-${field}-${month}`}
-        />
+          onValueChange={(newValue) => {
+            setCellValue(newValue);
+            // Auto-save on selection
+            const numValue = newValue === 'na' ? null : parseInt(newValue);
+            const evaluation = getEvaluationForMonth(month);
+            const baseData: any = {
+              vendorId,
+              month,
+              year: selectedYear,
+              qualityScore: evaluation?.qualityScore ?? null,
+              costScore: evaluation?.costScore ?? null,
+              deliveryScore: evaluation?.deliveryScore ?? null,
+              responseScore: evaluation?.responseScore ?? null,
+            };
+            baseData[field] = numValue;
+            const newPendingChanges = new Map(pendingChanges);
+            newPendingChanges.set(key, baseData);
+            setPendingChanges(newPendingChanges);
+            setEditingCell(null);
+          }}
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setEditingCell(null);
+          }}
+        >
+          <SelectTrigger className="w-16 h-8 text-center p-1" data-testid={`select-${field}-${month}`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="5">5</SelectItem>
+            <SelectItem value="4">4</SelectItem>
+            <SelectItem value="3">3</SelectItem>
+            <SelectItem value="2">2</SelectItem>
+            <SelectItem value="1">1</SelectItem>
+            <SelectItem value="na">N/A</SelectItem>
+          </SelectContent>
+        </Select>
       );
     }
 

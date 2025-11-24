@@ -70,7 +70,7 @@ type QueueItemWithInventory = ManufacturingQueue & {
 export default function ManufacturingQueue() {
   const { toast } = useToast();
   const [selectedDepartment, setSelectedDepartment] = useState<string>('Cutting Table');
-  const [selectedStatus, setSelectedStatus] = useState<string>('PENDING');
+  const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   // Fetch queue items
@@ -79,7 +79,7 @@ export default function ManufacturingQueue() {
     queryFn: () => {
       const params = new URLSearchParams();
       if (selectedDepartment) params.append('department', selectedDepartment);
-      if (selectedStatus) params.append('status', selectedStatus);
+      if (selectedStatus && selectedStatus !== 'ALL') params.append('status', selectedStatus);
       return apiRequest(`/api/manufacturing-queue?${params.toString()}`);
     },
     enabled: true,
@@ -204,7 +204,7 @@ export default function ManufacturingQueue() {
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                  <SelectItem value="">All</SelectItem>
+                  <SelectItem value="ALL">All</SelectItem>
                   <SelectItem value="PENDING">Pending</SelectItem>
                   <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
                   <SelectItem value="COMPLETED">Completed</SelectItem>

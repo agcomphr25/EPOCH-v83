@@ -116,14 +116,17 @@ export default function P2ProductionQueuePage() {
 
   const { data: queueData = [], isLoading } = useQuery<POGroup[]>({
     queryKey: ['/api/p2-production-queue', selectedStatus],
-    queryFn: async () => {
+    queryFn: async ({ queryKey }) => {
+      const [baseUrl, status] = queryKey;
       const params = new URLSearchParams();
-      if (selectedStatus && selectedStatus !== 'all') {
-        params.append('status', selectedStatus);
+      if (status && status !== 'all') {
+        params.append('status', status as string);
       }
-      const url = `/api/p2-production-queue${params.toString() ? `?${params}` : ''}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to fetch production queue');
+      const url = `${baseUrl}${params.toString() ? `?${params}` : ''}`;
+      const response = await fetch(url, { credentials: 'include' });
+      if (!response.ok) {
+        throw new Error('Failed to fetch production queue');
+      }
       return response.json();
     },
   });
@@ -147,7 +150,10 @@ export default function P2ProductionQueuePage() {
         title: 'Success',
         description: 'Layup date scheduled successfully',
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/p2-production-queue'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2-production-queue'],
+        exact: false,
+      });
       setScheduleDialog({ open: false, productionOrder: null });
     },
     onError: (error: any) => {
@@ -178,7 +184,10 @@ export default function P2ProductionQueuePage() {
         title: 'Success',
         description: 'Quantity updated successfully',
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/p2-production-queue'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2-production-queue'],
+        exact: false,
+      });
     },
     onError: (error: any) => {
       toast({

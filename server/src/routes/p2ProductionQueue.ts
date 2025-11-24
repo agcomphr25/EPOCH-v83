@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
   try {
     const { status, poId } = req.query;
 
-    let query = db
+    const baseQuery = db
       .select({
         productionOrder: p2ProductionOrders,
         purchaseOrder: {
@@ -63,23 +63,25 @@ router.get('/', async (req, res) => {
         eq(p2ProductionOrders.bomItemId, bomItems.id)
       );
 
+    const filters = [];
     if (status && typeof status === 'string') {
-      query = query.where(eq(p2ProductionOrders.status, status));
+      filters.push(eq(p2ProductionOrders.status, status));
     }
 
     if (poId && typeof poId === 'string') {
       const poIdNum = parseInt(poId, 10);
       if (!isNaN(poIdNum)) {
-        query = query.where(eq(p2ProductionOrders.p2PoId, poIdNum));
+        filters.push(eq(p2ProductionOrders.p2PoId, poIdNum));
       }
     }
 
-    const results = await query;
+    const results = filters.length > 0
+      ? await baseQuery.where(and(...filters))
+      : await baseQuery;
 
     // Get unique part numbers to fetch routing configs
-    const uniquePartNumbers = [
-      ...new Set(results.map((r) => r.poItem?.partNumber).filter(Boolean)),
-    ] as string[];
+    const partNumbers = results.map((r) => r.poItem?.partNumber).filter(Boolean) as string[];
+    const uniquePartNumbers = Array.from(new Set(partNumbers));
 
     let routingConfigs: Record<string, any> = {};
     if (uniquePartNumbers.length > 0) {
@@ -104,7 +106,7 @@ router.get('/', async (req, res) => {
         const poId = row.purchaseOrder?.id;
         const poItemId = row.poItem?.id;
 
-        if (!poId || !poItemId) return acc;
+        if (!poId || !poItemId || !row.poItem) return acc;
 
         if (!acc[poId]) {
           acc[poId] = {

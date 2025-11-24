@@ -308,6 +308,7 @@ router.get('/:id/items', async (req: Request, res: Response) => {
 });
 
 // POST /api/vendor-pos/:id/items - Add an item to a vendor PO
+// Note: Manufacturing queue auto-population now handled in storage layer
 router.post('/:id/items', async (req: Request, res: Response) => {
   try {
     const vendorPoId = parseInt(req.params.id);

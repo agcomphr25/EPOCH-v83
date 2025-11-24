@@ -54,6 +54,7 @@ interface InventoryFormData {
   sku: string;
   name: string;
   type: string;
+  manufacturingDepartment: string;
   source: string;
   vendorId: string;
   supplierPartNumber: string;
@@ -188,6 +189,24 @@ const InventoryForm = ({
             </SelectContent>
           </Select>
         </div>
+        {formData.type === 'Manufactured' && (
+          <div>
+            <Label htmlFor="manufacturingDepartment">Manufacturing Department *</Label>
+            <Select
+              value={formData.manufacturingDepartment}
+              onValueChange={(value) => onSelectChange('manufacturingDepartment', value)}
+            >
+              <SelectTrigger data-testid="select-manufacturingDepartment">
+                <SelectValue placeholder="Select department" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CNC">CNC</SelectItem>
+                <SelectItem value="Cutting Table">Cutting Table</SelectItem>
+                <SelectItem value="Cores">Cores</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="flex items-center space-x-2 pt-6">
           <Checkbox
             id="isStockItem"
@@ -877,6 +896,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     sku: '',
     name: '',
     type: 'Purchased',
+    manufacturingDepartment: '',
     source: '',
     vendorId: 'none',
     supplierPartNumber: '',
@@ -1309,6 +1329,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       sku: '',
       name: '',
       type: 'Purchased',
+      manufacturingDepartment: '',
       source: '',
       vendorId: 'none',
       supplierPartNumber: '',
@@ -1395,11 +1416,17 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         return;
       }
 
+      if (formData.type === 'Manufactured' && !formData.manufacturingDepartment) {
+        toast.error('Please select a Manufacturing Department for manufactured items');
+        return;
+      }
+
       const submitData = {
         agPartNumber: formData.agPartNumber,
         sku: formData.sku || null,
         name: formData.name,
         type: formData.type || 'Purchased',
+        manufacturingDepartment: formData.manufacturingDepartment || null,
         source: formData.source || null,
         vendorId:
           formData.vendorId && formData.vendorId !== 'none'
@@ -1458,6 +1485,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       sku: item.sku || '',
       name: item.name,
       type: item.type || 'Purchased',
+      manufacturingDepartment: (item as any).manufacturingDepartment || '',
       source: item.source || '',
       vendorId: item.vendorId ? item.vendorId.toString() : 'none',
       supplierPartNumber: item.supplierPartNumber || '',

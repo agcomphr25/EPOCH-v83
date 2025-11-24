@@ -659,6 +659,24 @@ router.get('/fabric-inventory/by-material/:materialId', async (req, res) => {
   }
 });
 
+// Look up fabric inventory by barcode
+router.get('/fabric-inventory-by-barcode/:barcode', async (req, res) => {
+  try {
+    const { barcode } = req.params;
+    const allInventory = await storage.getAllCuttingFabricInventory();
+    const inventory = allInventory.find(item => item.barcode === barcode);
+    
+    if (!inventory) {
+      return res.status(404).json({ error: 'Fabric inventory not found for this barcode' });
+    }
+    
+    res.json(inventory);
+  } catch (error) {
+    console.error('Error fetching fabric inventory by barcode:', error);
+    res.status(500).json({ error: 'Failed to fetch fabric inventory' });
+  }
+});
+
 router.post('/fabric-inventory', async (req, res) => {
   try {
     const validatedData = insertCuttingFabricInventorySchema.parse(req.body);
@@ -1035,12 +1053,19 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
     }
     .barcode-container {
       margin: 6px 0;
+      max-width: 100%;
+      overflow: hidden;
+    }
+    .barcode-container svg {
+      max-width: 100%;
+      height: auto;
     }
     .barcode-text {
-      font-size: 11px;
+      font-size: 10px;
       font-weight: bold;
       margin-top: 4px;
-      letter-spacing: 1px;
+      letter-spacing: 0.5px;
+      word-break: break-all;
     }
     .print-btn {
       margin-top: 12px;
@@ -1074,11 +1099,12 @@ router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
   </div>
   <script>
     JsBarcode("#barcode", "${inventory.barcode}", {
-      format: "CODE39",
-      width: 1.5,
-      height: 50,
+      format: "CODE128",
+      width: 1.2,
+      height: 40,
       displayValue: false,
-      margin: 5
+      margin: 2,
+      textMargin: 0
     });
   </script>
 </body>

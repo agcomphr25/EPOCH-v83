@@ -6774,15 +6774,60 @@ export class DatabaseStorage implements IStorage {
 
   async createVendorPOItem(data: any): Promise<any> {
     const [item] = await db.insert(vendorPOItems).values(data).returning();
+    
+    // Auto-populate manufacturing queue if this is a manufactured part
+    try {
+      const { autoPopulateManufacturingQueue } = await import('./src/utils/manufacturingQueueHelper');
+      const vendorPO = data.vendorPoId ? await this.getVendorPO(data.vendorPoId) : null;
+      const dueDate = vendorPO?.expectedDeliveryDate 
+        ? new Date(vendorPO.expectedDeliveryDate) 
+        : null;
+      
+      await autoPopulateManufacturingQueue({
+        inventoryPartNumber: data.agPartNumber,
+        quantity: data.quantity,
+        vendorPoId: data.vendorPoId,
+        vendorPoLineNumber: data.lineNumber,
+        dueDate,
+      });
+    } catch (error) {
+      console.error('Error auto-populating manufacturing queue:', error);
+      // Don't fail PO item creation if queue population fails
+    }
+    
     return item;
   }
 
   async updateVendorPOItem(id: number, data: any): Promise<any> {
+    // Get old data first for quantity sync
+    const [oldItem] = await db
+      .select()
+      .from(vendorPOItems)
+      .where(eq(vendorPOItems.id, id));
+    
     const [item] = await db
       .update(vendorPOItems)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(vendorPOItems.id, id))
       .returning();
+    
+    // Sync manufacturing queue if quantity changed
+    if (oldItem && data.quantity !== undefined && data.quantity !== oldItem.quantity) {
+      try {
+        const { syncManufacturingQueueOnUpdate } = await import('./src/utils/manufacturingQueueHelper');
+        await syncManufacturingQueueOnUpdate(
+          id,
+          oldItem.quantity,
+          data.quantity,
+          oldItem.vendorPoId,
+          oldItem.lineNumber
+        );
+      } catch (error) {
+        console.error('Error syncing manufacturing queue on update:', error);
+        // Don't fail PO item update if queue sync fails
+      }
+    }
+    
     return item;
   }
 
@@ -10248,6 +10293,36 @@ export class DatabaseStorage implements IStorage {
       .insert(p2PurchaseOrderItems)
       .values(data)
       .returning();
+
+    try {
+      // Get the P2 PO to extract due date
+      const p2Po = await this.getP2PurchaseOrder(item.poId);
+      const dueDate = p2Po?.expectedDelivery ? new Date(p2Po.expectedDelivery) : null;
+
+      // Step 1: Check if this part itself is manufactured (direct)
+      const { autoPopulateManufacturingQueue } = await import('./src/utils/manufacturingQueueHelper');
+      await autoPopulateManufacturingQueue({
+        inventoryPartNumber: item.partNumber,
+        quantity: item.quantity,
+        p2PoId: item.poId,
+        p2PoItemId: item.id,
+        dueDate,
+      });
+
+      // Step 2: BOM Explosion - Check if this part has a BOM with manufactured components
+      const { explodeBOMForManufacturing } = await import('./src/utils/manufacturingQueueHelper');
+      await explodeBOMForManufacturing({
+        partNumber: item.partNumber,
+        quantity: item.quantity,
+        p2PoId: item.poId,
+        p2PoItemId: item.id,
+        dueDate,
+      });
+    } catch (error) {
+      console.error('Error auto-populating manufacturing queue for P2 PO item:', error);
+      // Don't fail PO item creation if queue population fails
+    }
+
     return item;
   }
 

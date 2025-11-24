@@ -149,7 +149,14 @@ export function BarcodeInputField({
         </Button>
       </div>
 
-      <Dialog open={showScanner} onOpenChange={handleCloseScanner}>
+      <Dialog 
+        open={showScanner} 
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCloseScanner();
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Scan Barcode</DialogTitle>

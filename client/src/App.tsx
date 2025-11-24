@@ -57,6 +57,7 @@ import P2PurchaseOrders from './pages/P2PurchaseOrders';
 import P2ProductionQueuePage from './pages/P2ProductionQueuePage';
 import CuttingTableProductionQueue from './pages/CuttingTableProductionQueue';
 import ManufacturingQueue from './pages/ManufacturingQueue';
+import CuttingTableManufacturingQueue from './pages/CuttingTableManufacturingQueue';
 import PartRoutingManagement from './pages/PartRoutingManagement';
 import P2DepartmentManager from './pages/P2DepartmentManager';
 import P2TravelerPage from './pages/P2TravelerPage';
@@ -577,6 +578,7 @@ function App() {
                   <Route path="/p2-production-queue" component={P2ProductionQueuePage} />
                   <Route path="/cutting-table-queue" component={CuttingTableProductionQueue} />
                   <Route path="/manufacturing-queue" component={ManufacturingQueue} />
+                  <Route path="/cutting-table-mfg-queue" component={CuttingTableManufacturingQueue} />
                   <Route path="/part-routing-management" component={PartRoutingManagement} />
                   <Route
                     path="/master-document-register"

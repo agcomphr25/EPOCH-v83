@@ -438,8 +438,6 @@ function VendorPOCard({
             >
               <div className="flex items-center gap-1">
                 <Building2 className="w-4 h-4" />
-                <span className="font-medium text-gray-700 dark:text-gray-300">Supplier #{vendorPo.vendorId}</span>
-                <span className="text-gray-400">-</span>
                 {vendorPo.vendorName || 'Unknown Vendor'}
               </div>
             </CardDescription>
@@ -1065,7 +1063,7 @@ export default function VendorPOManager() {
                     <td>${item.description || '-'}</td>
                     <td>${item.quantity || 0}</td>
                     <td>$${item.unitPrice != null ? item.unitPrice.toFixed(2) : '0.00'}</td>
-                    <td>$${item.totalPrice != null ? item.totalPrice.toFixed(2) : '0.00'}</td>
+                    <td>$${((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2)}</td>
                   </tr>
                 `).join('')}
               </tbody>

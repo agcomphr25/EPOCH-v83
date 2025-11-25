@@ -97,19 +97,19 @@ export default function ConsolidatedNeedsListPage() {
 
   // Get all parts requests (not just consolidated)
   const { data: allRequests = [], isLoading } = useQuery<PartsRequest[]>({
-    queryKey: ['/api/parts-requests'],
+    queryKey: ['/api/inventory/parts-requests'],
   });
 
   // Update parts request mutation
   const updateRequestMutation = useMutation({
     mutationFn: async (data: { id: number; updates: Partial<PartsRequest> }) => {
-      return apiRequest(`/api/parts-requests/${data.id}`, {
+      return apiRequest(`/api/inventory/parts-requests/${data.id}`, {
         method: 'PUT',
         body: JSON.stringify(data.updates),
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
       toast({
         title: 'Success',
         description: 'Request updated successfully.',

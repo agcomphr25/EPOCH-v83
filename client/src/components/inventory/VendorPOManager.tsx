@@ -97,6 +97,7 @@ type VendorPOItem = {
   lineNumber: number;
   agPartNumber?: string;
   vendorPartNumber?: string;
+  supplierPartNumber?: string;
   description?: string;
   quantity: number;
   unitPrice: number;
@@ -157,9 +158,9 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
                 <div className="font-medium text-gray-900 dark:text-gray-100 break-words line-clamp-2">
                   {item.description}
                 </div>
-                {item.vendorPartNumber && (
+                {item.supplierPartNumber && (
                   <div className="text-gray-500 text-xs truncate">
-                    Vendor: {item.vendorPartNumber}
+                    Supplier Part #: {item.supplierPartNumber}
                   </div>
                 )}
               </div>

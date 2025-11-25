@@ -6851,6 +6851,8 @@ export class DatabaseStorage implements IStorage {
     // Flatten the joined data structure
     return items.map(row => ({
       ...row.vendor_po_items,
+      // Include supplier part number from inventory items
+      supplierPartNumber: row.inventory_items?.supplierPartNumber,
       // Include UOM conversion data from inventory items if available
       vendorUnit: row.inventory_items?.vendorUnit,
       purchaseUnit: row.inventory_items?.purchaseUnit,

@@ -65,8 +65,8 @@ export default function PartsRequestsCard() {
 
   // Load parts requests
   const { data: requests = [], isLoading } = useQuery<PartsRequest[]>({
-    queryKey: ['/api/parts-requests'],
-    queryFn: () => apiRequest('/api/parts-requests'),
+    queryKey: ['/api/inventory/parts-requests'],
+    queryFn: () => apiRequest('/api/inventory/parts-requests'),
   });
 
   // Group requests by department
@@ -102,7 +102,7 @@ export default function PartsRequestsCard() {
   // Create mutation
   const createMutation = useMutation({
     mutationFn: (data: any) =>
-      apiRequest('/api/parts-requests', {
+      apiRequest('/api/inventory/parts-requests', {
         method: 'POST',
         body: data,
       }),
@@ -110,7 +110,7 @@ export default function PartsRequestsCard() {
       toast.success('Parts request created successfully');
       setIsCreateOpen(false);
       resetForm();
-      queryClient.invalidateQueries({ queryKey: ['/api/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
     },
     onError: () => toast.error('Failed to create parts request'),
   });
@@ -118,7 +118,7 @@ export default function PartsRequestsCard() {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) =>
-      apiRequest(`/api/parts-requests/${id}`, {
+      apiRequest(`/api/inventory/parts-requests/${id}`, {
         method: 'PUT',
         body: data,
       }),
@@ -127,7 +127,7 @@ export default function PartsRequestsCard() {
       setIsEditOpen(false);
       setEditingRequest(null);
       resetForm();
-      queryClient.invalidateQueries({ queryKey: ['/api/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
     },
     onError: () => toast.error('Failed to update parts request'),
   });
@@ -135,12 +135,12 @@ export default function PartsRequestsCard() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: (id: number) =>
-      apiRequest(`/api/parts-requests/${id}`, {
+      apiRequest(`/api/inventory/parts-requests/${id}`, {
         method: 'DELETE',
       }),
     onSuccess: () => {
       toast.success('Parts request deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
     },
     onError: () => toast.error('Failed to delete parts request'),
   });

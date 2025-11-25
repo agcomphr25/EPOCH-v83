@@ -478,6 +478,17 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
   }
 });
 
+router.delete('/parts-requests/:id', async (req: Request, res: Response) => {
+  try {
+    const requestId = parseInt(req.params.id);
+    await storage.deletePartsRequest(requestId);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete parts request error:', error);
+    res.status(500).json({ error: 'Failed to delete parts request' });
+  }
+});
+
 // Get parts requests by department
 router.get('/parts-requests/department/:departmentId', async (req: Request, res: Response) => {
   try {

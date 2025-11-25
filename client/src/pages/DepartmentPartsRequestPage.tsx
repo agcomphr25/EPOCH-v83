@@ -107,7 +107,7 @@ export default function DepartmentPartsRequestPage() {
 
   // Get user's parts requests
   const { data: userRequests = [], isLoading: requestsLoading } = useQuery<PartsRequest[]>({
-    queryKey: [`/api/parts-requests/department/${effectiveDepartmentId}`],
+    queryKey: ['/api/inventory/parts-requests/department', effectiveDepartmentId],
     enabled: !!effectiveDepartmentId,
   });
 
@@ -123,7 +123,7 @@ export default function DepartmentPartsRequestPage() {
       department: string;
       departmentId: number;
     }) => {
-      return apiRequest('/api/parts-requests', {
+      return apiRequest('/api/inventory/parts-requests', {
         method: 'POST',
         body: JSON.stringify(data),
       });
@@ -131,7 +131,7 @@ export default function DepartmentPartsRequestPage() {
     onSuccess: () => {
       // Invalidate the appropriate department's request list (handles both admin and regular users)
       queryClient.invalidateQueries({ 
-        queryKey: [`/api/parts-requests/department/${effectiveDepartmentId}`] 
+        queryKey: ['/api/inventory/parts-requests/department', effectiveDepartmentId] 
       });
       // Also invalidate the inventory list to refresh stock levels
       queryClient.invalidateQueries({ 

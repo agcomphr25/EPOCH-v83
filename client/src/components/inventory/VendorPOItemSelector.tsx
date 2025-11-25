@@ -34,6 +34,7 @@ type VendorPOItem = {
   vendorPoId: number;
   lineNumber: number;
   agPartNumber?: string;
+  supplierPartNumber?: string;
   description?: string;
   quantity: number;
   unitPrice: number;
@@ -366,6 +367,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
             <TableRow>
               <TableHead>Line</TableHead>
               <TableHead>AG Part#</TableHead>
+              <TableHead>Supplier Part#</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Qty</TableHead>
               <TableHead>Unit Price</TableHead>
@@ -390,6 +392,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                     ) : (
                       item.agPartNumber || '-'
                     )}
+                  </TableCell>
+                  <TableCell>
+                    {item.supplierPartNumber || '-'}
                   </TableCell>
                   <TableCell>
                     {isEditing ? (

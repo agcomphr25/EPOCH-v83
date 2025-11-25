@@ -1049,6 +1049,7 @@ export default function VendorPOManager() {
                 <tr>
                   <th>Line</th>
                   <th>AG Part#</th>
+                  <th>Supplier Part#</th>
                   <th>Description</th>
                   <th>Quantity</th>
                   <th>Unit Price</th>
@@ -1060,6 +1061,7 @@ export default function VendorPOManager() {
                   <tr>
                     <td>${item.lineNumber}</td>
                     <td>${item.agPartNumber || '-'}</td>
+                    <td>${item.supplierPartNumber || '-'}</td>
                     <td>${item.description || '-'}</td>
                     <td>${item.quantity || 0}</td>
                     <td>$${item.unitPrice != null ? item.unitPrice.toFixed(2) : '0.00'}</td>

@@ -35,6 +35,7 @@ import EmployeePortalPage from './pages/EmployeePortalPage';
 import TimeClockAdminPage from './pages/TimeClockAdminPage';
 import Module8TestPage from './pages/Module8TestPage';
 import CommunicationInboxPage from './pages/CommunicationInboxPage';
+import MarketingCommunications from './pages/MarketingCommunications';
 import APJournalPage from './pages/APJournalPage';
 import ARJournalPage from './pages/ARJournalPage';
 import COGSReportPage from './pages/COGSReportPage';
@@ -456,6 +457,7 @@ function App() {
 
                   {/* Communication Routes */}
                   <Route path="/email-inbox" component={EmailInbox} />
+                  <Route path="/marketing-communications" component={MarketingCommunications} />
 
                   {/* User Dashboard Routes */}
                   <Route path="/ag-dashboard" component={AGTestDashboard} />

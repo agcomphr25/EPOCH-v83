@@ -1053,22 +1053,25 @@ export default function VendorPOManager() {
                 </tr>
               </thead>
               <tbody>
-                ${items.map(item => `
+                ${items.map(item => {
+                  const lineTotal = (item.quantity || 0) * (item.unitPrice || 0);
+                  return `
                   <tr>
                     <td>${item.lineNumber}</td>
                     <td>${item.agPartNumber || '-'}</td>
                     <td>${item.description || '-'}</td>
                     <td>${item.quantity || 0}</td>
                     <td>$${item.unitPrice != null ? item.unitPrice.toFixed(2) : '0.00'}</td>
-                    <td>$${item.totalPrice != null ? item.totalPrice.toFixed(2) : '0.00'}</td>
+                    <td>$${lineTotal.toFixed(2)}</td>
                   </tr>
-                `).join('')}
+                `;
+                }).join('')}
               </tbody>
             </table>
             
             <div class="totals">
               <div class="total-line">
-                Total: $${selectedVendorPO.totalCost != null ? selectedVendorPO.totalCost.toFixed(2) : '0.00'}
+                Total: $${items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0).toFixed(2)}
               </div>
             </div>
             

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -28,7 +28,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -42,9 +41,12 @@ import {
   Target,
   Layers,
   Calendar,
-  ArrowRight,
-  RefreshCw
+  RefreshCw,
+  PlayCircle,
+  Clock,
+  Factory
 } from "lucide-react";
+import { BarcodeInputField } from "@/components/BarcodeInputField";
 
 type FabricInventoryItem = {
   id: string;
@@ -61,20 +63,33 @@ type FabricInventoryItem = {
   status: 'available' | 'low' | 'expired';
 };
 
-type PacketSession = {
-  id: string;
-  packetType: 'carbon_fiber' | 'fiberglass';
-  packetsBuilt: number;
-  fabricLots: string[];
+type ManufacturingQueueItem = {
+  id: number;
+  partNumber: string | null;
+  partName: string | null;
+  quantityOrdered: number;
+  quantityCompleted: number;
+  status: string;
+  priority: number;
+  assignedTo: string | null;
+  fabricLot: string | null;
+  fabricBatch: string | null;
+  fabricRoll: string | null;
+  notes: string | null;
   createdAt: string;
-  createdBy: string;
+  dueDate: string | null;
 };
 
-type LayupScheduleItem = {
-  orderId: string;
-  stockModel: string;
-  material: string;
-  scheduledDate: string;
+type FabricInventory = {
+  id: string;
+  barcode: string;
+  fabric: string | null;
+  source: string | null;
+  batchNumber: string | null;
+  location: string | null;
+  productionLineId: string | null;
+  quantity: number;
+  conformanceDocumentLink: string | null;
 };
 
 const STOCK_TARGETS = {
@@ -85,7 +100,6 @@ const STOCK_TARGETS = {
 export default function CuttingTableDashboard() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("overview");
-  const [scanMode, setScanMode] = useState(false);
   const [scannedBarcode, setScannedBarcode] = useState("");
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [selectedFabric, setSelectedFabric] = useState<FabricInventoryItem | null>(null);
@@ -106,6 +120,23 @@ export default function CuttingTableDashboard() {
     packetType: "",
     quantity: "",
     scannedFabrics: [] as string[],
+  });
+
+  const [mfgQueueStatus, setMfgQueueStatus] = useState<string>('ACTIVE');
+  const [selectedMfgItem, setSelectedMfgItem] = useState<ManufacturingQueueItem | null>(null);
+  const [isProductionDialogOpen, setIsProductionDialogOpen] = useState(false);
+  const [quantityCompleted, setQuantityCompleted] = useState('');
+  const [fabricBarcode, setFabricBarcode] = useState('');
+  const previousFabricBarcode = useRef<string>('');
+  const [fabricLot, setFabricLot] = useState('');
+  const [fabricBatch, setFabricBatch] = useState('');
+  const [fabricRoll, setFabricRoll] = useState('');
+  const [materialDetails, setMaterialDetails] = useState('');
+  const [completionNotes, setCompletionNotes] = useState('');
+  const [completedBy, setCompletedBy] = useState('');
+
+  const { data: currentUser } = useQuery<{ username: string }>({
+    queryKey: ['currentUser'],
   });
 
   const { data: fabricInventory = [], isLoading: loadingFabric, refetch: refetchFabric } = useQuery<FabricInventoryItem[]>({
@@ -156,6 +187,23 @@ export default function CuttingTableDashboard() {
         return { carbon_fiber: 0, fiberglass: 0 };
       }
     },
+  });
+
+  const { data: mfgQueueItems = [], isLoading: loadingMfgQueue, refetch: refetchMfgQueue } = useQuery<ManufacturingQueueItem[]>({
+    queryKey: ['/api/cutting-table-mfg-queue/cutting-table', mfgQueueStatus],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (mfgQueueStatus && mfgQueueStatus !== 'ALL') {
+        params.append('status', mfgQueueStatus);
+      }
+      return apiRequest(`/api/cutting-table-mfg-queue/cutting-table?${params.toString()}`);
+    },
+  });
+
+  const { data: scannedFabricInventory } = useQuery<FabricInventory>({
+    queryKey: [`/api/cutting-table/fabric-inventory-by-barcode/${fabricBarcode}`],
+    enabled: isProductionDialogOpen && !!fabricBarcode && fabricBarcode.length >= 15,
+    retry: false,
   });
 
   const receiveFabricMutation = useMutation({
@@ -219,6 +267,170 @@ export default function CuttingTableDashboard() {
       toast({ title: "Error", description: "Failed to record packet session", variant: "destructive" });
     },
   });
+
+  const startItemMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/cutting-table-mfg-queue/${id}/start`, {
+        method: 'POST',
+        body: JSON.stringify({ assignedTo: currentUser?.username || 'unknown' }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ 
+        queryKey: ['/api/cutting-table-mfg-queue/cutting-table'],
+        exact: false 
+      });
+      toast({
+        title: 'Item started',
+        description: 'Manufacturing item has been marked as in progress.',
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to start item. Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const completeItemMutation = useMutation({
+    mutationFn: async (data: {
+      id: number;
+      quantityCompleted: number;
+      fabricLot?: string;
+      fabricBatch?: string;
+      fabricRoll?: string;
+      materialDetails?: string;
+      completionNotes?: string;
+      completedBy?: string;
+    }) => {
+      return apiRequest(`/api/cutting-table-mfg-queue/${data.id}/complete`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ 
+        queryKey: ['/api/cutting-table-mfg-queue/cutting-table'],
+        exact: false 
+      });
+      setIsProductionDialogOpen(false);
+      resetProductionForm();
+      
+      if (data.isPartialCompletion) {
+        toast({
+          title: 'Partial production recorded',
+          description: `Completed ${data.quantityCompleted} items. ${data.remainingQuantity} remaining in progress.`,
+        });
+      } else {
+        toast({
+          title: 'Production completed',
+          description: 'All items completed with traceability data.',
+        });
+      }
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to record production. Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const generateLabelsMutation = useMutation({
+    mutationFn: async ({ id, quantity }: { id: number; quantity: number }) => {
+      return apiRequest(`/api/cutting-table-mfg-queue/${id}/generate-labels`, {
+        method: 'POST',
+        body: JSON.stringify({ quantityToLabel: quantity }),
+      });
+    },
+    onSuccess: (data: any) => {
+      if (data.labels && data.labels.length > 0) {
+        const printWindow = window.open('', '_blank', 'width=800,height=600');
+        if (printWindow) {
+          const labelsHtml = data.labels.map((label: any) => `
+            <div class="label">
+              <div class="label-header">AG Composites - Packet Label</div>
+              <div class="label-info"><strong>${label.partNumber}</strong></div>
+              <div class="label-info">${label.partName}</div>
+              ${label.fabricLot ? `<div class="label-info">Lot: ${label.fabricLot}</div>` : ''}
+              ${label.fabricBatch ? `<div class="label-info">Batch: ${label.fabricBatch}</div>` : ''}
+              ${label.fabricRoll ? `<div class="label-info">Roll: ${label.fabricRoll}</div>` : ''}
+              <div class="barcode-container">
+                ${label.barcodeImage ? `<img src="${label.barcodeImage}" alt="Barcode" />` : `<div class="barcode-text">${label.barcodeValue}</div>`}
+              </div>
+              <div class="item-number">${label.itemId} of ${data.count}</div>
+            </div>
+          `).join('');
+
+          printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Packet Labels</title>
+              <style>
+                @media print {
+                  @page { margin: 0.5in; size: letter; }
+                  body { margin: 0; }
+                }
+                body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+                .labels-container {
+                  display: grid;
+                  grid-template-columns: repeat(2, 4in);
+                  gap: 10px;
+                  justify-content: center;
+                }
+                .label {
+                  width: 4in;
+                  height: 2in;
+                  padding: 0.15in;
+                  box-sizing: border-box;
+                  background: white;
+                  border: 1px dashed #ccc;
+                  display: flex;
+                  flex-direction: column;
+                  justify-content: center;
+                  align-items: center;
+                  text-align: center;
+                }
+                .label-header { font-size: 9px; font-weight: bold; margin-bottom: 3px; }
+                .label-info { font-size: 10px; margin: 1px 0; }
+                .label-info strong { font-size: 12px; }
+                .barcode-container { margin: 4px 0; max-width: 3.5in; }
+                .barcode-container img { max-width: 100%; height: auto; }
+                .item-number { font-size: 8px; color: #666; margin-top: 3px; }
+                .print-btn { margin: 20px auto; display: block; padding: 10px 20px; font-size: 16px; cursor: pointer; }
+              </style>
+            </head>
+            <body>
+              <button class="print-btn" onclick="window.print()">Print Labels</button>
+              <div class="labels-container">${labelsHtml}</div>
+            </body>
+            </html>
+          `);
+          printWindow.document.close();
+        }
+      }
+      toast({ title: 'Labels generated', description: `Generated ${data.count} labels` });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to generate labels', variant: 'destructive' });
+    },
+  });
+
+  const resetProductionForm = () => {
+    setQuantityCompleted('');
+    setFabricBarcode('');
+    setFabricLot('');
+    setFabricBatch('');
+    setFabricRoll('');
+    setMaterialDetails('');
+    setCompletionNotes('');
+    setCompletedBy('');
+    setSelectedMfgItem(null);
+  };
 
   const handleScanBarcode = () => {
     if (scannedBarcode) {
@@ -284,23 +496,67 @@ export default function CuttingTableDashboard() {
     }
   };
 
+  const handleOpenProductionDialog = (item: ManufacturingQueueItem) => {
+    setSelectedMfgItem(item);
+    setQuantityCompleted(String(item.quantityOrdered - item.quantityCompleted));
+    setCompletedBy(currentUser?.username || '');
+    if (item.fabricLot) setFabricLot(item.fabricLot);
+    if (item.fabricBatch) setFabricBatch(item.fabricBatch);
+    if (item.fabricRoll) setFabricRoll(item.fabricRoll);
+    setIsProductionDialogOpen(true);
+  };
+
+  const handleCompleteProduction = () => {
+    if (!selectedMfgItem) return;
+    
+    const qty = parseInt(quantityCompleted);
+    if (isNaN(qty) || qty <= 0) {
+      toast({ title: 'Error', description: 'Please enter a valid quantity', variant: 'destructive' });
+      return;
+    }
+
+    completeItemMutation.mutate({
+      id: selectedMfgItem.id,
+      quantityCompleted: qty,
+      fabricLot: fabricLot || undefined,
+      fabricBatch: fabricBatch || undefined,
+      fabricRoll: fabricRoll || undefined,
+      materialDetails: materialDetails || undefined,
+      completionNotes: completionNotes || undefined,
+      completedBy: completedBy || undefined,
+    });
+  };
+
   const cfShortfall = Math.max(0, STOCK_TARGETS.carbon_fiber - (currentStock.carbon_fiber || 0));
   const fgShortfall = Math.max(0, STOCK_TARGETS.fiberglass - (currentStock.fiberglass || 0));
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Pending</Badge>;
+      case 'IN_PROGRESS':
+        return <Badge className="bg-blue-600"><PlayCircle className="h-3 w-3 mr-1" />In Progress</Badge>;
+      case 'COMPLETED':
+        return <Badge className="bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Completed</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
 
   return (
     <div className="container mx-auto p-6 space-y-6" data-testid="cutting-table-dashboard">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Cutting Table Dashboard</h1>
-          <p className="text-muted-foreground">Fabric receiving, packet building, and stock management</p>
+          <p className="text-muted-foreground">Fabric receiving, packet building, manufacturing queue, and stock management</p>
         </div>
-        <Button variant="outline" onClick={() => refetchFabric()}>
+        <Button variant="outline" onClick={() => { refetchFabric(); refetchMfgQueue(); }}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card data-testid="card-cf-stock">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -358,13 +614,30 @@ export default function CuttingTableDashboard() {
             <p className="text-xs text-muted-foreground">From P1 Schedule</p>
           </CardContent>
         </Card>
+
+        <Card data-testid="card-mfg-queue">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Factory className="h-4 w-4" />
+              Active Queue Items
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{mfgQueueItems.filter(i => i.status !== 'COMPLETED').length}</div>
+            <p className="text-xs text-muted-foreground">In Manufacturing Queue</p>
+          </CardContent>
+        </Card>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview" data-testid="tab-overview">
             <Target className="h-4 w-4 mr-2" />
             Overview
+          </TabsTrigger>
+          <TabsTrigger value="mfg-queue" data-testid="tab-mfg-queue">
+            <Factory className="h-4 w-4 mr-2" />
+            Mfg Queue
           </TabsTrigger>
           <TabsTrigger value="receiving" data-testid="tab-receiving">
             <Plus className="h-4 w-4 mr-2" />
@@ -448,12 +721,128 @@ export default function CuttingTableDashboard() {
                 <div className="pt-2 border-t">
                   <p className="text-sm text-muted-foreground">
                     Packet needs are calculated from the P1 Layup Schedule for this week.
-                    Build packets to maintain target stock levels.
                   </p>
                 </div>
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="mfg-queue" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Factory className="h-5 w-5" />
+                    Manufacturing Queue
+                  </CardTitle>
+                  <CardDescription>
+                    Cutting table production queue with fabric traceability
+                  </CardDescription>
+                </div>
+                <Select value={mfgQueueStatus} onValueChange={setMfgQueueStatus}>
+                  <SelectTrigger className="w-[180px]" data-testid="select-mfg-status">
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All Items</SelectItem>
+                    <SelectItem value="PENDING">Pending</SelectItem>
+                    <SelectItem value="ACTIVE">Active</SelectItem>
+                    <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                    <SelectItem value="COMPLETED">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingMfgQueue ? (
+                <div className="text-center py-8 text-muted-foreground">Loading queue...</div>
+              ) : mfgQueueItems.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No items in the manufacturing queue for this status.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Part Number</TableHead>
+                      <TableHead>Part Name</TableHead>
+                      <TableHead>Qty Ordered</TableHead>
+                      <TableHead>Qty Completed</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Assigned To</TableHead>
+                      <TableHead>Fabric Lot</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {mfgQueueItems.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">{item.partNumber || '-'}</TableCell>
+                        <TableCell>{item.partName || '-'}</TableCell>
+                        <TableCell>{item.quantityOrdered}</TableCell>
+                        <TableCell>{item.quantityCompleted}</TableCell>
+                        <TableCell>{getStatusBadge(item.status)}</TableCell>
+                        <TableCell>{item.assignedTo || '-'}</TableCell>
+                        <TableCell>{item.fabricLot || '-'}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            {item.status === 'PENDING' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => startItemMutation.mutate(item.id)}
+                                disabled={startItemMutation.isPending}
+                                data-testid={`button-start-${item.id}`}
+                              >
+                                <PlayCircle className="h-4 w-4 mr-1" />
+                                Start
+                              </Button>
+                            )}
+                            {(item.status === 'IN_PROGRESS' || item.status === 'ACTIVE') && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleOpenProductionDialog(item)}
+                                  data-testid={`button-complete-${item.id}`}
+                                >
+                                  <CheckCircle2 className="h-4 w-4 mr-1" />
+                                  Complete
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => generateLabelsMutation.mutate({ id: item.id, quantity: item.quantityOrdered - item.quantityCompleted })}
+                                  disabled={generateLabelsMutation.isPending}
+                                  data-testid={`button-labels-${item.id}`}
+                                >
+                                  <Printer className="h-4 w-4 mr-1" />
+                                  Labels
+                                </Button>
+                              </>
+                            )}
+                            {item.status === 'COMPLETED' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => generateLabelsMutation.mutate({ id: item.id, quantity: item.quantityCompleted })}
+                                disabled={generateLabelsMutation.isPending}
+                                data-testid={`button-reprint-${item.id}`}
+                              >
+                                <Printer className="h-4 w-4 mr-1" />
+                                Reprint
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="receiving" className="space-y-4">
@@ -840,6 +1229,117 @@ export default function CuttingTableDashboard() {
             }}>
               <Printer className="h-4 w-4 mr-2" />
               Print Label
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isProductionDialogOpen} onOpenChange={setIsProductionDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Complete Production</DialogTitle>
+          </DialogHeader>
+          {selectedMfgItem && (
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                <div className="font-semibold">{selectedMfgItem.partNumber}</div>
+                <div className="text-sm text-muted-foreground">{selectedMfgItem.partName}</div>
+                <div className="text-sm mt-2">
+                  Remaining: {selectedMfgItem.quantityOrdered - selectedMfgItem.quantityCompleted} of {selectedMfgItem.quantityOrdered}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Quantity Completed *</Label>
+                <Input
+                  type="number"
+                  value={quantityCompleted}
+                  onChange={(e) => setQuantityCompleted(e.target.value)}
+                  placeholder="Enter quantity"
+                  data-testid="input-qty-completed"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Scan className="h-4 w-4" />
+                  Scan Fabric Barcode (for traceability)
+                </Label>
+                <BarcodeInputField
+                  id="fabric-barcode-scan"
+                  value={fabricBarcode}
+                  onChange={setFabricBarcode}
+                  placeholder="Scan fabric barcode..."
+                  data-testid="input-fabric-barcode"
+                />
+                {scannedFabricInventory && (
+                  <div className="text-sm p-2 bg-green-50 dark:bg-green-900/20 rounded border border-green-200">
+                    <CheckCircle2 className="h-4 w-4 inline mr-1 text-green-600" />
+                    Found: {scannedFabricInventory.fabric} - Lot: {scannedFabricInventory.batchNumber}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-2">
+                  <Label>Fabric Lot</Label>
+                  <Input
+                    value={fabricLot}
+                    onChange={(e) => setFabricLot(e.target.value)}
+                    placeholder="Lot #"
+                    data-testid="input-fabric-lot"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Batch</Label>
+                  <Input
+                    value={fabricBatch}
+                    onChange={(e) => setFabricBatch(e.target.value)}
+                    placeholder="Batch #"
+                    data-testid="input-fabric-batch"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Roll</Label>
+                  <Input
+                    value={fabricRoll}
+                    onChange={(e) => setFabricRoll(e.target.value)}
+                    placeholder="Roll #"
+                    data-testid="input-fabric-roll"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Completed By</Label>
+                <Input
+                  value={completedBy}
+                  onChange={(e) => setCompletedBy(e.target.value)}
+                  placeholder="Your name"
+                  data-testid="input-completed-by"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Notes</Label>
+                <Textarea
+                  value={completionNotes}
+                  onChange={(e) => setCompletionNotes(e.target.value)}
+                  placeholder="Any notes about this production run..."
+                  data-testid="input-completion-notes"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setIsProductionDialogOpen(false); resetProductionForm(); }}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCompleteProduction}
+              disabled={completeItemMutation.isPending}
+            >
+              {completeItemMutation.isPending ? 'Saving...' : 'Complete Production'}
             </Button>
           </DialogFooter>
         </DialogContent>

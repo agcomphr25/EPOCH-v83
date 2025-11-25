@@ -3800,6 +3800,248 @@ export const p2WorkTasks = pgTable('p2_work_tasks', {
   itemStatusIdx: index('p2_work_tasks_item_status_idx').on(table.serializedItemId, table.status),
 }));
 
+// P2 Oven Cure Logs - Records oven cure cycles for AS9100 traceability
+export const p2OvenCureLogs = pgTable('p2_oven_cure_logs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  serializedItemId: uuid('serialized_item_id')
+    .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  barcode: text('barcode').notNull(),
+  partNumber: text('part_number').notNull(),
+  department: text('department').notNull(),
+  ovenId: text('oven_id'), // Equipment identifier
+  cycleNumber: text('cycle_number'), // Oven cycle number
+  targetTemperature: real('target_temperature'), // Target temp in °F
+  actualTemperature: real('actual_temperature'), // Actual recorded temp
+  targetDuration: integer('target_duration'), // Target duration in minutes
+  actualDuration: integer('actual_duration'), // Actual duration in minutes
+  rampUpTime: integer('ramp_up_time'), // Time to reach target temp (minutes)
+  startTime: timestamp('start_time').notNull(),
+  endTime: timestamp('end_time'),
+  result: text('result').notNull().default('PENDING'), // PENDING, PASS, FAIL
+  failureReason: text('failure_reason'),
+  operatorId: integer('operator_id').references(() => employees.id),
+  operatorName: text('operator_name'),
+  signature: text('signature'), // Base64 encoded signature
+  notes: text('notes'),
+  metadata: jsonb('metadata'), // Additional cure parameters
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  itemIdIdx: index('p2_oven_cure_logs_item_id_idx').on(table.serializedItemId),
+  barcodeIdx: index('p2_oven_cure_logs_barcode_idx').on(table.barcode),
+}));
+
+// P2 Vacuum Leak Tests - Records vacuum bag leak test results for AS9100 traceability
+export const p2VacuumLeakTests = pgTable('p2_vacuum_leak_tests', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  serializedItemId: uuid('serialized_item_id')
+    .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  barcode: text('barcode').notNull(),
+  partNumber: text('part_number').notNull(),
+  department: text('department').notNull(),
+  testNumber: text('test_number'), // Test sequence number
+  initialPressure: real('initial_pressure'), // Initial vacuum pressure (inHg)
+  finalPressure: real('final_pressure'), // Final vacuum pressure after hold time
+  pressureDrop: real('pressure_drop'), // Calculated pressure drop
+  maxAllowableDrop: real('max_allowable_drop'), // Maximum allowable pressure drop
+  holdTime: integer('hold_time'), // Hold time in minutes
+  testDuration: integer('test_duration'), // Total test duration in minutes
+  startTime: timestamp('start_time').notNull(),
+  endTime: timestamp('end_time'),
+  result: text('result').notNull().default('PENDING'), // PENDING, PASS, FAIL
+  failureReason: text('failure_reason'),
+  repairAction: text('repair_action'), // Action taken if failed
+  retestRequired: boolean('retest_required').default(false),
+  retestOf: uuid('retest_of'), // Reference to original failed test
+  operatorId: integer('operator_id').references(() => employees.id),
+  operatorName: text('operator_name'),
+  signature: text('signature'), // Base64 encoded signature
+  notes: text('notes'),
+  metadata: jsonb('metadata'), // Additional test parameters
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  itemIdIdx: index('p2_vacuum_leak_tests_item_id_idx').on(table.serializedItemId),
+  barcodeIdx: index('p2_vacuum_leak_tests_barcode_idx').on(table.barcode),
+}));
+
+// P2 Final Inspection Results - Records final inspection and tolerance checks
+export const p2FinalInspectionResults = pgTable('p2_final_inspection_results', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  serializedItemId: uuid('serialized_item_id')
+    .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  barcode: text('barcode').notNull(),
+  partNumber: text('part_number').notNull(),
+  department: text('department').notNull().default('Final QC'),
+  inspectionDate: timestamp('inspection_date').notNull().defaultNow(),
+  inspectionType: text('inspection_type').notNull(), // VISUAL, DIMENSIONAL, FUNCTIONAL, FINAL
+  overallResult: text('overall_result').notNull().default('PENDING'), // PENDING, PASS, FAIL, CONDITIONAL
+  toleranceChecks: jsonb('tolerance_checks'), // Array of { dimension, nominal, tolerance, measured, result }
+  visualChecks: jsonb('visual_checks'), // Array of { item, required, actual, result }
+  functionalChecks: jsonb('functional_checks'), // Array of { test, criteria, result }
+  nonConformanceIds: jsonb('non_conformance_ids'), // Array of NCR IDs if any issues found
+  correctiveActions: text('corrective_actions'),
+  acceptedAsIs: boolean('accepted_as_is').default(false),
+  acceptedAsIsReason: text('accepted_as_is_reason'),
+  inspectorId: integer('inspector_id').references(() => employees.id),
+  inspectorName: text('inspector_name'),
+  signature: text('signature'), // Base64 encoded signature
+  qaMgrApproval: text('qa_mgr_approval'), // QA Manager signature if needed
+  qaMgrApprovalDate: timestamp('qa_mgr_approval_date'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  itemIdIdx: index('p2_final_inspection_item_id_idx').on(table.serializedItemId),
+  barcodeIdx: index('p2_final_inspection_barcode_idx').on(table.barcode),
+}));
+
+// P2 Lot Numbers - Manages lot number generation and assignment
+export const p2LotNumbers = pgTable('p2_lot_numbers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  lotNumber: text('lot_number').notNull().unique(), // Format: LOT-YYYYMMDD-XXXX
+  lotType: text('lot_type').notNull().default('PRODUCTION'), // PRODUCTION, SHIPPING, MATERIAL
+  partNumber: text('part_number'),
+  partName: text('part_name'),
+  customerId: text('customer_id'),
+  customerName: text('customer_name'),
+  poNumber: text('po_number'),
+  quantity: integer('quantity').default(1),
+  serializedItemIds: jsonb('serialized_item_ids'), // Array of serialized item UUIDs in this lot
+  barcodes: jsonb('barcodes'), // Array of barcodes in this lot for easy reference
+  manufacturingDate: timestamp('manufacturing_date'),
+  expirationDate: timestamp('expiration_date'),
+  status: text('status').notNull().default('OPEN'), // OPEN, CLOSED, SHIPPED
+  closedAt: timestamp('closed_at'),
+  closedBy: text('closed_by'),
+  shippedAt: timestamp('shipped_at'),
+  shippedBy: text('shipped_by'),
+  packingSlipId: uuid('packing_slip_id'), // Reference to packing slip if generated
+  certificateId: uuid('certificate_id'), // Reference to certificate of conformance
+  notes: text('notes'),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  lotNumberIdx: index('p2_lot_numbers_lot_number_idx').on(table.lotNumber),
+  customerIdx: index('p2_lot_numbers_customer_idx').on(table.customerId),
+  poNumberIdx: index('p2_lot_numbers_po_number_idx').on(table.poNumber),
+}));
+
+// P2 Packing Slips - Stores generated packing slip records
+export const p2PackingSlips = pgTable('p2_packing_slips', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  packingSlipNumber: text('packing_slip_number').notNull().unique(),
+  lotNumberId: uuid('lot_number_id').references(() => p2LotNumbers.id),
+  lotNumber: text('lot_number'),
+  customerId: text('customer_id').notNull(),
+  customerName: text('customer_name').notNull(),
+  customerAddress: text('customer_address'),
+  poNumber: text('po_number'),
+  invoiceNumber: text('invoice_number'),
+  shipDate: timestamp('ship_date'),
+  shipmentNumber: text('shipment_number'),
+  carrier: text('carrier'),
+  trackingNumber: text('tracking_number'),
+  lineItems: jsonb('line_items').notNull(), // Array of { partNumber, partName, quantity, serialNumbers }
+  totalQuantity: integer('total_quantity').notNull().default(0),
+  packedBy: text('packed_by'),
+  packedBySignature: text('packed_by_signature'),
+  verifiedBy: text('verified_by'),
+  verifiedBySignature: text('verified_by_signature'),
+  status: text('status').notNull().default('DRAFT'), // DRAFT, FINALIZED, SHIPPED
+  notes: text('notes'),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  packingSlipNumberIdx: index('p2_packing_slips_number_idx').on(table.packingSlipNumber),
+  customerIdx: index('p2_packing_slips_customer_idx').on(table.customerId),
+}));
+
+// P2 Certificates of Conformance - Stores generated COC records
+export const p2CertificatesOfConformance = pgTable('p2_certificates_of_conformance', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  certificateNumber: text('certificate_number').notNull().unique(),
+  lotNumberId: uuid('lot_number_id').references(() => p2LotNumbers.id),
+  lotNumber: text('lot_number'),
+  customerId: text('customer_id').notNull(),
+  customerName: text('customer_name').notNull(),
+  customerAddress: text('customer_address'),
+  poNumber: text('po_number'),
+  partNumber: text('part_number'),
+  partName: text('part_name'),
+  quantity: integer('quantity').notNull().default(1),
+  serialNumbers: jsonb('serial_numbers'), // Array of serial numbers covered
+  manufacturingDate: timestamp('manufacturing_date'),
+  shipDate: timestamp('ship_date'),
+  certificationText: text('certification_text'), // Main certification statement
+  specifications: jsonb('specifications'), // Customer specs/requirements met
+  materialCertifications: jsonb('material_certifications'), // Array of { material, certNumber, supplier }
+  processRecords: jsonb('process_records'), // Array of { process, recordId, result }
+  inspectionSummary: jsonb('inspection_summary'), // Summary of all inspections
+  traceabilityData: jsonb('traceability_data'), // All material traceability data
+  qaMgrName: text('qa_mgr_name'),
+  qaMgrSignature: text('qa_mgr_signature'),
+  qaMgrDate: timestamp('qa_mgr_date'),
+  status: text('status').notNull().default('DRAFT'), // DRAFT, APPROVED, ISSUED
+  approvedBy: text('approved_by'),
+  approvedAt: timestamp('approved_at'),
+  issuedAt: timestamp('issued_at'),
+  notes: text('notes'),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  certificateNumberIdx: index('p2_coc_number_idx').on(table.certificateNumber),
+  customerIdx: index('p2_coc_customer_idx').on(table.customerId),
+  lotNumberIdx: index('p2_coc_lot_number_idx').on(table.lotNumber),
+}));
+
+// P2 Test for Conformance Reports - Customer-facing conformance test reports
+export const p2TestForConformanceReports = pgTable('p2_test_for_conformance_reports', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  reportNumber: text('report_number').notNull().unique(),
+  certificateId: uuid('certificate_id').references(() => p2CertificatesOfConformance.id),
+  lotNumberId: uuid('lot_number_id').references(() => p2LotNumbers.id),
+  lotNumber: text('lot_number'),
+  customerId: text('customer_id').notNull(),
+  customerName: text('customer_name').notNull(),
+  poNumber: text('po_number'),
+  partNumber: text('part_number'),
+  partName: text('part_name'),
+  quantity: integer('quantity').notNull().default(1),
+  serialNumbers: jsonb('serial_numbers'),
+  testDate: timestamp('test_date').notNull().defaultNow(),
+  testCategories: jsonb('test_categories'), // Array of test categories performed
+  testResults: jsonb('test_results'), // Detailed test results by category
+  ovenCureResults: jsonb('oven_cure_results'), // Summary of all oven cure logs
+  vacuumTestResults: jsonb('vacuum_test_results'), // Summary of all vacuum tests
+  dimensionalResults: jsonb('dimensional_results'), // Dimensional inspection results
+  visualInspectionResults: jsonb('visual_inspection_results'), // Visual inspection summary
+  overallConformance: text('overall_conformance').notNull().default('PENDING'), // PENDING, CONFORMING, NON_CONFORMING
+  deviations: jsonb('deviations'), // Any deviations from requirements
+  waivers: jsonb('waivers'), // Any waivers granted
+  customerRequirements: jsonb('customer_requirements'), // Customer-specific requirements
+  testerName: text('tester_name'),
+  testerSignature: text('tester_signature'),
+  reviewerName: text('reviewer_name'),
+  reviewerSignature: text('reviewer_signature'),
+  reviewedAt: timestamp('reviewed_at'),
+  status: text('status').notNull().default('DRAFT'), // DRAFT, REVIEWED, APPROVED, ISSUED
+  issuedAt: timestamp('issued_at'),
+  notes: text('notes'),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  reportNumberIdx: index('p2_tfc_report_number_idx').on(table.reportNumber),
+  customerIdx: index('p2_tfc_customer_idx').on(table.customerId),
+}));
+
 // Production Orders - separate from regular orders for PO tracking
 export const productionOrders = pgTable('production_orders', {
   id: serial('id').primaryKey(),
@@ -4287,6 +4529,135 @@ export type InsertP2LayupSchedule = z.infer<typeof insertP2LayupScheduleSchema>;
 export type P2LayupSchedule = typeof p2LayupSchedules.$inferSelect;
 export type InsertP2WorkTask = z.infer<typeof insertP2WorkTaskSchema>;
 export type P2WorkTask = typeof p2WorkTasks.$inferSelect;
+
+// P2 Oven Cure Log Insert Schemas and Types
+export const insertP2OvenCureLogSchema = createInsertSchema(p2OvenCureLogs)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    serializedItemId: z.string().uuid('Invalid serialized item ID'),
+    barcode: z.string().min(1, 'Barcode is required'),
+    partNumber: z.string().min(1, 'Part number is required'),
+    department: z.string().min(1, 'Department is required'),
+    startTime: z.coerce.date(),
+    endTime: z.coerce.date().optional().nullable(),
+    result: z.enum(['PENDING', 'PASS', 'FAIL']).default('PENDING'),
+  });
+export type InsertP2OvenCureLog = z.infer<typeof insertP2OvenCureLogSchema>;
+export type P2OvenCureLog = typeof p2OvenCureLogs.$inferSelect;
+
+// P2 Vacuum Leak Test Insert Schemas and Types
+export const insertP2VacuumLeakTestSchema = createInsertSchema(p2VacuumLeakTests)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    serializedItemId: z.string().uuid('Invalid serialized item ID'),
+    barcode: z.string().min(1, 'Barcode is required'),
+    partNumber: z.string().min(1, 'Part number is required'),
+    department: z.string().min(1, 'Department is required'),
+    startTime: z.coerce.date(),
+    endTime: z.coerce.date().optional().nullable(),
+    result: z.enum(['PENDING', 'PASS', 'FAIL']).default('PENDING'),
+  });
+export type InsertP2VacuumLeakTest = z.infer<typeof insertP2VacuumLeakTestSchema>;
+export type P2VacuumLeakTest = typeof p2VacuumLeakTests.$inferSelect;
+
+// P2 Final Inspection Result Insert Schemas and Types
+export const insertP2FinalInspectionResultSchema = createInsertSchema(p2FinalInspectionResults)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    serializedItemId: z.string().uuid('Invalid serialized item ID'),
+    barcode: z.string().min(1, 'Barcode is required'),
+    partNumber: z.string().min(1, 'Part number is required'),
+    inspectionType: z.enum(['VISUAL', 'DIMENSIONAL', 'FUNCTIONAL', 'FINAL']),
+    overallResult: z.enum(['PENDING', 'PASS', 'FAIL', 'CONDITIONAL']).default('PENDING'),
+  });
+export type InsertP2FinalInspectionResult = z.infer<typeof insertP2FinalInspectionResultSchema>;
+export type P2FinalInspectionResult = typeof p2FinalInspectionResults.$inferSelect;
+
+// P2 Lot Number Insert Schemas and Types
+export const insertP2LotNumberSchema = createInsertSchema(p2LotNumbers)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    lotNumber: z.string().min(1, 'Lot number is required'),
+    lotType: z.enum(['PRODUCTION', 'SHIPPING', 'MATERIAL']).default('PRODUCTION'),
+    status: z.enum(['OPEN', 'CLOSED', 'SHIPPED']).default('OPEN'),
+    createdBy: z.string().min(1, 'Created by is required'),
+  });
+export type InsertP2LotNumber = z.infer<typeof insertP2LotNumberSchema>;
+export type P2LotNumber = typeof p2LotNumbers.$inferSelect;
+
+// P2 Packing Slip Insert Schemas and Types
+export const insertP2PackingSlipSchema = createInsertSchema(p2PackingSlips)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    packingSlipNumber: z.string().min(1, 'Packing slip number is required'),
+    customerId: z.string().min(1, 'Customer ID is required'),
+    customerName: z.string().min(1, 'Customer name is required'),
+    lineItems: z.array(z.object({
+      partNumber: z.string(),
+      partName: z.string(),
+      quantity: z.number(),
+      serialNumbers: z.array(z.string()).optional(),
+    })),
+    status: z.enum(['DRAFT', 'FINALIZED', 'SHIPPED']).default('DRAFT'),
+    createdBy: z.string().min(1, 'Created by is required'),
+  });
+export type InsertP2PackingSlip = z.infer<typeof insertP2PackingSlipSchema>;
+export type P2PackingSlip = typeof p2PackingSlips.$inferSelect;
+
+// P2 Certificate of Conformance Insert Schemas and Types
+export const insertP2CertificateOfConformanceSchema = createInsertSchema(p2CertificatesOfConformance)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    certificateNumber: z.string().min(1, 'Certificate number is required'),
+    customerId: z.string().min(1, 'Customer ID is required'),
+    customerName: z.string().min(1, 'Customer name is required'),
+    status: z.enum(['DRAFT', 'APPROVED', 'ISSUED']).default('DRAFT'),
+    createdBy: z.string().min(1, 'Created by is required'),
+  });
+export type InsertP2CertificateOfConformance = z.infer<typeof insertP2CertificateOfConformanceSchema>;
+export type P2CertificateOfConformance = typeof p2CertificatesOfConformance.$inferSelect;
+
+// P2 Test for Conformance Report Insert Schemas and Types
+export const insertP2TestForConformanceReportSchema = createInsertSchema(p2TestForConformanceReports)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    reportNumber: z.string().min(1, 'Report number is required'),
+    customerId: z.string().min(1, 'Customer ID is required'),
+    customerName: z.string().min(1, 'Customer name is required'),
+    overallConformance: z.enum(['PENDING', 'CONFORMING', 'NON_CONFORMING']).default('PENDING'),
+    status: z.enum(['DRAFT', 'REVIEWED', 'APPROVED', 'ISSUED']).default('DRAFT'),
+    createdBy: z.string().min(1, 'Created by is required'),
+  });
+export type InsertP2TestForConformanceReport = z.infer<typeof insertP2TestForConformanceReportSchema>;
+export type P2TestForConformanceReport = typeof p2TestForConformanceReports.$inferSelect;
 
 // Production Order Types
 export type InsertProductionOrder = z.infer<typeof insertProductionOrderSchema>;
@@ -6796,5 +7167,42 @@ export const insertMarketingRecipientSchema = createInsertSchema(marketingRecipi
 
 export type MarketingRecipient = typeof marketingRecipients.$inferSelect;
 export type InsertMarketingRecipient = z.infer<typeof insertMarketingRecipientSchema>;
+
+// P2 Department Transfer Signatures - AS9100 compliant electronic signatures for work completion
+export const p2DepartmentTransferSignatures = pgTable('p2_department_transfer_signatures', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  serializedItemId: uuid('serialized_item_id')
+    .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  barcode: text('barcode').notNull(),
+  partNumber: text('part_number').notNull(),
+  fromDepartment: text('from_department').notNull(),
+  toDepartment: text('to_department').notNull(),
+  workInstructionRef: text('work_instruction_ref'),
+  workInstructionVersion: text('work_instruction_version'),
+  signatureData: text('signature_data').notNull(),
+  signedByEmployeeId: integer('signed_by_employee_id').references(() => employees.id),
+  signedByName: text('signed_by_name').notNull(),
+  signedByUsername: text('signed_by_username').notNull(),
+  declarationText: text('declaration_text').notNull(),
+  declarationAccepted: boolean('declaration_accepted').notNull().default(true),
+  signedAt: timestamp('signed_at').notNull().defaultNow(),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  notes: text('notes'),
+}, (table) => ({
+  itemIdIdx: index('p2_transfer_sig_item_id_idx').on(table.serializedItemId),
+  barcodeIdx: index('p2_transfer_sig_barcode_idx').on(table.barcode),
+  deptIdx: index('p2_transfer_sig_dept_idx').on(table.fromDepartment),
+  signedByIdx: index('p2_transfer_sig_signed_by_idx').on(table.signedByEmployeeId),
+}));
+
+export const insertP2DepartmentTransferSignatureSchema = createInsertSchema(p2DepartmentTransferSignatures).omit({
+  id: true,
+  signedAt: true,
+});
+
+export type P2DepartmentTransferSignature = typeof p2DepartmentTransferSignatures.$inferSelect;
+export type InsertP2DepartmentTransferSignature = z.infer<typeof insertP2DepartmentTransferSignatureSchema>;
 
 export * from './calendar.schema';

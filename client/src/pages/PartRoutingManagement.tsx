@@ -26,17 +26,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Route,
   Settings,
@@ -46,10 +37,46 @@ import {
   Search,
   CheckCircle,
   XCircle,
-  X,
-  ArrowUp,
-  ArrowDown,
+  Eye,
+  Users,
+  Package,
+  Flame,
 } from 'lucide-react';
+import PartRoutingWizard from '@/components/PartRoutingWizard';
+
+interface MaterialRequirement {
+  partId: string;
+  partNumber: string;
+  partName: string;
+  requiredFields: string[];
+  entryMethod: 'manual' | 'barcode';
+}
+
+interface QCStandard {
+  standard: string;
+  tolerance: string;
+  requirement: string;
+}
+
+interface OvenCuringStep {
+  temperature: string;
+  time: string;
+}
+
+interface CustomDataField {
+  fieldName: string;
+  fieldType: 'text' | 'number' | 'date' | 'textarea';
+  isRequired: boolean;
+}
+
+interface DepartmentConfiguration {
+  materials: MaterialRequirement[];
+  assignedTechnicianId: number | null;
+  qcStandards: QCStandard[];
+  ovenCuringSteps?: OvenCuringStep[];
+  specialProcess?: string;
+  customDataFields?: CustomDataField[];
+}
 
 interface PartRouting {
   id: string;
@@ -58,8 +85,11 @@ interface PartRouting {
   partName: string;
   departmentSequence: string[];
   traceabilityConfig: Record<string, string[]>;
-  isActive: boolean;
-  notes: string | null;
+  departmentMaterials?: Record<string, MaterialRequirement[]>;
+  departmentConfig?: Record<string, DepartmentConfiguration>;
+  isActive?: boolean;
+  notes?: string | null;
+  createdBy: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -72,43 +102,15 @@ interface InventoryItem {
   manufacturingDepartment: string | null;
 }
 
-const AVAILABLE_DEPARTMENTS = [
-  'Layup',
-  'CNC',
-  'Cutting Table',
-  'Core Department',
-  'Gunsmith',
-  'Paint',
-  'Finish QC',
-  'Shipping QC',
-];
-
-const TRACEABILITY_FIELDS = [
-  'Lot Number',
-  'Batch Number',
-  'Expiration Date',
-  'Serial Number',
-  'Revision',
-];
-
 export default function PartRoutingManagement() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('active');
-  const [editDialog, setEditDialog] = useState<{
-    open: boolean;
-    routing: PartRouting | null;
-  }>({ open: false, routing: null });
+  const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
+  const [showWizard, setShowWizard] = useState(false);
+  const [editRouting, setEditRouting] = useState<PartRouting | null>(null);
   const [viewDialog, setViewDialog] = useState<{
     open: boolean;
     routing: PartRouting | null;
   }>({ open: false, routing: null });
-  
-  // Form state for edit/create
-  const [selectedInventoryItemId, setSelectedInventoryItemId] = useState('');
-  const [departmentSequence, setDepartmentSequence] = useState<string[]>([]);
-  const [traceabilityConfig, setTraceabilityConfig] = useState<Record<string, string[]>>({});
-  const [notes, setNotes] = useState('');
-  const [isActive, setIsActive] = useState(true);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -121,56 +123,6 @@ export default function PartRoutingManagement() {
   // Fetch all inventory items to show which parts don't have routings
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
     queryKey: ['/api/enhanced/inventory/items'],
-  });
-
-  // Create mutation
-  const createMutation = useMutation({
-    mutationFn: (data: any) =>
-      apiRequest('/api/part-routings', {
-        method: 'POST',
-        body: JSON.stringify(data),
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    onSuccess: () => {
-      toast({
-        title: 'Success',
-        description: 'Part routing created successfully',
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/part-routings'] });
-      handleCloseEditDialog();
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to create part routing',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  // Update mutation
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) =>
-      apiRequest(`/api/part-routings/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    onSuccess: () => {
-      toast({
-        title: 'Success',
-        description: 'Part routing updated successfully',
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/part-routings'] });
-      handleCloseEditDialog();
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to update part routing',
-        variant: 'destructive',
-      });
-    },
   });
 
   // Delete mutation
@@ -233,110 +185,15 @@ export default function PartRoutingManagement() {
     setViewDialog({ open: true, routing });
   };
 
-  const handleOpenEditDialog = (routing: PartRouting | null) => {
-    if (routing) {
-      // Edit existing routing
-      setSelectedInventoryItemId(routing.inventoryItemId);
-      setDepartmentSequence([...routing.departmentSequence]);
-      setTraceabilityConfig({ ...routing.traceabilityConfig });
-      setNotes(routing.notes || '');
-      setIsActive(routing.isActive);
-    } else {
-      // Create new routing
-      setSelectedInventoryItemId('');
-      setDepartmentSequence([]);
-      setTraceabilityConfig({});
-      setNotes('');
-      setIsActive(true);
-    }
-    setEditDialog({ open: true, routing });
+  const handleOpenWizard = (routing: PartRouting | null) => {
+    setEditRouting(routing);
+    setShowWizard(true);
   };
 
-  const handleCloseEditDialog = () => {
-    setEditDialog({ open: false, routing: null });
-    setSelectedInventoryItemId('');
-    setDepartmentSequence([]);
-    setTraceabilityConfig({});
-    setNotes('');
-    setIsActive(true);
-  };
-
-  const handleSaveRouting = () => {
-    if (!selectedInventoryItemId) {
-      toast({
-        title: 'Validation Error',
-        description: 'Please select an inventory item',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (departmentSequence.length === 0) {
-      toast({
-        title: 'Validation Error',
-        description: 'Please add at least one department to the sequence',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const selectedItem = inventoryItems.find(item => item.id === selectedInventoryItemId);
-    if (!selectedItem) return;
-
-    const routingData = {
-      inventoryItemId: selectedInventoryItemId,
-      partNumber: selectedItem.agPartNumber,
-      partName: selectedItem.name,
-      departmentSequence,
-      traceabilityConfig,
-      isActive,
-      notes: notes || null,
-    };
-
-    if (editDialog.routing) {
-      // Update existing
-      updateMutation.mutate({ id: editDialog.routing.id, data: routingData });
-    } else {
-      // Create new
-      createMutation.mutate(routingData);
-    }
-  };
-
-  const handleAddDepartment = (dept: string) => {
-    if (!departmentSequence.includes(dept)) {
-      setDepartmentSequence([...departmentSequence, dept]);
-    }
-  };
-
-  const handleRemoveDepartment = (index: number) => {
-    const newSequence = [...departmentSequence];
-    newSequence.splice(index, 1);
-    setDepartmentSequence(newSequence);
-  };
-
-  const handleMoveDepartment = (index: number, direction: 'up' | 'down') => {
-    const newSequence = [...departmentSequence];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    [newSequence[index], newSequence[targetIndex]] = [newSequence[targetIndex], newSequence[index]];
-    setDepartmentSequence(newSequence);
-  };
-
-  const handleToggleTraceabilityField = (dept: string, field: string) => {
-    const currentFields = traceabilityConfig[dept] || [];
-    const newFields = currentFields.includes(field)
-      ? currentFields.filter(f => f !== field)
-      : [...currentFields, field];
-    
-    if (newFields.length === 0) {
-      const newConfig = { ...traceabilityConfig };
-      delete newConfig[dept];
-      setTraceabilityConfig(newConfig);
-    } else {
-      setTraceabilityConfig({
-        ...traceabilityConfig,
-        [dept]: newFields,
-      });
-    }
+  const handleCloseWizard = () => {
+    setShowWizard(false);
+    setEditRouting(null);
+    queryClient.invalidateQueries({ queryKey: ['/api/part-routings'] });
   };
 
   // Filter routings based on search and active status
@@ -345,10 +202,11 @@ export default function PartRoutingManagement() {
       routing.partNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       routing.partName.toLowerCase().includes(searchTerm.toLowerCase());
 
+    const isActive = routing.isActive !== false;
     const matchesFilter =
       filterActive === 'all' ||
-      (filterActive === 'active' && routing.isActive) ||
-      (filterActive === 'inactive' && !routing.isActive);
+      (filterActive === 'active' && isActive) ||
+      (filterActive === 'inactive' && !isActive);
 
     return matchesSearch && matchesFilter;
   });
@@ -360,14 +218,9 @@ export default function PartRoutingManagement() {
       !routings.some((r) => r.partNumber === item.agPartNumber)
   );
 
-  // Get available inventory items for selection (manufactured only, not already routed)
-  const availableItems = inventoryItems.filter(
-    (item) =>
-      item.type === 'manufactured' &&
-      (editDialog.routing 
-        ? item.id === editDialog.routing.inventoryItemId || !routings.some((r) => r.inventoryItemId === item.id)
-        : !routings.some((r) => r.inventoryItemId === item.id))
-  );
+  // Count routings with full configuration
+  const routingsWithConfig = routings.filter(r => r.departmentConfig && Object.keys(r.departmentConfig).length > 0).length;
+  const activeRoutings = routings.filter(r => r.isActive !== false).length;
 
   if (isLoading) {
     return (
@@ -388,17 +241,17 @@ export default function PartRoutingManagement() {
             Part Routing Management
           </h1>
           <p className="text-muted-foreground mt-1">
-            Configure department sequences and traceability requirements for manufactured parts
+            Configure department sequences, materials, technicians, and traceability requirements for manufactured parts
           </p>
         </div>
-        <Button onClick={() => handleOpenEditDialog(null)} data-testid="button-create-routing">
+        <Button onClick={() => handleOpenWizard(null)} data-testid="button-create-routing">
           <Plus className="h-4 w-4 mr-2" />
           Create Routing
         </Button>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Total Routings</CardTitle>
@@ -413,8 +266,19 @@ export default function PartRoutingManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {routings.filter((r) => r.isActive).length}
+              {activeRoutings}
             </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Fully Configured</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">
+              {routingsWithConfig}
+            </div>
+            <p className="text-xs text-muted-foreground">With materials/technicians</p>
           </CardContent>
         </Card>
         <Card>
@@ -484,86 +348,116 @@ export default function PartRoutingManagement() {
                   <TableHead>Part Number</TableHead>
                   <TableHead>Part Name</TableHead>
                   <TableHead>Department Sequence</TableHead>
+                  <TableHead>Configuration</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Notes</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRoutings.map((routing) => (
-                  <TableRow key={routing.id}>
-                    <TableCell className="font-medium">
-                      {routing.partNumber}
-                    </TableCell>
-                    <TableCell>{routing.partName}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {routing.departmentSequence.map((dept, idx) => (
-                          <Badge key={idx} variant="outline">
-                            {dept}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={routing.isActive ? 'default' : 'secondary'}
-                        className="cursor-pointer"
-                        onClick={() => handleToggleActive(routing.id, routing.isActive)}
-                      >
-                        {routing.isActive ? (
-                          <>
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            Active
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="h-3 w-3 mr-1" />
-                            Inactive
-                          </>
-                        )}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {routing.notes ? (
-                        <span className="text-sm text-muted-foreground truncate max-w-xs block">
-                          {routing.notes}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleView(routing)}
-                          data-testid={`button-view-${routing.id}`}
+                {filteredRoutings.map((routing) => {
+                  const hasConfig = routing.departmentConfig && Object.keys(routing.departmentConfig).length > 0;
+                  const hasMaterials = hasConfig && Object.values(routing.departmentConfig || {}).some(
+                    (cfg) => cfg.materials && cfg.materials.length > 0
+                  );
+                  const hasTechnicians = hasConfig && Object.values(routing.departmentConfig || {}).some(
+                    (cfg) => cfg.assignedTechnicianId !== null
+                  );
+                  const hasOvenCuring = hasConfig && Object.values(routing.departmentConfig || {}).some(
+                    (cfg) => cfg.ovenCuringSteps && cfg.ovenCuringSteps.length > 0
+                  );
+                  const isActive = routing.isActive !== false;
+                  
+                  return (
+                    <TableRow key={routing.id}>
+                      <TableCell className="font-medium">
+                        {routing.partNumber}
+                      </TableCell>
+                      <TableCell>{routing.partName}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {routing.departmentSequence.map((dept, idx) => (
+                            <Badge key={idx} variant="outline" className="text-xs">
+                              {dept}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {hasMaterials && (
+                            <Badge variant="secondary" className="text-xs" title="Has materials configured">
+                              <Package className="h-3 w-3" />
+                            </Badge>
+                          )}
+                          {hasTechnicians && (
+                            <Badge variant="secondary" className="text-xs" title="Has technicians assigned">
+                              <Users className="h-3 w-3" />
+                            </Badge>
+                          )}
+                          {hasOvenCuring && (
+                            <Badge variant="secondary" className="text-xs" title="Has oven curing steps">
+                              <Flame className="h-3 w-3" />
+                            </Badge>
+                          )}
+                          {!hasConfig && (
+                            <span className="text-xs text-muted-foreground">Basic</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={isActive ? 'default' : 'secondary'}
+                          className="cursor-pointer"
+                          onClick={() => handleToggleActive(routing.id, isActive)}
                         >
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleOpenEditDialog(routing)}
-                          data-testid={`button-edit-${routing.id}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDelete(routing.id)}
-                          disabled={deleteMutation.isPending}
-                          data-testid={`button-delete-${routing.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          {isActive ? (
+                            <>
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Active
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Inactive
+                            </>
+                          )}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleView(routing)}
+                            data-testid={`button-view-${routing.id}`}
+                            title="View details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenWizard(routing)}
+                            data-testid={`button-edit-${routing.id}`}
+                            title="Edit routing"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDelete(routing.id)}
+                            disabled={deleteMutation.isPending}
+                            data-testid={`button-delete-${routing.id}`}
+                            title="Delete routing"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
@@ -605,14 +499,7 @@ export default function PartRoutingManagement() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => {
-                          setSelectedInventoryItemId(item.id);
-                          setDepartmentSequence(item.manufacturingDepartment ? [item.manufacturingDepartment] : []);
-                          setTraceabilityConfig({});
-                          setNotes('');
-                          setIsActive(true);
-                          setEditDialog({ open: true, routing: null });
-                        }}
+                        onClick={() => handleOpenWizard(null)}
                         data-testid={`button-create-routing-${item.id}`}
                       >
                         <Plus className="h-4 w-4 mr-1" />
@@ -632,176 +519,23 @@ export default function PartRoutingManagement() {
         </Card>
       )}
 
-      {/* Edit/Create Dialog */}
-      <Dialog open={editDialog.open} onOpenChange={(open) => !open && handleCloseEditDialog()}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editDialog.routing ? 'Edit Part Routing' : 'Create Part Routing'}
-            </DialogTitle>
-            <DialogDescription>
-              Configure department sequence and traceability requirements for manufactured parts
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            {/* Part Selection */}
-            <div className="space-y-2">
-              <Label htmlFor="part-select">Select Part *</Label>
-              <Select value={selectedInventoryItemId} onValueChange={setSelectedInventoryItemId} disabled={!!editDialog.routing}>
-                <SelectTrigger id="part-select">
-                  <SelectValue placeholder="Select a manufactured part..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableItems.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.agPartNumber} - {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Only manufactured parts without existing routing are shown
-              </p>
-            </div>
+      {/* Part Routing Wizard - Uses the same component as P2 Department Manager */}
+      <PartRoutingWizard
+        open={showWizard}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCloseWizard();
+          }
+        }}
+        editRouting={editRouting}
+      />
 
-            {/* Department Sequence Builder */}
-            <div className="space-y-2">
-              <Label>Department Sequence *</Label>
-              <div className="flex gap-2">
-                <Select onValueChange={handleAddDepartment}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Add department..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AVAILABLE_DEPARTMENTS.filter(d => !departmentSequence.includes(d)).map((dept) => (
-                      <SelectItem key={dept} value={dept}>
-                        {dept}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              {departmentSequence.length > 0 && (
-                <div className="space-y-2 mt-2">
-                  {departmentSequence.map((dept, index) => (
-                    <div key={index} className="flex items-center gap-2 p-2 border rounded">
-                      <Badge variant="outline" className="flex-1">
-                        {index + 1}. {dept}
-                      </Badge>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleMoveDepartment(index, 'up')}
-                          disabled={index === 0}
-                        >
-                          <ArrowUp className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleMoveDepartment(index, 'down')}
-                          disabled={index === departmentSequence.length - 1}
-                        >
-                          <ArrowDown className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveDepartment(index)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Traceability Configuration */}
-            {departmentSequence.length > 0 && (
-              <div className="space-y-2">
-                <Label>Traceability Requirements (Optional)</Label>
-                <p className="text-xs text-muted-foreground">
-                  Select which traceability fields are required for each department
-                </p>
-                <div className="space-y-3">
-                  {departmentSequence.map((dept) => (
-                    <div key={dept} className="border rounded p-3">
-                      <div className="font-semibold text-sm mb-2">{dept}</div>
-                      <div className="flex flex-wrap gap-2">
-                        {TRACEABILITY_FIELDS.map((field) => (
-                          <Badge
-                            key={field}
-                            variant={(traceabilityConfig[dept] || []).includes(field) ? 'default' : 'outline'}
-                            className="cursor-pointer"
-                            onClick={() => handleToggleTraceabilityField(dept, field)}
-                          >
-                            {field}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Notes */}
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes (Optional)</Label>
-              <Textarea
-                id="notes"
-                placeholder="Add any additional notes or instructions..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-              />
-            </div>
-
-            {/* Active Status */}
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="isActive"
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-                className="h-4 w-4"
-              />
-              <Label htmlFor="isActive" className="cursor-pointer">
-                Active routing (enable this routing for production use)
-              </Label>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={handleCloseEditDialog}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveRouting}
-              disabled={createMutation.isPending || updateMutation.isPending}
-              data-testid="button-save-routing"
-            >
-              {createMutation.isPending || updateMutation.isPending
-                ? 'Saving...'
-                : editDialog.routing
-                  ? 'Update Routing'
-                  : 'Create Routing'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* View Dialog */}
+      {/* View Dialog - Displays detailed routing info */}
       <Dialog
         open={viewDialog.open}
         onOpenChange={(open) => setViewDialog({ open, routing: null })}
       >
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Part Routing Details</DialogTitle>
             <DialogDescription>
@@ -809,9 +543,10 @@ export default function PartRoutingManagement() {
             </DialogDescription>
           </DialogHeader>
           {viewDialog.routing && (
-            <div className="space-y-4">
+            <div className="space-y-6">
+              {/* Department Sequence */}
               <div>
-                <Label>Department Sequence</Label>
+                <Label className="text-base font-semibold">Department Sequence</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {viewDialog.routing.departmentSequence.map((dept, idx) => (
                     <Badge key={idx} variant="outline" className="text-base px-3 py-1">
@@ -820,11 +555,100 @@ export default function PartRoutingManagement() {
                   ))}
                 </div>
               </div>
+
+              {/* Department Configuration Details */}
+              {viewDialog.routing.departmentConfig && Object.keys(viewDialog.routing.departmentConfig).length > 0 && (
+                <div>
+                  <Label className="text-base font-semibold">Department Configuration</Label>
+                  <div className="mt-2 space-y-3">
+                    {viewDialog.routing.departmentSequence.map((dept) => {
+                      const config = viewDialog.routing?.departmentConfig?.[dept];
+                      if (!config) return null;
+                      
+                      return (
+                        <Card key={dept} className="p-3">
+                          <div className="font-semibold text-sm mb-2">{dept}</div>
+                          <div className="space-y-2 text-sm">
+                            {config.materials && config.materials.length > 0 && (
+                              <div className="flex items-start gap-2">
+                                <Package className="h-4 w-4 text-blue-600 mt-0.5" />
+                                <div>
+                                  <span className="font-medium">Materials:</span>
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {config.materials.map((mat, idx) => (
+                                      <Badge key={idx} variant="secondary" className="text-xs">
+                                        {mat.partNumber} - {mat.partName}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {config.assignedTechnicianId && (
+                              <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4 text-green-600" />
+                                <span className="font-medium">Technician ID:</span> {config.assignedTechnicianId}
+                              </div>
+                            )}
+                            {config.ovenCuringSteps && config.ovenCuringSteps.length > 0 && (
+                              <div className="flex items-start gap-2">
+                                <Flame className="h-4 w-4 text-orange-600 mt-0.5" />
+                                <div>
+                                  <span className="font-medium">Oven Curing:</span>
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {config.ovenCuringSteps.map((step, idx) => (
+                                      <Badge key={idx} variant="outline" className="text-xs">
+                                        {step.temperature} for {step.time}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {config.qcStandards && config.qcStandards.length > 0 && (
+                              <div>
+                                <span className="font-medium">QC Standards:</span>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {config.qcStandards.map((std, idx) => (
+                                    <Badge key={idx} variant="outline" className="text-xs">
+                                      {std.standard}: {std.tolerance}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {config.customDataFields && config.customDataFields.length > 0 && (
+                              <div>
+                                <span className="font-medium">Custom Data Fields:</span>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {config.customDataFields.map((field, idx) => (
+                                    <Badge key={idx} variant="outline" className="text-xs">
+                                      {field.fieldName} ({field.fieldType})
+                                      {field.isRequired && ' *'}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {config.specialProcess && (
+                              <div>
+                                <span className="font-medium">Special Process:</span> {config.specialProcess}
+                              </div>
+                            )}
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Traceability Configuration */}
               <div>
-                <Label>Traceability Configuration</Label>
+                <Label className="text-base font-semibold">Traceability Configuration</Label>
                 <div className="mt-2 space-y-2">
-                  {Object.entries(viewDialog.routing.traceabilityConfig).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No traceability requirements configured</p>
+                  {Object.entries(viewDialog.routing.traceabilityConfig || {}).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No item-level traceability requirements configured</p>
                   ) : (
                     Object.entries(viewDialog.routing.traceabilityConfig).map(([dept, fields]) => (
                       <div key={dept} className="border rounded p-3">
@@ -839,16 +663,15 @@ export default function PartRoutingManagement() {
                   )}
                 </div>
               </div>
-              {viewDialog.routing.notes && (
-                <div>
-                  <Label>Notes</Label>
-                  <p className="text-sm mt-1">{viewDialog.routing.notes}</p>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground">
+
+              {/* Metadata */}
+              <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground border-t pt-4">
                 <div>
                   <Label>Created</Label>
                   <p>{new Date(viewDialog.routing.createdAt).toLocaleString()}</p>
+                  {viewDialog.routing.createdBy && (
+                    <p className="text-xs">by {viewDialog.routing.createdBy}</p>
+                  )}
                 </div>
                 <div>
                   <Label>Last Updated</Label>

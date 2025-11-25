@@ -40,6 +40,7 @@ import {
   Route,
 } from 'lucide-react';
 import PartRoutingWizard from '@/components/PartRoutingWizard';
+import DepartmentTransferSignatureDialog from '@/components/DepartmentTransferSignatureDialog';
 
 const P2_DEPARTMENTS = [
   'Layup',
@@ -144,6 +145,9 @@ export default function P2DepartmentManager() {
   const [requiredMaterials, setRequiredMaterials] = useState<MaterialRequirement[]>([]);
   const [customDataFields, setCustomDataFields] = useState<CustomDataField[]>([]);
   const [customDataValues, setCustomDataValues] = useState<Record<string, string>>({});
+  const [showSignatureDialog, setShowSignatureDialog] = useState(false);
+  const [pendingSignatureItem, setPendingSignatureItem] = useState<P2SerializedItem | null>(null);
+  const [pendingSignatureNextDepartment, setPendingSignatureNextDepartment] = useState<string>('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -209,6 +213,25 @@ export default function P2DepartmentManager() {
     enabled: !!selectedItem,
   });
 
+  // Fetch current user session for signatures
+  const { data: currentUser } = useQuery<{
+    id: number;
+    username: string;
+    firstName?: string;
+    lastName?: string;
+  }>({
+    queryKey: ['/api/auth/session'],
+  });
+
+  // Helper function to get next department in sequence
+  const getNextDepartment = (currentDept: string): string => {
+    const currentIndex = P2_DEPARTMENTS.indexOf(currentDept as Department);
+    if (currentIndex >= 0 && currentIndex < P2_DEPARTMENTS.length - 1) {
+      return P2_DEPARTMENTS[currentIndex + 1];
+    }
+    return 'Completed';
+  };
+
   // Get required traceability fields for current department
   const getRequiredTraceabilityFields = () => {
     if (!partRouting || !selectedItem) return [];
@@ -250,6 +273,25 @@ export default function P2DepartmentManager() {
     },
   });
 
+  // Show signature dialog before transitioning
+  const showSignatureBeforeTransition = (item: P2SerializedItem) => {
+    const nextDept = getNextDepartment(item.currentDepartment);
+    setPendingSignatureItem(item);
+    setPendingSignatureNextDepartment(nextDept);
+    setShowSignatureDialog(true);
+  };
+
+  // Handle signature completion - proceed with transition
+  const handleSignatureComplete = () => {
+    if (pendingSignatureItem) {
+      transitionMutation.mutate(pendingSignatureItem.id);
+    }
+    // Reset signature state
+    setShowSignatureDialog(false);
+    setPendingSignatureItem(null);
+    setPendingSignatureNextDepartment('');
+  };
+
   // Handle transition - check for traceability requirements first
   const handleTransition = async (item: P2SerializedItem) => {
     try {
@@ -266,8 +308,8 @@ export default function P2DepartmentManager() {
         setCustomDataFields(requirements.customFields);
         setShowTraceabilityDialog(true);
       } else {
-        // No traceability required, proceed directly
-        transitionMutation.mutate(item.id);
+        // No traceability required, proceed to signature
+        showSignatureBeforeTransition(item);
       }
     } catch (error: any) {
       // Fail closed - routing fetch failed, block advancement
@@ -278,8 +320,8 @@ export default function P2DepartmentManager() {
         errorMessage.includes('404');
       
       if (isNoRoutingConfigured) {
-        // No routing configured for this part, allow advancement without traceability
-        transitionMutation.mutate(item.id);
+        // No routing configured for this part, still require signature for AS9100 compliance
+        showSignatureBeforeTransition(item);
       } else {
         // Network error or server error - block advancement and show error
         toast({
@@ -1139,19 +1181,23 @@ export default function P2DepartmentManager() {
                       });
                     }
 
-                    // Proceed with transition after successful save
-                    transitionMutation.mutate(pendingTransitionItemId);
-                    
-                    // Reset dialog state
+                    // Reset traceability dialog state
                     setShowTraceabilityDialog(false);
                     setTraceabilityData({});
                     setMaterialTraceabilityData({});
-                    setPendingTransitionItemId(null);
-                    setPendingTransitionDepartment(null);
                     setRequiredTraceabilityFields([]);
                     setRequiredMaterials([]);
                     setCustomDataFields([]);
                     setCustomDataValues({});
+                    
+                    // Proceed to signature dialog after successful traceability save
+                    if (selectedItem) {
+                      showSignatureBeforeTransition(selectedItem);
+                    }
+                    
+                    // Reset pending transition state after signature dialog is shown
+                    setPendingTransitionItemId(null);
+                    setPendingTransitionDepartment(null);
                   } catch (error: any) {
                     toast({
                       title: 'Error Saving Traceability',
@@ -1174,6 +1220,29 @@ export default function P2DepartmentManager() {
         open={showRoutingWizard}
         onOpenChange={setShowRoutingWizard}
       />
+
+      {/* Department Transfer Signature Dialog - AS9100 Compliance */}
+      {pendingSignatureItem && currentUser && (
+        <DepartmentTransferSignatureDialog
+          open={showSignatureDialog}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowSignatureDialog(false);
+              setPendingSignatureItem(null);
+              setPendingSignatureNextDepartment('');
+            }
+          }}
+          onSignatureComplete={handleSignatureComplete}
+          serializedItemId={pendingSignatureItem.id}
+          barcode={pendingSignatureItem.barcode}
+          partNumber={pendingSignatureItem.partNumber}
+          partName={pendingSignatureItem.partName}
+          fromDepartment={pendingSignatureItem.currentDepartment}
+          toDepartment={pendingSignatureNextDepartment}
+          workInstructionRef={partRouting?.departmentConfig?.[pendingSignatureItem.currentDepartment]?.specialProcess}
+          currentUser={currentUser}
+        />
+      )}
     </div>
   );
 }

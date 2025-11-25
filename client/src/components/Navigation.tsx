@@ -51,6 +51,7 @@ import {
   Calculator,
   Route,
   Megaphone,
+  FileCheck,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import InstallPWAButton from './InstallPWAButton';
@@ -1104,6 +1107,82 @@ export default function Navigation() {
                   >
                     <Megaphone className="h-4 w-4 mr-2" />
                     Marketing Board
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            {/* Traveler Dropdown - P2 AS9100 Production Tracking */}
+            <div className="relative">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <Route className="h-4 w-4" />
+                    Traveler
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/p2-traveler-viewer')}
+                    className="cursor-pointer"
+                  >
+                    <ClipboardList className="h-4 w-4 mr-2" />
+                    Traveler Viewer
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/p2-traveler')}
+                    className="cursor-pointer"
+                  >
+                    <Scan className="h-4 w-4 mr-2" />
+                    Badge Scanner
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/part-routing-management')}
+                    className="cursor-pointer"
+                  >
+                    <Route className="h-4 w-4 mr-2" />
+                    Part Routing
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/p2-department-manager')}
+                    className="cursor-pointer"
+                  >
+                    <Factory className="h-4 w-4 mr-2" />
+                    Department Manager
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/p2-certifications-manager')}
+                    className="cursor-pointer"
+                  >
+                    <Award className="h-4 w-4 mr-2" />
+                    Certifications
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-gray-500">Document Generation (via Traveler)</DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/p2-traveler-viewer')}
+                    className="cursor-pointer text-gray-600"
+                  >
+                    <Package className="h-4 w-4 mr-2" />
+                    Generate Packing Slips
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/p2-traveler-viewer')}
+                    className="cursor-pointer text-gray-600"
+                  >
+                    <Award className="h-4 w-4 mr-2" />
+                    Generate Certificates
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/p2-traveler-viewer')}
+                    className="cursor-pointer text-gray-600"
+                  >
+                    <FileCheck className="h-4 w-4 mr-2" />
+                    Generate Test Reports
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

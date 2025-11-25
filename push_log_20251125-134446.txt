@@ -1,0 +1,35 @@
+Your branch is behind 'origin/main' by 24 commits, and can be fast-forwarded.
+  (use "git pull" to update your local branch)
+Updating c7e9ae2e..08267e26
+Fast-forward
+ attached_assets/image_1764016620535.png            | Bin 0 -> 69446 bytes
+ attached_assets/image_1764016680280.png            | Bin 0 -> 69446 bytes
+ attached_assets/image_1764017916265.png            | Bin 0 -> 87511 bytes
+ attached_assets/image_1764018528006.png            | Bin 0 -> 62929 bytes
+ attached_assets/image_1764019532550.png            | Bin 0 -> 100285 bytes
+ attached_assets/image_1764020223547.png            | Bin 0 -> 99524 bytes
+ attached_assets/image_1764021980581.png            | Bin 0 -> 91965 bytes
+ attached_assets/image_1764022123111.png            | Bin 0 -> 58969 bytes
+ attached_assets/image_1764022970539.png            | Bin 0 -> 58969 bytes
+ .../components/inventory/InventoryItemsCard.tsx    |  99 ++++++++++--
+ .../inventory/TraceabilityConfigModal.tsx          | 116 ++++++++++++++
+ client/src/pages/VendorManagement.tsx              | 167 ++++++++++++---------
+ push_log_20251124-225501.txt                       |   3 +
+ push_log_20251124-230041.txt                       |   3 +
+ server/schema.ts                                   |   4 +
+ server/src/routes/index.ts                         |  30 ++--
+ server/src/routes/vendors.ts                       |  40 ++++-
+ server/storage.ts                                  |  91 ++++++++++-
+ 18 files changed, 456 insertions(+), 97 deletions(-)
+ create mode 100644 attached_assets/image_1764016620535.png
+ create mode 100644 attached_assets/image_1764016680280.png
+ create mode 100644 attached_assets/image_1764017916265.png
+ create mode 100644 attached_assets/image_1764018528006.png
+ create mode 100644 attached_assets/image_1764019532550.png
+ create mode 100644 attached_assets/image_1764020223547.png
+ create mode 100644 attached_assets/image_1764021980581.png
+ create mode 100644 attached_assets/image_1764022123111.png
+ create mode 100644 attached_assets/image_1764022970539.png
+ create mode 100644 client/src/components/inventory/TraceabilityConfigModal.tsx
+ create mode 100644 push_log_20251124-225501.txt
+ create mode 100644 push_log_20251124-230041.txt

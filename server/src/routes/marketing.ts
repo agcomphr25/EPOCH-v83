@@ -301,27 +301,96 @@ router.delete('/templates/:id', async (req, res) => {
 
 router.get('/customer-types', async (req, res) => {
   try {
-    const distinctTypes = await db
-      .selectDistinct({ customerType: customers.customerType })
-      .from(customers)
-      .where(and(
-        eq(customers.isActive, true),
-        sql`${customers.customerType} IS NOT NULL AND ${customers.customerType} != ''`
-      ))
-      .orderBy(customers.customerType);
-    
-    const types = distinctTypes
-      .filter(t => t.customerType)
-      .map((t, index) => ({
-        id: index + 1,
-        name: t.customerType,
-        description: null
-      }));
+    const types = await db
+      .select()
+      .from(customerTypes)
+      .orderBy(customerTypes.name);
     
     res.json(types);
   } catch (error: any) {
     console.error('Error fetching customer types:', error);
     res.status(500).json({ error: 'Failed to fetch customer types' });
+  }
+});
+
+router.post('/customer-types', async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+    
+    const [newType] = await db
+      .insert(customerTypes)
+      .values({
+        name: name.trim(),
+        description: description?.trim() || null,
+      })
+      .returning();
+    
+    res.status(201).json(newType);
+  } catch (error: any) {
+    console.error('Error creating customer type:', error);
+    if (error.code === '23505') {
+      return res.status(400).json({ error: 'A customer type with this name already exists' });
+    }
+    res.status(500).json({ error: 'Failed to create customer type' });
+  }
+});
+
+router.put('/customer-types/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description } = req.body;
+    
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+    
+    const [updated] = await db
+      .update(customerTypes)
+      .set({
+        name: name.trim(),
+        description: description?.trim() || null,
+      })
+      .where(eq(customerTypes.id, parseInt(id)))
+      .returning();
+    
+    if (!updated) {
+      return res.status(404).json({ error: 'Customer type not found' });
+    }
+    
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating customer type:', error);
+    if (error.code === '23505') {
+      return res.status(400).json({ error: 'A customer type with this name already exists' });
+    }
+    res.status(500).json({ error: 'Failed to update customer type' });
+  }
+});
+
+router.delete('/customer-types/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const [deleted] = await db
+      .delete(customerTypes)
+      .where(eq(customerTypes.id, parseInt(id)))
+      .returning();
+    
+    if (!deleted) {
+      return res.status(404).json({ error: 'Customer type not found' });
+    }
+    
+    res.json({ success: true, deleted });
+  } catch (error: any) {
+    console.error('Error deleting customer type:', error);
+    if (error.code === '23503') {
+      return res.status(400).json({ error: 'Cannot delete customer type that has associated discounts' });
+    }
+    res.status(500).json({ error: 'Failed to delete customer type' });
   }
 });
 

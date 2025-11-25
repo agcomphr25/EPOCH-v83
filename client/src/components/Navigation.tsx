@@ -782,6 +782,12 @@ export default function Navigation() {
       description: 'Fabric cutting production planning for two production lines',
     },
     {
+      path: '/cutting-dashboard',
+      label: 'Cutting Dashboard',
+      icon: Scissors,
+      description: 'Fabric receiving, packet building, and stock target management',
+    },
+    {
       path: '/p2-serialized-scheduler',
       label: 'P2 Serialized Item Scheduler',
       icon: Calendar,

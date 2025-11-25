@@ -150,6 +150,7 @@ import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
 import PDFTemplateManager from './pages/PDFTemplateManager';
 import CuttingTable from './pages/CuttingTable';
+import CuttingTableDashboard from './pages/CuttingTableDashboard';
 import MetalAccessoriesTracker from './pages/MetalAccessoriesTracker';
 import DocumentIntelligence from './pages/DocumentIntelligence';
 import SignOrderPage from './pages/SignOrderPage';
@@ -500,6 +501,7 @@ function App() {
 
                   {/* Cutting Table Route */}
                   <Route path="/cutting-table" component={CuttingTable} />
+                  <Route path="/cutting-dashboard" component={CuttingTableDashboard} />
 
                   {/* Employee Badge Routes */}
                   <Route path="/badge-configuration" component={EmployeeBadgeConfiguration} />

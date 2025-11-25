@@ -1292,4 +1292,96 @@ router.post('/quick-production-entry', async (req, res) => {
   }
 });
 
+// Stock Levels - Get current packet stock counts
+router.get('/stock-levels', async (req, res) => {
+  try {
+    // Query completed packets from manufacturing queue or a dedicated stock table
+    // For now, return mock data that can be replaced with actual queries
+    const stockLevels = {
+      carbon_fiber: 385,
+      fiberglass: 38,
+    };
+    
+    res.json(stockLevels);
+  } catch (error) {
+    console.error('Error fetching stock levels:', error);
+    res.status(500).json({ error: 'Failed to fetch stock levels' });
+  }
+});
+
+// Print Fabric Label - Generate barcode for fabric inventory item
+router.post('/print-fabric-label', async (req, res) => {
+  try {
+    const { fabricId, barcodeValue, fabricType, lotNumber, batchNumber, rollNumber } = req.body;
+    
+    const { generateBarcodeImage } = await import('../utils/barcodeGenerator');
+    
+    const barcodeImage = generateBarcodeImage(barcodeValue || `FAB-${lotNumber || 'UNK'}-${fabricId}`, {
+      width: 2,
+      height: 60,
+      displayValue: true,
+      fontSize: 14,
+      margin: 10,
+    });
+    
+    res.json({
+      success: true,
+      barcodeImage,
+      labelData: {
+        fabricType,
+        lotNumber,
+        batchNumber,
+        rollNumber,
+        barcodeValue,
+      },
+    });
+  } catch (error) {
+    console.error('Error generating fabric label:', error);
+    res.status(500).json({ error: 'Failed to generate label' });
+  }
+});
+
+// Packet Sessions - Record packet building with fabric traceability
+router.post('/packet-sessions', async (req, res) => {
+  try {
+    const { packetType, packetsBuilt, fabricLots, createdAt } = req.body;
+    
+    // In a full implementation, this would:
+    // 1. Create a packet session record
+    // 2. Link to fabric inventory lots used
+    // 3. Update stock levels
+    // 4. Create audit trail for traceability
+    
+    // For now, return success with the data
+    const session = {
+      id: `PS-${Date.now()}`,
+      packetType,
+      packetsBuilt: parseInt(packetsBuilt) || 1,
+      fabricLots: fabricLots || [],
+      createdAt: createdAt || new Date().toISOString(),
+      status: 'completed',
+    };
+    
+    res.status(201).json(session);
+  } catch (error) {
+    console.error('Error creating packet session:', error);
+    res.status(500).json({ error: 'Failed to create packet session' });
+  }
+});
+
+// Weekly Packet Needs - Calculate from P1 layup schedule
+router.get('/weekly-packet-needs', async (req, res) => {
+  try {
+    // This would query the layup schedule to determine packet needs
+    // For now, return sample data
+    res.json({
+      carbon_fiber: 45,
+      fiberglass: 8,
+    });
+  } catch (error) {
+    console.error('Error fetching weekly packet needs:', error);
+    res.status(500).json({ error: 'Failed to fetch weekly packet needs' });
+  }
+});
+
 export default router;

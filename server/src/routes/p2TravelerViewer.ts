@@ -16,6 +16,7 @@ import {
   p2PackingSlips,
   p2CertificatesOfConformance,
   p2TestForConformanceReports,
+  p2DepartmentTransferSignatures,
   qcSubmissions,
   insertP2LotNumberSchema,
   insertP2PackingSlipSchema,
@@ -24,6 +25,7 @@ import {
   insertP2OvenCureLogSchema,
   insertP2VacuumLeakTestSchema,
   insertP2FinalInspectionResultSchema,
+  insertP2DepartmentTransferSignatureSchema,
 } from '../../schema';
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 
@@ -922,6 +924,183 @@ router.post('/generate-from-lot/:lotId', async (req: Request, res: Response) => 
   } catch (error: any) {
     console.error('Error generating documents from lot:', error);
     return res.status(500).json({ error: error.message || 'Failed to generate documents' });
+  }
+});
+
+// ============================================================================
+// DEPARTMENT TRANSFER SIGNATURES - AS9100 Compliance
+// ============================================================================
+
+// POST /api/p2-traveler-viewer/signatures
+// Create a new department transfer signature
+router.post('/signatures', async (req: Request, res: Response) => {
+  try {
+    const validatedData = insertP2DepartmentTransferSignatureSchema.parse(req.body);
+    
+    // Verify the serialized item exists
+    const serializedItem = await db.query.p2SerializedItems.findFirst({
+      where: eq(p2SerializedItems.id, validatedData.serializedItemId),
+    });
+
+    if (!serializedItem) {
+      return res.status(404).json({ error: 'Serialized item not found' });
+    }
+
+    // Create the signature record
+    const [signature] = await db.insert(p2DepartmentTransferSignatures).values({
+      ...validatedData,
+      barcode: validatedData.barcode || serializedItem.barcode,
+      partNumber: validatedData.partNumber || serializedItem.partNumber,
+      ipAddress: req.ip || req.headers['x-forwarded-for']?.toString() || null,
+      userAgent: req.headers['user-agent'] || null,
+    }).returning();
+
+    console.log(`[P2 Signature] Department transfer signature created: ${signature.id} for item ${serializedItem.barcode} from ${validatedData.fromDepartment} to ${validatedData.toDepartment}`);
+
+    return res.status(201).json(signature);
+  } catch (error: any) {
+    console.error('Error creating department transfer signature:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ error: 'Invalid signature data', details: error.errors });
+    }
+    return res.status(500).json({ error: error.message || 'Failed to create signature' });
+  }
+});
+
+// GET /api/p2-traveler-viewer/signatures/item/:serializedItemId
+// Get all signatures for a serialized item
+router.get('/signatures/item/:serializedItemId', async (req: Request, res: Response) => {
+  try {
+    const { serializedItemId } = req.params;
+
+    const signatures = await db.query.p2DepartmentTransferSignatures.findMany({
+      where: eq(p2DepartmentTransferSignatures.serializedItemId, serializedItemId),
+      orderBy: [desc(p2DepartmentTransferSignatures.signedAt)],
+    });
+
+    return res.json(signatures);
+  } catch (error: any) {
+    console.error('Error fetching signatures:', error);
+    return res.status(500).json({ error: error.message || 'Failed to fetch signatures' });
+  }
+});
+
+// GET /api/p2-traveler-viewer/signatures/barcode/:barcode
+// Get all signatures for an item by barcode
+router.get('/signatures/barcode/:barcode', async (req: Request, res: Response) => {
+  try {
+    const { barcode } = req.params;
+
+    const signatures = await db.query.p2DepartmentTransferSignatures.findMany({
+      where: eq(p2DepartmentTransferSignatures.barcode, barcode),
+      orderBy: [desc(p2DepartmentTransferSignatures.signedAt)],
+    });
+
+    return res.json(signatures);
+  } catch (error: any) {
+    console.error('Error fetching signatures by barcode:', error);
+    return res.status(500).json({ error: error.message || 'Failed to fetch signatures' });
+  }
+});
+
+// GET /api/p2-traveler-viewer/signatures/:id
+// Get a single signature by ID
+router.get('/signatures/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const signature = await db.query.p2DepartmentTransferSignatures.findFirst({
+      where: eq(p2DepartmentTransferSignatures.id, id),
+    });
+
+    if (!signature) {
+      return res.status(404).json({ error: 'Signature not found' });
+    }
+
+    return res.json(signature);
+  } catch (error: any) {
+    console.error('Error fetching signature:', error);
+    return res.status(500).json({ error: error.message || 'Failed to fetch signature' });
+  }
+});
+
+// GET /api/p2-traveler-viewer/signatures/department/:department
+// Get all signatures from a specific department
+router.get('/signatures/department/:department', async (req: Request, res: Response) => {
+  try {
+    const { department } = req.params;
+    const { limit = 50 } = req.query;
+
+    const signatures = await db.query.p2DepartmentTransferSignatures.findMany({
+      where: eq(p2DepartmentTransferSignatures.fromDepartment, department),
+      orderBy: [desc(p2DepartmentTransferSignatures.signedAt)],
+      limit: Number(limit),
+    });
+
+    return res.json(signatures);
+  } catch (error: any) {
+    console.error('Error fetching signatures by department:', error);
+    return res.status(500).json({ error: error.message || 'Failed to fetch signatures' });
+  }
+});
+
+// GET /api/p2-traveler-viewer/signatures/employee/:employeeId
+// Get all signatures by an employee
+router.get('/signatures/employee/:employeeId', async (req: Request, res: Response) => {
+  try {
+    const { employeeId } = req.params;
+    const { limit = 50 } = req.query;
+
+    const signatures = await db.query.p2DepartmentTransferSignatures.findMany({
+      where: eq(p2DepartmentTransferSignatures.signedByEmployeeId, Number(employeeId)),
+      orderBy: [desc(p2DepartmentTransferSignatures.signedAt)],
+      limit: Number(limit),
+    });
+
+    return res.json(signatures);
+  } catch (error: any) {
+    console.error('Error fetching signatures by employee:', error);
+    return res.status(500).json({ error: error.message || 'Failed to fetch signatures' });
+  }
+});
+
+// GET /api/p2-traveler-viewer/signatures/verify/:id
+// Verify a signature exists and return verification details
+router.get('/signatures/verify/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const signature = await db.query.p2DepartmentTransferSignatures.findFirst({
+      where: eq(p2DepartmentTransferSignatures.id, id),
+    });
+
+    if (!signature) {
+      return res.json({
+        valid: false,
+        error: 'Signature not found',
+      });
+    }
+
+    // Get the serialized item for additional context
+    const serializedItem = await db.query.p2SerializedItems.findFirst({
+      where: eq(p2SerializedItems.id, signature.serializedItemId),
+    });
+
+    return res.json({
+      valid: true,
+      signatureId: signature.id,
+      signedBy: signature.signedByName,
+      signedAt: signature.signedAt,
+      fromDepartment: signature.fromDepartment,
+      toDepartment: signature.toDepartment,
+      declarationAccepted: signature.declarationAccepted,
+      itemBarcode: signature.barcode,
+      itemPartNumber: signature.partNumber,
+      itemCurrentStatus: serializedItem?.status || 'UNKNOWN',
+    });
+  } catch (error: any) {
+    console.error('Error verifying signature:', error);
+    return res.status(500).json({ error: error.message || 'Failed to verify signature' });
   }
 });
 

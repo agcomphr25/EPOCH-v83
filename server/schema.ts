@@ -7168,4 +7168,41 @@ export const insertMarketingRecipientSchema = createInsertSchema(marketingRecipi
 export type MarketingRecipient = typeof marketingRecipients.$inferSelect;
 export type InsertMarketingRecipient = z.infer<typeof insertMarketingRecipientSchema>;
 
+// P2 Department Transfer Signatures - AS9100 compliant electronic signatures for work completion
+export const p2DepartmentTransferSignatures = pgTable('p2_department_transfer_signatures', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  serializedItemId: uuid('serialized_item_id')
+    .references(() => p2SerializedItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  barcode: text('barcode').notNull(),
+  partNumber: text('part_number').notNull(),
+  fromDepartment: text('from_department').notNull(),
+  toDepartment: text('to_department').notNull(),
+  workInstructionRef: text('work_instruction_ref'),
+  workInstructionVersion: text('work_instruction_version'),
+  signatureData: text('signature_data').notNull(),
+  signedByEmployeeId: integer('signed_by_employee_id').references(() => employees.id),
+  signedByName: text('signed_by_name').notNull(),
+  signedByUsername: text('signed_by_username').notNull(),
+  declarationText: text('declaration_text').notNull(),
+  declarationAccepted: boolean('declaration_accepted').notNull().default(true),
+  signedAt: timestamp('signed_at').notNull().defaultNow(),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  notes: text('notes'),
+}, (table) => ({
+  itemIdIdx: index('p2_transfer_sig_item_id_idx').on(table.serializedItemId),
+  barcodeIdx: index('p2_transfer_sig_barcode_idx').on(table.barcode),
+  deptIdx: index('p2_transfer_sig_dept_idx').on(table.fromDepartment),
+  signedByIdx: index('p2_transfer_sig_signed_by_idx').on(table.signedByEmployeeId),
+}));
+
+export const insertP2DepartmentTransferSignatureSchema = createInsertSchema(p2DepartmentTransferSignatures).omit({
+  id: true,
+  signedAt: true,
+});
+
+export type P2DepartmentTransferSignature = typeof p2DepartmentTransferSignatures.$inferSelect;
+export type InsertP2DepartmentTransferSignature = z.infer<typeof insertP2DepartmentTransferSignatureSchema>;
+
 export * from './calendar.schema';

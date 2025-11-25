@@ -1,3 +1,18 @@
 Your branch is ahead of 'origin/main' by 4 commits.
   (use "git push" to publish your local commits)
 Already up to date.
+[feature-20251125-1516-my-change da89b776] feat: my-change
+ 1 file changed, 3 insertions(+)
+ create mode 100644 push_log_20251125-151622.txt
+> da89b776 (HEAD -> feature-20251125-1516-my-change) feat: my-change
+> 26a0c682 (gitsafe-backup/main, gitsafe-backup/HEAD, main) Add customer type information to the customer list view
+> 9a0db612 Correctly calculate and display line item and total costs on purchase orders
+> c781df95 Saved your changes before starting work
+> b54140c1 (repl-0ce1429f-ab65-4d48-bef3-611aab96e0df/main, repl-0ce1429f-ab65-4d48-bef3-611aab96e0df/HEAD) Published your App
+ attached_assets/image_1764082852721.png             | Bin 0 -> 91262 bytes
+ attached_assets/image_1764082984056.png             | Bin 0 -> 55171 bytes
+ client/src/components/inventory/VendorPOManager.tsx |  11 +++++++----
+ client/src/pages/CustomerManagement.tsx             |   6 ++++++
+ push_log_20251125-151622.txt                        |   3 +++
+ 5 files changed, 16 insertions(+), 4 deletions(-)
+Open PR: https://github.com/agcomphr25/EPOCH-v83/compare/feature-20251125-1516-my-change?expand=1

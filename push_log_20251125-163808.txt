@@ -1,0 +1,4 @@
+M	client/src/pages/CustomerManagement.tsx
+Your branch is ahead of 'origin/main' by 2 commits.
+  (use "git push" to publish your local commits)
+Already up to date.

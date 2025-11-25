@@ -135,6 +135,19 @@ export default function CuttingTableDashboard() {
   const [completionNotes, setCompletionNotes] = useState('');
   const [completedBy, setCompletedBy] = useState('');
 
+  const [productionEntry, setProductionEntry] = useState({
+    fabricType: '',
+    packetsProduced: '',
+    piecesYielded: '',
+    fabricSquareMetersUsed: '',
+    fabricLot: '',
+    fabricBatch: '',
+    fabricRoll: '',
+    yieldPerCut: '4',
+    wasteFactor: '0.05',
+    notes: '',
+  });
+
   const { data: currentUser } = useQuery<{ username: string }>({
     queryKey: ['currentUser'],
   });
@@ -206,6 +219,24 @@ export default function CuttingTableDashboard() {
     retry: false,
   });
 
+  const { data: cutRecords = [], refetch: refetchCutRecords } = useQuery<any[]>({
+    queryKey: ['/api/cutting-table/cut-records'],
+    queryFn: async () => {
+      const res = await fetch('/api/cutting-table/cut-records?limit=50');
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const { data: productCategories = [] } = useQuery<any[]>({
+    queryKey: ['/api/cutting-table/product-categories'],
+    queryFn: async () => {
+      const res = await fetch('/api/cutting-table/product-categories');
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
   const receiveFabricMutation = useMutation({
     mutationFn: async (data: typeof receivingForm) => {
       return apiRequest('/api/cutting-table/fabric-inventory', {
@@ -265,6 +296,47 @@ export default function CuttingTableDashboard() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to record packet session", variant: "destructive" });
+    },
+  });
+
+  const productionEntryMutation = useMutation({
+    mutationFn: async (data: typeof productionEntry) => {
+      return apiRequest('/api/cutting-table/cut-records', {
+        method: 'POST',
+        body: JSON.stringify({
+          workDate: new Date().toISOString().split('T')[0],
+          fabricType: data.fabricType,
+          piecesYielded: parseInt(data.piecesYielded) || 0,
+          fabricSquareMetersUsed: data.fabricSquareMetersUsed,
+          fabricLot: data.fabricLot || null,
+          fabricBatch: data.fabricBatch || null,
+          fabricRoll: data.fabricRoll || null,
+          packetsProduced: parseInt(data.packetsProduced) || 0,
+          yieldPerCut: parseFloat(data.yieldPerCut) || 4,
+          wasteFactor: parseFloat(data.wasteFactor) || 0.05,
+          notes: data.notes || null,
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Production entry recorded" });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/cut-records'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/stock-levels'] });
+      setProductionEntry({
+        fabricType: '',
+        packetsProduced: '',
+        piecesYielded: '',
+        fabricSquareMetersUsed: '',
+        fabricLot: '',
+        fabricBatch: '',
+        fabricRoll: '',
+        yieldPerCut: '4',
+        wasteFactor: '0.05',
+        notes: '',
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to record production", variant: "destructive" });
     },
   });
 
@@ -630,10 +702,14 @@ export default function CuttingTableDashboard() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview" data-testid="tab-overview">
             <Target className="h-4 w-4 mr-2" />
             Overview
+          </TabsTrigger>
+          <TabsTrigger value="production" data-testid="tab-production">
+            <Layers className="h-4 w-4 mr-2" />
+            Production
           </TabsTrigger>
           <TabsTrigger value="mfg-queue" data-testid="tab-mfg-queue">
             <Factory className="h-4 w-4 mr-2" />
@@ -644,12 +720,12 @@ export default function CuttingTableDashboard() {
             Receive Fabric
           </TabsTrigger>
           <TabsTrigger value="packets" data-testid="tab-packets">
-            <Layers className="h-4 w-4 mr-2" />
+            <Scan className="h-4 w-4 mr-2" />
             Build Packets
           </TabsTrigger>
           <TabsTrigger value="inventory" data-testid="tab-inventory">
             <Package className="h-4 w-4 mr-2" />
-            Fabric Inventory
+            Inventory
           </TabsTrigger>
         </TabsList>
 
@@ -726,6 +802,270 @@ export default function CuttingTableDashboard() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="production" className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Layers className="h-5 w-5" />
+                  Record Production Entry
+                </CardTitle>
+                <CardDescription>
+                  Enter cutting yields and fabric usage to track packet production
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Fabric Type *</Label>
+                  <Select
+                    value={productionEntry.fabricType}
+                    onValueChange={(v) => setProductionEntry({ ...productionEntry, fabricType: v })}
+                  >
+                    <SelectTrigger data-testid="select-production-fabric-type">
+                      <SelectValue placeholder="Select fabric type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Carbon Fiber">Carbon Fiber</SelectItem>
+                      <SelectItem value="Fiberglass">Fiberglass</SelectItem>
+                      <SelectItem value="Primtex">Primtex</SelectItem>
+                      <SelectItem value="Kevlar">Kevlar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Packets Produced *</Label>
+                    <Input
+                      type="number"
+                      placeholder="e.g., 25"
+                      value={productionEntry.packetsProduced}
+                      onChange={(e) => setProductionEntry({ ...productionEntry, packetsProduced: e.target.value })}
+                      data-testid="input-packets-produced"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Pieces Yielded *</Label>
+                    <Input
+                      type="number"
+                      placeholder="Total pieces cut"
+                      value={productionEntry.piecesYielded}
+                      onChange={(e) => setProductionEntry({ ...productionEntry, piecesYielded: e.target.value })}
+                      data-testid="input-pieces-yielded"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Fabric Used (sq meters) *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g., 15.5"
+                    value={productionEntry.fabricSquareMetersUsed}
+                    onChange={(e) => setProductionEntry({ ...productionEntry, fabricSquareMetersUsed: e.target.value })}
+                    data-testid="input-fabric-sqm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-2">
+                    <Label>Fabric Lot</Label>
+                    <Input
+                      placeholder="Lot #"
+                      value={productionEntry.fabricLot}
+                      onChange={(e) => setProductionEntry({ ...productionEntry, fabricLot: e.target.value })}
+                      data-testid="input-prod-fabric-lot"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Batch</Label>
+                    <Input
+                      placeholder="Batch #"
+                      value={productionEntry.fabricBatch}
+                      onChange={(e) => setProductionEntry({ ...productionEntry, fabricBatch: e.target.value })}
+                      data-testid="input-prod-fabric-batch"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Roll</Label>
+                    <Input
+                      placeholder="Roll #"
+                      value={productionEntry.fabricRoll}
+                      onChange={(e) => setProductionEntry({ ...productionEntry, fabricRoll: e.target.value })}
+                      data-testid="input-prod-fabric-roll"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Yield Per Cut</Label>
+                    <Input
+                      type="number"
+                      placeholder="4"
+                      value={productionEntry.yieldPerCut}
+                      onChange={(e) => setProductionEntry({ ...productionEntry, yieldPerCut: e.target.value })}
+                      data-testid="input-yield-per-cut"
+                    />
+                    <p className="text-xs text-muted-foreground">Pieces per single cut</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Waste Factor</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.05"
+                      value={productionEntry.wasteFactor}
+                      onChange={(e) => setProductionEntry({ ...productionEntry, wasteFactor: e.target.value })}
+                      data-testid="input-waste-factor"
+                    />
+                    <p className="text-xs text-muted-foreground">5% = 0.05</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Notes</Label>
+                  <Textarea
+                    placeholder="Any production notes..."
+                    value={productionEntry.notes}
+                    onChange={(e) => setProductionEntry({ ...productionEntry, notes: e.target.value })}
+                    data-testid="input-prod-notes"
+                  />
+                </div>
+
+                <Button
+                  className="w-full"
+                  onClick={() => productionEntryMutation.mutate(productionEntry)}
+                  disabled={!productionEntry.fabricType || !productionEntry.packetsProduced || !productionEntry.fabricSquareMetersUsed || productionEntryMutation.isPending}
+                  data-testid="button-record-production"
+                >
+                  {productionEntryMutation.isPending ? 'Recording...' : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Record Production & Update Stock
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5" />
+                  Yield Estimator
+                </CardTitle>
+                <CardDescription>Calculate fabric needed based on yield settings</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-lg space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Yield per cut:</span>
+                    <span className="font-medium">{productionEntry.yieldPerCut || 4} pieces</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Waste factor:</span>
+                    <span className="font-medium">{((parseFloat(productionEntry.wasteFactor) || 0.05) * 100).toFixed(1)}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Effective yield:</span>
+                    <span className="font-medium">
+                      {Math.floor((parseFloat(productionEntry.yieldPerCut) || 4) * (1 - (parseFloat(productionEntry.wasteFactor) || 0.05)))} pieces/cut
+                    </span>
+                  </div>
+                  {productionEntry.piecesYielded && productionEntry.fabricSquareMetersUsed && (
+                    <>
+                      <div className="border-t pt-3 flex justify-between">
+                        <span className="text-sm text-muted-foreground">Efficiency:</span>
+                        <span className="font-medium text-green-600">
+                          {(parseInt(productionEntry.piecesYielded) / parseFloat(productionEntry.fabricSquareMetersUsed)).toFixed(2)} pieces/sq m
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="p-4 border rounded-lg">
+                  <h4 className="font-medium mb-2">To Build Shortfall:</h4>
+                  {cfShortfall > 0 && (
+                    <div className="flex justify-between text-sm mb-1">
+                      <span>Carbon Fiber ({cfShortfall} packets):</span>
+                      <span className="font-medium">
+                        ~{(cfShortfall * 4 / (parseFloat(productionEntry.yieldPerCut) || 4)).toFixed(0)} cuts needed
+                      </span>
+                    </div>
+                  )}
+                  {fgShortfall > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span>Fiberglass ({fgShortfall} packets):</span>
+                      <span className="font-medium">
+                        ~{(fgShortfall * 4 / (parseFloat(productionEntry.yieldPerCut) || 4)).toFixed(0)} cuts needed
+                      </span>
+                    </div>
+                  )}
+                  {cfShortfall === 0 && fgShortfall === 0 && (
+                    <p className="text-sm text-green-600">All stock targets met!</p>
+                  )}
+                </div>
+
+                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <h4 className="font-medium text-blue-700 dark:text-blue-400 mb-2">Production Tips</h4>
+                  <ul className="text-sm text-blue-600 dark:text-blue-400 space-y-1">
+                    <li>• Track fabric lot/batch for traceability</li>
+                    <li>• Record all pieces yielded to monitor efficiency</li>
+                    <li>• Update waste factor if scrap rate changes</li>
+                  </ul>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Production Records</CardTitle>
+              <CardDescription>Last 50 cutting table production entries</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {cutRecords.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No production records yet. Use the form above to record production.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Fabric Type</TableHead>
+                      <TableHead>Pieces Yielded</TableHead>
+                      <TableHead>Fabric Used (sq m)</TableHead>
+                      <TableHead>Efficiency</TableHead>
+                      <TableHead>Lot/Batch</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cutRecords.slice(0, 10).map((record: any) => {
+                      const efficiency = record.fabricSquareMetersUsed && parseFloat(record.fabricSquareMetersUsed) > 0
+                        ? (record.piecesYielded / parseFloat(record.fabricSquareMetersUsed)).toFixed(2)
+                        : '-';
+                      return (
+                        <TableRow key={record.id}>
+                          <TableCell>{record.workDate ? new Date(record.workDate).toLocaleDateString() : '-'}</TableCell>
+                          <TableCell>{record.fabricType || '-'}</TableCell>
+                          <TableCell>{record.piecesYielded || 0}</TableCell>
+                          <TableCell>{record.fabricSquareMetersUsed || '-'}</TableCell>
+                          <TableCell>{efficiency} pcs/sq m</TableCell>
+                          <TableCell>{record.fabricLot || record.notes || '-'}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="mfg-queue" className="space-y-4">

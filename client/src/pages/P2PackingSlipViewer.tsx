@@ -48,7 +48,7 @@ export default function P2PackingSlipViewer() {
   const packingSlipId = params?.id;
 
   const { data: packingSlip, isLoading, error } = useQuery<PackingSlipData>({
-    queryKey: ['/api/p2-traveler-viewer/packing-slip', packingSlipId],
+    queryKey: [`/api/p2-traveler-viewer/packing-slip/${packingSlipId}`],
     enabled: !!packingSlipId,
   });
 

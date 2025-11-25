@@ -54,7 +54,7 @@ export default function P2CertificateViewer() {
   const certificateId = params?.id;
 
   const { data: certificate, isLoading, error } = useQuery<CertificateData>({
-    queryKey: ['/api/p2-traveler-viewer/certificate-of-conformance', certificateId],
+    queryKey: [`/api/p2-traveler-viewer/certificate-of-conformance/${certificateId}`],
     enabled: !!certificateId,
   });
 

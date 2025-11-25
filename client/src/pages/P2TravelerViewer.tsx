@@ -69,7 +69,7 @@ export default function P2TravelerViewer() {
   });
 
   const { data: travelerData, isLoading, error } = useQuery<TravelerData>({
-    queryKey: ['/api/p2-traveler-viewer/item', searchedBarcode],
+    queryKey: [`/api/p2-traveler-viewer/item/${searchedBarcode}`],
     enabled: !!searchedBarcode,
   });
 
@@ -93,7 +93,7 @@ export default function P2TravelerViewer() {
         description: `Lot ${result.lot.lotNumber} created successfully`,
       });
       setShowLotDialog(false);
-      queryClient.invalidateQueries({ queryKey: ['/api/p2-traveler-viewer/item', searchedBarcode] });
+      queryClient.invalidateQueries({ queryKey: [`/api/p2-traveler-viewer/item/${searchedBarcode}`] });
     },
     onError: (error: any) => {
       toast({
@@ -116,7 +116,7 @@ export default function P2TravelerViewer() {
         title: 'Documents Generated',
         description: 'Documents have been generated successfully',
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/p2-traveler-viewer/item', searchedBarcode] });
+      queryClient.invalidateQueries({ queryKey: [`/api/p2-traveler-viewer/item/${searchedBarcode}`] });
     },
     onError: (error: any) => {
       toast({

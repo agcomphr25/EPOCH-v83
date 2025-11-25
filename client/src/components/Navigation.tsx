@@ -1103,6 +1103,59 @@ export default function Navigation() {
               </DropdownMenu>
             </div>
 
+            {/* Traveler Dropdown - P2 AS9100 Production Tracking */}
+            <div className="relative">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <Route className="h-4 w-4" />
+                    Traveler
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/p2-traveler-viewer')}
+                    className="cursor-pointer"
+                  >
+                    <ClipboardList className="h-4 w-4 mr-2" />
+                    Traveler Viewer
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/p2-traveler')}
+                    className="cursor-pointer"
+                  >
+                    <Scan className="h-4 w-4 mr-2" />
+                    Badge Scanner
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/part-routing-management')}
+                    className="cursor-pointer"
+                  >
+                    <Route className="h-4 w-4 mr-2" />
+                    Part Routing
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/p2-department-manager')}
+                    className="cursor-pointer"
+                  >
+                    <Factory className="h-4 w-4 mr-2" />
+                    Department Manager
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/p2-certifications-manager')}
+                    className="cursor-pointer"
+                  >
+                    <Award className="h-4 w-4 mr-2" />
+                    Certifications
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
             {/* Forms & Reports Dropdown */}
             {filteredFormsReportsItems.length > 0 && (
               <div className="relative">

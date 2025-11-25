@@ -64,6 +64,14 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
     - **Barcode Integration**: Scan P2 item barcodes to quickly locate items in department queues
     - **Department Progression**: Items flow through customized department sequences with status tracking (ACTIVE, ON_HOLD, SCRAPPED)
     - **Production-Ready Error Handling**: 404 errors (no routing) allow advancement, all other errors block with clear user feedback
+-   **P2 Traveler Viewer System**: AS9100-compliant production data interface for P2 serialized items with comprehensive documentation generation. Features include:
+    - **Comprehensive Data Display**: Shows all production data for serialized items including PO information, department completion status, technician assignments, material traceability, oven cure logs, vacuum leak tests, batch numbers, final inspection results, and tolerance checks
+    - **New Database Tables**: p2_oven_cure_logs, p2_vacuum_leak_tests, p2_final_inspection_results, p2_lot_numbers, p2_packing_slips, p2_certificates_of_conformance, p2_test_for_conformance_reports
+    - **Electronic Signatures**: Aggregated signature display from work tasks, oven cures, vacuum tests, inspections, and QC submissions
+    - **Lot Management**: Create lot numbers, add items to lots, generate documents from lots
+    - **Document Generation**: Generate packing slips, certificates of conformance, and test for conformance reports from lot data
+    - **Viewer Pages**: P2PackingSlipViewer (/p2/packing-slip/:id) and P2CertificateViewer (/p2/certificate/:id) for viewing and printing generated documents
+    - **API Routes**: Comprehensive REST API at /api/p2-traveler-viewer for CRUD operations on all new entities
 -   **Cost Center Management System**: Financial tracking infrastructure for department-based expense allocation and budgeting.
 -   **Vendor PO Optional Settings System**: Flexible optional statements system for Purchase Orders with CRUD management and multiselect interface. Features include:
     - **Reusable Statement Library**: Create/edit/delete optional statements in PO Settings that can be reused across multiple purchase orders

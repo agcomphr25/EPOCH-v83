@@ -1,0 +1,929 @@
+import { Router, type Request, type Response } from 'express';
+import { db } from '../../db';
+import { 
+  p2SerializedItems, 
+  p2SerializedItemEvents, 
+  p2WorkTasks,
+  partRoutings,
+  p2SerializedItemTraceability,
+  p2SerializedItemCustomData,
+  p2PurchaseOrders,
+  p2PurchaseOrderItems,
+  p2OvenCureLogs,
+  p2VacuumLeakTests,
+  p2FinalInspectionResults,
+  p2LotNumbers,
+  p2PackingSlips,
+  p2CertificatesOfConformance,
+  p2TestForConformanceReports,
+  qcSubmissions,
+  insertP2LotNumberSchema,
+  insertP2PackingSlipSchema,
+  insertP2CertificateOfConformanceSchema,
+  insertP2TestForConformanceReportSchema,
+  insertP2OvenCureLogSchema,
+  insertP2VacuumLeakTestSchema,
+  insertP2FinalInspectionResultSchema,
+} from '../../schema';
+import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+
+const router = Router();
+
+// Helper function to generate lot number
+function generateLotNumber(): string {
+  const date = new Date();
+  const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
+  const randomNum = Math.floor(1000 + Math.random() * 9000);
+  return `LOT-${dateStr}-${randomNum}`;
+}
+
+// Helper function to generate document numbers
+function generateDocumentNumber(prefix: string): string {
+  const date = new Date();
+  const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
+  const randomNum = Math.floor(1000 + Math.random() * 9000);
+  return `${prefix}-${dateStr}-${randomNum}`;
+}
+
+// GET /api/p2-traveler-viewer/item/:barcode
+// Get comprehensive traveler data for a serialized item
+router.get('/item/:barcode', async (req: Request, res: Response) => {
+  try {
+    const { barcode } = req.params;
+
+    // Get serialized item
+    const serializedItem = await db.query.p2SerializedItems.findFirst({
+      where: eq(p2SerializedItems.barcode, barcode),
+    });
+
+    if (!serializedItem) {
+      return res.status(404).json({ error: 'Serialized item not found' });
+    }
+
+    // Get part routing
+    const routing = await db.query.partRoutings.findFirst({
+      where: and(
+        eq(partRoutings.partNumber, serializedItem.partNumber),
+        eq(partRoutings.isActive, true)
+      ),
+    });
+
+    // Get PO information
+    const purchaseOrder = await db.query.p2PurchaseOrders.findFirst({
+      where: eq(p2PurchaseOrders.id, serializedItem.poId),
+    });
+
+    const poItem = await db.query.p2PurchaseOrderItems.findFirst({
+      where: eq(p2PurchaseOrderItems.id, serializedItem.poItemId),
+    });
+
+    // Get all work tasks (technician history)
+    const workTasks = await db.query.p2WorkTasks.findMany({
+      where: eq(p2WorkTasks.serializedItemId, serializedItem.id),
+      orderBy: [desc(p2WorkTasks.startedAt)],
+    });
+
+    // Get all events (audit log)
+    const events = await db.query.p2SerializedItemEvents.findMany({
+      where: eq(p2SerializedItemEvents.serializedItemId, serializedItem.id),
+      orderBy: [desc(p2SerializedItemEvents.createdAt)],
+    });
+
+    // Get traceability data
+    const traceabilityData = await db.query.p2SerializedItemTraceability.findMany({
+      where: eq(p2SerializedItemTraceability.serializedItemId, serializedItem.id),
+    });
+
+    // Get custom data
+    const customData = await db.query.p2SerializedItemCustomData.findMany({
+      where: eq(p2SerializedItemCustomData.serializedItemId, serializedItem.id),
+    });
+
+    // Get oven cure logs
+    const ovenCureLogs = await db.query.p2OvenCureLogs.findMany({
+      where: eq(p2OvenCureLogs.serializedItemId, serializedItem.id),
+      orderBy: [desc(p2OvenCureLogs.startTime)],
+    });
+
+    // Get vacuum leak tests
+    const vacuumLeakTests = await db.query.p2VacuumLeakTests.findMany({
+      where: eq(p2VacuumLeakTests.serializedItemId, serializedItem.id),
+      orderBy: [desc(p2VacuumLeakTests.startTime)],
+    });
+
+    // Get final inspection results
+    const finalInspectionResults = await db.query.p2FinalInspectionResults.findMany({
+      where: eq(p2FinalInspectionResults.serializedItemId, serializedItem.id),
+      orderBy: [desc(p2FinalInspectionResults.inspectionDate)],
+    });
+
+    // Get QC submissions related to this item
+    const qcSubmissionsData = await db.query.qcSubmissions.findMany({
+      where: eq(qcSubmissions.orderId, serializedItem.poNumber),
+    });
+
+    // Get lot numbers that include this item
+    const lotNumbers = await db.query.p2LotNumbers.findMany({
+      where: sql`${p2LotNumbers.barcodes}::jsonb ? ${barcode}`,
+    });
+
+    // Build department progression data
+    const departmentSequence = routing?.departmentSequence as string[] || [];
+    const departmentProgress = departmentSequence.map((dept, index) => {
+      const completedTasks = workTasks.filter(t => 
+        t.department === dept && t.status === 'COMPLETED'
+      );
+      const activeTasks = workTasks.filter(t => 
+        t.department === dept && t.status === 'IN_PROGRESS'
+      );
+      
+      return {
+        department: dept,
+        index,
+        status: index < (serializedItem.currentStageIndex || 0) ? 'COMPLETED' :
+                index === (serializedItem.currentStageIndex || 0) ? 
+                  (activeTasks.length > 0 ? 'IN_PROGRESS' : 'PENDING') : 'PENDING',
+        completedAt: completedTasks[0]?.completedAt || null,
+        technicians: completedTasks.map(t => ({
+          name: t.employeeName,
+          code: t.employeeCode,
+          startedAt: t.startedAt,
+          completedAt: t.completedAt,
+          duration: t.durationMinutes,
+        })),
+        traceabilityData: traceabilityData.filter(t => t.department === dept),
+        customData: customData.filter(c => c.department === dept),
+      };
+    });
+
+    // Extract all signatures from various sources
+    const signatures = [
+      ...workTasks.filter(t => t.traceabilityData && (t.traceabilityData as any)?.signature).map(t => ({
+        type: 'Work Task',
+        department: t.department,
+        signedBy: t.employeeName,
+        signedAt: t.completedAt,
+        signature: (t.traceabilityData as any)?.signature,
+      })),
+      ...ovenCureLogs.filter(l => l.signature).map(l => ({
+        type: 'Oven Cure',
+        department: l.department,
+        signedBy: l.operatorName,
+        signedAt: l.endTime,
+        signature: l.signature,
+      })),
+      ...vacuumLeakTests.filter(t => t.signature).map(t => ({
+        type: 'Vacuum Test',
+        department: t.department,
+        signedBy: t.operatorName,
+        signedAt: t.endTime,
+        signature: t.signature,
+      })),
+      ...finalInspectionResults.filter(r => r.signature).map(r => ({
+        type: 'Final Inspection',
+        department: r.department,
+        signedBy: r.inspectorName,
+        signedAt: r.inspectionDate,
+        signature: r.signature,
+      })),
+      ...qcSubmissionsData.filter(q => q.signature).map(q => ({
+        type: 'QC Submission',
+        department: q.department,
+        signedBy: q.submittedBy,
+        signedAt: q.submittedAt,
+        signature: q.signature,
+      })),
+    ];
+
+    return res.json({
+      serializedItem,
+      purchaseOrder,
+      poItem,
+      routing: routing ? {
+        id: routing.id,
+        departmentSequence,
+        traceabilityConfig: routing.traceabilityConfig,
+        departmentConfig: routing.departmentConfig,
+      } : null,
+      departmentProgress,
+      workTasks,
+      events,
+      traceabilityData,
+      customData,
+      ovenCureLogs,
+      vacuumLeakTests,
+      finalInspectionResults,
+      qcSubmissions: qcSubmissionsData,
+      signatures,
+      lotNumbers,
+    });
+  } catch (error: any) {
+    console.error('Error getting traveler data:', error);
+    return res.status(500).json({ error: 'Failed to get traveler data' });
+  }
+});
+
+// GET /api/p2-traveler-viewer/item-by-id/:id
+// Get comprehensive traveler data for a serialized item by ID
+router.get('/item-by-id/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const serializedItem = await db.query.p2SerializedItems.findFirst({
+      where: eq(p2SerializedItems.id, id),
+    });
+
+    if (!serializedItem) {
+      return res.status(404).json({ error: 'Serialized item not found' });
+    }
+
+    // Redirect to the barcode endpoint for the full data
+    req.params.barcode = serializedItem.barcode;
+    return router.handle(req, res, () => {});
+  } catch (error: any) {
+    console.error('Error getting traveler data by ID:', error);
+    return res.status(500).json({ error: 'Failed to get traveler data' });
+  }
+});
+
+// POST /api/p2-traveler-viewer/oven-cure-log
+// Record an oven cure cycle
+router.post('/oven-cure-log', async (req: Request, res: Response) => {
+  try {
+    const validatedData = insertP2OvenCureLogSchema.parse(req.body);
+    const [log] = await db.insert(p2OvenCureLogs).values(validatedData).returning();
+    return res.json({ success: true, log });
+  } catch (error: any) {
+    console.error('Error creating oven cure log:', error);
+    return res.status(500).json({ error: error.message || 'Failed to create oven cure log' });
+  }
+});
+
+// PUT /api/p2-traveler-viewer/oven-cure-log/:id
+// Update an oven cure cycle
+router.put('/oven-cure-log/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    delete updateData.id;
+    delete updateData.createdAt;
+    updateData.updatedAt = new Date();
+
+    const [log] = await db
+      .update(p2OvenCureLogs)
+      .set(updateData)
+      .where(eq(p2OvenCureLogs.id, id))
+      .returning();
+
+    if (!log) {
+      return res.status(404).json({ error: 'Oven cure log not found' });
+    }
+    return res.json({ success: true, log });
+  } catch (error: any) {
+    console.error('Error updating oven cure log:', error);
+    return res.status(500).json({ error: error.message || 'Failed to update oven cure log' });
+  }
+});
+
+// POST /api/p2-traveler-viewer/vacuum-leak-test
+// Record a vacuum leak test
+router.post('/vacuum-leak-test', async (req: Request, res: Response) => {
+  try {
+    const validatedData = insertP2VacuumLeakTestSchema.parse(req.body);
+    const [test] = await db.insert(p2VacuumLeakTests).values(validatedData).returning();
+    return res.json({ success: true, test });
+  } catch (error: any) {
+    console.error('Error creating vacuum leak test:', error);
+    return res.status(500).json({ error: error.message || 'Failed to create vacuum leak test' });
+  }
+});
+
+// PUT /api/p2-traveler-viewer/vacuum-leak-test/:id
+// Update a vacuum leak test
+router.put('/vacuum-leak-test/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    delete updateData.id;
+    delete updateData.createdAt;
+    updateData.updatedAt = new Date();
+
+    const [test] = await db
+      .update(p2VacuumLeakTests)
+      .set(updateData)
+      .where(eq(p2VacuumLeakTests.id, id))
+      .returning();
+
+    if (!test) {
+      return res.status(404).json({ error: 'Vacuum leak test not found' });
+    }
+    return res.json({ success: true, test });
+  } catch (error: any) {
+    console.error('Error updating vacuum leak test:', error);
+    return res.status(500).json({ error: error.message || 'Failed to update vacuum leak test' });
+  }
+});
+
+// POST /api/p2-traveler-viewer/final-inspection
+// Record a final inspection result
+router.post('/final-inspection', async (req: Request, res: Response) => {
+  try {
+    const validatedData = insertP2FinalInspectionResultSchema.parse(req.body);
+    const [result] = await db.insert(p2FinalInspectionResults).values(validatedData).returning();
+    return res.json({ success: true, result });
+  } catch (error: any) {
+    console.error('Error creating final inspection result:', error);
+    return res.status(500).json({ error: error.message || 'Failed to create final inspection result' });
+  }
+});
+
+// PUT /api/p2-traveler-viewer/final-inspection/:id
+// Update a final inspection result
+router.put('/final-inspection/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    delete updateData.id;
+    delete updateData.createdAt;
+    updateData.updatedAt = new Date();
+
+    const [result] = await db
+      .update(p2FinalInspectionResults)
+      .set(updateData)
+      .where(eq(p2FinalInspectionResults.id, id))
+      .returning();
+
+    if (!result) {
+      return res.status(404).json({ error: 'Final inspection result not found' });
+    }
+    return res.json({ success: true, result });
+  } catch (error: any) {
+    console.error('Error updating final inspection result:', error);
+    return res.status(500).json({ error: error.message || 'Failed to update final inspection result' });
+  }
+});
+
+// POST /api/p2-traveler-viewer/lot-number
+// Create a new lot number
+router.post('/lot-number', async (req: Request, res: Response) => {
+  try {
+    const lotNumber = req.body.lotNumber || generateLotNumber();
+    const validatedData = insertP2LotNumberSchema.parse({
+      ...req.body,
+      lotNumber,
+    });
+    
+    const [lot] = await db.insert(p2LotNumbers).values(validatedData).returning();
+    return res.json({ success: true, lot });
+  } catch (error: any) {
+    console.error('Error creating lot number:', error);
+    return res.status(500).json({ error: error.message || 'Failed to create lot number' });
+  }
+});
+
+// GET /api/p2-traveler-viewer/lot-numbers
+// Get all lot numbers
+router.get('/lot-numbers', async (req: Request, res: Response) => {
+  try {
+    const { status, customerId } = req.query;
+    
+    let query = db.query.p2LotNumbers.findMany({
+      orderBy: [desc(p2LotNumbers.createdAt)],
+    });
+
+    const lotNumbers = await query;
+    
+    // Filter by status and customerId if provided
+    let filtered = lotNumbers;
+    if (status) {
+      filtered = filtered.filter(l => l.status === status);
+    }
+    if (customerId) {
+      filtered = filtered.filter(l => l.customerId === customerId);
+    }
+
+    return res.json(filtered);
+  } catch (error: any) {
+    console.error('Error getting lot numbers:', error);
+    return res.status(500).json({ error: 'Failed to get lot numbers' });
+  }
+});
+
+// PUT /api/p2-traveler-viewer/lot-number/:id
+// Update a lot number
+router.put('/lot-number/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    delete updateData.id;
+    delete updateData.createdAt;
+    updateData.updatedAt = new Date();
+
+    const [lot] = await db
+      .update(p2LotNumbers)
+      .set(updateData)
+      .where(eq(p2LotNumbers.id, id))
+      .returning();
+
+    if (!lot) {
+      return res.status(404).json({ error: 'Lot number not found' });
+    }
+    return res.json({ success: true, lot });
+  } catch (error: any) {
+    console.error('Error updating lot number:', error);
+    return res.status(500).json({ error: error.message || 'Failed to update lot number' });
+  }
+});
+
+// POST /api/p2-traveler-viewer/lot-number/:id/add-items
+// Add serialized items to a lot
+router.post('/lot-number/:id/add-items', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { barcodes } = req.body;
+
+    const lot = await db.query.p2LotNumbers.findFirst({
+      where: eq(p2LotNumbers.id, id),
+    });
+
+    if (!lot) {
+      return res.status(404).json({ error: 'Lot number not found' });
+    }
+
+    // Get serialized item IDs for the barcodes
+    const items = await db.query.p2SerializedItems.findMany({
+      where: inArray(p2SerializedItems.barcode, barcodes),
+    });
+
+    const existingBarcodes = (lot.barcodes as string[]) || [];
+    const existingIds = (lot.serializedItemIds as string[]) || [];
+
+    const newBarcodes = [...new Set([...existingBarcodes, ...barcodes])];
+    const newIds = [...new Set([...existingIds, ...items.map(i => i.id)])];
+
+    const [updatedLot] = await db
+      .update(p2LotNumbers)
+      .set({
+        barcodes: newBarcodes,
+        serializedItemIds: newIds,
+        quantity: newBarcodes.length,
+        updatedAt: new Date(),
+      })
+      .where(eq(p2LotNumbers.id, id))
+      .returning();
+
+    return res.json({ success: true, lot: updatedLot });
+  } catch (error: any) {
+    console.error('Error adding items to lot:', error);
+    return res.status(500).json({ error: error.message || 'Failed to add items to lot' });
+  }
+});
+
+// POST /api/p2-traveler-viewer/packing-slip
+// Create a packing slip
+router.post('/packing-slip', async (req: Request, res: Response) => {
+  try {
+    const packingSlipNumber = req.body.packingSlipNumber || generateDocumentNumber('PS');
+    const validatedData = insertP2PackingSlipSchema.parse({
+      ...req.body,
+      packingSlipNumber,
+    });
+    
+    const [packingSlip] = await db.insert(p2PackingSlips).values(validatedData).returning();
+
+    // If associated with a lot, update the lot
+    if (req.body.lotNumberId) {
+      await db
+        .update(p2LotNumbers)
+        .set({ packingSlipId: packingSlip.id, updatedAt: new Date() })
+        .where(eq(p2LotNumbers.id, req.body.lotNumberId));
+    }
+
+    return res.json({ success: true, packingSlip });
+  } catch (error: any) {
+    console.error('Error creating packing slip:', error);
+    return res.status(500).json({ error: error.message || 'Failed to create packing slip' });
+  }
+});
+
+// GET /api/p2-traveler-viewer/packing-slips
+// Get all packing slips
+router.get('/packing-slips', async (req: Request, res: Response) => {
+  try {
+    const packingSlips = await db.query.p2PackingSlips.findMany({
+      orderBy: [desc(p2PackingSlips.createdAt)],
+    });
+    return res.json(packingSlips);
+  } catch (error: any) {
+    console.error('Error getting packing slips:', error);
+    return res.status(500).json({ error: 'Failed to get packing slips' });
+  }
+});
+
+// GET /api/p2-traveler-viewer/packing-slip/:id
+// Get a packing slip by ID
+router.get('/packing-slip/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const packingSlip = await db.query.p2PackingSlips.findFirst({
+      where: eq(p2PackingSlips.id, id),
+    });
+    if (!packingSlip) {
+      return res.status(404).json({ error: 'Packing slip not found' });
+    }
+    return res.json(packingSlip);
+  } catch (error: any) {
+    console.error('Error getting packing slip:', error);
+    return res.status(500).json({ error: 'Failed to get packing slip' });
+  }
+});
+
+// PUT /api/p2-traveler-viewer/packing-slip/:id
+// Update a packing slip
+router.put('/packing-slip/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    delete updateData.id;
+    delete updateData.createdAt;
+    updateData.updatedAt = new Date();
+
+    const [packingSlip] = await db
+      .update(p2PackingSlips)
+      .set(updateData)
+      .where(eq(p2PackingSlips.id, id))
+      .returning();
+
+    if (!packingSlip) {
+      return res.status(404).json({ error: 'Packing slip not found' });
+    }
+    return res.json({ success: true, packingSlip });
+  } catch (error: any) {
+    console.error('Error updating packing slip:', error);
+    return res.status(500).json({ error: error.message || 'Failed to update packing slip' });
+  }
+});
+
+// POST /api/p2-traveler-viewer/certificate-of-conformance
+// Create a certificate of conformance
+router.post('/certificate-of-conformance', async (req: Request, res: Response) => {
+  try {
+    const certificateNumber = req.body.certificateNumber || generateDocumentNumber('COC');
+    const validatedData = insertP2CertificateOfConformanceSchema.parse({
+      ...req.body,
+      certificateNumber,
+    });
+    
+    const [certificate] = await db.insert(p2CertificatesOfConformance).values(validatedData).returning();
+
+    // If associated with a lot, update the lot
+    if (req.body.lotNumberId) {
+      await db
+        .update(p2LotNumbers)
+        .set({ certificateId: certificate.id, updatedAt: new Date() })
+        .where(eq(p2LotNumbers.id, req.body.lotNumberId));
+    }
+
+    return res.json({ success: true, certificate });
+  } catch (error: any) {
+    console.error('Error creating certificate of conformance:', error);
+    return res.status(500).json({ error: error.message || 'Failed to create certificate of conformance' });
+  }
+});
+
+// GET /api/p2-traveler-viewer/certificates-of-conformance
+// Get all certificates of conformance
+router.get('/certificates-of-conformance', async (req: Request, res: Response) => {
+  try {
+    const certificates = await db.query.p2CertificatesOfConformance.findMany({
+      orderBy: [desc(p2CertificatesOfConformance.createdAt)],
+    });
+    return res.json(certificates);
+  } catch (error: any) {
+    console.error('Error getting certificates:', error);
+    return res.status(500).json({ error: 'Failed to get certificates' });
+  }
+});
+
+// GET /api/p2-traveler-viewer/certificate-of-conformance/:id
+// Get a certificate of conformance by ID
+router.get('/certificate-of-conformance/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const certificate = await db.query.p2CertificatesOfConformance.findFirst({
+      where: eq(p2CertificatesOfConformance.id, id),
+    });
+    if (!certificate) {
+      return res.status(404).json({ error: 'Certificate not found' });
+    }
+    return res.json(certificate);
+  } catch (error: any) {
+    console.error('Error getting certificate:', error);
+    return res.status(500).json({ error: 'Failed to get certificate' });
+  }
+});
+
+// PUT /api/p2-traveler-viewer/certificate-of-conformance/:id
+// Update a certificate of conformance
+router.put('/certificate-of-conformance/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    delete updateData.id;
+    delete updateData.createdAt;
+    updateData.updatedAt = new Date();
+
+    const [certificate] = await db
+      .update(p2CertificatesOfConformance)
+      .set(updateData)
+      .where(eq(p2CertificatesOfConformance.id, id))
+      .returning();
+
+    if (!certificate) {
+      return res.status(404).json({ error: 'Certificate not found' });
+    }
+    return res.json({ success: true, certificate });
+  } catch (error: any) {
+    console.error('Error updating certificate:', error);
+    return res.status(500).json({ error: error.message || 'Failed to update certificate' });
+  }
+});
+
+// POST /api/p2-traveler-viewer/test-for-conformance
+// Create a test for conformance report
+router.post('/test-for-conformance', async (req: Request, res: Response) => {
+  try {
+    const reportNumber = req.body.reportNumber || generateDocumentNumber('TFC');
+    const validatedData = insertP2TestForConformanceReportSchema.parse({
+      ...req.body,
+      reportNumber,
+    });
+    
+    const [report] = await db.insert(p2TestForConformanceReports).values(validatedData).returning();
+    return res.json({ success: true, report });
+  } catch (error: any) {
+    console.error('Error creating test for conformance report:', error);
+    return res.status(500).json({ error: error.message || 'Failed to create test for conformance report' });
+  }
+});
+
+// GET /api/p2-traveler-viewer/test-for-conformance-reports
+// Get all test for conformance reports
+router.get('/test-for-conformance-reports', async (req: Request, res: Response) => {
+  try {
+    const reports = await db.query.p2TestForConformanceReports.findMany({
+      orderBy: [desc(p2TestForConformanceReports.createdAt)],
+    });
+    return res.json(reports);
+  } catch (error: any) {
+    console.error('Error getting reports:', error);
+    return res.status(500).json({ error: 'Failed to get reports' });
+  }
+});
+
+// GET /api/p2-traveler-viewer/test-for-conformance/:id
+// Get a test for conformance report by ID
+router.get('/test-for-conformance/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const report = await db.query.p2TestForConformanceReports.findFirst({
+      where: eq(p2TestForConformanceReports.id, id),
+    });
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+    return res.json(report);
+  } catch (error: any) {
+    console.error('Error getting report:', error);
+    return res.status(500).json({ error: 'Failed to get report' });
+  }
+});
+
+// PUT /api/p2-traveler-viewer/test-for-conformance/:id
+// Update a test for conformance report
+router.put('/test-for-conformance/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    delete updateData.id;
+    delete updateData.createdAt;
+    updateData.updatedAt = new Date();
+
+    const [report] = await db
+      .update(p2TestForConformanceReports)
+      .set(updateData)
+      .where(eq(p2TestForConformanceReports.id, id))
+      .returning();
+
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+    return res.json({ success: true, report });
+  } catch (error: any) {
+    console.error('Error updating report:', error);
+    return res.status(500).json({ error: error.message || 'Failed to update report' });
+  }
+});
+
+// POST /api/p2-traveler-viewer/generate-from-lot/:lotId
+// Generate packing slip and certificate from lot data
+router.post('/generate-from-lot/:lotId', async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+    const { createdBy, generatePackingSlip, generateCertificate, generateTestReport } = req.body;
+
+    const lot = await db.query.p2LotNumbers.findFirst({
+      where: eq(p2LotNumbers.id, lotId),
+    });
+
+    if (!lot) {
+      return res.status(404).json({ error: 'Lot not found' });
+    }
+
+    const barcodes = (lot.barcodes as string[]) || [];
+    const results: any = { lot };
+
+    // Get all serialized items in the lot
+    const serializedItems = barcodes.length > 0 
+      ? await db.query.p2SerializedItems.findMany({
+          where: inArray(p2SerializedItems.barcode, barcodes),
+        })
+      : [];
+
+    // Get all traceability data for items in lot
+    const itemIds = serializedItems.map(i => i.id);
+    const allTraceability = itemIds.length > 0
+      ? await db.query.p2SerializedItemTraceability.findMany({
+          where: inArray(p2SerializedItemTraceability.serializedItemId, itemIds),
+        })
+      : [];
+
+    // Get all inspection results for items in lot
+    const allInspections = itemIds.length > 0
+      ? await db.query.p2FinalInspectionResults.findMany({
+          where: inArray(p2FinalInspectionResults.serializedItemId, itemIds),
+        })
+      : [];
+
+    // Get all oven cure logs for items in lot
+    const allOvenLogs = itemIds.length > 0
+      ? await db.query.p2OvenCureLogs.findMany({
+          where: inArray(p2OvenCureLogs.serializedItemId, itemIds),
+        })
+      : [];
+
+    // Get all vacuum tests for items in lot
+    const allVacuumTests = itemIds.length > 0
+      ? await db.query.p2VacuumLeakTests.findMany({
+          where: inArray(p2VacuumLeakTests.serializedItemId, itemIds),
+        })
+      : [];
+
+    if (generatePackingSlip) {
+      const lineItems = serializedItems.map(item => ({
+        partNumber: item.partNumber,
+        partName: item.partName,
+        quantity: 1,
+        serialNumbers: [item.serialNumber],
+      }));
+
+      const [packingSlip] = await db.insert(p2PackingSlips).values({
+        packingSlipNumber: generateDocumentNumber('PS'),
+        lotNumberId: lot.id,
+        lotNumber: lot.lotNumber,
+        customerId: lot.customerId || '',
+        customerName: lot.customerName || '',
+        poNumber: lot.poNumber,
+        lineItems,
+        totalQuantity: serializedItems.length,
+        status: 'DRAFT',
+        createdBy,
+      }).returning();
+
+      await db
+        .update(p2LotNumbers)
+        .set({ packingSlipId: packingSlip.id, updatedAt: new Date() })
+        .where(eq(p2LotNumbers.id, lot.id));
+
+      results.packingSlip = packingSlip;
+    }
+
+    if (generateCertificate) {
+      const serialNumbers = serializedItems.map(i => i.serialNumber);
+      
+      // Summarize inspection results
+      const inspectionSummary = {
+        totalInspections: allInspections.length,
+        passed: allInspections.filter(i => i.overallResult === 'PASS').length,
+        failed: allInspections.filter(i => i.overallResult === 'FAIL').length,
+        conditional: allInspections.filter(i => i.overallResult === 'CONDITIONAL').length,
+      };
+
+      const [certificate] = await db.insert(p2CertificatesOfConformance).values({
+        certificateNumber: generateDocumentNumber('COC'),
+        lotNumberId: lot.id,
+        lotNumber: lot.lotNumber,
+        customerId: lot.customerId || '',
+        customerName: lot.customerName || '',
+        poNumber: lot.poNumber,
+        partNumber: lot.partNumber,
+        partName: lot.partName,
+        quantity: serializedItems.length,
+        serialNumbers,
+        manufacturingDate: lot.manufacturingDate,
+        traceabilityData: allTraceability,
+        inspectionSummary,
+        status: 'DRAFT',
+        createdBy,
+      }).returning();
+
+      await db
+        .update(p2LotNumbers)
+        .set({ certificateId: certificate.id, updatedAt: new Date() })
+        .where(eq(p2LotNumbers.id, lot.id));
+
+      results.certificate = certificate;
+    }
+
+    if (generateTestReport) {
+      const serialNumbers = serializedItems.map(i => i.serialNumber);
+      
+      // Summarize test results
+      const ovenCureResults = {
+        total: allOvenLogs.length,
+        passed: allOvenLogs.filter(l => l.result === 'PASS').length,
+        failed: allOvenLogs.filter(l => l.result === 'FAIL').length,
+        logs: allOvenLogs.map(l => ({
+          id: l.id,
+          ovenId: l.ovenId,
+          temperature: l.actualTemperature,
+          duration: l.actualDuration,
+          result: l.result,
+        })),
+      };
+
+      const vacuumTestResults = {
+        total: allVacuumTests.length,
+        passed: allVacuumTests.filter(t => t.result === 'PASS').length,
+        failed: allVacuumTests.filter(t => t.result === 'FAIL').length,
+        tests: allVacuumTests.map(t => ({
+          id: t.id,
+          pressureDrop: t.pressureDrop,
+          holdTime: t.holdTime,
+          result: t.result,
+        })),
+      };
+
+      const dimensionalResults = allInspections
+        .filter(i => i.inspectionType === 'DIMENSIONAL')
+        .map(i => ({
+          id: i.id,
+          toleranceChecks: i.toleranceChecks,
+          result: i.overallResult,
+        }));
+
+      const visualInspectionResults = allInspections
+        .filter(i => i.inspectionType === 'VISUAL')
+        .map(i => ({
+          id: i.id,
+          visualChecks: i.visualChecks,
+          result: i.overallResult,
+        }));
+
+      // Determine overall conformance
+      const allPassed = 
+        allOvenLogs.every(l => l.result === 'PASS') &&
+        allVacuumTests.every(t => t.result === 'PASS') &&
+        allInspections.every(i => i.overallResult === 'PASS' || i.overallResult === 'CONDITIONAL');
+
+      const [report] = await db.insert(p2TestForConformanceReports).values({
+        reportNumber: generateDocumentNumber('TFC'),
+        lotNumberId: lot.id,
+        lotNumber: lot.lotNumber,
+        customerId: lot.customerId || '',
+        customerName: lot.customerName || '',
+        poNumber: lot.poNumber,
+        partNumber: lot.partNumber,
+        partName: lot.partName,
+        quantity: serializedItems.length,
+        serialNumbers,
+        ovenCureResults,
+        vacuumTestResults,
+        dimensionalResults,
+        visualInspectionResults,
+        overallConformance: allPassed ? 'CONFORMING' : 'NON_CONFORMING',
+        status: 'DRAFT',
+        createdBy,
+      }).returning();
+
+      results.testReport = report;
+    }
+
+    return res.json({ success: true, ...results });
+  } catch (error: any) {
+    console.error('Error generating documents from lot:', error);
+    return res.status(500).json({ error: error.message || 'Failed to generate documents' });
+  }
+});
+
+export default router;

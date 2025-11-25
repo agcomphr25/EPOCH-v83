@@ -76,6 +76,7 @@ import watchRulesRoutes from './watchRules';
 
 
 import p2TravelerRoutes from './p2Traveler';
+import p2TravelerViewerRoutes from './p2TravelerViewer';
 import p2ProductionQueueRoutes from './p2ProductionQueue';
 import partRoutingsRoutes from './partRoutings';
 
@@ -182,6 +183,9 @@ export function registerRoutes(app: Express): Server {
 
   // P2 Traveler routes
   app.use('/api/p2-traveler', p2TravelerRoutes);
+  
+  // P2 Traveler Viewer routes (comprehensive data retrieval & document generation)
+  app.use('/api/p2-traveler-viewer', p2TravelerViewerRoutes);
 
 
   // PDFME SYSTEM COMMENTED OUT - NOT IN USE

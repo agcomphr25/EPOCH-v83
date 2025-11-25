@@ -1,0 +1,50 @@
+index-BMQiZI0e.js:3231 React initialized: Object
+index-BMQiZI0e.js:3231 React hooks: Object
+index-BMQiZI0e.js:3228 App component is rendering...
+index-BMQiZI0e.js:3228 Environment: production
+index-BMQiZI0e.js:3228 Base URL: /
+p2-production-queue:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+index-BMQiZI0e.js:235 🌐 API Request to /api/p2/purchase-orders/1/items (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:235 ✅ API Response from /api/p2/purchase-orders/1/items: 200
+index-BMQiZI0e.js:235 🌐 API Request to /api/p2/purchase-orders/1/items/1 (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:235 ✅ API Response from /api/p2/purchase-orders/1/items/1: 204
+index-BMQiZI0e.js:235 🌐 API Request to /api/p2/purchase-orders/1/items (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:235 ✅ API Response from /api/p2/purchase-orders/1/items: 200
+index-BMQiZI0e.js:235 🌐 API Request to /api/p2-purchase-orders-bypass/1 (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:235 ✅ API Response from /api/p2-purchase-orders-bypass/1: 200
+index-BMQiZI0e.js:235 🌐 API Request to /api/p2/purchase-orders/3/items (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:235 ✅ API Response from /api/p2/purchase-orders/3/items: 200
+index-BMQiZI0e.js:235 🌐 API Request to /api/cutting-table-mfg-queue/cutting-table?status=ACTIVE (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:235 ✅ API Response from /api/cutting-table-mfg-queue/cutting-table?status=ACTIVE: 200
+index-BMQiZI0e.js:235 🌐 API Request to /api/p2-purchase-orders-bypass (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:235 ✅ API Response from /api/p2-purchase-orders-bypass: 201
+index-BMQiZI0e.js:235 🌐 API Request to /api/p2/purchase-orders/4/items (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:235 ✅ API Response from /api/p2/purchase-orders/4/items: 200
+index-BMQiZI0e.js:235 🌐 API Request to /api/p2/purchase-orders/4/items (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:235 ✅ API Response from /api/p2/purchase-orders/4/items: 201
+index-BMQiZI0e.js:235 🌐 API Request to /api/p2/purchase-orders/4/items (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:235 ✅ API Response from /api/p2/purchase-orders/4/items: 200
+index-BMQiZI0e.js:235 🌐 API Request to /api/p2/purchase-orders/4/items/3 (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:235 ✅ API Response from /api/p2/purchase-orders/4/items/3: 200
+index-BMQiZI0e.js:235 🌐 API Request to /api/p2/purchase-orders/4/items (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:235 ✅ API Response from /api/p2/purchase-orders/4/items: 200
+index-BMQiZI0e.js:235 🌐 API Request to /api/orders/production-orders/generate/3 (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:3231 🚨 API TIMEOUT: /api/orders/production-orders/generate/3 took longer than 15000ms
+console.error @ index-BMQiZI0e.js:3231
+index-BMQiZI0e.js:3231 💥 API Request failed for /api/orders/production-orders/generate/3: AbortError: signal is aborted without reason
+    at index-BMQiZI0e.js:235:5204
+console.error @ index-BMQiZI0e.js:3231
+index-BMQiZI0e.js:235 🌐 API Request to /api/orders/production-orders/generate/4 (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:3231 🚨 API TIMEOUT: /api/orders/production-orders/generate/4 took longer than 15000ms
+console.error @ index-BMQiZI0e.js:3231
+index-BMQiZI0e.js:3231 💥 API Request failed for /api/orders/production-orders/generate/4: AbortError: signal is aborted without reason
+    at index-BMQiZI0e.js:235:5204
+console.error @ index-BMQiZI0e.js:3231
+index-BMQiZI0e.js:235 🌐 API Request to /api/orders/production-orders/generate/4 (timeout: 15000ms, deployment: true)
+index-BMQiZI0e.js:3231 🚨 API TIMEOUT: /api/orders/production-orders/generate/4 took longer than 15000ms
+console.error @ index-BMQiZI0e.js:3231
+index-BMQiZI0e.js:3231 💥 API Request failed for /api/orders/production-orders/generate/4: AbortError: signal is aborted without reason
+    at index-BMQiZI0e.js:235:5204
+console.error @ index-BMQiZI0e.js:3231

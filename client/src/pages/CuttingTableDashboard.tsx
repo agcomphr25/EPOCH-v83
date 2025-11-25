@@ -140,9 +140,6 @@ export default function CuttingTableDashboard() {
     packetsProduced: '',
     piecesYielded: '',
     fabricSquareMetersUsed: '',
-    fabricLot: '',
-    fabricBatch: '',
-    fabricRoll: '',
     yieldPerCut: '4',
     wasteFactor: '0.05',
     notes: '',
@@ -308,9 +305,6 @@ export default function CuttingTableDashboard() {
           fabricType: data.fabricType,
           piecesYielded: parseInt(data.piecesYielded) || 0,
           fabricSquareMetersUsed: data.fabricSquareMetersUsed,
-          fabricLot: data.fabricLot || null,
-          fabricBatch: data.fabricBatch || null,
-          fabricRoll: data.fabricRoll || null,
           packetsProduced: parseInt(data.packetsProduced) || 0,
           yieldPerCut: parseFloat(data.yieldPerCut) || 4,
           wasteFactor: parseFloat(data.wasteFactor) || 0.05,
@@ -327,9 +321,6 @@ export default function CuttingTableDashboard() {
         packetsProduced: '',
         piecesYielded: '',
         fabricSquareMetersUsed: '',
-        fabricLot: '',
-        fabricBatch: '',
-        fabricRoll: '',
         yieldPerCut: '4',
         wasteFactor: '0.05',
         notes: '',
@@ -870,36 +861,6 @@ export default function CuttingTableDashboard() {
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="space-y-2">
-                    <Label>Fabric Lot</Label>
-                    <Input
-                      placeholder="Lot #"
-                      value={productionEntry.fabricLot}
-                      onChange={(e) => setProductionEntry({ ...productionEntry, fabricLot: e.target.value })}
-                      data-testid="input-prod-fabric-lot"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Batch</Label>
-                    <Input
-                      placeholder="Batch #"
-                      value={productionEntry.fabricBatch}
-                      onChange={(e) => setProductionEntry({ ...productionEntry, fabricBatch: e.target.value })}
-                      data-testid="input-prod-fabric-batch"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Roll</Label>
-                    <Input
-                      placeholder="Roll #"
-                      value={productionEntry.fabricRoll}
-                      onChange={(e) => setProductionEntry({ ...productionEntry, fabricRoll: e.target.value })}
-                      data-testid="input-prod-fabric-roll"
-                    />
-                  </div>
-                </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Yield Per Cut</Label>
@@ -1039,10 +1000,10 @@ export default function CuttingTableDashboard() {
                     <TableRow>
                       <TableHead>Date</TableHead>
                       <TableHead>Fabric Type</TableHead>
+                      <TableHead>Packets</TableHead>
                       <TableHead>Pieces Yielded</TableHead>
                       <TableHead>Fabric Used (sq m)</TableHead>
                       <TableHead>Efficiency</TableHead>
-                      <TableHead>Lot/Batch</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1054,10 +1015,10 @@ export default function CuttingTableDashboard() {
                         <TableRow key={record.id}>
                           <TableCell>{record.workDate ? new Date(record.workDate).toLocaleDateString() : '-'}</TableCell>
                           <TableCell>{record.fabricType || '-'}</TableCell>
+                          <TableCell className="font-medium">{record.packetsProduced || '-'}</TableCell>
                           <TableCell>{record.piecesYielded || 0}</TableCell>
                           <TableCell>{record.fabricSquareMetersUsed || '-'}</TableCell>
                           <TableCell>{efficiency} pcs/sq m</TableCell>
-                          <TableCell>{record.fabricLot || record.notes || '-'}</TableCell>
                         </TableRow>
                       );
                     })}

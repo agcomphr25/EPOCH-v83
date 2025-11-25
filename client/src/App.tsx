@@ -65,6 +65,7 @@ import P2TravelerPage from './pages/P2TravelerPage';
 import P2TravelerViewer from './pages/P2TravelerViewer';
 import P2PackingSlipViewer from './pages/P2PackingSlipViewer';
 import P2CertificateViewer from './pages/P2CertificateViewer';
+import P2TestReportViewer from './pages/P2TestReportViewer';
 import POProductsPage from './pages/POProductsPage';
 import ProductionTracking from './pages/ProductionTracking';
 import BarcodeScannerPage from './pages/BarcodeScannerPage';
@@ -586,6 +587,7 @@ function App() {
                   <Route path="/p2-traveler-viewer" component={P2TravelerViewer} />
                   <Route path="/p2/packing-slip/:id" component={P2PackingSlipViewer} />
                   <Route path="/p2/certificate/:id" component={P2CertificateViewer} />
+                  <Route path="/p2/test-report/:id" component={P2TestReportViewer} />
                   <Route path="/p2-production-queue" component={P2ProductionQueuePage} />
                   <Route path="/cutting-table-queue" component={CuttingTableProductionQueue} />
                   <Route path="/manufacturing-queue" component={ManufacturingQueue} />

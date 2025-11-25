@@ -51,6 +51,7 @@ import {
   Calculator,
   Route,
   Megaphone,
+  FileCheck,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import InstallPWAButton from './InstallPWAButton';
@@ -1151,6 +1154,29 @@ export default function Navigation() {
                   >
                     <Award className="h-4 w-4 mr-2" />
                     Certifications
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-gray-500">Document Generation</DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/p2-traveler-viewer')}
+                    className="cursor-pointer"
+                  >
+                    <Package className="h-4 w-4 mr-2" />
+                    Packing Slips
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/p2-traveler-viewer')}
+                    className="cursor-pointer"
+                  >
+                    <Award className="h-4 w-4 mr-2" />
+                    Certificates of Conformance
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/p2-traveler-viewer')}
+                    className="cursor-pointer"
+                  >
+                    <FileCheck className="h-4 w-4 mr-2" />
+                    Test Reports
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

@@ -237,9 +237,8 @@ router.get('/item-by-id/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Serialized item not found' });
     }
 
-    // Redirect to the barcode endpoint for the full data
-    req.params.barcode = serializedItem.barcode;
-    return router.handle(req, res, () => {});
+    // Redirect to the barcode endpoint
+    return res.redirect(`/api/p2-traveler-viewer/item/${serializedItem.barcode}`);
   } catch (error: any) {
     console.error('Error getting traveler data by ID:', error);
     return res.status(500).json({ error: 'Failed to get traveler data' });
@@ -458,8 +457,8 @@ router.post('/lot-number/:id/add-items', async (req: Request, res: Response) => 
     const existingBarcodes = (lot.barcodes as string[]) || [];
     const existingIds = (lot.serializedItemIds as string[]) || [];
 
-    const newBarcodes = [...new Set([...existingBarcodes, ...barcodes])];
-    const newIds = [...new Set([...existingIds, ...items.map(i => i.id)])];
+    const newBarcodes = Array.from(new Set([...existingBarcodes, ...barcodes]));
+    const newIds = Array.from(new Set([...existingIds, ...items.map(i => i.id)]));
 
     const [updatedLot] = await db
       .update(p2LotNumbers)

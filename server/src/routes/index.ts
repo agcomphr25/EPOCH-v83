@@ -28,6 +28,7 @@ import discountsRoutes from './discounts';
 // import bomsRoutes from './boms'; // Legacy BOM routes - replaced by Robust BOM system
 import robustBomsRoutes from './robustBoms';
 import communicationsRoutes from './communications';
+import marketingRoutes from './marketing';
 import internalMessagesRoutes from './internalMessages';
 import nonconformanceRoutes from '../../routes/nonconformance';
 import paymentsRoutes from './payments';
@@ -229,6 +230,9 @@ export function registerRoutes(app: Express): Server {
 
   // Communications management routes
   app.use('/api/communications', communicationsRoutes);
+
+  // Marketing communications routes
+  app.use('/api/marketing', marketingRoutes);
 
   // Internal messaging routes
   app.use('/api/internal-messages', internalMessagesRoutes);

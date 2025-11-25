@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { queryClient, apiRequest } from '@/lib/queryClient';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
@@ -22,6 +24,7 @@ import {
   Save,
   FileText,
   Search,
+  Filter,
   CheckCircle,
   XCircle,
   Clock,
@@ -56,6 +59,7 @@ interface Template {
   name: string;
   subject: string;
   content: string;
+  contentHtml: string | null;
   category: string;
 }
 
@@ -164,6 +168,7 @@ export default function MarketingCommunications() {
       if (messageType === 'sms') {
         params.set('hasPhone', 'true');
       }
+
       const response = await fetch(`/api/marketing/customers/count?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch count');
       return response.json();
@@ -172,9 +177,7 @@ export default function MarketingCommunications() {
 
   const { data: historyData } = useQuery<{
     messages: MarketingMessage[];
-    total: string;
-    page: number;
-    limit: number;
+    total: number;
   }>({
     queryKey: ['/api/marketing/history'],
   });
@@ -183,34 +186,30 @@ export default function MarketingCommunications() {
     mutationFn: async (data: {
       subject: string;
       content: string;
+      contentHtml?: string;
       customerTypeFilter?: string;
       customerIds?: number[];
     }) => {
-      const response = await fetch('/api/marketing/send-bulk-email', {
+      const response = await apiRequest('/api/marketing/send-bulk-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to send emails');
-      }
-      return response.json();
+      return response;
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       toast({
         title: 'Emails Sent',
-        description: `Successfully sent ${data.successCount} emails. ${data.failedCount} failed.`,
+        description: `Successfully sent ${data.successCount} of ${data.recipientCount} emails`,
       });
+      queryClient.invalidateQueries({ queryKey: ['/api/marketing/history'] });
       setSubject('');
       setContent('');
       setSelectedCustomerIds([]);
-      setSelectAll(false);
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       toast({
         title: 'Error',
-        description: error.message,
+        description: error.message || 'Failed to send emails',
         variant: 'destructive',
       });
     },
@@ -222,63 +221,86 @@ export default function MarketingCommunications() {
       customerTypeFilter?: string;
       customerIds?: number[];
     }) => {
-      const response = await fetch('/api/marketing/send-bulk-sms', {
+      const response = await apiRequest('/api/marketing/send-bulk-sms', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to send SMS');
-      }
-      return response.json();
+      return response;
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       toast({
-        title: 'SMS Sent',
-        description: `Successfully sent ${data.successCount} messages. ${data.failedCount} failed.`,
+        title: 'SMS Messages Sent',
+        description: `Successfully sent ${data.successCount} of ${data.recipientCount} messages`,
       });
+      queryClient.invalidateQueries({ queryKey: ['/api/marketing/history'] });
       setContent('');
       setSelectedCustomerIds([]);
-      setSelectAll(false);
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       toast({
         title: 'Error',
-        description: error.message,
+        description: error.message || 'Failed to send SMS messages',
         variant: 'destructive',
       });
     },
   });
 
   const saveTemplateMutation = useMutation({
-    mutationFn: async (data: { name: string; subject: string; content: string }) => {
-      const response = await fetch('/api/marketing/templates', {
+    mutationFn: async (data: {
+      name: string;
+      subject: string;
+      content: string;
+      contentHtml?: string;
+    }) => {
+      const response = await apiRequest('/api/marketing/templates', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to save template');
-      return response.json();
+      return response;
     },
     onSuccess: () => {
-      toast({ title: 'Template Saved', description: 'Your template has been saved successfully.' });
+      toast({
+        title: 'Template Saved',
+        description: 'Message template saved successfully',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/marketing/templates'] });
       setShowTemplateDialog(false);
       setTemplateName('');
     },
-    onError: () => {
-      toast({ title: 'Error', description: 'Failed to save template', variant: 'destructive' });
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to save template',
+        variant: 'destructive',
+      });
     },
   });
 
+  useEffect(() => {
+    if (selectAll && customersData?.customers) {
+      setSelectedCustomerIds(customersData.customers.map((c) => c.id));
+    } else if (!selectAll) {
+      setSelectedCustomerIds([]);
+    }
+  }, [selectAll, customersData?.customers]);
+
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplate(templateId);
+    const template = templates.find((t) => t.id.toString() === templateId);
+    if (template) {
+      setSubject(template.subject);
+      setContent(template.content);
+    }
+  };
+
   const handleSend = () => {
     if (messageType === 'email') {
-      if (!subject.trim()) {
-        toast({ title: 'Error', description: 'Please enter a subject line', variant: 'destructive' });
-        return;
-      }
-      if (!content.trim()) {
-        toast({ title: 'Error', description: 'Please enter message content', variant: 'destructive' });
+      if (!subject.trim() || !content.trim()) {
+        toast({
+          title: 'Validation Error',
+          description: 'Please enter both subject and message content',
+          variant: 'destructive',
+        });
         return;
       }
 
@@ -290,7 +312,11 @@ export default function MarketingCommunications() {
       });
     } else {
       if (!content.trim()) {
-        toast({ title: 'Error', description: 'Please enter message content', variant: 'destructive' });
+        toast({
+          title: 'Validation Error',
+          description: 'Please enter message content',
+          variant: 'destructive',
+        });
         return;
       }
 
@@ -302,23 +328,8 @@ export default function MarketingCommunications() {
     }
   };
 
-  const handleTemplateSelect = (templateId: string) => {
-    setSelectedTemplate(templateId);
-    const template = templates.find((t) => t.id.toString() === templateId);
-    if (template) {
-      setSubject(template.subject);
-      setContent(template.content);
-    }
-  };
-
-  const handleCustomerSelect = (customerId: number) => {
-    setSelectedCustomerIds((prev) =>
-      prev.includes(customerId) ? prev.filter((id) => id !== customerId) : [...prev, customerId]
-    );
-  };
-
-  const generateHtmlEmail = (plainContent: string, customerName: string = 'Valued Customer') => {
-    const settings = companySettings || {
+  const generateHtmlEmail = (text: string, settings?: CompanySettings) => {
+    const company = settings || {
       companyName: 'AG Composites',
       companyAddress: '123 Business Street, City, ST 12345',
       companyPhone: '(555) 123-4567',
@@ -326,47 +337,111 @@ export default function MarketingCommunications() {
       companyWebsite: 'www.agcomposites.com',
     };
 
-    const personalizedContent = plainContent.replace(/\{\{name\}\}/g, customerName);
-    const htmlContent = personalizedContent.replace(/\n/g, '<br>');
-
     return `
-      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-        <div style="padding: 30px 40px; text-align: center; background: linear-gradient(135deg, #1a365d 0%, #2563eb 100%); border-radius: 8px 8px 0 0;">
-          <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">${settings.companyName}</h1>
-        </div>
-        <div style="padding: 40px;">
-          <div style="color: #333333; font-size: 16px; line-height: 1.6;">
-            ${htmlContent}
-          </div>
-        </div>
-        <div style="padding: 30px 40px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; border-radius: 0 0 8px 8px;">
-          <p style="margin: 0 0 10px 0; color: #1a365d; font-weight: 600; font-size: 18px; text-align: center;">
-            ${settings.companyName}
-          </p>
-          <p style="margin: 0 0 5px 0; color: #64748b; font-size: 14px; text-align: center;">
-            ${settings.companyAddress}
-          </p>
-          <p style="margin: 0 0 5px 0; color: #64748b; font-size: 14px; text-align: center;">
-            ${settings.companyPhone}
-          </p>
-          <p style="margin: 0 0 5px 0; color: #2563eb; font-size: 14px; text-align: center;">
-            ${settings.companyEmail}
-          </p>
-          <p style="margin: 0; color: #2563eb; font-size: 14px; text-align: center;">
-            ${settings.companyWebsite}
-          </p>
-        </div>
-      </div>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td align="center" style="padding: 40px 0;">
+        <table role="presentation" style="width: 600px; border-collapse: collapse; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <!-- Header with Logo -->
+          <tr>
+            <td style="padding: 30px 40px; background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); border-radius: 8px 8px 0 0;">
+              <table role="presentation" style="width: 100%;">
+                <tr>
+                  <td>
+                    <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: bold;">${company.companyName}</h1>
+                    <p style="margin: 5px 0 0; color: rgba(255,255,255,0.8); font-size: 14px;">Premium Composite Solutions</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 40px;">
+              <div style="font-size: 16px; line-height: 1.6; color: #333333;">
+                ${text.replace(/\n/g, '<br>')}
+              </div>
+            </td>
+          </tr>
+          
+          <!-- Divider -->
+          <tr>
+            <td style="padding: 0 40px;">
+              <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 0;">
+            </td>
+          </tr>
+          
+          <!-- Footer with Contact Info -->
+          <tr>
+            <td style="padding: 30px 40px; background-color: #f8fafc;">
+              <table role="presentation" style="width: 100%;">
+                <tr>
+                  <td style="text-align: center;">
+                    <p style="margin: 0 0 15px; font-size: 14px; color: #64748b;">
+                      <strong style="color: #1e3a5f;">${company.companyName}</strong>
+                    </p>
+                    <p style="margin: 0 0 8px; font-size: 13px; color: #64748b;">
+                      <span style="display: inline-block; margin-right: 20px;">
+                        📍 ${company.companyAddress}
+                      </span>
+                    </p>
+                    <p style="margin: 0 0 8px; font-size: 13px; color: #64748b;">
+                      <span style="display: inline-block; margin-right: 20px;">
+                        📞 ${company.companyPhone}
+                      </span>
+                      <span style="display: inline-block;">
+                        ✉️ ${company.companyEmail}
+                      </span>
+                    </p>
+                    <p style="margin: 15px 0 0; font-size: 13px;">
+                      <a href="https://${company.companyWebsite}" style="color: #2563eb; text-decoration: none;">
+                        🌐 ${company.companyWebsite}
+                      </a>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Copyright -->
+          <tr>
+            <td style="padding: 20px 40px; text-align: center; background-color: #1e3a5f; border-radius: 0 0 8px 8px;">
+              <p style="margin: 0; font-size: 12px; color: rgba(255,255,255,0.7);">
+                © ${new Date().getFullYear()} ${company.companyName}. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
     `;
   };
 
-  const customers = customersData?.customers || [];
-  const totalPages = Math.ceil((customersData?.total || 0) / 50);
+  const toggleCustomerSelection = (customerId: number) => {
+    setSelectedCustomerIds((prev) =>
+      prev.includes(customerId)
+        ? prev.filter((id) => id !== customerId)
+        : [...prev, customerId]
+    );
+  };
 
   return (
-    <div className="container mx-auto py-6 px-4 max-w-7xl">
+    <div className="container mx-auto p-6 max-w-7xl">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold flex items-center gap-3">
+        <h1 className="text-3xl font-bold flex items-center gap-2" data-testid="page-title">
           <Mail className="h-8 w-8 text-primary" />
           Marketing Communications
         </h1>
@@ -375,29 +450,34 @@ export default function MarketingCommunications() {
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6">
-          <TabsTrigger value="compose" className="flex items-center gap-2">
-            <Send className="h-4 w-4" />
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsTrigger value="compose" data-testid="tab-compose">
+            <Send className="h-4 w-4 mr-2" />
             Compose
           </TabsTrigger>
-          <TabsTrigger value="templates" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
+          <TabsTrigger value="templates" data-testid="tab-templates">
+            <FileText className="h-4 w-4 mr-2" />
             Templates
           </TabsTrigger>
-          <TabsTrigger value="history" className="flex items-center gap-2">
-            <History className="h-4 w-4" />
+          <TabsTrigger value="history" data-testid="tab-history">
+            <History className="h-4 w-4 mr-2" />
             History
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="compose">
+        <TabsContent value="compose" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column - Message Composition */}
             <div className="lg:col-span-2 space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Mail className="h-5 w-5" />
+                    {messageType === 'email' ? (
+                      <Mail className="h-5 w-5" />
+                    ) : (
+                      <MessageSquare className="h-5 w-5" />
+                    )}
                     Compose Message
                   </CardTitle>
                   <CardDescription>
@@ -405,12 +485,12 @@ export default function MarketingCommunications() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex gap-2">
+                  <div className="flex gap-4">
                     <Button
                       variant={messageType === 'email' ? 'default' : 'outline'}
                       onClick={() => setMessageType('email')}
                       className="flex-1"
-                      data-testid="button-email-type"
+                      data-testid="btn-email-type"
                     >
                       <Mail className="h-4 w-4 mr-2" />
                       Email
@@ -419,12 +499,36 @@ export default function MarketingCommunications() {
                       variant={messageType === 'sms' ? 'default' : 'outline'}
                       onClick={() => setMessageType('sms')}
                       className="flex-1"
-                      data-testid="button-sms-type"
+                      data-testid="btn-sms-type"
                     >
                       <MessageSquare className="h-4 w-4 mr-2" />
                       SMS
                     </Button>
                   </div>
+
+                  {templates.length > 0 && (
+                    <div>
+                      <Label htmlFor="template">Use Template</Label>
+                      <Select
+                        value={selectedTemplate}
+                        onValueChange={handleTemplateSelect}
+                      >
+                        <SelectTrigger id="template" data-testid="select-template">
+                          <SelectValue placeholder="Select a template..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templates.map((template) => (
+                            <SelectItem
+                              key={template.id}
+                              value={template.id.toString()}
+                            >
+                              {template.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   {messageType === 'email' && (
                     <div>
@@ -440,136 +544,105 @@ export default function MarketingCommunications() {
                   )}
 
                   <div>
-                    <Label htmlFor="content">Message Content</Label>
+                    <Label htmlFor="content">
+                      Message Content
+                      {messageType === 'sms' && (
+                        <span className="text-muted-foreground ml-2">
+                          ({content.length}/160 characters)
+                        </span>
+                      )}
+                    </Label>
                     <Textarea
                       id="content"
                       value={content}
                       onChange={(e) => setContent(e.target.value)}
                       placeholder={
                         messageType === 'email'
-                          ? 'Enter your email message...'
-                          : 'Enter your SMS message (160 chars max)...'
+                          ? 'Enter your email message...\n\nUse {{name}} to personalize with customer name'
+                          : 'Enter your SMS message (160 characters max)...'
                       }
-                      rows={8}
+                      rows={messageType === 'email' ? 10 : 4}
                       maxLength={messageType === 'sms' ? 160 : undefined}
-                      data-testid="textarea-content"
+                      data-testid="input-content"
                     />
-                    {messageType === 'sms' && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {content.length}/160 characters
-                      </p>
-                    )}
-                    {messageType === 'email' && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Use {'{{name}}'} to personalize with customer name
-                      </p>
-                    )}
                   </div>
-
-                  {messageType === 'email' && templates.length > 0 && (
-                    <div>
-                      <Label>Load from Template</Label>
-                      <Select value={selectedTemplate} onValueChange={handleTemplateSelect}>
-                        <SelectTrigger data-testid="select-template">
-                          <SelectValue placeholder="Select a template..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {templates.map((template) => (
-                            <SelectItem key={template.id} value={template.id.toString()}>
-                              {template.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
 
                   <div className="flex gap-2">
                     {messageType === 'email' && (
-                      <>
-                        <Dialog open={showPreview} onOpenChange={setShowPreview}>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" data-testid="button-preview">
-                              <Eye className="h-4 w-4 mr-2" />
-                              Preview
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-                            <DialogHeader>
-                              <DialogTitle>Email Preview</DialogTitle>
-                            </DialogHeader>
-                            <div
-                              className="border rounded-lg p-4 bg-gray-50"
-                              dangerouslySetInnerHTML={{ __html: generateHtmlEmail(content) }}
-                            />
-                          </DialogContent>
-                        </Dialog>
-
-                        <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" data-testid="button-save-template">
-                              <Save className="h-4 w-4 mr-2" />
-                              Save as Template
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Save as Template</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4 py-4">
-                              <div>
-                                <Label htmlFor="template-name">Template Name</Label>
-                                <Input
-                                  id="template-name"
-                                  value={templateName}
-                                  onChange={(e) => setTemplateName(e.target.value)}
-                                  placeholder="Enter template name..."
-                                  data-testid="input-template-name"
-                                />
-                              </div>
-                            </div>
-                            <DialogFooter>
-                              <Button
-                                onClick={() =>
-                                  saveTemplateMutation.mutate({
-                                    name: templateName,
-                                    subject,
-                                    content,
-                                  })
-                                }
-                                disabled={!templateName.trim() || saveTemplateMutation.isPending}
-                                data-testid="button-confirm-save-template"
-                              >
-                                {saveTemplateMutation.isPending ? (
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                ) : (
-                                  <Save className="h-4 w-4 mr-2" />
-                                )}
-                                Save Template
-                              </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                      </>
+                      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" data-testid="btn-preview">
+                            <Eye className="h-4 w-4 mr-2" />
+                            Preview
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
+                          <DialogHeader>
+                            <DialogTitle>Email Preview</DialogTitle>
+                          </DialogHeader>
+                          <div
+                            className="border rounded-lg"
+                            dangerouslySetInnerHTML={{
+                              __html: generateHtmlEmail(content, companySettings),
+                            }}
+                          />
+                        </DialogContent>
+                      </Dialog>
                     )}
 
-                    <Button
-                      onClick={handleSend}
-                      disabled={sendEmailMutation.isPending || sendSmsMutation.isPending}
-                      className="ml-auto"
-                      data-testid="button-send"
+                    <Dialog
+                      open={showTemplateDialog}
+                      onOpenChange={setShowTemplateDialog}
                     >
-                      {sendEmailMutation.isPending || sendSmsMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4 mr-2" />
-                      )}
-                      Send {messageType === 'email' ? 'Emails' : 'SMS'}
-                    </Button>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" data-testid="btn-save-template">
+                          <Save className="h-4 w-4 mr-2" />
+                          Save as Template
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Save Message Template</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div>
+                            <Label htmlFor="template-name">Template Name</Label>
+                            <Input
+                              id="template-name"
+                              value={templateName}
+                              onChange={(e) => setTemplateName(e.target.value)}
+                              placeholder="Enter template name..."
+                              data-testid="input-template-name"
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            onClick={() =>
+                              saveTemplateMutation.mutate({
+                                name: templateName,
+                                subject,
+                                content,
+                              })
+                            }
+                            disabled={
+                              !templateName.trim() || saveTemplateMutation.isPending
+                            }
+                            data-testid="btn-confirm-save-template"
+                          >
+                            {saveTemplateMutation.isPending && (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            )}
+                            Save Template
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 </CardContent>
               </Card>
 
+              {/* Company Branding Info */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -577,7 +650,7 @@ export default function MarketingCommunications() {
                     Company Branding
                   </CardTitle>
                   <CardDescription>
-                    This information will be included in all marketing emails
+                    This information will be included in all emails
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -592,7 +665,9 @@ export default function MarketingCommunications() {
                     </div>
                     <div className="flex items-center gap-2">
                       <AtSign className="h-4 w-4 text-muted-foreground" />
-                      <span>{companySettings?.companyEmail || 'info@agcomposites.com'}</span>
+                      <span>
+                        {companySettings?.companyEmail || 'info@agcomposites.com'}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Globe className="h-4 w-4 text-muted-foreground" />
@@ -612,6 +687,7 @@ export default function MarketingCommunications() {
               </Card>
             </div>
 
+            {/* Right Column - Customer Selection */}
             <div className="space-y-6">
               <Card>
                 <CardHeader>
@@ -688,29 +764,26 @@ export default function MarketingCommunications() {
                     </Label>
                   </div>
 
-                  <ScrollArea className="h-[300px] border rounded-lg">
+                  <Separator />
+
+                  <ScrollArea className="h-[300px]">
                     {customersLoading ? (
-                      <div className="flex items-center justify-center h-full">
+                      <div className="flex items-center justify-center py-8">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                       </div>
-                    ) : customers.length === 0 ? (
-                      <div className="flex items-center justify-center h-full text-muted-foreground">
-                        No customers found
-                      </div>
                     ) : (
-                      <div className="p-2 space-y-1">
-                        {customers.map((customer) => (
+                      <div className="space-y-2">
+                        {customersData?.customers.map((customer) => (
                           <div
                             key={customer.id}
                             className="flex items-center space-x-3 p-2 hover:bg-muted/50 rounded-lg cursor-pointer"
-                            onClick={() => handleCustomerSelect(customer.id)}
-                            data-testid={`customer-row-${customer.id}`}
+                            onClick={() => toggleCustomerSelection(customer.id)}
                           >
                             <Checkbox
-                              checked={
-                                selectAll || selectedCustomerIds.includes(customer.id)
+                              checked={selectedCustomerIds.includes(customer.id)}
+                              onCheckedChange={() =>
+                                toggleCustomerSelection(customer.id)
                               }
-                              onCheckedChange={() => handleCustomerSelect(customer.id)}
                               data-testid={`checkbox-customer-${customer.id}`}
                             />
                             <div className="flex-1 min-w-0">
@@ -734,31 +807,49 @@ export default function MarketingCommunications() {
                     )}
                   </ScrollArea>
 
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-between">
+                  {customersData && customersData.total > 50 && (
+                    <div className="flex items-center justify-between pt-2">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setPage((p) => Math.max(1, p - 1))}
                         disabled={page === 1}
-                        data-testid="button-prev-page"
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
                       <span className="text-sm text-muted-foreground">
-                        Page {page} of {totalPages}
+                        Page {page} of {Math.ceil(customersData.total / 50)}
                       </span>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={page === totalPages}
-                        data-testid="button-next-page"
+                        onClick={() => setPage((p) => p + 1)}
+                        disabled={page >= Math.ceil(customersData.total / 50)}
                       >
                         <ChevronRight className="h-4 w-4" />
                       </Button>
                     </div>
                   )}
+
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    onClick={handleSend}
+                    disabled={
+                      sendEmailMutation.isPending ||
+                      sendSmsMutation.isPending ||
+                      (messageType === 'email' && (!subject.trim() || !content.trim())) ||
+                      (messageType === 'sms' && !content.trim())
+                    }
+                    data-testid="btn-send"
+                  >
+                    {(sendEmailMutation.isPending || sendSmsMutation.isPending) ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4 mr-2" />
+                    )}
+                    Send {messageType === 'email' ? 'Emails' : 'SMS Messages'}
+                  </Button>
                 </CardContent>
               </Card>
             </div>
@@ -768,59 +859,53 @@ export default function MarketingCommunications() {
         <TabsContent value="templates">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Message Templates
-              </CardTitle>
+              <CardTitle>Message Templates</CardTitle>
               <CardDescription>
-                Manage your saved email templates
+                Save and reuse message templates for your marketing campaigns
               </CardDescription>
             </CardHeader>
             <CardContent>
               {templates.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-12 text-muted-foreground">
                   <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>No templates saved yet</p>
                   <p className="text-sm">
-                    Create a message and save it as a template to reuse later
+                    Create a message and save it as a template to get started
                   </p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Subject</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {templates.map((template) => (
-                      <TableRow key={template.id} data-testid={`template-row-${template.id}`}>
-                        <TableCell className="font-medium">{template.name}</TableCell>
-                        <TableCell>{template.subject}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{template.category}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSubject(template.subject);
-                              setContent(template.content);
-                              setActiveTab('compose');
-                            }}
-                            data-testid={`button-use-template-${template.id}`}
-                          >
-                            Use Template
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {templates.map((template) => (
+                    <Card key={template.id} className="cursor-pointer hover:shadow-md transition-shadow">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg">{template.name}</CardTitle>
+                        <Badge variant="secondary" className="w-fit">
+                          {template.category}
+                        </Badge>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm font-medium text-muted-foreground mb-1">
+                          Subject: {template.subject}
+                        </p>
+                        <p className="text-sm text-muted-foreground line-clamp-3">
+                          {template.content}
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-4"
+                          onClick={() => {
+                            handleTemplateSelect(template.id.toString());
+                            setActiveTab('compose');
+                          }}
+                          data-testid={`btn-use-template-${template.id}`}
+                        >
+                          Use Template
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
@@ -829,18 +914,19 @@ export default function MarketingCommunications() {
         <TabsContent value="history">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <History className="h-5 w-5" />
-                Campaign History
-              </CardTitle>
-              <CardDescription>View past marketing campaigns and their results</CardDescription>
+              <CardTitle>Message History</CardTitle>
+              <CardDescription>
+                View past marketing communications and their delivery status
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {!historyData?.messages || historyData.messages.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-12 text-muted-foreground">
                   <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No campaigns sent yet</p>
-                  <p className="text-sm">Your campaign history will appear here</p>
+                  <p>No messages sent yet</p>
+                  <p className="text-sm">
+                    Your sent marketing messages will appear here
+                  </p>
                 </div>
               ) : (
                 <Table>
@@ -848,20 +934,26 @@ export default function MarketingCommunications() {
                     <TableRow>
                       <TableHead>Date</TableHead>
                       <TableHead>Type</TableHead>
-                      <TableHead>Subject</TableHead>
+                      <TableHead>Subject / Content</TableHead>
+                      <TableHead>Filter</TableHead>
                       <TableHead>Recipients</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Filter</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {historyData.messages.map((message) => (
-                      <TableRow key={message.id} data-testid={`history-row-${message.id}`}>
-                        <TableCell>
+                      <TableRow key={message.id}>
+                        <TableCell className="whitespace-nowrap">
                           {new Date(message.sentAt).toLocaleDateString()}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={message.messageType === 'email' ? 'default' : 'secondary'}>
+                          <Badge
+                            variant={
+                              message.messageType === 'email'
+                                ? 'default'
+                                : 'secondary'
+                            }
+                          >
                             {message.messageType === 'email' ? (
                               <Mail className="h-3 w-3 mr-1" />
                             ) : (
@@ -870,18 +962,21 @@ export default function MarketingCommunications() {
                             {message.messageType}
                           </Badge>
                         </TableCell>
-                        <TableCell className="max-w-[200px] truncate">
-                          {message.subject || '-'}
+                        <TableCell className="max-w-xs truncate">
+                          {message.subject || message.content.substring(0, 50)}
+                        </TableCell>
+                        <TableCell>
+                          {message.customerTypeFilter || 'All'}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <span className="text-green-600 flex items-center">
-                              <CheckCircle className="h-3 w-3 mr-1" />
+                            <span className="flex items-center gap-1 text-green-600">
+                              <CheckCircle className="h-3 w-3" />
                               {message.successCount}
                             </span>
                             {message.failedCount > 0 && (
-                              <span className="text-red-600 flex items-center">
-                                <XCircle className="h-3 w-3 mr-1" />
+                              <span className="flex items-center gap-1 text-red-600">
+                                <XCircle className="h-3 w-3" />
                                 {message.failedCount}
                               </span>
                             )}
@@ -889,18 +984,22 @@ export default function MarketingCommunications() {
                         </TableCell>
                         <TableCell>
                           <Badge
-                            variant={message.status === 'completed' ? 'default' : 'secondary'}
+                            variant={
+                              message.status === 'completed'
+                                ? 'default'
+                                : message.status === 'sending'
+                                ? 'secondary'
+                                : 'destructive'
+                            }
                           >
-                            {message.status === 'completed' ? (
+                            {message.status === 'completed' && (
                               <CheckCircle className="h-3 w-3 mr-1" />
-                            ) : (
+                            )}
+                            {message.status === 'sending' && (
                               <Clock className="h-3 w-3 mr-1" />
                             )}
                             {message.status}
                           </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {message.customerTypeFilter || 'All'}
                         </TableCell>
                       </TableRow>
                     ))}

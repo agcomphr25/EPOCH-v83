@@ -50,9 +50,16 @@ import {
   Building2,
   Calculator,
   Route,
+  Megaphone,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import InstallPWAButton from './InstallPWAButton';
 import GlobalSearch from './GlobalSearch';
@@ -1066,14 +1073,34 @@ export default function Navigation() {
 
             {/* Communications Dropdown */}
             <div className="relative">
-              <Button
-                variant="ghost"
-                className="flex items-center gap-2 text-sm"
-                onClick={() => (window.location.href = '/communications/inbox')}
-              >
-                <Mail className="h-4 w-4" />
-                Communications
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <Mail className="h-4 w-4" />
+                    Communications
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/communications/inbox')}
+                    className="cursor-pointer"
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    Inbox
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setLocation('/marketing-communications')}
+                    className="cursor-pointer"
+                  >
+                    <Megaphone className="h-4 w-4 mr-2" />
+                    Marketing Board
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             {/* Forms & Reports Dropdown */}

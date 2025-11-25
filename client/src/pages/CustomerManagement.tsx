@@ -1741,7 +1741,6 @@ export default function CustomerManagement() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Address</TableHead>
-                  <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   {isGlennj && (
@@ -1818,11 +1817,6 @@ export default function CustomerManagement() {
                             No address
                           </span>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" data-testid={`badge-customer-type-${customer.id}`}>
-                          {customer.customerType || 'N/A'}
-                        </Badge>
                       </TableCell>
                       <TableCell>
                         <Badge

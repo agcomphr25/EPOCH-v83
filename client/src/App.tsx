@@ -457,7 +457,6 @@ function App() {
 
                   {/* Communication Routes */}
                   <Route path="/email-inbox" component={EmailInbox} />
-                  <Route path="/marketing-communications" component={MarketingCommunications} />
 
                   {/* User Dashboard Routes */}
                   <Route path="/ag-dashboard" component={AGTestDashboard} />
@@ -511,6 +510,10 @@ function App() {
                   <Route
                     path="/communications/inbox"
                     component={CommunicationInboxPage}
+                  />
+                  <Route
+                    path="/marketing-communications"
+                    component={MarketingCommunications}
                   />
                   <Route path="/enhanced-forms" component={EnhancedFormsPage} />
                   <Route

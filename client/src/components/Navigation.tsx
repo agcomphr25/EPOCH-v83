@@ -325,6 +325,12 @@ export default function Navigation() {
         'Advanced inventory management with material requirements planning',
     },
     {
+      path: '/inventory/parts-request',
+      label: 'Parts Requests',
+      icon: FileText,
+      description: 'Submit and track requests for parts and materials',
+    },
+    {
       path: '/vendors',
       label: 'Vendor Management',
       icon: Users,

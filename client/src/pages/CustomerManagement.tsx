@@ -683,6 +683,46 @@ export default function CustomerManagement() {
     queryFn: () => apiRequest(`/api/customers/${balanceDueCustomerId}/balance-due`),
   });
 
+  // Fetch customer types for inline selector
+  const { data: customerTypes = [] } = useQuery<{ id: number; name: string; description: string | null }[]>({
+    queryKey: ['/api/marketing/customer-types'],
+    queryFn: () => apiRequest('/api/marketing/customer-types'),
+  });
+
+  // State to track which customer is currently being updated (for loading indicator)
+  const [updatingCustomerTypeId, setUpdatingCustomerTypeId] = useState<number | null>(null);
+
+  // Inline customer type update mutation
+  const updateCustomerTypeMutation = useMutation({
+    mutationFn: ({ id, customerType }: { id: number; customerType: string }) =>
+      apiRequest(`/api/customers/update-bypass/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerType }),
+      }),
+    onMutate: ({ id }) => {
+      setUpdatingCustomerTypeId(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers/bypass'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/marketing/customer-types'] });
+      toast({
+        title: 'Success',
+        description: 'Customer type updated successfully',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update customer type',
+        variant: 'destructive',
+      });
+    },
+    onSettled: () => {
+      setUpdatingCustomerTypeId(null);
+    },
+  });
+
   // Fetch addresses for selected customer
   const { data: addresses = [], isLoading: addressesLoading } = useQuery<
     CustomerAddress[]
@@ -1741,6 +1781,7 @@ export default function CustomerManagement() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Address</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   {isGlennj && (
@@ -1817,6 +1858,51 @@ export default function CustomerManagement() {
                             No address
                           </span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={customer.customerType || ''}
+                            onValueChange={(value) => {
+                              updateCustomerTypeMutation.mutate({
+                                id: customer.id,
+                                customerType: value,
+                              });
+                            }}
+                            disabled={updatingCustomerTypeId === customer.id}
+                          >
+                            <SelectTrigger 
+                              className="w-[130px] h-8 text-sm"
+                              data-testid={`select-customer-type-${customer.id}`}
+                            >
+                              <SelectValue placeholder="Select type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {customerTypes.length > 0 ? (
+                                customerTypes.map((type) => (
+                                  <SelectItem 
+                                    key={type.id} 
+                                    value={type.name}
+                                    data-testid={`option-customer-type-${type.name}`}
+                                  >
+                                    {type.name}
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <>
+                                  <SelectItem value="AGR">AGR</SelectItem>
+                                  <SelectItem value="Gunbuilder">Gunbuilder</SelectItem>
+                                  <SelectItem value="Distributor">Distributor</SelectItem>
+                                  <SelectItem value="OEM">OEM</SelectItem>
+                                  <SelectItem value="Individual">Individual</SelectItem>
+                                </>
+                              )}
+                            </SelectContent>
+                          </Select>
+                          {updatingCustomerTypeId === customer.id && (
+                            <RefreshCw className="h-4 w-4 animate-spin text-gray-500" />
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge

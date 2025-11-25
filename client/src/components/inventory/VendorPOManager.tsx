@@ -97,6 +97,7 @@ type VendorPOItem = {
   lineNumber: number;
   agPartNumber?: string;
   vendorPartNumber?: string;
+  supplierPartNumber?: string;
   description?: string;
   quantity: number;
   unitPrice: number;
@@ -157,9 +158,9 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
                 <div className="font-medium text-gray-900 dark:text-gray-100 break-words line-clamp-2">
                   {item.description}
                 </div>
-                {item.vendorPartNumber && (
+                {item.supplierPartNumber && (
                   <div className="text-gray-500 text-xs truncate">
-                    Vendor: {item.vendorPartNumber}
+                    Supplier Part #: {item.supplierPartNumber}
                   </div>
                 )}
               </div>
@@ -437,7 +438,7 @@ function VendorPOCard({
             >
               <div className="flex items-center gap-1">
                 <Building2 className="w-4 h-4" />
-                {vendorPo.vendorName || `Vendor ID: ${vendorPo.vendorId}`}
+                {vendorPo.vendorName || 'Unknown Vendor'}
               </div>
             </CardDescription>
             <div className="mt-3">
@@ -1046,6 +1047,7 @@ export default function VendorPOManager() {
                 <tr>
                   <th>Line</th>
                   <th>AG Part#</th>
+                  <th>Supplier Part#</th>
                   <th>Description</th>
                   <th>Quantity</th>
                   <th>Unit Price</th>
@@ -1057,10 +1059,11 @@ export default function VendorPOManager() {
                   <tr>
                     <td>${item.lineNumber}</td>
                     <td>${item.agPartNumber || '-'}</td>
+                    <td>${item.supplierPartNumber || '-'}</td>
                     <td>${item.description || '-'}</td>
                     <td>${item.quantity || 0}</td>
                     <td>$${item.unitPrice != null ? item.unitPrice.toFixed(2) : '0.00'}</td>
-                    <td>$${item.totalPrice != null ? item.totalPrice.toFixed(2) : '0.00'}</td>
+                    <td>$${((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2)}</td>
                   </tr>
                 `).join('')}
               </tbody>

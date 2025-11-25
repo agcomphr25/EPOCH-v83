@@ -644,33 +644,92 @@ export default function P2TravelerViewer() {
               <Card>
                 <CardHeader>
                   <CardTitle>Electronic Signatures</CardTitle>
-                  <CardDescription>All digital signatures captured for AS9100 compliance</CardDescription>
+                  <CardDescription>All digital signatures captured for AS9100 compliance - Department transfer verifications and work completion confirmations</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {travelerData.signatures && travelerData.signatures.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="space-y-4">
                       {travelerData.signatures.map((sig: any, index: number) => (
-                        <div key={index} className="border rounded-lg p-4" data-testid={`signature-${index}`}>
-                          <div className="flex items-center gap-2 mb-2">
-                            <FileSignature className="h-4 w-4 text-gray-400" />
-                            <span className="font-medium">{sig.type}</span>
+                        <div key={sig.id || index} className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-900" data-testid={`signature-${index}`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <FileSignature className="h-5 w-5 text-blue-600" />
+                              <Badge variant={sig.type === 'Department Transfer' ? 'default' : 'outline'}>
+                                {sig.type}
+                              </Badge>
+                              {sig.declarationAccepted && (
+                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  Verified
+                                </Badge>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {sig.signedAt ? format(new Date(sig.signedAt), 'MMM d, yyyy h:mm a') : 'N/A'}
+                            </span>
                           </div>
-                          <div className="text-sm text-gray-500 mb-2">
-                            {sig.department}
-                          </div>
-                          <div className="text-sm">
-                            <span className="font-medium">{sig.signedBy}</span>
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            {sig.signedAt ? format(new Date(sig.signedAt), 'MMM d, yyyy h:mm a') : 'N/A'}
-                          </div>
-                          {sig.signature && (
-                            <div className="mt-2 border-t pt-2">
-                              <img 
-                                src={sig.signature} 
-                                alt="Signature" 
-                                className="max-h-16 object-contain"
-                              />
+                          
+                          {sig.type === 'Department Transfer' ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 text-sm">
+                                  <span className="text-gray-500">From:</span>
+                                  <Badge variant="outline">{sig.fromDepartment}</Badge>
+                                  <ArrowRight className="h-4 w-4 text-gray-400" />
+                                  <span className="text-gray-500">To:</span>
+                                  <Badge variant="default">{sig.toDepartment}</Badge>
+                                </div>
+                                <div className="text-sm">
+                                  <span className="text-gray-500">Signed by:</span>{' '}
+                                  <span className="font-medium">{sig.signedBy}</span>
+                                  {sig.signedByUsername && (
+                                    <span className="text-gray-400 ml-1">(@{sig.signedByUsername})</span>
+                                  )}
+                                </div>
+                                {sig.workInstructionRef && (
+                                  <div className="text-sm">
+                                    <span className="text-gray-500">Work Instruction:</span>{' '}
+                                    <span className="font-mono text-blue-600">{sig.workInstructionRef}</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex justify-end items-start">
+                                {sig.signatureData && (
+                                  <div className="bg-white dark:bg-gray-800 border rounded p-2">
+                                    <img 
+                                      src={sig.signatureData} 
+                                      alt="Signature" 
+                                      className="max-h-20 object-contain"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-1">
+                                <div className="text-sm text-gray-500">
+                                  {sig.department || sig.fromDepartment || 'N/A'}
+                                </div>
+                                <div className="text-sm">
+                                  <span className="font-medium">{sig.signedBy}</span>
+                                </div>
+                              </div>
+                              {sig.signatureData && (
+                                <div className="bg-white dark:bg-gray-800 border rounded p-2">
+                                  <img 
+                                    src={sig.signatureData} 
+                                    alt="Signature" 
+                                    className="max-h-16 object-contain"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {sig.notes && (
+                            <div className="mt-2 pt-2 border-t text-sm text-gray-600">
+                              <span className="font-medium">Notes:</span> {sig.notes}
                             </div>
                           )}
                         </div>

@@ -129,6 +129,12 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       where: sql`${p2LotNumbers.barcodes}::jsonb ? ${barcode}`,
     });
 
+    // Get department transfer signatures
+    const departmentTransferSignatures = await db.query.p2DepartmentTransferSignatures.findMany({
+      where: eq(p2DepartmentTransferSignatures.serializedItemId, serializedItem.id),
+      orderBy: [desc(p2DepartmentTransferSignatures.signedAt)],
+    });
+
     // Build department progression data
     const departmentSequence = routing?.departmentSequence as string[] || [];
     const departmentProgress = departmentSequence.map((dept, index) => {
@@ -160,40 +166,56 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
 
     // Extract all signatures from various sources
     const signatures = [
+      // Department Transfer Signatures (AS9100 compliant work completion verification)
+      ...departmentTransferSignatures.map(s => ({
+        id: s.id,
+        type: 'Department Transfer',
+        fromDepartment: s.fromDepartment,
+        toDepartment: s.toDepartment,
+        signedBy: s.signedByName,
+        signedByUsername: s.signedByUsername,
+        signedAt: s.signedAt,
+        signatureData: s.signatureData,
+        workInstructionRef: s.workInstructionRef,
+        declarationText: s.declarationText,
+        declarationAccepted: s.declarationAccepted,
+        notes: s.notes,
+      })),
+      // Legacy signatures from other sources
       ...workTasks.filter(t => t.traceabilityData && (t.traceabilityData as any)?.signature).map(t => ({
         type: 'Work Task',
         department: t.department,
         signedBy: t.employeeName,
         signedAt: t.completedAt,
-        signature: (t.traceabilityData as any)?.signature,
+        signatureData: (t.traceabilityData as any)?.signature,
       })),
       ...ovenCureLogs.filter(l => l.signature).map(l => ({
         type: 'Oven Cure',
         department: l.department,
         signedBy: l.operatorName,
         signedAt: l.endTime,
-        signature: l.signature,
+        signatureData: l.signature,
       })),
       ...vacuumLeakTests.filter(t => t.signature).map(t => ({
         type: 'Vacuum Test',
         department: t.department,
         signedBy: t.operatorName,
         signedAt: t.endTime,
-        signature: t.signature,
+        signatureData: t.signature,
       })),
       ...finalInspectionResults.filter(r => r.signature).map(r => ({
         type: 'Final Inspection',
         department: r.department,
         signedBy: r.inspectorName,
         signedAt: r.inspectionDate,
-        signature: r.signature,
+        signatureData: r.signature,
       })),
       ...qcSubmissionsData.filter(q => q.signature).map(q => ({
         type: 'QC Submission',
         department: q.department,
         signedBy: q.submittedBy,
         signedAt: q.submittedAt,
-        signature: q.signature,
+        signatureData: q.signature,
       })),
     ];
 

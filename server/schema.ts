@@ -6728,4 +6728,73 @@ export const insertGatewayReportSchema = createInsertSchema(gatewayReports).omit
 export type GatewayReport = typeof gatewayReports.$inferSelect;
 export type InsertGatewayReport = z.infer<typeof insertGatewayReportSchema>;
 
+// Marketing Communications - Message Templates
+export const marketingTemplates = pgTable('marketing_templates', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  subject: text('subject').notNull(),
+  content: text('content').notNull(),
+  contentHtml: text('content_html'),
+  category: text('category').default('general'),
+  isActive: boolean('is_active').default(true),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertMarketingTemplateSchema = createInsertSchema(marketingTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MarketingTemplate = typeof marketingTemplates.$inferSelect;
+export type InsertMarketingTemplate = z.infer<typeof insertMarketingTemplateSchema>;
+
+// Marketing Communications - Sent Messages History
+export const marketingMessages = pgTable('marketing_messages', {
+  id: serial('id').primaryKey(),
+  subject: text('subject').notNull(),
+  content: text('content').notNull(),
+  contentHtml: text('content_html'),
+  messageType: text('message_type').notNull().default('email'),
+  recipientCount: integer('recipient_count').default(0),
+  successCount: integer('success_count').default(0),
+  failedCount: integer('failed_count').default(0),
+  customerTypeFilter: text('customer_type_filter'),
+  templateId: integer('template_id').references(() => marketingTemplates.id),
+  sentBy: text('sent_by'),
+  sentAt: timestamp('sent_at').defaultNow(),
+  status: text('status').default('sent'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const insertMarketingMessageSchema = createInsertSchema(marketingMessages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MarketingMessage = typeof marketingMessages.$inferSelect;
+export type InsertMarketingMessage = z.infer<typeof insertMarketingMessageSchema>;
+
+// Marketing Communications - Individual Recipient Log
+export const marketingRecipients = pgTable('marketing_recipients', {
+  id: serial('id').primaryKey(),
+  messageId: integer('message_id').references(() => marketingMessages.id).notNull(),
+  customerId: integer('customer_id'),
+  recipientEmail: text('recipient_email'),
+  recipientPhone: text('recipient_phone'),
+  status: text('status').default('pending'),
+  errorMessage: text('error_message'),
+  sentAt: timestamp('sent_at'),
+  deliveredAt: timestamp('delivered_at'),
+});
+
+export const insertMarketingRecipientSchema = createInsertSchema(marketingRecipients).omit({
+  id: true,
+});
+
+export type MarketingRecipient = typeof marketingRecipients.$inferSelect;
+export type InsertMarketingRecipient = z.infer<typeof insertMarketingRecipientSchema>;
+
 export * from './calendar.schema';

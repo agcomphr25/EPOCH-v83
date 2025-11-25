@@ -437,7 +437,9 @@ function VendorPOCard({
             >
               <div className="flex items-center gap-1">
                 <Building2 className="w-4 h-4" />
-                {vendorPo.vendorName || `Vendor ID: ${vendorPo.vendorId}`}
+                <span className="font-medium text-gray-700 dark:text-gray-300">Supplier #{vendorPo.vendorId}</span>
+                <span className="text-gray-400">-</span>
+                {vendorPo.vendorName || 'Unknown Vendor'}
               </div>
             </CardDescription>
             <div className="mt-3">

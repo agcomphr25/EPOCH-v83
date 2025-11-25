@@ -1156,27 +1156,27 @@ export default function Navigation() {
                     Certifications
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs text-gray-500">Document Generation</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-xs text-gray-500">Document Generation (via Traveler)</DropdownMenuLabel>
                   <DropdownMenuItem
                     onClick={() => setLocation('/p2-traveler-viewer')}
-                    className="cursor-pointer"
+                    className="cursor-pointer text-gray-600"
                   >
                     <Package className="h-4 w-4 mr-2" />
-                    Packing Slips
+                    Generate Packing Slips
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => setLocation('/p2-traveler-viewer')}
-                    className="cursor-pointer"
+                    className="cursor-pointer text-gray-600"
                   >
                     <Award className="h-4 w-4 mr-2" />
-                    Certificates of Conformance
+                    Generate Certificates
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => setLocation('/p2-traveler-viewer')}
-                    className="cursor-pointer"
+                    className="cursor-pointer text-gray-600"
                   >
                     <FileCheck className="h-4 w-4 mr-2" />
-                    Test Reports
+                    Generate Test Reports
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

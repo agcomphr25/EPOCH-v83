@@ -285,6 +285,7 @@ router.get('/fabric-items', async (req, res) => {
         id: item.id,
         agPartNumber: item.agPartNumber,
         name: item.name,
+        fabric: item.fabric || item.name,
         sku: item.sku,
       }));
     

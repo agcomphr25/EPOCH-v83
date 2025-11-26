@@ -947,6 +947,52 @@ export default function BarcodeQueuePage() {
                                     </Badge>
                                   </div>
 
+                                  {/* Bottom Metal and LOP/Fill Badges */}
+                                  <div className="flex gap-2 flex-wrap">
+                                    {(() => {
+                                      const bottomMetal = order.features?.bottom_metal;
+                                      const showBottomMetal =
+                                        bottomMetal &&
+                                        typeof bottomMetal === 'string' &&
+                                        bottomMetal.toLowerCase().includes('adl');
+                                      if (showBottomMetal) {
+                                        return (
+                                          <Badge className="bg-blue-100 text-blue-800 border-blue-200 font-semibold text-xs">
+                                            {bottomMetal.replace(/_/g, ' ').toUpperCase()}
+                                          </Badge>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
+                                    {(() => {
+                                      const lop = order.features?.length_of_pull;
+                                      const hasLopAdjustment = lop && lop !== 'no_lop_change' && lop.includes('lop_adj_');
+                                      const lopMatch = hasLopAdjustment ? lop.match(/lop_adj_([\d.]+)/) : null;
+                                      const lopValue = lopMatch ? lopMatch[1] : null;
+                                      
+                                      const fill = order.features?.fill;
+                                      const hasFill = fill && fill !== 'no_fill' && fill !== 'none';
+                                      
+                                      if (hasLopAdjustment || hasFill) {
+                                        return (
+                                          <div className="flex gap-1">
+                                            {hasLopAdjustment && (
+                                              <Badge className="bg-green-100 text-green-800 border-green-200 font-semibold text-xs">
+                                                LOP {lopValue}
+                                              </Badge>
+                                            )}
+                                            {hasFill && (
+                                              <Badge className="bg-purple-100 text-purple-800 border-purple-200 font-semibold text-xs">
+                                                Fill
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
+                                  </div>
+
                                   {order.customerPO && (
                                     <div className="text-xs text-gray-600">
                                       PO: {order.customerPO}

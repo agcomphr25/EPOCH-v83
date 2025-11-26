@@ -278,11 +278,16 @@ export default function MarketingCommunications() {
 
   useEffect(() => {
     if (selectAll && customersData?.customers) {
-      setSelectedCustomerIds(customersData.customers.map((c) => c.id));
+      // Add current page customers to selection (don't replace)
+      setSelectedCustomerIds((prev) => {
+        const currentPageIds = customersData.customers.map((c) => c.id);
+        const newIds = [...new Set([...prev, ...currentPageIds])];
+        return newIds;
+      });
     } else if (!selectAll) {
       setSelectedCustomerIds([]);
     }
-  }, [selectAll, customersData?.customers]);
+  }, [selectAll]);
 
   const handleTemplateSelect = (templateId: string) => {
     setSelectedTemplate(templateId);
@@ -774,10 +779,9 @@ export default function MarketingCommunications() {
                     ) : (
                       <div className="space-y-2">
                         {customersData?.customers.map((customer) => (
-                          <div
+                          <label
                             key={customer.id}
                             className="flex items-center space-x-3 p-2 hover:bg-muted/50 rounded-lg cursor-pointer"
-                            onClick={() => toggleCustomerSelection(customer.id)}
                           >
                             <Checkbox
                               checked={selectedCustomerIds.includes(customer.id)}
@@ -785,6 +789,7 @@ export default function MarketingCommunications() {
                                 toggleCustomerSelection(customer.id)
                               }
                               data-testid={`checkbox-customer-${customer.id}`}
+                              id={`customer-${customer.id}`}
                             />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate">
@@ -801,7 +806,7 @@ export default function MarketingCommunications() {
                                 {customer.customerType}
                               </Badge>
                             )}
-                          </div>
+                          </label>
                         ))}
                       </div>
                     )}

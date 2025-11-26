@@ -108,43 +108,37 @@ export default function QCShippingQueuePage() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  // Helper function to download shipment documents
+  // State for shipment documents modal (combined label + packing slips)
+  const [shipmentDocumentsData, setShipmentDocumentsData] = useState<{
+    trackingNumber: string;
+    labelData: string | null;
+    packingSlips: Array<{ poNumber: string; filename: string; data: string }>;
+  } | null>(null);
+  const [showShipmentDocumentsModal, setShowShipmentDocumentsModal] = useState(false);
+
+  // Helper function to handle shipment documents - shows modal for printing
   const handleShipmentDocuments = (shipmentData: any) => {
     try {
-      // Download shipping label (GIF base64)
-      if (shipmentData.shippingLabel?.data) {
-        const labelBlob = new Blob(
-          [Uint8Array.from(atob(shipmentData.shippingLabel.data), c => c.charCodeAt(0))],
-          { type: 'image/gif' }
-        );
-        const labelUrl = URL.createObjectURL(labelBlob);
-        const labelLink = document.createElement('a');
-        labelLink.href = labelUrl;
-        labelLink.download = `Shipping-Label-${shipmentData.trackingNumber}.gif`;
-        labelLink.click();
-        URL.revokeObjectURL(labelUrl);
-      }
-
-      // Download packing slips (PDF base64)
-      if (shipmentData.packingSlips && Array.isArray(shipmentData.packingSlips)) {
-        shipmentData.packingSlips.forEach((slip: any) => {
-          const slipBlob = new Blob(
-            [Uint8Array.from(atob(slip.data), c => c.charCodeAt(0))],
-            { type: 'application/pdf' }
-          );
-          const slipUrl = URL.createObjectURL(slipBlob);
-          const slipLink = document.createElement('a');
-          slipLink.href = slipUrl;
-          slipLink.download = slip.filename;
-          slipLink.click();
-          URL.revokeObjectURL(slipUrl);
-        });
-      }
-    } catch (error) {
-      console.error('Error downloading shipment documents:', error);
+      // Prepare document data for the modal
+      const documentsData = {
+        trackingNumber: shipmentData.trackingNumber || '',
+        labelData: shipmentData.shippingLabel?.data || null,
+        packingSlips: shipmentData.packingSlips || [],
+      };
+      
+      // Store in state and show modal
+      setShipmentDocumentsData(documentsData);
+      setShowShipmentDocumentsModal(true);
+      
       toast({
-        title: 'Download Error',
-        description: 'Some documents may not have downloaded correctly',
+        title: 'Shipment Created!',
+        description: `Tracking: ${shipmentData.trackingNumber} - Documents ready for printing`,
+      });
+    } catch (error) {
+      console.error('Error processing shipment documents:', error);
+      toast({
+        title: 'Error',
+        description: 'Shipment created but there was an issue processing documents',
         variant: 'destructive',
       });
     }
@@ -1705,15 +1699,16 @@ export default function QCShippingQueuePage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-600 dark:text-purple-300 dark:hover:bg-purple-900/20"
+                  className="border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-900/20"
                   disabled={selectedPOItems.size === 0 || generatePOPackingSlipsMutation.isPending}
                   onClick={handlePOPackingSlips}
                   data-testid="button-generate-po-packing-slips"
+                  title="Preview packing slips without tracking numbers (draft only)"
                 >
                   <FileText className="h-4 w-4 mr-2" />
                   {generatePOPackingSlipsMutation.isPending
                     ? 'Generating...'
-                    : `Generate Packing Slips (${selectedPOItems.size})`}
+                    : `Draft Packing Slips`}
                 </Button>
                 <Button
                   size="sm"
@@ -1729,13 +1724,14 @@ export default function QCShippingQueuePage() {
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-green-600 hover:bg-green-700 text-white"
+                  className="bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md"
                   onClick={() => setShowShipmentDialog(true)}
                   disabled={transformedShipmentItems.length === 0}
                   data-testid="button-ship-selected-floating"
+                  title="Generate shipping label, packing slips with tracking number, and print all"
                 >
                   <Truck className="h-4 w-4 mr-2" />
-                  Ship Selected ({selectedPOItems.size})
+                  Ship & Print ({selectedPOItems.size})
                 </Button>
               </div>
             </div>
@@ -2065,6 +2061,207 @@ export default function QCShippingQueuePage() {
           setSelectedCustomer(null);
         }}
       />
+
+      {/* Shipment Documents Modal - Shows label and packing slips after shipping */}
+      {showShipmentDocumentsModal && shipmentDocumentsData && (
+        <Dialog open={showShipmentDocumentsModal} onOpenChange={setShowShipmentDocumentsModal}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5 text-green-600" />
+                Shipment Documents - {shipmentDocumentsData.trackingNumber}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-6">
+              {/* Shipping Label */}
+              {shipmentDocumentsData.labelData && (
+                <div className="border rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-medium flex items-center gap-2">
+                      <Truck className="h-4 w-4" />
+                      Shipping Label
+                    </h3>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const byteCharacters = atob(shipmentDocumentsData.labelData!);
+                          const byteNumbers = new Array(byteCharacters.length);
+                          for (let i = 0; i < byteCharacters.length; i++) {
+                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                          }
+                          const byteArray = new Uint8Array(byteNumbers);
+                          const blob = new Blob([byteArray], { type: 'image/gif' });
+                          const url = URL.createObjectURL(blob);
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.download = `Shipping-Label-${shipmentDocumentsData.trackingNumber}.gif`;
+                          link.click();
+                          URL.revokeObjectURL(url);
+                        }}
+                        data-testid="button-download-label"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download Label
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const byteCharacters = atob(shipmentDocumentsData.labelData!);
+                          const byteNumbers = new Array(byteCharacters.length);
+                          for (let i = 0; i < byteCharacters.length; i++) {
+                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                          }
+                          const byteArray = new Uint8Array(byteNumbers);
+                          const blob = new Blob([byteArray], { type: 'image/gif' });
+                          const url = URL.createObjectURL(blob);
+                          const printWindow = window.open('', '_blank');
+                          if (printWindow) {
+                            printWindow.document.write(`
+                              <html>
+                                <head><title>Shipping Label - ${shipmentDocumentsData.trackingNumber}</title></head>
+                                <body style="margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh;">
+                                  <img src="${url}" alt="Shipping Label" style="max-width: 4in; max-height: 6in; object-fit: contain;" onload="setTimeout(() => { window.print(); }, 100);" />
+                                </body>
+                              </html>
+                            `);
+                            printWindow.document.close();
+                            setTimeout(() => URL.revokeObjectURL(url), 5000);
+                          }
+                        }}
+                        data-testid="button-print-label"
+                      >
+                        <Printer className="h-4 w-4 mr-2" />
+                        Print Label
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex justify-center bg-gray-50 p-4 rounded">
+                    <img
+                      src={`data:image/gif;base64,${shipmentDocumentsData.labelData}`}
+                      alt="Shipping Label"
+                      className="max-w-[4in] max-h-[6in] border shadow"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Packing Slips */}
+              {shipmentDocumentsData.packingSlips.length > 0 && (
+                <div className="border rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-medium flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Packing Slips ({shipmentDocumentsData.packingSlips.length})
+                    </h3>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        shipmentDocumentsData.packingSlips.forEach((slip, index) => {
+                          const byteCharacters = atob(slip.data);
+                          const byteNumbers = new Array(byteCharacters.length);
+                          for (let i = 0; i < byteCharacters.length; i++) {
+                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                          }
+                          const byteArray = new Uint8Array(byteNumbers);
+                          const blob = new Blob([byteArray], { type: 'application/pdf' });
+                          const url = URL.createObjectURL(blob);
+                          const link = document.createElement('a');
+                          link.href = url;
+                          link.download = slip.filename || `packing-slip-${index + 1}.pdf`;
+                          setTimeout(() => {
+                            link.click();
+                            URL.revokeObjectURL(url);
+                          }, index * 150);
+                        });
+                      }}
+                      data-testid="button-download-all-slips"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download All Slips
+                    </Button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {shipmentDocumentsData.packingSlips.map((slip, index) => {
+                      const byteCharacters = atob(slip.data);
+                      const byteNumbers = new Array(byteCharacters.length);
+                      for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                      }
+                      const byteArray = new Uint8Array(byteNumbers);
+                      const blob = new Blob([byteArray], { type: 'application/pdf' });
+                      const url = URL.createObjectURL(blob);
+
+                      return (
+                        <div key={index} className="border rounded p-3">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-medium">
+                              {slip.poNumber || slip.filename || `Packing Slip ${index + 1}`}
+                            </span>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  const link = document.createElement('a');
+                                  link.href = url;
+                                  link.download = slip.filename || `packing-slip-${index + 1}.pdf`;
+                                  link.click();
+                                }}
+                                data-testid={`button-download-slip-${index}`}
+                              >
+                                <Download className="h-4 w-4 mr-1" />
+                                Download
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  const printWindow = window.open(url, '_blank');
+                                  if (printWindow) {
+                                    printWindow.addEventListener('load', () => {
+                                      printWindow.print();
+                                    });
+                                  }
+                                }}
+                                data-testid={`button-print-slip-${index}`}
+                              >
+                                <Printer className="h-4 w-4 mr-1" />
+                                Print
+                              </Button>
+                            </div>
+                          </div>
+                          <iframe
+                            src={url}
+                            className="w-full h-[400px] border rounded"
+                            title={slip.filename || `Packing Slip ${index + 1}`}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 mt-4 border-t pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowShipmentDocumentsModal(false);
+                  setShipmentDocumentsData(null);
+                }}
+                data-testid="button-close-documents-modal"
+              >
+                Close
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

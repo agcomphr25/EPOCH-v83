@@ -55,7 +55,6 @@ type FabricInventoryItem = {
   nickname: string | null;
   supplierPartNumber: string | null;
   internalControlNumber: string | null;
-  lotNumber: string;
   batchNumber: string;
   rollNumber: string;
   quantityInStock: number;
@@ -114,7 +113,6 @@ export default function CuttingTableDashboard() {
     nickname: "",
     supplierPartNumber: "",
     internalControlNumber: "",
-    lotNumber: "",
     batchNumber: "",
     rollNumber: "",
     quantity: "",
@@ -170,7 +168,7 @@ export default function CuttingTableDashboard() {
         nickname: item.nickname,
         supplierPartNumber: item.supplierPartNumber,
         internalControlNumber: item.internalControlNumber,
-        barcodeValue: `FAB-${item.internalControlNumber || item.lotNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
+        barcodeValue: `FAB-${item.internalControlNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
         status: item.quantityInStock < 10 ? 'low' : 
                 (item.expirationDate && new Date(item.expirationDate) < new Date() ? 'expired' : 'available'),
       }));
@@ -261,7 +259,6 @@ export default function CuttingTableDashboard() {
           nickname: data.nickname,
           supplierPartNumber: data.supplierPartNumber,
           internalControlNumber: data.internalControlNumber,
-          lotNumber: data.lotNumber,
           batchNumber: data.batchNumber,
           rollNumber: data.rollNumber,
           quantityInStock: parseInt(data.quantity) || 0,
@@ -282,7 +279,6 @@ export default function CuttingTableDashboard() {
         nickname: "",
         supplierPartNumber: "",
         internalControlNumber: "",
-        lotNumber: "",
         batchNumber: "",
         rollNumber: "",
         quantity: "",
@@ -543,7 +539,6 @@ export default function CuttingTableDashboard() {
           internalControlNumber: fabric.internalControlNumber,
           nickname: fabric.nickname,
           supplierPartNumber: fabric.supplierPartNumber,
-          lotNumber: fabric.lotNumber,
           batchNumber: fabric.batchNumber,
           rollNumber: fabric.rollNumber,
         }),
@@ -573,7 +568,6 @@ export default function CuttingTableDashboard() {
                     ${fabric.nickname ? `<div class="nickname">"${fabric.nickname}"</div>` : ''}
                     <div class="barcode"><img src="${data.barcodeImage}" alt="barcode" /></div>
                     ${fabric.supplierPartNumber ? `<div class="info"><strong>Supplier P/N:</strong> ${fabric.supplierPartNumber}</div>` : ''}
-                    <div class="info"><strong>Lot:</strong> ${fabric.lotNumber || 'N/A'}</div>
                     <div class="info"><strong>Batch:</strong> ${fabric.batchNumber || 'N/A'}</div>
                     <div class="info"><strong>Roll:</strong> ${fabric.rollNumber || 'N/A'}</div>
                     <div class="info"><strong>Location:</strong> ${fabric.location || 'N/A'}</div>
@@ -1273,17 +1267,7 @@ export default function CuttingTableDashboard() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="lotNumber">Lot Number *</Label>
-                      <Input
-                        id="lotNumber"
-                        placeholder="LOT-2024-001"
-                        value={receivingForm.lotNumber}
-                        onChange={(e) => setReceivingForm({ ...receivingForm, lotNumber: e.target.value })}
-                        data-testid="input-lot-number"
-                      />
-                    </div>
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="batchNumber">Batch Number</Label>
                       <Input
@@ -1546,7 +1530,6 @@ export default function CuttingTableDashboard() {
                         <TableHead>Fabric Type</TableHead>
                         <TableHead>Nickname</TableHead>
                         <TableHead>Supplier Part #</TableHead>
-                        <TableHead>Lot #</TableHead>
                         <TableHead>Batch</TableHead>
                         <TableHead>Roll</TableHead>
                         <TableHead>Quantity</TableHead>
@@ -1572,7 +1555,6 @@ export default function CuttingTableDashboard() {
                           </TableCell>
                           <TableCell>{fabric.nickname || '-'}</TableCell>
                           <TableCell>{fabric.supplierPartNumber || '-'}</TableCell>
-                          <TableCell>{fabric.lotNumber || '-'}</TableCell>
                           <TableCell>{fabric.batchNumber || '-'}</TableCell>
                           <TableCell>{fabric.rollNumber || '-'}</TableCell>
                           <TableCell>{fabric.quantityInStock || 0}</TableCell>
@@ -1629,7 +1611,6 @@ export default function CuttingTableDashboard() {
                   <div><strong>Type:</strong> {selectedFabric.fabricType}</div>
                   {selectedFabric.nickname && <div><strong>Nickname:</strong> {selectedFabric.nickname}</div>}
                   {selectedFabric.supplierPartNumber && <div><strong>Supplier Part #:</strong> {selectedFabric.supplierPartNumber}</div>}
-                  <div><strong>Lot:</strong> {selectedFabric.lotNumber}</div>
                   <div><strong>Barcode:</strong> {selectedFabric.barcodeValue}</div>
                 </div>
               </div>

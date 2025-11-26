@@ -6,6 +6,7 @@ import {
   rtsInventory, 
   rtsInventoryHistory,
   allOrders,
+  payments,
   insertRtsSaleSchema,
   insertRtsSaleItemSchema 
 } from '../../schema';
@@ -91,6 +92,11 @@ const createSaleSchema = z.object({
   }),
   notes: z.string().optional(),
   generateLabel: z.boolean().default(true),
+  payment: z.object({
+    paymentType: z.enum(['cash', 'check', 'credit_card', 'ach', 'agr']),
+    paymentAmount: z.number().positive(),
+    notes: z.string().optional(),
+  }).optional(),
 });
 
 router.post('/', async (req, res) => {
@@ -236,6 +242,27 @@ router.post('/', async (req, res) => {
       .set({ orderId: newOrderId, updatedAt: new Date() })
       .where(eq(rtsSales.id, sale.id));
 
+    // Create payment if provided
+    let paymentRecord = null;
+    if (data.payment) {
+      const [payment] = await db.insert(payments).values({
+        orderId: newOrderId,
+        paymentType: data.payment.paymentType,
+        paymentAmount: data.payment.paymentAmount,
+        paymentDate: new Date(),
+        notes: data.payment.notes || `RTS Sale: ${saleNumber}`,
+      }).returning();
+      paymentRecord = payment;
+      console.log(`✅ Payment of $${data.payment.paymentAmount} recorded for order ${newOrderId}`);
+
+      // Update balance due on RTS sale
+      const newBalanceDue = Math.max(0, totalAmount - data.payment.paymentAmount);
+      await db
+        .update(rtsSales)
+        .set({ balanceDue: newBalanceDue, updatedAt: new Date() })
+        .where(eq(rtsSales.id, sale.id));
+    }
+
     // Generate shipping label if requested
     if (data.generateLabel) {
       try {
@@ -284,6 +311,7 @@ router.post('/', async (req, res) => {
           sale: { ...sale, orderId: newOrderId, trackingNumber: labelResult.trackingNumber, shippingLabelUrl: labelData },
           order: { orderId: newOrderId },
           label: labelResult,
+          payment: paymentRecord,
         });
       } catch (labelError: any) {
         console.error('Error generating shipping label:', labelError);
@@ -292,12 +320,14 @@ router.post('/', async (req, res) => {
           sale: { ...sale, orderId: newOrderId },
           order: { orderId: newOrderId },
           labelError: labelError.message || 'Failed to generate shipping label',
+          payment: paymentRecord,
         });
       }
     } else {
       res.json({ 
         sale: { ...sale, orderId: newOrderId },
         order: { orderId: newOrderId },
+        payment: paymentRecord,
       });
     }
   } catch (error: any) {

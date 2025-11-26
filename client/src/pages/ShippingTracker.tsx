@@ -26,12 +26,6 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
   Package,
   TrendingUp,
   Calendar,
@@ -42,7 +36,6 @@ import {
   ExternalLink,
   Mail,
   Send,
-  MapPin,
 } from 'lucide-react';
 import {
   getCurrentCompanyWeek,
@@ -51,6 +44,7 @@ import {
 } from '@shared/weekUtils';
 import { format } from 'date-fns';
 import { ManualTrackingEntry } from '@/components/ManualTrackingEntry';
+import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient } from '@/lib/queryClient';
 
@@ -71,20 +65,6 @@ interface Order {
   shippingMethod?: string;
   isRtsOrder?: boolean;
   rtsSaleId?: string;
-  hasAltShipTo?: boolean;
-  altShipToCustomerId?: string;
-  altShipToName?: string;
-  altShipToCompany?: string;
-  altShipToEmail?: string;
-  altShipToPhone?: string;
-  altShipToAddress?: {
-    street?: string;
-    street2?: string;
-    city?: string;
-    state?: string;
-    zipCode?: string;
-    country?: string;
-  };
 }
 
 interface Customer {
@@ -92,20 +72,6 @@ interface Customer {
   name: string;
   email?: string;
   phone?: string;
-  company?: string;
-}
-
-interface CustomerAddress {
-  id: number;
-  customerId: string;
-  street: string;
-  street2?: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  country: string;
-  type: string;
-  isDefault: boolean;
 }
 
 interface WeeklyStats {
@@ -172,90 +138,6 @@ export default function ShippingTracker() {
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ['/api/customers'],
   });
-
-  // Fetch customer addresses for ship-to tooltips
-  const { data: customerAddresses, isLoading: isLoadingAddresses } = useQuery<CustomerAddress[]>({
-    queryKey: ['/api/customer-addresses'],
-  });
-
-  // Helper function to safely parse altShipToAddress (could be object, string, or null)
-  const parseAltShipToAddress = (addr: unknown): Order['altShipToAddress'] => {
-    if (!addr) return undefined;
-    if (typeof addr === 'object' && addr !== null) {
-      const obj = addr as Record<string, unknown>;
-      return {
-        street: typeof obj.street === 'string' ? obj.street : undefined,
-        street2: typeof obj.street2 === 'string' ? obj.street2 : undefined,
-        city: typeof obj.city === 'string' ? obj.city : undefined,
-        state: typeof obj.state === 'string' ? obj.state : undefined,
-        zipCode: typeof obj.zipCode === 'string' ? obj.zipCode : undefined,
-        country: typeof obj.country === 'string' ? obj.country : undefined,
-      };
-    }
-    return undefined;
-  };
-
-  // Helper function to get shipping address for an order
-  const getShipToInfo = (order: Order, customer: Customer | undefined) => {
-    // Check if order has alt ship-to info
-    if (order.hasAltShipTo) {
-      const altAddr = parseAltShipToAddress(order.altShipToAddress);
-      return {
-        name: order.altShipToName || order.altShipToCompany || 'Alt Ship To',
-        company: order.altShipToCompany,
-        email: order.altShipToEmail,
-        phone: order.altShipToPhone,
-        street: altAddr?.street,
-        street2: altAddr?.street2,
-        city: altAddr?.city,
-        state: altAddr?.state,
-        zipCode: altAddr?.zipCode,
-        country: altAddr?.country,
-        isAltShipTo: true,
-      };
-    }
-
-    // Get default shipping address for customer
-    if (customer && customerAddresses) {
-      const custAddresses = customerAddresses.filter(
-        (addr) => String(addr.customerId) === String(customer.id)
-      );
-      const shippingAddress = custAddresses.find(
-        (addr) => addr.isDefault && (addr.type === 'shipping' || addr.type === 'both')
-      ) || custAddresses.find(
-        (addr) => addr.type === 'shipping' || addr.type === 'both'
-      ) || custAddresses[0];
-
-      if (shippingAddress) {
-        return {
-          name: customer.name,
-          company: customer.company,
-          email: customer.email,
-          phone: customer.phone,
-          street: shippingAddress.street,
-          street2: shippingAddress.street2,
-          city: shippingAddress.city,
-          state: shippingAddress.state,
-          zipCode: shippingAddress.zipCode,
-          country: shippingAddress.country,
-          isAltShipTo: false,
-        };
-      }
-    }
-
-    // Fallback to customer info only
-    if (customer) {
-      return {
-        name: customer.name,
-        company: customer.company,
-        email: customer.email,
-        phone: customer.phone,
-        isAltShipTo: false,
-      };
-    }
-
-    return null;
-  };
 
   // Filter orders by search term (order number or customer name)
   const filteredOrders = useMemo(() => {
@@ -614,90 +496,21 @@ export default function ShippingTracker() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span 
-                                    className="cursor-pointer hover:text-blue-600 hover:underline inline-flex items-center gap-1"
-                                    data-testid={`customer-name-${order.orderId}`}
-                                  >
-                                    {customer?.name || 'Unknown Customer'}
-                                    {order.hasAltShipTo && (
-                                      <Badge variant="secondary" className="bg-purple-100 text-purple-800 text-xs ml-1">
-                                        Alt
-                                      </Badge>
-                                    )}
-                                    <MapPin className="h-3 w-3 text-gray-400" />
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  {(() => {
-                                    if (isLoadingAddresses && !order.hasAltShipTo) {
-                                      return (
-                                        <div className="text-gray-500 flex items-center gap-2">
-                                          <div className="h-3 w-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                                          Loading address...
-                                        </div>
-                                      );
-                                    }
-                                    const shipToInfo = getShipToInfo(order, customer);
-                                    if (!shipToInfo) {
-                                      return (
-                                        <div className="text-gray-500">
-                                          No shipping information available
-                                        </div>
-                                      );
-                                    }
-                                    return (
-                                      <div className="space-y-2">
-                                        <div className="font-semibold text-sm border-b pb-1 flex items-center gap-2">
-                                          <MapPin className="h-4 w-4" />
-                                          Ship To Address
-                                          {shipToInfo.isAltShipTo && (
-                                            <Badge variant="secondary" className="bg-purple-100 text-purple-800 text-xs">
-                                              Alternate
-                                            </Badge>
-                                          )}
-                                        </div>
-                                        <div className="space-y-1 text-sm">
-                                          <div className="font-medium">{shipToInfo.name}</div>
-                                          {shipToInfo.company && shipToInfo.company !== shipToInfo.name && (
-                                            <div className="text-gray-600">{shipToInfo.company}</div>
-                                          )}
-                                          {shipToInfo.street && (
-                                            <div>
-                                              <div>{shipToInfo.street}</div>
-                                              {shipToInfo.street2 && <div>{shipToInfo.street2}</div>}
-                                              <div>
-                                                {shipToInfo.city}, {shipToInfo.state} {shipToInfo.zipCode}
-                                              </div>
-                                              {shipToInfo.country && shipToInfo.country !== 'United States' && (
-                                                <div>{shipToInfo.country}</div>
-                                              )}
-                                            </div>
-                                          )}
-                                          {!shipToInfo.street && (
-                                            <div className="text-gray-500 italic">
-                                              No address on file
-                                            </div>
-                                          )}
-                                          {(shipToInfo.email || shipToInfo.phone) && (
-                                            <div className="pt-1 border-t mt-2 space-y-1">
-                                              {shipToInfo.email && (
-                                                <div className="text-gray-600 text-xs">{shipToInfo.email}</div>
-                                              )}
-                                              {shipToInfo.phone && (
-                                                <div className="text-gray-600 text-xs">{shipToInfo.phone}</div>
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })()}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                            {order.customerId ? (
+                              <CustomerDetailsTooltip
+                                customerId={order.customerId}
+                                customerName={customer?.name || 'Unknown Customer'}
+                              >
+                                <span 
+                                  className="cursor-pointer hover:text-blue-600 hover:underline"
+                                  data-testid={`customer-name-${order.orderId}`}
+                                >
+                                  {customer?.name || 'Unknown Customer'}
+                                </span>
+                              </CustomerDetailsTooltip>
+                            ) : (
+                              <span className="text-gray-500">Unknown Customer</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {order.trackingNumber ? (

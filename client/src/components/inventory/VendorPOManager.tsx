@@ -1071,7 +1071,7 @@ export default function VendorPOManager() {
             
             <div class="totals">
               <div class="total-line">
-                Total: $${selectedVendorPO.totalCost != null ? selectedVendorPO.totalCost.toFixed(2) : '0.00'}
+                Total: $${items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0).toFixed(2)}
               </div>
             </div>
             

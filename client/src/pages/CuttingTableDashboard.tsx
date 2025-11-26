@@ -199,6 +199,10 @@ export default function CuttingTableDashboard() {
     },
   });
 
+  const { data: fabricItems = [], isLoading: loadingFabricItems } = useQuery<any[]>({
+    queryKey: ['/api/cutting-table/fabric-items'],
+  });
+
   const { data: mfgQueueItems = [], isLoading: loadingMfgQueue, refetch: refetchMfgQueue } = useQuery<ManufacturingQueueItem[]>({
     queryKey: ['/api/cutting-table-mfg-queue/cutting-table', mfgQueueStatus],
     queryFn: () => {
@@ -818,10 +822,19 @@ export default function CuttingTableDashboard() {
                       <SelectValue placeholder="Select fabric type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Carbon Fiber">Carbon Fiber</SelectItem>
-                      <SelectItem value="Fiberglass">Fiberglass</SelectItem>
-                      <SelectItem value="Primtex">Primtex</SelectItem>
-                      <SelectItem value="Kevlar">Kevlar</SelectItem>
+                      {fabricItems.length === 0 ? (
+                        <div className="p-2 text-sm text-muted-foreground">No fabric items available</div>
+                      ) : (
+                        fabricItems.map((item: any) => (
+                          <SelectItem 
+                            key={item.id} 
+                            value={item.fabric || item.agPartNumber || item.name}
+                            data-testid={`option-fabric-${item.id}`}
+                          >
+                            {item.fabric || item.agPartNumber || item.name}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

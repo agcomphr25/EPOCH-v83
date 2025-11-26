@@ -774,10 +774,9 @@ export default function MarketingCommunications() {
                     ) : (
                       <div className="space-y-2">
                         {customersData?.customers.map((customer) => (
-                          <div
+                          <label
                             key={customer.id}
                             className="flex items-center space-x-3 p-2 hover:bg-muted/50 rounded-lg cursor-pointer"
-                            onClick={() => toggleCustomerSelection(customer.id)}
                           >
                             <Checkbox
                               checked={selectedCustomerIds.includes(customer.id)}
@@ -785,6 +784,7 @@ export default function MarketingCommunications() {
                                 toggleCustomerSelection(customer.id)
                               }
                               data-testid={`checkbox-customer-${customer.id}`}
+                              id={`customer-${customer.id}`}
                             />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate">
@@ -801,7 +801,7 @@ export default function MarketingCommunications() {
                                 {customer.customerType}
                               </Badge>
                             )}
-                          </div>
+                          </label>
                         ))}
                       </div>
                     )}

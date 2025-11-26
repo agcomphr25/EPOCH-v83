@@ -106,6 +106,10 @@ export default function CuttingTableDashboard() {
 
   const [receivingForm, setReceivingForm] = useState({
     fabricType: "",
+    fabricPartNumber: "",
+    nickname: "",
+    supplierPartNumber: "",
+    internalControlNumber: "",
     lotNumber: "",
     batchNumber: "",
     rollNumber: "",
@@ -243,7 +247,11 @@ export default function CuttingTableDashboard() {
       return apiRequest('/api/cutting-table/fabric-inventory', {
         method: 'POST',
         body: JSON.stringify({
-          fabricType: data.fabricType,
+          fabric: data.fabricType,
+          fabricPartNumber: data.fabricPartNumber,
+          nickname: data.nickname,
+          supplierPartNumber: data.supplierPartNumber,
+          internalControlNumber: data.internalControlNumber,
           lotNumber: data.lotNumber,
           batchNumber: data.batchNumber,
           rollNumber: data.rollNumber,
@@ -261,6 +269,10 @@ export default function CuttingTableDashboard() {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
       setReceivingForm({
         fabricType: "",
+        fabricPartNumber: "",
+        nickname: "",
+        supplierPartNumber: "",
+        internalControlNumber: "",
         lotNumber: "",
         batchNumber: "",
         rollNumber: "",
@@ -1167,17 +1179,26 @@ export default function CuttingTableDashboard() {
                 Receive Fabric into Inventory
               </CardTitle>
               <CardDescription>
-                Add new fabric with full traceability (lot, batch, roll numbers)
+                Add new fabric with full traceability (control number, lot, batch, roll)
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="fabricType">Fabric Type *</Label>
+                    <Label htmlFor="fabricType">Fabric Type (Part Number) *</Label>
                     <Select
                       value={receivingForm.fabricType}
-                      onValueChange={(v) => setReceivingForm({ ...receivingForm, fabricType: v })}
+                      onValueChange={(v) => {
+                        const selectedItem = fabricItems.find((item: any) => 
+                          (item.agPartNumber || item.fabric || item.name) === v
+                        );
+                        setReceivingForm({ 
+                          ...receivingForm, 
+                          fabricType: v,
+                          fabricPartNumber: selectedItem?.agPartNumber || ''
+                        });
+                      }}
                     >
                       <SelectTrigger id="fabricType" data-testid="select-fabric-type">
                         <SelectValue placeholder="Select fabric type" />
@@ -1189,15 +1210,50 @@ export default function CuttingTableDashboard() {
                           fabricItems.map((item: any) => (
                             <SelectItem 
                               key={item.id} 
-                              value={item.fabric || item.agPartNumber || item.name}
+                              value={item.agPartNumber || item.fabric || item.name}
                               data-testid={`option-fabric-${item.id}`}
                             >
-                              {item.fabric || item.agPartNumber || item.name}
+                              {item.agPartNumber ? `${item.agPartNumber} - ${item.name || item.fabric}` : (item.fabric || item.name)}
                             </SelectItem>
                           ))
                         )}
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="nickname">Nickname (In-House Name)</Label>
+                    <Input
+                      id="nickname"
+                      placeholder="What we call it in the shop"
+                      value={receivingForm.nickname}
+                      onChange={(e) => setReceivingForm({ ...receivingForm, nickname: e.target.value })}
+                      data-testid="input-nickname"
+                    />
+                    <p className="text-xs text-muted-foreground">The name your team uses for this fabric</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="internalControlNumber">Internal Control Number *</Label>
+                      <Input
+                        id="internalControlNumber"
+                        placeholder="ICN-2024-001"
+                        value={receivingForm.internalControlNumber}
+                        onChange={(e) => setReceivingForm({ ...receivingForm, internalControlNumber: e.target.value })}
+                        data-testid="input-internal-control-number"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="supplierPartNumber">Supplier Part Number</Label>
+                      <Input
+                        id="supplierPartNumber"
+                        placeholder="SUP-12345"
+                        value={receivingForm.supplierPartNumber}
+                        onChange={(e) => setReceivingForm({ ...receivingForm, supplierPartNumber: e.target.value })}
+                        data-testid="input-supplier-part-number"
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2">
@@ -1297,7 +1353,7 @@ export default function CuttingTableDashboard() {
                   <Button
                     className="w-full"
                     onClick={() => receiveFabricMutation.mutate(receivingForm)}
-                    disabled={!receivingForm.fabricType || !receivingForm.lotNumber || receiveFabricMutation.isPending}
+                    disabled={!receivingForm.fabricType || !receivingForm.internalControlNumber || receiveFabricMutation.isPending}
                     data-testid="button-receive-fabric"
                   >
                     {receiveFabricMutation.isPending ? (

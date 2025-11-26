@@ -641,7 +641,7 @@ router.delete('/consumption-rates/:id', async (req: Request, res: Response) => {
 });
 
 // Get inventory items filtered by department
-router.get('/inventory/items/department/:departmentName', async (req: Request, res: Response) => {
+router.get('/items/department/:departmentName', async (req: Request, res: Response) => {
   try {
     const departmentName = req.params.departmentName;
     const username = req.user?.username;

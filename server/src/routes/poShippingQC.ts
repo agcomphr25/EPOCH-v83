@@ -1179,18 +1179,15 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         id: shipmentId,
         createdBy: req.user?.username || 'system',
         reference: referenceNumber,
-        customerId: orderDetails[0].order.customerId,
         poNumbers: poNumbers.join(', '),
         shippedAt,
         carrier: 'UPS',
         serviceLevel: serviceCode,
         billType,
         masterTrackingNumber: trackingNumber,
-        packageCount: 1, // Default to single package
-        trackingNumber,
-        trackingUrl: `https://www.ups.com/track?tracknum=${trackingNumber}`,
-        thirdPartyAccountNumber: thirdPartyAccountNumber || null,
-        shipFromAddress: {
+        packageCount: 1,
+        thirdPartyAccount: thirdPartyAccountNumber || null,
+        shipFromSnapshot: {
           name: process.env.SHIP_FROM_NAME || 'AG Composites',
           street: process.env.SHIP_FROM_ADDRESS1 || '',
           city: process.env.SHIP_FROM_CITY || '',
@@ -1198,7 +1195,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           postalCode: process.env.SHIP_FROM_POSTAL || '',
           country: process.env.SHIP_FROM_COUNTRY || 'US',
         },
-        shipToAddress: {
+        shipToSnapshot: {
           name: shipTo.name,
           street: shipTo.address1,
           street2: shipTo.address2 || null,
@@ -1207,14 +1204,11 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           postalCode: shipTo.postalCode,
           country: shipTo.country || 'US',
         },
-        totalWeightLbs: totalWeight,
-        documents: {
-          label: labelBase64 ? { type: 'label', fileName: `Label-${trackingNumber}.gif`, data: labelBase64 } : null,
-          packingSlips: [], // Will be populated after packing slip generation
-        },
-        notificationSent: false,
-        notificationEmail: null,
-        notificationSms: null,
+        totalWeightLbs: String(totalWeight),
+        documents: [
+          labelBase64 ? { type: 'label', fileName: `Label-${trackingNumber}.gif`, mime: 'image/gif', storagePath: '', bytes: labelBase64.length } : null,
+        ].filter(Boolean),
+        notificationMetadata: {},
       };
 
       const shipmentItemsData = orderDetails.map((detail) => ({

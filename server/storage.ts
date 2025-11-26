@@ -11224,28 +11224,26 @@ export class DatabaseStorage implements IStorage {
     shipment: InsertShipmentRecord;
     items: { poItemId: number; orderId: string; quantity: number; weightLbs: number | null }[];
   }): Promise<ShipmentRecord> {
-    return await db.transaction(async (tx) => {
-      // Create the shipment record
-      const [shipment] = await tx
-        .insert(shipmentRecords)
-        .values(data.shipment)
-        .returning();
+    // Create the shipment record first (without transaction - neon-http doesn't support transactions)
+    const [shipment] = await db
+      .insert(shipmentRecords)
+      .values(data.shipment)
+      .returning();
 
-      // Create shipment items
-      if (data.items.length > 0) {
-        const shipmentItemsData = data.items.map(item => ({
-          shipmentId: shipment.id,
-          poItemId: item.poItemId,
-          orderId: item.orderId,
-          quantity: item.quantity,
-          weightLbs: item.weightLbs,
-        }));
+    // Create shipment items using the returned shipment ID
+    if (data.items.length > 0) {
+      const shipmentItemsData = data.items.map(item => ({
+        shipmentId: shipment.id,
+        poItemId: item.poItemId,
+        orderId: item.orderId,
+        quantity: item.quantity,
+        weightLbs: item.weightLbs,
+      }));
 
-        await tx.insert(shipmentItems).values(shipmentItemsData);
-      }
+      await db.insert(shipmentItems).values(shipmentItemsData);
+    }
 
-      return shipment;
-    });
+    return shipment;
   }
 
   async getShipment(id: string): Promise<ShipmentRecord | undefined> {

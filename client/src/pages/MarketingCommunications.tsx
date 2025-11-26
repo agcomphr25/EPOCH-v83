@@ -278,11 +278,16 @@ export default function MarketingCommunications() {
 
   useEffect(() => {
     if (selectAll && customersData?.customers) {
-      setSelectedCustomerIds(customersData.customers.map((c) => c.id));
+      // Add current page customers to selection (don't replace)
+      setSelectedCustomerIds((prev) => {
+        const currentPageIds = customersData.customers.map((c) => c.id);
+        const newIds = [...new Set([...prev, ...currentPageIds])];
+        return newIds;
+      });
     } else if (!selectAll) {
       setSelectedCustomerIds([]);
     }
-  }, [selectAll, customersData?.customers]);
+  }, [selectAll]);
 
   const handleTemplateSelect = (templateId: string) => {
     setSelectedTemplate(templateId);

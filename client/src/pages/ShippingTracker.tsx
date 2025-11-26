@@ -44,6 +44,7 @@ import {
 } from '@shared/weekUtils';
 import { format } from 'date-fns';
 import { ManualTrackingEntry } from '@/components/ManualTrackingEntry';
+import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient } from '@/lib/queryClient';
 
@@ -495,7 +496,21 @@ export default function ShippingTracker() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            {customer?.name || 'Unknown Customer'}
+                            {order.customerId ? (
+                              <CustomerDetailsTooltip
+                                customerId={order.customerId}
+                                customerName={customer?.name || 'Unknown Customer'}
+                              >
+                                <span 
+                                  className="cursor-pointer hover:text-blue-600 hover:underline"
+                                  data-testid={`customer-name-${order.orderId}`}
+                                >
+                                  {customer?.name || 'Unknown Customer'}
+                                </span>
+                              </CustomerDetailsTooltip>
+                            ) : (
+                              <span className="text-gray-500">Unknown Customer</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {order.trackingNumber ? (

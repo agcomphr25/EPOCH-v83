@@ -115,7 +115,6 @@ export default function CuttingTableDashboard() {
     internalControlNumber: "",
     batchNumber: "",
     rollNumber: "",
-    quantity: "",
     squareMeters: "",
     expirationDate: "",
     location: "",
@@ -261,7 +260,7 @@ export default function CuttingTableDashboard() {
           internalControlNumber: data.internalControlNumber,
           batchNumber: data.batchNumber,
           rollNumber: data.rollNumber,
-          quantityInStock: parseInt(data.quantity) || 0,
+          quantityInStock: 1,
           squareMeters: parseFloat(data.squareMeters) || 0,
           expirationDate: data.expirationDate || null,
           location: data.location,
@@ -281,7 +280,6 @@ export default function CuttingTableDashboard() {
         internalControlNumber: "",
         batchNumber: "",
         rollNumber: "",
-        quantity: "",
         squareMeters: "",
         expirationDate: "",
         location: "",
@@ -1290,30 +1288,17 @@ export default function CuttingTableDashboard() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="quantity">Quantity (yards/meters)</Label>
-                      <Input
-                        id="quantity"
-                        type="number"
-                        placeholder="100"
-                        value={receivingForm.quantity}
-                        onChange={(e) => setReceivingForm({ ...receivingForm, quantity: e.target.value })}
-                        data-testid="input-quantity"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="squareMeters">Square Meters</Label>
-                      <Input
-                        id="squareMeters"
-                        type="number"
-                        step="0.01"
-                        placeholder="50.5"
-                        value={receivingForm.squareMeters}
-                        onChange={(e) => setReceivingForm({ ...receivingForm, squareMeters: e.target.value })}
-                        data-testid="input-square-meters"
-                      />
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="squareMeters">Square Meters</Label>
+                    <Input
+                      id="squareMeters"
+                      type="number"
+                      step="0.01"
+                      placeholder="50.5"
+                      value={receivingForm.squareMeters}
+                      onChange={(e) => setReceivingForm({ ...receivingForm, squareMeters: e.target.value })}
+                      data-testid="input-square-meters"
+                    />
                   </div>
                 </div>
 

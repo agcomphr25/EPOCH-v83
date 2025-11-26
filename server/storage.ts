@@ -4806,12 +4806,13 @@ export class DatabaseStorage implements IStorage {
       .from(inventoryItems)
       .where(eq(inventoryItems.isActive, true));
     
-    // Admin users (glennj, tasham, staciw) can see all active parts
-    if (isAdmin) {
+    // Admin users can see all items when "all" is selected
+    if (departmentName === 'all' && isAdmin) {
       return items;
     }
     
     // Filter items that have this department in their assignedDepartments array
+    // This applies to both regular users AND admin users when a specific department is selected
     return items.filter(item => {
       const assignedDepts = item.assignedDepartments as string[] | null;
       return assignedDepts && assignedDepts.includes(departmentName);

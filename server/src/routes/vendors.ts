@@ -59,17 +59,15 @@ async function syncVendorScoresFromEvaluations(vendorId: number) {
   // Get all evaluations for this vendor
   const allEvaluations = await storage.getVendorMonthlyEvaluations(vendorId);
   
-  // Check if there's an evaluation for the CURRENT month
+  // Check if there's an evaluation record for the CURRENT month
+  // A vendor is considered "evaluated" if they have any evaluation record for the current month,
+  // even if all scores are N/A (null) - the record existence is what matters
   const currentMonthEval = allEvaluations.find(ev => 
     ev.year === currentYear && 
-    ev.month === currentMonth &&
-    (ev.qualityScore !== null || 
-     ev.costScore !== null || 
-     ev.deliveryScore !== null || 
-     ev.responseScore !== null)
+    ev.month === currentMonth
   );
   
-  // Set evaluated=true only if current month has scores
+  // Set evaluated=true if current month has ANY evaluation record (scores or N/A)
   const isEvaluated = !!currentMonthEval;
   
   // Get the latest evaluation for displaying scores (not necessarily current month)

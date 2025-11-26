@@ -1669,136 +1669,11 @@ export default function VendorManagement() {
 
                 {editingVendor && <MonthlyEvaluationsTable vendorId={editingVendor.id} />}
 
-                <div className="bg-amber-50 border border-amber-200 rounded-md p-4 mb-4">
-                  <h4 className="font-semibold text-amber-900 mb-2">Overall Vendor Evaluation</h4>
-                  <p className="text-sm text-amber-700">
-                    Rate the vendor on 4 criteria using a 1-5 scale.
-                  </p>
-                </div>
-
                 <Form {...form}>
                   <form
                     onSubmit={form.handleSubmit(onSubmit)}
                     className="space-y-4"
                   >
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="qualityScore"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Quality</FormLabel>
-                            <Select
-                              value={field.value?.toString() || 'na'}
-                              onValueChange={(value) => field.onChange(value === 'na' ? null : parseInt(value))}
-                            >
-                              <FormControl>
-                                <SelectTrigger data-testid="select-quality-score">
-                                  <SelectValue placeholder="Select rating..." />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="5">5</SelectItem>
-                                <SelectItem value="4">4</SelectItem>
-                                <SelectItem value="3">3</SelectItem>
-                                <SelectItem value="2">2</SelectItem>
-                                <SelectItem value="1">1</SelectItem>
-                                <SelectItem value="na">N/A</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="costScore"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Cost</FormLabel>
-                            <Select
-                              value={field.value?.toString() || 'na'}
-                              onValueChange={(value) => field.onChange(value === 'na' ? null : parseInt(value))}
-                            >
-                              <FormControl>
-                                <SelectTrigger data-testid="select-cost-score">
-                                  <SelectValue placeholder="Select rating..." />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="5">5</SelectItem>
-                                <SelectItem value="4">4</SelectItem>
-                                <SelectItem value="3">3</SelectItem>
-                                <SelectItem value="2">2</SelectItem>
-                                <SelectItem value="1">1</SelectItem>
-                                <SelectItem value="na">N/A</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="deliveryScore"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Delivery</FormLabel>
-                            <Select
-                              value={field.value?.toString() || 'na'}
-                              onValueChange={(value) => field.onChange(value === 'na' ? null : parseInt(value))}
-                            >
-                              <FormControl>
-                                <SelectTrigger data-testid="select-delivery-score">
-                                  <SelectValue placeholder="Select rating..." />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="5">5</SelectItem>
-                                <SelectItem value="4">4</SelectItem>
-                                <SelectItem value="3">3</SelectItem>
-                                <SelectItem value="2">2</SelectItem>
-                                <SelectItem value="1">1</SelectItem>
-                                <SelectItem value="na">N/A</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="responseScore"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Response</FormLabel>
-                            <Select
-                              value={field.value?.toString() || 'na'}
-                              onValueChange={(value) => field.onChange(value === 'na' ? null : parseInt(value))}
-                            >
-                              <FormControl>
-                                <SelectTrigger data-testid="select-response-score">
-                                  <SelectValue placeholder="Select rating..." />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="5">5</SelectItem>
-                                <SelectItem value="4">4</SelectItem>
-                                <SelectItem value="3">3</SelectItem>
-                                <SelectItem value="2">2</SelectItem>
-                                <SelectItem value="1">1</SelectItem>
-                                <SelectItem value="na">N/A</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-
                     <FormField
                       control={form.control}
                       name="notes"
@@ -2458,10 +2333,14 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
 
   const renderCell = (month: number, field: string) => {
     const evaluation = getEvaluationForMonth(month);
-    const value = evaluation?.[field];
-    const isEditing = editingCell?.month === month && editingCell?.field === field;
     const key = `${month}`;
     const hasChanges = pendingChanges.has(key);
+    
+    // Use pending value if there's a pending change, otherwise use saved value
+    const pendingData = pendingChanges.get(key);
+    const value = hasChanges ? pendingData?.[field] : evaluation?.[field];
+    
+    const isEditing = editingCell?.month === month && editingCell?.field === field;
 
     if (isEditing) {
       return (
@@ -2472,7 +2351,8 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
             // Auto-save on selection
             const numValue = newValue === 'na' ? null : parseInt(newValue);
             const evaluation = getEvaluationForMonth(month);
-            const baseData: any = {
+            const existingPending = pendingChanges.get(key);
+            const baseData: any = existingPending || {
               vendorId,
               month,
               year: selectedYear,
@@ -2507,6 +2387,9 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
       );
     }
 
+    // Display the value - show 'N/A' for null values when there's a pending change
+    const displayValue = value !== null && value !== undefined ? value : (hasChanges ? 'N/A' : '-');
+
     return (
       <div
         onClick={() => handleCellClick(month, field)}
@@ -2516,7 +2399,7 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
         )}
         data-testid={`cell-${field}-${month}`}
       >
-        {value || '-'}
+        {displayValue}
       </div>
     );
   };

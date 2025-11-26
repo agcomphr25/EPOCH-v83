@@ -22,7 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import CustomerSearchInput from './CustomerSearchInput';
 import { useToast } from '@/hooks/use-toast';
-import { Package, DollarSign, Truck } from 'lucide-react';
+import { Package, DollarSign, Truck, CreditCard } from 'lucide-react';
 
 interface RTSInventoryItem {
   id: string;
@@ -78,6 +78,12 @@ export default function RTSSalesDialog({
   // Department to send order to
   const [selectedDepartment, setSelectedDepartment] = useState('QC & Shipping');
 
+  // Payment info
+  const [addPayment, setAddPayment] = useState(false);
+  const [paymentType, setPaymentType] = useState('cash');
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentNotes, setPaymentNotes] = useState('');
+
   // Reset form when dialog opens
   useEffect(() => {
     if (isOpen) {
@@ -101,6 +107,10 @@ export default function RTSSalesDialog({
       setPackageHeight('6');
       setShippingMethod('03');
       setSelectedDepartment('QC & Shipping');
+      setAddPayment(false);
+      setPaymentType('cash');
+      setPaymentAmount('');
+      setPaymentNotes('');
     }
   }, [isOpen]);
 
@@ -115,22 +125,27 @@ export default function RTSSalesDialog({
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['/api/rts-inventory'] });
       queryClient.invalidateQueries({ queryKey: ['/api/rts-sales'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+      
+      const paymentMsg = response.payment ? ` Payment of $${response.payment.paymentAmount.toFixed(2)} recorded.` : '';
+      const orderMsg = response.order ? ` Order ${response.order.orderId} created.` : '';
       
       if (response.labelError) {
         toast({
           title: 'Sale Created (Label Failed)',
-          description: `Sale created successfully but shipping label generation failed: ${response.labelError}`,
+          description: `Sale created successfully but shipping label generation failed: ${response.labelError}${paymentMsg}${orderMsg}`,
           variant: 'destructive',
         });
       } else if (response.label) {
         toast({
           title: 'Sale Created & Label Generated',
-          description: `Sale ${response.sale.saleNumber} created with tracking ${response.sale.trackingNumber}`,
+          description: `Sale ${response.sale.saleNumber} created with tracking ${response.sale.trackingNumber}.${paymentMsg}${orderMsg}`,
         });
       } else {
         toast({
           title: 'Sale Created',
-          description: `Sale ${response.sale.saleNumber} created successfully`,
+          description: `Sale ${response.sale.saleNumber} created successfully.${paymentMsg}${orderMsg}`,
         });
       }
       
@@ -260,13 +275,26 @@ export default function RTSSalesDialog({
       }
     }
 
-    const saleData = {
-      customerId: customerId.toString(), // Convert to string
+    // Validate payment if enabled
+    if (addPayment) {
+      const payAmt = parseFloat(paymentAmount);
+      if (isNaN(payAmt) || payAmt <= 0) {
+        toast({
+          title: 'Invalid Payment Amount',
+          description: 'Please enter a valid payment amount',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    const saleData: any = {
+      customerId: customerId.toString(),
       items: Array.from(selectedItemIds).map(itemId => ({
-        rtsInventoryId: itemId, // Correct field name
-        unitPrice: itemPrices[itemId], // Correct field name
+        rtsInventoryId: itemId,
+        unitPrice: itemPrices[itemId],
       })),
-      department: selectedDepartment, // Department to send order to
+      department: selectedDepartment,
       shipTo: {
         name: shipToName,
         company: shipToCompany,
@@ -289,6 +317,15 @@ export default function RTSSalesDialog({
       },
       generateLabel: true,
     };
+
+    // Add payment data if enabled
+    if (addPayment && paymentAmount) {
+      saleData.payment = {
+        paymentType: paymentType,
+        paymentAmount: parseFloat(paymentAmount),
+        notes: paymentNotes || undefined,
+      };
+    }
 
     createSaleMutation.mutate(saleData);
   };
@@ -488,6 +525,89 @@ export default function RTSSalesDialog({
                 </p>
               </div>
             </div>
+          </div>
+
+          <Separator />
+
+          {/* Payment Section */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                Payment (Optional)
+              </h3>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="addPayment"
+                  checked={addPayment}
+                  onCheckedChange={(checked) => {
+                    setAddPayment(checked === true);
+                    if (checked) {
+                      setPaymentAmount(calculateTotal().toFixed(2));
+                    }
+                  }}
+                  data-testid="checkbox-add-payment"
+                />
+                <Label htmlFor="addPayment" className="text-sm cursor-pointer">
+                  Add payment now
+                </Label>
+              </div>
+            </div>
+            
+            {addPayment && (
+              <div className="grid grid-cols-3 gap-4 p-4 border rounded-lg bg-muted/30">
+                <div>
+                  <Label htmlFor="paymentType">Payment Type *</Label>
+                  <Select value={paymentType} onValueChange={setPaymentType}>
+                    <SelectTrigger data-testid="select-payment-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="check">Check</SelectItem>
+                      <SelectItem value="credit_card">Credit Card</SelectItem>
+                      <SelectItem value="ach">ACH/Bank Transfer</SelectItem>
+                      <SelectItem value="agr">AGR</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="paymentAmount">Amount *</Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="paymentAmount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      className="pl-8"
+                      placeholder="0.00"
+                      data-testid="input-payment-amount"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="paymentNotes">Notes</Label>
+                  <Input
+                    id="paymentNotes"
+                    value={paymentNotes}
+                    onChange={(e) => setPaymentNotes(e.target.value)}
+                    placeholder="Check #, reference, etc."
+                    data-testid="input-payment-notes"
+                  />
+                </div>
+                <div className="col-span-3 text-sm text-muted-foreground">
+                  Order total: ${calculateTotal().toFixed(2)}
+                  {parseFloat(paymentAmount) > 0 && parseFloat(paymentAmount) < calculateTotal() && (
+                    <span className="ml-2 text-amber-600">
+                      (Partial payment - ${(calculateTotal() - parseFloat(paymentAmount)).toFixed(2)} will remain due)
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <Separator />

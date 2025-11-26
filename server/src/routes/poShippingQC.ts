@@ -987,39 +987,88 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     const { storage } = await import('../../storage');
 
     // 1. VALIDATE: Fetch all orders and ensure they exist + are ready to ship
+    // Handle both items with production orders (orderId) and non-stock items (poItemId only)
     const orderDetails = await Promise.all(
       normalizedItems.map(async (item) => {
-        const order = await storage.getProductionOrderByOrderId(item.orderId);
-        if (!order) {
-          throw new Error(`Order ${item.orderId} not found`);
-        }
-        // P1 PO orders use productionStatus (PENDING, LAID_UP, SHIPPED) not currentDepartment
-        if (order.productionStatus === 'SHIPPED') {
-          throw new Error(`Order ${item.orderId} has already been shipped`);
-        }
+        // Check if this is a synthetic orderId (format: PO-{poItemId}-{unitNumber})
+        // These are non-stock items that bypass production
+        const syntheticMatch = item.orderId.match(/^PO-(\d+)-(\d+)$/);
+        
+        if (syntheticMatch) {
+          // Non-stock item: lookup directly by poItemId
+          const poItemId = parseInt(syntheticMatch[1]);
+          const unitNumber = parseInt(syntheticMatch[2]);
+          
+          console.log(`📦 Processing non-stock item: poItemId=${poItemId}, unit=${unitNumber}`);
+          
+          const poItem = await storage.getPurchaseOrderItem(poItemId);
+          if (!poItem) {
+            throw new Error(`PO item ${poItemId} not found`);
+          }
+          
+          // Check if already shipped
+          if (poItem.stockStatus === 'SHIPPED' || poItem.stockStatus === 'FULFILLED') {
+            throw new Error(`PO item ${poItemId} has already been shipped`);
+          }
+          
+          const po = await storage.getPurchaseOrder(poItem.poId);
+          if (!po) {
+            throw new Error(`PO ${poItem.poId} not found`);
+          }
+          
+          const customer = await storage.getCustomer(parseInt(po.customerId));
+          if (!customer) {
+            throw new Error(`Customer ${po.customerId} not found`);
+          }
+          
+          // Create a synthetic order object for non-stock items
+          const syntheticOrder = {
+            id: null, // No production order
+            orderId: item.orderId,
+            poItemId: poItemId,
+            customerId: String(po.customerId),
+            unitNumber,
+            itemId: poItem.stockModelId || null,
+            itemName: poItem.itemName || poItem.stockModelName,
+            productionStatus: 'PENDING',
+            isNonStock: true, // Flag to identify non-stock items
+          };
+          
+          return { order: syntheticOrder, poItem, po, customer, quantity: item.quantity };
+        } else {
+          // Regular production order
+          const order = await storage.getProductionOrderByOrderId(item.orderId);
+          if (!order) {
+            throw new Error(`Order ${item.orderId} not found`);
+          }
+          // P1 PO orders use productionStatus (PENDING, LAID_UP, SHIPPED) not currentDepartment
+          if (order.productionStatus === 'SHIPPED') {
+            throw new Error(`Order ${item.orderId} has already been shipped`);
+          }
 
-        // Get PO item details
-        if (!order.poItemId) {
-          throw new Error(`Order ${item.orderId} has no PO item ID`);
-        }
-        const poItem = await storage.getPurchaseOrderItem(order.poItemId);
-        if (!poItem) {
-          throw new Error(`PO item ${order.poItemId} not found`);
-        }
+          // Get PO item details
+          if (!order.poItemId) {
+            throw new Error(`Order ${item.orderId} has no PO item ID`);
+          }
+          const poItem = await storage.getPurchaseOrderItem(order.poItemId);
+          if (!poItem) {
+            throw new Error(`PO item ${order.poItemId} not found`);
+          }
 
-        // Get PO details
-        const po = await storage.getPurchaseOrder(poItem.poId);
-        if (!po) {
-          throw new Error(`PO ${poItem.poId} not found`);
-        }
+          // Get PO details
+          const po = await storage.getPurchaseOrder(poItem.poId);
+          if (!po) {
+            throw new Error(`PO ${poItem.poId} not found`);
+          }
 
-        // Get customer details
-        const customer = await storage.getCustomer(parseInt(order.customerId));
-        if (!customer) {
-          throw new Error(`Customer ${order.customerId} not found`);
-        }
+          // Get customer details
+          const customer = await storage.getCustomer(parseInt(order.customerId));
+          if (!customer) {
+            throw new Error(`Customer ${order.customerId} not found`);
+          }
 
-        return { order, poItem, po, customer, quantity: item.quantity };
+          return { order: { ...order, isNonStock: false }, poItem, po, customer, quantity: item.quantity };
+        }
       })
     );
 
@@ -1130,18 +1179,15 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         id: shipmentId,
         createdBy: req.user?.username || 'system',
         reference: referenceNumber,
-        customerId: orderDetails[0].order.customerId,
         poNumbers: poNumbers.join(', '),
         shippedAt,
         carrier: 'UPS',
         serviceLevel: serviceCode,
         billType,
         masterTrackingNumber: trackingNumber,
-        packageCount: 1, // Default to single package
-        trackingNumber,
-        trackingUrl: `https://www.ups.com/track?tracknum=${trackingNumber}`,
-        thirdPartyAccountNumber: thirdPartyAccountNumber || null,
-        shipFromAddress: {
+        packageCount: 1,
+        thirdPartyAccount: thirdPartyAccountNumber || null,
+        shipFromSnapshot: {
           name: process.env.SHIP_FROM_NAME || 'AG Composites',
           street: process.env.SHIP_FROM_ADDRESS1 || '',
           city: process.env.SHIP_FROM_CITY || '',
@@ -1149,7 +1195,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           postalCode: process.env.SHIP_FROM_POSTAL || '',
           country: process.env.SHIP_FROM_COUNTRY || 'US',
         },
-        shipToAddress: {
+        shipToSnapshot: {
           name: shipTo.name,
           street: shipTo.address1,
           street2: shipTo.address2 || null,
@@ -1158,14 +1204,11 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           postalCode: shipTo.postalCode,
           country: shipTo.country || 'US',
         },
-        totalWeightLbs: totalWeight,
-        documents: {
-          label: labelBase64 ? { type: 'label', fileName: `Label-${trackingNumber}.gif`, data: labelBase64 } : null,
-          packingSlips: [], // Will be populated after packing slip generation
-        },
-        notificationSent: false,
-        notificationEmail: null,
-        notificationSms: null,
+        totalWeightLbs: String(totalWeight),
+        documents: [
+          labelBase64 ? { type: 'label', fileName: `Label-${trackingNumber}.gif`, mime: 'image/gif', storagePath: '', bytes: labelBase64.length } : null,
+        ].filter(Boolean),
+        notificationMetadata: {},
       };
 
       const shipmentItemsData = orderDetails.map((detail) => ({
@@ -1182,14 +1225,23 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
 
       console.log(`✅ Shipment persisted to database: ${shipmentId}`);
 
-      // Update production order statuses to SHIPPED
+      // Update order/item statuses to SHIPPED
       for (const detail of orderDetails) {
         try {
-          await storage.updateProductionOrder(detail.order.id, {
-            productionStatus: 'SHIPPED',
-            shippedAt,
-          });
-          console.log(`✅ Order ${detail.order.orderId} marked as SHIPPED`);
+          if (detail.order.isNonStock) {
+            // Non-stock item: update PO item stockStatus directly
+            await storage.updatePurchaseOrderItem(detail.order.poItemId, {
+              stockStatus: 'SHIPPED',
+            });
+            console.log(`✅ PO Item ${detail.order.poItemId} marked as SHIPPED (non-stock)`);
+          } else if (detail.order.id) {
+            // Regular production order
+            await storage.updateProductionOrder(detail.order.id, {
+              productionStatus: 'SHIPPED',
+              shippedAt,
+            });
+            console.log(`✅ Order ${detail.order.orderId} marked as SHIPPED`);
+          }
         } catch (updateError: any) {
           console.error(`⚠️ Failed to update order ${detail.order.orderId}:`, updateError.message);
         }

@@ -1439,13 +1439,26 @@ export default function CuttingTable() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Fabric *</label>
-              <Input 
-                type="text" 
-                value={fabricType}
-                onChange={(e) => setFabricType(e.target.value)}
-                placeholder="e.g., Carbon Fiber, Fiberglass"
-                data-testid="input-fabric-type"
-              />
+              <Select value={fabricType} onValueChange={setFabricType}>
+                <SelectTrigger data-testid="select-fabric-type">
+                  <SelectValue placeholder="Select fabric type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {fabricItems.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground">No fabric items available</div>
+                  ) : (
+                    fabricItems.map((item) => (
+                      <SelectItem 
+                        key={item.id} 
+                        value={item.fabric || item.agPartNumber || `${item.id}`}
+                        data-testid={`option-fabric-${item.id}`}
+                      >
+                        {item.fabric || item.agPartNumber || `Item ${item.id}`}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

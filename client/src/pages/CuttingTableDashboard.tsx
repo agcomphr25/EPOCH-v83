@@ -51,6 +51,10 @@ import { BarcodeInputField } from "@/components/BarcodeInputField";
 type FabricInventoryItem = {
   id: string;
   fabricType: string;
+  fabricPartNumber: string | null;
+  nickname: string | null;
+  supplierPartNumber: string | null;
+  internalControlNumber: string | null;
   lotNumber: string;
   batchNumber: string;
   rollNumber: string;
@@ -161,7 +165,12 @@ export default function CuttingTableDashboard() {
       const data = await res.json();
       return data.map((item: any) => ({
         ...item,
-        barcodeValue: `FAB-${item.lotNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
+        fabricType: item.fabric || item.fabricType,
+        fabricPartNumber: item.fabricPartNumber,
+        nickname: item.nickname,
+        supplierPartNumber: item.supplierPartNumber,
+        internalControlNumber: item.internalControlNumber,
+        barcodeValue: `FAB-${item.internalControlNumber || item.lotNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
         status: item.quantityInStock < 10 ? 'low' : 
                 (item.expirationDate && new Date(item.expirationDate) < new Date() ? 'expired' : 'available'),
       }));
@@ -531,6 +540,9 @@ export default function CuttingTableDashboard() {
           fabricId: fabric.id,
           barcodeValue: fabric.barcodeValue,
           fabricType: fabric.fabricType,
+          internalControlNumber: fabric.internalControlNumber,
+          nickname: fabric.nickname,
+          supplierPartNumber: fabric.supplierPartNumber,
           lotNumber: fabric.lotNumber,
           batchNumber: fabric.batchNumber,
           rollNumber: fabric.rollNumber,
@@ -546,16 +558,21 @@ export default function CuttingTableDashboard() {
                 <head><title>Fabric Label</title>
                 <style>
                   body { font-family: Arial, sans-serif; padding: 20px; }
-                  .label { border: 2px solid #000; padding: 15px; width: 300px; }
+                  .label { border: 2px solid #000; padding: 15px; width: 320px; }
                   .barcode { text-align: center; margin: 10px 0; }
-                  .info { font-size: 12px; margin: 5px 0; }
-                  .type { font-size: 16px; font-weight: bold; margin-bottom: 10px; }
+                  .info { font-size: 11px; margin: 4px 0; }
+                  .type { font-size: 14px; font-weight: bold; margin-bottom: 5px; }
+                  .control-number { font-size: 16px; font-weight: bold; margin-bottom: 8px; }
+                  .nickname { font-size: 12px; font-style: italic; margin-bottom: 5px; color: #555; }
                 </style>
                 </head>
                 <body>
                   <div class="label">
+                    <div class="control-number">ICN: ${fabric.internalControlNumber || 'N/A'}</div>
                     <div class="type">${fabric.fabricType}</div>
+                    ${fabric.nickname ? `<div class="nickname">"${fabric.nickname}"</div>` : ''}
                     <div class="barcode"><img src="${data.barcodeImage}" alt="barcode" /></div>
+                    ${fabric.supplierPartNumber ? `<div class="info"><strong>Supplier P/N:</strong> ${fabric.supplierPartNumber}</div>` : ''}
                     <div class="info"><strong>Lot:</strong> ${fabric.lotNumber || 'N/A'}</div>
                     <div class="info"><strong>Batch:</strong> ${fabric.batchNumber || 'N/A'}</div>
                     <div class="info"><strong>Roll:</strong> ${fabric.rollNumber || 'N/A'}</div>
@@ -1521,60 +1538,77 @@ export default function CuttingTableDashboard() {
                   No fabric in inventory. Use the Receive Fabric tab to add fabric.
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Fabric Type</TableHead>
-                      <TableHead>Lot Number</TableHead>
-                      <TableHead>Batch</TableHead>
-                      <TableHead>Roll</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Location</TableHead>
-                      <TableHead>Expiration</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {fabricInventory.map((fabric) => (
-                      <TableRow key={fabric.id}>
-                        <TableCell className="font-medium">{fabric.fabricType || 'Unknown'}</TableCell>
-                        <TableCell>{fabric.lotNumber || '-'}</TableCell>
-                        <TableCell>{fabric.batchNumber || '-'}</TableCell>
-                        <TableCell>{fabric.rollNumber || '-'}</TableCell>
-                        <TableCell>{fabric.quantityInStock || 0}</TableCell>
-                        <TableCell>{fabric.location || '-'}</TableCell>
-                        <TableCell>
-                          {fabric.expirationDate 
-                            ? new Date(fabric.expirationDate).toLocaleDateString() 
-                            : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {fabric.status === 'expired' && (
-                            <Badge variant="destructive">Expired</Badge>
-                          )}
-                          {fabric.status === 'low' && (
-                            <Badge variant="secondary" className="bg-amber-100 text-amber-800">Low</Badge>
-                          )}
-                          {fabric.status === 'available' && (
-                            <Badge variant="default" className="bg-green-100 text-green-800">Available</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePrintLabel(fabric)}
-                            data-testid={`button-print-label-${fabric.id}`}
-                          >
-                            <Printer className="h-4 w-4 mr-1" />
-                            Print Label
-                          </Button>
-                        </TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Internal Control #</TableHead>
+                        <TableHead>Fabric Type</TableHead>
+                        <TableHead>Nickname</TableHead>
+                        <TableHead>Supplier Part #</TableHead>
+                        <TableHead>Lot #</TableHead>
+                        <TableHead>Batch</TableHead>
+                        <TableHead>Roll</TableHead>
+                        <TableHead>Quantity</TableHead>
+                        <TableHead>Location</TableHead>
+                        <TableHead>Expiration</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {fabricInventory.map((fabric) => (
+                        <TableRow key={fabric.id}>
+                          <TableCell className="font-medium">{fabric.internalControlNumber || '-'}</TableCell>
+                          <TableCell>
+                            {fabric.fabricPartNumber ? (
+                              <div>
+                                <span className="font-medium">{fabric.fabricPartNumber}</span>
+                                {fabric.fabricType && <span className="text-muted-foreground ml-1">({fabric.fabricType})</span>}
+                              </div>
+                            ) : (
+                              fabric.fabricType || 'Unknown'
+                            )}
+                          </TableCell>
+                          <TableCell>{fabric.nickname || '-'}</TableCell>
+                          <TableCell>{fabric.supplierPartNumber || '-'}</TableCell>
+                          <TableCell>{fabric.lotNumber || '-'}</TableCell>
+                          <TableCell>{fabric.batchNumber || '-'}</TableCell>
+                          <TableCell>{fabric.rollNumber || '-'}</TableCell>
+                          <TableCell>{fabric.quantityInStock || 0}</TableCell>
+                          <TableCell>{fabric.location || '-'}</TableCell>
+                          <TableCell>
+                            {fabric.expirationDate 
+                              ? new Date(fabric.expirationDate).toLocaleDateString() 
+                              : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {fabric.status === 'expired' && (
+                              <Badge variant="destructive">Expired</Badge>
+                            )}
+                            {fabric.status === 'low' && (
+                              <Badge variant="secondary" className="bg-amber-100 text-amber-800">Low</Badge>
+                            )}
+                            {fabric.status === 'available' && (
+                              <Badge variant="default" className="bg-green-100 text-green-800">Available</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePrintLabel(fabric)}
+                              data-testid={`button-print-label-${fabric.id}`}
+                            >
+                              <Printer className="h-4 w-4 mr-1" />
+                              Print Label
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -1591,7 +1625,10 @@ export default function CuttingTableDashboard() {
             {selectedFabric && (
               <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
                 <div className="text-sm space-y-1">
+                  <div><strong>Internal Control #:</strong> {selectedFabric.internalControlNumber || '-'}</div>
                   <div><strong>Type:</strong> {selectedFabric.fabricType}</div>
+                  {selectedFabric.nickname && <div><strong>Nickname:</strong> {selectedFabric.nickname}</div>}
+                  {selectedFabric.supplierPartNumber && <div><strong>Supplier Part #:</strong> {selectedFabric.supplierPartNumber}</div>}
                   <div><strong>Lot:</strong> {selectedFabric.lotNumber}</div>
                   <div><strong>Barcode:</strong> {selectedFabric.barcodeValue}</div>
                 </div>

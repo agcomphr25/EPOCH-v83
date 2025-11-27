@@ -664,6 +664,10 @@ export const partsRequests = pgTable('parts_requests', {
   deliveredToDepartment: timestamp('delivered_to_department'), // When parts were turned over to requesting department
   receivedByDepartment: text('received_by_department'), // Who in the department received the parts
   vendorPoId: integer('vendor_po_id').references(() => vendorPOs.id), // Link to vendor PO if ordered
+  vendorId: integer('vendor_id').references(() => vendors.id), // Assigned vendor for ordering
+  orderMethod: text('order_method'), // 'PO' for purchase order or 'WEBSITE' for online orders (McMaster-Carr, Amazon, etc.)
+  vendorPartNumber: text('vendor_part_number'), // Vendor's SKU or part number for easy ordering
+  productUrl: text('product_url'), // Direct link to product page for website orders
   notes: text('notes'),
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at').defaultNow(),
@@ -2188,6 +2192,10 @@ export const insertPartsRequestSchema = createInsertSchema(partsRequests)
     deliveredToDepartment: z.coerce.date().optional().nullable(),
     receivedByDepartment: z.string().optional().nullable(),
     vendorPoId: z.number().optional().nullable(),
+    vendorId: z.number().optional().nullable(),
+    orderMethod: z.enum(['PO', 'WEBSITE']).optional().nullable(),
+    vendorPartNumber: z.string().optional().nullable(),
+    productUrl: z.string().url().optional().nullable(),
     notes: z.string().optional().nullable(),
     isActive: z.boolean().default(true),
   });

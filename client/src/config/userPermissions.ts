@@ -33,7 +33,6 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/production-queue',
       '/inventory/dashboard',
       '/inventory/manager',
-      '/inventory/consolidated-needs',
       '/customers',
       '/customer-management',
       '/gateway-reports',
@@ -70,7 +69,6 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/production-queue',
       '/inventory/dashboard',
       '/inventory/manager',
-      '/inventory/consolidated-needs',
       '/orders-list',
       '/orders',
     ],
@@ -166,7 +164,6 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-list',
       '/orders',
       '/inventory/dashboard',
-      '/inventory/consolidated-needs',
     ],
   },
 
@@ -232,6 +229,11 @@ function hasRoleBasedAccess(route: string, userRole?: string): boolean {
 
   // Enhanced Inventory & MRP route requires ADMIN or INVENTORY_MANAGER role
   if (route === '/inventory/enhanced-mrp' && (role === 'ADMIN' || role === 'INVENTORY_MANAGER')) {
+    return true;
+  }
+
+  // Consolidated Needs List route requires ADMIN or OWNER role
+  if (route === '/inventory/consolidated-needs' && (role === 'ADMIN' || role === 'OWNER')) {
     return true;
   }
 

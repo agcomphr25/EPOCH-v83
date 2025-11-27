@@ -467,6 +467,34 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
   try {
     const requestId = parseInt(req.params.id);
     const updates = insertPartsRequestSchema.partial().parse(req.body);
+    
+    // Enforce status transition rules: PENDING → APPROVED → ORDERED → RECEIVED → DELIVERED_TO_DEPT
+    // Also allows PENDING → REJECTED
+    if (updates.status) {
+      const validTransitions: Record<string, string[]> = {
+        'APPROVED': ['PENDING'],           // Can only approve from PENDING
+        'REJECTED': ['PENDING'],           // Can only reject from PENDING
+        'ORDERED': ['APPROVED'],           // Can only order from APPROVED
+        'RECEIVED': ['ORDERED'],           // Can only receive from ORDERED
+        'DELIVERED_TO_DEPT': ['RECEIVED'], // Can only deliver from RECEIVED
+      };
+      
+      if (validTransitions[updates.status]) {
+        // Get current status
+        const existingRequest = await storage.getPartsRequest(requestId);
+        if (!existingRequest) {
+          return res.status(404).json({ error: 'Request not found' });
+        }
+        
+        const allowedFromStatuses = validTransitions[updates.status];
+        if (!allowedFromStatuses.includes(existingRequest.status)) {
+          return res.status(400).json({ 
+            error: `Cannot change status to '${updates.status}' from '${existingRequest.status}'. Valid source statuses: ${allowedFromStatuses.join(', ')}.`
+          });
+        }
+      }
+    }
+    
     const updatedRequest = await storage.updatePartsRequest(requestId, updates);
     res.json(updatedRequest);
   } catch (error) {
@@ -509,6 +537,223 @@ router.get('/parts-requests/consolidated/needs', async (req: Request, res: Respo
   } catch (error) {
     console.error('Get consolidated parts needs error:', error);
     res.status(500).json({ error: 'Failed to fetch consolidated parts needs' });
+  }
+});
+
+// Get parts requests grouped by vendor for consolidated ordering view
+router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
+  try {
+    const { partsRequests, vendors, inventoryItems } = await import('../../schema');
+    const { db } = await import('../../db');
+    const { eq, and, inArray, isNotNull, isNull } = await import('drizzle-orm');
+    
+    // Get all active parts requests that are not yet delivered
+    const activeStatuses = ['PENDING', 'APPROVED', 'ORDERED', 'RECEIVED'];
+    const requests = await db
+      .select()
+      .from(partsRequests)
+      .where(
+        and(
+          eq(partsRequests.isActive, true),
+          inArray(partsRequests.status, activeStatuses)
+        )
+      );
+    
+    // Get all vendors for lookup
+    const allVendors = await db.select().from(vendors);
+    const vendorMap = new Map(allVendors.map(v => [v.id, v]));
+    
+    // Get inventory items with vendor assignments for auto-suggest
+    const itemsWithVendors = await db
+      .select({
+        agPartNumber: inventoryItems.agPartNumber,
+        vendorId: inventoryItems.vendorId,
+        name: inventoryItems.name,
+      })
+      .from(inventoryItems)
+      .where(isNotNull(inventoryItems.vendorId));
+    
+    const itemVendorMap = new Map(itemsWithVendors.map(i => [i.agPartNumber, i.vendorId]));
+    
+    // Group requests by vendor
+    const vendorGroups: Record<string, {
+      vendorId: number | null;
+      vendorName: string;
+      orderMethod: string | null;
+      websiteUrl: string | null;
+      requests: typeof requests;
+      totalQuantity: number;
+      totalEstimatedCost: number;
+    }> = {};
+    
+    // "Unassigned" group for requests without vendor
+    vendorGroups['unassigned'] = {
+      vendorId: null,
+      vendorName: 'Unassigned',
+      orderMethod: null,
+      websiteUrl: null,
+      requests: [],
+      totalQuantity: 0,
+      totalEstimatedCost: 0,
+    };
+    
+    for (const request of requests) {
+      // Try to determine vendor: explicit assignment > inventory item default > unassigned
+      let vendorId = request.vendorId;
+      if (!vendorId && request.agPartNumber) {
+        vendorId = itemVendorMap.get(request.agPartNumber) || null;
+      }
+      
+      if (vendorId && vendorMap.has(vendorId)) {
+        const vendor = vendorMap.get(vendorId)!;
+        const key = `vendor-${vendorId}`;
+        
+        if (!vendorGroups[key]) {
+          vendorGroups[key] = {
+            vendorId: vendor.id,
+            vendorName: vendor.name,
+            orderMethod: request.orderMethod || null,
+            websiteUrl: vendor.website || null,
+            requests: [],
+            totalQuantity: 0,
+            totalEstimatedCost: 0,
+          };
+        }
+        
+        vendorGroups[key].requests.push(request);
+        vendorGroups[key].totalQuantity += request.quantity;
+        vendorGroups[key].totalEstimatedCost += request.estimatedCost || 0;
+      } else {
+        vendorGroups['unassigned'].requests.push(request);
+        vendorGroups['unassigned'].totalQuantity += request.quantity;
+        vendorGroups['unassigned'].totalEstimatedCost += request.estimatedCost || 0;
+      }
+    }
+    
+    // Convert to array and sort by vendor name
+    const result = Object.values(vendorGroups)
+      .filter(g => g.requests.length > 0)
+      .sort((a, b) => {
+        if (a.vendorId === null) return 1; // Unassigned goes last
+        if (b.vendorId === null) return -1;
+        return a.vendorName.localeCompare(b.vendorName);
+      });
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Get parts requests by vendor error:', error);
+    res.status(500).json({ error: 'Failed to fetch parts requests by vendor' });
+  }
+});
+
+// Bulk update parts requests (for vendor assignment and bulk status changes)
+// Enforces status transition rules: PENDING → APPROVED → ORDERED → RECEIVED → DELIVERED_TO_DEPT
+router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
+  try {
+    const { partsRequests } = await import('../../schema');
+    const { db } = await import('../../db');
+    const { eq, inArray, and } = await import('drizzle-orm');
+    
+    const { requestIds, updates } = req.body as {
+      requestIds: number[];
+      updates: {
+        vendorId?: number | null;
+        orderMethod?: 'PO' | 'WEBSITE' | null;
+        vendorPartNumber?: string | null;
+        productUrl?: string | null;
+        status?: string;
+        expectedDelivery?: string | null;
+        orderDate?: string | null;
+        notes?: string | null;
+      };
+    };
+    
+    if (!requestIds || requestIds.length === 0) {
+      return res.status(400).json({ error: 'No request IDs provided' });
+    }
+    
+    // Build update object with proper date handling
+    const updateData: Record<string, unknown> = {};
+    if (updates.vendorId !== undefined) updateData.vendorId = updates.vendorId;
+    if (updates.orderMethod !== undefined) updateData.orderMethod = updates.orderMethod;
+    if (updates.vendorPartNumber !== undefined) updateData.vendorPartNumber = updates.vendorPartNumber;
+    if (updates.productUrl !== undefined) updateData.productUrl = updates.productUrl;
+    if (updates.notes !== undefined) updateData.notes = updates.notes;
+    if (updates.expectedDelivery !== undefined) {
+      updateData.expectedDelivery = updates.expectedDelivery;
+    }
+    if (updates.orderDate !== undefined) {
+      updateData.orderDate = updates.orderDate ? new Date(updates.orderDate) : null;
+    }
+    updateData.updatedAt = new Date();
+    
+    // Define valid status transitions
+    const validTransitions: Record<string, string> = {
+      'ORDERED': 'APPROVED',       // Can only mark ORDERED if currently APPROVED
+      'RECEIVED': 'ORDERED',       // Can only mark RECEIVED if currently ORDERED
+      'DELIVERED_TO_DEPT': 'RECEIVED', // Can only mark DELIVERED if currently RECEIVED
+    };
+    
+    let updatedCount = 0;
+    let skippedCount = 0;
+    const skippedIds: number[] = [];
+    
+    // If status is being changed, enforce valid transitions
+    if (updates.status && validTransitions[updates.status]) {
+      const requiredCurrentStatus = validTransitions[updates.status];
+      
+      // Get all requests to check their current status
+      const existingRequests = await db
+        .select({ id: partsRequests.id, status: partsRequests.status })
+        .from(partsRequests)
+        .where(inArray(partsRequests.id, requestIds));
+      
+      // Separate valid and invalid requests
+      const validIds: number[] = [];
+      for (const req of existingRequests) {
+        if (req.status === requiredCurrentStatus) {
+          validIds.push(req.id);
+        } else {
+          skippedIds.push(req.id);
+          skippedCount++;
+        }
+      }
+      
+      if (validIds.length > 0) {
+        updateData.status = updates.status;
+        await db
+          .update(partsRequests)
+          .set(updateData)
+          .where(inArray(partsRequests.id, validIds));
+        updatedCount = validIds.length;
+      }
+      
+      // Return detailed response about what was updated/skipped
+      res.json({ 
+        success: true, 
+        updatedCount, 
+        skippedCount,
+        skippedIds: skippedIds.length > 0 ? skippedIds : undefined,
+        message: skippedCount > 0 
+          ? `Updated ${updatedCount} requests. Skipped ${skippedCount} requests that were not in '${requiredCurrentStatus}' status.`
+          : `Successfully updated ${updatedCount} requests.`
+      });
+    } else {
+      // No status change or status doesn't require transition validation (like vendor assignment)
+      if (updates.status) {
+        updateData.status = updates.status;
+      }
+      
+      await db
+        .update(partsRequests)
+        .set(updateData)
+        .where(inArray(partsRequests.id, requestIds));
+      
+      res.json({ success: true, updatedCount: requestIds.length });
+    }
+  } catch (error) {
+    console.error('Bulk update parts requests error:', error);
+    res.status(500).json({ error: 'Failed to bulk update parts requests' });
   }
 });
 

@@ -146,10 +146,11 @@ export default function ConsolidatedNeedsListPage() {
     queryKey: ['/api/inventory/parts-requests'],
   });
 
-  // Get all vendors
-  const { data: vendors = [] } = useQuery<Vendor[]>({
+  // Get all vendors (API returns paginated result with data property)
+  const { data: vendorsResponse } = useQuery<{ data: Vendor[]; total: number; page: number; pageSize: number }>({
     queryKey: ['/api/vendors'],
   });
+  const vendors = vendorsResponse?.data ?? [];
 
   // Get parts requests grouped by vendor
   const { data: vendorGroups = [], isLoading: isLoadingVendorGroups } = useQuery<VendorGroup[]>({
@@ -193,13 +194,22 @@ export default function ConsolidatedNeedsListPage() {
         body: JSON.stringify(data),
       });
     },
-    onSuccess: () => {
+    onSuccess: (response: { success: boolean; updatedCount: number; skippedCount?: number; message?: string }) => {
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/by-vendor'] });
-      toast({
-        title: 'Success',
-        description: 'Requests updated successfully.',
-      });
+      
+      if (response.skippedCount && response.skippedCount > 0) {
+        toast({
+          title: 'Partially Updated',
+          description: response.message || `Updated ${response.updatedCount} requests. Some were skipped due to invalid status.`,
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: response.message || `Successfully updated ${response.updatedCount} requests.`,
+        });
+      }
+      
       setSelectedVendorRequests(new Set());
       setIsVendorAssignDialogOpen(false);
       setIsBulkOrderDialogOpen(false);
@@ -395,8 +405,31 @@ export default function ConsolidatedNeedsListPage() {
   const handleBulkMarkOrdered = () => {
     if (selectedVendorRequests.size === 0) return;
     
+    // Filter to only APPROVED requests (client-side safety measure, backend also validates)
+    const allSelectedIds = Array.from(selectedVendorRequests);
+    const approvedIds = allSelectedIds.filter(id => {
+      const request = allRequests.find(r => r.id === id);
+      return request?.status === 'APPROVED';
+    });
+    
+    if (approvedIds.length === 0) {
+      toast({
+        title: 'No Approved Requests',
+        description: 'Only approved requests can be marked as ordered. Please select approved items.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (approvedIds.length < allSelectedIds.length) {
+      toast({
+        title: 'Some Items Filtered',
+        description: `${allSelectedIds.length - approvedIds.length} non-approved items were excluded. Ordering ${approvedIds.length} approved items.`,
+      });
+    }
+    
     bulkUpdateMutation.mutate({
-      requestIds: Array.from(selectedVendorRequests),
+      requestIds: approvedIds,
       updates: {
         status: 'ORDERED',
         orderDate: new Date().toISOString(),

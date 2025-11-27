@@ -619,11 +619,12 @@ router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
 });
 
 // Bulk update parts requests (for vendor assignment and bulk status changes)
+// Enforces status transition rules: PENDING → APPROVED → ORDERED → RECEIVED → DELIVERED_TO_DEPT
 router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
   try {
     const { partsRequests } = await import('../../schema');
     const { db } = await import('../../db');
-    const { eq, inArray } = await import('drizzle-orm');
+    const { eq, inArray, and } = await import('drizzle-orm');
     
     const { requestIds, updates } = req.body as {
       requestIds: number[];
@@ -649,7 +650,6 @@ router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
     if (updates.orderMethod !== undefined) updateData.orderMethod = updates.orderMethod;
     if (updates.vendorPartNumber !== undefined) updateData.vendorPartNumber = updates.vendorPartNumber;
     if (updates.productUrl !== undefined) updateData.productUrl = updates.productUrl;
-    if (updates.status !== undefined) updateData.status = updates.status;
     if (updates.notes !== undefined) updateData.notes = updates.notes;
     if (updates.expectedDelivery !== undefined) {
       updateData.expectedDelivery = updates.expectedDelivery;
@@ -659,12 +659,70 @@ router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
     }
     updateData.updatedAt = new Date();
     
-    await db
-      .update(partsRequests)
-      .set(updateData)
-      .where(inArray(partsRequests.id, requestIds));
+    // Define valid status transitions
+    const validTransitions: Record<string, string> = {
+      'ORDERED': 'APPROVED',       // Can only mark ORDERED if currently APPROVED
+      'RECEIVED': 'ORDERED',       // Can only mark RECEIVED if currently ORDERED
+      'DELIVERED_TO_DEPT': 'RECEIVED', // Can only mark DELIVERED if currently RECEIVED
+    };
     
-    res.json({ success: true, updatedCount: requestIds.length });
+    let updatedCount = 0;
+    let skippedCount = 0;
+    const skippedIds: number[] = [];
+    
+    // If status is being changed, enforce valid transitions
+    if (updates.status && validTransitions[updates.status]) {
+      const requiredCurrentStatus = validTransitions[updates.status];
+      
+      // Get all requests to check their current status
+      const existingRequests = await db
+        .select({ id: partsRequests.id, status: partsRequests.status })
+        .from(partsRequests)
+        .where(inArray(partsRequests.id, requestIds));
+      
+      // Separate valid and invalid requests
+      const validIds: number[] = [];
+      for (const req of existingRequests) {
+        if (req.status === requiredCurrentStatus) {
+          validIds.push(req.id);
+        } else {
+          skippedIds.push(req.id);
+          skippedCount++;
+        }
+      }
+      
+      if (validIds.length > 0) {
+        updateData.status = updates.status;
+        await db
+          .update(partsRequests)
+          .set(updateData)
+          .where(inArray(partsRequests.id, validIds));
+        updatedCount = validIds.length;
+      }
+      
+      // Return detailed response about what was updated/skipped
+      res.json({ 
+        success: true, 
+        updatedCount, 
+        skippedCount,
+        skippedIds: skippedIds.length > 0 ? skippedIds : undefined,
+        message: skippedCount > 0 
+          ? `Updated ${updatedCount} requests. Skipped ${skippedCount} requests that were not in '${requiredCurrentStatus}' status.`
+          : `Successfully updated ${updatedCount} requests.`
+      });
+    } else {
+      // No status change or status doesn't require transition validation (like vendor assignment)
+      if (updates.status) {
+        updateData.status = updates.status;
+      }
+      
+      await db
+        .update(partsRequests)
+        .set(updateData)
+        .where(inArray(partsRequests.id, requestIds));
+      
+      res.json({ success: true, updatedCount: requestIds.length });
+    }
   } catch (error) {
     console.error('Bulk update parts requests error:', error);
     res.status(500).json({ error: 'Failed to bulk update parts requests' });

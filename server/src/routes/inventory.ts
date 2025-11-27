@@ -467,6 +467,34 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
   try {
     const requestId = parseInt(req.params.id);
     const updates = insertPartsRequestSchema.partial().parse(req.body);
+    
+    // Enforce status transition rules: PENDING → APPROVED → ORDERED → RECEIVED → DELIVERED_TO_DEPT
+    // Also allows PENDING → REJECTED
+    if (updates.status) {
+      const validTransitions: Record<string, string[]> = {
+        'APPROVED': ['PENDING'],           // Can only approve from PENDING
+        'REJECTED': ['PENDING'],           // Can only reject from PENDING
+        'ORDERED': ['APPROVED'],           // Can only order from APPROVED
+        'RECEIVED': ['ORDERED'],           // Can only receive from ORDERED
+        'DELIVERED_TO_DEPT': ['RECEIVED'], // Can only deliver from RECEIVED
+      };
+      
+      if (validTransitions[updates.status]) {
+        // Get current status
+        const existingRequest = await storage.getPartsRequest(requestId);
+        if (!existingRequest) {
+          return res.status(404).json({ error: 'Request not found' });
+        }
+        
+        const allowedFromStatuses = validTransitions[updates.status];
+        if (!allowedFromStatuses.includes(existingRequest.status)) {
+          return res.status(400).json({ 
+            error: `Cannot change status to '${updates.status}' from '${existingRequest.status}'. Valid source statuses: ${allowedFromStatuses.join(', ')}.`
+          });
+        }
+      }
+    }
+    
     const updatedRequest = await storage.updatePartsRequest(requestId, updates);
     res.json(updatedRequest);
   } catch (error) {

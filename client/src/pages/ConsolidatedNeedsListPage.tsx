@@ -13,7 +13,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Package, 
   Clock, 
@@ -23,7 +31,14 @@ import {
   Truck, 
   AlertTriangle,
   ChevronDown,
-  ChevronUp 
+  ChevronUp,
+  Download,
+  Copy,
+  ExternalLink,
+  Building2,
+  Globe,
+  FileText,
+  Users
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -40,6 +55,14 @@ type InventoryItem = {
 type Department = {
   id: number;
   name: string;
+};
+
+type Vendor = {
+  id: number;
+  name: string;
+  email?: string;
+  phone?: string;
+  website?: string;
 };
 
 type PartsRequest = {
@@ -64,9 +87,23 @@ type PartsRequest = {
   actualDelivery?: string;
   deliveredToDepartment?: string;
   receivedByDepartment?: string;
+  vendorId?: number;
+  orderMethod?: 'PO' | 'WEBSITE';
+  vendorPartNumber?: string;
+  productUrl?: string;
   notes?: string;
   inventoryItem?: InventoryItem;
   department_details?: Department;
+};
+
+type VendorGroup = {
+  vendorId: number | null;
+  vendorName: string;
+  orderMethod: string | null;
+  websiteUrl: string | null;
+  requests: PartsRequest[];
+  totalQuantity: number;
+  totalEstimatedCost: number;
 };
 
 type ConsolidatedPart = {
@@ -89,15 +126,34 @@ export default function ConsolidatedNeedsListPage() {
   const [actionNotes, setActionNotes] = useState('');
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState('');
   const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
+  const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set());
+  const [mainViewTab, setMainViewTab] = useState<'by-status' | 'by-vendor'>('by-status');
+  const [vendorFilterTab, setVendorFilterTab] = useState<'all' | 'po' | 'website'>('all');
+  const [selectedVendorRequests, setSelectedVendorRequests] = useState<Set<number>>(new Set());
+  const [isVendorAssignDialogOpen, setIsVendorAssignDialogOpen] = useState(false);
+  const [isBulkOrderDialogOpen, setIsBulkOrderDialogOpen] = useState(false);
+  const [bulkExpectedDelivery, setBulkExpectedDelivery] = useState('');
+  const [selectedVendorId, setSelectedVendorId] = useState<string>('');
+  const [selectedOrderMethod, setSelectedOrderMethod] = useState<'PO' | 'WEBSITE'>('PO');
 
   // Get current user for approval tracking
   const { data: user } = useQuery<{ username: string; firstName: string; lastName: string }>({
     queryKey: ['/api/auth/session'],
   });
 
-  // Get all parts requests (not just consolidated)
+  // Get all parts requests
   const { data: allRequests = [], isLoading } = useQuery<PartsRequest[]>({
     queryKey: ['/api/inventory/parts-requests'],
+  });
+
+  // Get all vendors
+  const { data: vendors = [] } = useQuery<Vendor[]>({
+    queryKey: ['/api/vendors'],
+  });
+
+  // Get parts requests grouped by vendor
+  const { data: vendorGroups = [], isLoading: isLoadingVendorGroups } = useQuery<VendorGroup[]>({
+    queryKey: ['/api/inventory/parts-requests/by-vendor'],
   });
 
   // Update parts request mutation
@@ -110,6 +166,7 @@ export default function ConsolidatedNeedsListPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/by-vendor'] });
       toast({
         title: 'Success',
         description: 'Request updated successfully.',
@@ -123,6 +180,35 @@ export default function ConsolidatedNeedsListPage() {
       toast({
         title: 'Error',
         description: 'Failed to update request. Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Bulk update mutation
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async (data: { requestIds: number[]; updates: Record<string, unknown> }) => {
+      return apiRequest('/api/inventory/parts-requests/bulk', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/by-vendor'] });
+      toast({
+        title: 'Success',
+        description: 'Requests updated successfully.',
+      });
+      setSelectedVendorRequests(new Set());
+      setIsVendorAssignDialogOpen(false);
+      setIsBulkOrderDialogOpen(false);
+      setBulkExpectedDelivery('');
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to update requests. Please try again.',
         variant: 'destructive',
       });
     },
@@ -197,6 +283,34 @@ export default function ConsolidatedNeedsListPage() {
   const receivedRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => r.status === 'RECEIVED')), [filteredRequests]);
   const deliveredRequests = useMemo(() => consolidateByPart(filteredRequests.filter(r => r.status === 'DELIVERED_TO_DEPT')), [filteredRequests]);
 
+  // Filter vendor groups
+  const filteredVendorGroups = useMemo(() => {
+    let groups = vendorGroups;
+    
+    // Filter by search term
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase();
+      groups = groups.map(g => ({
+        ...g,
+        requests: g.requests.filter(r => 
+          r.partNumber.toLowerCase().includes(search) ||
+          r.partName.toLowerCase().includes(search) ||
+          r.department.toLowerCase().includes(search) ||
+          (r.requestedBy && r.requestedBy.toLowerCase().includes(search))
+        )
+      })).filter(g => g.requests.length > 0);
+    }
+    
+    // Filter by PO/Website
+    if (vendorFilterTab === 'po') {
+      groups = groups.filter(g => g.orderMethod === 'PO' || (!g.websiteUrl && g.vendorId !== null));
+    } else if (vendorFilterTab === 'website') {
+      groups = groups.filter(g => g.orderMethod === 'WEBSITE' || g.websiteUrl);
+    }
+    
+    return groups;
+  }, [vendorGroups, searchTerm, vendorFilterTab]);
+
   const toggleExpanded = (partNumber: string) => {
     setExpandedParts((prev) => {
       const newSet = new Set(prev);
@@ -204,6 +318,18 @@ export default function ConsolidatedNeedsListPage() {
         newSet.delete(partNumber);
       } else {
         newSet.add(partNumber);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleVendorExpanded = (vendorKey: string) => {
+    setExpandedVendors((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(vendorKey)) {
+        newSet.delete(vendorKey);
+      } else {
+        newSet.add(vendorKey);
       }
       return newSet;
     });
@@ -254,6 +380,91 @@ export default function ConsolidatedNeedsListPage() {
     updateRequestMutation.mutate({ id: selectedRequest.id, updates });
   };
 
+  const handleBulkVendorAssign = () => {
+    if (selectedVendorRequests.size === 0) return;
+    
+    bulkUpdateMutation.mutate({
+      requestIds: Array.from(selectedVendorRequests),
+      updates: {
+        vendorId: selectedVendorId ? parseInt(selectedVendorId) : null,
+        orderMethod: selectedOrderMethod,
+      },
+    });
+  };
+
+  const handleBulkMarkOrdered = () => {
+    if (selectedVendorRequests.size === 0) return;
+    
+    bulkUpdateMutation.mutate({
+      requestIds: Array.from(selectedVendorRequests),
+      updates: {
+        status: 'ORDERED',
+        orderDate: new Date().toISOString(),
+        expectedDelivery: bulkExpectedDelivery || null,
+      },
+    });
+  };
+
+  const exportVendorCSV = (vendorGroup: VendorGroup) => {
+    const headers = ['Part Number', 'Part Name', 'Vendor SKU', 'Quantity', 'Est. Cost', 'Department', 'Urgency', 'Status'];
+    const rows = vendorGroup.requests.map(r => [
+      r.partNumber,
+      r.partName,
+      r.vendorPartNumber || '',
+      r.quantity.toString(),
+      r.estimatedCost?.toFixed(2) || '',
+      r.department,
+      r.urgency,
+      r.status,
+    ]);
+    
+    const csvContent = [headers.join(','), ...rows.map(r => r.map(cell => `"${cell}"`).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${vendorGroup.vendorName.replace(/\s+/g, '_')}_parts_order.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: 'CSV Downloaded',
+      description: `Order list for ${vendorGroup.vendorName} has been downloaded.`,
+    });
+  };
+
+  const copyOrderList = (vendorGroup: VendorGroup) => {
+    const lines = vendorGroup.requests.map(r => 
+      `${r.vendorPartNumber || r.partNumber}\t${r.partName}\t${r.quantity}`
+    );
+    const text = lines.join('\n');
+    navigator.clipboard.writeText(text);
+    
+    toast({
+      title: 'Copied to Clipboard',
+      description: `Order list for ${vendorGroup.vendorName} copied. Paste into vendor website.`,
+    });
+  };
+
+  const toggleRequestSelection = (requestId: number) => {
+    setSelectedVendorRequests(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(requestId)) {
+        newSet.delete(requestId);
+      } else {
+        newSet.add(requestId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllInVendor = (vendorGroup: VendorGroup) => {
+    const approvedIds = vendorGroup.requests
+      .filter(r => r.status === 'APPROVED')
+      .map(r => r.id);
+    setSelectedVendorRequests(new Set(approvedIds));
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { color: string; icon: JSX.Element }> = {
       PENDING: { color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300', icon: <Clock className="w-3 h-3" /> },
@@ -286,6 +497,23 @@ export default function ConsolidatedNeedsListPage() {
       <Badge className={`${config.color} flex items-center gap-1`}>
         {config.icon}
         {urgency}
+      </Badge>
+    );
+  };
+
+  const getOrderMethodBadge = (method: string | null, websiteUrl: string | null) => {
+    if (method === 'PO' || (!websiteUrl && method !== 'WEBSITE')) {
+      return (
+        <Badge className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300 flex items-center gap-1">
+          <FileText className="w-3 h-3" />
+          PO
+        </Badge>
+      );
+    }
+    return (
+      <Badge className="bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300 flex items-center gap-1">
+        <Globe className="w-3 h-3" />
+        Website
       </Badge>
     );
   };
@@ -419,13 +647,277 @@ export default function ConsolidatedNeedsListPage() {
     );
   };
 
+  const renderVendorGroupedView = () => {
+    if (isLoadingVendorGroups) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">Loading vendor groups...</p>
+        </div>
+      );
+    }
+
+    if (filteredVendorGroups.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">No requests found.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* Bulk Actions Bar */}
+        {selectedVendorRequests.size > 0 && (
+          <div className="sticky top-0 z-10 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">{selectedVendorRequests.size} selected</Badge>
+              <span className="text-sm text-muted-foreground">requests selected</span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsVendorAssignDialogOpen(true)}
+                data-testid="button-assign-vendor"
+              >
+                <Building2 className="w-4 h-4 mr-1" />
+                Assign Vendor
+              </Button>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={() => setIsBulkOrderDialogOpen(true)}
+                data-testid="button-bulk-mark-ordered"
+              >
+                <ShoppingCart className="w-4 h-4 mr-1" />
+                Mark Ordered
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedVendorRequests(new Set())}
+                data-testid="button-clear-selection"
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Vendor Filter Tabs */}
+        <Tabs value={vendorFilterTab} onValueChange={(v) => setVendorFilterTab(v as typeof vendorFilterTab)}>
+          <TabsList>
+            <TabsTrigger value="all" data-testid="tab-vendor-all">
+              All Vendors ({vendorGroups.length})
+            </TabsTrigger>
+            <TabsTrigger value="po" data-testid="tab-vendor-po">
+              <FileText className="w-4 h-4 mr-1" />
+              PO Orders
+            </TabsTrigger>
+            <TabsTrigger value="website" data-testid="tab-vendor-website">
+              <Globe className="w-4 h-4 mr-1" />
+              Website Orders
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {/* Vendor Cards */}
+        {filteredVendorGroups.map((vendorGroup) => {
+          const vendorKey = vendorGroup.vendorId ? `vendor-${vendorGroup.vendorId}` : 'unassigned';
+          const isExpanded = expandedVendors.has(vendorKey);
+          const approvedCount = vendorGroup.requests.filter(r => r.status === 'APPROVED').length;
+          const hasHighUrgency = vendorGroup.requests.some(r => r.urgency === 'HIGH' || r.urgency === 'CRITICAL');
+
+          return (
+            <Card key={vendorKey} className={`${hasHighUrgency ? 'border-orange-300 dark:border-orange-700' : ''}`}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                      {vendorGroup.vendorId ? (
+                        <Building2 className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                      ) : (
+                        <Users className="w-5 h-5 text-gray-400" />
+                      )}
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        {vendorGroup.vendorName}
+                        {getOrderMethodBadge(vendorGroup.orderMethod, vendorGroup.websiteUrl)}
+                        {hasHighUrgency && (
+                          <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300">
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                            Urgent
+                          </Badge>
+                        )}
+                      </CardTitle>
+                      <CardDescription>
+                        {vendorGroup.requests.length} parts | {vendorGroup.totalQuantity} total units | 
+                        {approvedCount > 0 && ` ${approvedCount} ready to order |`}
+                        ${vendorGroup.totalEstimatedCost.toFixed(2)} est. total
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {/* Quick Actions */}
+                    {vendorGroup.vendorId && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => exportVendorCSV(vendorGroup)}
+                          data-testid={`button-export-${vendorKey}`}
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => copyOrderList(vendorGroup)}
+                          data-testid={`button-copy-${vendorKey}`}
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                        {vendorGroup.websiteUrl && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => window.open(vendorGroup.websiteUrl!, '_blank')}
+                            data-testid={`button-website-${vendorKey}`}
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </>
+                    )}
+                    {approvedCount > 0 && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => selectAllInVendor(vendorGroup)}
+                        data-testid={`button-select-all-${vendorKey}`}
+                      >
+                        Select All Ready
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleVendorExpanded(vendorKey)}
+                      data-testid={`button-expand-vendor-${vendorKey}`}
+                    >
+                      {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+
+              {isExpanded && (
+                <CardContent>
+                  <table className="w-full">
+                    <thead className="bg-gray-100 dark:bg-gray-900">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 w-10">
+                          <Checkbox
+                            checked={vendorGroup.requests.every(r => selectedVendorRequests.has(r.id))}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedVendorRequests(new Set([
+                                  ...selectedVendorRequests,
+                                  ...vendorGroup.requests.map(r => r.id)
+                                ]));
+                              } else {
+                                const newSet = new Set(selectedVendorRequests);
+                                vendorGroup.requests.forEach(r => newSet.delete(r.id));
+                                setSelectedVendorRequests(newSet);
+                              }
+                            }}
+                            data-testid={`checkbox-all-${vendorKey}`}
+                          />
+                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Part</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Vendor SKU</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Qty</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Est. Cost</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Department</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requester</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Urgency</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Status</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+                      {vendorGroup.requests.map((request) => (
+                        <tr key={request.id} className="bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
+                          <td className="px-3 py-2">
+                            <Checkbox
+                              checked={selectedVendorRequests.has(request.id)}
+                              onCheckedChange={() => toggleRequestSelection(request.id)}
+                              data-testid={`checkbox-request-${request.id}`}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{request.partName}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">{request.partNumber}</div>
+                          </td>
+                          <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
+                            {request.vendorPartNumber || '-'}
+                          </td>
+                          <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-gray-100">{request.quantity}</td>
+                          <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
+                            {request.estimatedCost ? `$${request.estimatedCost.toFixed(2)}` : '-'}
+                          </td>
+                          <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{request.department}</td>
+                          <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{request.requestedBy}</td>
+                          <td className="px-3 py-2">{getUrgencyBadge(request.urgency)}</td>
+                          <td className="px-3 py-2">{getStatusBadge(request.status)}</td>
+                          <td className="px-3 py-2 text-right">
+                            {request.status === 'APPROVED' && (
+                              <Button size="sm" variant="default" onClick={() => handleAction(request, 'order')} data-testid={`button-order-${request.id}`}>
+                                Order
+                              </Button>
+                            )}
+                            {request.status === 'ORDERED' && (
+                              <Button size="sm" variant="outline" onClick={() => handleAction(request, 'receive')} data-testid={`button-receive-${request.id}`}>
+                                Receive
+                              </Button>
+                            )}
+                            {request.status === 'RECEIVED' && (
+                              <Button size="sm" variant="outline" onClick={() => handleAction(request, 'deliver')} data-testid={`button-deliver-${request.id}`}>
+                                Deliver
+                              </Button>
+                            )}
+                            {request.productUrl && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => window.open(request.productUrl!, '_blank')}
+                                data-testid={`button-product-${request.id}`}
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </CardContent>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="p-8 space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Consolidated Parts Needs</h1>
         <p className="text-muted-foreground mt-1">
-          Manage all parts requests across departments - grouped by part number
+          Manage all parts requests across departments - grouped by part number or vendor
         </p>
       </div>
 
@@ -475,62 +967,92 @@ export default function ConsolidatedNeedsListPage() {
         </Card>
       </div>
 
-      {/* Tabs for different request statuses */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Requests by Status (Consolidated by Part)</CardTitle>
-          <CardDescription>
-            Parts grouped by part number showing total quantities across departments
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">Loading requests...</p>
-            </div>
-          ) : (
-            <Tabs defaultValue="pending">
-              <TabsList>
-                <TabsTrigger value="pending" data-testid="tab-pending">
-                  Pending ({pendingRequests.length})
-                </TabsTrigger>
-                <TabsTrigger value="approved" data-testid="tab-approved">
-                  Approved ({approvedRequests.length})
-                </TabsTrigger>
-                <TabsTrigger value="ordered" data-testid="tab-ordered">
-                  Ordered ({orderedRequests.length})
-                </TabsTrigger>
-                <TabsTrigger value="received" data-testid="tab-received">
-                  Received ({receivedRequests.length})
-                </TabsTrigger>
-                <TabsTrigger value="delivered" data-testid="tab-delivered">
-                  Delivered ({deliveredRequests.length})
-                </TabsTrigger>
-              </TabsList>
+      {/* Main View Tabs */}
+      <Tabs value={mainViewTab} onValueChange={(v) => setMainViewTab(v as typeof mainViewTab)}>
+        <TabsList className="mb-4">
+          <TabsTrigger value="by-status" data-testid="tab-by-status">
+            <Package className="w-4 h-4 mr-2" />
+            By Status
+          </TabsTrigger>
+          <TabsTrigger value="by-vendor" data-testid="tab-by-vendor">
+            <Building2 className="w-4 h-4 mr-2" />
+            By Vendor
+          </TabsTrigger>
+        </TabsList>
 
-              <TabsContent value="pending">
-                {renderConsolidatedTable(pendingRequests)}
-              </TabsContent>
+        <TabsContent value="by-status">
+          {/* Tabs for different request statuses */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Requests by Status (Consolidated by Part)</CardTitle>
+              <CardDescription>
+                Parts grouped by part number showing total quantities across departments
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">Loading requests...</p>
+                </div>
+              ) : (
+                <Tabs defaultValue="pending">
+                  <TabsList>
+                    <TabsTrigger value="pending" data-testid="tab-pending">
+                      Pending ({pendingRequests.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="approved" data-testid="tab-approved">
+                      Approved ({approvedRequests.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="ordered" data-testid="tab-ordered">
+                      Ordered ({orderedRequests.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="received" data-testid="tab-received">
+                      Received ({receivedRequests.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="delivered" data-testid="tab-delivered">
+                      Delivered ({deliveredRequests.length})
+                    </TabsTrigger>
+                  </TabsList>
 
-              <TabsContent value="approved">
-                {renderConsolidatedTable(approvedRequests)}
-              </TabsContent>
+                  <TabsContent value="pending">
+                    {renderConsolidatedTable(pendingRequests)}
+                  </TabsContent>
 
-              <TabsContent value="ordered">
-                {renderConsolidatedTable(orderedRequests)}
-              </TabsContent>
+                  <TabsContent value="approved">
+                    {renderConsolidatedTable(approvedRequests)}
+                  </TabsContent>
 
-              <TabsContent value="received">
-                {renderConsolidatedTable(receivedRequests)}
-              </TabsContent>
+                  <TabsContent value="ordered">
+                    {renderConsolidatedTable(orderedRequests)}
+                  </TabsContent>
 
-              <TabsContent value="delivered">
-                {renderConsolidatedTable(deliveredRequests, false)}
-              </TabsContent>
-            </Tabs>
-          )}
-        </CardContent>
-      </Card>
+                  <TabsContent value="received">
+                    {renderConsolidatedTable(receivedRequests)}
+                  </TabsContent>
+
+                  <TabsContent value="delivered">
+                    {renderConsolidatedTable(deliveredRequests, false)}
+                  </TabsContent>
+                </Tabs>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="by-vendor">
+          <Card>
+            <CardHeader>
+              <CardTitle>Requests by Vendor</CardTitle>
+              <CardDescription>
+                Parts grouped by vendor for efficient ordering - select items to bulk order
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {renderVendorGroupedView()}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Action Dialog */}
       <Dialog open={isActionDialogOpen} onOpenChange={setIsActionDialogOpen}>
@@ -634,6 +1156,99 @@ export default function ConsolidatedNeedsListPage() {
                 data-testid="button-submit-action"
               >
                 {updateRequestMutation.isPending ? 'Processing...' : 'Confirm'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Vendor Assignment Dialog */}
+      <Dialog open={isVendorAssignDialogOpen} onOpenChange={setIsVendorAssignDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Vendor</DialogTitle>
+            <DialogDescription>
+              Assign a vendor to {selectedVendorRequests.size} selected requests
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Vendor</label>
+              <Select value={selectedVendorId} onValueChange={setSelectedVendorId}>
+                <SelectTrigger data-testid="select-vendor">
+                  <SelectValue placeholder="Select a vendor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vendors.map((vendor) => (
+                    <SelectItem key={vendor.id} value={vendor.id.toString()}>
+                      {vendor.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Order Method</label>
+              <Select value={selectedOrderMethod} onValueChange={(v) => setSelectedOrderMethod(v as 'PO' | 'WEBSITE')}>
+                <SelectTrigger data-testid="select-order-method">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PO">Purchase Order (PO)</SelectItem>
+                  <SelectItem value="WEBSITE">Website Order</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={() => setIsVendorAssignDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleBulkVendorAssign}
+                disabled={bulkUpdateMutation.isPending || !selectedVendorId}
+                data-testid="button-confirm-vendor-assign"
+              >
+                {bulkUpdateMutation.isPending ? 'Assigning...' : 'Assign Vendor'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Order Dialog */}
+      <Dialog open={isBulkOrderDialogOpen} onOpenChange={setIsBulkOrderDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark as Ordered</DialogTitle>
+            <DialogDescription>
+              Mark {selectedVendorRequests.size} selected requests as ordered
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Expected Delivery Date</label>
+              <Input
+                type="date"
+                value={bulkExpectedDelivery}
+                onChange={(e) => setBulkExpectedDelivery(e.target.value)}
+                data-testid="input-bulk-expected-delivery"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={() => setIsBulkOrderDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleBulkMarkOrdered}
+                disabled={bulkUpdateMutation.isPending}
+                data-testid="button-confirm-bulk-order"
+              >
+                {bulkUpdateMutation.isPending ? 'Processing...' : 'Mark Ordered'}
               </Button>
             </div>
           </div>

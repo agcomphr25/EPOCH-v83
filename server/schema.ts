@@ -6192,8 +6192,13 @@ export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
   productionLineId: uuid('production_line_id').references(() => cuttingProductionLines.id),
   source: text('source'), // Fabric source/manufacturer
   fabric: text('fabric'), // Fabric type/description
-  batchNumber: text('batch_number'), // Batch/lot number
-  internalControlNumber: text('internal_control_number'), // Part number/internal control
+  fabricPartNumber: text('fabric_part_number'), // Part number for the fabric type
+  nickname: text('nickname'), // In-house nickname for the fabric
+  supplierPartNumber: text('supplier_part_number'), // Supplier's part number
+  internalControlNumber: text('internal_control_number'), // Internal control number
+  lotNumber: text('lot_number'), // Lot number for traceability
+  batchNumber: text('batch_number'), // Batch number
+  rollNumber: text('roll_number'), // Roll number
   manufactureDate: date('manufacture_date'),
   receivedDate: date('received_date'),
   expirationDate: date('expiration_date'),

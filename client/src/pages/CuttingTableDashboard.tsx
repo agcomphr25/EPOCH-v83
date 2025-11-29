@@ -51,7 +51,10 @@ import { BarcodeInputField } from "@/components/BarcodeInputField";
 type FabricInventoryItem = {
   id: string;
   fabricType: string;
-  lotNumber: string;
+  fabricPartNumber: string | null;
+  nickname: string | null;
+  supplierPartNumber: string | null;
+  internalControlNumber: string | null;
   batchNumber: string;
   rollNumber: string;
   quantityInStock: number;
@@ -106,10 +109,12 @@ export default function CuttingTableDashboard() {
 
   const [receivingForm, setReceivingForm] = useState({
     fabricType: "",
-    lotNumber: "",
+    fabricPartNumber: "",
+    nickname: "",
+    supplierPartNumber: "",
+    internalControlNumber: "",
     batchNumber: "",
     rollNumber: "",
-    quantity: "",
     squareMeters: "",
     expirationDate: "",
     location: "",
@@ -157,7 +162,12 @@ export default function CuttingTableDashboard() {
       const data = await res.json();
       return data.map((item: any) => ({
         ...item,
-        barcodeValue: `FAB-${item.lotNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
+        fabricType: item.fabric || item.fabricType,
+        fabricPartNumber: item.fabricPartNumber,
+        nickname: item.nickname,
+        supplierPartNumber: item.supplierPartNumber,
+        internalControlNumber: item.internalControlNumber,
+        barcodeValue: `FAB-${item.internalControlNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
         status: item.quantityInStock < 10 ? 'low' : 
                 (item.expirationDate && new Date(item.expirationDate) < new Date() ? 'expired' : 'available'),
       }));
@@ -243,11 +253,14 @@ export default function CuttingTableDashboard() {
       return apiRequest('/api/cutting-table/fabric-inventory', {
         method: 'POST',
         body: JSON.stringify({
-          fabricType: data.fabricType,
-          lotNumber: data.lotNumber,
+          fabric: data.fabricType,
+          fabricPartNumber: data.fabricPartNumber,
+          nickname: data.nickname,
+          supplierPartNumber: data.supplierPartNumber,
+          internalControlNumber: data.internalControlNumber,
           batchNumber: data.batchNumber,
           rollNumber: data.rollNumber,
-          quantityInStock: parseInt(data.quantity) || 0,
+          quantityInStock: 1,
           squareMeters: parseFloat(data.squareMeters) || 0,
           expirationDate: data.expirationDate || null,
           location: data.location,
@@ -261,10 +274,12 @@ export default function CuttingTableDashboard() {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
       setReceivingForm({
         fabricType: "",
-        lotNumber: "",
+        fabricPartNumber: "",
+        nickname: "",
+        supplierPartNumber: "",
+        internalControlNumber: "",
         batchNumber: "",
         rollNumber: "",
-        quantity: "",
         squareMeters: "",
         expirationDate: "",
         location: "",
@@ -519,7 +534,9 @@ export default function CuttingTableDashboard() {
           fabricId: fabric.id,
           barcodeValue: fabric.barcodeValue,
           fabricType: fabric.fabricType,
-          lotNumber: fabric.lotNumber,
+          internalControlNumber: fabric.internalControlNumber,
+          nickname: fabric.nickname,
+          supplierPartNumber: fabric.supplierPartNumber,
           batchNumber: fabric.batchNumber,
           rollNumber: fabric.rollNumber,
         }),
@@ -534,17 +551,21 @@ export default function CuttingTableDashboard() {
                 <head><title>Fabric Label</title>
                 <style>
                   body { font-family: Arial, sans-serif; padding: 20px; }
-                  .label { border: 2px solid #000; padding: 15px; width: 300px; }
+                  .label { border: 2px solid #000; padding: 15px; width: 320px; }
                   .barcode { text-align: center; margin: 10px 0; }
-                  .info { font-size: 12px; margin: 5px 0; }
-                  .type { font-size: 16px; font-weight: bold; margin-bottom: 10px; }
+                  .info { font-size: 11px; margin: 4px 0; }
+                  .type { font-size: 14px; font-weight: bold; margin-bottom: 5px; }
+                  .control-number { font-size: 16px; font-weight: bold; margin-bottom: 8px; }
+                  .nickname { font-size: 12px; font-style: italic; margin-bottom: 5px; color: #555; }
                 </style>
                 </head>
                 <body>
                   <div class="label">
+                    <div class="control-number">ICN: ${fabric.internalControlNumber || 'N/A'}</div>
                     <div class="type">${fabric.fabricType}</div>
+                    ${fabric.nickname ? `<div class="nickname">"${fabric.nickname}"</div>` : ''}
                     <div class="barcode"><img src="${data.barcodeImage}" alt="barcode" /></div>
-                    <div class="info"><strong>Lot:</strong> ${fabric.lotNumber || 'N/A'}</div>
+                    ${fabric.supplierPartNumber ? `<div class="info"><strong>Supplier P/N:</strong> ${fabric.supplierPartNumber}</div>` : ''}
                     <div class="info"><strong>Batch:</strong> ${fabric.batchNumber || 'N/A'}</div>
                     <div class="info"><strong>Roll:</strong> ${fabric.rollNumber || 'N/A'}</div>
                     <div class="info"><strong>Location:</strong> ${fabric.location || 'N/A'}</div>
@@ -1167,17 +1188,26 @@ export default function CuttingTableDashboard() {
                 Receive Fabric into Inventory
               </CardTitle>
               <CardDescription>
-                Add new fabric with full traceability (lot, batch, roll numbers)
+                Add new fabric with full traceability (control number, lot, batch, roll)
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="fabricType">Fabric Type *</Label>
+                    <Label htmlFor="fabricType">Fabric Type (Part Number) *</Label>
                     <Select
                       value={receivingForm.fabricType}
-                      onValueChange={(v) => setReceivingForm({ ...receivingForm, fabricType: v })}
+                      onValueChange={(v) => {
+                        const selectedItem = fabricItems.find((item: any) => 
+                          (item.agPartNumber || item.fabric || item.name) === v
+                        );
+                        setReceivingForm({ 
+                          ...receivingForm, 
+                          fabricType: v,
+                          fabricPartNumber: selectedItem?.agPartNumber || ''
+                        });
+                      }}
                     >
                       <SelectTrigger id="fabricType" data-testid="select-fabric-type">
                         <SelectValue placeholder="Select fabric type" />
@@ -1189,10 +1219,10 @@ export default function CuttingTableDashboard() {
                           fabricItems.map((item: any) => (
                             <SelectItem 
                               key={item.id} 
-                              value={item.fabric || item.agPartNumber || item.name}
+                              value={item.agPartNumber || item.fabric || item.name}
                               data-testid={`option-fabric-${item.id}`}
                             >
-                              {item.fabric || item.agPartNumber || item.name}
+                              {item.agPartNumber ? `${item.agPartNumber} - ${item.name || item.fabric}` : (item.fabric || item.name)}
                             </SelectItem>
                           ))
                         )}
@@ -1200,17 +1230,42 @@ export default function CuttingTableDashboard() {
                     </Select>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="nickname">Nickname (In-House Name)</Label>
+                    <Input
+                      id="nickname"
+                      placeholder="What we call it in the shop"
+                      value={receivingForm.nickname}
+                      onChange={(e) => setReceivingForm({ ...receivingForm, nickname: e.target.value })}
+                      data-testid="input-nickname"
+                    />
+                    <p className="text-xs text-muted-foreground">The name your team uses for this fabric</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="lotNumber">Lot Number *</Label>
+                      <Label htmlFor="internalControlNumber">Internal Control Number *</Label>
                       <Input
-                        id="lotNumber"
-                        placeholder="LOT-2024-001"
-                        value={receivingForm.lotNumber}
-                        onChange={(e) => setReceivingForm({ ...receivingForm, lotNumber: e.target.value })}
-                        data-testid="input-lot-number"
+                        id="internalControlNumber"
+                        placeholder="ICN-2024-001"
+                        value={receivingForm.internalControlNumber}
+                        onChange={(e) => setReceivingForm({ ...receivingForm, internalControlNumber: e.target.value })}
+                        data-testid="input-internal-control-number"
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="supplierPartNumber">Supplier Part Number</Label>
+                      <Input
+                        id="supplierPartNumber"
+                        placeholder="SUP-12345"
+                        value={receivingForm.supplierPartNumber}
+                        onChange={(e) => setReceivingForm({ ...receivingForm, supplierPartNumber: e.target.value })}
+                        data-testid="input-supplier-part-number"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="batchNumber">Batch Number</Label>
                       <Input
@@ -1233,30 +1288,17 @@ export default function CuttingTableDashboard() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="quantity">Quantity (yards/meters)</Label>
-                      <Input
-                        id="quantity"
-                        type="number"
-                        placeholder="100"
-                        value={receivingForm.quantity}
-                        onChange={(e) => setReceivingForm({ ...receivingForm, quantity: e.target.value })}
-                        data-testid="input-quantity"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="squareMeters">Square Meters</Label>
-                      <Input
-                        id="squareMeters"
-                        type="number"
-                        step="0.01"
-                        placeholder="50.5"
-                        value={receivingForm.squareMeters}
-                        onChange={(e) => setReceivingForm({ ...receivingForm, squareMeters: e.target.value })}
-                        data-testid="input-square-meters"
-                      />
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="squareMeters">Square Meters</Label>
+                    <Input
+                      id="squareMeters"
+                      type="number"
+                      step="0.01"
+                      placeholder="50.5"
+                      value={receivingForm.squareMeters}
+                      onChange={(e) => setReceivingForm({ ...receivingForm, squareMeters: e.target.value })}
+                      data-testid="input-square-meters"
+                    />
                   </div>
                 </div>
 
@@ -1297,7 +1339,7 @@ export default function CuttingTableDashboard() {
                   <Button
                     className="w-full"
                     onClick={() => receiveFabricMutation.mutate(receivingForm)}
-                    disabled={!receivingForm.fabricType || !receivingForm.lotNumber || receiveFabricMutation.isPending}
+                    disabled={!receivingForm.fabricType || !receivingForm.internalControlNumber || receiveFabricMutation.isPending}
                     data-testid="button-receive-fabric"
                   >
                     {receiveFabricMutation.isPending ? (
@@ -1465,60 +1507,75 @@ export default function CuttingTableDashboard() {
                   No fabric in inventory. Use the Receive Fabric tab to add fabric.
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Fabric Type</TableHead>
-                      <TableHead>Lot Number</TableHead>
-                      <TableHead>Batch</TableHead>
-                      <TableHead>Roll</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Location</TableHead>
-                      <TableHead>Expiration</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {fabricInventory.map((fabric) => (
-                      <TableRow key={fabric.id}>
-                        <TableCell className="font-medium">{fabric.fabricType || 'Unknown'}</TableCell>
-                        <TableCell>{fabric.lotNumber || '-'}</TableCell>
-                        <TableCell>{fabric.batchNumber || '-'}</TableCell>
-                        <TableCell>{fabric.rollNumber || '-'}</TableCell>
-                        <TableCell>{fabric.quantityInStock || 0}</TableCell>
-                        <TableCell>{fabric.location || '-'}</TableCell>
-                        <TableCell>
-                          {fabric.expirationDate 
-                            ? new Date(fabric.expirationDate).toLocaleDateString() 
-                            : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {fabric.status === 'expired' && (
-                            <Badge variant="destructive">Expired</Badge>
-                          )}
-                          {fabric.status === 'low' && (
-                            <Badge variant="secondary" className="bg-amber-100 text-amber-800">Low</Badge>
-                          )}
-                          {fabric.status === 'available' && (
-                            <Badge variant="default" className="bg-green-100 text-green-800">Available</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handlePrintLabel(fabric)}
-                            data-testid={`button-print-label-${fabric.id}`}
-                          >
-                            <Printer className="h-4 w-4 mr-1" />
-                            Print Label
-                          </Button>
-                        </TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Internal Control #</TableHead>
+                        <TableHead>Fabric Type</TableHead>
+                        <TableHead>Nickname</TableHead>
+                        <TableHead>Supplier Part #</TableHead>
+                        <TableHead>Batch</TableHead>
+                        <TableHead>Roll</TableHead>
+                        <TableHead>Quantity</TableHead>
+                        <TableHead>Location</TableHead>
+                        <TableHead>Expiration</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {fabricInventory.map((fabric) => (
+                        <TableRow key={fabric.id}>
+                          <TableCell className="font-medium">{fabric.internalControlNumber || '-'}</TableCell>
+                          <TableCell>
+                            {fabric.fabricPartNumber ? (
+                              <div>
+                                <span className="font-medium">{fabric.fabricPartNumber}</span>
+                                {fabric.fabricType && <span className="text-muted-foreground ml-1">({fabric.fabricType})</span>}
+                              </div>
+                            ) : (
+                              fabric.fabricType || 'Unknown'
+                            )}
+                          </TableCell>
+                          <TableCell>{fabric.nickname || '-'}</TableCell>
+                          <TableCell>{fabric.supplierPartNumber || '-'}</TableCell>
+                          <TableCell>{fabric.batchNumber || '-'}</TableCell>
+                          <TableCell>{fabric.rollNumber || '-'}</TableCell>
+                          <TableCell>{fabric.quantityInStock || 0}</TableCell>
+                          <TableCell>{fabric.location || '-'}</TableCell>
+                          <TableCell>
+                            {fabric.expirationDate 
+                              ? new Date(fabric.expirationDate).toLocaleDateString() 
+                              : '-'}
+                          </TableCell>
+                          <TableCell>
+                            {fabric.status === 'expired' && (
+                              <Badge variant="destructive">Expired</Badge>
+                            )}
+                            {fabric.status === 'low' && (
+                              <Badge variant="secondary" className="bg-amber-100 text-amber-800">Low</Badge>
+                            )}
+                            {fabric.status === 'available' && (
+                              <Badge variant="default" className="bg-green-100 text-green-800">Available</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePrintLabel(fabric)}
+                              data-testid={`button-print-label-${fabric.id}`}
+                            >
+                              <Printer className="h-4 w-4 mr-1" />
+                              Print Label
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -1535,8 +1592,10 @@ export default function CuttingTableDashboard() {
             {selectedFabric && (
               <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
                 <div className="text-sm space-y-1">
+                  <div><strong>Internal Control #:</strong> {selectedFabric.internalControlNumber || '-'}</div>
                   <div><strong>Type:</strong> {selectedFabric.fabricType}</div>
-                  <div><strong>Lot:</strong> {selectedFabric.lotNumber}</div>
+                  {selectedFabric.nickname && <div><strong>Nickname:</strong> {selectedFabric.nickname}</div>}
+                  {selectedFabric.supplierPartNumber && <div><strong>Supplier Part #:</strong> {selectedFabric.supplierPartNumber}</div>}
                   <div><strong>Barcode:</strong> {selectedFabric.barcodeValue}</div>
                 </div>
               </div>

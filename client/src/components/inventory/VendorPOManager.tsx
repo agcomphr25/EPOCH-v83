@@ -261,21 +261,20 @@ function OptionalSettingsSelector({ vendorPoId }: { vendorPoId: number }) {
     enabled: isOpen,
   });
 
-  // Reset and initialize selected IDs when dialog opens
+  // Reset and initialize selected IDs when dialog opens and data loads
   useEffect(() => {
-    if (isOpen) {
-      // Always start fresh when opening - reset to empty first
-      setSelectedIds([]);
-      
-      // Then load current settings if available and no error
-      if (!isLoading && !isError && currentSettings) {
-        setSelectedIds(currentSettings.map((s: any) => s.id));
-      }
-    } else {
-      // Clear when closing
+    if (isOpen && !isLoading && !isError && currentSettings && currentSettings.length >= 0) {
+      // Only set once when data finishes loading
+      setSelectedIds(currentSettings.map((s: any) => s.id));
+    }
+  }, [isOpen, isLoading, isError]);
+
+  // Clear selected IDs when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
       setSelectedIds([]);
     }
-  }, [isOpen, currentSettings, isLoading, isError]);
+  }, [isOpen]);
 
   const updateMutation = useMutation({
     mutationFn: async (optionalSettingIds: number[]) => {

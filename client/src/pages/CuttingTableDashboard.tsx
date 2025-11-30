@@ -168,7 +168,9 @@ export default function CuttingTableDashboard() {
   const [deletingFabric, setDeletingFabric] = useState<FabricInventoryItem | null>(null);
   const [editForm, setEditForm] = useState({
     fabricType: '',
-    lotNumber: '',
+    internalControlNumber: '',
+    nickname: '',
+    supplierPartNumber: '',
     batchNumber: '',
     rollNumber: '',
     quantity: '',
@@ -326,7 +328,9 @@ export default function CuttingTableDashboard() {
         method: 'PUT',
         body: JSON.stringify({
           fabric: data.fabricType,
-          lotNumber: data.lotNumber,
+          internalControlNumber: data.internalControlNumber,
+          nickname: data.nickname,
+          supplierPartNumber: data.supplierPartNumber,
           batchNumber: data.batchNumber,
           rollNumber: data.rollNumber,
           quantityInStock: parseInt(data.quantity) || 0,
@@ -659,7 +663,9 @@ export default function CuttingTableDashboard() {
     setEditingFabric(fabric);
     setEditForm({
       fabricType: fabric.fabricType || '',
-      lotNumber: fabric.lotNumber || '',
+      internalControlNumber: fabric.internalControlNumber || '',
+      nickname: fabric.nickname || '',
+      supplierPartNumber: fabric.supplierPartNumber || '',
       batchNumber: fabric.batchNumber || '',
       rollNumber: fabric.rollNumber || '',
       quantity: String(fabric.quantityInStock || 0),
@@ -1610,92 +1616,21 @@ export default function CuttingTableDashboard() {
                   No fabric in inventory. Use the Receive Fabric tab to add fabric.
                 </div>
               ) : (
-
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Internal Control #</TableHead>
-                        <TableHead>Fabric Type</TableHead>
+                        <TableHead>Part Number</TableHead>
                         <TableHead>Nickname</TableHead>
                         <TableHead>Supplier Part #</TableHead>
-                        <TableHead>Batch</TableHead>
-                        <TableHead>Roll</TableHead>
-                        <TableHead>Quantity</TableHead>
+                        <TableHead>Batch #</TableHead>
+                        <TableHead>Roll #</TableHead>
+                        <TableHead>Qty in Stock</TableHead>
                         <TableHead>Location</TableHead>
                         <TableHead>Expiration</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Actions</TableHead>
-
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Fabric Type</TableHead>
-                      <TableHead>Lot Number</TableHead>
-                      <TableHead>Batch</TableHead>
-                      <TableHead>Roll</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Location</TableHead>
-                      <TableHead>Expiration</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {fabricInventory.map((fabric) => (
-                      <TableRow key={fabric.id}>
-                        <TableCell className="font-medium">{fabric.fabricType || 'Unknown'}</TableCell>
-                        <TableCell>{fabric.lotNumber || '-'}</TableCell>
-                        <TableCell>{fabric.batchNumber || '-'}</TableCell>
-                        <TableCell>{fabric.rollNumber || '-'}</TableCell>
-                        <TableCell>{fabric.quantityInStock || 0}</TableCell>
-                        <TableCell>{fabric.location || '-'}</TableCell>
-                        <TableCell>
-                          {fabric.expirationDate 
-                            ? new Date(fabric.expirationDate).toLocaleDateString() 
-                            : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {fabric.status === 'expired' && (
-                            <Badge variant="destructive">Expired</Badge>
-                          )}
-                          {fabric.status === 'low' && (
-                            <Badge variant="secondary" className="bg-amber-100 text-amber-800">Low</Badge>
-                          )}
-                          {fabric.status === 'available' && (
-                            <Badge variant="default" className="bg-green-100 text-green-800">Available</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleOpenEditDialog(fabric)}
-                              data-testid={`button-edit-${fabric.id}`}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handlePrintLabel(fabric)}
-                              data-testid={`button-print-label-${fabric.id}`}
-                            >
-                              <Printer className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleOpenDeleteDialog(fabric)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              data-testid={`button-delete-${fabric.id}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1735,15 +1670,36 @@ export default function CuttingTableDashboard() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handlePrintLabel(fabric)}
-                              data-testid={`button-print-label-${fabric.id}`}
-                            >
-                              <Printer className="h-4 w-4 mr-1" />
-                              Print Label
-                            </Button>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePrintLabel(fabric)}
+                                title="Print Label"
+                                data-testid={`button-print-label-${fabric.id}`}
+                              >
+                                <Printer className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenEditDialog(fabric)}
+                                title="Edit"
+                                data-testid={`button-edit-fabric-${fabric.id}`}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenDeleteDialog(fabric)}
+                                title="Delete"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                data-testid={`button-delete-fabric-${fabric.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1906,7 +1862,7 @@ export default function CuttingTableDashboard() {
           <DialogHeader>
             <DialogTitle>Edit Fabric Inventory</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Fabric Type *</Label>
@@ -1918,12 +1874,32 @@ export default function CuttingTableDashboard() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Lot Number</Label>
+                <Label>Internal Control #</Label>
                 <Input
-                  value={editForm.lotNumber}
-                  onChange={(e) => setEditForm({ ...editForm, lotNumber: e.target.value })}
-                  placeholder="Lot number"
-                  data-testid="input-edit-lot-number"
+                  value={editForm.internalControlNumber}
+                  onChange={(e) => setEditForm({ ...editForm, internalControlNumber: e.target.value })}
+                  placeholder="ICN-2024-001"
+                  data-testid="input-edit-internal-control"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Nickname</Label>
+                <Input
+                  value={editForm.nickname}
+                  onChange={(e) => setEditForm({ ...editForm, nickname: e.target.value })}
+                  placeholder="In-house name"
+                  data-testid="input-edit-nickname"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Supplier Part #</Label>
+                <Input
+                  value={editForm.supplierPartNumber}
+                  onChange={(e) => setEditForm({ ...editForm, supplierPartNumber: e.target.value })}
+                  placeholder="Supplier part number"
+                  data-testid="input-edit-supplier-part"
                 />
               </div>
             </div>
@@ -2015,7 +1991,8 @@ export default function CuttingTableDashboard() {
               {deletingFabric && (
                 <div className="mt-2 p-2 bg-slate-100 dark:bg-slate-800 rounded">
                   <div className="font-medium">{deletingFabric.fabricType}</div>
-                  <div className="text-sm">Lot: {deletingFabric.lotNumber || 'N/A'}</div>
+                  <div className="text-sm">ICN: {deletingFabric.internalControlNumber || 'N/A'}</div>
+                  <div className="text-sm">Batch: {deletingFabric.batchNumber || 'N/A'}</div>
                   <div className="text-sm">Qty: {deletingFabric.quantityInStock}</div>
                 </div>
               )}

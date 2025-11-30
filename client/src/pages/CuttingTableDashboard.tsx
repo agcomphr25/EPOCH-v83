@@ -1696,9 +1696,7 @@ export default function CuttingTableDashboard() {
                           </div>
                         </TableCell>
 
-                      </TableRow>
-                    </TableBody>
-                    </Table>
+                
 
                     <Table>
                     <TableHeader>

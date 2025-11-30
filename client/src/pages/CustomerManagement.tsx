@@ -150,6 +150,7 @@ const CustomerFormFields = ({
   showCustomerFormSuggestions,
   isValidatingCustomerAddress,
   handleCustomerFormSuggestionSelect,
+  customerTypes,
 }: {
   formData: CustomerFormData;
   setFormData: React.Dispatch<React.SetStateAction<CustomerFormData>>;
@@ -159,6 +160,7 @@ const CustomerFormFields = ({
   showCustomerFormSuggestions: boolean;
   isValidatingCustomerAddress: boolean;
   handleCustomerFormSuggestionSelect: (suggestion: any) => void;
+  customerTypes: { id: number; name: string; description: string | null }[];
 }) => (
   <div className="space-y-6 py-4">
     {/* Customer Information Section */}
@@ -240,11 +242,11 @@ const CustomerFormFields = ({
               <SelectValue placeholder="Select customer type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="AGR">AGR</SelectItem>
-              <SelectItem value="Gunbuilder">Gunbuilder</SelectItem>
-              <SelectItem value="Distributor">Distributor</SelectItem>
-              <SelectItem value="OEM">OEM</SelectItem>
-              <SelectItem value="Individual">Individual</SelectItem>
+              {customerTypes.map((type) => (
+                <SelectItem key={type.id} value={type.name}>
+                  {type.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -1640,6 +1642,7 @@ export default function CustomerManagement() {
                 handleCustomerFormSuggestionSelect={
                   handleCustomerFormSuggestionSelect
                 }
+                customerTypes={customerTypes}
               />
               <div className="flex justify-end gap-2 pt-6 border-t">
                 <Button
@@ -2315,11 +2318,11 @@ export default function CustomerManagement() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="AGR">AGR</SelectItem>
-                    <SelectItem value="Gunbuilder">Gunbuilder</SelectItem>
-                    <SelectItem value="Distributor">Distributor</SelectItem>
-                    <SelectItem value="OEM">OEM</SelectItem>
-                    <SelectItem value="Individual">Individual</SelectItem>
+                    {customerTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.name}>
+                        {type.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

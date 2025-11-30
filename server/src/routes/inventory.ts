@@ -79,6 +79,21 @@ router.get('/inventory/items', async (req: Request, res: Response) => {
   }
 });
 
+// Enhanced Inventory API - Get item by AG Part Number (for unit conversion lookup)
+router.get('/inventory/items/by-part-number/:partNumber', async (req: Request, res: Response) => {
+  try {
+    const { partNumber } = req.params;
+    const item = await storage.getInventoryItemByAgPartNumber(partNumber);
+    if (!item) {
+      return res.status(404).json({ error: 'Inventory item not found' });
+    }
+    res.json(item);
+  } catch (error) {
+    console.error('Get inventory item by part number error:', error);
+    res.status(500).json({ error: 'Failed to fetch inventory item' });
+  }
+});
+
 // Enhanced Inventory API - Update item
 router.put('/inventory/items/:id', pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
   try {

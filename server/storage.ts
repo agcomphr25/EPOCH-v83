@@ -6836,13 +6836,15 @@ export class DatabaseStorage implements IStorage {
       .orderBy(vendorPOItems.lineNumber);
     
     // Flatten the joined data structure
+    // Prioritize stored purchase unit data from vendor_po_items over inventory_items
     return items.map(row => ({
       ...row.vendor_po_items,
       // Include supplier part number from inventory items
       supplierPartNumber: row.inventory_items?.supplierPartNumber,
-      // Include UOM conversion data from inventory items if available
-      vendorUnit: row.inventory_items?.vendorUnit,
-      purchaseUnit: row.inventory_items?.purchaseUnit,
+      // Use stored vendor/purchase unit if available, fall back to inventory_items
+      vendorUnit: row.vendor_po_items?.vendorUnit || row.inventory_items?.vendorUnit,
+      purchaseUnit: row.vendor_po_items?.purchaseUnit || row.inventory_items?.purchaseUnit,
+      // purchaseQuantity from inventory_items represents the conversion factor
       purchaseQuantity: row.inventory_items?.purchaseQuantity,
       consumptionRate: row.inventory_items?.consumptionRate,
       usageUnit: row.inventory_items?.usageUnit,
@@ -6851,7 +6853,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createVendorPOItem(data: any): Promise<any> {
-    const [item] = await db.insert(vendorPOItems).values(data).returning();
+    // If purchase unit data is provided, derive vendor unit values server-side
+    let processedData = { ...data };
+    if (data.purchaseQty !== undefined && data.purchaseQty !== null && data.conversionFactor) {
+      const conversionFactor = Number(data.conversionFactor);
+      if (conversionFactor > 0) {
+        // Derive vendor quantity: purchaseQty / conversionFactor
+        processedData.quantity = data.purchaseQty / conversionFactor;
+        // Derive vendor unit price: purchaseUnitPrice * conversionFactor
+        if (data.purchaseUnitPrice !== undefined && data.purchaseUnitPrice !== null) {
+          processedData.unitPrice = data.purchaseUnitPrice * conversionFactor;
+        }
+      }
+    }
+    
+    const [item] = await db.insert(vendorPOItems).values(processedData).returning();
     
     // Auto-populate manufacturing queue if this is a manufactured part
     try {
@@ -6863,7 +6879,7 @@ export class DatabaseStorage implements IStorage {
       
       await autoPopulateManufacturingQueue({
         inventoryPartNumber: data.agPartNumber,
-        quantity: data.quantity,
+        quantity: processedData.quantity,
         vendorPoId: data.vendorPoId,
         vendorPoLineNumber: data.lineNumber,
         dueDate,
@@ -6883,20 +6899,35 @@ export class DatabaseStorage implements IStorage {
       .from(vendorPOItems)
       .where(eq(vendorPOItems.id, id));
     
+    // If purchase unit data is provided, derive vendor unit values server-side
+    let processedData = { ...data };
+    if (data.purchaseQty !== undefined && data.purchaseQty !== null && data.conversionFactor) {
+      const conversionFactor = Number(data.conversionFactor);
+      if (conversionFactor > 0) {
+        // Derive vendor quantity: purchaseQty / conversionFactor
+        processedData.quantity = data.purchaseQty / conversionFactor;
+        // Derive vendor unit price: purchaseUnitPrice * conversionFactor
+        if (data.purchaseUnitPrice !== undefined && data.purchaseUnitPrice !== null) {
+          processedData.unitPrice = data.purchaseUnitPrice * conversionFactor;
+        }
+      }
+    }
+    
     const [item] = await db
       .update(vendorPOItems)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...processedData, updatedAt: new Date() })
       .where(eq(vendorPOItems.id, id))
       .returning();
     
     // Sync manufacturing queue if quantity changed
-    if (oldItem && data.quantity !== undefined && data.quantity !== oldItem.quantity) {
+    const newQuantity = processedData.quantity !== undefined ? processedData.quantity : data.quantity;
+    if (oldItem && newQuantity !== undefined && newQuantity !== oldItem.quantity) {
       try {
         const { syncManufacturingQueueOnUpdate } = await import('./src/utils/manufacturingQueueHelper');
         await syncManufacturingQueueOnUpdate(
           id,
           oldItem.quantity,
-          data.quantity,
+          newQuantity,
           oldItem.vendorPoId,
           oldItem.lineNumber
         );

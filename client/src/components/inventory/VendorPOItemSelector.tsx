@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Trash2, Pencil, Check, X, Info } from 'lucide-react';
+import { Plus, Trash2, Pencil, Check, X, Info, ArrowRight, Calculator } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import {
   Tooltip,
@@ -21,6 +21,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 
 type VendorPOItemSelectorProps = {
   vendorPoId: number;
@@ -36,17 +37,15 @@ type VendorPOItem = {
   agPartNumber?: string;
   supplierPartNumber?: string;
   description?: string;
+  purchaseQty?: number;
+  purchaseUnitPrice?: number;
+  purchaseUnit?: string;
   quantity: number;
   unitPrice: number;
+  vendorUnit?: string;
+  conversionFactor?: number;
   lineTotal: number;
   notes?: string;
-  // Extended with inventory item UOM data
-  vendorUnit?: string;
-  purchaseUnit?: string;
-  purchaseQuantity?: number;
-  consumptionRate?: number;
-  usageUnit?: string;
-  purchaseUnitLabel?: string;
 };
 
 type VendorPart = {
@@ -64,25 +63,34 @@ type VendorPart = {
   itemUom?: string;
 };
 
-// Helper component to display quantity with conversion info
+type InventoryItem = {
+  id: number;
+  agPartNumber: string;
+  name: string;
+  vendorUnit?: string;
+  purchaseUnit?: string;
+  purchaseQuantity?: number;
+  costPer?: number;
+  supplierPartNumber?: string;
+};
+
+type NewItemState = {
+  agPartNumber: string;
+  description: string;
+  purchaseQty: number;
+  purchaseUnitPrice: number;
+  purchaseUnit: string;
+  vendorUnit: string;
+  conversionFactor: number;
+  quantity: number;
+  unitPrice: number;
+};
+
 function QuantityDisplay({ item }: { item: VendorPOItem }) {
-  // If no conversion data available, just show simple quantity
-  if (!item.vendorUnit) {
-    return <span>{item.quantity}</span>;
+  if (!item.vendorUnit && !item.purchaseUnit) {
+    return <span>{item.quantity.toFixed(2)}</span>;
   }
 
-  // Build conversion chain display
-  const conversionChain: string[] = [];
-  if (item.vendorUnit) {
-    conversionChain.push(`${item.quantity} ${item.vendorUnit}`);
-  }
-  if (item.purchaseQuantity && item.purchaseUnit) {
-    conversionChain.push(`${item.purchaseQuantity} ${item.purchaseUnit} per ${item.vendorUnit}`);
-  }
-  if (item.consumptionRate && item.usageUnit) {
-    conversionChain.push(`${item.consumptionRate} ${item.usageUnit} per item`);
-  }
-  
   return (
     <TooltipProvider>
       <Tooltip>
@@ -90,11 +98,11 @@ function QuantityDisplay({ item }: { item: VendorPOItem }) {
           <div className="flex items-center gap-1 cursor-help">
             <div>
               <div className="font-medium">
-                {item.quantity} {item.vendorUnit}
+                {item.quantity.toFixed(2)} {item.vendorUnit || 'units'}
               </div>
-              {item.purchaseQuantity && item.purchaseUnit && (
+              {item.purchaseQty && item.purchaseUnit && (
                 <div className="text-xs text-muted-foreground">
-                  = {(item.quantity * item.purchaseQuantity).toFixed(2)} {item.purchaseUnit}
+                  = {item.purchaseQty.toFixed(2)} {item.purchaseUnit}
                 </div>
               )}
             </div>
@@ -103,10 +111,51 @@ function QuantityDisplay({ item }: { item: VendorPOItem }) {
         </TooltipTrigger>
         <TooltipContent>
           <div className="space-y-1 text-xs">
-            <p><strong>Conversion Chain:</strong></p>
-            {conversionChain.map((chain, idx) => (
-              <p key={idx} className="ml-2">→ {chain}</p>
-            ))}
+            <p><strong>Unit Conversion:</strong></p>
+            {item.purchaseQty && item.purchaseUnit && (
+              <p>Purchase: {item.purchaseQty.toFixed(2)} {item.purchaseUnit} @ ${item.purchaseUnitPrice?.toFixed(2)}/{item.purchaseUnit}</p>
+            )}
+            {item.conversionFactor && (
+              <p>Conversion: {item.conversionFactor.toFixed(2)} {item.purchaseUnit} per {item.vendorUnit}</p>
+            )}
+            <p>Vendor: {item.quantity.toFixed(2)} {item.vendorUnit || 'units'} @ ${item.unitPrice.toFixed(2)}/{item.vendorUnit || 'unit'}</p>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function UnitPriceDisplay({ item }: { item: VendorPOItem }) {
+  if (!item.vendorUnit && !item.purchaseUnit) {
+    return <span>${item.unitPrice.toFixed(2)}</span>;
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex items-center gap-1 cursor-help">
+            <div>
+              <div className="font-medium">
+                ${item.unitPrice.toFixed(2)}/{item.vendorUnit || 'unit'}
+              </div>
+              {item.purchaseUnitPrice && item.purchaseUnit && (
+                <div className="text-xs text-muted-foreground">
+                  ${item.purchaseUnitPrice.toFixed(2)}/{item.purchaseUnit}
+                </div>
+              )}
+            </div>
+            <Info className="w-3 h-3 text-muted-foreground" />
+          </div>
+        </TooltipTrigger>
+        <TooltipContent>
+          <div className="space-y-1 text-xs">
+            <p><strong>Price Breakdown:</strong></p>
+            {item.purchaseUnitPrice && item.purchaseUnit && (
+              <p>Purchase price: ${item.purchaseUnitPrice.toFixed(2)} per {item.purchaseUnit}</p>
+            )}
+            <p>Vendor price: ${item.unitPrice.toFixed(2)} per {item.vendorUnit || 'unit'}</p>
           </div>
         </TooltipContent>
       </Tooltip>
@@ -117,10 +166,16 @@ function QuantityDisplay({ item }: { item: VendorPOItem }) {
 export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, onTotalChange }: VendorPOItemSelectorProps) {
   const queryClient = useQueryClient();
   const [selectedPartId, setSelectedPartId] = useState<string>('');
-  const [newItem, setNewItem] = useState({
+  const [selectedInventoryItem, setSelectedInventoryItem] = useState<InventoryItem | null>(null);
+  const [newItem, setNewItem] = useState<NewItemState>({
     agPartNumber: '',
     description: '',
-    quantity: 1,
+    purchaseQty: 0,
+    purchaseUnitPrice: 0,
+    purchaseUnit: '',
+    vendorUnit: '',
+    conversionFactor: 0,
+    quantity: 0,
     unitPrice: 0,
   });
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
@@ -131,41 +186,108 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
     queryFn: () => apiRequest(`/api/vendor-pos/${vendorPoId}/items`),
   });
 
-  // Fetch vendor parts for the selected vendor
   const { data: vendorParts = [], isLoading: isLoadingParts } = useQuery<VendorPart[]>({
     queryKey: ['/api/inventory/vendor-parts/vendor', vendorId],
     queryFn: () => apiRequest(`/api/inventory/vendor-parts/vendor/${vendorId}`),
     enabled: !!vendorId,
   });
 
-  // Handle part selection
-  const handlePartSelect = (partId: string) => {
+  const hasUnitConversion = useMemo(() => {
+    return selectedInventoryItem?.vendorUnit && 
+           selectedInventoryItem?.purchaseUnit && 
+           selectedInventoryItem?.purchaseQuantity && 
+           selectedInventoryItem.purchaseQuantity > 0;
+  }, [selectedInventoryItem]);
+
+  const calculatedVendorValues = useMemo(() => {
+    if (!hasUnitConversion || !newItem.purchaseQty || newItem.purchaseQty <= 0) {
+      return { vendorQty: newItem.purchaseQty || 0, vendorUnitPrice: newItem.purchaseUnitPrice || 0 };
+    }
+    
+    const conversionFactor = selectedInventoryItem!.purchaseQuantity!;
+    const vendorQty = newItem.purchaseQty / conversionFactor;
+    const vendorUnitPrice = newItem.purchaseUnitPrice * conversionFactor;
+    
+    return { vendorQty, vendorUnitPrice };
+  }, [hasUnitConversion, newItem.purchaseQty, newItem.purchaseUnitPrice, selectedInventoryItem]);
+
+  const lineTotal = useMemo(() => {
+    if (hasUnitConversion) {
+      return calculatedVendorValues.vendorQty * calculatedVendorValues.vendorUnitPrice;
+    }
+    return newItem.quantity * newItem.unitPrice;
+  }, [hasUnitConversion, calculatedVendorValues, newItem.quantity, newItem.unitPrice]);
+
+  const handlePartSelect = async (partId: string) => {
     setSelectedPartId(partId);
     const selectedPart = vendorParts.find(p => p.id.toString() === partId);
+    
     if (selectedPart) {
-      setNewItem({
-        agPartNumber: selectedPart.agPartNumber,
-        description: selectedPart.itemDescription || selectedPart.agPartNumber,
-        quantity: selectedPart.minimumOrderQty || 1,
-        unitPrice: selectedPart.unitPrice || 0,
-      });
+      try {
+        const inventoryItem = await apiRequest(`/api/inventory/items/by-part-number/${selectedPart.agPartNumber}`);
+        setSelectedInventoryItem(inventoryItem);
+        
+        const hasConversion = inventoryItem?.vendorUnit && 
+                             inventoryItem?.purchaseUnit && 
+                             inventoryItem?.purchaseQuantity && 
+                             inventoryItem.purchaseQuantity > 0;
+        
+        if (hasConversion) {
+          setNewItem({
+            agPartNumber: selectedPart.agPartNumber,
+            description: selectedPart.itemDescription || selectedPart.agPartNumber,
+            purchaseQty: 0,
+            purchaseUnitPrice: selectedPart.unitPrice || inventoryItem.costPer || 0,
+            purchaseUnit: inventoryItem.purchaseUnit,
+            vendorUnit: inventoryItem.vendorUnit,
+            conversionFactor: inventoryItem.purchaseQuantity,
+            quantity: 0,
+            unitPrice: 0,
+          });
+        } else {
+          setNewItem({
+            agPartNumber: selectedPart.agPartNumber,
+            description: selectedPart.itemDescription || selectedPart.agPartNumber,
+            purchaseQty: 0,
+            purchaseUnitPrice: 0,
+            purchaseUnit: '',
+            vendorUnit: inventoryItem?.vendorUnit || '',
+            conversionFactor: 0,
+            quantity: selectedPart.minimumOrderQty || 1,
+            unitPrice: selectedPart.unitPrice || 0,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch inventory item:', error);
+        setSelectedInventoryItem(null);
+        setNewItem({
+          agPartNumber: selectedPart.agPartNumber,
+          description: selectedPart.itemDescription || selectedPart.agPartNumber,
+          purchaseQty: 0,
+          purchaseUnitPrice: 0,
+          purchaseUnit: '',
+          vendorUnit: '',
+          conversionFactor: 0,
+          quantity: selectedPart.minimumOrderQty || 1,
+          unitPrice: selectedPart.unitPrice || 0,
+        });
+      }
     }
   };
 
   const createItemMutation = useMutation({
     mutationFn: async (data: any) => {
       const lineNumber = items.length + 1;
-      const lineTotal = data.quantity * data.unitPrice;
       return apiRequest(`/api/vendor-pos/${vendorPoId}/items`, {
         method: 'POST',
-        body: { ...data, lineNumber, lineTotal },
+        body: { ...data, lineNumber },
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'items'] });
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
       toast.success('Item added successfully');
-      setNewItem({ agPartNumber: '', description: '', quantity: 1, unitPrice: 0 });
+      resetForm();
       if (onTotalChange) {
         onTotalChange(calculateTotal());
       }
@@ -219,13 +341,65 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
     return items.reduce((sum, item) => sum + item.lineTotal, 0);
   };
 
+  const resetForm = () => {
+    setNewItem({
+      agPartNumber: '',
+      description: '',
+      purchaseQty: 0,
+      purchaseUnitPrice: 0,
+      purchaseUnit: '',
+      vendorUnit: '',
+      conversionFactor: 0,
+      quantity: 0,
+      unitPrice: 0,
+    });
+    setSelectedPartId('');
+    setSelectedInventoryItem(null);
+  };
+
   const handleAddItem = () => {
     if (!newItem.description && !newItem.agPartNumber) {
       toast.error('Please provide either AG Part# or description');
       return;
     }
-    createItemMutation.mutate(newItem);
-    setSelectedPartId('');
+    
+    let itemData: any;
+    
+    if (hasUnitConversion && newItem.purchaseQty > 0) {
+      if (newItem.purchaseUnitPrice <= 0) {
+        toast.error('Please enter a valid purchase unit price');
+        return;
+      }
+      
+      itemData = {
+        agPartNumber: newItem.agPartNumber,
+        description: newItem.description,
+        purchaseQty: newItem.purchaseQty,
+        purchaseUnitPrice: newItem.purchaseUnitPrice,
+        purchaseUnit: newItem.purchaseUnit,
+        vendorUnit: newItem.vendorUnit,
+        conversionFactor: newItem.conversionFactor,
+        quantity: calculatedVendorValues.vendorQty,
+        unitPrice: calculatedVendorValues.vendorUnitPrice,
+        lineTotal: lineTotal,
+      };
+    } else {
+      if (newItem.quantity <= 0 || newItem.unitPrice <= 0) {
+        toast.error('Please enter valid quantity and unit price');
+        return;
+      }
+      
+      itemData = {
+        agPartNumber: newItem.agPartNumber,
+        description: newItem.description,
+        quantity: newItem.quantity,
+        unitPrice: newItem.unitPrice,
+        vendorUnit: newItem.vendorUnit || null,
+        lineTotal: newItem.quantity * newItem.unitPrice,
+      };
+    }
+    
+    createItemMutation.mutate(itemData);
   };
 
   const handleEditItem = (item: VendorPOItem) => {
@@ -240,11 +414,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
   };
 
   const handleSaveEdit = (itemId: number) => {
-    // Find the original item to preserve unchanged values
     const originalItem = items.find(item => item.id === itemId);
     if (!originalItem) return;
     
-    // Merge edited fields with original values
     const updatedData = {
       agPartNumber: editedItem.agPartNumber ?? originalItem.agPartNumber,
       description: editedItem.description ?? originalItem.description,
@@ -273,9 +445,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
         <CardTitle>Line Items for PO #{poNumber}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Add New Item Form */}
         <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-900 rounded">
-          {/* Part Selection Dropdown */}
           <div className="grid grid-cols-1 gap-4">
             <div>
               <Label htmlFor="partSelector">Select from Vendor Parts</Label>
@@ -302,66 +472,142 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                   )}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Note: Vendor selection for parts is now integrated directly into the Inventory Items form
-              </p>
             </div>
           </div>
 
-          {/* Manual Entry Fields */}
-          <div className="grid grid-cols-4 gap-4">
-            <div>
-              <Label htmlFor="agPartNumber">AG Part#</Label>
-              <Input
-                id="agPartNumber"
-                value={newItem.agPartNumber}
-                onChange={(e) => setNewItem({ ...newItem, agPartNumber: e.target.value })}
-                data-testid="input-ag-part-number"
-                placeholder="Auto-filled or manual"
-              />
+          {hasUnitConversion && selectedInventoryItem && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Calculator className="w-4 h-4 text-blue-600" />
+                <span className="font-medium text-blue-800 dark:text-blue-200">Unit Conversion Active</span>
+                <Badge variant="outline" className="text-xs">
+                  {selectedInventoryItem.purchaseQuantity} {selectedInventoryItem.purchaseUnit} per {selectedInventoryItem.vendorUnit}
+                </Badge>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-gray-700 dark:text-gray-300">You Enter (Purchase Units)</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="purchaseQty">Quantity ({selectedInventoryItem.purchaseUnit})</Label>
+                      <Input
+                        id="purchaseQty"
+                        type="number"
+                        step="0.01"
+                        value={newItem.purchaseQty || ''}
+                        onChange={(e) => setNewItem({ ...newItem, purchaseQty: parseFloat(e.target.value) || 0 })}
+                        data-testid="input-purchase-qty"
+                        placeholder={`e.g., 366 ${selectedInventoryItem.purchaseUnit}`}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="purchaseUnitPrice">Price per {selectedInventoryItem.purchaseUnit}</Label>
+                      <Input
+                        id="purchaseUnitPrice"
+                        type="number"
+                        step="0.01"
+                        value={newItem.purchaseUnitPrice || ''}
+                        onChange={(e) => setNewItem({ ...newItem, purchaseUnitPrice: parseFloat(e.target.value) || 0 })}
+                        data-testid="input-purchase-unit-price"
+                        placeholder="e.g., 17.18"
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <ArrowRight className="w-4 h-4" />
+                    PO Shows (Vendor Units)
+                  </h4>
+                  <div className="bg-white dark:bg-gray-800 rounded p-3 border">
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Quantity:</span>
+                        <div className="font-bold text-lg">
+                          {calculatedVendorValues.vendorQty.toFixed(2)} {selectedInventoryItem.vendorUnit}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Price per {selectedInventoryItem.vendorUnit}:</span>
+                        <div className="font-bold text-lg">
+                          ${calculatedVendorValues.vendorUnitPrice.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-2 pt-2 border-t">
+                      <span className="text-muted-foreground">Line Total:</span>
+                      <div className="font-bold text-xl text-green-600">
+                        ${lineTotal.toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Input
-                id="description"
-                value={newItem.description}
-                onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-                data-testid="input-description"
-                placeholder="Auto-filled or manual"
-              />
+          )}
+
+          {!hasUnitConversion && (
+            <div className="grid grid-cols-4 gap-4">
+              <div>
+                <Label htmlFor="agPartNumber">AG Part#</Label>
+                <Input
+                  id="agPartNumber"
+                  value={newItem.agPartNumber}
+                  onChange={(e) => setNewItem({ ...newItem, agPartNumber: e.target.value })}
+                  data-testid="input-ag-part-number"
+                  placeholder="Auto-filled or manual"
+                />
+              </div>
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Input
+                  id="description"
+                  value={newItem.description}
+                  onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                  data-testid="input-description"
+                  placeholder="Auto-filled or manual"
+                />
+              </div>
+              <div>
+                <Label htmlFor="quantity">Quantity {newItem.vendorUnit && `(${newItem.vendorUnit})`}</Label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  step="0.01"
+                  value={newItem.quantity || ''}
+                  onChange={(e) => setNewItem({ ...newItem, quantity: parseFloat(e.target.value) || 0 })}
+                  data-testid="input-quantity"
+                />
+              </div>
+              <div>
+                <Label htmlFor="unitPrice">Unit Price {newItem.vendorUnit && `(per ${newItem.vendorUnit})`}</Label>
+                <Input
+                  id="unitPrice"
+                  type="number"
+                  step="0.01"
+                  value={newItem.unitPrice || ''}
+                  onChange={(e) => setNewItem({ ...newItem, unitPrice: parseFloat(e.target.value) || 0 })}
+                  data-testid="input-unit-price"
+                />
+              </div>
             </div>
-            <div>
-              <Label htmlFor="quantity">Quantity</Label>
-              <Input
-                id="quantity"
-                type="number"
-                value={newItem.quantity}
-                onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 1 })}
-                data-testid="input-quantity"
-              />
-            </div>
-            <div>
-              <Label htmlFor="unitPrice">Unit Price</Label>
-              <Input
-                id="unitPrice"
-                type="number"
-                step="0.01"
-                value={newItem.unitPrice}
-                onChange={(e) => setNewItem({ ...newItem, unitPrice: parseFloat(e.target.value) || 0 })}
-                data-testid="input-unit-price"
-              />
-            </div>
-          </div>
+          )}
           
-          <div className="flex items-end">
+          <div className="flex items-center gap-4">
             <Button onClick={handleAddItem} disabled={createItemMutation.isPending} data-testid="button-add-item">
               <Plus className="w-4 h-4 mr-2" />
-              Add
+              Add Item
             </Button>
+            {selectedPartId && (
+              <Button variant="outline" onClick={resetForm}>
+                Clear Selection
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Items Table */}
         <Table>
           <TableHeader>
             <TableRow>
@@ -369,7 +615,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
               <TableHead>AG Part#</TableHead>
               <TableHead>Supplier Part#</TableHead>
               <TableHead>Description</TableHead>
-              <TableHead>Qty</TableHead>
+              <TableHead>Qty (Vendor)</TableHead>
               <TableHead>Unit Price</TableHead>
               <TableHead>Line Total</TableHead>
               <TableHead>Actions</TableHead>
@@ -412,8 +658,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                     {isEditing ? (
                       <Input
                         type="number"
+                        step="0.01"
                         value={editedItem.quantity || 0}
-                        onChange={(e) => setEditedItem({ ...editedItem, quantity: parseInt(e.target.value) || 0 })}
+                        onChange={(e) => setEditedItem({ ...editedItem, quantity: parseFloat(e.target.value) || 0 })}
                         className="w-20"
                         data-testid={`input-edit-quantity-${item.id}`}
                       />
@@ -432,7 +679,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                         data-testid={`input-edit-unit-price-${item.id}`}
                       />
                     ) : (
-                      `$${item.unitPrice.toFixed(2)}`
+                      <UnitPriceDisplay item={item} />
                     )}
                   </TableCell>
                   <TableCell>
@@ -491,7 +738,6 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
           </TableBody>
         </Table>
 
-        {/* Total */}
         <div className="flex justify-end">
           <div className="text-right">
             <div className="text-2xl font-bold" data-testid="text-total">

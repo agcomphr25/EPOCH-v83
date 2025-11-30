@@ -106,6 +106,11 @@ type VendorPOItem = {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+  purchaseQty?: number;
+  purchaseUnitPrice?: number;
+  purchaseUnit?: string;
+  vendorUnit?: string;
+  conversionFactor?: number;
 };
 
 type CreateVendorPOData = {
@@ -163,18 +168,24 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
                     Supplier Part #: {item.supplierPartNumber}
                   </div>
                 )}
+                {/* Show purchase unit info if available */}
+                {item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit && (
+                  <div className="text-green-600 text-xs">
+                    Ordered: {item.purchaseQty.toFixed(2)} {item.purchaseUnit} @ ${(item.purchaseUnitPrice ?? 0).toFixed(4)}/{item.purchaseUnit}
+                  </div>
+                )}
               </div>
               <div className="text-right ml-2 flex-shrink-0 whitespace-nowrap">
                 <div className="font-medium text-gray-900 dark:text-gray-100">
-                  {item.quantity.toFixed(2)}
+                  {(item.quantity ?? 0).toFixed(2)} {item.vendorUnit || item.uom || ''}
                 </div>
                 <div className="text-gray-500 text-xs">
                   $
-                  {item.unitPrice.toLocaleString('en-US', {
+                  {(item.unitPrice ?? 0).toLocaleString('en-US', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}{' '}
-                  ea
+                  {item.vendorUnit ? `/${item.vendorUnit}` : 'ea'}
                 </div>
               </div>
             </div>
@@ -250,21 +261,20 @@ function OptionalSettingsSelector({ vendorPoId }: { vendorPoId: number }) {
     enabled: isOpen,
   });
 
-  // Reset and initialize selected IDs when dialog opens
+  // Reset and initialize selected IDs when dialog opens and data loads
   useEffect(() => {
-    if (isOpen) {
-      // Always start fresh when opening - reset to empty first
-      setSelectedIds([]);
-      
-      // Then load current settings if available and no error
-      if (!isLoading && !isError && currentSettings) {
-        setSelectedIds(currentSettings.map((s: any) => s.id));
-      }
-    } else {
-      // Clear when closing
+    if (isOpen && !isLoading && !isError && currentSettings && currentSettings.length >= 0) {
+      // Only set once when data finishes loading
+      setSelectedIds(currentSettings.map((s: any) => s.id));
+    }
+  }, [isOpen, isLoading, isError]);
+
+  // Clear selected IDs when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
       setSelectedIds([]);
     }
-  }, [isOpen, currentSettings, isLoading, isError]);
+  }, [isOpen]);
 
   const updateMutation = useMutation({
     mutationFn: async (optionalSettingIds: number[]) => {
@@ -1049,7 +1059,8 @@ export default function VendorPOManager() {
                   <th>AG Part#</th>
                   <th>Supplier Part#</th>
                   <th>Description</th>
-                  <th>Quantity</th>
+                  <th>Qty</th>
+                  <th>Unit</th>
                   <th>Unit Price</th>
                   <th>Line Total</th>
                 </tr>
@@ -1060,10 +1071,11 @@ export default function VendorPOManager() {
                     <td>${item.lineNumber}</td>
                     <td>${item.agPartNumber || '-'}</td>
                     <td>${item.supplierPartNumber || '-'}</td>
-                    <td>${item.description || '-'}</td>
-                    <td>${item.quantity || 0}</td>
-                    <td>$${item.unitPrice != null ? item.unitPrice.toFixed(2) : '0.00'}</td>
-                    <td>$${((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2)}</td>
+                    <td>${item.description || '-'}${item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit ? `<br/><small style="color: #666;">(${Number(item.purchaseQty).toFixed(2)} ${item.purchaseUnit} ordered)</small>` : ''}</td>
+                    <td>${item.quantity != null ? Number(item.quantity).toFixed(2) : '0.00'}</td>
+                    <td>${item.vendorUnit || item.uom || '-'}</td>
+                    <td>$${item.unitPrice != null ? Number(item.unitPrice).toFixed(2) : '0.00'}</td>
+                    <td>$${((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)).toFixed(2)}</td>
                   </tr>
                 `).join('')}
               </tbody>

@@ -1697,6 +1697,24 @@ export default function CuttingTableDashboard() {
                         </TableCell>
 
                       </TableRow>
+                    </TableBody>
+                    </Table>
+
+                    <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Internal Control #</TableHead>
+                        <TableHead>Part Number</TableHead>
+                        <TableHead>Nickname</TableHead>
+                        <TableHead>Supplier Part #</TableHead>
+                        <TableHead>Batch #</TableHead>
+                        <TableHead>Roll #</TableHead>
+                        <TableHead>Qty in Stock</TableHead>
+                        <TableHead>Location</TableHead>
+                        <TableHead>Expiration</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
                     </TableHeader>
                     <TableBody>
                       {fabricInventory.map((fabric) => (

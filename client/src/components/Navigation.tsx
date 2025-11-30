@@ -788,6 +788,12 @@ export default function Navigation() {
       description: 'Fabric receiving, packet building, and stock target management',
     },
     {
+      path: '/fabric-inventory',
+      label: 'Fabric Inventory',
+      icon: Package,
+      description: 'Full CRUD management for cutting table fabric inventory',
+    },
+    {
       path: '/p2-serialized-scheduler',
       label: 'P2 Serialized Item Scheduler',
       icon: Calendar,

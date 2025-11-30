@@ -44,8 +44,20 @@ import {
   RefreshCw,
   PlayCircle,
   Clock,
-  Factory
+  Factory,
+  Edit,
+  Trash2
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { BarcodeInputField } from "@/components/BarcodeInputField";
 
 type FabricInventoryItem = {
@@ -148,6 +160,21 @@ export default function CuttingTableDashboard() {
     yieldPerCut: '4',
     wasteFactor: '0.05',
     notes: '',
+  });
+
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingFabric, setEditingFabric] = useState<FabricInventoryItem | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deletingFabric, setDeletingFabric] = useState<FabricInventoryItem | null>(null);
+  const [editForm, setEditForm] = useState({
+    fabricType: '',
+    lotNumber: '',
+    batchNumber: '',
+    rollNumber: '',
+    quantity: '',
+    squareMeters: '',
+    expirationDate: '',
+    location: '',
   });
 
   const { data: currentUser } = useQuery<{ username: string }>({
@@ -290,6 +317,50 @@ export default function CuttingTableDashboard() {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to receive fabric", variant: "destructive" });
+    },
+  });
+
+  const updateFabricMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof editForm }) => {
+      return apiRequest(`/api/cutting-table/fabric-inventory/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          fabric: data.fabricType,
+          lotNumber: data.lotNumber,
+          batchNumber: data.batchNumber,
+          rollNumber: data.rollNumber,
+          quantityInStock: parseInt(data.quantity) || 0,
+          squareMeters: parseFloat(data.squareMeters) || 0,
+          expirationDate: data.expirationDate || null,
+          location: data.location,
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Fabric inventory updated" });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
+      setIsEditDialogOpen(false);
+      setEditingFabric(null);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update fabric", variant: "destructive" });
+    },
+  });
+
+  const deleteFabricMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/cutting-table/fabric-inventory/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Fabric inventory deleted" });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
+      setIsDeleteDialogOpen(false);
+      setDeletingFabric(null);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete fabric", variant: "destructive" });
     },
   });
 
@@ -581,6 +652,38 @@ export default function CuttingTableDashboard() {
       }
     } catch (error) {
       toast({ title: "Error", description: "Failed to print label", variant: "destructive" });
+    }
+  };
+
+  const handleOpenEditDialog = (fabric: FabricInventoryItem) => {
+    setEditingFabric(fabric);
+    setEditForm({
+      fabricType: fabric.fabricType || '',
+      lotNumber: fabric.lotNumber || '',
+      batchNumber: fabric.batchNumber || '',
+      rollNumber: fabric.rollNumber || '',
+      quantity: String(fabric.quantityInStock || 0),
+      squareMeters: String(fabric.squareMeters || 0),
+      expirationDate: fabric.expirationDate ? fabric.expirationDate.split('T')[0] : '',
+      location: fabric.location || '',
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleOpenDeleteDialog = (fabric: FabricInventoryItem) => {
+    setDeletingFabric(fabric);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleUpdateFabric = () => {
+    if (editingFabric) {
+      updateFabricMutation.mutate({ id: editingFabric.id, data: editForm });
+    }
+  };
+
+  const handleDeleteFabric = () => {
+    if (deletingFabric) {
+      deleteFabricMutation.mutate(deletingFabric.id);
     }
   };
 
@@ -1507,6 +1610,7 @@ export default function CuttingTableDashboard() {
                   No fabric in inventory. Use the Receive Fabric tab to add fabric.
                 </div>
               ) : (
+
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -1522,6 +1626,76 @@ export default function CuttingTableDashboard() {
                         <TableHead>Expiration</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Actions</TableHead>
+
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fabric Type</TableHead>
+                      <TableHead>Lot Number</TableHead>
+                      <TableHead>Batch</TableHead>
+                      <TableHead>Roll</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead>Expiration</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {fabricInventory.map((fabric) => (
+                      <TableRow key={fabric.id}>
+                        <TableCell className="font-medium">{fabric.fabricType || 'Unknown'}</TableCell>
+                        <TableCell>{fabric.lotNumber || '-'}</TableCell>
+                        <TableCell>{fabric.batchNumber || '-'}</TableCell>
+                        <TableCell>{fabric.rollNumber || '-'}</TableCell>
+                        <TableCell>{fabric.quantityInStock || 0}</TableCell>
+                        <TableCell>{fabric.location || '-'}</TableCell>
+                        <TableCell>
+                          {fabric.expirationDate 
+                            ? new Date(fabric.expirationDate).toLocaleDateString() 
+                            : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {fabric.status === 'expired' && (
+                            <Badge variant="destructive">Expired</Badge>
+                          )}
+                          {fabric.status === 'low' && (
+                            <Badge variant="secondary" className="bg-amber-100 text-amber-800">Low</Badge>
+                          )}
+                          {fabric.status === 'available' && (
+                            <Badge variant="default" className="bg-green-100 text-green-800">Available</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenEditDialog(fabric)}
+                              data-testid={`button-edit-${fabric.id}`}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePrintLabel(fabric)}
+                              data-testid={`button-print-label-${fabric.id}`}
+                            >
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenDeleteDialog(fabric)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              data-testid={`button-delete-${fabric.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1726,6 +1900,141 @@ export default function CuttingTableDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Fabric Inventory</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Fabric Type *</Label>
+                <Input
+                  value={editForm.fabricType}
+                  onChange={(e) => setEditForm({ ...editForm, fabricType: e.target.value })}
+                  placeholder="e.g., Carbon Fiber"
+                  data-testid="input-edit-fabric-type"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Lot Number</Label>
+                <Input
+                  value={editForm.lotNumber}
+                  onChange={(e) => setEditForm({ ...editForm, lotNumber: e.target.value })}
+                  placeholder="Lot number"
+                  data-testid="input-edit-lot-number"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Batch Number</Label>
+                <Input
+                  value={editForm.batchNumber}
+                  onChange={(e) => setEditForm({ ...editForm, batchNumber: e.target.value })}
+                  placeholder="Batch number"
+                  data-testid="input-edit-batch-number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Roll Number</Label>
+                <Input
+                  value={editForm.rollNumber}
+                  onChange={(e) => setEditForm({ ...editForm, rollNumber: e.target.value })}
+                  placeholder="Roll number"
+                  data-testid="input-edit-roll-number"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Quantity *</Label>
+                <Input
+                  type="number"
+                  value={editForm.quantity}
+                  onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })}
+                  placeholder="Quantity"
+                  data-testid="input-edit-quantity"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Square Meters</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={editForm.squareMeters}
+                  onChange={(e) => setEditForm({ ...editForm, squareMeters: e.target.value })}
+                  placeholder="Square meters"
+                  data-testid="input-edit-sqm"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Location</Label>
+                <Input
+                  value={editForm.location}
+                  onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                  placeholder="Storage location"
+                  data-testid="input-edit-location"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Expiration Date</Label>
+                <Input
+                  type="date"
+                  value={editForm.expirationDate}
+                  onChange={(e) => setEditForm({ ...editForm, expirationDate: e.target.value })}
+                  data-testid="input-edit-expiration"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUpdateFabric}
+              disabled={updateFabricMutation.isPending}
+              data-testid="button-save-edit"
+            >
+              {updateFabricMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Fabric Inventory</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this fabric inventory item?
+              {deletingFabric && (
+                <div className="mt-2 p-2 bg-slate-100 dark:bg-slate-800 rounded">
+                  <div className="font-medium">{deletingFabric.fabricType}</div>
+                  <div className="text-sm">Lot: {deletingFabric.lotNumber || 'N/A'}</div>
+                  <div className="text-sm">Qty: {deletingFabric.quantityInStock}</div>
+                </div>
+              )}
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteFabric}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deleteFabricMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteFabricMutation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

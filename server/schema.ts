@@ -2853,8 +2853,15 @@ export const vendorPOItems = pgTable('vendor_po_items', {
   agPartNumber: text('ag_part_number')
     .references(() => inventoryItems.agPartNumber), // Nullable for ad-hoc items
   description: text('description'), // For ad-hoc items without agPartNumber
-  quantity: integer('quantity').notNull(),
-  unitPrice: real('unit_price').notNull(),
+  // Purchase Unit Fields (what user enters)
+  purchaseQty: real('purchase_qty'), // Quantity in purchase units (e.g., 366 sqm)
+  purchaseUnitPrice: real('purchase_unit_price'), // Price per purchase unit (e.g., $17.18/sqm)
+  purchaseUnit: text('purchase_unit'), // Unit for purchase (e.g., "sqm")
+  // Vendor Unit Fields (what shows on PO)
+  quantity: real('quantity').notNull(), // Quantity in vendor units (e.g., 3 rolls) - changed from integer to real
+  unitPrice: real('unit_price').notNull(), // Price per vendor unit (e.g., $2,095.96/roll)
+  vendorUnit: text('vendor_unit'), // Unit for vendor (e.g., "roll")
+  conversionFactor: real('conversion_factor'), // Purchase qty per vendor unit (e.g., 122 sqm/roll)
   lineTotal: real('line_total').notNull(),
   receivedQuantity: integer('received_quantity').default(0),
   receivedDate: date('received_date'),
@@ -3184,8 +3191,15 @@ export const insertVendorPOItemSchema = createInsertSchema(vendorPOItems)
     lineNumber: z.number().int().positive('Line number is required'),
     agPartNumber: z.string().optional().nullable(),
     description: z.string().optional().nullable(),
-    quantity: z.number().int().positive('Quantity must be greater than 0'),
+    // Purchase unit fields (what user enters)
+    purchaseQty: z.number().positive().optional().nullable(),
+    purchaseUnitPrice: z.number().positive().optional().nullable(),
+    purchaseUnit: z.string().optional().nullable(),
+    // Vendor unit fields (what shows on PO)
+    quantity: z.number().positive('Quantity must be greater than 0'),
     unitPrice: z.number().positive('Unit price must be greater than 0'),
+    vendorUnit: z.string().optional().nullable(),
+    conversionFactor: z.number().positive().optional().nullable(),
     lineTotal: z.number(),
     receivedQuantity: z.number().int().default(0),
     receivedDate: z.string().optional().nullable(),

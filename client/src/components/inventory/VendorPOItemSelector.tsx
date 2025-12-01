@@ -227,17 +227,27 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
         const inventoryItem = await apiRequest(`/api/inventory/items/by-part-number/${selectedPart.agPartNumber}`);
         setSelectedInventoryItem(inventoryItem);
         
-        console.log('📦 Raw API response for part', selectedPart.agPartNumber, ':', inventoryItem);
-        console.log('📦 Checking fields:', {
+        console.log('📦 Raw API response for part', selectedPart.agPartNumber, ':', JSON.stringify(inventoryItem, null, 2));
+        console.log('📦 Checking conversion fields:', {
           vendorUnit: inventoryItem?.vendorUnit,
           purchaseUnit: inventoryItem?.purchaseUnit,
           purchaseQuantity: inventoryItem?.purchaseQuantity,
+          hasVendorUnit: inventoryItem?.vendorUnit !== null && inventoryItem?.vendorUnit !== undefined && inventoryItem?.vendorUnit !== '',
+          hasPurchaseUnit: inventoryItem?.purchaseUnit !== null && inventoryItem?.purchaseUnit !== undefined && inventoryItem?.purchaseUnit !== '',
+          hasPurchaseQty: inventoryItem?.purchaseQuantity !== null && inventoryItem?.purchaseQuantity !== undefined && Number(inventoryItem?.purchaseQuantity) > 0,
         });
         
-        const hasConversion = inventoryItem?.vendorUnit && 
-                             inventoryItem?.purchaseUnit && 
-                             inventoryItem?.purchaseQuantity && 
-                             inventoryItem.purchaseQuantity > 0;
+        // Use explicit null/undefined checks instead of truthy checks
+        const hasConversion = 
+          inventoryItem?.vendorUnit !== null && 
+          inventoryItem?.vendorUnit !== undefined && 
+          inventoryItem?.vendorUnit !== '' &&
+          inventoryItem?.purchaseUnit !== null && 
+          inventoryItem?.purchaseUnit !== undefined && 
+          inventoryItem?.purchaseUnit !== '' &&
+          inventoryItem?.purchaseQuantity !== null && 
+          inventoryItem?.purchaseQuantity !== undefined && 
+          Number(inventoryItem?.purchaseQuantity) > 0;
         
         if (hasConversion) {
           // Purchase unit mode - user enters in purchase units (e.g., sqm)

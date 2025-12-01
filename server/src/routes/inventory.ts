@@ -88,15 +88,17 @@ router.get('/inventory/items/by-part-number/:partNumber', async (req: Request, r
       return res.status(404).json({ error: 'Inventory item not found' });
     }
     
-    // Ensure conversion fields are included in response
+    // Map all fields explicitly to ensure camelCase naming for frontend
+    // The raw Drizzle object may have snake_case keys from DB, so we map them explicitly
+    const rawItem = item as any;
     const response = {
       ...item,
-      // Explicitly include conversion fields for vendor PO
-      vendorUnit: item.vendorUnit,
-      purchaseUnit: item.purchaseUnit,
-      purchaseQuantity: item.purchaseQuantity,
-      costPer: item.costPer,
-      name: item.name,
+      // Explicitly map conversion fields (handle both camelCase and snake_case from DB)
+      vendorUnit: item.vendorUnit ?? rawItem.vendor_unit ?? null,
+      purchaseUnit: item.purchaseUnit ?? rawItem.purchase_unit ?? null,
+      purchaseQuantity: item.purchaseQuantity ?? rawItem.purchase_quantity ?? null,
+      costPer: item.costPer ?? rawItem.cost_per ?? null,
+      name: item.name ?? rawItem.name ?? null,
     };
     
     console.log('📦 Inventory item response for', partNumber, ':', {

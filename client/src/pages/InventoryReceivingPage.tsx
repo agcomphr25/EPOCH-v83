@@ -628,7 +628,7 @@ export default function InventoryReceivingPage() {
                   <p className="text-sm">Issue a Purchase Order to see items here</p>
                 </div>
               ) : (
-                <Accordion type="multiple" className="w-full" defaultValue={groupedByVPO.map(g => g.poNumber)}>
+                <Accordion type="multiple" className="w-full" defaultValue={[]}>
                   {groupedByVPO.map((group) => (
                     <AccordionItem key={group.poNumber} value={group.poNumber} data-testid={`accordion-vpo-${group.poNumber}`}>
                       <AccordionTrigger className="hover:no-underline">

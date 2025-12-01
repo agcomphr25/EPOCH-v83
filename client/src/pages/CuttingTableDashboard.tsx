@@ -1620,54 +1620,29 @@ export default function CuttingTableDashboard() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Internal Control #</TableHead>
-                        <TableHead>Part Number</TableHead>
-                        <TableHead>Nickname</TableHead>
-                        <TableHead>Supplier Part #</TableHead>
+                        <TableHead>Part #</TableHead>
+                        <TableHead>Inventory Item Name</TableHead>
+                        <TableHead>Common Name</TableHead>
+                        <TableHead>Supplier</TableHead>
                         <TableHead>Batch #</TableHead>
                         <TableHead>Roll #</TableHead>
-                        <TableHead>Qty in Stock</TableHead>
-                        <TableHead>Location</TableHead>
-                        <TableHead>Expiration</TableHead>
-                        <TableHead>Status</TableHead>
+                        <TableHead>Expiration Date</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {fabricInventory.map((fabric) => (
                         <TableRow key={fabric.id}>
-                          <TableCell className="font-medium">{fabric.internalControlNumber || '-'}</TableCell>
-                          <TableCell>
-                            {fabric.fabricPartNumber ? (
-                              <div>
-                                <span className="font-medium">{fabric.fabricPartNumber}</span>
-                                {fabric.fabricType && <span className="text-muted-foreground ml-1">({fabric.fabricType})</span>}
-                              </div>
-                            ) : (
-                              fabric.fabricType || 'Unknown'
-                            )}
-                          </TableCell>
+                          <TableCell className="font-medium">{fabric.fabricPartNumber || '-'}</TableCell>
+                          <TableCell>{fabric.fabricType || '-'}</TableCell>
                           <TableCell>{fabric.nickname || '-'}</TableCell>
                           <TableCell>{fabric.supplierPartNumber || '-'}</TableCell>
                           <TableCell>{fabric.batchNumber || '-'}</TableCell>
                           <TableCell>{fabric.rollNumber || '-'}</TableCell>
-                          <TableCell>{fabric.quantityInStock || 0}</TableCell>
-                          <TableCell>{fabric.location || '-'}</TableCell>
                           <TableCell>
                             {fabric.expirationDate 
                               ? new Date(fabric.expirationDate).toLocaleDateString() 
                               : '-'}
-                          </TableCell>
-                          <TableCell>
-                            {fabric.status === 'expired' && (
-                              <Badge variant="destructive">Expired</Badge>
-                            )}
-                            {fabric.status === 'low' && (
-                              <Badge variant="secondary" className="bg-amber-100 text-amber-800">Low</Badge>
-                            )}
-                            {fabric.status === 'available' && (
-                              <Badge variant="default" className="bg-green-100 text-green-800">Available</Badge>
-                            )}
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">

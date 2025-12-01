@@ -206,6 +206,8 @@ export default function MarketingCommunications() {
       setSubject('');
       setContent('');
       setSelectedCustomerIds([]);
+      setSelectAll(false);
+      setSelectAllPages(false);
     },
     onError: (error: any) => {
       toast({
@@ -752,7 +754,9 @@ export default function MarketingCommunications() {
                   <div className="bg-muted/50 p-3 rounded-lg">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">
-                        {selectedCustomerIds.length > 0
+                        {selectAllPages
+                          ? `All ${recipientCount?.count || 0} customers selected`
+                          : selectedCustomerIds.length > 0
                           ? `${selectedCustomerIds.length} selected`
                           : `${recipientCount?.count || 0} eligible recipients`}
                       </span>
@@ -762,16 +766,41 @@ export default function MarketingCommunications() {
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="select-all"
-                      checked={selectAll}
-                      onCheckedChange={(checked) => setSelectAll(checked as boolean)}
-                      data-testid="checkbox-select-all"
-                    />
-                    <Label htmlFor="select-all" className="text-sm">
-                      Select all visible customers
-                    </Label>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="select-all-pages"
+                        checked={selectAllPages}
+                        onCheckedChange={(checked) => {
+                          setSelectAllPages(checked as boolean);
+                          if (checked) {
+                            setSelectAll(false);
+                            setSelectedCustomerIds([]);
+                          }
+                        }}
+                        data-testid="checkbox-select-all-pages"
+                      />
+                      <Label htmlFor="select-all-pages" className="text-sm font-medium">
+                        Select all customers on all pages ({recipientCount?.count || 0} total)
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="select-all"
+                        checked={selectAll}
+                        disabled={selectAllPages}
+                        onCheckedChange={(checked) => {
+                          setSelectAll(checked as boolean);
+                          if (checked) {
+                            setSelectAllPages(false);
+                          }
+                        }}
+                        data-testid="checkbox-select-all"
+                      />
+                      <Label htmlFor="select-all" className="text-sm text-muted-foreground">
+                        Select all visible customers (this page only)
+                      </Label>
+                    </div>
                   </div>
 
                   <Separator />

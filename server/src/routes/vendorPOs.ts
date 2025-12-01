@@ -249,6 +249,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // PUT /api/vendor-pos/:id - Update a vendor PO
+// Note: Blocks edits on issued POs (status Sent or beyond) - use revisions instead
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
@@ -256,7 +257,27 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid vendor PO ID' });
     }
 
+    // Check if PO exists and get current status
+    const existingPO = await storage.getVendorPO(id);
+    if (!existingPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    // Block edits on issued POs - except for status changes which are allowed
+    const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
     const data = insertVendorPOSchema.partial().parse(req.body);
+    
+    // Allow status changes (e.g., moving to Sent, Received, etc.) even on issued POs
+    const isStatusOnlyChange = Object.keys(data).length === 1 && data.status !== undefined;
+    
+    if (issuedStatuses.includes(existingPO.status) && !isStatusOnlyChange) {
+      return res.status(403).json({ 
+        error: 'Cannot edit issued PO',
+        message: 'This PO has been issued and cannot be directly modified. Create a revision to make changes.',
+        currentStatus: existingPO.status
+      });
+    }
+
     const vendorPO = await storage.updateVendorPO(id, data);
 
     if (!vendorPO) {
@@ -272,6 +293,72 @@ router.put('/:id', async (req: Request, res: Response) => {
         .json({ error: 'Invalid vendor PO data', details: error.errors });
     }
     res.status(500).json({ error: 'Failed to update vendor PO' });
+  }
+});
+
+// POST /api/vendor-pos/:id/revisions - Create a new revision of an issued PO
+router.post('/:id/revisions', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    // Validate revision request
+    const revisionSchema = z.object({
+      changeReason: z.string().min(1, 'Change reason is required'),
+      revisedBy: z.string().optional(),
+    });
+
+    const { changeReason, revisedBy } = revisionSchema.parse(req.body);
+
+    // Get original PO
+    const originalPO = await storage.getVendorPO(id);
+    if (!originalPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    // Only issued POs can be revised (Draft POs can be edited directly)
+    const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
+    if (!issuedStatuses.includes(originalPO.status)) {
+      return res.status(400).json({ 
+        error: 'Cannot create revision',
+        message: 'Only issued POs can be revised. Draft POs can be edited directly.',
+        currentStatus: originalPO.status
+      });
+    }
+
+    // Create revision using storage function
+    const revision = await storage.createVendorPORevision(id, changeReason, revisedBy);
+
+    res.status(201).json(revision);
+  } catch (error) {
+    console.error('Create vendor PO revision error:', error);
+    if (error instanceof z.ZodError) {
+      return res
+        .status(400)
+        .json({ error: 'Invalid revision data', details: error.errors });
+    }
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to create vendor PO revision' });
+  }
+});
+
+// GET /api/vendor-pos/:id/history - Get revision history for a PO
+router.get('/:id/history', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const history = await storage.getVendorPORevisionHistory(id);
+    res.json(history);
+  } catch (error) {
+    console.error('Get vendor PO history error:', error);
+    res.status(500).json({ error: 'Failed to retrieve vendor PO history' });
   }
 });
 

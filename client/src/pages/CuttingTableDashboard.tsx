@@ -67,7 +67,8 @@ type FabricInventoryItem = {
   nickname: string | null;
   supplierPartNumber: string | null;
   internalControlNumber: string | null;
-  batchNumber: string;
+  lotNumber: string | null;    // Primary lot/batch identifier from receiving (Supplier Batch/Lot/C #)
+  batchNumber: string | null;  // Secondary identifier (Aluminum Heat # etc.)
   rollNumber: string;
   quantityInStock: number;
   squareMeters: number;
@@ -196,6 +197,9 @@ export default function CuttingTableDashboard() {
         nickname: item.nickname,
         supplierPartNumber: item.supplierPartNumber,
         internalControlNumber: item.internalControlNumber,
+        lotNumber: item.lotNumber,       // Supplier Batch/Lot/C # from receiving
+        batchNumber: item.batchNumber,   // Secondary identifier (Aluminum Heat # etc.)
+        rollNumber: item.rollNumber,     // Manufacture Roll # from receiving
         barcodeValue: `FAB-${item.internalControlNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
         status: item.quantityInStock < 10 ? 'low' : 
                 (item.expirationDate && new Date(item.expirationDate) < new Date() ? 'expired' : 'available'),
@@ -1620,16 +1624,13 @@ export default function CuttingTableDashboard() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Internal Control #</TableHead>
-                        <TableHead>Part Number</TableHead>
-                        <TableHead>Nickname</TableHead>
-                        <TableHead>Supplier Part #</TableHead>
+                        <TableHead>Part #</TableHead>
+                        <TableHead>Inventory Item Name</TableHead>
+                        <TableHead>Common Name</TableHead>
+                        <TableHead>Supplier</TableHead>
                         <TableHead>Batch #</TableHead>
                         <TableHead>Roll #</TableHead>
-                        <TableHead>Qty in Stock</TableHead>
-                        <TableHead>Location</TableHead>
-                        <TableHead>Expiration</TableHead>
-                        <TableHead>Status</TableHead>
+                        <TableHead>Expiration Date</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1658,25 +1659,12 @@ export default function CuttingTableDashboard() {
                           </TableCell>
                           <TableCell>{fabric.nickname || '-'}</TableCell>
                           <TableCell>{fabric.supplierPartNumber || '-'}</TableCell>
-                          <TableCell>{fabric.batchNumber || '-'}</TableCell>
+                          <TableCell>{fabric.lotNumber || fabric.batchNumber || '-'}</TableCell>
                           <TableCell>{fabric.rollNumber || '-'}</TableCell>
-                          <TableCell>{fabric.quantityInStock || 0}</TableCell>
-                          <TableCell>{fabric.location || '-'}</TableCell>
                           <TableCell>
                             {fabric.expirationDate 
                               ? new Date(fabric.expirationDate).toLocaleDateString() 
                               : '-'}
-                          </TableCell>
-                          <TableCell>
-                            {fabric.status === 'expired' && (
-                              <Badge variant="destructive">Expired</Badge>
-                            )}
-                            {fabric.status === 'low' && (
-                              <Badge variant="secondary" className="bg-amber-100 text-amber-800">Low</Badge>
-                            )}
-                            {fabric.status === 'available' && (
-                              <Badge variant="default" className="bg-green-100 text-green-800">Available</Badge>
-                            )}
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">

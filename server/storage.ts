@@ -7103,96 +7103,93 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Received date cannot be in the future. Received: ${receivedDate.toISOString()}, Current: ${now.toISOString()}`);
     }
 
-    // Wrap all database operations in a transaction for data integrity
-    return await db.transaction(async (tx) => {
-      // Get the PO line item details
-      const [poLineItem] = await tx
-        .select({
-          id: vendorPOItems.id,
-          agPartNumber: vendorPOItems.agPartNumber,
-          unitPrice: vendorPOItems.unitPrice,
-          vendorPoId: vendorPOItems.vendorPoId,
-        })
-        .from(vendorPOItems)
-        .where(eq(vendorPOItems.id, poLineItemId));
+    // Note: neon-http driver doesn't support transactions, so we execute queries sequentially
+    // Get the PO line item details
+    const [poLineItem] = await db
+      .select({
+        id: vendorPOItems.id,
+        agPartNumber: vendorPOItems.agPartNumber,
+        unitPrice: vendorPOItems.unitPrice,
+        vendorPoId: vendorPOItems.vendorPoId,
+      })
+      .from(vendorPOItems)
+      .where(eq(vendorPOItems.id, poLineItemId));
 
-      if (!poLineItem) {
-        throw new Error(`PO line item ${poLineItemId} not found`);
-      }
+    if (!poLineItem) {
+      throw new Error(`PO line item ${poLineItemId} not found`);
+    }
 
-      if (!poLineItem.agPartNumber) {
-        throw new Error('Cannot calculate COGS for ad-hoc items without AG Part Number');
-      }
+    if (!poLineItem.agPartNumber) {
+      throw new Error('Cannot calculate COGS for ad-hoc items without AG Part Number');
+    }
 
-      // Validate unit price
-      if (!poLineItem.unitPrice || poLineItem.unitPrice <= 0) {
-        throw new Error(
-          `Invalid unit price ${poLineItem.unitPrice} for PO line item ${poLineItemId}. Must be positive.`
-        );
-      }
+    // Validate unit price
+    if (!poLineItem.unitPrice || poLineItem.unitPrice <= 0) {
+      throw new Error(
+        `Invalid unit price ${poLineItem.unitPrice} for PO line item ${poLineItemId}. Must be positive.`
+      );
+    }
 
-      // Get the vendor PO to get vendorId
-      const [vendorPO] = await tx
-        .select({ vendorId: vendorPOs.vendorId })
-        .from(vendorPOs)
-        .where(eq(vendorPOs.id, poLineItem.vendorPoId));
+    // Get the vendor PO to get vendorId
+    const [vendorPO] = await db
+      .select({ vendorId: vendorPOs.vendorId })
+      .from(vendorPOs)
+      .where(eq(vendorPOs.id, poLineItem.vendorPoId));
 
-      if (!vendorPO) {
-        throw new Error(`Vendor PO ${poLineItem.vendorPoId} not found`);
-      }
+    if (!vendorPO) {
+      throw new Error(`Vendor PO ${poLineItem.vendorPoId} not found`);
+    }
 
-      // Get the inventory item's UOM conversion data
-      const [inventoryItem] = await tx
-        .select({
-          id: inventoryItems.id,
-          agPartNumber: inventoryItems.agPartNumber,
-          vendorUnit: inventoryItems.vendorUnit,
-          purchaseUnit: inventoryItems.purchaseUnit,
-          purchaseQuantity: inventoryItems.purchaseQuantity,
-          consumptionRate: inventoryItems.consumptionRate,
-          usageUnit: inventoryItems.usageUnit,
-        })
-        .from(inventoryItems)
-        .where(eq(inventoryItems.agPartNumber, poLineItem.agPartNumber));
+    // Get the inventory item's UOM conversion data and cutting table flags
+    const [inventoryItem] = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+        source: inventoryItems.source,
+        supplierPartNumber: inventoryItems.supplierPartNumber,
+        vendorUnit: inventoryItems.vendorUnit,
+        purchaseUnit: inventoryItems.purchaseUnit,
+        purchaseQuantity: inventoryItems.purchaseQuantity,
+        consumptionRate: inventoryItems.consumptionRate,
+        usageUnit: inventoryItems.usageUnit,
+        utilizedInPL1: inventoryItems.utilizedInPL1,
+        utilizedInPL2: inventoryItems.utilizedInPL2,
+        isFabric: inventoryItems.isFabric,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.agPartNumber, poLineItem.agPartNumber));
 
-      if (!inventoryItem) {
-        throw new Error(`Inventory item ${poLineItem.agPartNumber} not found`);
-      }
+    // Check if we have full COGS configuration
+    const hasFullCogsConfig = 
+      inventoryItem &&
+      inventoryItem.purchaseQuantity && 
+      inventoryItem.purchaseQuantity > 0 &&
+      inventoryItem.consumptionRate && 
+      inventoryItem.consumptionRate > 0 &&
+      inventoryItem.purchaseUnit && 
+      inventoryItem.usageUnit;
 
-      // Require valid purchase quantity and consumption rate (no defaults - must be configured)
-      if (!inventoryItem.purchaseQuantity || inventoryItem.purchaseQuantity <= 0) {
-        throw new Error(
-          `Purchase quantity not configured for ${poLineItem.agPartNumber}. Please set purchaseQuantity before receiving PO items.`
-        );
-      }
+    let costHistory = null;
+    let costPerPurchaseUnit = null;
+    let cogsPerItem = null;
 
-      if (!inventoryItem.consumptionRate || inventoryItem.consumptionRate <= 0) {
-        throw new Error(
-          `Consumption rate not configured for ${poLineItem.agPartNumber}. Please set consumptionRate before receiving PO items.`
-        );
-      }
-
-      if (!inventoryItem.purchaseUnit || !inventoryItem.usageUnit) {
-        throw new Error(
-          `Units not configured for ${poLineItem.agPartNumber}. Please set purchaseUnit and usageUnit before receiving PO items.`
-        );
-      }
-
+    if (hasFullCogsConfig) {
       // Import unit conversion utility
       const { calculateCOGS } = await import('./src/utils/unitConversion.js');
 
       // Calculate COGS per item using automatic unit conversion
       // Example: $491.20 per BOX, 80 lbs per BOX, 50g consumption rate
       // Result: $491.20 / 80 = $6.14/lb = $0.0135/g * 50g = $0.68 per item
-      const cogsPerItem = calculateCOGS(
-        poLineItem.unitPrice, // $491.20
-        inventoryItem.purchaseQuantity, // 80 lbs
-        inventoryItem.purchaseUnit, // "lb"
-        inventoryItem.consumptionRate, // 50g
-        inventoryItem.usageUnit // "g"
+      cogsPerItem = calculateCOGS(
+        poLineItem.unitPrice,
+        inventoryItem.purchaseQuantity!,
+        inventoryItem.purchaseUnit!,
+        inventoryItem.consumptionRate!,
+        inventoryItem.usageUnit!
       );
 
-      const costPerPurchaseUnit = poLineItem.unitPrice / inventoryItem.purchaseQuantity;
+      costPerPurchaseUnit = poLineItem.unitPrice / inventoryItem.purchaseQuantity!;
 
       console.log(`💰 COGS Calculation for ${poLineItem.agPartNumber}:`);
       console.log(`   Vendor Unit Cost: $${poLineItem.unitPrice} per ${inventoryItem.vendorUnit || 'unit'}`);
@@ -7202,7 +7199,7 @@ export class DatabaseStorage implements IStorage {
       console.log(`   COGS per Item: $${cogsPerItem.toFixed(4)}`);
 
       // Insert into cost history
-      const [costHistory] = await tx
+      const [insertedCostHistory] = await db
         .insert(inventoryItemCostHistory)
         .values({
           inventoryItemId: inventoryItem.id,
@@ -7216,9 +7213,10 @@ export class DatabaseStorage implements IStorage {
           createdBy,
         })
         .returning();
+      costHistory = insertedCostHistory;
 
       // Update the inventory item's latest cost and COGS
-      await tx
+      await db
         .update(inventoryItems)
         .set({
           latestCost: costPerPurchaseUnit,
@@ -7227,39 +7225,290 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(inventoryItems.id, inventoryItem.id));
 
-      // Update the PO line item's received quantity and date
-      await tx
-        .update(vendorPOItems)
-        .set({
-          receivedQuantity,
-          receivedDate,
-          updatedAt: new Date(),
-        })
-        .where(eq(vendorPOItems.id, poLineItemId));
-
       console.log(`✅ Cost history recorded for ${poLineItem.agPartNumber}`);
       console.log(`   Latest cost: $${costPerPurchaseUnit.toFixed(4)}/${inventoryItem.purchaseUnit}`);
       console.log(`   COGS per item: $${cogsPerItem.toFixed(4)}`);
+    } else {
+      console.log(`⚠️ Skipping COGS calculation for ${poLineItem.agPartNumber} - missing configuration`);
+      if (!inventoryItem) {
+        console.log(`   Inventory item not found in Parts List`);
+      } else {
+        if (!inventoryItem.purchaseQuantity || inventoryItem.purchaseQuantity <= 0) {
+          console.log(`   Missing: purchaseQuantity`);
+        }
+        if (!inventoryItem.consumptionRate || inventoryItem.consumptionRate <= 0) {
+          console.log(`   Missing: consumptionRate`);
+        }
+        if (!inventoryItem.purchaseUnit) {
+          console.log(`   Missing: purchaseUnit`);
+        }
+        if (!inventoryItem.usageUnit) {
+          console.log(`   Missing: usageUnit`);
+        }
+      }
+    }
 
-      return {
-        costHistory,
-        inventoryItem: {
-          agPartNumber: inventoryItem.agPartNumber,
-          latestCost: costPerPurchaseUnit,
-          cogsPerUnit: cogsPerItem,
-        },
-        calculation: {
-          vendorUnitCost: poLineItem.unitPrice,
-          purchaseUnitCost: costPerPurchaseUnit,
-          cogsPerItem,
-          vendorUnit: inventoryItem.vendorUnit,
-          purchaseUnit: inventoryItem.purchaseUnit,
-          purchaseQuantity: inventoryItem.purchaseQuantity,
-          consumptionRate: inventoryItem.consumptionRate,
-          usageUnit: inventoryItem.usageUnit,
-        },
-      };
-    });
+    // Always update the PO line item's received quantity and date
+    await db
+      .update(vendorPOItems)
+      .set({
+        receivedQuantity,
+        receivedDate,
+        updatedAt: new Date(),
+      })
+      .where(eq(vendorPOItems.id, poLineItemId));
+
+    // If this is a FABRIC item for Cutting Table (must be marked as fabric AND used in PL1 or PL2), create fabric inventory records
+    let fabricInventoryRecords: any[] = [];
+    let fabricInventoryWarnings: string[] = [];
+    const isFabricForCuttingTable = inventoryItem && inventoryItem.isFabric && (inventoryItem.utilizedInPL1 || inventoryItem.utilizedInPL2);
+    const productionLines = inventoryItem ? [
+      inventoryItem.utilizedInPL1 ? 'PL1' : null,
+      inventoryItem.utilizedInPL2 ? 'PL2' : null,
+    ].filter(Boolean).join(', ') : '';
+    
+    if (isFabricForCuttingTable && notes) {
+      console.log(`🧵 Creating fabric inventory for ${productionLines} fabric item: ${poLineItem.agPartNumber}`);
+      
+      try {
+        // Helper to normalize dates to ISO format (YYYY-MM-DD) or return undefined
+        const normalizeDate = (dateStr: string | undefined): string | undefined => {
+          if (!dateStr || dateStr.trim() === '') return undefined;
+          const trimmed = dateStr.trim();
+          
+          // Try parsing common date formats
+          const date = new Date(trimmed);
+          if (!isNaN(date.getTime())) {
+            return date.toISOString().split('T')[0];
+          }
+          
+          // Try MM/DD/YYYY format
+          const mmddyyyyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          if (mmddyyyyMatch) {
+            const [, month, day, year] = mmddyyyyMatch;
+            const parsed = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            if (!isNaN(parsed.getTime())) {
+              return parsed.toISOString().split('T')[0];
+            }
+          }
+          
+          // Try YYYY-MM-DD format (already ISO)
+          if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+            return trimmed;
+          }
+          
+          console.warn(`⚠️ Could not parse date: "${trimmed}"`);
+          return undefined;
+        };
+        
+        // Parse traceability data using structured key-value splitting (more robust than regex)
+        // Maps to cutting_fabric_inventory columns:
+        // - supplierPartNumber → supplierPartNumber column
+        // - Supplier Batch/Lot/C # → lotNumber column (primary traceability identifier)
+        // - Manufacture Roll # → rollNumber column
+        // - Manufacture Date → manufactureDate column
+        // - Expiration Date → expirationDate column
+        // - Received Date → receivedDate column
+        // - Aluminum Heat # → stored in notes/batchNumber as secondary identifier
+        const parseTraceabilityFromNote = (noteText: string): {
+          supplierPartNumber?: string;
+          lotNumber?: string;       // Supplier Batch/Lot/C #
+          batchNumber?: string;     // Aluminum Heat # or other batch identifier
+          rollNumber?: string;      // Manufacture Roll #
+          manufactureDate?: string;
+          expirationDate?: string;
+          receivedDateStr?: string;
+        } => {
+          const result: any = {};
+          
+          // Split by "|" as field delimiter, then parse each key-value pair
+          const segments = noteText.split(/\s*\|\s*/);
+          
+          for (const segment of segments) {
+            const colonIndex = segment.indexOf(':');
+            if (colonIndex === -1) continue;
+            
+            const key = segment.substring(0, colonIndex).trim().toLowerCase();
+            const value = segment.substring(colonIndex + 1).trim();
+            
+            if (!value) continue;
+            
+            // Map known field labels to result fields (matching TRACEABILITY_FIELD_LABELS from receiving page)
+            if (key === 'supplier part number' || key.includes('supplier part')) {
+              result.supplierPartNumber = value;
+            } else if (key === 'supplier batch/lot/c #' || key.includes('batch/lot') || key.includes('lot/c')) {
+              // This is the primary lot number for traceability
+              result.lotNumber = value;
+            } else if (key === 'manufacture roll #' || key.includes('manufacture roll') || key.includes('roll #')) {
+              result.rollNumber = value;
+            } else if (key === 'manufacture date' || key.includes('manufacture date')) {
+              result.manufactureDate = normalizeDate(value);
+            } else if (key === 'expiration date' || key.includes('expiration')) {
+              result.expirationDate = normalizeDate(value);
+            } else if (key === 'received date' || key.includes('received date')) {
+              result.receivedDateStr = normalizeDate(value);
+            } else if (key === 'aluminum heat #' || key.includes('aluminum heat') || key.includes('heat #')) {
+              // Store aluminum heat as batch number (secondary identifier)
+              result.batchNumber = value;
+            }
+          }
+          
+          return result;
+        };
+        
+        // Check if this is per-unit mode (structured format from receiving dialog)
+        const perUnitMatch = notes.match(/\[(\d+) units with individual traceability\]/);
+        
+        if (perUnitMatch) {
+          // Per-unit mode: parse structured unit data
+          const unitCount = parseInt(perUnitMatch[1]);
+          
+          // Split by "Unit X:" markers more robustly
+          // Look for patterns like "| Unit 1:" or "Unit 1:" at start
+          const unitSections: { unitNum: number; data: string }[] = [];
+          const unitMarkerPattern = /(?:^|\|)\s*Unit\s+(\d+)\s*:\s*/gi;
+          let lastIndex = 0;
+          let lastUnitNum = 0;
+          let match;
+          
+          // Reset lastIndex for global regex
+          unitMarkerPattern.lastIndex = 0;
+          
+          while ((match = unitMarkerPattern.exec(notes)) !== null) {
+            if (lastUnitNum > 0) {
+              // Capture data from previous unit
+              const unitData = notes.substring(lastIndex, match.index).trim();
+              if (unitData) {
+                unitSections.push({ unitNum: lastUnitNum, data: unitData });
+              }
+            }
+            lastUnitNum = parseInt(match[1]);
+            lastIndex = unitMarkerPattern.lastIndex;
+          }
+          
+          // Capture the last unit's data
+          if (lastUnitNum > 0) {
+            const unitData = notes.substring(lastIndex).trim();
+            if (unitData) {
+              unitSections.push({ unitNum: lastUnitNum, data: unitData });
+            }
+          }
+          
+          if (unitSections.length === 0) {
+            fabricInventoryWarnings.push(`Per-unit mode detected but no unit data could be parsed from notes`);
+            console.warn(`⚠️ Per-unit mode but no unit sections parsed from: ${notes.substring(0, 200)}...`);
+          } else if (unitSections.length !== unitCount) {
+            fabricInventoryWarnings.push(`Expected ${unitCount} units but parsed ${unitSections.length} from notes`);
+          }
+          
+          for (const section of unitSections) {
+            const traceability = parseTraceabilityFromNote(section.data);
+            
+            // Create fabric inventory record for this unit
+            // Column mapping:
+            // - fabric: Inventory Item Name (what type of fabric)
+            // - fabricPartNumber: Part # (AG part number)
+            // - nickname: Common Name (from inventory item name)
+            // - supplierPartNumber: Supplier (supplier's part number)
+            // - lotNumber: Batch # column (Supplier Batch/Lot/C # - primary traceability)
+            // - rollNumber: Roll # column (Manufacture Roll #)
+            // - batchNumber: secondary identifier (Aluminum Heat # if applicable)
+            // - expirationDate: Expiration Date column
+            const fabricRecord = await db
+              .insert(cuttingFabricInventory)
+              .values({
+                source: inventoryItem.source || undefined,
+                fabric: inventoryItem.name,
+                fabricPartNumber: inventoryItem.agPartNumber,
+                nickname: inventoryItem.name,
+                supplierPartNumber: traceability.supplierPartNumber || inventoryItem.supplierPartNumber || undefined,
+                lotNumber: traceability.lotNumber || undefined,
+                batchNumber: traceability.batchNumber || undefined,
+                rollNumber: traceability.rollNumber || undefined,
+                manufactureDate: traceability.manufactureDate || undefined,
+                receivedDate: traceability.receivedDateStr || receivedDate.toISOString().split('T')[0],
+                expirationDate: traceability.expirationDate || undefined,
+                quantityInStock: 1,
+                notes: `Auto-created from PO receipt. Unit ${section.unitNum} of ${unitCount}. Original notes: ${section.data}`,
+              })
+              .returning();
+            
+            fabricInventoryRecords.push(fabricRecord[0]);
+          }
+          
+          console.log(`   Created ${fabricInventoryRecords.length} fabric inventory records for ${unitCount} units`);
+        } else {
+          // Single unit or bulk: create one fabric inventory record
+          const traceability = parseTraceabilityFromNote(notes);
+          
+          // Column mapping:
+          // - fabric: Inventory Item Name (what type of fabric)
+          // - fabricPartNumber: Part # (AG part number)
+          // - nickname: Common Name (from inventory item name)
+          // - supplierPartNumber: Supplier (supplier's part number)
+          // - lotNumber: Batch # column (Supplier Batch/Lot/C # - primary traceability)
+          // - rollNumber: Roll # column (Manufacture Roll #)
+          // - batchNumber: secondary identifier (Aluminum Heat # if applicable)
+          // - expirationDate: Expiration Date column
+          const fabricRecord = await db
+            .insert(cuttingFabricInventory)
+            .values({
+              source: inventoryItem.source || undefined,
+              fabric: inventoryItem.name,
+              fabricPartNumber: inventoryItem.agPartNumber,
+              nickname: inventoryItem.name,
+              supplierPartNumber: traceability.supplierPartNumber || inventoryItem.supplierPartNumber || undefined,
+              lotNumber: traceability.lotNumber || undefined,
+              batchNumber: traceability.batchNumber || undefined,
+              rollNumber: traceability.rollNumber || undefined,
+              manufactureDate: traceability.manufactureDate || undefined,
+              receivedDate: traceability.receivedDateStr || receivedDate.toISOString().split('T')[0],
+              expirationDate: traceability.expirationDate || undefined,
+              quantityInStock: receivedQuantity,
+              notes: `Auto-created from PO receipt. Notes: ${notes}`,
+            })
+            .returning();
+          
+          fabricInventoryRecords.push(fabricRecord[0]);
+          console.log(`   Created 1 fabric inventory record for ${receivedQuantity} units`);
+        }
+        
+        console.log(`✅ Fabric inventory updated for ${poLineItem.agPartNumber}`);
+      } catch (fabricError) {
+        const errorMsg = fabricError instanceof Error ? fabricError.message : String(fabricError);
+        console.error(`⚠️ Failed to create fabric inventory for ${poLineItem.agPartNumber}:`, fabricError);
+        fabricInventoryWarnings.push(`Failed to create fabric inventory: ${errorMsg}`);
+      }
+    }
+
+    return {
+      costHistory,
+      inventoryItem: inventoryItem ? {
+        agPartNumber: inventoryItem.agPartNumber,
+        latestCost: costPerPurchaseUnit,
+        cogsPerUnit: cogsPerItem,
+      } : null,
+      calculation: hasFullCogsConfig && inventoryItem ? {
+        vendorUnitCost: poLineItem.unitPrice,
+        purchaseUnitCost: costPerPurchaseUnit,
+        cogsPerItem,
+        vendorUnit: inventoryItem.vendorUnit,
+        purchaseUnit: inventoryItem.purchaseUnit,
+        purchaseQuantity: inventoryItem.purchaseQuantity,
+        consumptionRate: inventoryItem.consumptionRate,
+        usageUnit: inventoryItem.usageUnit,
+      } : null,
+      cogsSkipped: !hasFullCogsConfig,
+      fabricInventory: fabricInventoryRecords.length > 0 || fabricInventoryWarnings.length > 0 ? {
+        createdCount: fabricInventoryRecords.length,
+        records: fabricInventoryRecords,
+        warnings: fabricInventoryWarnings.length > 0 ? fabricInventoryWarnings : undefined,
+        isFabric: inventoryItem?.isFabric ?? false,
+        isPL1Item: inventoryItem?.utilizedInPL1 ?? false,
+        isPL2Item: inventoryItem?.utilizedInPL2 ?? false,
+        productionLines: productionLines || undefined,
+      } : null,
+    };
   }
 
   // Get cost history for an inventory item by AG Part Number

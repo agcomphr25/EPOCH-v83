@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -13,6 +13,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Package,
   Scan,
   Plus,
@@ -23,11 +37,35 @@ import {
   QrCode,
   FileText,
   Loader2,
+  Save,
+  Printer,
+  CheckSquare,
+  Square,
+  Tag,
+  ClipboardList,
+  Copy,
+  ArrowRight,
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import JsBarcode from 'jsbarcode';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { apiRequest } from '@/lib/queryClient';
 import P2ReceivingDialog from '@/components/inventory/P2ReceivingDialog';
+
+// Traceability field definitions - must match TraceabilityConfigModal
+const TRACEABILITY_FIELD_LABELS: Record<string, string> = {
+  supplierPartNumber: 'Supplier Part Number',
+  supplierBatchLotC: 'Supplier Batch/Lot/C #',
+  manufactureRoll: 'Manufacture Roll #',
+  manufactureDate: 'Manufacture Date',
+  expirationDate: 'Expiration Date',
+  receivedDate: 'Received Date',
+  aluminumHeat: 'Aluminum Heat #',
+};
+
+// Fields that should use date input
+const DATE_FIELDS = ['manufactureDate', 'expirationDate', 'receivedDate'];
 
 interface ReceivingItem {
   id?: number;
@@ -88,11 +126,42 @@ function isP2Product(item: any): boolean {
   );
 }
 
+// Helper to get traceability info for an item from inventory
+function getItemTraceability(
+  agPartNumber: string,
+  inventoryItems: any[] | undefined
+): { required: boolean; fields: string[] } {
+  if (!inventoryItems || !Array.isArray(inventoryItems)) {
+    return { required: false, fields: [] };
+  }
+  const invItem = inventoryItems.find(
+    (inv: any) => inv.agPartNumber?.toLowerCase() === agPartNumber?.toLowerCase()
+  );
+  if (invItem) {
+    return {
+      required: invItem.traceabilityRequired || false,
+      fields: invItem.traceabilityFields || [],
+    };
+  }
+  return { required: false, fields: [] };
+}
+
 export default function InventoryReceivingPage() {
   const [scanMode, setScanMode] = useState(false);
   const [scannedCode, setScannedCode] = useState('');
   const [p2DialogOpen, setP2DialogOpen] = useState(false);
   const [selectedP2Item, setSelectedP2Item] = useState<any>(null);
+  const [receivingDialogOpen, setReceivingDialogOpen] = useState(false);
+  const [selectedReceivingItem, setSelectedReceivingItem] = useState<(ReceivingItem & { poNumber: string; vendorName: string }) | null>(null);
+  const [selectedItemTraceability, setSelectedItemTraceability] = useState<{
+    required: boolean;
+    fields: string[];
+  }>({ required: false, fields: [] });
+  const [dialogReceivingData, setDialogReceivingData] = useState({
+    receivedQuantity: 0,
+    notes: '',
+  });
+  const [traceabilityData, setTraceabilityData] = useState<Record<string, string>>({});
   const [receivingData, setReceivingData] = useState<ReceivingItem>({
     agPartNumber: '',
     name: '',
@@ -100,6 +169,20 @@ export default function InventoryReceivingPage() {
     receivedQuantity: 0,
     status: 'pending',
   });
+  const [selectedForPrint, setSelectedForPrint] = useState<Set<number>>(new Set());
+  const [recentlyReceived, setRecentlyReceived] = useState<Array<ReceivingItem & { poNumber: string; vendorName: string }>>([]);
+  
+  // Multi-item receiving state for auto-advance and copy functionality
+  const [currentPoGroupItems, setCurrentPoGroupItems] = useState<(ReceivingItem & { poNumber: string; vendorName: string })[]>([]);
+  const [currentItemIndex, setCurrentItemIndex] = useState(0);
+  const [lastTraceabilityData, setLastTraceabilityData] = useState<Record<string, string>>({});
+  const [receivedItemIds, setReceivedItemIds] = useState<Set<number>>(new Set());
+  
+  // Per-unit traceability entry state (when receiving qty > 1 for traceable items)
+  const [perUnitMode, setPerUnitMode] = useState(false);
+  const [currentUnitIndex, setCurrentUnitIndex] = useState(0);
+  const [totalUnitsToReceive, setTotalUnitsToReceive] = useState(0);
+  const [allUnitsTraceabilityData, setAllUnitsTraceabilityData] = useState<Record<string, string>[]>([]);
 
   const queryClient = useQueryClient();
 
@@ -233,6 +316,38 @@ export default function InventoryReceivingPage() {
     });
   }
 
+  // Group pending items by VPO-# for accordion display
+  const groupedByVPO = useMemo(() => {
+    const pendingItems = pendingReceivingItems.filter(item => item.status !== 'complete');
+    const grouped: Record<string, { 
+      poNumber: string; 
+      vendorName: string; 
+      items: typeof pendingItems;
+      pendingCount: number;
+      partialCount: number;
+    }> = {};
+    
+    pendingItems.forEach(item => {
+      if (!grouped[item.poNumber]) {
+        grouped[item.poNumber] = {
+          poNumber: item.poNumber,
+          vendorName: item.vendorName,
+          items: [],
+          pendingCount: 0,
+          partialCount: 0,
+        };
+      }
+      grouped[item.poNumber].items.push(item);
+      if (item.status === 'pending') {
+        grouped[item.poNumber].pendingCount++;
+      } else if (item.status === 'partial') {
+        grouped[item.poNumber].partialCount++;
+      }
+    });
+    
+    return Object.values(grouped).sort((a, b) => a.poNumber.localeCompare(b.poNumber));
+  }, [pendingReceivingItems]);
+
   const createInventoryMutation = useMutation({
     mutationFn: async (data: any) => {
       const response = await fetch('/api/inventory', {
@@ -302,7 +417,7 @@ export default function InventoryReceivingPage() {
     createInventoryMutation.mutate(inventoryData);
   };
 
-  const handleReceiveFromPending = (item: ReceivingItem) => {
+  const handleReceiveFromPending = (item: ReceivingItem & { poNumber: string; vendorName: string }, skipGroupSetup = false) => {
     // Check if this is a P2 product
     if (isP2Product(item)) {
       setSelectedP2Item(item);
@@ -310,8 +425,548 @@ export default function InventoryReceivingPage() {
       return;
     }
 
-    // For non-P2 products, load into the form
-    setReceivingData(item);
+    // Look up the inventory item to get traceability settings
+    let traceabilityRequired = false;
+    let traceabilityFields: string[] = [];
+    
+    if (inventoryItems && Array.isArray(inventoryItems)) {
+      const invItem = inventoryItems.find(
+        (inv: any) => inv.agPartNumber?.toLowerCase() === item.agPartNumber?.toLowerCase()
+      );
+      if (invItem) {
+        traceabilityRequired = invItem.traceabilityRequired || false;
+        traceabilityFields = invItem.traceabilityFields || [];
+      }
+    }
+
+    // Set up PO group items for multi-item receiving (only on first item click)
+    if (!skipGroupSetup) {
+      // Find all items in the same PO from the pending items list
+      const samePoItems = pendingReceivingItems.filter(
+        (i: ReceivingItem & { poNumber: string; vendorName: string }) => 
+          i.poNumber === item.poNumber && 
+          !isP2Product(i) && 
+          (i.status === 'pending' || i.status === 'partial')
+      );
+      if (samePoItems.length > 0) {
+        setCurrentPoGroupItems(samePoItems);
+        const itemIndex = samePoItems.findIndex(
+          (i: ReceivingItem & { poNumber: string; vendorName: string }) => i.id === item.id
+        );
+        setCurrentItemIndex(itemIndex >= 0 ? itemIndex : 0);
+      } else {
+        setCurrentPoGroupItems([item]);
+        setCurrentItemIndex(0);
+      }
+      // Reset last traceability data and received IDs when starting a new PO group
+      setLastTraceabilityData({});
+      setReceivedItemIds(new Set());
+    }
+
+    // For non-P2 products, open the receiving dialog
+    setSelectedReceivingItem(item);
+    setSelectedItemTraceability({
+      required: traceabilityRequired,
+      fields: traceabilityFields,
+    });
+    
+    const quantityToReceive = item.expectedQuantity - item.receivedQuantity;
+    setDialogReceivingData({
+      receivedQuantity: quantityToReceive,
+      notes: '',
+    });
+    
+    // Initialize traceability data with empty values for each field
+    const initialTraceabilityData: Record<string, string> = {};
+    traceabilityFields.forEach((field) => {
+      // Pre-fill receivedDate with today's date
+      if (field === 'receivedDate') {
+        initialTraceabilityData[field] = new Date().toISOString().split('T')[0];
+      } else {
+        initialTraceabilityData[field] = '';
+      }
+    });
+    setTraceabilityData(initialTraceabilityData);
+    
+    // Set up per-unit mode if traceable item with quantity > 1
+    if (traceabilityRequired && traceabilityFields.length > 0 && quantityToReceive > 1) {
+      setPerUnitMode(true);
+      setCurrentUnitIndex(0);
+      setTotalUnitsToReceive(quantityToReceive);
+      setAllUnitsTraceabilityData([]);
+    } else {
+      setPerUnitMode(false);
+      setCurrentUnitIndex(0);
+      setTotalUnitsToReceive(0);
+      setAllUnitsTraceabilityData([]);
+    }
+    
+    setReceivingDialogOpen(true);
+  };
+
+  // Copy traceability data from previous item (for multi-PO-item workflow)
+  const handleCopyFromPrevious = () => {
+    if (Object.keys(lastTraceabilityData).length === 0) {
+      toast.error('No previous traceability data to copy');
+      return;
+    }
+    // Copy only fields that are configured for this item
+    const copiedData: Record<string, string> = {};
+    selectedItemTraceability.fields.forEach((field) => {
+      if (lastTraceabilityData[field]) {
+        // For received date, always use today
+        if (field === 'receivedDate') {
+          copiedData[field] = new Date().toISOString().split('T')[0];
+        } else {
+          copiedData[field] = lastTraceabilityData[field];
+        }
+      } else if (field === 'receivedDate') {
+        copiedData[field] = new Date().toISOString().split('T')[0];
+      } else {
+        copiedData[field] = '';
+      }
+    });
+    setTraceabilityData(copiedData);
+    toast.success('Copied traceability data from previous item');
+  };
+  
+  // Copy traceability data from previous unit (for per-unit workflow)
+  const handleCopyFromPreviousUnit = () => {
+    if (allUnitsTraceabilityData.length === 0 || currentUnitIndex === 0) {
+      toast.error('No previous unit data to copy');
+      return;
+    }
+    const previousUnitData = allUnitsTraceabilityData[currentUnitIndex - 1];
+    if (!previousUnitData) {
+      toast.error('No previous unit data to copy');
+      return;
+    }
+    // Copy data, but always use today for receivedDate
+    const copiedData: Record<string, string> = { ...previousUnitData };
+    if (copiedData.receivedDate) {
+      copiedData.receivedDate = new Date().toISOString().split('T')[0];
+    }
+    setTraceabilityData(copiedData);
+    toast.success(`Copied data from Unit ${currentUnitIndex}`);
+  };
+  
+  // Handle advancing to next unit in per-unit mode
+  const handleNextUnit = () => {
+    // Validate current unit's traceability fields
+    const missingFields = selectedItemTraceability.fields.filter(
+      (field) => !traceabilityData[field] || traceabilityData[field].trim() === ''
+    );
+    if (missingFields.length > 0) {
+      const missingLabels = missingFields.map((f) => TRACEABILITY_FIELD_LABELS[f] || f);
+      toast.error(`Please fill in required fields: ${missingLabels.join(', ')}`);
+      return;
+    }
+    
+    // Save current unit's data
+    const updatedAllUnitsData = [...allUnitsTraceabilityData];
+    updatedAllUnitsData[currentUnitIndex] = { ...traceabilityData };
+    setAllUnitsTraceabilityData(updatedAllUnitsData);
+    
+    // Advance to next unit
+    const nextIndex = currentUnitIndex + 1;
+    setCurrentUnitIndex(nextIndex);
+    
+    // Pre-fill next unit with current unit's data (user can adjust)
+    const nextUnitData: Record<string, string> = { ...traceabilityData };
+    // Always use today for receivedDate
+    if (nextUnitData.receivedDate) {
+      nextUnitData.receivedDate = new Date().toISOString().split('T')[0];
+    }
+    setTraceabilityData(nextUnitData);
+    
+    toast.success(`Unit ${currentUnitIndex + 1} saved. Now entering Unit ${nextIndex + 1} of ${totalUnitsToReceive}`);
+  };
+
+  const handleDialogReceive = async () => {
+    if (!selectedReceivingItem) return;
+
+    if (dialogReceivingData.receivedQuantity <= 0) {
+      toast.error('Please enter a valid quantity');
+      return;
+    }
+
+    // Validate required traceability fields for current unit
+    if (selectedItemTraceability.required && selectedItemTraceability.fields.length > 0) {
+      const missingFields = selectedItemTraceability.fields.filter(
+        (field) => !traceabilityData[field] || traceabilityData[field].trim() === ''
+      );
+      if (missingFields.length > 0) {
+        const missingLabels = missingFields.map((f) => TRACEABILITY_FIELD_LABELS[f] || f);
+        toast.error(`Please fill in required traceability fields: ${missingLabels.join(', ')}`);
+        return;
+      }
+    }
+
+    try {
+      // Collect all units' traceability data for per-unit mode
+      let finalUnitsData: Record<string, string>[] = [];
+      if (perUnitMode) {
+        // Save current (last) unit's data
+        finalUnitsData = [...allUnitsTraceabilityData];
+        finalUnitsData[currentUnitIndex] = { ...traceabilityData };
+        
+        // Validate that we have traceability data for all units being received
+        if (finalUnitsData.length !== dialogReceivingData.receivedQuantity) {
+          toast.error(`Traceability data mismatch: expected ${dialogReceivingData.receivedQuantity} units but have ${finalUnitsData.length}`);
+          return;
+        }
+      }
+      
+      // Build notes with traceability info
+      const noteParts = [];
+      if (perUnitMode && finalUnitsData.length > 0) {
+        // Include summary of all units
+        noteParts.push(`[${finalUnitsData.length} units with individual traceability]`);
+        finalUnitsData.forEach((unitData, idx) => {
+          const unitParts: string[] = [];
+          selectedItemTraceability.fields.forEach((field) => {
+            if (unitData[field]) {
+              const label = TRACEABILITY_FIELD_LABELS[field] || field;
+              unitParts.push(`${label}: ${unitData[field]}`);
+            }
+          });
+          noteParts.push(`Unit ${idx + 1}: ${unitParts.join(', ')}`);
+        });
+      } else {
+        // Single unit - add traceability data to notes
+        selectedItemTraceability.fields.forEach((field) => {
+          if (traceabilityData[field]) {
+            const label = TRACEABILITY_FIELD_LABELS[field] || field;
+            noteParts.push(`${label}: ${traceabilityData[field]}`);
+          }
+        });
+      }
+      if (dialogReceivingData.notes) {
+        noteParts.push(dialogReceivingData.notes);
+      }
+      const combinedNotes = noteParts.join(' | ');
+
+      // Update the vendor PO item with received quantity
+      await apiRequest(`/api/vendor-pos/items/${selectedReceivingItem.id}/receive`, {
+        method: 'POST',
+        body: JSON.stringify({
+          receivedQuantity: dialogReceivingData.receivedQuantity,
+          notes: combinedNotes || undefined,
+        }),
+      });
+
+      // Track recently received items for barcode printing (if traceable)
+      const isTraceable = selectedItemTraceability.required && selectedItemTraceability.fields.length > 0;
+      if (isTraceable) {
+        if (perUnitMode && finalUnitsData.length > 0) {
+          // Add each unit as a separate entry for barcode printing
+          const newReceivedItems = finalUnitsData.map((unitData, idx) => ({
+            id: selectedReceivingItem.id! + idx * 0.001, // Unique ID for each unit
+            agPartNumber: selectedReceivingItem.agPartNumber,
+            name: selectedReceivingItem.name,
+            expectedQuantity: 1,
+            receivedQuantity: 1,
+            lotNumber: unitData.supplierBatchLotC || unitData.manufactureRoll || '',
+            batchNumber: unitData.aluminumHeat || '',
+            status: 'complete' as const,
+            receivedDate: new Date().toISOString(),
+            poNumber: selectedReceivingItem.poNumber,
+            vendorName: selectedReceivingItem.vendorName,
+            notes: selectedItemTraceability.fields.map(f => 
+              `${TRACEABILITY_FIELD_LABELS[f] || f}: ${unitData[f] || ''}`
+            ).join(' | '),
+          }));
+          setRecentlyReceived(prev => [...newReceivedItems, ...prev]);
+        } else {
+          // Single unit
+          const receivedItem: ReceivingItem & { poNumber: string; vendorName: string } = {
+            id: selectedReceivingItem.id,
+            agPartNumber: selectedReceivingItem.agPartNumber,
+            name: selectedReceivingItem.name,
+            expectedQuantity: selectedReceivingItem.expectedQuantity,
+            receivedQuantity: dialogReceivingData.receivedQuantity,
+            lotNumber: traceabilityData.supplierBatchLotC || traceabilityData.manufactureRoll || '',
+            batchNumber: traceabilityData.aluminumHeat || '',
+            status: 'complete',
+            receivedDate: new Date().toISOString(),
+            poNumber: selectedReceivingItem.poNumber,
+            vendorName: selectedReceivingItem.vendorName,
+            notes: combinedNotes,
+          };
+          setRecentlyReceived(prev => [receivedItem, ...prev]);
+        }
+      }
+
+      // Save last traceability data for "Copy from Previous" feature
+      if (selectedItemTraceability.required && Object.keys(traceabilityData).length > 0) {
+        setLastTraceabilityData({ ...traceabilityData });
+      }
+
+      // Track this item as received
+      const currentItemId = selectedReceivingItem.id;
+      setReceivedItemIds(prev => {
+        const updated = new Set(prev);
+        if (currentItemId) updated.add(currentItemId);
+        return updated;
+      });
+
+      toast.success(`Successfully received ${dialogReceivingData.receivedQuantity} units of ${selectedReceivingItem.agPartNumber}`);
+      
+      // Invalidate queries to refresh the data
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos/items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      
+      // Store PO number and update received IDs before advancing
+      const poNumberForAdvance = selectedReceivingItem.poNumber;
+      const groupItemsCopy = [...currentPoGroupItems];
+      const currentIdx = currentItemIndex;
+      
+      // Update received IDs state
+      const newReceivedIds = new Set(receivedItemIds);
+      if (currentItemId) newReceivedIds.add(currentItemId);
+      setReceivedItemIds(newReceivedIds);
+      
+      // Helper function to close dialog and reset state
+      const closeAndReset = (showCompletion = false) => {
+        setReceivingDialogOpen(false);
+        setSelectedReceivingItem(null);
+        setSelectedItemTraceability({ required: false, fields: [] });
+        setDialogReceivingData({ receivedQuantity: 0, notes: '' });
+        setTraceabilityData({});
+        setCurrentPoGroupItems([]);
+        setCurrentItemIndex(0);
+        setReceivedItemIds(new Set());
+        // Reset per-unit state
+        setPerUnitMode(false);
+        setCurrentUnitIndex(0);
+        setTotalUnitsToReceive(0);
+        setAllUnitsTraceabilityData([]);
+        if (showCompletion) {
+          toast.success('All items in this PO have been received!');
+        }
+      };
+      
+      // Find next unreceived item using the cached group, skipping received IDs
+      let nextItemIdx = -1;
+      for (let i = currentIdx + 1; i < groupItemsCopy.length; i++) {
+        const item = groupItemsCopy[i];
+        if (item.id && !newReceivedIds.has(item.id)) {
+          nextItemIdx = i;
+          break;
+        }
+      }
+      
+      if (nextItemIdx < 0 || groupItemsCopy.length <= 1) {
+        closeAndReset(groupItemsCopy.length > 1);
+      } else {
+        const nextItem = groupItemsCopy[nextItemIdx];
+        setCurrentItemIndex(nextItemIdx);
+        // Small delay for toast visibility before advancing
+        setTimeout(() => {
+          handleReceiveFromPending(nextItem, true);
+        }, 400);
+      }
+    } catch (error) {
+      toast.error('Failed to receive item');
+      console.error('Receiving error:', error);
+    }
+  };
+
+  const handleDialogClose = () => {
+    setReceivingDialogOpen(false);
+    setSelectedReceivingItem(null);
+    setSelectedItemTraceability({ required: false, fields: [] });
+    setDialogReceivingData({
+      receivedQuantity: 0,
+      notes: '',
+    });
+    setTraceabilityData({});
+    // Reset all multi-item tracking state
+    setCurrentPoGroupItems([]);
+    setCurrentItemIndex(0);
+    setReceivedItemIds(new Set());
+    setLastTraceabilityData({});
+    // Reset per-unit tracking state
+    setPerUnitMode(false);
+    setCurrentUnitIndex(0);
+    setTotalUnitsToReceive(0);
+    setAllUnitsTraceabilityData([]);
+  };
+
+  // Toggle item selection for barcode printing
+  const togglePrintSelection = (itemId: number) => {
+    setSelectedForPrint(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
+  };
+
+  // Select all traceable items for printing
+  const selectAllForPrint = () => {
+    const allIds = recentlyReceived.map(item => item.id!).filter(Boolean);
+    setSelectedForPrint(new Set(allIds));
+  };
+
+  // Clear all selections
+  const clearPrintSelection = () => {
+    setSelectedForPrint(new Set());
+  };
+
+  // Batch print barcodes for selected items
+  const handleBatchPrintBarcodes = () => {
+    const selectedItems = recentlyReceived.filter(item => selectedForPrint.has(item.id!));
+    
+    if (selectedItems.length === 0) {
+      toast.error('Please select items to print barcodes');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Please allow popups to print barcodes');
+      return;
+    }
+
+    // Generate barcode label content
+    const generateLabelContent = (item: ReceivingItem & { poNumber: string; vendorName: string }, index: number) => {
+      const barcodeValue = item.lotNumber || item.batchNumber || item.agPartNumber;
+      return `
+        <div class="label">
+          <div class="label-content">
+            <div class="part-number">${item.agPartNumber}</div>
+            <div class="item-name">${item.name}</div>
+            <div class="barcode-container">
+              <canvas id="barcode-${index}" width="200" height="50"></canvas>
+            </div>
+            ${item.lotNumber ? `<div class="lot-info">Lot: ${item.lotNumber}</div>` : ''}
+            ${item.batchNumber ? `<div class="batch-info">Batch: ${item.batchNumber}</div>` : ''}
+            <div class="qty-info">Qty: ${item.receivedQuantity} | PO: ${item.poNumber}</div>
+            <div class="date-info">${new Date(item.receivedDate!).toLocaleDateString()}</div>
+          </div>
+        </div>
+      `;
+    };
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Inventory Barcodes</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; padding: 10px; }
+            .labels-container {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+            }
+            .label {
+              width: 2.625in;
+              height: 1.2in;
+              border: 1px solid #ccc;
+              padding: 5px;
+              page-break-inside: avoid;
+            }
+            .label-content {
+              height: 100%;
+              display: flex;
+              flex-direction: column;
+              justify-content: space-between;
+              text-align: center;
+            }
+            .part-number {
+              font-size: 10pt;
+              font-weight: bold;
+              color: #000;
+            }
+            .item-name {
+              font-size: 7pt;
+              color: #333;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+            .barcode-container {
+              display: flex;
+              justify-content: center;
+              margin: 3px 0;
+            }
+            .lot-info, .batch-info {
+              font-size: 8pt;
+              font-weight: bold;
+              color: #0066cc;
+            }
+            .qty-info {
+              font-size: 7pt;
+              color: #666;
+            }
+            .date-info {
+              font-size: 6pt;
+              color: #999;
+            }
+            @media print {
+              body { margin: 0; }
+              .label { border: none; }
+              @page {
+                size: 8.5in 11in;
+                margin: 0.5in;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="labels-container">
+            ${selectedItems.map((item, idx) => generateLabelContent(item, idx)).join('')}
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+
+    // Generate barcodes after DOM is ready
+    setTimeout(() => {
+      selectedItems.forEach((item, idx) => {
+        const canvas = printWindow.document.getElementById(`barcode-${idx}`) as HTMLCanvasElement;
+        if (canvas) {
+          const barcodeValue = item.lotNumber || item.batchNumber || item.agPartNumber;
+          try {
+            JsBarcode(canvas, barcodeValue, {
+              format: 'CODE39',
+              width: 1.5,
+              height: 35,
+              displayValue: true,
+              fontSize: 10,
+              margin: 2,
+              lineColor: '#000000',
+            });
+          } catch (error) {
+            console.error('Error generating barcode:', error);
+          }
+        }
+      });
+
+      // Print and close
+      printWindow.focus();
+      printWindow.print();
+    }, 300);
+
+    toast.success(`Printing barcodes for ${selectedItems.length} items`);
+    clearPrintSelection();
+  };
+
+  // Remove item from recently received list
+  const removeFromRecentlyReceived = (itemId: number) => {
+    setRecentlyReceived(prev => prev.filter(item => item.id !== itemId));
+    setSelectedForPrint(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(itemId);
+      return newSet;
+    });
   };
 
   const resetForm = () => {
@@ -574,7 +1229,7 @@ export default function InventoryReceivingPage() {
                 Pending Receipts
               </CardTitle>
               <CardDescription>
-                Items from issued Purchase Orders awaiting receipt ({pendingReceivingItems.filter(item => item.status !== 'complete').length} items from {sentPOs.length} POs)
+                Items from issued Purchase Orders awaiting receipt ({pendingReceivingItems.filter(item => item.status !== 'complete').length} items from {groupedByVPO.length} POs)
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -583,108 +1238,261 @@ export default function InventoryReceivingPage() {
                   <Loader2 className="w-6 h-6 animate-spin mr-2" />
                   <span className="text-muted-foreground">Loading pending receipts...</span>
                 </div>
-              ) : pendingReceivingItems.filter(item => item.status !== 'complete').length === 0 ? (
+              ) : groupedByVPO.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
                   <p>No pending receipts</p>
                   <p className="text-sm">Issue a Purchase Order to see items here</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {pendingReceivingItems
-                    .filter((item) => item.status !== 'complete')
-                    .map((item) => (
-                      <div
-                        key={`${item.poNumber}-${item.id}`}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge variant="outline" className="font-mono text-xs">
-                              {item.poNumber}
-                            </Badge>
-                            <span className="font-medium">
-                              #{item.agPartNumber}
-                            </span>
-                            <span className="text-muted-foreground">-</span>
-                            <span className="truncate max-w-[300px]">{item.name}</span>
-                            {isP2Product(item) && (
-                              <Badge
-                                variant="secondary"
-                                className="bg-orange-100 text-orange-800 text-xs"
-                              >
-                                <QrCode className="w-3 h-3 mr-1" />
-                                P2
+                <Accordion type="multiple" className="w-full" defaultValue={[]}>
+                  {groupedByVPO.map((group) => (
+                    <AccordionItem key={group.poNumber} value={group.poNumber} data-testid={`accordion-vpo-${group.poNumber}`}>
+                      <AccordionTrigger className="hover:no-underline">
+                        <div className="flex items-center gap-3 flex-1">
+                          <Badge variant="outline" className="font-mono text-sm font-semibold">
+                            {group.poNumber}
+                          </Badge>
+                          <span className="text-muted-foreground text-sm">
+                            {group.vendorName}
+                          </span>
+                          <div className="flex items-center gap-2 ml-auto mr-4">
+                            {group.pendingCount > 0 && (
+                              <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 text-xs">
+                                <Clock className="w-3 h-3 mr-1" />
+                                {group.pendingCount} pending
                               </Badge>
                             )}
-                            {getStatusBadge(item.status)}
+                            {group.partialCount > 0 && (
+                              <Badge variant="secondary" className="bg-orange-100 text-orange-800 text-xs">
+                                <AlertCircle className="w-3 h-3 mr-1" />
+                                {group.partialCount} partial
+                              </Badge>
+                            )}
+                            <Badge variant="outline" className="text-xs">
+                              {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
+                            </Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Expected: {item.expectedQuantity} | Received:{' '}
-                            {item.receivedQuantity} | Vendor: {item.vendorName}
-                          </p>
                         </div>
-                        <Button
-                          size="sm"
-                          onClick={() => handleReceiveFromPending(item)}
-                          className={
-                            isP2Product(item)
-                              ? 'bg-orange-500 hover:bg-orange-600'
-                              : ''
-                          }
-                        >
-                          {isP2Product(item) && (
-                            <QrCode className="w-4 h-4 mr-1" />
-                          )}
-                          Receive
-                        </Button>
-                      </div>
-                    ))}
-                </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-3 pt-2">
+                          {group.items.map((item) => (
+                            <div
+                              key={`${item.poNumber}-${item.id}`}
+                              className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                              data-testid={`receipt-item-${item.id}`}
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium">
+                                    #{item.agPartNumber}
+                                  </span>
+                                  <span className="text-muted-foreground">-</span>
+                                  <span className="truncate max-w-[300px]">{item.name}</span>
+                                  {isP2Product(item) && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="bg-orange-100 text-orange-800 text-xs"
+                                    >
+                                      <QrCode className="w-3 h-3 mr-1" />
+                                      P2
+                                    </Badge>
+                                  )}
+                                  {getItemTraceability(item.agPartNumber, inventoryItems as any[]).required && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="bg-blue-100 text-blue-800 text-xs"
+                                    >
+                                      <ClipboardList className="w-3 h-3 mr-1" />
+                                      Traceable
+                                    </Badge>
+                                  )}
+                                  {getStatusBadge(item.status)}
+                                </div>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  Expected: {item.expectedQuantity} | Received:{' '}
+                                  {item.receivedQuantity}
+                                </p>
+                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => handleReceiveFromPending(item)}
+                                className={
+                                  isP2Product(item)
+                                    ? 'bg-orange-500 hover:bg-orange-600'
+                                    : ''
+                                }
+                                data-testid={`button-receive-${item.id}`}
+                              >
+                                {isP2Product(item) && (
+                                  <QrCode className="w-4 h-4 mr-1" />
+                                )}
+                                Receive
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="history">
-          <Card>
-            <CardHeader>
-              <CardTitle>Receiving History</CardTitle>
-              <CardDescription>Recently completed receipts</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {mockReceivingItems
-                  .filter((item) => item.status === 'complete')
-                  .map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-4 border rounded-lg bg-green-50"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">
-                            {item.agPartNumber}
-                          </span>
-                          <span className="text-muted-foreground">-</span>
-                          <span>{item.name}</span>
-                          {getStatusBadge(item.status)}
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Received: {item.receivedQuantity} units
-                        </p>
-                        {item.receivedBy && (
-                          <p className="text-sm text-muted-foreground">
-                            By: {item.receivedBy} on{' '}
-                            {new Date(item.receivedDate!).toLocaleDateString()}
-                          </p>
-                        )}
-                      </div>
+          <div className="space-y-6">
+            {/* Recently Received Traceable Items - For Barcode Printing */}
+            {recentlyReceived.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Tag className="h-5 w-5" />
+                        Recently Received - Print Barcodes
+                      </CardTitle>
+                      <CardDescription>
+                        Traceable items ready for barcode printing (Lot/Batch tracked)
+                      </CardDescription>
                     </div>
-                  ))}
-              </div>
-            </CardContent>
-          </Card>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={selectedForPrint.size === recentlyReceived.length ? clearPrintSelection : selectAllForPrint}
+                        data-testid="button-select-all-print"
+                      >
+                        {selectedForPrint.size === recentlyReceived.length ? (
+                          <>
+                            <Square className="h-4 w-4 mr-2" />
+                            Deselect All
+                          </>
+                        ) : (
+                          <>
+                            <CheckSquare className="h-4 w-4 mr-2" />
+                            Select All ({recentlyReceived.length})
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        onClick={handleBatchPrintBarcodes}
+                        disabled={selectedForPrint.size === 0}
+                        data-testid="button-print-barcodes"
+                      >
+                        <Printer className="h-4 w-4 mr-2" />
+                        Print Barcodes ({selectedForPrint.size})
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {recentlyReceived.map((item) => (
+                      <div
+                        key={item.id}
+                        className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${
+                          selectedForPrint.has(item.id!) ? 'bg-blue-50 border-blue-300' : 'bg-green-50'
+                        }`}
+                        data-testid={`received-item-${item.id}`}
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <Checkbox
+                            checked={selectedForPrint.has(item.id!)}
+                            onCheckedChange={() => togglePrintSelection(item.id!)}
+                            data-testid={`checkbox-print-${item.id}`}
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="outline" className="font-mono text-xs">
+                                {item.poNumber}
+                              </Badge>
+                              <span className="font-medium">{item.agPartNumber}</span>
+                              <span className="text-muted-foreground">-</span>
+                              <span className="text-sm">{item.name}</span>
+                              {getStatusBadge('complete')}
+                            </div>
+                            <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                              <span>Qty: {item.receivedQuantity}</span>
+                              {item.lotNumber && (
+                                <Badge variant="secondary" className="text-xs">
+                                  Lot: {item.lotNumber}
+                                </Badge>
+                              )}
+                              {item.batchNumber && (
+                                <Badge variant="secondary" className="text-xs">
+                                  Batch: {item.batchNumber}
+                                </Badge>
+                              )}
+                              <span>
+                                {new Date(item.receivedDate!).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeFromRecentlyReceived(item.id!)}
+                          className="text-muted-foreground hover:text-destructive"
+                          data-testid={`button-remove-${item.id}`}
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Regular Receiving History */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Receiving History</CardTitle>
+                <CardDescription>Previously completed receipts</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {mockReceivingItems
+                    .filter((item) => item.status === 'complete')
+                    .map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between p-4 border rounded-lg bg-green-50"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">
+                              {item.agPartNumber}
+                            </span>
+                            <span className="text-muted-foreground">-</span>
+                            <span>{item.name}</span>
+                            {getStatusBadge(item.status)}
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Received: {item.receivedQuantity} units
+                          </p>
+                          {item.receivedBy && (
+                            <p className="text-sm text-muted-foreground">
+                              By: {item.receivedBy} on{' '}
+                              {new Date(item.receivedDate!).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  {mockReceivingItems.filter((item) => item.status === 'complete').length === 0 && recentlyReceived.length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">
+                      No completed receipts yet
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
 
@@ -694,6 +1502,250 @@ export default function InventoryReceivingPage() {
         onOpenChange={setP2DialogOpen}
         item={selectedP2Item}
       />
+
+      {/* Standard Receiving Dialog */}
+      <Dialog open={receivingDialogOpen} onOpenChange={setReceivingDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
+              <Package className="h-5 w-5" />
+              Receive Item
+              {currentPoGroupItems.length > 1 && (
+                <Badge variant="secondary" className="ml-2 text-xs">
+                  Item {currentItemIndex + 1} of {currentPoGroupItems.length}
+                </Badge>
+              )}
+              {perUnitMode && (
+                <Badge variant="default" className="ml-2 text-xs bg-purple-600">
+                  Unit {currentUnitIndex + 1} of {totalUnitsToReceive}
+                </Badge>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {perUnitMode ? (
+                <span className="block">
+                  Enter traceability data for each unit individually
+                  <span className="block text-xs mt-1 text-purple-600 dark:text-purple-400">
+                    Each unit requires separate traceability information. Data auto-copies to next unit.
+                  </span>
+                </span>
+              ) : (
+                <>
+                  Enter receiving details for this item
+                  {currentPoGroupItems.length > 1 && (
+                    <span className="block text-xs mt-1">
+                      After receiving, the next item will open automatically
+                    </span>
+                  )}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedReceivingItem && (
+            <div className="space-y-4">
+              {/* Item Info */}
+              <div className="p-3 bg-muted rounded-lg">
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {selectedReceivingItem.poNumber}
+                  </Badge>
+                  <span className="font-medium">#{selectedReceivingItem.agPartNumber}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">{selectedReceivingItem.name}</p>
+                <p className="text-sm mt-1">
+                  <span className="text-muted-foreground">Expected:</span> {selectedReceivingItem.expectedQuantity} | 
+                  <span className="text-muted-foreground ml-2">Already Received:</span> {selectedReceivingItem.receivedQuantity}
+                </p>
+              </div>
+
+              {/* Per-Unit Progress Bar */}
+              {perUnitMode && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Unit Progress</span>
+                    <span className="font-medium text-purple-600">
+                      {currentUnitIndex + 1} / {totalUnitsToReceive}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div 
+                      className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${((currentUnitIndex + 1) / totalUnitsToReceive) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Quantity - Editable in per-unit mode only before starting entry */}
+              {!perUnitMode ? (
+                <div>
+                  <Label htmlFor="dialogQuantity">Quantity to Receive *</Label>
+                  <Input
+                    id="dialogQuantity"
+                    type="number"
+                    value={dialogReceivingData.receivedQuantity}
+                    onChange={(e) =>
+                      setDialogReceivingData((prev) => ({
+                        ...prev,
+                        receivedQuantity: parseInt(e.target.value) || 0,
+                      }))
+                    }
+                    min="1"
+                    max={selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity}
+                    data-testid="input-receive-quantity"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Remaining to receive: {selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Quantity to Receive</Label>
+                    {/* Allow editing quantity only before starting per-unit entry */}
+                    {currentUnitIndex === 0 && allUnitsTraceabilityData.length === 0 ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          value={dialogReceivingData.receivedQuantity}
+                          onChange={(e) => {
+                            const newQty = parseInt(e.target.value) || 1;
+                            const maxQty = selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity;
+                            const clampedQty = Math.max(1, Math.min(newQty, maxQty));
+                            setDialogReceivingData((prev) => ({
+                              ...prev,
+                              receivedQuantity: clampedQty,
+                            }));
+                            setTotalUnitsToReceive(clampedQty);
+                          }}
+                          min="1"
+                          max={selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity}
+                          className="w-20 h-8 text-center"
+                          data-testid="input-receive-quantity-perunit"
+                        />
+                        <span className="text-sm text-muted-foreground">units</span>
+                      </div>
+                    ) : (
+                      <Badge variant="secondary" className="font-mono">
+                        {dialogReceivingData.receivedQuantity} units (locked)
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {currentUnitIndex === 0 && allUnitsTraceabilityData.length === 0 
+                      ? 'Adjust quantity before entering unit data. Each unit requires separate traceability.'
+                      : 'Quantity is locked after entering unit traceability data.'}
+                  </p>
+                </div>
+              )}
+
+              {/* Traceability Fields - Dynamic based on item configuration */}
+              {selectedItemTraceability.required && selectedItemTraceability.fields.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400">
+                      <ClipboardList className="h-4 w-4" />
+                      {perUnitMode ? (
+                        <span>Unit {currentUnitIndex + 1} Traceability</span>
+                      ) : (
+                        <span>Traceability Information Required</span>
+                      )}
+                    </div>
+                    {/* Copy button for per-unit mode (from previous unit) */}
+                    {perUnitMode && currentUnitIndex > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCopyFromPreviousUnit}
+                        className="text-xs"
+                        data-testid="button-copy-from-previous-unit"
+                      >
+                        <Copy className="h-3 w-3 mr-1" />
+                        Copy from Unit {currentUnitIndex}
+                      </Button>
+                    )}
+                    {/* Copy button for multi-item mode (from previous item) */}
+                    {!perUnitMode && Object.keys(lastTraceabilityData).length > 0 && currentItemIndex > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCopyFromPrevious}
+                        className="text-xs"
+                        data-testid="button-copy-traceability"
+                      >
+                        <Copy className="h-3 w-3 mr-1" />
+                        Copy from Previous
+                      </Button>
+                    )}
+                  </div>
+                  <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-3 bg-blue-50/50 dark:bg-blue-900/20 space-y-3">
+                    {selectedItemTraceability.fields.map((field) => (
+                      <div key={field}>
+                        <Label htmlFor={`traceability-${field}`}>
+                          {TRACEABILITY_FIELD_LABELS[field] || field} *
+                        </Label>
+                        <Input
+                          id={`traceability-${field}`}
+                          type={DATE_FIELDS.includes(field) ? 'date' : 'text'}
+                          value={traceabilityData[field] || ''}
+                          onChange={(e) =>
+                            setTraceabilityData((prev) => ({
+                              ...prev,
+                              [field]: e.target.value,
+                            }))
+                          }
+                          placeholder={`Enter ${TRACEABILITY_FIELD_LABELS[field] || field}`}
+                          data-testid={`input-traceability-${field}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Notes - Only show on last unit or when not in per-unit mode */}
+              {(!perUnitMode || currentUnitIndex === totalUnitsToReceive - 1) && (
+                <div>
+                  <Label htmlFor="dialogNotes">Notes</Label>
+                  <Textarea
+                    id="dialogNotes"
+                    value={dialogReceivingData.notes}
+                    onChange={(e) =>
+                      setDialogReceivingData((prev) => ({
+                        ...prev,
+                        notes: e.target.value,
+                      }))
+                    }
+                    placeholder="Any additional notes about this receipt..."
+                    rows={2}
+                    data-testid="input-receive-notes"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="flex-wrap gap-2">
+            <Button variant="outline" onClick={handleDialogClose} data-testid="button-cancel-receive">
+              Cancel
+            </Button>
+            {perUnitMode && currentUnitIndex < totalUnitsToReceive - 1 ? (
+              <Button onClick={handleNextUnit} data-testid="button-next-unit" className="bg-purple-600 hover:bg-purple-700">
+                <ArrowRight className="h-4 w-4 mr-2" />
+                Next Unit ({currentUnitIndex + 2} of {totalUnitsToReceive})
+              </Button>
+            ) : (
+              <Button onClick={handleDialogReceive} data-testid="button-confirm-receive">
+                <Save className="h-4 w-4 mr-2" />
+                {perUnitMode ? `Receive All ${totalUnitsToReceive} Units` : 'Receive Item'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

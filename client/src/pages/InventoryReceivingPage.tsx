@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Card,
   CardContent,
@@ -12,6 +12,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import {
   Package,
   Scan,
@@ -232,6 +238,38 @@ export default function InventoryReceivingPage() {
       });
     });
   }
+
+  // Group pending items by VPO-# for accordion display
+  const groupedByVPO = useMemo(() => {
+    const pendingItems = pendingReceivingItems.filter(item => item.status !== 'complete');
+    const grouped: Record<string, { 
+      poNumber: string; 
+      vendorName: string; 
+      items: typeof pendingItems;
+      pendingCount: number;
+      partialCount: number;
+    }> = {};
+    
+    pendingItems.forEach(item => {
+      if (!grouped[item.poNumber]) {
+        grouped[item.poNumber] = {
+          poNumber: item.poNumber,
+          vendorName: item.vendorName,
+          items: [],
+          pendingCount: 0,
+          partialCount: 0,
+        };
+      }
+      grouped[item.poNumber].items.push(item);
+      if (item.status === 'pending') {
+        grouped[item.poNumber].pendingCount++;
+      } else if (item.status === 'partial') {
+        grouped[item.poNumber].partialCount++;
+      }
+    });
+    
+    return Object.values(grouped).sort((a, b) => a.poNumber.localeCompare(b.poNumber));
+  }, [pendingReceivingItems]);
 
   const createInventoryMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -574,7 +612,7 @@ export default function InventoryReceivingPage() {
                 Pending Receipts
               </CardTitle>
               <CardDescription>
-                Items from issued Purchase Orders awaiting receipt ({pendingReceivingItems.filter(item => item.status !== 'complete').length} items from {sentPOs.length} POs)
+                Items from issued Purchase Orders awaiting receipt ({pendingReceivingItems.filter(item => item.status !== 'complete').length} items from {groupedByVPO.length} POs)
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -583,64 +621,96 @@ export default function InventoryReceivingPage() {
                   <Loader2 className="w-6 h-6 animate-spin mr-2" />
                   <span className="text-muted-foreground">Loading pending receipts...</span>
                 </div>
-              ) : pendingReceivingItems.filter(item => item.status !== 'complete').length === 0 ? (
+              ) : groupedByVPO.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
                   <p>No pending receipts</p>
                   <p className="text-sm">Issue a Purchase Order to see items here</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {pendingReceivingItems
-                    .filter((item) => item.status !== 'complete')
-                    .map((item) => (
-                      <div
-                        key={`${item.poNumber}-${item.id}`}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Badge variant="outline" className="font-mono text-xs">
-                              {item.poNumber}
-                            </Badge>
-                            <span className="font-medium">
-                              #{item.agPartNumber}
-                            </span>
-                            <span className="text-muted-foreground">-</span>
-                            <span className="truncate max-w-[300px]">{item.name}</span>
-                            {isP2Product(item) && (
-                              <Badge
-                                variant="secondary"
-                                className="bg-orange-100 text-orange-800 text-xs"
-                              >
-                                <QrCode className="w-3 h-3 mr-1" />
-                                P2
+                <Accordion type="multiple" className="w-full" defaultValue={groupedByVPO.map(g => g.poNumber)}>
+                  {groupedByVPO.map((group) => (
+                    <AccordionItem key={group.poNumber} value={group.poNumber} data-testid={`accordion-vpo-${group.poNumber}`}>
+                      <AccordionTrigger className="hover:no-underline">
+                        <div className="flex items-center gap-3 flex-1">
+                          <Badge variant="outline" className="font-mono text-sm font-semibold">
+                            {group.poNumber}
+                          </Badge>
+                          <span className="text-muted-foreground text-sm">
+                            {group.vendorName}
+                          </span>
+                          <div className="flex items-center gap-2 ml-auto mr-4">
+                            {group.pendingCount > 0 && (
+                              <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 text-xs">
+                                <Clock className="w-3 h-3 mr-1" />
+                                {group.pendingCount} pending
                               </Badge>
                             )}
-                            {getStatusBadge(item.status)}
+                            {group.partialCount > 0 && (
+                              <Badge variant="secondary" className="bg-orange-100 text-orange-800 text-xs">
+                                <AlertCircle className="w-3 h-3 mr-1" />
+                                {group.partialCount} partial
+                              </Badge>
+                            )}
+                            <Badge variant="outline" className="text-xs">
+                              {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
+                            </Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Expected: {item.expectedQuantity} | Received:{' '}
-                            {item.receivedQuantity} | Vendor: {item.vendorName}
-                          </p>
                         </div>
-                        <Button
-                          size="sm"
-                          onClick={() => handleReceiveFromPending(item)}
-                          className={
-                            isP2Product(item)
-                              ? 'bg-orange-500 hover:bg-orange-600'
-                              : ''
-                          }
-                        >
-                          {isP2Product(item) && (
-                            <QrCode className="w-4 h-4 mr-1" />
-                          )}
-                          Receive
-                        </Button>
-                      </div>
-                    ))}
-                </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-3 pt-2">
+                          {group.items.map((item) => (
+                            <div
+                              key={`${item.poNumber}-${item.id}`}
+                              className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                              data-testid={`receipt-item-${item.id}`}
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium">
+                                    #{item.agPartNumber}
+                                  </span>
+                                  <span className="text-muted-foreground">-</span>
+                                  <span className="truncate max-w-[300px]">{item.name}</span>
+                                  {isP2Product(item) && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="bg-orange-100 text-orange-800 text-xs"
+                                    >
+                                      <QrCode className="w-3 h-3 mr-1" />
+                                      P2
+                                    </Badge>
+                                  )}
+                                  {getStatusBadge(item.status)}
+                                </div>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  Expected: {item.expectedQuantity} | Received:{' '}
+                                  {item.receivedQuantity}
+                                </p>
+                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => handleReceiveFromPending(item)}
+                                className={
+                                  isP2Product(item)
+                                    ? 'bg-orange-500 hover:bg-orange-600'
+                                    : ''
+                                }
+                                data-testid={`button-receive-${item.id}`}
+                              >
+                                {isP2Product(item) && (
+                                  <QrCode className="w-4 h-4 mr-1" />
+                                )}
+                                Receive
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
               )}
             </CardContent>
           </Card>

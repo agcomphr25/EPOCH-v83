@@ -93,6 +93,7 @@ export default function MarketingCommunications() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<number[]>([]);
   const [selectAll, setSelectAll] = useState(false);
+  const [selectAllPages, setSelectAllPages] = useState(false);
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
@@ -277,17 +278,21 @@ export default function MarketingCommunications() {
   });
 
   useEffect(() => {
-    if (selectAll && customersData?.customers) {
+    if (selectAllPages) {
+      // When selecting all pages, we don't need individual IDs - the backend handles it
+      setSelectedCustomerIds([]);
+      setSelectAll(false);
+    } else if (selectAll && customersData?.customers) {
       // Add current page customers to selection (don't replace)
       setSelectedCustomerIds((prev) => {
         const currentPageIds = customersData.customers.map((c) => c.id);
         const newIds = [...new Set([...prev, ...currentPageIds])];
         return newIds;
       });
-    } else if (!selectAll) {
+    } else if (!selectAll && !selectAllPages) {
       setSelectedCustomerIds([]);
     }
-  }, [selectAll]);
+  }, [selectAll, selectAllPages]);
 
   const handleTemplateSelect = (templateId: string) => {
     setSelectedTemplate(templateId);

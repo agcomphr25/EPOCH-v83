@@ -44,6 +44,7 @@ import {
   Tag,
   ClipboardList,
   Copy,
+  ArrowRight,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import JsBarcode from 'jsbarcode';
@@ -176,6 +177,12 @@ export default function InventoryReceivingPage() {
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [lastTraceabilityData, setLastTraceabilityData] = useState<Record<string, string>>({});
   const [receivedItemIds, setReceivedItemIds] = useState<Set<number>>(new Set());
+  
+  // Per-unit traceability entry state (when receiving qty > 1 for traceable items)
+  const [perUnitMode, setPerUnitMode] = useState(false);
+  const [currentUnitIndex, setCurrentUnitIndex] = useState(0);
+  const [totalUnitsToReceive, setTotalUnitsToReceive] = useState(0);
+  const [allUnitsTraceabilityData, setAllUnitsTraceabilityData] = useState<Record<string, string>[]>([]);
 
   const queryClient = useQueryClient();
 
@@ -462,10 +469,13 @@ export default function InventoryReceivingPage() {
       required: traceabilityRequired,
       fields: traceabilityFields,
     });
+    
+    const quantityToReceive = item.expectedQuantity - item.receivedQuantity;
     setDialogReceivingData({
-      receivedQuantity: item.expectedQuantity - item.receivedQuantity,
+      receivedQuantity: quantityToReceive,
       notes: '',
     });
+    
     // Initialize traceability data with empty values for each field
     const initialTraceabilityData: Record<string, string> = {};
     traceabilityFields.forEach((field) => {
@@ -477,10 +487,24 @@ export default function InventoryReceivingPage() {
       }
     });
     setTraceabilityData(initialTraceabilityData);
+    
+    // Set up per-unit mode if traceable item with quantity > 1
+    if (traceabilityRequired && traceabilityFields.length > 0 && quantityToReceive > 1) {
+      setPerUnitMode(true);
+      setCurrentUnitIndex(0);
+      setTotalUnitsToReceive(quantityToReceive);
+      setAllUnitsTraceabilityData([]);
+    } else {
+      setPerUnitMode(false);
+      setCurrentUnitIndex(0);
+      setTotalUnitsToReceive(0);
+      setAllUnitsTraceabilityData([]);
+    }
+    
     setReceivingDialogOpen(true);
   };
 
-  // Copy traceability data from previous item
+  // Copy traceability data from previous item (for multi-PO-item workflow)
   const handleCopyFromPrevious = () => {
     if (Object.keys(lastTraceabilityData).length === 0) {
       toast.error('No previous traceability data to copy');
@@ -505,6 +529,58 @@ export default function InventoryReceivingPage() {
     setTraceabilityData(copiedData);
     toast.success('Copied traceability data from previous item');
   };
+  
+  // Copy traceability data from previous unit (for per-unit workflow)
+  const handleCopyFromPreviousUnit = () => {
+    if (allUnitsTraceabilityData.length === 0 || currentUnitIndex === 0) {
+      toast.error('No previous unit data to copy');
+      return;
+    }
+    const previousUnitData = allUnitsTraceabilityData[currentUnitIndex - 1];
+    if (!previousUnitData) {
+      toast.error('No previous unit data to copy');
+      return;
+    }
+    // Copy data, but always use today for receivedDate
+    const copiedData: Record<string, string> = { ...previousUnitData };
+    if (copiedData.receivedDate) {
+      copiedData.receivedDate = new Date().toISOString().split('T')[0];
+    }
+    setTraceabilityData(copiedData);
+    toast.success(`Copied data from Unit ${currentUnitIndex}`);
+  };
+  
+  // Handle advancing to next unit in per-unit mode
+  const handleNextUnit = () => {
+    // Validate current unit's traceability fields
+    const missingFields = selectedItemTraceability.fields.filter(
+      (field) => !traceabilityData[field] || traceabilityData[field].trim() === ''
+    );
+    if (missingFields.length > 0) {
+      const missingLabels = missingFields.map((f) => TRACEABILITY_FIELD_LABELS[f] || f);
+      toast.error(`Please fill in required fields: ${missingLabels.join(', ')}`);
+      return;
+    }
+    
+    // Save current unit's data
+    const updatedAllUnitsData = [...allUnitsTraceabilityData];
+    updatedAllUnitsData[currentUnitIndex] = { ...traceabilityData };
+    setAllUnitsTraceabilityData(updatedAllUnitsData);
+    
+    // Advance to next unit
+    const nextIndex = currentUnitIndex + 1;
+    setCurrentUnitIndex(nextIndex);
+    
+    // Pre-fill next unit with current unit's data (user can adjust)
+    const nextUnitData: Record<string, string> = { ...traceabilityData };
+    // Always use today for receivedDate
+    if (nextUnitData.receivedDate) {
+      nextUnitData.receivedDate = new Date().toISOString().split('T')[0];
+    }
+    setTraceabilityData(nextUnitData);
+    
+    toast.success(`Unit ${currentUnitIndex + 1} saved. Now entering Unit ${nextIndex + 1} of ${totalUnitsToReceive}`);
+  };
 
   const handleDialogReceive = async () => {
     if (!selectedReceivingItem) return;
@@ -514,7 +590,7 @@ export default function InventoryReceivingPage() {
       return;
     }
 
-    // Validate required traceability fields
+    // Validate required traceability fields for current unit
     if (selectedItemTraceability.required && selectedItemTraceability.fields.length > 0) {
       const missingFields = selectedItemTraceability.fields.filter(
         (field) => !traceabilityData[field] || traceabilityData[field].trim() === ''
@@ -527,15 +603,44 @@ export default function InventoryReceivingPage() {
     }
 
     try {
+      // Collect all units' traceability data for per-unit mode
+      let finalUnitsData: Record<string, string>[] = [];
+      if (perUnitMode) {
+        // Save current (last) unit's data
+        finalUnitsData = [...allUnitsTraceabilityData];
+        finalUnitsData[currentUnitIndex] = { ...traceabilityData };
+        
+        // Validate that we have traceability data for all units being received
+        if (finalUnitsData.length !== dialogReceivingData.receivedQuantity) {
+          toast.error(`Traceability data mismatch: expected ${dialogReceivingData.receivedQuantity} units but have ${finalUnitsData.length}`);
+          return;
+        }
+      }
+      
       // Build notes with traceability info
       const noteParts = [];
-      // Add traceability data to notes
-      selectedItemTraceability.fields.forEach((field) => {
-        if (traceabilityData[field]) {
-          const label = TRACEABILITY_FIELD_LABELS[field] || field;
-          noteParts.push(`${label}: ${traceabilityData[field]}`);
-        }
-      });
+      if (perUnitMode && finalUnitsData.length > 0) {
+        // Include summary of all units
+        noteParts.push(`[${finalUnitsData.length} units with individual traceability]`);
+        finalUnitsData.forEach((unitData, idx) => {
+          const unitParts: string[] = [];
+          selectedItemTraceability.fields.forEach((field) => {
+            if (unitData[field]) {
+              const label = TRACEABILITY_FIELD_LABELS[field] || field;
+              unitParts.push(`${label}: ${unitData[field]}`);
+            }
+          });
+          noteParts.push(`Unit ${idx + 1}: ${unitParts.join(', ')}`);
+        });
+      } else {
+        // Single unit - add traceability data to notes
+        selectedItemTraceability.fields.forEach((field) => {
+          if (traceabilityData[field]) {
+            const label = TRACEABILITY_FIELD_LABELS[field] || field;
+            noteParts.push(`${label}: ${traceabilityData[field]}`);
+          }
+        });
+      }
       if (dialogReceivingData.notes) {
         noteParts.push(dialogReceivingData.notes);
       }
@@ -550,24 +655,46 @@ export default function InventoryReceivingPage() {
         }),
       });
 
-      // Track recently received item for barcode printing (if traceable)
+      // Track recently received items for barcode printing (if traceable)
       const isTraceable = selectedItemTraceability.required && selectedItemTraceability.fields.length > 0;
       if (isTraceable) {
-        const receivedItem: ReceivingItem & { poNumber: string; vendorName: string } = {
-          id: selectedReceivingItem.id,
-          agPartNumber: selectedReceivingItem.agPartNumber,
-          name: selectedReceivingItem.name,
-          expectedQuantity: selectedReceivingItem.expectedQuantity,
-          receivedQuantity: dialogReceivingData.receivedQuantity,
-          lotNumber: traceabilityData.supplierBatchLotC || traceabilityData.manufactureRoll || '',
-          batchNumber: traceabilityData.aluminumHeat || '',
-          status: 'complete',
-          receivedDate: new Date().toISOString(),
-          poNumber: selectedReceivingItem.poNumber,
-          vendorName: selectedReceivingItem.vendorName,
-          notes: combinedNotes,
-        };
-        setRecentlyReceived(prev => [receivedItem, ...prev]);
+        if (perUnitMode && finalUnitsData.length > 0) {
+          // Add each unit as a separate entry for barcode printing
+          const newReceivedItems = finalUnitsData.map((unitData, idx) => ({
+            id: selectedReceivingItem.id! + idx * 0.001, // Unique ID for each unit
+            agPartNumber: selectedReceivingItem.agPartNumber,
+            name: selectedReceivingItem.name,
+            expectedQuantity: 1,
+            receivedQuantity: 1,
+            lotNumber: unitData.supplierBatchLotC || unitData.manufactureRoll || '',
+            batchNumber: unitData.aluminumHeat || '',
+            status: 'complete' as const,
+            receivedDate: new Date().toISOString(),
+            poNumber: selectedReceivingItem.poNumber,
+            vendorName: selectedReceivingItem.vendorName,
+            notes: selectedItemTraceability.fields.map(f => 
+              `${TRACEABILITY_FIELD_LABELS[f] || f}: ${unitData[f] || ''}`
+            ).join(' | '),
+          }));
+          setRecentlyReceived(prev => [...newReceivedItems, ...prev]);
+        } else {
+          // Single unit
+          const receivedItem: ReceivingItem & { poNumber: string; vendorName: string } = {
+            id: selectedReceivingItem.id,
+            agPartNumber: selectedReceivingItem.agPartNumber,
+            name: selectedReceivingItem.name,
+            expectedQuantity: selectedReceivingItem.expectedQuantity,
+            receivedQuantity: dialogReceivingData.receivedQuantity,
+            lotNumber: traceabilityData.supplierBatchLotC || traceabilityData.manufactureRoll || '',
+            batchNumber: traceabilityData.aluminumHeat || '',
+            status: 'complete',
+            receivedDate: new Date().toISOString(),
+            poNumber: selectedReceivingItem.poNumber,
+            vendorName: selectedReceivingItem.vendorName,
+            notes: combinedNotes,
+          };
+          setRecentlyReceived(prev => [receivedItem, ...prev]);
+        }
       }
 
       // Save last traceability data for "Copy from Previous" feature
@@ -610,6 +737,11 @@ export default function InventoryReceivingPage() {
         setCurrentPoGroupItems([]);
         setCurrentItemIndex(0);
         setReceivedItemIds(new Set());
+        // Reset per-unit state
+        setPerUnitMode(false);
+        setCurrentUnitIndex(0);
+        setTotalUnitsToReceive(0);
+        setAllUnitsTraceabilityData([]);
         if (showCompletion) {
           toast.success('All items in this PO have been received!');
         }
@@ -655,6 +787,11 @@ export default function InventoryReceivingPage() {
     setCurrentItemIndex(0);
     setReceivedItemIds(new Set());
     setLastTraceabilityData({});
+    // Reset per-unit tracking state
+    setPerUnitMode(false);
+    setCurrentUnitIndex(0);
+    setTotalUnitsToReceive(0);
+    setAllUnitsTraceabilityData([]);
   };
 
   // Toggle item selection for barcode printing
@@ -1370,7 +1507,7 @@ export default function InventoryReceivingPage() {
       <Dialog open={receivingDialogOpen} onOpenChange={setReceivingDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
               <Package className="h-5 w-5" />
               Receive Item
               {currentPoGroupItems.length > 1 && (
@@ -1378,13 +1515,29 @@ export default function InventoryReceivingPage() {
                   Item {currentItemIndex + 1} of {currentPoGroupItems.length}
                 </Badge>
               )}
+              {perUnitMode && (
+                <Badge variant="default" className="ml-2 text-xs bg-purple-600">
+                  Unit {currentUnitIndex + 1} of {totalUnitsToReceive}
+                </Badge>
+              )}
             </DialogTitle>
             <DialogDescription>
-              Enter receiving details for this item
-              {currentPoGroupItems.length > 1 && (
-                <span className="block text-xs mt-1">
-                  After receiving, the next item will open automatically
+              {perUnitMode ? (
+                <span className="block">
+                  Enter traceability data for each unit individually
+                  <span className="block text-xs mt-1 text-purple-600 dark:text-purple-400">
+                    Each unit requires separate traceability information. Data auto-copies to next unit.
+                  </span>
                 </span>
+              ) : (
+                <>
+                  Enter receiving details for this item
+                  {currentPoGroupItems.length > 1 && (
+                    <span className="block text-xs mt-1">
+                      After receiving, the next item will open automatically
+                    </span>
+                  )}
+                </>
               )}
             </DialogDescription>
           </DialogHeader>
@@ -1406,37 +1559,115 @@ export default function InventoryReceivingPage() {
                 </p>
               </div>
 
-              {/* Quantity */}
-              <div>
-                <Label htmlFor="dialogQuantity">Quantity to Receive *</Label>
-                <Input
-                  id="dialogQuantity"
-                  type="number"
-                  value={dialogReceivingData.receivedQuantity}
-                  onChange={(e) =>
-                    setDialogReceivingData((prev) => ({
-                      ...prev,
-                      receivedQuantity: parseInt(e.target.value) || 0,
-                    }))
-                  }
-                  min="1"
-                  max={selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity}
-                  data-testid="input-receive-quantity"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Remaining to receive: {selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity}
-                </p>
-              </div>
+              {/* Per-Unit Progress Bar */}
+              {perUnitMode && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Unit Progress</span>
+                    <span className="font-medium text-purple-600">
+                      {currentUnitIndex + 1} / {totalUnitsToReceive}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div 
+                      className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${((currentUnitIndex + 1) / totalUnitsToReceive) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Quantity - Editable in per-unit mode only before starting entry */}
+              {!perUnitMode ? (
+                <div>
+                  <Label htmlFor="dialogQuantity">Quantity to Receive *</Label>
+                  <Input
+                    id="dialogQuantity"
+                    type="number"
+                    value={dialogReceivingData.receivedQuantity}
+                    onChange={(e) =>
+                      setDialogReceivingData((prev) => ({
+                        ...prev,
+                        receivedQuantity: parseInt(e.target.value) || 0,
+                      }))
+                    }
+                    min="1"
+                    max={selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity}
+                    data-testid="input-receive-quantity"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Remaining to receive: {selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Quantity to Receive</Label>
+                    {/* Allow editing quantity only before starting per-unit entry */}
+                    {currentUnitIndex === 0 && allUnitsTraceabilityData.length === 0 ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          value={dialogReceivingData.receivedQuantity}
+                          onChange={(e) => {
+                            const newQty = parseInt(e.target.value) || 1;
+                            const maxQty = selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity;
+                            const clampedQty = Math.max(1, Math.min(newQty, maxQty));
+                            setDialogReceivingData((prev) => ({
+                              ...prev,
+                              receivedQuantity: clampedQty,
+                            }));
+                            setTotalUnitsToReceive(clampedQty);
+                          }}
+                          min="1"
+                          max={selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity}
+                          className="w-20 h-8 text-center"
+                          data-testid="input-receive-quantity-perunit"
+                        />
+                        <span className="text-sm text-muted-foreground">units</span>
+                      </div>
+                    ) : (
+                      <Badge variant="secondary" className="font-mono">
+                        {dialogReceivingData.receivedQuantity} units (locked)
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {currentUnitIndex === 0 && allUnitsTraceabilityData.length === 0 
+                      ? 'Adjust quantity before entering unit data. Each unit requires separate traceability.'
+                      : 'Quantity is locked after entering unit traceability data.'}
+                  </p>
+                </div>
+              )}
 
               {/* Traceability Fields - Dynamic based on item configuration */}
               {selectedItemTraceability.required && selectedItemTraceability.fields.length > 0 && (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400">
                       <ClipboardList className="h-4 w-4" />
-                      Traceability Information Required
+                      {perUnitMode ? (
+                        <span>Unit {currentUnitIndex + 1} Traceability</span>
+                      ) : (
+                        <span>Traceability Information Required</span>
+                      )}
                     </div>
-                    {Object.keys(lastTraceabilityData).length > 0 && currentItemIndex > 0 && (
+                    {/* Copy button for per-unit mode (from previous unit) */}
+                    {perUnitMode && currentUnitIndex > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCopyFromPreviousUnit}
+                        className="text-xs"
+                        data-testid="button-copy-from-previous-unit"
+                      >
+                        <Copy className="h-3 w-3 mr-1" />
+                        Copy from Unit {currentUnitIndex}
+                      </Button>
+                    )}
+                    {/* Copy button for multi-item mode (from previous item) */}
+                    {!perUnitMode && Object.keys(lastTraceabilityData).length > 0 && currentItemIndex > 0 && (
                       <Button
                         type="button"
                         variant="outline"
@@ -1475,34 +1706,43 @@ export default function InventoryReceivingPage() {
                 </div>
               )}
 
-              {/* Notes */}
-              <div>
-                <Label htmlFor="dialogNotes">Notes</Label>
-                <Textarea
-                  id="dialogNotes"
-                  value={dialogReceivingData.notes}
-                  onChange={(e) =>
-                    setDialogReceivingData((prev) => ({
-                      ...prev,
-                      notes: e.target.value,
-                    }))
-                  }
-                  placeholder="Any additional notes about this receipt..."
-                  rows={2}
-                  data-testid="input-receive-notes"
-                />
-              </div>
+              {/* Notes - Only show on last unit or when not in per-unit mode */}
+              {(!perUnitMode || currentUnitIndex === totalUnitsToReceive - 1) && (
+                <div>
+                  <Label htmlFor="dialogNotes">Notes</Label>
+                  <Textarea
+                    id="dialogNotes"
+                    value={dialogReceivingData.notes}
+                    onChange={(e) =>
+                      setDialogReceivingData((prev) => ({
+                        ...prev,
+                        notes: e.target.value,
+                      }))
+                    }
+                    placeholder="Any additional notes about this receipt..."
+                    rows={2}
+                    data-testid="input-receive-notes"
+                  />
+                </div>
+              )}
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="flex-wrap gap-2">
             <Button variant="outline" onClick={handleDialogClose} data-testid="button-cancel-receive">
               Cancel
             </Button>
-            <Button onClick={handleDialogReceive} data-testid="button-confirm-receive">
-              <Save className="h-4 w-4 mr-2" />
-              Receive Item
-            </Button>
+            {perUnitMode && currentUnitIndex < totalUnitsToReceive - 1 ? (
+              <Button onClick={handleNextUnit} data-testid="button-next-unit" className="bg-purple-600 hover:bg-purple-700">
+                <ArrowRight className="h-4 w-4 mr-2" />
+                Next Unit ({currentUnitIndex + 2} of {totalUnitsToReceive})
+              </Button>
+            ) : (
+              <Button onClick={handleDialogReceive} data-testid="button-confirm-receive">
+                <Save className="h-4 w-4 mr-2" />
+                {perUnitMode ? `Receive All ${totalUnitsToReceive} Units` : 'Receive Item'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

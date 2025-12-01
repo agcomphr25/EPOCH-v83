@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearch } from 'wouter';
+import { useSearch, useLocation } from 'wouter';
 import {
   Card,
   CardContent,
@@ -30,6 +30,7 @@ import {
   Target,
   Clock,
   CheckCircle,
+  ClipboardList,
 } from 'lucide-react';
 
 // Import enhanced inventory components
@@ -46,6 +47,7 @@ import VendorPOSettings from '../components/inventory/VendorPOSettings';
 
 export default function EnhancedInventoryMRPPage() {
   const searchParams = useSearch();
+  const [, setLocation] = useLocation();
   const [activeCard, setActiveCard] = useState<string | null>(null);
   const [isInventoryItemsModalOpen, setIsInventoryItemsModalOpen] =
     useState(false);
@@ -303,6 +305,31 @@ export default function EnhancedInventoryMRPPage() {
                   Suggestions
                 </div>
                 <ShoppingCart className="h-4 w-4 text-gray-400" />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Consolidated Parts Needs Card */}
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-purple-500"
+            onClick={() => setLocation('/inventory/consolidated-needs')}
+            data-testid="card-consolidated-needs"
+          >
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <ClipboardList className="h-5 w-5 text-purple-600" />
+                Consolidated Parts Needs
+              </CardTitle>
+              <CardDescription>
+                View and manage all parts requests across departments
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="text-2xl font-bold text-purple-600">
+                  Parts Needs
+                </div>
+                <ClipboardList className="h-4 w-4 text-gray-400" />
               </div>
             </CardContent>
           </Card>

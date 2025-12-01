@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -42,6 +42,7 @@ import {
   CheckSquare,
   Square,
   Tag,
+  ClipboardList,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import JsBarcode from 'jsbarcode';
@@ -49,6 +50,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { apiRequest } from '@/lib/queryClient';
 import P2ReceivingDialog from '@/components/inventory/P2ReceivingDialog';
+
+// Traceability field definitions - must match TraceabilityConfigModal
+const TRACEABILITY_FIELD_LABELS: Record<string, string> = {
+  supplierPartNumber: 'Supplier Part Number',
+  supplierBatchLotC: 'Supplier Batch/Lot/C #',
+  manufactureRoll: 'Manufacture Roll #',
+  manufactureDate: 'Manufacture Date',
+  expirationDate: 'Expiration Date',
+  receivedDate: 'Received Date',
+  aluminumHeat: 'Aluminum Heat #',
+};
+
+// Fields that should use date input
+const DATE_FIELDS = ['manufactureDate', 'expirationDate', 'receivedDate'];
 
 interface ReceivingItem {
   id?: number;
@@ -109,6 +124,26 @@ function isP2Product(item: any): boolean {
   );
 }
 
+// Helper to get traceability info for an item from inventory
+function getItemTraceability(
+  agPartNumber: string,
+  inventoryItems: any[] | undefined
+): { required: boolean; fields: string[] } {
+  if (!inventoryItems || !Array.isArray(inventoryItems)) {
+    return { required: false, fields: [] };
+  }
+  const invItem = inventoryItems.find(
+    (inv: any) => inv.agPartNumber?.toLowerCase() === agPartNumber?.toLowerCase()
+  );
+  if (invItem) {
+    return {
+      required: invItem.traceabilityRequired || false,
+      fields: invItem.traceabilityFields || [],
+    };
+  }
+  return { required: false, fields: [] };
+}
+
 export default function InventoryReceivingPage() {
   const [scanMode, setScanMode] = useState(false);
   const [scannedCode, setScannedCode] = useState('');
@@ -116,12 +151,15 @@ export default function InventoryReceivingPage() {
   const [selectedP2Item, setSelectedP2Item] = useState<any>(null);
   const [receivingDialogOpen, setReceivingDialogOpen] = useState(false);
   const [selectedReceivingItem, setSelectedReceivingItem] = useState<(ReceivingItem & { poNumber: string; vendorName: string }) | null>(null);
+  const [selectedItemTraceability, setSelectedItemTraceability] = useState<{
+    required: boolean;
+    fields: string[];
+  }>({ required: false, fields: [] });
   const [dialogReceivingData, setDialogReceivingData] = useState({
     receivedQuantity: 0,
-    lotNumber: '',
-    batchNumber: '',
     notes: '',
   });
+  const [traceabilityData, setTraceabilityData] = useState<Record<string, string>>({});
   const [receivingData, setReceivingData] = useState<ReceivingItem>({
     agPartNumber: '',
     name: '',
@@ -373,14 +411,41 @@ export default function InventoryReceivingPage() {
       return;
     }
 
+    // Look up the inventory item to get traceability settings
+    let traceabilityRequired = false;
+    let traceabilityFields: string[] = [];
+    
+    if (inventoryItems && Array.isArray(inventoryItems)) {
+      const invItem = inventoryItems.find(
+        (inv: any) => inv.agPartNumber?.toLowerCase() === item.agPartNumber?.toLowerCase()
+      );
+      if (invItem) {
+        traceabilityRequired = invItem.traceabilityRequired || false;
+        traceabilityFields = invItem.traceabilityFields || [];
+      }
+    }
+
     // For non-P2 products, open the receiving dialog
     setSelectedReceivingItem(item);
+    setSelectedItemTraceability({
+      required: traceabilityRequired,
+      fields: traceabilityFields,
+    });
     setDialogReceivingData({
       receivedQuantity: item.expectedQuantity - item.receivedQuantity,
-      lotNumber: item.lotNumber || '',
-      batchNumber: item.batchNumber || '',
       notes: '',
     });
+    // Initialize traceability data with empty values for each field
+    const initialTraceabilityData: Record<string, string> = {};
+    traceabilityFields.forEach((field) => {
+      // Pre-fill receivedDate with today's date
+      if (field === 'receivedDate') {
+        initialTraceabilityData[field] = new Date().toISOString().split('T')[0];
+      } else {
+        initialTraceabilityData[field] = '';
+      }
+    });
+    setTraceabilityData(initialTraceabilityData);
     setReceivingDialogOpen(true);
   };
 
@@ -392,15 +457,28 @@ export default function InventoryReceivingPage() {
       return;
     }
 
+    // Validate required traceability fields
+    if (selectedItemTraceability.required && selectedItemTraceability.fields.length > 0) {
+      const missingFields = selectedItemTraceability.fields.filter(
+        (field) => !traceabilityData[field] || traceabilityData[field].trim() === ''
+      );
+      if (missingFields.length > 0) {
+        const missingLabels = missingFields.map((f) => TRACEABILITY_FIELD_LABELS[f] || f);
+        toast.error(`Please fill in required traceability fields: ${missingLabels.join(', ')}`);
+        return;
+      }
+    }
+
     try {
-      // Build notes with lot/batch info
+      // Build notes with traceability info
       const noteParts = [];
-      if (dialogReceivingData.lotNumber) {
-        noteParts.push(`Lot#: ${dialogReceivingData.lotNumber}`);
-      }
-      if (dialogReceivingData.batchNumber) {
-        noteParts.push(`Batch#: ${dialogReceivingData.batchNumber}`);
-      }
+      // Add traceability data to notes
+      selectedItemTraceability.fields.forEach((field) => {
+        if (traceabilityData[field]) {
+          const label = TRACEABILITY_FIELD_LABELS[field] || field;
+          noteParts.push(`${label}: ${traceabilityData[field]}`);
+        }
+      });
       if (dialogReceivingData.notes) {
         noteParts.push(dialogReceivingData.notes);
       }
@@ -416,7 +494,7 @@ export default function InventoryReceivingPage() {
       });
 
       // Track recently received item for barcode printing (if traceable)
-      const isTraceable = dialogReceivingData.lotNumber || dialogReceivingData.batchNumber;
+      const isTraceable = selectedItemTraceability.required && selectedItemTraceability.fields.length > 0;
       if (isTraceable) {
         const receivedItem: ReceivingItem & { poNumber: string; vendorName: string } = {
           id: selectedReceivingItem.id,
@@ -424,13 +502,13 @@ export default function InventoryReceivingPage() {
           name: selectedReceivingItem.name,
           expectedQuantity: selectedReceivingItem.expectedQuantity,
           receivedQuantity: dialogReceivingData.receivedQuantity,
-          lotNumber: dialogReceivingData.lotNumber,
-          batchNumber: dialogReceivingData.batchNumber,
+          lotNumber: traceabilityData.supplierBatchLotC || traceabilityData.manufactureRoll || '',
+          batchNumber: traceabilityData.aluminumHeat || '',
           status: 'complete',
           receivedDate: new Date().toISOString(),
           poNumber: selectedReceivingItem.poNumber,
           vendorName: selectedReceivingItem.vendorName,
-          notes: dialogReceivingData.notes,
+          notes: combinedNotes,
         };
         setRecentlyReceived(prev => [receivedItem, ...prev]);
       }
@@ -445,12 +523,12 @@ export default function InventoryReceivingPage() {
       // Close dialog and reset
       setReceivingDialogOpen(false);
       setSelectedReceivingItem(null);
+      setSelectedItemTraceability({ required: false, fields: [] });
       setDialogReceivingData({
         receivedQuantity: 0,
-        lotNumber: '',
-        batchNumber: '',
         notes: '',
       });
+      setTraceabilityData({});
     } catch (error) {
       toast.error('Failed to receive item');
       console.error('Receiving error:', error);
@@ -460,12 +538,12 @@ export default function InventoryReceivingPage() {
   const handleDialogClose = () => {
     setReceivingDialogOpen(false);
     setSelectedReceivingItem(null);
+    setSelectedItemTraceability({ required: false, fields: [] });
     setDialogReceivingData({
       receivedQuantity: 0,
-      lotNumber: '',
-      batchNumber: '',
       notes: '',
     });
+    setTraceabilityData({});
   };
 
   // Toggle item selection for barcode printing
@@ -973,6 +1051,15 @@ export default function InventoryReceivingPage() {
                                       P2
                                     </Badge>
                                   )}
+                                  {getItemTraceability(item.agPartNumber, inventoryItems as any[]).required && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="bg-blue-100 text-blue-800 text-xs"
+                                    >
+                                      <ClipboardList className="w-3 h-3 mr-1" />
+                                      Traceable
+                                    </Badge>
+                                  )}
                                   {getStatusBadge(item.status)}
                                 </div>
                                 <p className="text-sm text-muted-foreground mt-1">
@@ -1170,7 +1257,7 @@ export default function InventoryReceivingPage() {
 
       {/* Standard Receiving Dialog */}
       <Dialog open={receivingDialogOpen} onOpenChange={setReceivingDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
@@ -1220,39 +1307,37 @@ export default function InventoryReceivingPage() {
                 </p>
               </div>
 
-              {/* Lot Number */}
-              <div>
-                <Label htmlFor="dialogLotNumber">Lot Number</Label>
-                <Input
-                  id="dialogLotNumber"
-                  value={dialogReceivingData.lotNumber}
-                  onChange={(e) =>
-                    setDialogReceivingData((prev) => ({
-                      ...prev,
-                      lotNumber: e.target.value,
-                    }))
-                  }
-                  placeholder="Enter lot number (optional)"
-                  data-testid="input-lot-number"
-                />
-              </div>
-
-              {/* Batch Number */}
-              <div>
-                <Label htmlFor="dialogBatchNumber">Batch Number</Label>
-                <Input
-                  id="dialogBatchNumber"
-                  value={dialogReceivingData.batchNumber}
-                  onChange={(e) =>
-                    setDialogReceivingData((prev) => ({
-                      ...prev,
-                      batchNumber: e.target.value,
-                    }))
-                  }
-                  placeholder="Enter batch number (optional)"
-                  data-testid="input-batch-number"
-                />
-              </div>
+              {/* Traceability Fields - Dynamic based on item configuration */}
+              {selectedItemTraceability.required && selectedItemTraceability.fields.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400">
+                    <ClipboardList className="h-4 w-4" />
+                    Traceability Information Required
+                  </div>
+                  <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-3 bg-blue-50/50 dark:bg-blue-900/20 space-y-3">
+                    {selectedItemTraceability.fields.map((field) => (
+                      <div key={field}>
+                        <Label htmlFor={`traceability-${field}`}>
+                          {TRACEABILITY_FIELD_LABELS[field] || field} *
+                        </Label>
+                        <Input
+                          id={`traceability-${field}`}
+                          type={DATE_FIELDS.includes(field) ? 'date' : 'text'}
+                          value={traceabilityData[field] || ''}
+                          onChange={(e) =>
+                            setTraceabilityData((prev) => ({
+                              ...prev,
+                              [field]: e.target.value,
+                            }))
+                          }
+                          placeholder={`Enter ${TRACEABILITY_FIELD_LABELS[field] || field}`}
+                          data-testid={`input-traceability-${field}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Notes */}
               <div>

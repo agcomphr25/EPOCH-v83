@@ -23,6 +23,24 @@ import {
 } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 
+// Helper function to format numbers with commas
+function formatNumber(value: number | undefined | null, decimals: number = 2): string {
+  if (value === undefined || value === null) return '0.00';
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+// Helper function to format currency with commas
+function formatCurrency(value: number | undefined | null, decimals: number = 2): string {
+  if (value === undefined || value === null) return '$0.00';
+  return '$' + value.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
 type VendorPOItemSelectorProps = {
   vendorPoId: number;
   vendorId: number;
@@ -88,7 +106,7 @@ type NewItemState = {
 
 function QuantityDisplay({ item }: { item: VendorPOItem }) {
   if (!item.vendorUnit && !item.purchaseUnit) {
-    return <span>{item.quantity.toFixed(2)}</span>;
+    return <span>{formatNumber(item.quantity)}</span>;
   }
 
   return (
@@ -98,11 +116,11 @@ function QuantityDisplay({ item }: { item: VendorPOItem }) {
           <div className="flex items-center gap-1 cursor-help">
             <div>
               <div className="font-medium">
-                {item.quantity.toFixed(2)} {item.vendorUnit || 'units'}
+                {formatNumber(item.quantity)} {item.vendorUnit || 'units'}
               </div>
               {item.purchaseQty && item.purchaseUnit && (
                 <div className="text-xs text-muted-foreground">
-                  = {item.purchaseQty.toFixed(2)} {item.purchaseUnit}
+                  = {formatNumber(item.purchaseQty)} {item.purchaseUnit}
                 </div>
               )}
             </div>
@@ -113,12 +131,12 @@ function QuantityDisplay({ item }: { item: VendorPOItem }) {
           <div className="space-y-1 text-xs">
             <p><strong>Unit Conversion:</strong></p>
             {item.purchaseQty && item.purchaseUnit && (
-              <p>Purchase: {item.purchaseQty.toFixed(2)} {item.purchaseUnit} @ ${item.purchaseUnitPrice?.toFixed(2)}/{item.purchaseUnit}</p>
+              <p>Purchase: {formatNumber(item.purchaseQty)} {item.purchaseUnit} @ {formatCurrency(item.purchaseUnitPrice)}/{item.purchaseUnit}</p>
             )}
             {item.conversionFactor && (
-              <p>Conversion: {item.conversionFactor.toFixed(2)} {item.purchaseUnit} per {item.vendorUnit}</p>
+              <p>Conversion: {formatNumber(item.conversionFactor)} {item.purchaseUnit} per {item.vendorUnit}</p>
             )}
-            <p>Vendor: {item.quantity.toFixed(2)} {item.vendorUnit || 'units'} @ ${item.unitPrice.toFixed(2)}/{item.vendorUnit || 'unit'}</p>
+            <p>Vendor: {formatNumber(item.quantity)} {item.vendorUnit || 'units'} @ {formatCurrency(item.unitPrice)}/{item.vendorUnit || 'unit'}</p>
           </div>
         </TooltipContent>
       </Tooltip>
@@ -128,7 +146,7 @@ function QuantityDisplay({ item }: { item: VendorPOItem }) {
 
 function UnitPriceDisplay({ item }: { item: VendorPOItem }) {
   if (!item.vendorUnit && !item.purchaseUnit) {
-    return <span>${item.unitPrice.toFixed(2)}</span>;
+    return <span>{formatCurrency(item.unitPrice)}</span>;
   }
 
   return (
@@ -138,11 +156,11 @@ function UnitPriceDisplay({ item }: { item: VendorPOItem }) {
           <div className="flex items-center gap-1 cursor-help">
             <div>
               <div className="font-medium">
-                ${item.unitPrice.toFixed(2)}/{item.vendorUnit || 'unit'}
+                {formatCurrency(item.unitPrice)}/{item.vendorUnit || 'unit'}
               </div>
               {item.purchaseUnitPrice && item.purchaseUnit && (
                 <div className="text-xs text-muted-foreground">
-                  ${item.purchaseUnitPrice.toFixed(2)}/{item.purchaseUnit}
+                  {formatCurrency(item.purchaseUnitPrice)}/{item.purchaseUnit}
                 </div>
               )}
             </div>
@@ -153,9 +171,9 @@ function UnitPriceDisplay({ item }: { item: VendorPOItem }) {
           <div className="space-y-1 text-xs">
             <p><strong>Price Breakdown:</strong></p>
             {item.purchaseUnitPrice && item.purchaseUnit && (
-              <p>Purchase price: ${item.purchaseUnitPrice.toFixed(2)} per {item.purchaseUnit}</p>
+              <p>Purchase price: {formatCurrency(item.purchaseUnitPrice)} per {item.purchaseUnit}</p>
             )}
-            <p>Vendor price: ${item.unitPrice.toFixed(2)} per {item.vendorUnit || 'unit'}</p>
+            <p>Vendor price: {formatCurrency(item.unitPrice)} per {item.vendorUnit || 'unit'}</p>
           </div>
         </TooltipContent>
       </Tooltip>
@@ -715,9 +733,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                     )}
                   </TableCell>
                   <TableCell>
-                    ${isEditing 
-                      ? ((editedItem.quantity || 0) * (editedItem.unitPrice || 0)).toFixed(2)
-                      : item.lineTotal.toFixed(2)
+                    {isEditing 
+                      ? formatCurrency((editedItem.quantity || 0) * (editedItem.unitPrice || 0))
+                      : formatCurrency(item.lineTotal)
                     }
                   </TableCell>
                   <TableCell>
@@ -773,7 +791,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
         <div className="flex justify-end">
           <div className="text-right">
             <div className="text-2xl font-bold" data-testid="text-total">
-              Total: ${total.toFixed(2)}
+              Total: {formatCurrency(total)}
             </div>
           </div>
         </div>

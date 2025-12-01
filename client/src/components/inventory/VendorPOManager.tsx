@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+
 import {
   Pencil,
   Trash2,
@@ -69,6 +70,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+
+// Helper function to format numbers with commas
+function formatNumber(value: number | undefined | null, decimals: number = 2): string {
+  if (value === undefined || value === null) return '0.00';
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+// Helper function to format currency with commas
+function formatCurrency(value: number | undefined | null, decimals: number = 2): string {
+  if (value === undefined || value === null) return '$0.00';
+  return '$' + value.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
 
 // Types based on our schema
 type VendorPO = {
@@ -144,7 +163,7 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
       <div className="flex items-center gap-1 mb-2">
         <Package className="w-4 h-4 text-blue-600" />
         <span className="font-medium text-blue-600">
-          {totalQuantity.toFixed(2)} total qty
+          {formatNumber(totalQuantity)} total qty
         </span>
       </div>
       <div className="space-y-1">
@@ -171,13 +190,13 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
                 {/* Show purchase unit info if available */}
                 {item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit && (
                   <div className="text-green-600 text-xs">
-                    Ordered: {item.purchaseQty.toFixed(2)} {item.purchaseUnit} @ ${(item.purchaseUnitPrice ?? 0).toFixed(4)}/{item.purchaseUnit}
+                    Ordered: {formatNumber(item.purchaseQty)} {item.purchaseUnit} @ {formatCurrency(item.purchaseUnitPrice, 4)}/{item.purchaseUnit}
                   </div>
                 )}
               </div>
               <div className="text-right ml-2 flex-shrink-0 whitespace-nowrap">
                 <div className="font-medium text-gray-900 dark:text-gray-100">
-                  {(item.quantity ?? 0).toFixed(2)} {item.vendorUnit || item.uom || ''}
+                  {formatNumber(item.quantity ?? 0)} {item.vendorUnit || item.uom || ''}
                 </div>
                 <div className="text-gray-500 text-xs">
                   $
@@ -1071,11 +1090,11 @@ export default function VendorPOManager() {
                     <td>${item.lineNumber}</td>
                     <td>${item.agPartNumber || '-'}</td>
                     <td>${item.supplierPartNumber || '-'}</td>
-                    <td>${item.description || '-'}${item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit ? `<br/><small style="color: #666;">(${Number(item.purchaseQty).toFixed(2)} ${item.purchaseUnit} ordered)</small>` : ''}</td>
-                    <td>${item.quantity != null ? Number(item.quantity).toFixed(2) : '0.00'}</td>
+                    <td>${item.description || '-'}${item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit ? `<br/><small style="color: #666;">(${Number(item.purchaseQty).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${item.purchaseUnit} ordered)</small>` : ''}</td>
+                    <td>${item.quantity != null ? Number(item.quantity).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
                     <td>${item.vendorUnit || item.uom || '-'}</td>
-                    <td>$${item.unitPrice != null ? Number(item.unitPrice).toFixed(2) : '0.00'}</td>
-                    <td>$${((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)).toFixed(2)}</td>
+                    <td>$${item.unitPrice != null ? Number(item.unitPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
+                    <td>$${((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -1083,7 +1102,7 @@ export default function VendorPOManager() {
             
             <div class="totals">
               <div class="total-line">
-                Total: $${items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0).toFixed(2)}
+                Total: $${items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
             

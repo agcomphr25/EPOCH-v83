@@ -1,7 +1,7 @@
 # EPOCH v8 - Manufacturing ERP System
 
 ## Overview
-EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. Its primary goal is to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The system is a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms. Key capabilities include a robust Bill of Materials (BOM) system, Google OAuth integration, a global search function, and a comprehensive Parts List Management System. The business vision is to be the leading ERP solution for small-to-medium customizable product manufacturers.
+EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. It aims to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The system is a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile. Key capabilities include a robust Bill of Materials (BOM) system, Google OAuth integration, global search, and a comprehensive Parts List Management System. The business vision is to be the leading ERP solution for small-to-medium customizable product manufacturers.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -27,16 +27,16 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 - **Modular Routing**: Backend routes are organized into specialized modules.
 - **Atomic Order ID Reservation**: Database-based atomic reservation system for unique, sequential Order ID generation.
 - **Asset Path Resolution**: Centralized asset path resolver for consistent file access.
-- **Centralized PDF Configuration**: Standardized PDF generation system with consistent margins, font sizes, spacing, colors, and layout patterns across all PDF documents.
+- **Centralized PDF Configuration**: Standardized PDF generation system.
 - **UI/UX**: Leverages ShadCN UI components with Tailwind CSS and Framer Motion for animations.
 - **CI/CD**: Implemented with pre-commit hooks (Husky + lint-staged) and GitHub Actions.
 - **BOM System**: Robust Bill of Materials system with UUID-based architecture and revision control.
-- **Google OAuth Integration**: Production-ready OAuth 2.0 flow with CSRF protection and secure state management.
+- **Google OAuth Integration**: Production-ready OAuth 2.0 flow with CSRF protection.
 - **Global Search System**: Multi-entity search across Customers, Orders, Vendors, Employees, and Inventory Items.
 - **Vendor Evaluation System**: Question-based evaluation with 4 criteria, automatic status, and monthly reset.
-- **Linked Orders Management**: Functionality to link multiple orders for combined processing/shipping.
-- **Urgency/Priority System**: For manually flagged urgent orders with visual badges and production queue sorting.
-- **Rush Fee System**: Adjusts due dates for "Expedite" and "Rush" orders with visual badges and notifications.
+- **Linked Orders Management**: Functionality to link multiple orders.
+- **Urgency/Priority System**: For manually flagged urgent orders with visual badges.
+- **Rush Fee System**: Adjusts due dates for "Expedite" and "Rush" orders.
 - **P1 Purchase Orders Queue**: Displays open purchase orders with stock items needing layup, grouped by customer.
 - **Vendor Purchase Order Management**: Full CRUD operations for vendor POs and line items with Zod validation.
 - **Inventory CSV Import**: Transactional "Replace All" with two-phase validation and atomic database operations.
@@ -46,24 +46,24 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 - **Department Technician Assignment**: Employee profiles include department-specific assignment flags.
 - **Follow-Up Order Signature Workflow**: Complete pricing calculation system for sign-order pages.
 - **P1 PO Shipping QC Management**: Comprehensive tracking system for P1 purchase orders with department status tracking, UPS integration for label creation, and OEM Shipments history.
-- **P1 PO Department Progression**: Backend endpoints use database query-based detection for production orders, ensuring proper updates to the `production_orders` table.
-- **P1 PO Department Queue Visibility**: Utility handles production orders by checking for `productionStatus` field, ensuring P1 PO items appear in all relevant department queues.
+- **P1 PO Department Progression**: Backend endpoints use database query-based detection for production orders.
+- **P1 PO Department Queue Visibility**: Utility handles production orders by checking for `productionStatus` field.
 - **P1 PO Shipping QC Tab Separation**: P1 PO orders appear exclusively in the "PO Orders" tab in Shipping QC.
 - **Production Deployment**: Uses `tsx` to run TypeScript directly in production; static files served from `dist/public/`.
-- **Nonconformance Record System**: Comprehensive quality issue tracking with 12 specific issue/cause categories.
+- **Nonconformance Record System**: Comprehensive quality issue tracking.
 - **Cutting Table Packet Building**: FIFO-based packet production workflow with automatic inventory consumption, two-phase allocation, material linkage validation, expiration-based priority indicators, and real-time inventory balance tracking.
-- **Dynamic Discount System**: Orders save discount metadata (type, value, scope) at creation for dynamic recalculation while preserving original intent.
-- **Cutting Table Inventory Integration**: Fabric inventory items are linked to Cut Management for selection and tracking.
-- **Cutting Table Production Progress Tracker**: Automatic calculation of remaining cuts needed to hit weekly production goals, with visual progress tracking.
+- **Dynamic Discount System**: Orders save discount metadata at creation for dynamic recalculation.
+- **Cutting Table Inventory Integration**: Fabric inventory items are linked to Cut Management.
+- **Cutting Table Production Progress Tracker**: Automatic calculation of remaining cuts needed to hit weekly production goals.
 - **P2 Department Manager with Part Routing**: Complete P2 purchase order serialized item tracking system with customizable department workflows, barcode scanning, and mandatory traceability data capture. Features include UUID-based architecture, a part routing wizard, fail-closed traceability gating, fetch-and-merge storage updates, barcode integration, department progression, and production-ready error handling.
-- **P2 Traveler Viewer System**: AS9100-compliant production data interface for P2 serialized items with comprehensive documentation generation. Features include barcode-based item lookup, comprehensive data display across multiple tabs (PO Info, Department Status, Technicians, Material Traceability, Custom Data, Oven Cures, Vacuum Tests, Inspections, Signatures, Lots), and document generation capabilities. Database tables include p2_oven_cure_logs, p2_vacuum_leak_tests, p2_final_inspection_results, p2_lot_numbers, p2_packing_slips, p2_certificates_of_conformance, p2_test_for_conformance_reports, and p2_work_tasks. Frontend viewer pages for packing slips, certificates of conformance, and test reports with print functionality. Navigation accessible via Traveler dropdown menu.
-- **P2 Electronic Signature System**: AS9100-compliant electronic signature capture for department transfers, ensuring work completion verification per quality standards. Database table `p2_department_transfer_signatures` captures signature image data (base64), declaration text with mandatory acceptance, work instruction references (document ID and version), signer identity (employee ID, name, username), and audit trail data (IP address, user agent, timestamp). Signature dialog integrates into department transition flow: traceability data → electronic signature → department transfer. API endpoints at `/api/p2-traveler-viewer/signatures` for create and retrieve operations. Signatures displayed in P2 Traveler Viewer Signatures tab with full compliance details.
+- **P2 Traveler Viewer System**: AS9100-compliant production data interface for P2 serialized items with comprehensive documentation generation, barcode-based item lookup, and detailed data display.
+- **P2 Electronic Signature System**: AS9100-compliant electronic signature capture for department transfers, ensuring work completion verification per quality standards.
 - **Cost Center Management System**: Financial tracking infrastructure for department-based expense allocation and budgeting.
-- **Vendor PO Optional Settings System**: Flexible optional statements system for Purchase Orders with CRUD management and multiselect interface, including a reusable statement library and a 2-tab PO settings interface.
-- **PDF Template Library System**: Comprehensive template management system enabling separate PDF configurations for different business contexts without code changes. Features include multi-template support, custom branding, comprehensive styling controls, company information customization, a template manager UI, security hardening, backend integration, and a seeding system for default templates.
-- **Vendor-Based Parts Request Consolidation**: Enhanced ConsolidatedNeedsListPage with dual-view system ("By Status" and "By Vendor" tabs). Vendor grouping enables inventory managers to efficiently plan orders by organizing parts needs by vendor, distinguishing between PO vendors and website vendors (like McMaster-Carr, Amazon). Features include: collapsible vendor cards with PO/Website badges, bulk selection and ordering, export CSV per vendor, copy order list to clipboard, quick website links, vendor assignment dialogs, and enforced status transition rules (PENDING → APPROVED → ORDERED → RECEIVED → DELIVERED_TO_DEPT) on both single and bulk update endpoints. API endpoints: GET /api/inventory/parts-requests/by-vendor (vendor-grouped data), PUT /api/inventory/parts-requests/bulk (bulk updates with validation).
-- **Vendor PO Dual-Unit System**: Users can enter quantities in purchase units (e.g., square meters) with automatic conversion and display in vendor units (e.g., rolls) on Purchase Orders. Database fields (purchaseQty, purchaseUnitPrice, purchaseUnit, vendorUnit, conversionFactor) in vendor_po_items table store both purchase and vendor unit data. Server-side validation enforces correct conversion calculations (vendorQty = purchaseQty / conversionFactor, vendorUnitPrice = purchaseUnitPrice * conversionFactor). The VendorPOItemSelector component provides real-time conversion preview when entering purchase quantities. Display components show both purchase unit context and vendor unit values for complete order visibility.
-- **Vendor PO Revision System**: Audit-compliant revision workflow for issued Purchase Orders. Draft POs are fully editable; once issued (Sent/Partially Received/Fully Received), POs are locked for direct editing. Users can create formal revisions with mandatory change reasons for audit trails. Features include: revision numbering (VPO-25001 → VPO-25001-R1 → VPO-25001-R2), parent PO linking via parentPoId field, isCurrentRevision flag to track superseded versions, items and settings copied from original PO to revision, visual "Superseded" badge on old versions, "R1/R2" revision badges on current versions, and "Create Revision" button replacing Edit for issued POs. Database fields on vendor_pos table: revisionNumber (integer), parentPoId (integer, nullable), changeReason (text), isCurrentRevision (boolean), revisedAt (timestamp), revisedBy (varchar). API endpoints: POST /api/vendor-pos/:id/revisions (create revision with changeReason), GET /api/vendor-pos/:id/history (revision chain).
+- **Vendor PO Optional Settings System**: Flexible optional statements system for Purchase Orders with CRUD management and multiselect interface.
+- **PDF Template Library System**: Comprehensive template management system enabling separate PDF configurations for different business contexts without code changes.
+- **Vendor-Based Parts Request Consolidation**: Enhanced ConsolidatedNeedsListPage with dual-view system ("By Status" and "By Vendor" tabs) for efficient ordering.
+- **Vendor PO Dual-Unit System**: Users can enter quantities in purchase units with automatic conversion and display in vendor units on Purchase Orders.
+- **Vendor PO Revision System**: Audit-compliant revision workflow for issued Purchase Orders with mandatory change reasons.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

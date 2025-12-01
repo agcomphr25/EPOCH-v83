@@ -69,7 +69,7 @@ const pdfUpload = multer({
 });
 
 // Enhanced Inventory API - Get all items
-router.get('/inventory/items', async (req: Request, res: Response) => {
+router.get('/items', async (req: Request, res: Response) => {
   try {
     const items = await storage.getAllInventoryItems();
     res.json(items);
@@ -80,7 +80,7 @@ router.get('/inventory/items', async (req: Request, res: Response) => {
 });
 
 // Enhanced Inventory API - Get item by AG Part Number (for unit conversion lookup)
-router.get('/inventory/items/by-part-number/:partNumber', async (req: Request, res: Response) => {
+router.get('/items/by-part-number/:partNumber', async (req: Request, res: Response) => {
   try {
     const { partNumber } = req.params;
     const item = await storage.getInventoryItemByAgPartNumber(partNumber);

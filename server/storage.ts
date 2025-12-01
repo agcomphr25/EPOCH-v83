@@ -7140,16 +7140,20 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Vendor PO ${poLineItem.vendorPoId} not found`);
     }
 
-    // Get the inventory item's UOM conversion data
+    // Get the inventory item's UOM conversion data and cutting table flags
     const [inventoryItem] = await db
       .select({
         id: inventoryItems.id,
         agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+        source: inventoryItems.source,
+        supplierPartNumber: inventoryItems.supplierPartNumber,
         vendorUnit: inventoryItems.vendorUnit,
         purchaseUnit: inventoryItems.purchaseUnit,
         purchaseQuantity: inventoryItems.purchaseQuantity,
         consumptionRate: inventoryItems.consumptionRate,
         usageUnit: inventoryItems.usageUnit,
+        utilizedInPL1: inventoryItems.utilizedInPL1,
       })
       .from(inventoryItems)
       .where(eq(inventoryItems.agPartNumber, poLineItem.agPartNumber));
@@ -7252,6 +7256,190 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(vendorPOItems.id, poLineItemId));
 
+    // If this is a fabric item for Cutting Table (Production Line 1), create fabric inventory records
+    let fabricInventoryRecords: any[] = [];
+    let fabricInventoryWarnings: string[] = [];
+    if (inventoryItem && inventoryItem.utilizedInPL1 && notes) {
+      console.log(`🧵 Creating fabric inventory for PL1 item: ${poLineItem.agPartNumber}`);
+      
+      try {
+        // Helper to normalize dates to ISO format (YYYY-MM-DD) or return undefined
+        const normalizeDate = (dateStr: string | undefined): string | undefined => {
+          if (!dateStr || dateStr.trim() === '') return undefined;
+          const trimmed = dateStr.trim();
+          
+          // Try parsing common date formats
+          const date = new Date(trimmed);
+          if (!isNaN(date.getTime())) {
+            return date.toISOString().split('T')[0];
+          }
+          
+          // Try MM/DD/YYYY format
+          const mmddyyyyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          if (mmddyyyyMatch) {
+            const [, month, day, year] = mmddyyyyMatch;
+            const parsed = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+            if (!isNaN(parsed.getTime())) {
+              return parsed.toISOString().split('T')[0];
+            }
+          }
+          
+          // Try YYYY-MM-DD format (already ISO)
+          if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+            return trimmed;
+          }
+          
+          console.warn(`⚠️ Could not parse date: "${trimmed}"`);
+          return undefined;
+        };
+        
+        // Parse traceability data using structured key-value splitting (more robust than regex)
+        const parseTraceabilityFromNote = (noteText: string): {
+          supplierPartNumber?: string;
+          batchNumber?: string;
+          rollNumber?: string;
+          manufactureDate?: string;
+          expirationDate?: string;
+          receivedDateStr?: string;
+        } => {
+          const result: any = {};
+          
+          // Split by "|" or "," as field delimiters, then parse each key-value pair
+          const segments = noteText.split(/\s*[|]\s*/);
+          
+          for (const segment of segments) {
+            const colonIndex = segment.indexOf(':');
+            if (colonIndex === -1) continue;
+            
+            const key = segment.substring(0, colonIndex).trim().toLowerCase();
+            const value = segment.substring(colonIndex + 1).trim();
+            
+            if (!value) continue;
+            
+            // Map known field labels to result fields
+            if (key.includes('supplier part') || key === 'supplier part number') {
+              result.supplierPartNumber = value;
+            } else if (key.includes('batch') || key.includes('lot') || key.includes('supplier batch/lot')) {
+              result.batchNumber = value;
+            } else if (key.includes('roll') || key.includes('manufacture roll')) {
+              result.rollNumber = value;
+            } else if (key.includes('manufacture date') || key === 'mfg date') {
+              result.manufactureDate = normalizeDate(value);
+            } else if (key.includes('expiration') || key.includes('exp date')) {
+              result.expirationDate = normalizeDate(value);
+            } else if (key.includes('received date')) {
+              result.receivedDateStr = normalizeDate(value);
+            }
+          }
+          
+          return result;
+        };
+        
+        // Check if this is per-unit mode (structured format from receiving dialog)
+        const perUnitMatch = notes.match(/\[(\d+) units with individual traceability\]/);
+        
+        if (perUnitMatch) {
+          // Per-unit mode: parse structured unit data
+          const unitCount = parseInt(perUnitMatch[1]);
+          
+          // Split by "Unit X:" markers more robustly
+          // Look for patterns like "| Unit 1:" or "Unit 1:" at start
+          const unitSections: { unitNum: number; data: string }[] = [];
+          const unitMarkerPattern = /(?:^|\|)\s*Unit\s+(\d+)\s*:\s*/gi;
+          let lastIndex = 0;
+          let lastUnitNum = 0;
+          let match;
+          
+          // Reset lastIndex for global regex
+          unitMarkerPattern.lastIndex = 0;
+          
+          while ((match = unitMarkerPattern.exec(notes)) !== null) {
+            if (lastUnitNum > 0) {
+              // Capture data from previous unit
+              const unitData = notes.substring(lastIndex, match.index).trim();
+              if (unitData) {
+                unitSections.push({ unitNum: lastUnitNum, data: unitData });
+              }
+            }
+            lastUnitNum = parseInt(match[1]);
+            lastIndex = unitMarkerPattern.lastIndex;
+          }
+          
+          // Capture the last unit's data
+          if (lastUnitNum > 0) {
+            const unitData = notes.substring(lastIndex).trim();
+            if (unitData) {
+              unitSections.push({ unitNum: lastUnitNum, data: unitData });
+            }
+          }
+          
+          if (unitSections.length === 0) {
+            fabricInventoryWarnings.push(`Per-unit mode detected but no unit data could be parsed from notes`);
+            console.warn(`⚠️ Per-unit mode but no unit sections parsed from: ${notes.substring(0, 200)}...`);
+          } else if (unitSections.length !== unitCount) {
+            fabricInventoryWarnings.push(`Expected ${unitCount} units but parsed ${unitSections.length} from notes`);
+          }
+          
+          for (const section of unitSections) {
+            const traceability = parseTraceabilityFromNote(section.data);
+            
+            // Create fabric inventory record for this unit
+            const fabricRecord = await db
+              .insert(cuttingFabricInventory)
+              .values({
+                source: inventoryItem.source || undefined,
+                fabric: inventoryItem.name,
+                fabricPartNumber: inventoryItem.agPartNumber,
+                nickname: inventoryItem.name,
+                supplierPartNumber: traceability.supplierPartNumber || inventoryItem.supplierPartNumber || undefined,
+                batchNumber: traceability.batchNumber || undefined,
+                rollNumber: traceability.rollNumber || undefined,
+                manufactureDate: traceability.manufactureDate || undefined,
+                receivedDate: traceability.receivedDateStr || receivedDate.toISOString().split('T')[0],
+                expirationDate: traceability.expirationDate || undefined,
+                quantityInStock: 1,
+                notes: `Auto-created from PO receipt. Unit ${section.unitNum} of ${unitCount}. Original notes: ${section.data}`,
+              })
+              .returning();
+            
+            fabricInventoryRecords.push(fabricRecord[0]);
+          }
+          
+          console.log(`   Created ${fabricInventoryRecords.length} fabric inventory records for ${unitCount} units`);
+        } else {
+          // Single unit or bulk: create one fabric inventory record
+          const traceability = parseTraceabilityFromNote(notes);
+          
+          const fabricRecord = await db
+            .insert(cuttingFabricInventory)
+            .values({
+              source: inventoryItem.source || undefined,
+              fabric: inventoryItem.name,
+              fabricPartNumber: inventoryItem.agPartNumber,
+              nickname: inventoryItem.name,
+              supplierPartNumber: traceability.supplierPartNumber || inventoryItem.supplierPartNumber || undefined,
+              batchNumber: traceability.batchNumber || undefined,
+              rollNumber: traceability.rollNumber || undefined,
+              manufactureDate: traceability.manufactureDate || undefined,
+              receivedDate: traceability.receivedDateStr || receivedDate.toISOString().split('T')[0],
+              expirationDate: traceability.expirationDate || undefined,
+              quantityInStock: receivedQuantity,
+              notes: `Auto-created from PO receipt. Notes: ${notes}`,
+            })
+            .returning();
+          
+          fabricInventoryRecords.push(fabricRecord[0]);
+          console.log(`   Created 1 fabric inventory record for ${receivedQuantity} units`);
+        }
+        
+        console.log(`✅ Fabric inventory updated for ${poLineItem.agPartNumber}`);
+      } catch (fabricError) {
+        const errorMsg = fabricError instanceof Error ? fabricError.message : String(fabricError);
+        console.error(`⚠️ Failed to create fabric inventory for ${poLineItem.agPartNumber}:`, fabricError);
+        fabricInventoryWarnings.push(`Failed to create fabric inventory: ${errorMsg}`);
+      }
+    }
+
     return {
       costHistory,
       inventoryItem: inventoryItem ? {
@@ -7270,6 +7458,12 @@ export class DatabaseStorage implements IStorage {
         usageUnit: inventoryItem.usageUnit,
       } : null,
       cogsSkipped: !hasFullCogsConfig,
+      fabricInventory: fabricInventoryRecords.length > 0 || fabricInventoryWarnings.length > 0 ? {
+        createdCount: fabricInventoryRecords.length,
+        records: fabricInventoryRecords,
+        warnings: fabricInventoryWarnings.length > 0 ? fabricInventoryWarnings : undefined,
+        isPL1Item: inventoryItem?.utilizedInPL1 ?? false,
+      } : null,
     };
   }
 

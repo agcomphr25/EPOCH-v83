@@ -233,9 +233,10 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                              inventoryItem.purchaseQuantity > 0;
         
         if (hasConversion) {
+          // Purchase unit mode - user enters in purchase units (e.g., sqm)
           setNewItem({
             agPartNumber: selectedPart.agPartNumber,
-            description: selectedPart.itemDescription || selectedPart.agPartNumber,
+            description: selectedPart.itemDescription || `${selectedPart.agPartNumber} - ${inventoryItem.name || ''}`,
             purchaseQty: 0,
             purchaseUnitPrice: selectedPart.unitPrice || inventoryItem.costPer || 0,
             purchaseUnit: inventoryItem.purchaseUnit,
@@ -244,7 +245,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
             quantity: 0,
             unitPrice: 0,
           });
+          console.log('Purchase unit mode activated:', { vendorUnit: inventoryItem.vendorUnit, purchaseUnit: inventoryItem.purchaseUnit, conversionFactor: inventoryItem.purchaseQuantity });
         } else {
+          // Simple vendor unit mode - user enters vendor units directly
           setNewItem({
             agPartNumber: selectedPart.agPartNumber,
             description: selectedPart.itemDescription || selectedPart.agPartNumber,
@@ -256,6 +259,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
             quantity: selectedPart.minimumOrderQty || 1,
             unitPrice: selectedPart.unitPrice || 0,
           });
+          console.log('Simple vendor unit mode - no conversion data available');
         }
       } catch (error) {
         console.error('Failed to fetch inventory item:', error);
@@ -271,6 +275,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
           quantity: selectedPart.minimumOrderQty || 1,
           unitPrice: selectedPart.unitPrice || 0,
         });
+        console.log('Failed to fetch inventory item, using simple mode');
       }
     }
   };
@@ -475,22 +480,23 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
             </div>
           </div>
 
-          {hasUnitConversion && selectedInventoryItem && (
+          {newItem.purchaseUnit && newItem.vendorUnit && newItem.conversionFactor > 0 && (
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Calculator className="w-4 h-4 text-blue-600" />
                 <span className="font-medium text-blue-800 dark:text-blue-200">Unit Conversion Active</span>
                 <Badge variant="outline" className="text-xs">
-                  {selectedInventoryItem.purchaseQuantity} {selectedInventoryItem.purchaseUnit} per {selectedInventoryItem.vendorUnit}
+                  {newItem.conversionFactor} {newItem.purchaseUnit} per {newItem.vendorUnit}
                 </Badge>
               </div>
               
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <h4 className="font-medium text-sm text-gray-700 dark:text-gray-300">You Enter (Purchase Units)</h4>
+                  <h4 className="font-medium text-sm text-gray-700 dark:text-gray-300">📊 You Enter (Purchase Units)</h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Enter what you need in actual measurements</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label htmlFor="purchaseQty">Quantity ({selectedInventoryItem.purchaseUnit})</Label>
+                      <Label htmlFor="purchaseQty">Quantity ({newItem.purchaseUnit})</Label>
                       <Input
                         id="purchaseQty"
                         type="number"
@@ -498,11 +504,13 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                         value={newItem.purchaseQty || ''}
                         onChange={(e) => setNewItem({ ...newItem, purchaseQty: parseFloat(e.target.value) || 0 })}
                         data-testid="input-purchase-qty"
-                        placeholder={`e.g., 366 ${selectedInventoryItem.purchaseUnit}`}
+                        placeholder={`e.g., 366 ${newItem.purchaseUnit}`}
+                        className="text-base font-semibold"
                       />
+                      <p className="text-xs text-gray-500 mt-1">e.g., 366 sq meters</p>
                     </div>
                     <div>
-                      <Label htmlFor="purchaseUnitPrice">Price per {selectedInventoryItem.purchaseUnit}</Label>
+                      <Label htmlFor="purchaseUnitPrice">Price per {newItem.purchaseUnit}</Label>
                       <Input
                         id="purchaseUnitPrice"
                         type="number"
@@ -511,7 +519,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                         onChange={(e) => setNewItem({ ...newItem, purchaseUnitPrice: parseFloat(e.target.value) || 0 })}
                         data-testid="input-purchase-unit-price"
                         placeholder="e.g., 17.18"
+                        className="text-base font-semibold"
                       />
+                      <p className="text-xs text-gray-500 mt-1">e.g., $17.18/sqm</p>
                     </div>
                   </div>
                 </div>
@@ -519,26 +529,27 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                 <div className="space-y-3">
                   <h4 className="font-medium text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
                     <ArrowRight className="w-4 h-4" />
-                    PO Shows (Vendor Units)
+                    📋 Vendor PO Shows (Vendor Units)
                   </h4>
-                  <div className="bg-white dark:bg-gray-800 rounded p-3 border">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">Automatically converted for the vendor</p>
+                  <div className="bg-white dark:bg-gray-800 rounded p-3 border border-green-200 dark:border-green-800">
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
-                        <span className="text-muted-foreground">Quantity:</span>
-                        <div className="font-bold text-lg">
-                          {calculatedVendorValues.vendorQty.toFixed(2)} {selectedInventoryItem.vendorUnit}
+                        <span className="text-muted-foreground text-xs">Qty (Vendor):</span>
+                        <div className="font-bold text-lg text-green-600">
+                          {calculatedVendorValues.vendorQty.toFixed(2)} {newItem.vendorUnit}
                         </div>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">Price per {selectedInventoryItem.vendorUnit}:</span>
-                        <div className="font-bold text-lg">
+                        <span className="text-muted-foreground text-xs">Price per {newItem.vendorUnit}:</span>
+                        <div className="font-bold text-lg text-green-600">
                           ${calculatedVendorValues.vendorUnitPrice.toFixed(2)}
                         </div>
                       </div>
                     </div>
-                    <div className="mt-2 pt-2 border-t">
-                      <span className="text-muted-foreground">Line Total:</span>
-                      <div className="font-bold text-xl text-green-600">
+                    <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-800">
+                      <span className="text-muted-foreground text-xs">Line Total:</span>
+                      <div className="font-bold text-xl text-green-700 dark:text-green-400">
                         ${lineTotal.toFixed(2)}
                       </div>
                     </div>
@@ -548,50 +559,54 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
             </div>
           )}
 
-          {!hasUnitConversion && (
-            <div className="grid grid-cols-4 gap-4">
-              <div>
-                <Label htmlFor="agPartNumber">AG Part#</Label>
-                <Input
-                  id="agPartNumber"
-                  value={newItem.agPartNumber}
-                  onChange={(e) => setNewItem({ ...newItem, agPartNumber: e.target.value })}
-                  data-testid="input-ag-part-number"
-                  placeholder="Auto-filled or manual"
-                />
+          {!(newItem.purchaseUnit && newItem.vendorUnit && newItem.conversionFactor > 0) && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-3">⚠️ No unit conversion configured</p>
+              <div className="grid grid-cols-4 gap-4">
+                <div>
+                  <Label htmlFor="agPartNumber">AG Part#</Label>
+                  <Input
+                    id="agPartNumber"
+                    value={newItem.agPartNumber}
+                    onChange={(e) => setNewItem({ ...newItem, agPartNumber: e.target.value })}
+                    data-testid="input-ag-part-number"
+                    placeholder="Auto-filled or manual"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <Input
+                    id="description"
+                    value={newItem.description}
+                    onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                    data-testid="input-description"
+                    placeholder="Auto-filled or manual"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="quantity">Quantity {newItem.vendorUnit && `(${newItem.vendorUnit})`}</Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    step="0.01"
+                    value={newItem.quantity || ''}
+                    onChange={(e) => setNewItem({ ...newItem, quantity: parseFloat(e.target.value) || 0 })}
+                    data-testid="input-quantity"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="unitPrice">Unit Price {newItem.vendorUnit && `(per ${newItem.vendorUnit})`}</Label>
+                  <Input
+                    id="unitPrice"
+                    type="number"
+                    step="0.01"
+                    value={newItem.unitPrice || ''}
+                    onChange={(e) => setNewItem({ ...newItem, unitPrice: parseFloat(e.target.value) || 0 })}
+                    data-testid="input-unit-price"
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <Input
-                  id="description"
-                  value={newItem.description}
-                  onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-                  data-testid="input-description"
-                  placeholder="Auto-filled or manual"
-                />
-              </div>
-              <div>
-                <Label htmlFor="quantity">Quantity {newItem.vendorUnit && `(${newItem.vendorUnit})`}</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  step="0.01"
-                  value={newItem.quantity || ''}
-                  onChange={(e) => setNewItem({ ...newItem, quantity: parseFloat(e.target.value) || 0 })}
-                  data-testid="input-quantity"
-                />
-              </div>
-              <div>
-                <Label htmlFor="unitPrice">Unit Price {newItem.vendorUnit && `(per ${newItem.vendorUnit})`}</Label>
-                <Input
-                  id="unitPrice"
-                  type="number"
-                  step="0.01"
-                  value={newItem.unitPrice || ''}
-                  onChange={(e) => setNewItem({ ...newItem, unitPrice: parseFloat(e.target.value) || 0 })}
-                  data-testid="input-unit-price"
-                />
-              </div>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">💡 Tip: Set up vendorUnit, purchaseUnit, and conversion factor in inventory items for automatic unit conversion</p>
             </div>
           )}
           

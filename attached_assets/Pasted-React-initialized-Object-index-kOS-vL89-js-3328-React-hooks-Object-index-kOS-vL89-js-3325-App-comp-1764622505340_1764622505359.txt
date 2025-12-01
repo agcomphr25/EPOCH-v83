@@ -1,0 +1,105 @@
+React initialized: Object
+index-kOS_vL89.js:3328 React hooks: Object
+index-kOS_vL89.js:3325 App component is rendering...
+index-kOS_vL89.js:3325 Environment: production
+index-kOS_vL89.js:3325 Base URL: /
+index-kOS_vL89.js:235 🌐 API Request to /api/short-term-sales (timeout: 15000ms, deployment: true)
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23Understand this warning
+index-kOS_vL89.js:235 ✅ API Response from /api/short-term-sales: 200
+discounts:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-kOS_vL89.js:235 🌐 API Request to /api/customer-types (timeout: 15000ms, deployment: true)
+index-kOS_vL89.js:235 ✅ API Response from /api/customer-types: 200
+index-kOS_vL89.js:3325 App component is rendering...
+index-kOS_vL89.js:3325 Environment: production
+index-kOS_vL89.js:3325 Base URL: /
+index-kOS_vL89.js:3325 App component is rendering...
+index-kOS_vL89.js:3325 Environment: production
+index-kOS_vL89.js:3325 Base URL: /
+index-kOS_vL89.js:3328 TypeError: o.map is not a function
+    at Dpt (index-kOS_vL89.js:1207:378328)
+    at Lee (index-kOS_vL89.js:38:17091)
+    at iW (index-kOS_vL89.js:40:3159)
+    at AEe (index-kOS_vL89.js:40:45092)
+    at fEe (index-kOS_vL89.js:40:40005)
+    at RJe (index-kOS_vL89.js:40:39928)
+    at KR (index-kOS_vL89.js:40:39776)
+    at gW (index-kOS_vL89.js:40:36109)
+    at Mce (index-kOS_vL89.js:40:36916)
+    at zw (index-kOS_vL89.js:38:3302)
+console.error @ index-kOS_vL89.js:3328
+aW @ index-kOS_vL89.js:40
+KSe.n.callback @ index-kOS_vL89.js:40
+vce @ index-kOS_vL89.js:38
+Tce @ index-kOS_vL89.js:40
+cEe @ index-kOS_vL89.js:40
+OJe @ index-kOS_vL89.js:40
+LJe @ index-kOS_vL89.js:40
+IN @ index-kOS_vL89.js:40
+Mce @ index-kOS_vL89.js:40
+zw @ index-kOS_vL89.js:38
+(anonymous) @ index-kOS_vL89.js:40
+setTimeout
+Iet @ index-kOS_vL89.js:51
+o @ index-kOS_vL89.js:51
+batch @ index-kOS_vL89.js:51
+J1 @ index-kOS_vL89.js:51
+setData @ index-kOS_vL89.js:51
+fetch @ index-kOS_vL89.js:51
+await in fetch
+gB @ index-kOS_vL89.js:51
+onSubscribe @ index-kOS_vL89.js:51
+subscribe @ index-kOS_vL89.js:51
+(anonymous) @ index-kOS_vL89.js:51
+DSe @ index-kOS_vL89.js:38
+X7 @ index-kOS_vL89.js:40
+WS @ index-kOS_vL89.js:40
+LJe @ index-kOS_vL89.js:40
+IN @ index-kOS_vL89.js:40
+Mce @ index-kOS_vL89.js:40
+zw @ index-kOS_vL89.js:38
+(anonymous) @ index-kOS_vL89.js:40Understand this error
+index-kOS_vL89.js:3328 Global error caught: TypeError: o.map is not a function
+    at Dpt (index-kOS_vL89.js:1207:378328)
+    at Lee (index-kOS_vL89.js:38:17091)
+    at iW (index-kOS_vL89.js:40:3159)
+    at AEe (index-kOS_vL89.js:40:45092)
+    at fEe (index-kOS_vL89.js:40:40005)
+    at RJe (index-kOS_vL89.js:40:39928)
+    at KR (index-kOS_vL89.js:40:39776)
+    at gW (index-kOS_vL89.js:40:36109)
+    at Mce (index-kOS_vL89.js:40:36916)
+    at zw (index-kOS_vL89.js:38:3302)
+console.error @ index-kOS_vL89.js:3328
+n @ index-kOS_vL89.js:3325
+setTimeout
+Iet @ index-kOS_vL89.js:51
+o @ index-kOS_vL89.js:51
+batch @ index-kOS_vL89.js:51
+J1 @ index-kOS_vL89.js:51
+setData @ index-kOS_vL89.js:51
+fetch @ index-kOS_vL89.js:51
+await in fetch
+gB @ index-kOS_vL89.js:51
+onSubscribe @ index-kOS_vL89.js:51
+subscribe @ index-kOS_vL89.js:51
+(anonymous) @ index-kOS_vL89.js:51
+DSe @ index-kOS_vL89.js:38
+X7 @ index-kOS_vL89.js:40
+WS @ index-kOS_vL89.js:40
+LJe @ index-kOS_vL89.js:40
+IN @ index-kOS_vL89.js:40
+Mce @ index-kOS_vL89.js:40
+zw @ index-kOS_vL89.js:38
+(anonymous) @ index-kOS_vL89.js:40Understand this error
+index-kOS_vL89.js:1207 Uncaught TypeError: o.map is not a function
+    at Dpt (index-kOS_vL89.js:1207:378328)
+    at Lee (index-kOS_vL89.js:38:17091)
+    at iW (index-kOS_vL89.js:40:3159)
+    at AEe (index-kOS_vL89.js:40:45092)
+    at fEe (index-kOS_vL89.js:40:40005)
+    at RJe (index-kOS_vL89.js:40:39928)
+    at KR (index-kOS_vL89.js:40:39776)
+    at gW (index-kOS_vL89.js:40:36109)
+    at Mce (index-kOS_vL89.js:40:36916)
+    at zw (index-kOS_vL89.js:38:3302)

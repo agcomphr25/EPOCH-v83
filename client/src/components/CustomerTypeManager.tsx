@@ -50,18 +50,18 @@ export default function CustomerTypeManager() {
   const queryClient = useQueryClient();
 
   const { data: customerTypes = [], isLoading } = useQuery({
-    queryKey: ['/api/customer-types'],
-    queryFn: () => apiRequest('/api/customer-types'),
+    queryKey: ['/api/marketing/customer-types'],
+    queryFn: () => apiRequest('/api/marketing/customer-types'),
   });
 
   const createMutation = useMutation({
     mutationFn: (data: CustomerTypeFormData) =>
-      apiRequest('/api/customer-types', {
+      apiRequest('/api/marketing/customer-types', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customer-types'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/marketing/customer-types'] });
       setIsCreateDialogOpen(false);
       toast({
         title: 'Success',
@@ -85,12 +85,12 @@ export default function CustomerTypeManager() {
       id: number;
       data: Partial<CustomerTypeFormData>;
     }) =>
-      apiRequest(`/api/customer-types/${id}`, {
+      apiRequest(`/api/marketing/customer-types/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customer-types'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/marketing/customer-types'] });
       setEditingCustomerType(null);
       toast({
         title: 'Success',
@@ -108,11 +108,11 @@ export default function CustomerTypeManager() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) =>
-      apiRequest(`/api/customer-types/${id}`, {
+      apiRequest(`/api/marketing/customer-types/${id}`, {
         method: 'DELETE',
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customer-types'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/marketing/customer-types'] });
       toast({
         title: 'Success',
         description: 'Customer type deleted successfully',

@@ -294,7 +294,7 @@ export default function CuttingTableDashboard() {
           batchNumber: data.batchNumber,
           rollNumber: data.rollNumber,
           quantityInStock: 1,
-          squareMeters: parseFloat(data.squareMeters) || 0,
+          squareMeters: data.squareMeters || '0',
           expirationDate: data.expirationDate || null,
           location: data.location,
           notes: data.notes,
@@ -338,7 +338,7 @@ export default function CuttingTableDashboard() {
           batchNumber: data.batchNumber,
           rollNumber: data.rollNumber,
           quantityInStock: parseInt(data.quantity) || 0,
-          squareMeters: parseFloat(data.squareMeters) || 0,
+          squareMeters: data.squareMeters || '0',
           expirationDate: data.expirationDate || null,
           location: data.location,
         }),
@@ -1310,14 +1310,14 @@ export default function CuttingTableDashboard() {
                   <div className="space-y-2">
                     <Label htmlFor="fabricType">Fabric Type (Part Number) *</Label>
                     <Select
-                      value={receivingForm.fabricType}
+                      value={receivingForm.fabricPartNumber || receivingForm.fabricType}
                       onValueChange={(v) => {
                         const selectedItem = fabricItems.find((item: any) => 
                           (item.agPartNumber || item.fabric || item.name) === v
                         );
                         setReceivingForm({ 
                           ...receivingForm, 
-                          fabricType: v,
+                          fabricType: selectedItem?.name || selectedItem?.fabric || v,
                           fabricPartNumber: selectedItem?.agPartNumber || ''
                         });
                       }}
@@ -1637,8 +1637,26 @@ export default function CuttingTableDashboard() {
                     <TableBody>
                       {fabricInventory.map((fabric) => (
                         <TableRow key={fabric.id}>
-                          <TableCell className="font-medium">{fabric.fabricPartNumber || '-'}</TableCell>
-                          <TableCell>{fabric.fabricType || '-'}</TableCell>
+                          <TableCell className="font-medium">{fabric.internalControlNumber || '-'}</TableCell>
+                          <TableCell>
+                            {(() => {
+                              const partNum = fabric.fabricPartNumber || fabric.fabricType;
+                              const matchedItem = fabricItems.find((item: any) => item.agPartNumber === partNum);
+                              const itemName = matchedItem?.name || fabric.fabricType;
+                              const displayName = itemName && itemName !== partNum ? itemName : null;
+                              
+                              return partNum ? (
+                                <div>
+                                  <span className="font-medium">{partNum}</span>
+                                  {displayName && (
+                                    <span className="text-muted-foreground ml-1">({displayName})</span>
+                                  )}
+                                </div>
+                              ) : (
+                                fabric.fabricType || 'Unknown'
+                              );
+                            })()}
+                          </TableCell>
                           <TableCell>{fabric.nickname || '-'}</TableCell>
                           <TableCell>{fabric.supplierPartNumber || '-'}</TableCell>
                           <TableCell>{fabric.lotNumber || fabric.batchNumber || '-'}</TableCell>

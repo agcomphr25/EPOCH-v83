@@ -61,13 +61,13 @@ interface VendorPOItem {
   lineNumber: number;
   agPartNumber: string;
   description: string;
-  vendorQty: number;
+  quantity: number;
   vendorUnit: string;
-  vendorUnitPrice: number;
+  unitPrice: number;
   purchaseQty?: number;
   purchaseUnit?: string;
   purchaseUnitPrice?: number;
-  receivedQty?: number;
+  receivedQuantity?: number;
 }
 
 // Function to detect if an item is a P2 product
@@ -194,8 +194,8 @@ export default function InventoryReceivingPage() {
     sentPOs.forEach((po) => {
       const items = poItemsMap[po.id] || [];
       items.forEach((item) => {
-        const expectedQty = item.vendorQty || 0;
-        const receivedQty = item.receivedQty || 0;
+        const expectedQty = item.quantity || 0;
+        const receivedQty = item.receivedQuantity || 0;
         let status: 'pending' | 'partial' | 'complete' = 'pending';
         if (receivedQty >= expectedQty && expectedQty > 0) {
           status = 'complete';

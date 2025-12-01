@@ -188,12 +188,27 @@ export default function InventoryReceivingPage() {
     enabled: sentPOs.length > 0,
   });
 
-  // Transform PO items into receiving items format
+  // Get valid inventory part numbers for filtering
+  const validPartNumbers = new Set<string>();
+  if (inventoryItems && Array.isArray(inventoryItems)) {
+    inventoryItems.forEach((item: any) => {
+      if (item.agPartNumber) {
+        validPartNumbers.add(item.agPartNumber.toLowerCase());
+      }
+    });
+  }
+
+  // Transform PO items into receiving items format - only include items with valid inventory part numbers
   const pendingReceivingItems: (ReceivingItem & { poNumber: string; vendorName: string })[] = [];
   if (poItemsMap) {
     sentPOs.forEach((po) => {
       const items = poItemsMap[po.id] || [];
       items.forEach((item) => {
+        // Only include items that exist in the inventory
+        if (!item.agPartNumber || !validPartNumbers.has(item.agPartNumber.toLowerCase())) {
+          return; // Skip items not in inventory
+        }
+
         const expectedQty = item.quantity || 0;
         const receivedQty = item.receivedQuantity || 0;
         let status: 'pending' | 'partial' | 'complete' = 'pending';

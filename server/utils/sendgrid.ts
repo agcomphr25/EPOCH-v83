@@ -84,7 +84,7 @@ export async function getUncachableSendGridClient() {
   sgMail.setApiKey(apiKey);
   return {
     client: sgMail,
-    fromEmail: email,
+    fromEmail: { email, name: 'A G Composites' },
   };
 }
 
@@ -107,7 +107,7 @@ export async function sendEmailViaSendGrid(options: {
     const msg: any = {
       to: options.to,
       from: fromEmail,
-      replyTo: options.replyTo || 'sales@agcomposites.com',
+      replyTo: options.replyTo || { email: 'sales@agcomposites.com', name: 'A G Composites Sales' },
       subject: options.subject,
       text: options.text,
       html: options.html || options.text,

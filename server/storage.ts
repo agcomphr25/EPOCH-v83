@@ -7154,6 +7154,7 @@ export class DatabaseStorage implements IStorage {
         consumptionRate: inventoryItems.consumptionRate,
         usageUnit: inventoryItems.usageUnit,
         utilizedInPL1: inventoryItems.utilizedInPL1,
+        utilizedInPL2: inventoryItems.utilizedInPL2,
       })
       .from(inventoryItems)
       .where(eq(inventoryItems.agPartNumber, poLineItem.agPartNumber));
@@ -7256,11 +7257,17 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(vendorPOItems.id, poLineItemId));
 
-    // If this is a fabric item for Cutting Table (Production Line 1), create fabric inventory records
+    // If this is a fabric item for Cutting Table (Production Line 1 or 2), create fabric inventory records
     let fabricInventoryRecords: any[] = [];
     let fabricInventoryWarnings: string[] = [];
-    if (inventoryItem && inventoryItem.utilizedInPL1 && notes) {
-      console.log(`🧵 Creating fabric inventory for PL1 item: ${poLineItem.agPartNumber}`);
+    const isCuttingTableItem = inventoryItem && (inventoryItem.utilizedInPL1 || inventoryItem.utilizedInPL2);
+    const productionLines = inventoryItem ? [
+      inventoryItem.utilizedInPL1 ? 'PL1' : null,
+      inventoryItem.utilizedInPL2 ? 'PL2' : null,
+    ].filter(Boolean).join(', ') : '';
+    
+    if (isCuttingTableItem && notes) {
+      console.log(`🧵 Creating fabric inventory for ${productionLines} item: ${poLineItem.agPartNumber}`);
       
       try {
         // Helper to normalize dates to ISO format (YYYY-MM-DD) or return undefined
@@ -7463,6 +7470,8 @@ export class DatabaseStorage implements IStorage {
         records: fabricInventoryRecords,
         warnings: fabricInventoryWarnings.length > 0 ? fabricInventoryWarnings : undefined,
         isPL1Item: inventoryItem?.utilizedInPL1 ?? false,
+        isPL2Item: inventoryItem?.utilizedInPL2 ?? false,
+        productionLines: productionLines || undefined,
       } : null,
     };
   }

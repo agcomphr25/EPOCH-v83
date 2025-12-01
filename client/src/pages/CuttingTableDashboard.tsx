@@ -1641,7 +1641,9 @@ export default function CuttingTableDashboard() {
                             {fabric.fabricPartNumber ? (
                               <div>
                                 <span className="font-medium">{fabric.fabricPartNumber}</span>
-                                {fabric.fabricType && <span className="text-muted-foreground ml-1">({fabric.fabricType})</span>}
+                                {fabric.fabricType && fabric.fabricType !== fabric.fabricPartNumber && (
+                                  <span className="text-muted-foreground ml-1">({fabric.fabricType})</span>
+                                )}
                               </div>
                             ) : (
                               fabric.fabricType || 'Unknown'

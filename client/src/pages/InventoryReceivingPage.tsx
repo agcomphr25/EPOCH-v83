@@ -19,6 +19,14 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Package,
   Scan,
   Plus,
@@ -29,6 +37,7 @@ import {
   QrCode,
   FileText,
   Loader2,
+  Save,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
@@ -99,6 +108,14 @@ export default function InventoryReceivingPage() {
   const [scannedCode, setScannedCode] = useState('');
   const [p2DialogOpen, setP2DialogOpen] = useState(false);
   const [selectedP2Item, setSelectedP2Item] = useState<any>(null);
+  const [receivingDialogOpen, setReceivingDialogOpen] = useState(false);
+  const [selectedReceivingItem, setSelectedReceivingItem] = useState<(ReceivingItem & { poNumber: string; vendorName: string }) | null>(null);
+  const [dialogReceivingData, setDialogReceivingData] = useState({
+    receivedQuantity: 0,
+    lotNumber: '',
+    batchNumber: '',
+    notes: '',
+  });
   const [receivingData, setReceivingData] = useState<ReceivingItem>({
     agPartNumber: '',
     name: '',
@@ -340,7 +357,7 @@ export default function InventoryReceivingPage() {
     createInventoryMutation.mutate(inventoryData);
   };
 
-  const handleReceiveFromPending = (item: ReceivingItem) => {
+  const handleReceiveFromPending = (item: ReceivingItem & { poNumber: string; vendorName: string }) => {
     // Check if this is a P2 product
     if (isP2Product(item)) {
       setSelectedP2Item(item);
@@ -348,8 +365,79 @@ export default function InventoryReceivingPage() {
       return;
     }
 
-    // For non-P2 products, load into the form
-    setReceivingData(item);
+    // For non-P2 products, open the receiving dialog
+    setSelectedReceivingItem(item);
+    setDialogReceivingData({
+      receivedQuantity: item.expectedQuantity - item.receivedQuantity,
+      lotNumber: item.lotNumber || '',
+      batchNumber: item.batchNumber || '',
+      notes: '',
+    });
+    setReceivingDialogOpen(true);
+  };
+
+  const handleDialogReceive = async () => {
+    if (!selectedReceivingItem) return;
+
+    if (dialogReceivingData.receivedQuantity <= 0) {
+      toast.error('Please enter a valid quantity');
+      return;
+    }
+
+    try {
+      // Build notes with lot/batch info
+      const noteParts = [];
+      if (dialogReceivingData.lotNumber) {
+        noteParts.push(`Lot#: ${dialogReceivingData.lotNumber}`);
+      }
+      if (dialogReceivingData.batchNumber) {
+        noteParts.push(`Batch#: ${dialogReceivingData.batchNumber}`);
+      }
+      if (dialogReceivingData.notes) {
+        noteParts.push(dialogReceivingData.notes);
+      }
+      const combinedNotes = noteParts.join(' | ');
+
+      // Update the vendor PO item with received quantity
+      await apiRequest(`/api/vendor-pos/items/${selectedReceivingItem.id}/receive`, {
+        method: 'POST',
+        body: JSON.stringify({
+          receivedQuantity: dialogReceivingData.receivedQuantity,
+          notes: combinedNotes || undefined,
+        }),
+      });
+
+      toast.success(`Successfully received ${dialogReceivingData.receivedQuantity} units of ${selectedReceivingItem.agPartNumber}`);
+      
+      // Invalidate queries to refresh the data
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos/items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
+      
+      // Close dialog and reset
+      setReceivingDialogOpen(false);
+      setSelectedReceivingItem(null);
+      setDialogReceivingData({
+        receivedQuantity: 0,
+        lotNumber: '',
+        batchNumber: '',
+        notes: '',
+      });
+    } catch (error) {
+      toast.error('Failed to receive item');
+      console.error('Receiving error:', error);
+    }
+  };
+
+  const handleDialogClose = () => {
+    setReceivingDialogOpen(false);
+    setSelectedReceivingItem(null);
+    setDialogReceivingData({
+      receivedQuantity: 0,
+      lotNumber: '',
+      batchNumber: '',
+      notes: '',
+    });
   };
 
   const resetForm = () => {
@@ -764,6 +852,124 @@ export default function InventoryReceivingPage() {
         onOpenChange={setP2DialogOpen}
         item={selectedP2Item}
       />
+
+      {/* Standard Receiving Dialog */}
+      <Dialog open={receivingDialogOpen} onOpenChange={setReceivingDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Receive Item
+            </DialogTitle>
+            <DialogDescription>
+              Enter receiving details for this item
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedReceivingItem && (
+            <div className="space-y-4">
+              {/* Item Info */}
+              <div className="p-3 bg-muted rounded-lg">
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {selectedReceivingItem.poNumber}
+                  </Badge>
+                  <span className="font-medium">#{selectedReceivingItem.agPartNumber}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">{selectedReceivingItem.name}</p>
+                <p className="text-sm mt-1">
+                  <span className="text-muted-foreground">Expected:</span> {selectedReceivingItem.expectedQuantity} | 
+                  <span className="text-muted-foreground ml-2">Already Received:</span> {selectedReceivingItem.receivedQuantity}
+                </p>
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <Label htmlFor="dialogQuantity">Quantity to Receive *</Label>
+                <Input
+                  id="dialogQuantity"
+                  type="number"
+                  value={dialogReceivingData.receivedQuantity}
+                  onChange={(e) =>
+                    setDialogReceivingData((prev) => ({
+                      ...prev,
+                      receivedQuantity: parseInt(e.target.value) || 0,
+                    }))
+                  }
+                  min="1"
+                  max={selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity}
+                  data-testid="input-receive-quantity"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Remaining to receive: {selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity}
+                </p>
+              </div>
+
+              {/* Lot Number */}
+              <div>
+                <Label htmlFor="dialogLotNumber">Lot Number</Label>
+                <Input
+                  id="dialogLotNumber"
+                  value={dialogReceivingData.lotNumber}
+                  onChange={(e) =>
+                    setDialogReceivingData((prev) => ({
+                      ...prev,
+                      lotNumber: e.target.value,
+                    }))
+                  }
+                  placeholder="Enter lot number (optional)"
+                  data-testid="input-lot-number"
+                />
+              </div>
+
+              {/* Batch Number */}
+              <div>
+                <Label htmlFor="dialogBatchNumber">Batch Number</Label>
+                <Input
+                  id="dialogBatchNumber"
+                  value={dialogReceivingData.batchNumber}
+                  onChange={(e) =>
+                    setDialogReceivingData((prev) => ({
+                      ...prev,
+                      batchNumber: e.target.value,
+                    }))
+                  }
+                  placeholder="Enter batch number (optional)"
+                  data-testid="input-batch-number"
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <Label htmlFor="dialogNotes">Notes</Label>
+                <Textarea
+                  id="dialogNotes"
+                  value={dialogReceivingData.notes}
+                  onChange={(e) =>
+                    setDialogReceivingData((prev) => ({
+                      ...prev,
+                      notes: e.target.value,
+                    }))
+                  }
+                  placeholder="Any additional notes about this receipt..."
+                  rows={2}
+                  data-testid="input-receive-notes"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleDialogClose} data-testid="button-cancel-receive">
+              Cancel
+            </Button>
+            <Button onClick={handleDialogReceive} data-testid="button-confirm-receive">
+              <Save className="h-4 w-4 mr-2" />
+              Receive Item
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

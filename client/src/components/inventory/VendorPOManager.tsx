@@ -108,6 +108,13 @@ type VendorPO = {
   barcode: string;
   createdAt: string;
   updatedAt: string;
+  // Revision tracking fields
+  revisionNumber?: number;
+  parentPoId?: number;
+  changeReason?: string;
+  isCurrentRevision?: boolean;
+  revisedAt?: string;
+  revisedBy?: string;
 };
 
 type VendorPOItem = {
@@ -440,13 +447,18 @@ function VendorPOCard({
   onDelete,
   onViewItems,
   onIssuePO,
+  onCreateRevision,
 }: {
   vendorPo: VendorPO;
   onEdit: (vendorPo: VendorPO) => void;
   onDelete: (id: number) => void;
   onViewItems: (vendorPo: VendorPO) => void;
   onIssuePO: (id: number) => void;
+  onCreateRevision: (vendorPo: VendorPO) => void;
 }) {
+  // Check if PO is issued (cannot be directly edited)
+  const isIssued = ['Sent', 'Partially Received', 'Fully Received'].includes(vendorPo.status);
+  
   return (
     <Card
       className="hover:shadow-md transition-shadow"
@@ -460,6 +472,12 @@ function VendorPOCard({
               data-testid={`text-po-number-${vendorPo.id}`}
             >
               {vendorPo.poNumber}
+              {/* Show revision indicator if this is a revision */}
+              {vendorPo.revisionNumber !== undefined && vendorPo.revisionNumber > 0 && (
+                <Badge className="ml-2 bg-purple-100 text-purple-800" data-testid={`revision-badge-${vendorPo.id}`}>
+                  R{vendorPo.revisionNumber}
+                </Badge>
+              )}
             </CardTitle>
             <CardDescription
               className="mt-1"
@@ -474,13 +492,19 @@ function VendorPOCard({
               <VendorPOItemsDisplay vendorPoId={vendorPo.id} />
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col items-end gap-1">
             <Badge
               className={getStatusColor(vendorPo.status)}
               data-testid={`status-${vendorPo.id}`}
             >
               {vendorPo.status}
             </Badge>
+            {/* Show if this is not the current revision (superseded) */}
+            {vendorPo.isCurrentRevision === false && (
+              <Badge className="bg-gray-200 text-gray-600 text-xs" data-testid={`superseded-badge-${vendorPo.id}`}>
+                Superseded
+              </Badge>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -520,7 +544,7 @@ function VendorPOCard({
             data-testid={`button-view-items-${vendorPo.id}`}
           >
             <Eye className="w-4 h-4 mr-1" />
-            Manage Items
+            {isIssued ? 'View Items' : 'Manage Items'}
           </Button>
           <OptionalSettingsSelector vendorPoId={vendorPo.id} />
           {vendorPo.status === 'Draft' && (
@@ -535,15 +559,31 @@ function VendorPOCard({
               Issue PO
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onEdit(vendorPo)}
-            data-testid={`button-edit-${vendorPo.id}`}
-          >
-            <Pencil className="w-4 h-4 mr-1" />
-            Edit
-          </Button>
+          {/* Show Edit button only for Draft POs */}
+          {!isIssued && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onEdit(vendorPo)}
+              data-testid={`button-edit-${vendorPo.id}`}
+            >
+              <Pencil className="w-4 h-4 mr-1" />
+              Edit
+            </Button>
+          )}
+          {/* Show Create Revision button for issued POs */}
+          {isIssued && vendorPo.isCurrentRevision !== false && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onCreateRevision(vendorPo)}
+              className="text-purple-600 hover:text-purple-800 border-purple-300 hover:border-purple-400"
+              data-testid={`button-create-revision-${vendorPo.id}`}
+            >
+              <Pencil className="w-4 h-4 mr-1" />
+              Create Revision
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -772,6 +812,11 @@ export default function VendorPOManager() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showStatusChangeDialog, setShowStatusChangeDialog] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string>('');
+  
+  // Revision dialog state
+  const [showRevisionDialog, setShowRevisionDialog] = useState(false);
+  const [revisionReason, setRevisionReason] = useState('');
+  const [revisionPO, setRevisionPO] = useState<VendorPO | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -865,6 +910,31 @@ export default function VendorPOManager() {
     },
   });
 
+  // Create revision mutation
+  const createRevisionMutation = useMutation({
+    mutationFn: ({ id, changeReason }: { id: number; changeReason: string }) =>
+      apiRequest(`/api/vendor-pos/${id}/revisions`, {
+        method: 'POST',
+        body: JSON.stringify({ changeReason }),
+      }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      toast.success(`Revision created: ${data.poNumber}. You can now edit the new draft.`);
+      setShowRevisionDialog(false);
+      setRevisionReason('');
+      setRevisionPO(null);
+      // Open the new revision for editing
+      if (data) {
+        setSelectedVendorPO(data);
+        setShowDetailView(true);
+        setActiveTab('items');
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to create revision');
+    },
+  });
+
   // Filter vendor POs
   const filteredVendorPOs = (vendorPOs || []).filter((vendorPo) => {
     const matchesSearch =
@@ -914,6 +984,21 @@ export default function VendorPOManager() {
     setSelectedVendorPO(vendorPo);
     setShowDetailView(true);
     setActiveTab('items');
+  };
+
+  const handleCreateRevision = (vendorPo: VendorPO) => {
+    setRevisionPO(vendorPo);
+    setRevisionReason('');
+    setShowRevisionDialog(true);
+  };
+
+  const confirmCreateRevision = () => {
+    if (revisionPO && revisionReason.trim()) {
+      createRevisionMutation.mutate({ 
+        id: revisionPO.id, 
+        changeReason: revisionReason.trim() 
+      });
+    }
   };
 
   const handleFormSubmit = (data: CreateVendorPOData) => {
@@ -1459,6 +1544,7 @@ export default function VendorPOManager() {
               onDelete={handleDelete}
               onViewItems={handleViewItems}
               onIssuePO={handleIssuePO}
+              onCreateRevision={handleCreateRevision}
             />
           ))}
         </div>
@@ -1474,6 +1560,53 @@ export default function VendorPOManager() {
         }}
         onSubmit={handleFormSubmit}
       />
+
+      {/* Create Revision Dialog */}
+      <AlertDialog open={showRevisionDialog} onOpenChange={setShowRevisionDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle data-testid="revision-dialog-title">
+              Create Revision for {revisionPO?.poNumber}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will create a new draft revision of this purchase order. The original 
+              PO will be marked as superseded and the new revision will be available for editing.
+              <div className="mt-4">
+                <Label htmlFor="revision-reason" className="text-foreground font-medium">
+                  Reason for Revision *
+                </Label>
+                <Textarea
+                  id="revision-reason"
+                  placeholder="Enter the reason for this revision (e.g., quantity adjustment, price correction, additional items needed...)"
+                  value={revisionReason}
+                  onChange={(e) => setRevisionReason(e.target.value)}
+                  className="mt-2"
+                  rows={3}
+                  data-testid="input-revision-reason"
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-revision">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCreateRevision}
+              disabled={!revisionReason.trim() || createRevisionMutation.isPending}
+              className="bg-purple-600 hover:bg-purple-700"
+              data-testid="button-confirm-revision"
+            >
+              {createRevisionMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Revision'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

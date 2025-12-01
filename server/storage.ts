@@ -6725,6 +6725,13 @@ export class DatabaseStorage implements IStorage {
           totalCost: vendorPOs.totalCost,
           notes: vendorPOs.notes,
           createdBy: vendorPOs.createdBy,
+          // Revision tracking fields
+          revisionNumber: vendorPOs.revisionNumber,
+          parentPoId: vendorPOs.parentPoId,
+          changeReason: vendorPOs.changeReason,
+          isCurrentRevision: vendorPOs.isCurrentRevision,
+          revisedAt: vendorPOs.revisedAt,
+          revisedBy: vendorPOs.revisedBy,
           createdAt: vendorPOs.createdAt,
           updatedAt: vendorPOs.updatedAt,
         })
@@ -6768,6 +6775,13 @@ export class DatabaseStorage implements IStorage {
         totalCost: vendorPOs.totalCost,
         notes: vendorPOs.notes,
         createdBy: vendorPOs.createdBy,
+        // Revision tracking fields
+        revisionNumber: vendorPOs.revisionNumber,
+        parentPoId: vendorPOs.parentPoId,
+        changeReason: vendorPOs.changeReason,
+        isCurrentRevision: vendorPOs.isCurrentRevision,
+        revisedAt: vendorPOs.revisedAt,
+        revisedBy: vendorPOs.revisedBy,
         createdAt: vendorPOs.createdAt,
         updatedAt: vendorPOs.updatedAt,
       })

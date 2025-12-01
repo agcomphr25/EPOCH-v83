@@ -1306,14 +1306,14 @@ export default function CuttingTableDashboard() {
                   <div className="space-y-2">
                     <Label htmlFor="fabricType">Fabric Type (Part Number) *</Label>
                     <Select
-                      value={receivingForm.fabricType}
+                      value={receivingForm.fabricPartNumber || receivingForm.fabricType}
                       onValueChange={(v) => {
                         const selectedItem = fabricItems.find((item: any) => 
                           (item.agPartNumber || item.fabric || item.name) === v
                         );
                         setReceivingForm({ 
                           ...receivingForm, 
-                          fabricType: v,
+                          fabricType: selectedItem?.name || selectedItem?.fabric || v,
                           fabricPartNumber: selectedItem?.agPartNumber || ''
                         });
                       }}

@@ -87,7 +87,26 @@ router.get('/inventory/items/by-part-number/:partNumber', async (req: Request, r
     if (!item) {
       return res.status(404).json({ error: 'Inventory item not found' });
     }
-    res.json(item);
+    
+    // Ensure conversion fields are included in response
+    const response = {
+      ...item,
+      // Explicitly include conversion fields for vendor PO
+      vendorUnit: item.vendorUnit,
+      purchaseUnit: item.purchaseUnit,
+      purchaseQuantity: item.purchaseQuantity,
+      costPer: item.costPer,
+      name: item.name,
+    };
+    
+    console.log('📦 Inventory item response for', partNumber, ':', {
+      vendorUnit: response.vendorUnit,
+      purchaseUnit: response.purchaseUnit,
+      purchaseQuantity: response.purchaseQuantity,
+      costPer: response.costPer,
+    });
+    
+    res.json(response);
   } catch (error) {
     console.error('Get inventory item by part number error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory item' });

@@ -7302,18 +7302,27 @@ export class DatabaseStorage implements IStorage {
         };
         
         // Parse traceability data using structured key-value splitting (more robust than regex)
+        // Maps to cutting_fabric_inventory columns:
+        // - supplierPartNumber → supplierPartNumber column
+        // - Supplier Batch/Lot/C # → lotNumber column (primary traceability identifier)
+        // - Manufacture Roll # → rollNumber column
+        // - Manufacture Date → manufactureDate column
+        // - Expiration Date → expirationDate column
+        // - Received Date → receivedDate column
+        // - Aluminum Heat # → stored in notes/batchNumber as secondary identifier
         const parseTraceabilityFromNote = (noteText: string): {
           supplierPartNumber?: string;
-          batchNumber?: string;
-          rollNumber?: string;
+          lotNumber?: string;       // Supplier Batch/Lot/C #
+          batchNumber?: string;     // Aluminum Heat # or other batch identifier
+          rollNumber?: string;      // Manufacture Roll #
           manufactureDate?: string;
           expirationDate?: string;
           receivedDateStr?: string;
         } => {
           const result: any = {};
           
-          // Split by "|" or "," as field delimiters, then parse each key-value pair
-          const segments = noteText.split(/\s*[|]\s*/);
+          // Split by "|" as field delimiter, then parse each key-value pair
+          const segments = noteText.split(/\s*\|\s*/);
           
           for (const segment of segments) {
             const colonIndex = segment.indexOf(':');
@@ -7324,19 +7333,23 @@ export class DatabaseStorage implements IStorage {
             
             if (!value) continue;
             
-            // Map known field labels to result fields
-            if (key.includes('supplier part') || key === 'supplier part number') {
+            // Map known field labels to result fields (matching TRACEABILITY_FIELD_LABELS from receiving page)
+            if (key === 'supplier part number' || key.includes('supplier part')) {
               result.supplierPartNumber = value;
-            } else if (key.includes('batch') || key.includes('lot') || key.includes('supplier batch/lot')) {
-              result.batchNumber = value;
-            } else if (key.includes('roll') || key.includes('manufacture roll')) {
+            } else if (key === 'supplier batch/lot/c #' || key.includes('batch/lot') || key.includes('lot/c')) {
+              // This is the primary lot number for traceability
+              result.lotNumber = value;
+            } else if (key === 'manufacture roll #' || key.includes('manufacture roll') || key.includes('roll #')) {
               result.rollNumber = value;
-            } else if (key.includes('manufacture date') || key === 'mfg date') {
+            } else if (key === 'manufacture date' || key.includes('manufacture date')) {
               result.manufactureDate = normalizeDate(value);
-            } else if (key.includes('expiration') || key.includes('exp date')) {
+            } else if (key === 'expiration date' || key.includes('expiration')) {
               result.expirationDate = normalizeDate(value);
-            } else if (key.includes('received date')) {
+            } else if (key === 'received date' || key.includes('received date')) {
               result.receivedDateStr = normalizeDate(value);
+            } else if (key === 'aluminum heat #' || key.includes('aluminum heat') || key.includes('heat #')) {
+              // Store aluminum heat as batch number (secondary identifier)
+              result.batchNumber = value;
             }
           }
           
@@ -7392,6 +7405,15 @@ export class DatabaseStorage implements IStorage {
             const traceability = parseTraceabilityFromNote(section.data);
             
             // Create fabric inventory record for this unit
+            // Column mapping:
+            // - fabric: Inventory Item Name (what type of fabric)
+            // - fabricPartNumber: Part # (AG part number)
+            // - nickname: Common Name (from inventory item name)
+            // - supplierPartNumber: Supplier (supplier's part number)
+            // - lotNumber: Batch # column (Supplier Batch/Lot/C # - primary traceability)
+            // - rollNumber: Roll # column (Manufacture Roll #)
+            // - batchNumber: secondary identifier (Aluminum Heat # if applicable)
+            // - expirationDate: Expiration Date column
             const fabricRecord = await db
               .insert(cuttingFabricInventory)
               .values({
@@ -7400,6 +7422,7 @@ export class DatabaseStorage implements IStorage {
                 fabricPartNumber: inventoryItem.agPartNumber,
                 nickname: inventoryItem.name,
                 supplierPartNumber: traceability.supplierPartNumber || inventoryItem.supplierPartNumber || undefined,
+                lotNumber: traceability.lotNumber || undefined,
                 batchNumber: traceability.batchNumber || undefined,
                 rollNumber: traceability.rollNumber || undefined,
                 manufactureDate: traceability.manufactureDate || undefined,
@@ -7418,6 +7441,15 @@ export class DatabaseStorage implements IStorage {
           // Single unit or bulk: create one fabric inventory record
           const traceability = parseTraceabilityFromNote(notes);
           
+          // Column mapping:
+          // - fabric: Inventory Item Name (what type of fabric)
+          // - fabricPartNumber: Part # (AG part number)
+          // - nickname: Common Name (from inventory item name)
+          // - supplierPartNumber: Supplier (supplier's part number)
+          // - lotNumber: Batch # column (Supplier Batch/Lot/C # - primary traceability)
+          // - rollNumber: Roll # column (Manufacture Roll #)
+          // - batchNumber: secondary identifier (Aluminum Heat # if applicable)
+          // - expirationDate: Expiration Date column
           const fabricRecord = await db
             .insert(cuttingFabricInventory)
             .values({
@@ -7426,6 +7458,7 @@ export class DatabaseStorage implements IStorage {
               fabricPartNumber: inventoryItem.agPartNumber,
               nickname: inventoryItem.name,
               supplierPartNumber: traceability.supplierPartNumber || inventoryItem.supplierPartNumber || undefined,
+              lotNumber: traceability.lotNumber || undefined,
               batchNumber: traceability.batchNumber || undefined,
               rollNumber: traceability.rollNumber || undefined,
               manufactureDate: traceability.manufactureDate || undefined,

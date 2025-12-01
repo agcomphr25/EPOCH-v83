@@ -67,7 +67,8 @@ type FabricInventoryItem = {
   nickname: string | null;
   supplierPartNumber: string | null;
   internalControlNumber: string | null;
-  batchNumber: string;
+  lotNumber: string | null;    // Primary lot/batch identifier from receiving (Supplier Batch/Lot/C #)
+  batchNumber: string | null;  // Secondary identifier (Aluminum Heat # etc.)
   rollNumber: string;
   quantityInStock: number;
   squareMeters: number;
@@ -196,6 +197,9 @@ export default function CuttingTableDashboard() {
         nickname: item.nickname,
         supplierPartNumber: item.supplierPartNumber,
         internalControlNumber: item.internalControlNumber,
+        lotNumber: item.lotNumber,       // Supplier Batch/Lot/C # from receiving
+        batchNumber: item.batchNumber,   // Secondary identifier (Aluminum Heat # etc.)
+        rollNumber: item.rollNumber,     // Manufacture Roll # from receiving
         barcodeValue: `FAB-${item.internalControlNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
         status: item.quantityInStock < 10 ? 'low' : 
                 (item.expirationDate && new Date(item.expirationDate) < new Date() ? 'expired' : 'available'),
@@ -1637,7 +1641,7 @@ export default function CuttingTableDashboard() {
                           <TableCell>{fabric.fabricType || '-'}</TableCell>
                           <TableCell>{fabric.nickname || '-'}</TableCell>
                           <TableCell>{fabric.supplierPartNumber || '-'}</TableCell>
-                          <TableCell>{fabric.batchNumber || '-'}</TableCell>
+                          <TableCell>{fabric.lotNumber || fabric.batchNumber || '-'}</TableCell>
                           <TableCell>{fabric.rollNumber || '-'}</TableCell>
                           <TableCell>
                             {fabric.expirationDate 

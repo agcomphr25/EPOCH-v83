@@ -426,10 +426,16 @@ export default function InventoryReceivingPage() {
       const invItem = inventoryItems.find(
         (inv: any) => inv.agPartNumber?.toLowerCase() === item.agPartNumber?.toLowerCase()
       );
+      console.log('DEBUG: Looking up traceability for', item.agPartNumber, 'found:', invItem ? {
+        traceabilityRequired: invItem.traceabilityRequired,
+        traceabilityFields: invItem.traceabilityFields,
+      } : 'NOT FOUND');
       if (invItem) {
         traceabilityRequired = invItem.traceabilityRequired || false;
         traceabilityFields = invItem.traceabilityFields || [];
       }
+    } else {
+      console.log('DEBUG: inventoryItems not loaded or not an array:', inventoryItems);
     }
 
     // Set up PO group items for multi-item receiving (only on first item click)

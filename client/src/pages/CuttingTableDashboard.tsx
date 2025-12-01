@@ -1638,16 +1638,23 @@ export default function CuttingTableDashboard() {
                         <TableRow key={fabric.id}>
                           <TableCell className="font-medium">{fabric.internalControlNumber || '-'}</TableCell>
                           <TableCell>
-                            {fabric.fabricPartNumber ? (
-                              <div>
-                                <span className="font-medium">{fabric.fabricPartNumber}</span>
-                                {fabric.fabricType && fabric.fabricType !== fabric.fabricPartNumber && (
-                                  <span className="text-muted-foreground ml-1">({fabric.fabricType})</span>
-                                )}
-                              </div>
-                            ) : (
-                              fabric.fabricType || 'Unknown'
-                            )}
+                            {(() => {
+                              const partNum = fabric.fabricPartNumber || fabric.fabricType;
+                              const matchedItem = fabricItems.find((item: any) => item.agPartNumber === partNum);
+                              const itemName = matchedItem?.name || fabric.fabricType;
+                              const displayName = itemName && itemName !== partNum ? itemName : null;
+                              
+                              return partNum ? (
+                                <div>
+                                  <span className="font-medium">{partNum}</span>
+                                  {displayName && (
+                                    <span className="text-muted-foreground ml-1">({displayName})</span>
+                                  )}
+                                </div>
+                              ) : (
+                                fabric.fabricType || 'Unknown'
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>{fabric.nickname || '-'}</TableCell>
                           <TableCell>{fabric.supplierPartNumber || '-'}</TableCell>

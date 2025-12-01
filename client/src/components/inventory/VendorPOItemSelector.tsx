@@ -227,6 +227,13 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
         const inventoryItem = await apiRequest(`/api/inventory/items/by-part-number/${selectedPart.agPartNumber}`);
         setSelectedInventoryItem(inventoryItem);
         
+        console.log('📦 Raw API response for part', selectedPart.agPartNumber, ':', inventoryItem);
+        console.log('📦 Checking fields:', {
+          vendorUnit: inventoryItem?.vendorUnit,
+          purchaseUnit: inventoryItem?.purchaseUnit,
+          purchaseQuantity: inventoryItem?.purchaseQuantity,
+        });
+        
         const hasConversion = inventoryItem?.vendorUnit && 
                              inventoryItem?.purchaseUnit && 
                              inventoryItem?.purchaseQuantity && 

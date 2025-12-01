@@ -68,8 +68,8 @@ const pdfUpload = multer({
   }
 });
 
-// Enhanced Inventory API - Get all items
-router.get('/items', async (req: Request, res: Response) => {
+// Enhanced Inventory API - Get all items (mounted at /api/enhanced/inventory/items)
+router.get('/inventory/items', async (req: Request, res: Response) => {
   try {
     const items = await storage.getAllInventoryItems();
     res.json(items);
@@ -79,7 +79,19 @@ router.get('/items', async (req: Request, res: Response) => {
   }
 });
 
+// Also expose at /items for /api/inventory/items path
+router.get('/items', async (req: Request, res: Response) => {
+  try {
+    const items = await storage.getAllInventoryItems();
+    res.json(items);
+  } catch (error) {
+    console.error('Get inventory items error:', error);
+    res.status(500).json({ error: 'Failed to fetch inventory items' });
+  }
+});
+
 // Enhanced Inventory API - Get item by AG Part Number (for unit conversion lookup)
+// This route is at /items/by-part-number to work with /api/inventory mount point
 router.get('/items/by-part-number/:partNumber', async (req: Request, res: Response) => {
   try {
     const { partNumber } = req.params;

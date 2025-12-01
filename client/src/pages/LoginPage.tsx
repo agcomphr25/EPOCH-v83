@@ -14,6 +14,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { getDashboardRoute } from '@/config/dashboardMapping';
+import { queryClient } from '@/lib/queryClient';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -56,11 +57,17 @@ export default function LoginPage() {
         if (data.sessionToken) {
           localStorage.setItem('sessionToken', data.sessionToken);
         }
+        
+        // Store username for navigation component to use
+        localStorage.setItem('dev_username', username.toLowerCase());
 
         toast({
           title: 'Success',
           description: 'Login successful!',
         });
+        
+        // Invalidate the currentUser query to refresh navigation with new user data
+        queryClient.invalidateQueries({ queryKey: ['currentUser'] });
 
         // Redirect to user's personalized dashboard
         const dashboardRoute = getDashboardRoute(username);
@@ -114,11 +121,19 @@ export default function LoginPage() {
         if (data.sessionToken) {
           localStorage.setItem('sessionToken', data.sessionToken);
         }
+        
+        // Store username for navigation component to use
+        if (data.user?.username) {
+          localStorage.setItem('dev_username', data.user.username.toLowerCase());
+        }
 
         toast({
           title: 'Welcome!',
           description: `Logged in as ${data.employee?.name || badgeCode}`,
         });
+        
+        // Invalidate the currentUser query to refresh navigation with new user data
+        queryClient.invalidateQueries({ queryKey: ['currentUser'] });
 
         // Redirect to assigned task page (from badge configuration) or default dashboard
         const redirectUrl = data.redirectUrl || getDashboardRoute(data.user.username);

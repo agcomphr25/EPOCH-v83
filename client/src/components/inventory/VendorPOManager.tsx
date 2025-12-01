@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+
 import {
   Pencil,
   Trash2,
@@ -70,6 +71,24 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+// Helper function to format numbers with commas
+function formatNumber(value: number | undefined | null, decimals: number = 2): string {
+  if (value === undefined || value === null) return '0.00';
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+// Helper function to format currency with commas
+function formatCurrency(value: number | undefined | null, decimals: number = 2): string {
+  if (value === undefined || value === null) return '$0.00';
+  return '$' + value.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
 // Types based on our schema
 type VendorPO = {
   id: number;
@@ -89,6 +108,13 @@ type VendorPO = {
   barcode: string;
   createdAt: string;
   updatedAt: string;
+  // Revision tracking fields
+  revisionNumber?: number;
+  parentPoId?: number;
+  changeReason?: string;
+  isCurrentRevision?: boolean;
+  revisedAt?: string;
+  revisedBy?: string;
 };
 
 type VendorPOItem = {
@@ -144,7 +170,7 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
       <div className="flex items-center gap-1 mb-2">
         <Package className="w-4 h-4 text-blue-600" />
         <span className="font-medium text-blue-600">
-          {totalQuantity.toFixed(2)} total qty
+          {formatNumber(totalQuantity)} total qty
         </span>
       </div>
       <div className="space-y-1">
@@ -171,13 +197,13 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
                 {/* Show purchase unit info if available */}
                 {item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit && (
                   <div className="text-green-600 text-xs">
-                    Ordered: {item.purchaseQty.toFixed(2)} {item.purchaseUnit} @ ${(item.purchaseUnitPrice ?? 0).toFixed(4)}/{item.purchaseUnit}
+                    Ordered: {formatNumber(item.purchaseQty)} {item.purchaseUnit} @ {formatCurrency(item.purchaseUnitPrice, 4)}/{item.purchaseUnit}
                   </div>
                 )}
               </div>
               <div className="text-right ml-2 flex-shrink-0 whitespace-nowrap">
                 <div className="font-medium text-gray-900 dark:text-gray-100">
-                  {(item.quantity ?? 0).toFixed(2)} {item.vendorUnit || item.uom || ''}
+                  {formatNumber(item.quantity ?? 0)} {item.vendorUnit || item.uom || ''}
                 </div>
                 <div className="text-gray-500 text-xs">
                   $
@@ -421,13 +447,18 @@ function VendorPOCard({
   onDelete,
   onViewItems,
   onIssuePO,
+  onCreateRevision,
 }: {
   vendorPo: VendorPO;
   onEdit: (vendorPo: VendorPO) => void;
   onDelete: (id: number) => void;
   onViewItems: (vendorPo: VendorPO) => void;
   onIssuePO: (id: number) => void;
+  onCreateRevision: (vendorPo: VendorPO) => void;
 }) {
+  // Check if PO is issued (cannot be directly edited)
+  const isIssued = ['Sent', 'Partially Received', 'Fully Received'].includes(vendorPo.status);
+  
   return (
     <Card
       className="hover:shadow-md transition-shadow"
@@ -441,6 +472,12 @@ function VendorPOCard({
               data-testid={`text-po-number-${vendorPo.id}`}
             >
               {vendorPo.poNumber}
+              {/* Show revision indicator if this is a revision */}
+              {vendorPo.revisionNumber !== undefined && vendorPo.revisionNumber > 0 && (
+                <Badge className="ml-2 bg-purple-100 text-purple-800" data-testid={`revision-badge-${vendorPo.id}`}>
+                  R{vendorPo.revisionNumber}
+                </Badge>
+              )}
             </CardTitle>
             <CardDescription
               className="mt-1"
@@ -455,13 +492,19 @@ function VendorPOCard({
               <VendorPOItemsDisplay vendorPoId={vendorPo.id} />
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col items-end gap-1">
             <Badge
               className={getStatusColor(vendorPo.status)}
               data-testid={`status-${vendorPo.id}`}
             >
               {vendorPo.status}
             </Badge>
+            {/* Show if this is not the current revision (superseded) */}
+            {vendorPo.isCurrentRevision === false && (
+              <Badge className="bg-gray-200 text-gray-600 text-xs" data-testid={`superseded-badge-${vendorPo.id}`}>
+                Superseded
+              </Badge>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -501,7 +544,7 @@ function VendorPOCard({
             data-testid={`button-view-items-${vendorPo.id}`}
           >
             <Eye className="w-4 h-4 mr-1" />
-            Manage Items
+            {isIssued ? 'View Items' : 'Manage Items'}
           </Button>
           <OptionalSettingsSelector vendorPoId={vendorPo.id} />
           {vendorPo.status === 'Draft' && (
@@ -516,15 +559,31 @@ function VendorPOCard({
               Issue PO
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onEdit(vendorPo)}
-            data-testid={`button-edit-${vendorPo.id}`}
-          >
-            <Pencil className="w-4 h-4 mr-1" />
-            Edit
-          </Button>
+          {/* Show Edit button only for Draft POs */}
+          {!isIssued && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onEdit(vendorPo)}
+              data-testid={`button-edit-${vendorPo.id}`}
+            >
+              <Pencil className="w-4 h-4 mr-1" />
+              Edit
+            </Button>
+          )}
+          {/* Show Create Revision button for issued POs */}
+          {isIssued && vendorPo.isCurrentRevision !== false && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onCreateRevision(vendorPo)}
+              className="text-purple-600 hover:text-purple-800 border-purple-300 hover:border-purple-400"
+              data-testid={`button-create-revision-${vendorPo.id}`}
+            >
+              <Pencil className="w-4 h-4 mr-1" />
+              Create Revision
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -753,6 +812,11 @@ export default function VendorPOManager() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showStatusChangeDialog, setShowStatusChangeDialog] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string>('');
+  
+  // Revision dialog state
+  const [showRevisionDialog, setShowRevisionDialog] = useState(false);
+  const [revisionReason, setRevisionReason] = useState('');
+  const [revisionPO, setRevisionPO] = useState<VendorPO | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -846,6 +910,31 @@ export default function VendorPOManager() {
     },
   });
 
+  // Create revision mutation
+  const createRevisionMutation = useMutation({
+    mutationFn: ({ id, changeReason }: { id: number; changeReason: string }) =>
+      apiRequest(`/api/vendor-pos/${id}/revisions`, {
+        method: 'POST',
+        body: JSON.stringify({ changeReason }),
+      }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      toast.success(`Revision created: ${data.poNumber}. You can now edit the new draft.`);
+      setShowRevisionDialog(false);
+      setRevisionReason('');
+      setRevisionPO(null);
+      // Open the new revision for editing
+      if (data) {
+        setSelectedVendorPO(data);
+        setShowDetailView(true);
+        setActiveTab('items');
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to create revision');
+    },
+  });
+
   // Filter vendor POs
   const filteredVendorPOs = (vendorPOs || []).filter((vendorPo) => {
     const matchesSearch =
@@ -895,6 +984,21 @@ export default function VendorPOManager() {
     setSelectedVendorPO(vendorPo);
     setShowDetailView(true);
     setActiveTab('items');
+  };
+
+  const handleCreateRevision = (vendorPo: VendorPO) => {
+    setRevisionPO(vendorPo);
+    setRevisionReason('');
+    setShowRevisionDialog(true);
+  };
+
+  const confirmCreateRevision = () => {
+    if (revisionPO && revisionReason.trim()) {
+      createRevisionMutation.mutate({ 
+        id: revisionPO.id, 
+        changeReason: revisionReason.trim() 
+      });
+    }
   };
 
   const handleFormSubmit = (data: CreateVendorPOData) => {
@@ -1071,11 +1175,11 @@ export default function VendorPOManager() {
                     <td>${item.lineNumber}</td>
                     <td>${item.agPartNumber || '-'}</td>
                     <td>${item.supplierPartNumber || '-'}</td>
-                    <td>${item.description || '-'}${item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit ? `<br/><small style="color: #666;">(${Number(item.purchaseQty).toFixed(2)} ${item.purchaseUnit} ordered)</small>` : ''}</td>
-                    <td>${item.quantity != null ? Number(item.quantity).toFixed(2) : '0.00'}</td>
+                    <td>${item.description || '-'}${item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit ? `<br/><small style="color: #666;">(${Number(item.purchaseQty).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${item.purchaseUnit} ordered)</small>` : ''}</td>
+                    <td>${item.quantity != null ? Number(item.quantity).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
                     <td>${item.vendorUnit || item.uom || '-'}</td>
-                    <td>$${item.unitPrice != null ? Number(item.unitPrice).toFixed(2) : '0.00'}</td>
-                    <td>$${((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)).toFixed(2)}</td>
+                    <td>$${item.unitPrice != null ? Number(item.unitPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>
+                    <td>$${((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -1083,7 +1187,7 @@ export default function VendorPOManager() {
             
             <div class="totals">
               <div class="total-line">
-                Total: $${items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0).toFixed(2)}
+                Total: $${items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
             
@@ -1440,6 +1544,7 @@ export default function VendorPOManager() {
               onDelete={handleDelete}
               onViewItems={handleViewItems}
               onIssuePO={handleIssuePO}
+              onCreateRevision={handleCreateRevision}
             />
           ))}
         </div>
@@ -1455,6 +1560,53 @@ export default function VendorPOManager() {
         }}
         onSubmit={handleFormSubmit}
       />
+
+      {/* Create Revision Dialog */}
+      <AlertDialog open={showRevisionDialog} onOpenChange={setShowRevisionDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle data-testid="revision-dialog-title">
+              Create Revision for {revisionPO?.poNumber}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will create a new draft revision of this purchase order. The original 
+              PO will be marked as superseded and the new revision will be available for editing.
+              <div className="mt-4">
+                <Label htmlFor="revision-reason" className="text-foreground font-medium">
+                  Reason for Revision *
+                </Label>
+                <Textarea
+                  id="revision-reason"
+                  placeholder="Enter the reason for this revision (e.g., quantity adjustment, price correction, additional items needed...)"
+                  value={revisionReason}
+                  onChange={(e) => setRevisionReason(e.target.value)}
+                  className="mt-2"
+                  rows={3}
+                  data-testid="input-revision-reason"
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-revision">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCreateRevision}
+              disabled={!revisionReason.trim() || createRevisionMutation.isPending}
+              className="bg-purple-600 hover:bg-purple-700"
+              data-testid="button-confirm-revision"
+            >
+              {createRevisionMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Revision'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

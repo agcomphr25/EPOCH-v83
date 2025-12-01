@@ -2839,6 +2839,13 @@ export const vendorPOs = pgTable('vendor_pos', {
   totalCost: real('total_cost').default(0),
   notes: text('notes'),
   createdBy: text('created_by'),
+  // Revision tracking fields
+  revisionNumber: integer('revision_number').default(0).notNull(), // R0 = original, R1 = first revision, etc.
+  parentPoId: integer('parent_po_id'), // Self-reference to original PO (null for originals)
+  changeReason: text('change_reason'), // Required explanation for revisions
+  isCurrentRevision: boolean('is_current_revision').default(true).notNull(), // Only one revision should be current
+  revisedAt: timestamp('revised_at'), // When this revision was created
+  revisedBy: text('revised_by'), // Who created this revision
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

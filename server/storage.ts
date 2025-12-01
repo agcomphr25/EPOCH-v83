@@ -1650,6 +1650,10 @@ export interface IStorage {
   }): Promise<any>;
   getInventoryItemCostHistory(agPartNumber: string): Promise<any[]>;
 
+  // Vendor PO Revision Management
+  createVendorPORevision(poId: number, changeReason: string, revisedBy?: string): Promise<any>;
+  getVendorPORevisionHistory(poId: number): Promise<any[]>;
+
   // Vendor PO Settings
   getVendorPOSettings(): Promise<any | undefined>;
   updateVendorPOSettings(data: any): Promise<any>;
@@ -6721,6 +6725,13 @@ export class DatabaseStorage implements IStorage {
           totalCost: vendorPOs.totalCost,
           notes: vendorPOs.notes,
           createdBy: vendorPOs.createdBy,
+          // Revision tracking fields
+          revisionNumber: vendorPOs.revisionNumber,
+          parentPoId: vendorPOs.parentPoId,
+          changeReason: vendorPOs.changeReason,
+          isCurrentRevision: vendorPOs.isCurrentRevision,
+          revisedAt: vendorPOs.revisedAt,
+          revisedBy: vendorPOs.revisedBy,
           createdAt: vendorPOs.createdAt,
           updatedAt: vendorPOs.updatedAt,
         })
@@ -6764,6 +6775,13 @@ export class DatabaseStorage implements IStorage {
         totalCost: vendorPOs.totalCost,
         notes: vendorPOs.notes,
         createdBy: vendorPOs.createdBy,
+        // Revision tracking fields
+        revisionNumber: vendorPOs.revisionNumber,
+        parentPoId: vendorPOs.parentPoId,
+        changeReason: vendorPOs.changeReason,
+        isCurrentRevision: vendorPOs.isCurrentRevision,
+        revisedAt: vendorPOs.revisedAt,
+        revisedBy: vendorPOs.revisedBy,
         createdAt: vendorPOs.createdAt,
         updatedAt: vendorPOs.updatedAt,
       })
@@ -6821,6 +6839,128 @@ export class DatabaseStorage implements IStorage {
 
   async deleteVendorPO(id: number): Promise<void> {
     await db.delete(vendorPOs).where(eq(vendorPOs.id, id));
+  }
+
+  // Vendor PO Revision Management
+  async createVendorPORevision(poId: number, changeReason: string, revisedBy?: string): Promise<any> {
+    // Get the original PO
+    const originalPO = await this.getVendorPO(poId);
+    if (!originalPO) {
+      throw new Error('Vendor PO not found');
+    }
+
+    // Determine the root parent (original PO in the chain)
+    const rootParentId = originalPO.parentPoId || originalPO.id;
+    
+    // Get the highest revision number for this PO family
+    const existingRevisions = await db
+      .select({ revisionNumber: vendorPOs.revisionNumber })
+      .from(vendorPOs)
+      .where(
+        or(
+          eq(vendorPOs.id, rootParentId),
+          eq(vendorPOs.parentPoId, rootParentId)
+        )
+      )
+      .orderBy(desc(vendorPOs.revisionNumber))
+      .limit(1);
+    
+    const nextRevisionNumber = (existingRevisions[0]?.revisionNumber || 0) + 1;
+    
+    // Mark the current PO as no longer the current revision
+    await db
+      .update(vendorPOs)
+      .set({ isCurrentRevision: false, updatedAt: new Date() })
+      .where(eq(vendorPOs.id, poId));
+    
+    // Generate a new unique PO number with revision suffix
+    const basePONumber = originalPO.poNumber.replace(/-R\d+$/, ''); // Remove any existing revision suffix
+    const newPONumber = `${basePONumber}-R${nextRevisionNumber}`;
+    
+    // Create the new revision PO (copy of the original with revision metadata)
+    const revisionData = {
+      poNumber: newPONumber,
+      vendorId: originalPO.vendorId,
+      status: 'Draft', // New revision starts as Draft for editing
+      orderDate: originalPO.orderDate,
+      expectedDeliveryDate: originalPO.expectedDeliveryDate,
+      actualDeliveryDate: originalPO.actualDeliveryDate,
+      shipVia: originalPO.shipVia,
+      barcode: nanoid(12), // New unique barcode
+      subtotal: originalPO.subtotal,
+      tax: originalPO.tax,
+      shippingCost: originalPO.shippingCost,
+      totalCost: originalPO.totalCost,
+      notes: originalPO.notes,
+      createdBy: originalPO.createdBy,
+      revisionNumber: nextRevisionNumber,
+      parentPoId: rootParentId,
+      changeReason: changeReason,
+      isCurrentRevision: true,
+      revisedAt: new Date(),
+      revisedBy: revisedBy,
+    };
+    
+    const [newRevision] = await db.insert(vendorPOs).values(revisionData).returning();
+    
+    // Copy all line items from the original PO to the new revision
+    const originalItems = await this.getVendorPOItems(poId);
+    for (const item of originalItems) {
+      const itemData = {
+        vendorPoId: newRevision.id,
+        lineNumber: item.lineNumber,
+        agPartNumber: item.agPartNumber,
+        description: item.description,
+        purchaseQty: item.purchaseQty,
+        purchaseUnitPrice: item.purchaseUnitPrice,
+        purchaseUnit: item.purchaseUnit,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        vendorUnit: item.vendorUnit,
+        conversionFactor: item.conversionFactor,
+        lineTotal: item.lineTotal,
+        receivedQuantity: 0, // Reset received quantity for new revision
+        notes: item.notes,
+      };
+      await db.insert(vendorPOItems).values(itemData);
+    }
+    
+    // Copy optional settings from original PO
+    const originalSettings = await this.getPOOptionalSettings(poId);
+    for (const setting of originalSettings) {
+      await this.addPOOptionalSetting(newRevision.id, setting.optionalSettingId);
+    }
+    
+    return newRevision;
+  }
+
+  async getVendorPORevisionHistory(poId: number): Promise<any[]> {
+    // Get the PO to find its root parent
+    const po = await this.getVendorPO(poId);
+    if (!po) {
+      return [];
+    }
+    
+    // Determine the root parent ID
+    const rootParentId = po.parentPoId || po.id;
+    
+    // Get all POs in this revision chain (original + all revisions)
+    const history = await db
+      .select()
+      .from(vendorPOs)
+      .leftJoin(vendors, eq(vendorPOs.vendorId, vendors.id))
+      .where(
+        or(
+          eq(vendorPOs.id, rootParentId),
+          eq(vendorPOs.parentPoId, rootParentId)
+        )
+      )
+      .orderBy(vendorPOs.revisionNumber);
+    
+    return history.map(row => ({
+      ...row.vendor_pos,
+      vendorName: row.vendors?.name,
+    }));
   }
 
   // Vendor PO Items CRUD

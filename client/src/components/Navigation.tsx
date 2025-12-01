@@ -95,7 +95,7 @@ export default function Navigation() {
   };
 
   // Fetch current user data
-  const { data: currentUser } = useQuery({
+  const { data: currentUser, refetch: refetchUser } = useQuery({
     queryKey: ['currentUser'],
     queryFn: async () => {
       const token =
@@ -137,6 +137,15 @@ export default function Navigation() {
     retry: false,
   });
 
+  // Listen for storage events to refetch user data after login
+  useEffect(() => {
+    const handleStorageChange = () => {
+      refetchUser();
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [refetchUser]);
+
   // Global keyboard shortcut for search (Cmd/Ctrl+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -164,6 +173,7 @@ export default function Navigation() {
       // Clear any local storage tokens
       localStorage.removeItem('sessionToken');
       localStorage.removeItem('jwtToken');
+      localStorage.removeItem('dev_username');
 
       // Redirect to login page
       window.location.href = '/login';

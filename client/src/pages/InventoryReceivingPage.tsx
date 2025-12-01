@@ -21,9 +21,12 @@ import {
   AlertCircle,
   Search,
   QrCode,
+  FileText,
+  Loader2,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
+import { apiRequest } from '@/lib/queryClient';
 import P2ReceivingDialog from '@/components/inventory/P2ReceivingDialog';
 
 interface ReceivingItem {
@@ -39,6 +42,32 @@ interface ReceivingItem {
   notes?: string;
   receivedDate?: string;
   receivedBy?: string;
+}
+
+interface VendorPO {
+  id: number;
+  poNumber: string;
+  vendorId: number;
+  vendorName: string;
+  status: string;
+  requestedDeliveryDate?: string;
+  notes?: string;
+  createdAt?: string;
+}
+
+interface VendorPOItem {
+  id: number;
+  vendorPoId: number;
+  lineNumber: number;
+  agPartNumber: string;
+  description: string;
+  quantity: number;
+  vendorUnit: string;
+  unitPrice: number;
+  purchaseQty?: number;
+  purchaseUnit?: string;
+  purchaseUnitPrice?: number;
+  receivedQuantity?: number;
 }
 
 // Function to detect if an item is a P2 product
@@ -128,6 +157,66 @@ export default function InventoryReceivingPage() {
     queryKey: ['/api/inventory'],
     enabled: true,
   });
+
+  // Fetch Vendor POs with status "Sent" for Pending Receipts
+  const { data: sentPOsResponse, isLoading: isLoadingPOs } = useQuery<{ data: VendorPO[] }>({
+    queryKey: ['/api/vendor-pos', 'Sent'],
+    queryFn: () => apiRequest('/api/vendor-pos?status=Sent'),
+  });
+  
+  const sentPOs = sentPOsResponse?.data || [];
+
+  // Fetch line items for all sent POs
+  const { data: poItemsMap, isLoading: isLoadingItems } = useQuery<Record<number, VendorPOItem[]>>({
+    queryKey: ['/api/vendor-pos/items', sentPOs.map(po => po.id)],
+    queryFn: async () => {
+      if (sentPOs.length === 0) return {};
+      const itemsMap: Record<number, VendorPOItem[]> = {};
+      await Promise.all(
+        sentPOs.map(async (po) => {
+          try {
+            const items = await apiRequest(`/api/vendor-pos/${po.id}/items`);
+            itemsMap[po.id] = items || [];
+          } catch (error) {
+            console.error(`Failed to fetch items for PO ${po.id}:`, error);
+            itemsMap[po.id] = [];
+          }
+        })
+      );
+      return itemsMap;
+    },
+    enabled: sentPOs.length > 0,
+  });
+
+  // Transform PO items into receiving items format
+  const pendingReceivingItems: (ReceivingItem & { poNumber: string; vendorName: string })[] = [];
+  if (poItemsMap) {
+    sentPOs.forEach((po) => {
+      const items = poItemsMap[po.id] || [];
+      items.forEach((item) => {
+        const expectedQty = item.quantity || 0;
+        const receivedQty = item.receivedQuantity || 0;
+        let status: 'pending' | 'partial' | 'complete' = 'pending';
+        if (receivedQty >= expectedQty && expectedQty > 0) {
+          status = 'complete';
+        } else if (receivedQty > 0) {
+          status = 'partial';
+        }
+        
+        pendingReceivingItems.push({
+          id: item.id,
+          agPartNumber: item.agPartNumber || '',
+          name: item.description || '',
+          expectedQuantity: expectedQty,
+          receivedQuantity: receivedQty,
+          status,
+          notes: `${po.poNumber} from ${po.vendorName}`,
+          poNumber: po.poNumber,
+          vendorName: po.vendorName,
+        });
+      });
+    });
+  }
 
   const createInventoryMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -465,63 +554,79 @@ export default function InventoryReceivingPage() {
         <TabsContent value="pending">
           <Card>
             <CardHeader>
-              <CardTitle>Pending Receipts</CardTitle>
-              <CardDescription>Items expected to be received</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Pending Receipts
+              </CardTitle>
+              <CardDescription>
+                Items from issued Purchase Orders awaiting receipt ({pendingReceivingItems.filter(item => item.status !== 'complete').length} items from {sentPOs.length} POs)
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {mockReceivingItems
-                  .filter((item) => item.status !== 'complete')
-                  .map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">
-                            {item.agPartNumber}
-                          </span>
-                          <span className="text-muted-foreground">-</span>
-                          <span>{item.name}</span>
-                          {isP2Product(item) && (
-                            <Badge
-                              variant="secondary"
-                              className="bg-orange-100 text-orange-800 text-xs"
-                            >
-                              <QrCode className="w-3 h-3 mr-1" />
-                              P2
-                            </Badge>
-                          )}
-                          {getStatusBadge(item.status)}
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Expected: {item.expectedQuantity} | Received:{' '}
-                          {item.receivedQuantity}
-                        </p>
-                        {item.notes && (
-                          <p className="text-sm text-muted-foreground">
-                            {item.notes}
-                          </p>
-                        )}
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={() => handleReceiveFromPending(item)}
-                        className={
-                          isP2Product(item)
-                            ? 'bg-orange-500 hover:bg-orange-600'
-                            : ''
-                        }
+              {(isLoadingPOs || isLoadingItems) ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                  <span className="text-muted-foreground">Loading pending receipts...</span>
+                </div>
+              ) : pendingReceivingItems.filter(item => item.status !== 'complete').length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No pending receipts</p>
+                  <p className="text-sm">Issue a Purchase Order to see items here</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {pendingReceivingItems
+                    .filter((item) => item.status !== 'complete')
+                    .map((item) => (
+                      <div
+                        key={`${item.poNumber}-${item.id}`}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                       >
-                        {isP2Product(item) && (
-                          <QrCode className="w-4 h-4 mr-1" />
-                        )}
-                        Receive
-                      </Button>
-                    </div>
-                  ))}
-              </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="outline" className="font-mono text-xs">
+                              {item.poNumber}
+                            </Badge>
+                            <span className="font-medium">
+                              #{item.agPartNumber}
+                            </span>
+                            <span className="text-muted-foreground">-</span>
+                            <span className="truncate max-w-[300px]">{item.name}</span>
+                            {isP2Product(item) && (
+                              <Badge
+                                variant="secondary"
+                                className="bg-orange-100 text-orange-800 text-xs"
+                              >
+                                <QrCode className="w-3 h-3 mr-1" />
+                                P2
+                              </Badge>
+                            )}
+                            {getStatusBadge(item.status)}
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Expected: {item.expectedQuantity} | Received:{' '}
+                            {item.receivedQuantity} | Vendor: {item.vendorName}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => handleReceiveFromPending(item)}
+                          className={
+                            isP2Product(item)
+                              ? 'bg-orange-500 hover:bg-orange-600'
+                              : ''
+                          }
+                        >
+                          {isP2Product(item) && (
+                            <QrCode className="w-4 h-4 mr-1" />
+                          )}
+                          Receive
+                        </Button>
+                      </div>
+                    ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

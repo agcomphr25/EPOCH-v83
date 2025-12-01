@@ -43,6 +43,7 @@ import {
   Square,
   Tag,
   ClipboardList,
+  Copy,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import JsBarcode from 'jsbarcode';
@@ -169,6 +170,12 @@ export default function InventoryReceivingPage() {
   });
   const [selectedForPrint, setSelectedForPrint] = useState<Set<number>>(new Set());
   const [recentlyReceived, setRecentlyReceived] = useState<Array<ReceivingItem & { poNumber: string; vendorName: string }>>([]);
+  
+  // Multi-item receiving state for auto-advance and copy functionality
+  const [currentPoGroupItems, setCurrentPoGroupItems] = useState<(ReceivingItem & { poNumber: string; vendorName: string })[]>([]);
+  const [currentItemIndex, setCurrentItemIndex] = useState(0);
+  const [lastTraceabilityData, setLastTraceabilityData] = useState<Record<string, string>>({});
+  const [receivedItemIds, setReceivedItemIds] = useState<Set<number>>(new Set());
 
   const queryClient = useQueryClient();
 
@@ -403,7 +410,7 @@ export default function InventoryReceivingPage() {
     createInventoryMutation.mutate(inventoryData);
   };
 
-  const handleReceiveFromPending = (item: ReceivingItem & { poNumber: string; vendorName: string }) => {
+  const handleReceiveFromPending = (item: ReceivingItem & { poNumber: string; vendorName: string }, skipGroupSetup = false) => {
     // Check if this is a P2 product
     if (isP2Product(item)) {
       setSelectedP2Item(item);
@@ -423,6 +430,30 @@ export default function InventoryReceivingPage() {
         traceabilityRequired = invItem.traceabilityRequired || false;
         traceabilityFields = invItem.traceabilityFields || [];
       }
+    }
+
+    // Set up PO group items for multi-item receiving (only on first item click)
+    if (!skipGroupSetup) {
+      // Find all items in the same PO from the pending items list
+      const samePoItems = pendingReceivingItems.filter(
+        (i: ReceivingItem & { poNumber: string; vendorName: string }) => 
+          i.poNumber === item.poNumber && 
+          !isP2Product(i) && 
+          (i.status === 'pending' || i.status === 'partial')
+      );
+      if (samePoItems.length > 0) {
+        setCurrentPoGroupItems(samePoItems);
+        const itemIndex = samePoItems.findIndex(
+          (i: ReceivingItem & { poNumber: string; vendorName: string }) => i.id === item.id
+        );
+        setCurrentItemIndex(itemIndex >= 0 ? itemIndex : 0);
+      } else {
+        setCurrentPoGroupItems([item]);
+        setCurrentItemIndex(0);
+      }
+      // Reset last traceability data and received IDs when starting a new PO group
+      setLastTraceabilityData({});
+      setReceivedItemIds(new Set());
     }
 
     // For non-P2 products, open the receiving dialog
@@ -447,6 +478,32 @@ export default function InventoryReceivingPage() {
     });
     setTraceabilityData(initialTraceabilityData);
     setReceivingDialogOpen(true);
+  };
+
+  // Copy traceability data from previous item
+  const handleCopyFromPrevious = () => {
+    if (Object.keys(lastTraceabilityData).length === 0) {
+      toast.error('No previous traceability data to copy');
+      return;
+    }
+    // Copy only fields that are configured for this item
+    const copiedData: Record<string, string> = {};
+    selectedItemTraceability.fields.forEach((field) => {
+      if (lastTraceabilityData[field]) {
+        // For received date, always use today
+        if (field === 'receivedDate') {
+          copiedData[field] = new Date().toISOString().split('T')[0];
+        } else {
+          copiedData[field] = lastTraceabilityData[field];
+        }
+      } else if (field === 'receivedDate') {
+        copiedData[field] = new Date().toISOString().split('T')[0];
+      } else {
+        copiedData[field] = '';
+      }
+    });
+    setTraceabilityData(copiedData);
+    toast.success('Copied traceability data from previous item');
   };
 
   const handleDialogReceive = async () => {
@@ -513,6 +570,19 @@ export default function InventoryReceivingPage() {
         setRecentlyReceived(prev => [receivedItem, ...prev]);
       }
 
+      // Save last traceability data for "Copy from Previous" feature
+      if (selectedItemTraceability.required && Object.keys(traceabilityData).length > 0) {
+        setLastTraceabilityData({ ...traceabilityData });
+      }
+
+      // Track this item as received
+      const currentItemId = selectedReceivingItem.id;
+      setReceivedItemIds(prev => {
+        const updated = new Set(prev);
+        if (currentItemId) updated.add(currentItemId);
+        return updated;
+      });
+
       toast.success(`Successfully received ${dialogReceivingData.receivedQuantity} units of ${selectedReceivingItem.agPartNumber}`);
       
       // Invalidate queries to refresh the data
@@ -520,15 +590,51 @@ export default function InventoryReceivingPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos/items'] });
       queryClient.invalidateQueries({ queryKey: ['/api/inventory'] });
       
-      // Close dialog and reset
-      setReceivingDialogOpen(false);
-      setSelectedReceivingItem(null);
-      setSelectedItemTraceability({ required: false, fields: [] });
-      setDialogReceivingData({
-        receivedQuantity: 0,
-        notes: '',
-      });
-      setTraceabilityData({});
+      // Store PO number and update received IDs before advancing
+      const poNumberForAdvance = selectedReceivingItem.poNumber;
+      const groupItemsCopy = [...currentPoGroupItems];
+      const currentIdx = currentItemIndex;
+      
+      // Update received IDs state
+      const newReceivedIds = new Set(receivedItemIds);
+      if (currentItemId) newReceivedIds.add(currentItemId);
+      setReceivedItemIds(newReceivedIds);
+      
+      // Helper function to close dialog and reset state
+      const closeAndReset = (showCompletion = false) => {
+        setReceivingDialogOpen(false);
+        setSelectedReceivingItem(null);
+        setSelectedItemTraceability({ required: false, fields: [] });
+        setDialogReceivingData({ receivedQuantity: 0, notes: '' });
+        setTraceabilityData({});
+        setCurrentPoGroupItems([]);
+        setCurrentItemIndex(0);
+        setReceivedItemIds(new Set());
+        if (showCompletion) {
+          toast.success('All items in this PO have been received!');
+        }
+      };
+      
+      // Find next unreceived item using the cached group, skipping received IDs
+      let nextItemIdx = -1;
+      for (let i = currentIdx + 1; i < groupItemsCopy.length; i++) {
+        const item = groupItemsCopy[i];
+        if (item.id && !newReceivedIds.has(item.id)) {
+          nextItemIdx = i;
+          break;
+        }
+      }
+      
+      if (nextItemIdx < 0 || groupItemsCopy.length <= 1) {
+        closeAndReset(groupItemsCopy.length > 1);
+      } else {
+        const nextItem = groupItemsCopy[nextItemIdx];
+        setCurrentItemIndex(nextItemIdx);
+        // Small delay for toast visibility before advancing
+        setTimeout(() => {
+          handleReceiveFromPending(nextItem, true);
+        }, 400);
+      }
     } catch (error) {
       toast.error('Failed to receive item');
       console.error('Receiving error:', error);
@@ -544,6 +650,11 @@ export default function InventoryReceivingPage() {
       notes: '',
     });
     setTraceabilityData({});
+    // Reset all multi-item tracking state
+    setCurrentPoGroupItems([]);
+    setCurrentItemIndex(0);
+    setReceivedItemIds(new Set());
+    setLastTraceabilityData({});
   };
 
   // Toggle item selection for barcode printing
@@ -1262,9 +1373,19 @@ export default function InventoryReceivingPage() {
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
               Receive Item
+              {currentPoGroupItems.length > 1 && (
+                <Badge variant="secondary" className="ml-2 text-xs">
+                  Item {currentItemIndex + 1} of {currentPoGroupItems.length}
+                </Badge>
+              )}
             </DialogTitle>
             <DialogDescription>
               Enter receiving details for this item
+              {currentPoGroupItems.length > 1 && (
+                <span className="block text-xs mt-1">
+                  After receiving, the next item will open automatically
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -1310,9 +1431,24 @@ export default function InventoryReceivingPage() {
               {/* Traceability Fields - Dynamic based on item configuration */}
               {selectedItemTraceability.required && selectedItemTraceability.fields.length > 0 && (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400">
-                    <ClipboardList className="h-4 w-4" />
-                    Traceability Information Required
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400">
+                      <ClipboardList className="h-4 w-4" />
+                      Traceability Information Required
+                    </div>
+                    {Object.keys(lastTraceabilityData).length > 0 && currentItemIndex > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCopyFromPrevious}
+                        className="text-xs"
+                        data-testid="button-copy-traceability"
+                      >
+                        <Copy className="h-3 w-3 mr-1" />
+                        Copy from Previous
+                      </Button>
+                    )}
                   </div>
                   <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-3 bg-blue-50/50 dark:bg-blue-900/20 space-y-3">
                     {selectedItemTraceability.fields.map((field) => (

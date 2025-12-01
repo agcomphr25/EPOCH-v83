@@ -38,7 +38,13 @@ import {
   FileText,
   Loader2,
   Save,
+  Printer,
+  CheckSquare,
+  Square,
+  Tag,
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import JsBarcode from 'jsbarcode';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -123,6 +129,8 @@ export default function InventoryReceivingPage() {
     receivedQuantity: 0,
     status: 'pending',
   });
+  const [selectedForPrint, setSelectedForPrint] = useState<Set<number>>(new Set());
+  const [recentlyReceived, setRecentlyReceived] = useState<Array<ReceivingItem & { poNumber: string; vendorName: string }>>([]);
 
   const queryClient = useQueryClient();
 
@@ -407,6 +415,26 @@ export default function InventoryReceivingPage() {
         }),
       });
 
+      // Track recently received item for barcode printing (if traceable)
+      const isTraceable = dialogReceivingData.lotNumber || dialogReceivingData.batchNumber;
+      if (isTraceable) {
+        const receivedItem: ReceivingItem & { poNumber: string; vendorName: string } = {
+          id: selectedReceivingItem.id,
+          agPartNumber: selectedReceivingItem.agPartNumber,
+          name: selectedReceivingItem.name,
+          expectedQuantity: selectedReceivingItem.expectedQuantity,
+          receivedQuantity: dialogReceivingData.receivedQuantity,
+          lotNumber: dialogReceivingData.lotNumber,
+          batchNumber: dialogReceivingData.batchNumber,
+          status: 'complete',
+          receivedDate: new Date().toISOString(),
+          poNumber: selectedReceivingItem.poNumber,
+          vendorName: selectedReceivingItem.vendorName,
+          notes: dialogReceivingData.notes,
+        };
+        setRecentlyReceived(prev => [receivedItem, ...prev]);
+      }
+
       toast.success(`Successfully received ${dialogReceivingData.receivedQuantity} units of ${selectedReceivingItem.agPartNumber}`);
       
       // Invalidate queries to refresh the data
@@ -437,6 +465,181 @@ export default function InventoryReceivingPage() {
       lotNumber: '',
       batchNumber: '',
       notes: '',
+    });
+  };
+
+  // Toggle item selection for barcode printing
+  const togglePrintSelection = (itemId: number) => {
+    setSelectedForPrint(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
+  };
+
+  // Select all traceable items for printing
+  const selectAllForPrint = () => {
+    const allIds = recentlyReceived.map(item => item.id!).filter(Boolean);
+    setSelectedForPrint(new Set(allIds));
+  };
+
+  // Clear all selections
+  const clearPrintSelection = () => {
+    setSelectedForPrint(new Set());
+  };
+
+  // Batch print barcodes for selected items
+  const handleBatchPrintBarcodes = () => {
+    const selectedItems = recentlyReceived.filter(item => selectedForPrint.has(item.id!));
+    
+    if (selectedItems.length === 0) {
+      toast.error('Please select items to print barcodes');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Please allow popups to print barcodes');
+      return;
+    }
+
+    // Generate barcode label content
+    const generateLabelContent = (item: ReceivingItem & { poNumber: string; vendorName: string }, index: number) => {
+      const barcodeValue = item.lotNumber || item.batchNumber || item.agPartNumber;
+      return `
+        <div class="label">
+          <div class="label-content">
+            <div class="part-number">${item.agPartNumber}</div>
+            <div class="item-name">${item.name}</div>
+            <div class="barcode-container">
+              <canvas id="barcode-${index}" width="200" height="50"></canvas>
+            </div>
+            ${item.lotNumber ? `<div class="lot-info">Lot: ${item.lotNumber}</div>` : ''}
+            ${item.batchNumber ? `<div class="batch-info">Batch: ${item.batchNumber}</div>` : ''}
+            <div class="qty-info">Qty: ${item.receivedQuantity} | PO: ${item.poNumber}</div>
+            <div class="date-info">${new Date(item.receivedDate!).toLocaleDateString()}</div>
+          </div>
+        </div>
+      `;
+    };
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Inventory Barcodes</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; padding: 10px; }
+            .labels-container {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+            }
+            .label {
+              width: 2.625in;
+              height: 1.2in;
+              border: 1px solid #ccc;
+              padding: 5px;
+              page-break-inside: avoid;
+            }
+            .label-content {
+              height: 100%;
+              display: flex;
+              flex-direction: column;
+              justify-content: space-between;
+              text-align: center;
+            }
+            .part-number {
+              font-size: 10pt;
+              font-weight: bold;
+              color: #000;
+            }
+            .item-name {
+              font-size: 7pt;
+              color: #333;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+            .barcode-container {
+              display: flex;
+              justify-content: center;
+              margin: 3px 0;
+            }
+            .lot-info, .batch-info {
+              font-size: 8pt;
+              font-weight: bold;
+              color: #0066cc;
+            }
+            .qty-info {
+              font-size: 7pt;
+              color: #666;
+            }
+            .date-info {
+              font-size: 6pt;
+              color: #999;
+            }
+            @media print {
+              body { margin: 0; }
+              .label { border: none; }
+              @page {
+                size: 8.5in 11in;
+                margin: 0.5in;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="labels-container">
+            ${selectedItems.map((item, idx) => generateLabelContent(item, idx)).join('')}
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+
+    // Generate barcodes after DOM is ready
+    setTimeout(() => {
+      selectedItems.forEach((item, idx) => {
+        const canvas = printWindow.document.getElementById(`barcode-${idx}`) as HTMLCanvasElement;
+        if (canvas) {
+          const barcodeValue = item.lotNumber || item.batchNumber || item.agPartNumber;
+          try {
+            JsBarcode(canvas, barcodeValue, {
+              format: 'CODE39',
+              width: 1.5,
+              height: 35,
+              displayValue: true,
+              fontSize: 10,
+              margin: 2,
+              lineColor: '#000000',
+            });
+          } catch (error) {
+            console.error('Error generating barcode:', error);
+          }
+        }
+      });
+
+      // Print and close
+      printWindow.focus();
+      printWindow.print();
+    }, 300);
+
+    toast.success(`Printing barcodes for ${selectedItems.length} items`);
+    clearPrintSelection();
+  };
+
+  // Remove item from recently received list
+  const removeFromRecentlyReceived = (itemId: number) => {
+    setRecentlyReceived(prev => prev.filter(item => item.id !== itemId));
+    setSelectedForPrint(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(itemId);
+      return newSet;
     });
   };
 
@@ -805,44 +1008,156 @@ export default function InventoryReceivingPage() {
         </TabsContent>
 
         <TabsContent value="history">
-          <Card>
-            <CardHeader>
-              <CardTitle>Receiving History</CardTitle>
-              <CardDescription>Recently completed receipts</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {mockReceivingItems
-                  .filter((item) => item.status === 'complete')
-                  .map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-4 border rounded-lg bg-green-50"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">
-                            {item.agPartNumber}
-                          </span>
-                          <span className="text-muted-foreground">-</span>
-                          <span>{item.name}</span>
-                          {getStatusBadge(item.status)}
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Received: {item.receivedQuantity} units
-                        </p>
-                        {item.receivedBy && (
-                          <p className="text-sm text-muted-foreground">
-                            By: {item.receivedBy} on{' '}
-                            {new Date(item.receivedDate!).toLocaleDateString()}
-                          </p>
-                        )}
-                      </div>
+          <div className="space-y-6">
+            {/* Recently Received Traceable Items - For Barcode Printing */}
+            {recentlyReceived.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Tag className="h-5 w-5" />
+                        Recently Received - Print Barcodes
+                      </CardTitle>
+                      <CardDescription>
+                        Traceable items ready for barcode printing (Lot/Batch tracked)
+                      </CardDescription>
                     </div>
-                  ))}
-              </div>
-            </CardContent>
-          </Card>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={selectedForPrint.size === recentlyReceived.length ? clearPrintSelection : selectAllForPrint}
+                        data-testid="button-select-all-print"
+                      >
+                        {selectedForPrint.size === recentlyReceived.length ? (
+                          <>
+                            <Square className="h-4 w-4 mr-2" />
+                            Deselect All
+                          </>
+                        ) : (
+                          <>
+                            <CheckSquare className="h-4 w-4 mr-2" />
+                            Select All ({recentlyReceived.length})
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        onClick={handleBatchPrintBarcodes}
+                        disabled={selectedForPrint.size === 0}
+                        data-testid="button-print-barcodes"
+                      >
+                        <Printer className="h-4 w-4 mr-2" />
+                        Print Barcodes ({selectedForPrint.size})
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {recentlyReceived.map((item) => (
+                      <div
+                        key={item.id}
+                        className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${
+                          selectedForPrint.has(item.id!) ? 'bg-blue-50 border-blue-300' : 'bg-green-50'
+                        }`}
+                        data-testid={`received-item-${item.id}`}
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <Checkbox
+                            checked={selectedForPrint.has(item.id!)}
+                            onCheckedChange={() => togglePrintSelection(item.id!)}
+                            data-testid={`checkbox-print-${item.id}`}
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge variant="outline" className="font-mono text-xs">
+                                {item.poNumber}
+                              </Badge>
+                              <span className="font-medium">{item.agPartNumber}</span>
+                              <span className="text-muted-foreground">-</span>
+                              <span className="text-sm">{item.name}</span>
+                              {getStatusBadge('complete')}
+                            </div>
+                            <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                              <span>Qty: {item.receivedQuantity}</span>
+                              {item.lotNumber && (
+                                <Badge variant="secondary" className="text-xs">
+                                  Lot: {item.lotNumber}
+                                </Badge>
+                              )}
+                              {item.batchNumber && (
+                                <Badge variant="secondary" className="text-xs">
+                                  Batch: {item.batchNumber}
+                                </Badge>
+                              )}
+                              <span>
+                                {new Date(item.receivedDate!).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeFromRecentlyReceived(item.id!)}
+                          className="text-muted-foreground hover:text-destructive"
+                          data-testid={`button-remove-${item.id}`}
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Regular Receiving History */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Receiving History</CardTitle>
+                <CardDescription>Previously completed receipts</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {mockReceivingItems
+                    .filter((item) => item.status === 'complete')
+                    .map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between p-4 border rounded-lg bg-green-50"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">
+                              {item.agPartNumber}
+                            </span>
+                            <span className="text-muted-foreground">-</span>
+                            <span>{item.name}</span>
+                            {getStatusBadge(item.status)}
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Received: {item.receivedQuantity} units
+                          </p>
+                          {item.receivedBy && (
+                            <p className="text-sm text-muted-foreground">
+                              By: {item.receivedBy} on{' '}
+                              {new Date(item.receivedDate!).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  {mockReceivingItems.filter((item) => item.status === 'complete').length === 0 && recentlyReceived.length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">
+                      No completed receipts yet
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
 

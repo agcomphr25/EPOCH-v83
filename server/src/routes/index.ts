@@ -1597,16 +1597,30 @@ export function registerRoutes(app: Express): Server {
       const { poId } = req.params;
       const { storage } = await import('../../storage');
       const { insertP2PurchaseOrderItemSchema } = await import('../../schema');
+      
+      console.log('📦 P2 PO Item Create - Request body:', req.body);
+      
       const itemData = insertP2PurchaseOrderItemSchema.omit({ poId: true }).parse(req.body);
+      
+      console.log('📦 P2 PO Item Create - Parsed data:', itemData);
       
       // Calculate totalPrice from quantity and unitPrice
       const totalPrice = itemData.quantity * (itemData.unitPrice || 0);
       
-      const item = await storage.createP2PurchaseOrderItem({ 
+      console.log('📦 P2 PO Item Create - Calculated totalPrice:', totalPrice);
+      
+      const createData = { 
         ...itemData, 
         poId: parseInt(poId),
         totalPrice
-      });
+      };
+      
+      console.log('📦 P2 PO Item Create - Final data to storage:', createData);
+      
+      const item = await storage.createP2PurchaseOrderItem(createData);
+      
+      console.log('📦 P2 PO Item Create - Created item:', item);
+      
       res.status(201).json(item);
     } catch (error) {
       console.error('Create P2 purchase order item error:', error);

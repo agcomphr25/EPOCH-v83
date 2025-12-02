@@ -10787,9 +10787,12 @@ export class DatabaseStorage implements IStorage {
   async createP2PurchaseOrderItem(
     data: InsertP2PurchaseOrderItem
   ): Promise<P2PurchaseOrderItem> {
+    // Calculate totalPrice from quantity and unitPrice
+    const totalPrice = data.quantity * (data.unitPrice || 0);
+    
     const [item] = await db
       .insert(p2PurchaseOrderItems)
-      .values(data)
+      .values({ ...data, totalPrice })
       .returning();
 
     try {

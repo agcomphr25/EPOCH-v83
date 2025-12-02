@@ -10926,100 +10926,194 @@ export class DatabaseStorage implements IStorage {
     }
 
     const productionOrders: P2ProductionOrder[] = [];
+    const skippedParts: string[] = []; // Track parts skipped due to missing data
+
+    // Helper function to recursively process manufactured parts
+    // Uses a recursion stack to detect cycles (same part appearing in its own ancestor chain)
+    const processManufacturedPart = async (
+      partNumber: string,
+      quantity: number,
+      poItem: typeof poItems[0],
+      ancestorStack: Set<string>, // Track ancestors in current recursion branch
+      level: number = 0
+    ): Promise<void> => {
+      // Prevent cycles: if this part is already in our ancestor chain, we have a circular BOM
+      if (ancestorStack.has(partNumber)) {
+        console.warn(`⚠️ Circular BOM detected: ${partNumber} appears in its own ancestor chain - skipping to prevent infinite loop`);
+        return;
+      }
+      
+      // Prevent excessive depth
+      if (level > 10) {
+        console.warn(`⚠️ Maximum BOM depth exceeded for ${partNumber}`);
+        return;
+      }
+      
+      // Add current part to ancestor stack for this branch
+      ancestorStack.add(partNumber);
+      
+      try {
+        // Get the BOM for this part
+        const bomRecords = await db
+          .select()
+          .from(boms)
+          .where(and(
+            eq(boms.parentPartAgNumber, partNumber),
+            eq(boms.isActive, true)
+          ));
+
+        if (bomRecords.length === 0) {
+          console.log(`ℹ️ No BOM found for part ${partNumber} (may be a leaf component)`);
+          return;
+        }
+
+        const bom = bomRecords[0];
+
+        // Get the most recent active revision (prefer released, otherwise latest)
+        const revisions = await db
+          .select()
+          .from(bomRevisions)
+          .where(eq(bomRevisions.bomId, bom.id))
+          .orderBy(sql`CASE WHEN ${bomRevisions.isReleased} THEN 0 ELSE 1 END`, sql`${bomRevisions.createdAt} DESC`);
+
+        if (revisions.length === 0) {
+          console.warn(`⚠️ No BOM revision found for BOM ${bom.code}`);
+          return;
+        }
+
+        const revision = revisions[0];
+
+        // Get all BOM lines (components) for this revision
+        const lines = await db
+          .select()
+          .from(bomLines)
+          .where(eq(bomLines.revisionId, revision.id))
+          .orderBy(bomLines.operationSeq);
+
+        if (lines.length === 0) {
+          console.warn(`⚠️ No BOM lines found for BOM ${bom.code} revision ${revision.revCode}`);
+          return;
+        }
+
+        // Process each BOM line component
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+
+          // Get part details from inventory to check if it's Manufactured or Purchased
+          const partInfo = await db
+            .select()
+            .from(inventoryItems)
+            .where(eq(inventoryItems.agPartNumber, line.childPartAgNumber))
+            .limit(1);
+
+          if (partInfo.length === 0) {
+            console.warn(`⚠️ Part ${line.childPartAgNumber} not found in inventory - skipping`);
+            continue;
+          }
+
+          const part = partInfo[0];
+          
+          // CRITICAL: Only create production orders for MANUFACTURED items
+          if (part.type !== 'Manufactured') {
+            console.log(`📦 Skipping purchased part ${line.childPartAgNumber} (type: ${part.type || 'undefined'})`);
+            continue;
+          }
+
+          // Manufactured items must have a manufacturing department
+          if (!part.manufacturingDepartment) {
+            const skipMsg = `Manufactured part ${line.childPartAgNumber} has no manufacturing department assigned`;
+            console.warn(`⚠️ ${skipMsg} - skipping`);
+            skippedParts.push(skipMsg);
+            continue;
+          }
+
+          // Calculate total quantity needed (qty per unit * parent quantity)
+          const qtyPer = Number(line.qtyPer) || 1;
+          const totalQuantity = Math.ceil(qtyPer * quantity);
+
+          console.log(`🔧 Creating ${totalQuantity} production order(s) for manufactured part ${line.childPartAgNumber} (dept: ${part.manufacturingDepartment})`);
+
+          // Create individual production orders (1 unit each) for manufactured items
+          for (let unitIndex = 1; unitIndex <= totalQuantity; unitIndex++) {
+            // Generate unique order ID: P2-{PO#}-{item#}-{level}-{line#}-{unit#}
+            const levelPrefix = level > 0 ? `L${level}-` : '';
+            const orderIdSuffix = String(i + 1).padStart(3, '0');
+            const unitSuffix = String(unitIndex).padStart(3, '0');
+            const orderId = `P2-${po.poNumber}-${poItem.id}-${levelPrefix}${orderIdSuffix}-${unitSuffix}`;
+
+            const productionOrderData: InsertP2ProductionOrder = {
+              orderId,
+              p2PoId: poId,
+              p2PoItemId: poItem.id,
+              bomDefinitionId: bom.id,
+              bomItemId: line.id,
+              sku: line.childPartAgNumber,
+              partName: part.name || line.childPartAgNumber,
+              quantity: 1,
+              department: part.manufacturingDepartment as any,
+              status: 'PENDING',
+              priority: 50,
+              dueDate: po.dueDate || undefined,
+              notes: `Generated from P2 PO ${po.poNumber} - BOM ${bom.code} (${revision.revCode}) - Component ${line.childPartAgNumber} - Unit ${unitIndex} of ${totalQuantity}${level > 0 ? ` (Sub-assembly level ${level})` : ''}`,
+            };
+
+            const productionOrder = await this.createP2ProductionOrder(productionOrderData);
+            productionOrders.push(productionOrder);
+          }
+
+          // RECURSIVE BOM EXPLOSION: Check if this manufactured part has its own BOM
+          // and recursively create production orders for its sub-components
+          await processManufacturedPart(
+            line.childPartAgNumber,
+            totalQuantity,
+            poItem,
+            ancestorStack,
+            level + 1
+          );
+        }
+      } finally {
+        // ALWAYS remove current part from ancestor stack when leaving this branch
+        // This ensures proper cleanup on all exit paths (normal return, early return, or error)
+        ancestorStack.delete(partNumber);
+      }
+    };
 
     // Process each PO item
     for (const poItem of poItems) {
-      // Get the BOM from the robust BOM system
-      // Match using parentPartAgNumber which corresponds to the part number
-      const bomRecords = await db
+      console.log(`\n📋 Processing PO Item: ${poItem.partNumber} (Qty: ${poItem.quantity})`);
+      
+      // First, check if the PO item itself is manufactured
+      const topLevelPart = await db
         .select()
-        .from(boms)
-        .where(and(
-          eq(boms.parentPartAgNumber, poItem.partNumber),
-          eq(boms.isActive, true)
-        ));
+        .from(inventoryItems)
+        .where(eq(inventoryItems.agPartNumber, poItem.partNumber))
+        .limit(1);
 
-      if (bomRecords.length === 0) {
-        console.warn(`No BOM found for part number: ${poItem.partNumber}`);
-        continue;
+      if (topLevelPart.length > 0 && topLevelPart[0].type === 'Manufactured') {
+        console.log(`🔧 Top-level item ${poItem.partNumber} is Manufactured`);
+      } else if (topLevelPart.length > 0) {
+        console.log(`📦 Top-level item ${poItem.partNumber} is ${topLevelPart[0].type || 'undefined type'} - exploding BOM for sub-components only`);
       }
 
-      const bom = bomRecords[0];
-
-      // Get the most recent active revision (prefer released, otherwise latest)
-      const revisions = await db
-        .select()
-        .from(bomRevisions)
-        .where(eq(bomRevisions.bomId, bom.id))
-        .orderBy(sql`CASE WHEN ${bomRevisions.isReleased} THEN 0 ELSE 1 END`, sql`${bomRevisions.createdAt} DESC`);
-
-      if (revisions.length === 0) {
-        console.warn(`No BOM revision found for BOM ${bom.code}`);
-        continue;
-      }
-
-      const revision = revisions[0];
-
-      // Get all BOM lines (components) for this revision
-      const lines = await db
-        .select()
-        .from(bomLines)
-        .where(eq(bomLines.revisionId, revision.id))
-        .orderBy(bomLines.operationSeq);
-
-      if (lines.length === 0) {
-        console.warn(`No BOM lines found for BOM ${bom.code} revision ${revision.revCode}`);
-        continue;
-      }
-
-      // Create production orders for each BOM line
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-
-        // Calculate total quantity needed (qty per unit * PO quantity)
-        const qtyPer = Number(line.qtyPer) || 1;
-        const totalQuantity = Math.ceil(qtyPer * poItem.quantity);
-
-        // Get part details from inventory
-        const partInfo = await db
-          .select()
-          .from(inventoryItems)
-          .where(eq(inventoryItems.agPartNumber, line.childPartAgNumber))
-          .limit(1);
-
-        const partName = partInfo.length > 0 ? partInfo[0].name : line.childPartAgNumber;
-        const firstDept = partInfo.length > 0 ? (partInfo[0].manufacturingDepartment || 'Layup') : 'Layup';
-
-        // Create individual production orders (1 unit each) instead of bulk orders
-        for (let unitIndex = 1; unitIndex <= totalQuantity; unitIndex++) {
-          // Generate unique order ID: P2-{PO#}-{item#}-{line#}-{unit#}
-          const orderIdSuffix = String(i + 1).padStart(3, '0');
-          const unitSuffix = String(unitIndex).padStart(3, '0');
-          const orderId = `P2-${po.poNumber}-${poItem.id}-${orderIdSuffix}-${unitSuffix}`;
-
-          const productionOrderData: InsertP2ProductionOrder = {
-            orderId,
-            p2PoId: poId,
-            p2PoItemId: poItem.id,
-            bomDefinitionId: bom.id, // Store BOM ID
-            bomItemId: line.id, // Store BOM Line ID
-            sku: poItem.partNumber,
-            partName: partName,
-            quantity: 1, // Individual orders with quantity of 1
-            department: firstDept as any,
-            status: 'PENDING',
-            priority: 50,
-            dueDate: po.dueDate || undefined,
-            notes: `Generated from P2 PO ${po.poNumber} - ${bom.code} (${revision.revCode}) - Component ${line.childPartAgNumber} - Unit ${unitIndex} of ${totalQuantity}`,
-          };
-
-          const productionOrder =
-            await this.createP2ProductionOrder(productionOrderData);
-          productionOrders.push(productionOrder);
-        }
-      }
+      // Process the BOM for this PO item (will recursively handle sub-assemblies)
+      // Each PO item gets a fresh ancestor stack for cycle detection
+      await processManufacturedPart(
+        poItem.partNumber,
+        poItem.quantity,
+        poItem,
+        new Set<string>(), // Fresh ancestor stack for each PO item
+        0
+      );
     }
 
+    console.log(`\n✅ Generated ${productionOrders.length} production orders for manufactured items`);
+    
+    // Log any skipped parts that need attention
+    if (skippedParts.length > 0) {
+      console.warn(`\n⚠️ ${skippedParts.length} manufactured parts were skipped due to missing data:`);
+      skippedParts.forEach(msg => console.warn(`   - ${msg}`));
+    }
+    
     return productionOrders;
   }
 

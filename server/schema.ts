@@ -2873,6 +2873,9 @@ export const vendorPOItems = pgTable('vendor_po_items', {
   receivedQuantity: integer('received_quantity').default(0),
   receivedDate: date('received_date'),
   notes: text('notes'),
+  customerPoId: integer('customer_po_id')
+    .references(() => p2PurchaseOrders.id), // Optional link to customer PO (internal tracking only)
+  otherIdentifier: text('other_identifier'), // Optional identifier when no customer PO (internal tracking only)
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
@@ -3211,6 +3214,8 @@ export const insertVendorPOItemSchema = createInsertSchema(vendorPOItems)
     receivedQuantity: z.number().int().default(0),
     receivedDate: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
+    customerPoId: z.number().int().positive().optional().nullable(), // Optional link to customer PO (internal tracking only)
+    otherIdentifier: z.string().optional().nullable(), // Optional identifier when no customer PO (internal tracking only)
   });
 export type InsertVendorPOItem = z.infer<typeof insertVendorPOItemSchema>;
 export type VendorPOItem = typeof vendorPOItems.$inferSelect;

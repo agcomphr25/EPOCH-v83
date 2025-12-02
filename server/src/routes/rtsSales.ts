@@ -13,7 +13,7 @@ import {
 import { eq, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { createShipment } from '../utils/upsShipping';
-import { generateP1OrderId } from '../../utils/orderIdGenerator';
+import { storage } from '../../storage';
 
 const router = Router();
 
@@ -192,15 +192,8 @@ router.post('/', async (req, res) => {
     }
 
     // Create an order in allOrders that goes directly to Shipping QC
-    // Generate unique order ID
-    const existingOrders = await db
-      .select({ orderId: allOrders.orderId })
-      .from(allOrders)
-      .orderBy(desc(allOrders.createdAt))
-      .limit(1);
-    
-    const lastOrderId = existingOrders.length > 0 ? existingOrders[0].orderId : '';
-    const newOrderId = generateP1OrderId(new Date(), lastOrderId);
+    // Generate unique order ID using atomic sequence (shared with regular orders)
+    const newOrderId = await storage.generateNextOrderId();
 
     // Get the first RTS item's stock model for the order (or a descriptive string)
     const firstItem = selectedItems[0];

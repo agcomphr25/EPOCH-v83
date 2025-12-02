@@ -55,6 +55,7 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 - **Dynamic Discount System**: Orders save discount metadata at creation for dynamic recalculation.
 - **Cutting Table Inventory Integration**: Fabric inventory items are linked to Cut Management.
 - **Cutting Table Production Progress Tracker**: Automatic calculation of remaining cuts needed to hit weekly production goals.
+- **Cutting Table Multi-Select Barcode Printing**: Batch barcode label printing for fabric inventory with checkbox selection, quantity specification per item, and Avery 5160 label format support (3-column grid, 30 labels per sheet).
 - **P2 Department Manager with Part Routing**: Complete P2 purchase order serialized item tracking system with customizable department workflows, barcode scanning, and mandatory traceability data capture. Features include UUID-based architecture, a part routing wizard, fail-closed traceability gating, fetch-and-merge storage updates, barcode integration, department progression, and production-ready error handling.
 - **P2 Traveler Viewer System**: AS9100-compliant production data interface for P2 serialized items with comprehensive documentation generation, barcode-based item lookup, and detailed data display.
 - **P2 Electronic Signature System**: AS9100-compliant electronic signature capture for department transfers, ensuring work completion verification per quality standards.

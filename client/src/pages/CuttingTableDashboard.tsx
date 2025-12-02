@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -29,6 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -170,6 +172,12 @@ export default function CuttingTableDashboard() {
   const [editingFabric, setEditingFabric] = useState<FabricInventoryItem | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingFabric, setDeletingFabric] = useState<FabricInventoryItem | null>(null);
+  
+  // Multi-select for batch barcode printing
+  const [selectedForPrint, setSelectedForPrint] = useState<Set<string>>(new Set());
+  const [isBatchPrintDialogOpen, setIsBatchPrintDialogOpen] = useState(false);
+  const [printQuantities, setPrintQuantities] = useState<Record<string, number>>({});
+  
   const [editForm, setEditForm] = useState({
     fabricType: '',
     internalControlNumber: '',
@@ -667,6 +675,234 @@ export default function CuttingTableDashboard() {
     } catch (error) {
       toast({ title: "Error", description: "Failed to print label", variant: "destructive" });
     }
+  };
+
+  // Multi-select handlers for batch printing
+  const toggleSelectForPrint = (id: string) => {
+    setSelectedForPrint(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedForPrint.size === fabricInventory.length) {
+      setSelectedForPrint(new Set());
+    } else {
+      setSelectedForPrint(new Set(fabricInventory.map(item => item.id)));
+    }
+  };
+
+  const openBatchPrintDialog = () => {
+    if (selectedForPrint.size === 0) {
+      toast({ title: "No items selected", description: "Please select at least one fabric to print", variant: "destructive" });
+      return;
+    }
+    const initialQuantities: Record<string, number> = {};
+    selectedForPrint.forEach(id => {
+      initialQuantities[id] = printQuantities[id] || 1;
+    });
+    setPrintQuantities(initialQuantities);
+    setIsBatchPrintDialogOpen(true);
+  };
+
+  const handleBatchPrint = () => {
+    const selectedItems = fabricInventory.filter(item => selectedForPrint.has(item.id));
+    
+    if (selectedItems.length === 0) {
+      toast({ title: "Error", description: "No valid items to print", variant: "destructive" });
+      return;
+    }
+
+    // Generate labels array with quantities
+    const labels: Array<{ item: FabricInventoryItem; quantity: number }> = [];
+    selectedItems.forEach(item => {
+      const qty = printQuantities[item.id] || 1;
+      for (let i = 0; i < qty; i++) {
+        labels.push({ item, quantity: qty });
+      }
+    });
+
+    // Create print window with Avery 5160 layout (30 labels per sheet, 3 columns x 10 rows)
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: "Error", description: "Could not open print window. Please allow popups.", variant: "destructive" });
+      return;
+    }
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Fabric Barcode Labels - Avery 5160</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <style>
+    @page {
+      size: letter;
+      margin: 0.5in 0.1875in;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .sheet {
+      width: 8.5in;
+      padding: 0.5in 0.1875in;
+    }
+    .labels-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 2.625in);
+      grid-auto-rows: 1in;
+      gap: 0;
+      justify-content: center;
+    }
+    .label {
+      width: 2.625in;
+      height: 1in;
+      padding: 0.05in 0.1in;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      border: 1px dashed #ccc;
+      page-break-inside: avoid;
+    }
+    @media print {
+      .label {
+        border: none;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+    .label-content {
+      text-align: center;
+      width: 100%;
+    }
+    .label-title {
+      font-size: 7px;
+      font-weight: bold;
+      margin-bottom: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .label-info {
+      font-size: 6px;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .barcode-container {
+      margin: 2px 0;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+    .barcode-container svg {
+      max-width: 2.4in;
+      height: 28px;
+    }
+    .barcode-text {
+      font-size: 7px;
+      font-weight: bold;
+      font-family: monospace;
+    }
+    .print-controls {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      z-index: 1000;
+    }
+    .print-btn {
+      padding: 10px 20px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-right: 10px;
+    }
+    .print-btn:hover {
+      background: #1d4ed8;
+    }
+    .close-btn {
+      padding: 10px 20px;
+      background: #6b7280;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="print-controls no-print">
+    <button class="print-btn" onclick="window.print()">Print Labels</button>
+    <button class="close-btn" onclick="window.close()">Close</button>
+    <p style="margin-top: 10px; font-size: 12px; color: #666;">
+      ${labels.length} label(s) ready to print on Avery 5160 sheets
+    </p>
+  </div>
+  
+  <div class="sheet">
+    <div class="labels-grid">
+      ${labels.map((labelData, index) => `
+        <div class="label">
+          <div class="label-content">
+            <div class="label-title">${labelData.item.fabricType || 'Fabric'}</div>
+            <div class="label-info">${labelData.item.lotNumber || labelData.item.batchNumber || ''} ${labelData.item.rollNumber ? '| Roll: ' + labelData.item.rollNumber : ''}</div>
+            <div class="barcode-container">
+              <svg id="barcode-${index}"></svg>
+            </div>
+            <div class="barcode-text">${labelData.item.barcodeValue}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  </div>
+  
+  <script>
+    ${labels.map((labelData, index) => `
+      JsBarcode("#barcode-${index}", "${labelData.item.barcodeValue}", {
+        format: "CODE128",
+        width: 1.2,
+        height: 28,
+        displayValue: false,
+        margin: 0
+      });
+    `).join('')}
+  </script>
+</body>
+</html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    
+    setIsBatchPrintDialogOpen(false);
+    setSelectedForPrint(new Set());
+    toast({ title: "Success", description: `Prepared ${labels.length} labels for printing` });
   };
 
   const handleOpenEditDialog = (fabric: FabricInventoryItem) => {
@@ -1611,13 +1847,32 @@ export default function CuttingTableDashboard() {
         <TabsContent value="inventory" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Fabric Inventory
-              </CardTitle>
-              <CardDescription>
-                View all fabric in stock with lot tracking and print labels
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    Fabric Inventory
+                  </CardTitle>
+                  <CardDescription>
+                    View all fabric in stock with lot tracking and print labels
+                    {selectedForPrint.size > 0 && (
+                      <span className="ml-2 text-blue-600 font-medium">
+                        ({selectedForPrint.size} selected)
+                      </span>
+                    )}
+                  </CardDescription>
+                </div>
+                {selectedForPrint.size > 0 && (
+                  <Button
+                    onClick={openBatchPrintDialog}
+                    className="bg-blue-600 hover:bg-blue-700"
+                    data-testid="button-batch-print"
+                  >
+                    <Printer className="h-4 w-4 mr-2" />
+                    Print Labels ({selectedForPrint.size})
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {loadingFabric ? (
@@ -1631,6 +1886,14 @@ export default function CuttingTableDashboard() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={selectedForPrint.size > 0 && selectedForPrint.size === fabricInventory.length}
+                            onCheckedChange={toggleSelectAll}
+                            data-testid="checkbox-select-all"
+                            title="Select all for printing"
+                          />
+                        </TableHead>
                         <TableHead>Part #</TableHead>
                         <TableHead>Inventory Item Name</TableHead>
                         <TableHead>Common Name</TableHead>
@@ -1644,7 +1907,14 @@ export default function CuttingTableDashboard() {
                     </TableHeader>
                     <TableBody>
                       {fabricInventory.map((fabric) => (
-                        <TableRow key={fabric.id}>
+                        <TableRow key={fabric.id} className={selectedForPrint.has(fabric.id) ? 'bg-blue-50 dark:bg-blue-950' : ''}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedForPrint.has(fabric.id)}
+                              onCheckedChange={() => toggleSelectForPrint(fabric.id)}
+                              data-testid={`checkbox-print-${fabric.id}`}
+                            />
+                          </TableCell>
                           <TableCell className="font-medium">{fabric.internalControlNumber || '-'}</TableCell>
                           <TableCell>
                             {(() => {
@@ -2047,6 +2317,69 @@ export default function CuttingTableDashboard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Batch Print Dialog */}
+      <Dialog open={isBatchPrintDialogOpen} onOpenChange={setIsBatchPrintDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Print Barcode Labels</DialogTitle>
+            <DialogDescription>
+              Set the quantity of labels to print for each selected fabric. Labels will be formatted for Avery 5160 sheets (30 labels per sheet).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[400px] overflow-y-auto py-4">
+            <div className="space-y-3">
+              {fabricInventory
+                .filter(item => selectedForPrint.has(item.id))
+                .map(item => (
+                  <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{item.fabricType || 'Unknown Fabric'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.lotNumber || item.batchNumber ? `Batch: ${item.lotNumber || item.batchNumber}` : ''}
+                        {item.rollNumber && ` | Roll: ${item.rollNumber}`}
+                      </p>
+                      <p className="text-xs font-mono text-blue-600">{item.barcodeValue}</p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-4">
+                      <Label htmlFor={`qty-${item.id}`} className="text-sm whitespace-nowrap">Qty:</Label>
+                      <Input
+                        id={`qty-${item.id}`}
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={printQuantities[item.id] || 1}
+                        onChange={(e) => setPrintQuantities(prev => ({
+                          ...prev,
+                          [item.id]: Math.max(1, Math.min(100, parseInt(e.target.value) || 1))
+                        }))}
+                        className="w-20"
+                        data-testid={`input-print-qty-${item.id}`}
+                      />
+                    </div>
+                  </div>
+                ))}
+            </div>
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                <strong>Total Labels:</strong> {Object.values(printQuantities).reduce((a, b) => a + b, 0)}
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                Labels will be arranged in a 3-column grid for Avery 5160 label sheets
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBatchPrintDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleBatchPrint} className="bg-blue-600 hover:bg-blue-700" data-testid="button-confirm-print">
+              <Printer className="h-4 w-4 mr-2" />
+              Print Labels
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

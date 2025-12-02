@@ -119,12 +119,13 @@ const STOCK_TARGETS = {
 };
 
 // Enhanced fabric type mapping for status thresholds
+// Low threshold determines when status shows as "low" vs "available"
 const FABRIC_TYPE_THRESHOLDS: Record<string, { low: number; target: number }> = {
   'carbon_fiber': { low: 50, target: 400 },
   'carbon fiber': { low: 50, target: 400 },
-  'fiberglass': { low: 10, target: 40 },
-  'kevlar': { low: 20, target: 100 },
-  'default': { low: 10, target: 50 },
+  'fiberglass': { low: 5, target: 40 },
+  'kevlar': { low: 5, target: 100 },
+  'default': { low: 3, target: 50 },  // Default: low only when 2 or fewer on hand
 };
 
 // Type for resolved fabric with full traceability data for packets

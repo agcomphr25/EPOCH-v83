@@ -624,7 +624,7 @@ const InventoryForm = ({
             data-testid="checkbox-isPacketPart"
           />
           <Label htmlFor="isPacketPart" className="cursor-pointer">
-            Packet Part (Cutting Table)
+            Packet (Cutting Table)
           </Label>
         </div>
         <div className="flex items-center space-x-2">

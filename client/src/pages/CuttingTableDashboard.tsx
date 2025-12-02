@@ -230,6 +230,16 @@ export default function CuttingTableDashboard() {
   const [isBatchPrintDialogOpen, setIsBatchPrintDialogOpen] = useState(false);
   const [printQuantities, setPrintQuantities] = useState<Record<string, number>>({});
   
+  // Packet scheduling state
+  const [isSchedulePacketDialogOpen, setIsSchedulePacketDialogOpen] = useState(false);
+  const [schedulePacketForm, setSchedulePacketForm] = useState({
+    inventoryItemId: '',
+    quantity: '',
+    priority: '50',
+    dueDate: '',
+    notes: '',
+  });
+  
   const [editForm, setEditForm] = useState({
     fabricType: '',
     internalControlNumber: '',
@@ -308,6 +318,11 @@ export default function CuttingTableDashboard() {
 
   const { data: fabricItems = [], isLoading: loadingFabricItems } = useQuery<any[]>({
     queryKey: ['/api/cutting-table/fabric-items'],
+  });
+
+  // Available packet items for scheduling
+  const { data: availablePackets = [] } = useQuery<any[]>({
+    queryKey: ['/api/cutting-table-mfg-queue/available-packets'],
   });
 
   const { data: mfgQueueItems = [], isLoading: loadingMfgQueue, refetch: refetchMfgQueue } = useQuery<ManufacturingQueueItem[]>({
@@ -663,6 +678,48 @@ export default function CuttingTableDashboard() {
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to generate labels', variant: 'destructive' });
+    },
+  });
+
+  // Schedule packet mutation
+  const schedulePacketMutation = useMutation({
+    mutationFn: async (data: typeof schedulePacketForm) => {
+      return apiRequest('/api/cutting-table-mfg-queue/schedule-packet', {
+        method: 'POST',
+        body: JSON.stringify({
+          inventoryItemId: parseInt(data.inventoryItemId),
+          quantity: parseInt(data.quantity),
+          priority: parseInt(data.priority) || 50,
+          dueDate: data.dueDate || null,
+          notes: data.notes || null,
+          requestedBy: currentUser?.username || 'unknown',
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ 
+        queryKey: ['/api/cutting-table-mfg-queue/cutting-table'],
+        exact: false 
+      });
+      setIsSchedulePacketDialogOpen(false);
+      setSchedulePacketForm({
+        inventoryItemId: '',
+        quantity: '',
+        priority: '50',
+        dueDate: '',
+        notes: '',
+      });
+      toast({
+        title: 'Packet scheduled',
+        description: 'Packet has been added to the manufacturing queue.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to schedule packet',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -1589,18 +1646,27 @@ export default function CuttingTableDashboard() {
                     Cutting table production queue with fabric traceability
                   </CardDescription>
                 </div>
-                <Select value={mfgQueueStatus} onValueChange={setMfgQueueStatus}>
-                  <SelectTrigger className="w-[180px]" data-testid="select-mfg-status">
-                    <SelectValue placeholder="Filter by status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All Items</SelectItem>
-                    <SelectItem value="PENDING">Pending</SelectItem>
-                    <SelectItem value="ACTIVE">Active</SelectItem>
-                    <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                    <SelectItem value="COMPLETED">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    onClick={() => setIsSchedulePacketDialogOpen(true)}
+                    data-testid="button-schedule-packet"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Schedule Packet
+                  </Button>
+                  <Select value={mfgQueueStatus} onValueChange={setMfgQueueStatus}>
+                    <SelectTrigger className="w-[180px]" data-testid="select-mfg-status">
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Items</SelectItem>
+                      <SelectItem value="PENDING">Pending</SelectItem>
+                      <SelectItem value="ACTIVE">Active</SelectItem>
+                      <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                      <SelectItem value="COMPLETED">Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -2582,6 +2648,100 @@ export default function CuttingTableDashboard() {
             <Button onClick={handleBatchPrint} className="bg-blue-600 hover:bg-blue-700" data-testid="button-confirm-print">
               <Printer className="h-4 w-4 mr-2" />
               Print Labels
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Packet Dialog */}
+      <Dialog open={isSchedulePacketDialogOpen} onOpenChange={setIsSchedulePacketDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Schedule Packet Production</DialogTitle>
+            <DialogDescription>
+              Add a packet item to the cutting table manufacturing queue. Select an inventory item marked as "Packet (Cutting Table)".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="packet-item">Packet Item *</Label>
+              <Select 
+                value={schedulePacketForm.inventoryItemId} 
+                onValueChange={(value) => setSchedulePacketForm(prev => ({ ...prev, inventoryItemId: value }))}
+              >
+                <SelectTrigger data-testid="select-packet-item">
+                  <SelectValue placeholder="Select a packet item" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availablePackets.map((packet: any) => (
+                    <SelectItem key={packet.id} value={packet.id.toString()}>
+                      {packet.agPartNumber} - {packet.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {availablePackets.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No packet items available. Mark inventory items as "Packet (Cutting Table)" in the Parts List to schedule them here.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="packet-quantity">Quantity *</Label>
+              <Input
+                id="packet-quantity"
+                type="number"
+                min={1}
+                value={schedulePacketForm.quantity}
+                onChange={(e) => setSchedulePacketForm(prev => ({ ...prev, quantity: e.target.value }))}
+                placeholder="Enter quantity to produce"
+                data-testid="input-packet-quantity"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="packet-priority">Priority (1-100, lower = higher priority)</Label>
+              <Input
+                id="packet-priority"
+                type="number"
+                min={1}
+                max={100}
+                value={schedulePacketForm.priority}
+                onChange={(e) => setSchedulePacketForm(prev => ({ ...prev, priority: e.target.value }))}
+                placeholder="50"
+                data-testid="input-packet-priority"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="packet-due-date">Due Date (optional)</Label>
+              <Input
+                id="packet-due-date"
+                type="date"
+                value={schedulePacketForm.dueDate}
+                onChange={(e) => setSchedulePacketForm(prev => ({ ...prev, dueDate: e.target.value }))}
+                data-testid="input-packet-due-date"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="packet-notes">Notes (optional)</Label>
+              <Textarea
+                id="packet-notes"
+                value={schedulePacketForm.notes}
+                onChange={(e) => setSchedulePacketForm(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Any additional notes..."
+                data-testid="input-packet-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsSchedulePacketDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => schedulePacketMutation.mutate(schedulePacketForm)}
+              disabled={!schedulePacketForm.inventoryItemId || !schedulePacketForm.quantity || schedulePacketMutation.isPending}
+              data-testid="button-confirm-schedule"
+            >
+              {schedulePacketMutation.isPending ? 'Scheduling...' : 'Schedule Packet'}
             </Button>
           </DialogFooter>
         </DialogContent>

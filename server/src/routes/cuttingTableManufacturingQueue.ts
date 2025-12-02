@@ -224,4 +224,82 @@ router.post('/:id/generate-labels', async (req: Request, res: Response) => {
   }
 });
 
+// Schedule a packet item to the cutting table manufacturing queue
+router.post('/schedule-packet', async (req: Request, res: Response) => {
+  try {
+    const { inventoryItemId, quantity, priority, dueDate, notes, requestedBy } = req.body;
+    
+    if (!inventoryItemId) {
+      return res.status(400).json({ error: 'Inventory item ID is required' });
+    }
+    
+    if (!quantity || quantity <= 0) {
+      return res.status(400).json({ error: 'Quantity must be greater than 0' });
+    }
+    
+    // Verify the inventory item exists and is a packet item
+    const inventoryItem = await db.query.inventoryItems.findFirst({
+      where: eq(inventoryItems.id, inventoryItemId),
+    });
+    
+    if (!inventoryItem) {
+      return res.status(404).json({ error: 'Inventory item not found' });
+    }
+    
+    if (!inventoryItem.isPacketPart) {
+      return res.status(400).json({ error: 'This item is not marked as a packet item. Enable "Packet (Cutting Table)" in the inventory item settings.' });
+    }
+    
+    // Create the manufacturing queue entry
+    const [newQueueItem] = await db
+      .insert(manufacturingQueue)
+      .values({
+        inventoryItemId,
+        department: 'Cutting Table',
+        quantityRequested: quantity,
+        quantityCompleted: 0,
+        priority: priority || 50,
+        status: 'PENDING',
+        dueDate: dueDate ? new Date(dueDate) : null,
+        notes,
+        requestedBy,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    
+    res.status(201).json({
+      ...newQueueItem,
+      partNumber: inventoryItem.agPartNumber,
+      partName: inventoryItem.name,
+    });
+  } catch (error) {
+    console.error('Error scheduling packet to cutting table:', error);
+    res.status(500).json({ error: 'Failed to schedule packet' });
+  }
+});
+
+// Get all packet items that can be scheduled (isPacketPart = true)
+router.get('/available-packets', async (req: Request, res: Response) => {
+  try {
+    const packetItems = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+        description: inventoryItems.description,
+        quantityInStock: inventoryItems.quantityInStock,
+        onHand: inventoryItems.onHand,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.isPacketPart, true))
+      .orderBy(inventoryItems.agPartNumber);
+    
+    res.json(packetItems);
+  } catch (error) {
+    console.error('Error fetching available packets:', error);
+    res.status(500).json({ error: 'Failed to fetch available packets' });
+  }
+});
+
 export default router;

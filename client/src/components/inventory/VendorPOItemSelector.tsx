@@ -112,7 +112,7 @@ type NewItemState = {
   conversionFactor: number;
   quantity: number;
   unitPrice: number;
-  customerPoId?: number;
+  customerPoId?: number | null;
   otherIdentifier: string;
 };
 
@@ -211,7 +211,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
     otherIdentifier: '',
   });
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
-  const [editedItem, setEditedItem] = useState<Partial<VendorPOItem>>({});
+  const [editedItem, setEditedItem] = useState<Partial<VendorPOItem> & { customerPoId?: number | null }>({});
 
   const { data: items = [], isLoading } = useQuery<VendorPOItem[]>({
     queryKey: ['/api/vendor-pos', vendorPoId, 'items'],
@@ -495,8 +495,8 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
       quantity: editedItem.quantity ?? originalItem.quantity,
       unitPrice: editedItem.unitPrice ?? originalItem.unitPrice,
       notes: editedItem.notes ?? originalItem.notes,
-      customerPoId: editedItem.customerPoId ?? originalItem.customerPoId,
-      otherIdentifier: editedItem.otherIdentifier ?? originalItem.otherIdentifier,
+      customerPoId: 'customerPoId' in editedItem ? editedItem.customerPoId : originalItem.customerPoId,
+      otherIdentifier: 'otherIdentifier' in editedItem ? editedItem.otherIdentifier : originalItem.otherIdentifier,
     };
     
     updateItemMutation.mutate({ itemId, data: updatedData });
@@ -818,7 +818,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                     {isEditing ? (
                       <Select 
                         value={editedItem.customerPoId?.toString() || 'none'} 
-                        onValueChange={(value) => setEditedItem({ ...editedItem, customerPoId: value && value !== 'none' ? parseInt(value) : undefined })}
+                        onValueChange={(value) => setEditedItem({ ...editedItem, customerPoId: value && value !== 'none' ? parseInt(value) : null as unknown as undefined })}
                       >
                         <SelectTrigger className="w-32" data-testid={`select-edit-customer-po-${item.id}`}>
                           <SelectValue placeholder="None" />

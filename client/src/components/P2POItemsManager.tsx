@@ -479,7 +479,7 @@ export function P2POItemsManager({
           <CardDescription>
             {items.length === 0
               ? 'No items added yet'
-              : `${items.length} item${items.length === 1 ? '' : 's'} | Total: $${totalValue.toFixed(2)}`}
+              : `${items.length} item${items.length === 1 ? '' : 's'} | Total: $${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -517,10 +517,10 @@ export function P2POItemsManager({
                         {item.quantity}
                       </TableCell>
                       <TableCell className="text-right font-mono">
-                        ${item.unitPrice.toFixed(2)}
+                        ${item.unitPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell className="text-right font-mono font-semibold">
-                        ${item.totalPrice.toFixed(2)}
+                        ${item.totalPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">

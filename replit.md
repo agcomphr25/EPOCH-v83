@@ -33,7 +33,7 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 - **BOM System**: Robust Bill of Materials system with UUID-based architecture and revision control.
 - **Google OAuth Integration**: Production-ready OAuth 2.0 flow with CSRF protection.
 - **Global Search System**: Multi-entity search across Customers, Orders, Vendors, Employees, and Inventory Items.
-- **Vendor Evaluation System**: Question-based evaluation with 4 criteria, automatic status, and monthly reset.
+- **Vendor Evaluation System**: Question-based evaluation with 4 criteria, automatic status, monthly reset, and yearly average scoring. Score formula: (actualScore / possibleScore) × 20, where possibleScore = count of non-null criteria × 5. N/A (null) criteria are excluded from calculation.
 - **Linked Orders Management**: Functionality to link multiple orders.
 - **Urgency/Priority System**: For manually flagged urgent orders with visual badges.
 - **Rush Fee System**: Adjusts due dates for "Expedite" and "Rush" orders.

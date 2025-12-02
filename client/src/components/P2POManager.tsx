@@ -227,14 +227,52 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
     },
   });
 
+  const [clearingPoId, setClearingPoId] = useState<number | null>(null);
+
+  const clearProductionOrdersMutation = useMutation({
+    mutationFn: (purchaseOrderId: number) =>
+      apiRequest(`/api/orders/production-orders/clear/${purchaseOrderId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: (data: any) => {
+      toast({
+        title: 'Success',
+        description: data.message || 'Production orders cleared',
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2-production-orders'],
+      });
+      setClearingPoId(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to clear production orders',
+        variant: 'destructive',
+      });
+      setClearingPoId(null);
+    },
+  });
+
   const handleGenerateProductionOrders = (po: P2PurchaseOrder) => {
     if (
       confirm(
-        `Generate production orders for ${po.poNumber}?\n\nThis will explode the BOM for all items in this purchase order and create individual production orders.`
+        `Generate production orders for ${po.poNumber}?\n\nThis will explode the BOM for all items in this purchase order and create individual production orders for MANUFACTURED items only.`
       )
     ) {
       setGeneratingPoId(po.id);
       generateProductionOrdersMutation.mutate(po.id);
+    }
+  };
+
+  const handleClearProductionOrders = (po: P2PurchaseOrder) => {
+    if (
+      confirm(
+        `Clear ALL production orders for ${po.poNumber}?\n\nThis will delete all generated production orders for this PO. You can regenerate them afterwards.`
+      )
+    ) {
+      setClearingPoId(po.id);
+      clearProductionOrdersMutation.mutate(po.id);
     }
   };
 
@@ -733,19 +771,35 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                     Manage Items
                   </Button>
                   {po.status === 'OPEN' && (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={() => handleGenerateProductionOrders(po)}
-                      disabled={generatingPoId === po.id}
-                      data-testid={`button-generate-production-orders-${po.id}`}
-                      title="Explode BOM and create production orders"
-                    >
-                      <Factory className="h-4 w-4 mr-2" />
-                      {generatingPoId === po.id
-                        ? 'Generating...'
-                        : 'Generate Production Orders'}
-                    </Button>
+                    <>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleGenerateProductionOrders(po)}
+                        disabled={generatingPoId === po.id}
+                        data-testid={`button-generate-production-orders-${po.id}`}
+                        title="Explode BOM and create production orders for manufactured items"
+                      >
+                        <Factory className="h-4 w-4 mr-2" />
+                        {generatingPoId === po.id
+                          ? 'Generating...'
+                          : 'Generate Production Orders'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleClearProductionOrders(po)}
+                        disabled={clearingPoId === po.id}
+                        data-testid={`button-clear-production-orders-${po.id}`}
+                        title="Delete all production orders for this PO"
+                        className="text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-300"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        {clearingPoId === po.id
+                          ? 'Clearing...'
+                          : 'Clear Orders'}
+                      </Button>
+                    </>
                   )}
                   <Button
                     variant="outline"

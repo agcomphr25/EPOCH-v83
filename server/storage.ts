@@ -1124,6 +1124,7 @@ export interface IStorage {
     data: Partial<InsertP2ProductionOrder>
   ): Promise<P2ProductionOrder>;
   deleteP2ProductionOrder(id: number): Promise<void>;
+  deleteP2ProductionOrdersByPoId(poId: number): Promise<number>;
   generateP2ProductionOrders(poId: number): Promise<P2ProductionOrder[]>;
   getP2MaterialRequirements(poId: number): Promise<any[]>;
 
@@ -10911,6 +10912,23 @@ export class DatabaseStorage implements IStorage {
 
   async deleteP2ProductionOrder(id: number): Promise<void> {
     await db.delete(p2ProductionOrders).where(eq(p2ProductionOrders.id, id));
+  }
+
+  async deleteP2ProductionOrdersByPoId(poId: number): Promise<number> {
+    // Get count before deleting
+    const existingOrders = await db
+      .select()
+      .from(p2ProductionOrders)
+      .where(eq(p2ProductionOrders.p2PoId, poId));
+    
+    const count = existingOrders.length;
+    
+    if (count > 0) {
+      await db.delete(p2ProductionOrders).where(eq(p2ProductionOrders.p2PoId, poId));
+      console.log(`🗑️ Deleted ${count} production orders for P2 PO ${poId}`);
+    }
+    
+    return count;
   }
 
   async generateP2ProductionOrders(poId: number): Promise<P2ProductionOrder[]> {

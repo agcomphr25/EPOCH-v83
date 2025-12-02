@@ -924,6 +924,25 @@ router.post(
   }
 );
 
+// Clear all production orders for a P2 Purchase Order
+router.delete(
+  '/production-orders/clear/:purchaseOrderId',
+  async (req: Request, res: Response) => {
+    try {
+      const purchaseOrderId = parseInt(req.params.purchaseOrderId);
+      const deletedCount = await storage.deleteP2ProductionOrdersByPoId(purchaseOrderId);
+      res.json({ 
+        success: true, 
+        message: `Cleared ${deletedCount} production orders`,
+        deletedCount 
+      });
+    } catch (error) {
+      console.error('Clear production orders error:', error);
+      res.status(500).json({ error: 'Failed to clear production orders' });
+    }
+  }
+);
+
 // Order ID Generation - MUST be before parameterized routes
 router.get('/last-id', async (req: Request, res: Response) => {
   try {

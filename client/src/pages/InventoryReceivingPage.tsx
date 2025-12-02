@@ -45,6 +45,7 @@ import {
   ClipboardList,
   Copy,
   ArrowRight,
+  ExternalLink,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import JsBarcode from 'jsbarcode';
@@ -160,6 +161,7 @@ export default function InventoryReceivingPage() {
   const [dialogReceivingData, setDialogReceivingData] = useState({
     receivedQuantity: 0,
     notes: '',
+    cocLink: '',
   });
   const [traceabilityData, setTraceabilityData] = useState<Record<string, string>>({});
   const [receivingData, setReceivingData] = useState<ReceivingItem>({
@@ -474,6 +476,7 @@ export default function InventoryReceivingPage() {
     setDialogReceivingData({
       receivedQuantity: quantityToReceive,
       notes: '',
+      cocLink: '',
     });
     
     // Initialize traceability data with empty values for each field
@@ -652,6 +655,7 @@ export default function InventoryReceivingPage() {
         body: JSON.stringify({
           receivedQuantity: dialogReceivingData.receivedQuantity,
           notes: combinedNotes || undefined,
+          cocLink: dialogReceivingData.cocLink || undefined,
         }),
       });
 
@@ -732,7 +736,7 @@ export default function InventoryReceivingPage() {
         setReceivingDialogOpen(false);
         setSelectedReceivingItem(null);
         setSelectedItemTraceability({ required: false, fields: [] });
-        setDialogReceivingData({ receivedQuantity: 0, notes: '' });
+        setDialogReceivingData({ receivedQuantity: 0, notes: '', cocLink: '' });
         setTraceabilityData({});
         setCurrentPoGroupItems([]);
         setCurrentItemIndex(0);
@@ -780,6 +784,7 @@ export default function InventoryReceivingPage() {
     setDialogReceivingData({
       receivedQuantity: 0,
       notes: '',
+      cocLink: '',
     });
     setTraceabilityData({});
     // Reset all multi-item tracking state
@@ -1706,24 +1711,48 @@ export default function InventoryReceivingPage() {
                 </div>
               )}
 
-              {/* Notes - Only show on last unit or when not in per-unit mode */}
+              {/* CoC Link and Notes - Only show on last unit or when not in per-unit mode */}
               {(!perUnitMode || currentUnitIndex === totalUnitsToReceive - 1) && (
-                <div>
-                  <Label htmlFor="dialogNotes">Notes</Label>
-                  <Textarea
-                    id="dialogNotes"
-                    value={dialogReceivingData.notes}
-                    onChange={(e) =>
-                      setDialogReceivingData((prev) => ({
-                        ...prev,
-                        notes: e.target.value,
-                      }))
-                    }
-                    placeholder="Any additional notes about this receipt..."
-                    rows={2}
-                    data-testid="input-receive-notes"
-                  />
-                </div>
+                <>
+                  <div>
+                    <Label htmlFor="dialogCocLink" className="flex items-center gap-1">
+                      <ExternalLink className="h-3 w-3" />
+                      Certificate of Conformance (CoC) Link
+                    </Label>
+                    <Input
+                      id="dialogCocLink"
+                      type="url"
+                      value={dialogReceivingData.cocLink}
+                      onChange={(e) =>
+                        setDialogReceivingData((prev) => ({
+                          ...prev,
+                          cocLink: e.target.value,
+                        }))
+                      }
+                      placeholder="https://drive.google.com/... or other link to CoC document"
+                      data-testid="input-receive-coc-link"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Paste a link to the Certificate of Conformance for this material
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="dialogNotes">Notes</Label>
+                    <Textarea
+                      id="dialogNotes"
+                      value={dialogReceivingData.notes}
+                      onChange={(e) =>
+                        setDialogReceivingData((prev) => ({
+                          ...prev,
+                          notes: e.target.value,
+                        }))
+                      }
+                      placeholder="Any additional notes about this receipt..."
+                      rows={2}
+                      data-testid="input-receive-notes"
+                    />
+                  </div>
+                </>
               )}
             </div>
           )}

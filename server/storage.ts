@@ -1648,6 +1648,7 @@ export interface IStorage {
     receivedDate: Date;
     notes?: string;
     createdBy?: number;
+    cocLink?: string;
   }): Promise<any>;
   getInventoryItemCostHistory(agPartNumber: string): Promise<any[]>;
 
@@ -7091,8 +7092,9 @@ export class DatabaseStorage implements IStorage {
     receivedDate: Date;
     notes?: string;
     createdBy?: number;
+    cocLink?: string;
   }): Promise<any> {
-    const { poLineItemId, receivedQuantity, receivedDate, notes, createdBy } = params;
+    const { poLineItemId, receivedQuantity, receivedDate, notes, createdBy, cocLink } = params;
 
     // Validate received date is valid and not in the future
     if (isNaN(receivedDate.getTime())) {
@@ -7430,6 +7432,7 @@ export class DatabaseStorage implements IStorage {
                 receivedDate: traceability.receivedDateStr || receivedDate.toISOString().split('T')[0],
                 expirationDate: traceability.expirationDate || undefined,
                 quantityInStock: 1,
+                conformanceDocumentLink: cocLink || undefined,
                 notes: `Auto-created from PO receipt. Unit ${section.unitNum} of ${unitCount}. Original notes: ${section.data}`,
               })
               .returning();
@@ -7466,6 +7469,7 @@ export class DatabaseStorage implements IStorage {
               receivedDate: traceability.receivedDateStr || receivedDate.toISOString().split('T')[0],
               expirationDate: traceability.expirationDate || undefined,
               quantityInStock: receivedQuantity,
+              conformanceDocumentLink: cocLink || undefined,
               notes: `Auto-created from PO receipt. Notes: ${notes}`,
             })
             .returning();

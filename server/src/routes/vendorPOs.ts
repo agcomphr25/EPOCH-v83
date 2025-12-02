@@ -478,9 +478,10 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
       receivedDate: z.string().optional(), // ISO date string, defaults to now
       notes: z.string().optional(),
       createdBy: z.number().int().positive().optional(), // Employee ID
+      cocLink: z.string().optional(), // Certificate of Conformance link
     });
 
-    const { receivedQuantity, receivedDate, notes, createdBy } = receiveSchema.parse(req.body);
+    const { receivedQuantity, receivedDate, notes, createdBy, cocLink } = receiveSchema.parse(req.body);
 
     // Record PO receipt and calculate COGS
     const result = await storage.recordVendorPOReceipt({
@@ -489,6 +490,7 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
       receivedDate: receivedDate ? new Date(receivedDate) : new Date(),
       notes,
       createdBy,
+      cocLink,
     });
 
     res.json(result);

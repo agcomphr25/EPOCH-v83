@@ -46,7 +46,9 @@ import {
   Clock,
   Factory,
   Edit,
-  Trash2
+  Trash2,
+  ExternalLink,
+  FileText
 } from "lucide-react";
 import {
   AlertDialog,
@@ -77,6 +79,7 @@ type FabricInventoryItem = {
   location: string;
   barcodeValue: string;
   status: 'available' | 'low' | 'expired';
+  conformanceDocumentLink: string | null;  // Certificate of Conformance link
 };
 
 type ManufacturingQueueItem = {
@@ -178,6 +181,7 @@ export default function CuttingTableDashboard() {
     squareMeters: '',
     expirationDate: '',
     location: '',
+    cocLink: '',
   });
 
   const { data: currentUser } = useQuery<{ username: string }>({
@@ -203,6 +207,7 @@ export default function CuttingTableDashboard() {
         barcodeValue: `FAB-${item.internalControlNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
         status: item.quantityInStock < 10 ? 'low' : 
                 (item.expirationDate && new Date(item.expirationDate) < new Date() ? 'expired' : 'available'),
+        conformanceDocumentLink: item.conformanceDocumentLink || null,
       }));
     },
   });
@@ -341,6 +346,7 @@ export default function CuttingTableDashboard() {
           squareMeters: data.squareMeters || '0',
           expirationDate: data.expirationDate || null,
           location: data.location,
+          conformanceDocumentLink: data.cocLink || null,
         }),
       });
     },
@@ -676,6 +682,7 @@ export default function CuttingTableDashboard() {
       squareMeters: String(fabric.squareMeters || 0),
       expirationDate: fabric.expirationDate ? fabric.expirationDate.split('T')[0] : '',
       location: fabric.location || '',
+      cocLink: fabric.conformanceDocumentLink || '',
     });
     setIsEditDialogOpen(true);
   };
@@ -1630,6 +1637,7 @@ export default function CuttingTableDashboard() {
                         <TableHead>Supplier</TableHead>
                         <TableHead>Batch #</TableHead>
                         <TableHead>Roll #</TableHead>
+                        <TableHead>CoC</TableHead>
                         <TableHead>Expiration Date</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
@@ -1661,6 +1669,23 @@ export default function CuttingTableDashboard() {
                           <TableCell>{fabric.supplierPartNumber || '-'}</TableCell>
                           <TableCell>{fabric.lotNumber || fabric.batchNumber || '-'}</TableCell>
                           <TableCell>{fabric.rollNumber || '-'}</TableCell>
+                          <TableCell>
+                            {fabric.conformanceDocumentLink ? (
+                              <a
+                                href={fabric.conformanceDocumentLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
+                                title="View Certificate of Conformance"
+                                data-testid={`link-coc-${fabric.id}`}
+                              >
+                                <FileText className="h-4 w-4" />
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
                           <TableCell>
                             {fabric.expirationDate 
                               ? new Date(fabric.expirationDate).toLocaleDateString() 
@@ -1962,6 +1987,19 @@ export default function CuttingTableDashboard() {
                   data-testid="input-edit-expiration"
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1">
+                <ExternalLink className="h-3 w-3" />
+                Certificate of Conformance (CoC) Link
+              </Label>
+              <Input
+                type="url"
+                value={editForm.cocLink}
+                onChange={(e) => setEditForm({ ...editForm, cocLink: e.target.value })}
+                placeholder="https://drive.google.com/... or other link to CoC document"
+                data-testid="input-edit-coc-link"
+              />
             </div>
           </div>
           <DialogFooter>

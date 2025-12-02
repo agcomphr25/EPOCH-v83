@@ -7,7 +7,9 @@ import {
 } from '@shared/schema';
 
 import { storage } from '../../storage';
-import { pool } from '../../db';
+import { pool, db } from '../../db';
+import { p2LayupSchedules, p2SerializedItems } from '../../schema';
+import { eq, and, inArray, or } from 'drizzle-orm';
 import { uploadMiddleware } from '../../utils/fileUpload';
 import path from 'path';
 import fs from 'fs';
@@ -1609,6 +1611,7 @@ router.get(
 );
 
 // Get department queue (items for a specific department)
+// For Layup: Items only appear after being scheduled from the P2 Production Queue
 router.get(
   '/departments/:department/queue',
   async (req: Request, res: Response) => {
@@ -1616,6 +1619,40 @@ router.get(
       const { department } = req.params;
       const { status = 'ACTIVE' } = req.query;
       
+      // For Layup department, only show items that have been scheduled
+      if (department === 'Layup') {
+        // Get items that have an active layup schedule (SCHEDULED or IN_PROGRESS)
+        const scheduledItems = await db
+          .select({
+            serializedItem: p2SerializedItems,
+            schedule: p2LayupSchedules,
+          })
+          .from(p2LayupSchedules)
+          .innerJoin(
+            p2SerializedItems,
+            eq(p2LayupSchedules.serializedItemId, p2SerializedItems.id)
+          )
+          .where(
+            and(
+              or(
+                eq(p2LayupSchedules.status, 'SCHEDULED'),
+                eq(p2LayupSchedules.status, 'IN_PROGRESS')
+              ),
+              eq(p2SerializedItems.status, status as string),
+              eq(p2SerializedItems.currentDepartment, 'Layup')
+            )
+          );
+        
+        // Return serialized items with schedule info attached
+        const items = scheduledItems.map(row => ({
+          ...row.serializedItem,
+          layupSchedule: row.schedule,
+        }));
+        
+        return res.json(items);
+      }
+      
+      // For other departments, use standard filtering
       const items = await storage.getP2SerializedItems({
         department,
         status: status as string

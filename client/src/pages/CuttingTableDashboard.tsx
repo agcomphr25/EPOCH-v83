@@ -763,6 +763,13 @@ export default function CuttingTableDashboard() {
         if (data.barcodeImage) {
           const printWindow = window.open('', '_blank');
           if (printWindow) {
+            const formatExpDate = (dateStr: string | null) => {
+              if (!dateStr) return 'N/A';
+              try {
+                const d = new Date(dateStr);
+                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+              } catch { return 'N/A'; }
+            };
             printWindow.document.write(`
               <html>
                 <head><title>Fabric Label</title>
@@ -771,21 +778,26 @@ export default function CuttingTableDashboard() {
                   .label { border: 2px solid #000; padding: 15px; width: 320px; }
                   .barcode { text-align: center; margin: 10px 0; }
                   .info { font-size: 11px; margin: 4px 0; }
-                  .type { font-size: 14px; font-weight: bold; margin-bottom: 5px; }
-                  .control-number { font-size: 16px; font-weight: bold; margin-bottom: 8px; }
-                  .nickname { font-size: 12px; font-style: italic; margin-bottom: 5px; color: #555; }
+                  .type { font-size: 12px; margin-bottom: 3px; color: #333; }
+                  .control-number { font-size: 10px; color: #666; margin-bottom: 5px; }
+                  .nickname { font-size: 18px; font-weight: bold; margin-bottom: 5px; color: #000; }
+                  .roll-number { font-size: 16px; font-weight: bold; margin-bottom: 8px; color: #1a56db; }
+                  .expiration { font-size: 14px; font-weight: bold; margin-top: 8px; padding: 4px 8px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 4px; display: inline-block; }
+                  .expiration.expired { background: #fee2e2; border-color: #dc2626; color: #dc2626; }
                 </style>
                 </head>
                 <body>
                   <div class="label">
+                    ${fabric.nickname ? `<div class="nickname">${fabric.nickname}</div>` : `<div class="nickname">${fabric.fabricType || 'Fabric'}</div>`}
+                    <div class="roll-number">Roll #${fabric.rollNumber || 'N/A'}</div>
+                    <div class="type">${fabric.fabricType || ''}</div>
                     <div class="control-number">ICN: ${fabric.internalControlNumber || 'N/A'}</div>
-                    <div class="type">${fabric.fabricType}</div>
-                    ${fabric.nickname ? `<div class="nickname">"${fabric.nickname}"</div>` : ''}
                     <div class="barcode"><img src="${data.barcodeImage}" alt="barcode" /></div>
+                    <div class="info"><strong>Batch/Lot:</strong> ${fabric.batchNumber || fabric.lotNumber || 'N/A'}</div>
                     ${fabric.supplierPartNumber ? `<div class="info"><strong>Supplier P/N:</strong> ${fabric.supplierPartNumber}</div>` : ''}
-                    <div class="info"><strong>Batch:</strong> ${fabric.batchNumber || 'N/A'}</div>
-                    <div class="info"><strong>Roll:</strong> ${fabric.rollNumber || 'N/A'}</div>
-                    <div class="info"><strong>Location:</strong> ${fabric.location || 'N/A'}</div>
+                    <div class="expiration ${fabric.expirationDate && new Date(fabric.expirationDate) < new Date() ? 'expired' : ''}">
+                      EXP: ${formatExpDate(fabric.expirationDate)}
+                    </div>
                   </div>
                   <script>window.print();</script>
                 </body>
@@ -916,20 +928,32 @@ export default function CuttingTableDashboard() {
       text-align: center;
       width: 100%;
     }
-    .label-title {
-      font-size: 7px;
+    .label-nickname {
+      font-size: 8px;
       font-weight: bold;
       margin-bottom: 1px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .label-info {
+    .label-roll {
+      font-size: 7px;
+      font-weight: bold;
+      color: #1a56db;
+      margin-bottom: 1px;
+    }
+    .label-exp {
       font-size: 6px;
-      color: #333;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-weight: bold;
+      color: #b45309;
+      background: #fef3c7;
+      padding: 1px 3px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+    .label-exp.expired {
+      color: #dc2626;
+      background: #fee2e2;
     }
     .barcode-container {
       margin: 2px 0;
@@ -991,18 +1015,26 @@ export default function CuttingTableDashboard() {
   
   <div class="sheet">
     <div class="labels-grid">
-      ${labels.map((labelData, index) => `
+      ${labels.map((labelData, index) => {
+        const expDate = labelData.item.expirationDate;
+        const isExpired = expDate ? new Date(expDate) < new Date() : false;
+        const formatExp = (d: string | null) => {
+          if (!d) return 'N/A';
+          try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }); } 
+          catch { return 'N/A'; }
+        };
+        return `
         <div class="label">
           <div class="label-content">
-            <div class="label-title">${labelData.item.fabricType || 'Fabric'}</div>
-            <div class="label-info">${labelData.item.lotNumber || labelData.item.batchNumber || ''} ${labelData.item.rollNumber ? '| Roll: ' + labelData.item.rollNumber : ''}</div>
+            <div class="label-nickname">${labelData.item.nickname || labelData.item.fabricType || 'Fabric'}</div>
+            <div class="label-roll">Roll #${labelData.item.rollNumber || 'N/A'}</div>
             <div class="barcode-container">
               <svg id="barcode-${index}"></svg>
             </div>
-            <div class="barcode-text">${labelData.item.barcodeValue}</div>
+            <div class="label-exp ${isExpired ? 'expired' : ''}">EXP: ${formatExp(expDate)}</div>
           </div>
         </div>
-      `).join('')}
+      `}).join('')}
     </div>
   </div>
   

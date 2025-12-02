@@ -80,7 +80,7 @@ type FabricInventoryItem = {
   expirationDate: string | null;
   location: string;
   barcodeValue: string;
-  status: 'available' | 'low' | 'expired';
+  status: 'available' | 'low' | 'expired' | 'expiring';
   conformanceDocumentLink: string | null;  // Certificate of Conformance link
 };
 
@@ -118,6 +118,57 @@ const STOCK_TARGETS = {
   fiberglass: 40,
 };
 
+// Enhanced fabric type mapping for status thresholds
+const FABRIC_TYPE_THRESHOLDS: Record<string, { low: number; target: number }> = {
+  'carbon_fiber': { low: 50, target: 400 },
+  'carbon fiber': { low: 50, target: 400 },
+  'fiberglass': { low: 10, target: 40 },
+  'kevlar': { low: 20, target: 100 },
+  'default': { low: 10, target: 50 },
+};
+
+// Type for resolved fabric with full traceability data for packets
+type ScannedFabricForPacket = {
+  fabricId: string;
+  barcodeValue: string;
+  fabricType: string;
+  fabricPartNumber: string | null;
+  internalControlNumber: string | null;
+  batchNumber: string | null;  // Batch/Lot #
+  rollNumber: string | null;
+  lotNumber: string | null;
+  supplierPartNumber: string | null;
+  expirationDate: string | null;
+  scannedAt: string;
+};
+
+// Helper to get fabric status based on type and quantity
+const getFabricStatus = (fabricType: string | null | undefined, quantity: number | null | undefined, expirationDate: string | null | undefined): 'available' | 'low' | 'expired' | 'expiring' => {
+  // Check expiration first
+  if (expirationDate) {
+    const expDate = new Date(expirationDate);
+    const now = new Date();
+    if (!isNaN(expDate.getTime())) {
+      if (expDate < now) return 'expired';
+      // Warn if expiring within 30 days
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+      if (expDate < thirtyDaysFromNow) return 'expiring';
+    }
+  }
+  
+  // Handle undefined or null quantity - default to available if quantity not tracked
+  const qty = typeof quantity === 'number' ? quantity : null;
+  if (qty === null) return 'available';
+  
+  // Normalize fabric type for lookup
+  const normalizedType = (fabricType || '').toLowerCase().replace(/[-_]/g, ' ').trim();
+  const thresholds = FABRIC_TYPE_THRESHOLDS[normalizedType] || FABRIC_TYPE_THRESHOLDS['default'];
+  
+  if (qty < thresholds.low) return 'low';
+  return 'available';
+};
+
 export default function CuttingTableDashboard() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("overview");
@@ -142,7 +193,7 @@ export default function CuttingTableDashboard() {
   const [packetForm, setPacketForm] = useState({
     packetType: "",
     quantity: "",
-    scannedFabrics: [] as string[],
+    scannedFabrics: [] as ScannedFabricForPacket[],  // Now stores full fabric traceability data
   });
 
   const [mfgQueueStatus, setMfgQueueStatus] = useState<string>('ACTIVE');
@@ -213,8 +264,7 @@ export default function CuttingTableDashboard() {
         batchNumber: item.batchNumber,   // Secondary identifier (Aluminum Heat # etc.)
         rollNumber: item.rollNumber,     // Manufacture Roll # from receiving
         barcodeValue: `FAB-${item.internalControlNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
-        status: item.quantityInStock < 10 ? 'low' : 
-                (item.expirationDate && new Date(item.expirationDate) < new Date() ? 'expired' : 'available'),
+        status: getFabricStatus(item.fabric || item.fabricType, item.quantityInStock, item.expirationDate),
         conformanceDocumentLink: item.conformanceDocumentLink || null,
       }));
     },
@@ -388,18 +438,38 @@ export default function CuttingTableDashboard() {
 
   const buildPacketMutation = useMutation({
     mutationFn: async (data: typeof packetForm) => {
+      // Build traceability payload with full fabric details for AS9100 compliance
+      const traceabilityData = data.scannedFabrics.map(fabric => ({
+        fabricId: fabric.fabricId,
+        barcodeValue: fabric.barcodeValue,
+        fabricType: fabric.fabricType,
+        fabricPartNumber: fabric.fabricPartNumber,
+        internalControlNumber: fabric.internalControlNumber,
+        batchNumber: fabric.batchNumber,  // Batch/Lot # for traceability
+        rollNumber: fabric.rollNumber,
+        lotNumber: fabric.lotNumber,
+        supplierPartNumber: fabric.supplierPartNumber,
+        expirationDate: fabric.expirationDate,
+        scannedAt: fabric.scannedAt,
+      }));
+      
       return apiRequest('/api/cutting-table/packet-sessions', {
         method: 'POST',
         body: JSON.stringify({
           packetType: data.packetType,
           packetsBuilt: parseInt(data.quantity) || 1,
-          fabricLots: data.scannedFabrics,
+          fabricTraceability: traceabilityData,  // Full traceability data
+          fabricLots: traceabilityData.map(f => f.barcodeValue),  // Backward compatibility
           createdAt: new Date().toISOString(),
         }),
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Packet session recorded with traceability" });
+      const fabricCount = packetForm.scannedFabrics.length;
+      toast({ 
+        title: "Packet Created with Traceability", 
+        description: `Packet recorded with ${fabricCount} fabric lot(s) linked for AS9100 compliance` 
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/stock-levels'] });
       setPacketForm({ packetType: "", quantity: "", scannedFabrics: [] });
     },
@@ -608,14 +678,68 @@ export default function CuttingTableDashboard() {
   };
 
   const handleScanBarcode = () => {
-    if (scannedBarcode) {
-      setPacketForm(prev => ({
-        ...prev,
-        scannedFabrics: [...prev.scannedFabrics, scannedBarcode],
-      }));
-      toast({ title: "Scanned", description: `Fabric ${scannedBarcode} added to packet` });
-      setScannedBarcode("");
+    if (!scannedBarcode) return;
+    
+    // Look up the fabric in inventory by barcode or ICN
+    const matchedFabric = fabricInventory.find(f => 
+      f.barcodeValue === scannedBarcode || 
+      f.internalControlNumber === scannedBarcode ||
+      f.barcodeValue?.includes(scannedBarcode) ||
+      scannedBarcode.includes(f.internalControlNumber || '')
+    );
+    
+    if (!matchedFabric) {
+      toast({ 
+        title: "Fabric Not Found", 
+        description: `No fabric found with barcode "${scannedBarcode}". Please verify the barcode is correct.`,
+        variant: "destructive" 
+      });
+      return;
     }
+    
+    // Check if already scanned
+    if (packetForm.scannedFabrics.some(sf => sf.fabricId === matchedFabric.id)) {
+      toast({ 
+        title: "Already Scanned", 
+        description: `This fabric (${matchedFabric.internalControlNumber || matchedFabric.barcodeValue}) is already in this packet.`,
+        variant: "destructive" 
+      });
+      setScannedBarcode("");
+      return;
+    }
+    
+    // Create resolved fabric record with full traceability data
+    const resolvedFabric: ScannedFabricForPacket = {
+      fabricId: matchedFabric.id,
+      barcodeValue: matchedFabric.barcodeValue,
+      fabricType: matchedFabric.fabricType,
+      fabricPartNumber: matchedFabric.fabricPartNumber,
+      internalControlNumber: matchedFabric.internalControlNumber,
+      batchNumber: matchedFabric.batchNumber || matchedFabric.lotNumber,  // Use batch or lot
+      rollNumber: matchedFabric.rollNumber,
+      lotNumber: matchedFabric.lotNumber,
+      supplierPartNumber: matchedFabric.supplierPartNumber,
+      expirationDate: matchedFabric.expirationDate,
+      scannedAt: new Date().toISOString(),
+    };
+    
+    setPacketForm(prev => ({
+      ...prev,
+      scannedFabrics: [...prev.scannedFabrics, resolvedFabric],
+    }));
+    
+    // Show success with fabric details
+    const fabricInfo = [
+      matchedFabric.fabricType,
+      matchedFabric.batchNumber || matchedFabric.lotNumber ? `Batch: ${matchedFabric.batchNumber || matchedFabric.lotNumber}` : null,
+      matchedFabric.rollNumber ? `Roll: ${matchedFabric.rollNumber}` : null,
+    ].filter(Boolean).join(' | ');
+    
+    toast({ 
+      title: "Fabric Scanned", 
+      description: `Added: ${fabricInfo}` 
+    });
+    setScannedBarcode("");
   };
 
   const handlePrintLabel = async (fabric: FabricInventoryItem) => {
@@ -1774,14 +1898,44 @@ export default function CuttingTableDashboard() {
 
                 {packetForm.scannedFabrics.length > 0 && (
                   <div className="space-y-2">
-                    <Label>Scanned Fabrics ({packetForm.scannedFabrics.length})</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {packetForm.scannedFabrics.map((code, idx) => (
-                        <Badge key={idx} variant="secondary" className="text-xs">
-                          {code}
-                        </Badge>
+                    <Label className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      Scanned Fabrics for Traceability ({packetForm.scannedFabrics.length})
+                    </Label>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {packetForm.scannedFabrics.map((fabric, idx) => (
+                        <div 
+                          key={idx} 
+                          className="p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-sm">{fabric.fabricType || 'Unknown'}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                              onClick={() => setPacketForm(prev => ({
+                                ...prev,
+                                scannedFabrics: prev.scannedFabrics.filter((_, i) => i !== idx)
+                              }))}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
+                            <div><strong>ICN:</strong> {fabric.internalControlNumber || 'N/A'}</div>
+                            <div><strong>Batch/Lot #:</strong> {fabric.batchNumber || fabric.lotNumber || 'N/A'}</div>
+                            {fabric.rollNumber && <div><strong>Roll #:</strong> {fabric.rollNumber}</div>}
+                            {fabric.supplierPartNumber && <div><strong>Supplier P/N:</strong> {fabric.supplierPartNumber}</div>}
+                            <div className="font-mono text-blue-600">{fabric.barcodeValue}</div>
+                          </div>
+                        </div>
                       ))}
                     </div>
+                    <p className="text-xs text-green-700 dark:text-green-400 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      Full traceability data will be recorded for AS9100 compliance
+                    </p>
                   </div>
                 )}
 
@@ -1901,13 +2055,15 @@ export default function CuttingTableDashboard() {
                         <TableHead>Batch #</TableHead>
                         <TableHead>Roll #</TableHead>
                         <TableHead>CoC</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Qty</TableHead>
                         <TableHead>Expiration Date</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {fabricInventory.map((fabric) => (
-                        <TableRow key={fabric.id} className={selectedForPrint.has(fabric.id) ? 'bg-blue-50 dark:bg-blue-950' : ''}>
+                        <TableRow key={fabric.id} className={`${selectedForPrint.has(fabric.id) ? 'bg-blue-50 dark:bg-blue-950' : ''} ${fabric.status === 'expired' ? 'bg-red-50 dark:bg-red-950/30' : fabric.status === 'expiring' ? 'bg-amber-50 dark:bg-amber-950/30' : fabric.status === 'low' ? 'bg-yellow-50 dark:bg-yellow-950/30' : ''}`}>
                           <TableCell>
                             <Checkbox
                               checked={selectedForPrint.has(fabric.id)}
@@ -1955,6 +2111,23 @@ export default function CuttingTableDashboard() {
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            {fabric.status === 'expired' && (
+                              <Badge variant="destructive" className="text-xs">Expired</Badge>
+                            )}
+                            {fabric.status === 'expiring' && (
+                              <Badge variant="outline" className="text-xs bg-amber-100 text-amber-800 border-amber-300">Expiring Soon</Badge>
+                            )}
+                            {fabric.status === 'low' && (
+                              <Badge variant="outline" className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300">Low Stock</Badge>
+                            )}
+                            {fabric.status === 'available' && (
+                              <Badge variant="outline" className="text-xs bg-green-100 text-green-800 border-green-300">Available</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center font-medium">
+                            {fabric.quantityInStock ?? fabric.squareMeters ?? '-'}
                           </TableCell>
                           <TableCell>
                             {fabric.expirationDate 

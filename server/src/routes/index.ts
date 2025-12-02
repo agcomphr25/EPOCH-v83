@@ -1579,6 +1579,91 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P2 Purchase Order Items routes
+  app.get('/api/p2/purchase-orders/:poId/items', async (req, res) => {
+    try {
+      const { poId } = req.params;
+      const { storage } = await import('../../storage');
+      const items = await storage.getP2PurchaseOrderItems(parseInt(poId));
+      res.json(items);
+    } catch (error) {
+      console.error('Get P2 purchase order items error:', error);
+      res.status(500).json({ error: 'Failed to fetch P2 purchase order items' });
+    }
+  });
+
+  app.post('/api/p2/purchase-orders/:poId/items', async (req, res) => {
+    try {
+      const { poId } = req.params;
+      const { storage } = await import('../../storage');
+      const { insertP2PurchaseOrderItemSchema } = await import('../../schema');
+      const itemData = insertP2PurchaseOrderItemSchema.omit({ poId: true }).parse(req.body);
+      
+      // Calculate totalPrice from quantity and unitPrice
+      const totalPrice = itemData.quantity * (itemData.unitPrice || 0);
+      
+      const item = await storage.createP2PurchaseOrderItem({ 
+        ...itemData, 
+        poId: parseInt(poId),
+        totalPrice
+      });
+      res.status(201).json(item);
+    } catch (error) {
+      console.error('Create P2 purchase order item error:', error);
+      const { z } = await import('zod');
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid P2 purchase order item data', details: error.errors });
+      } else {
+        res.status(500).json({ error: 'Failed to create P2 purchase order item' });
+      }
+    }
+  });
+
+  app.put('/api/p2/purchase-orders/:poId/items/:itemId', async (req, res) => {
+    try {
+      const { itemId } = req.params;
+      const { storage } = await import('../../storage');
+      const { insertP2PurchaseOrderItemSchema } = await import('../../schema');
+      const itemData = insertP2PurchaseOrderItemSchema.partial().omit({ poId: true }).parse(req.body);
+      
+      // Recalculate totalPrice if quantity or unitPrice changed
+      let updateData = { ...itemData };
+      if (itemData.quantity !== undefined || itemData.unitPrice !== undefined) {
+        // Get existing item to get current values
+        const existingItems = await storage.getP2PurchaseOrderItems(parseInt(req.params.poId));
+        const existingItem = existingItems.find(i => i.id === parseInt(itemId));
+        if (existingItem) {
+          const quantity = itemData.quantity ?? existingItem.quantity;
+          const unitPrice = itemData.unitPrice ?? existingItem.unitPrice ?? 0;
+          updateData.totalPrice = quantity * unitPrice;
+        }
+      }
+      
+      const item = await storage.updateP2PurchaseOrderItem(parseInt(itemId), updateData);
+      res.json(item);
+    } catch (error) {
+      console.error('Update P2 purchase order item error:', error);
+      const { z } = await import('zod');
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: 'Invalid P2 purchase order item data', details: error.errors });
+      } else {
+        res.status(500).json({ error: 'Failed to update P2 purchase order item' });
+      }
+    }
+  });
+
+  app.delete('/api/p2/purchase-orders/:poId/items/:itemId', async (req, res) => {
+    try {
+      const { itemId } = req.params;
+      const { storage } = await import('../../storage');
+      await storage.deleteP2PurchaseOrderItem(parseInt(itemId));
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete P2 purchase order item error:', error);
+      res.status(500).json({ error: 'Failed to delete P2 purchase order item' });
+    }
+  });
+
   // Stock Models routes - bypass to old monolithic routes temporarily
   app.get('/api/stock-models', async (req, res) => {
     try {

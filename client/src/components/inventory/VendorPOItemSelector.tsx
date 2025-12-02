@@ -688,14 +688,14 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
               <div>
                 <Label htmlFor="customerPo">Customer PO</Label>
                 <Select 
-                  value={newItem.customerPoId?.toString() || ''} 
-                  onValueChange={(value) => setNewItem({ ...newItem, customerPoId: value ? parseInt(value) : undefined })}
+                  value={newItem.customerPoId?.toString() || 'none'} 
+                  onValueChange={(value) => setNewItem({ ...newItem, customerPoId: value && value !== 'none' ? parseInt(value) : undefined })}
                 >
                   <SelectTrigger data-testid="select-customer-po">
                     <SelectValue placeholder="Select customer PO (optional)..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {p2PurchaseOrders.filter(po => po.status === 'OPEN').map((po) => (
                       <SelectItem key={po.id} value={po.id.toString()}>
                         {po.poNumber} - {po.customerName}
@@ -817,14 +817,14 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                   <TableCell className="text-purple-600">
                     {isEditing ? (
                       <Select 
-                        value={editedItem.customerPoId?.toString() || ''} 
-                        onValueChange={(value) => setEditedItem({ ...editedItem, customerPoId: value ? parseInt(value) : undefined })}
+                        value={editedItem.customerPoId?.toString() || 'none'} 
+                        onValueChange={(value) => setEditedItem({ ...editedItem, customerPoId: value && value !== 'none' ? parseInt(value) : undefined })}
                       >
                         <SelectTrigger className="w-32" data-testid={`select-edit-customer-po-${item.id}`}>
                           <SelectValue placeholder="None" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">None</SelectItem>
+                          <SelectItem value="none">None</SelectItem>
                           {p2PurchaseOrders.filter(po => po.status === 'OPEN').map((po) => (
                             <SelectItem key={po.id} value={po.id.toString()}>
                               {po.poNumber}

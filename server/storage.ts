@@ -11107,8 +11107,42 @@ export class DatabaseStorage implements IStorage {
         .where(eq(inventoryItems.agPartNumber, poItem.partNumber))
         .limit(1);
 
+      // If the TOP-LEVEL PO item is Manufactured, create production orders for IT first
       if (topLevelPart.length > 0 && topLevelPart[0].type === 'Manufactured') {
-        console.log(`🔧 Top-level item ${poItem.partNumber} is Manufactured`);
+        const part = topLevelPart[0];
+        
+        if (part.manufacturingDepartment) {
+          console.log(`🔧 Top-level item ${poItem.partNumber} is Manufactured (dept: ${part.manufacturingDepartment}) - creating ${poItem.quantity} production orders`);
+          
+          // Create individual production orders for the top-level manufactured item
+          for (let unitIndex = 1; unitIndex <= poItem.quantity; unitIndex++) {
+            const unitSuffix = String(unitIndex).padStart(3, '0');
+            const orderId = `P2-${po.poNumber}-${poItem.id}-TOP-${unitSuffix}`;
+
+            const productionOrderData: InsertP2ProductionOrder = {
+              orderId,
+              p2PoId: poId,
+              p2PoItemId: poItem.id,
+              bomDefinitionId: null, // Top-level doesn't reference a parent BOM
+              bomItemId: null,
+              sku: poItem.partNumber,
+              partName: part.name || poItem.partName || poItem.partNumber,
+              quantity: 1,
+              department: part.manufacturingDepartment as any,
+              status: 'PENDING',
+              priority: 50,
+              dueDate: po.dueDate || undefined,
+              notes: `Generated from P2 PO ${po.poNumber} - TOP-LEVEL ASSEMBLY ${poItem.partNumber} - Unit ${unitIndex} of ${poItem.quantity}`,
+            };
+
+            const productionOrder = await this.createP2ProductionOrder(productionOrderData);
+            productionOrders.push(productionOrder);
+          }
+        } else {
+          const skipMsg = `Top-level manufactured part ${poItem.partNumber} has no manufacturing department assigned`;
+          console.warn(`⚠️ ${skipMsg} - skipping production order creation`);
+          skippedParts.push(skipMsg);
+        }
       } else if (topLevelPart.length > 0) {
         console.log(`📦 Top-level item ${poItem.partNumber} is ${topLevelPart[0].type || 'undefined type'} - exploding BOM for sub-components only`);
       }

@@ -27,9 +27,23 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowLeft, Plus, Pencil, Trash2, Package, Send } from 'lucide-react';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { ArrowLeft, Plus, Pencil, Trash2, Package, Send, Check, ChevronsUpDown } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface P2POItemsManagerProps {
   poId: number;
@@ -56,6 +70,7 @@ export function P2POItemsManager({
 }: P2POItemsManagerProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<P2POItem | null>(null);
+  const [partNumberOpen, setPartNumberOpen] = useState(false);
   const [formData, setFormData] = useState({
     partNumber: '',
     partName: '',
@@ -298,37 +313,65 @@ export function P2POItemsManager({
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="partNumber">Part Number * (from inventory or custom)</Label>
+                  <Label>Part Number * (from inventory or custom)</Label>
+                  <Popover open={partNumberOpen} onOpenChange={setPartNumberOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={partNumberOpen}
+                        className="w-full justify-between font-normal"
+                        disabled={isLoadingInventory}
+                      >
+                        {formData.partNumber || "Select part number..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search parts..." />
+                        <CommandList>
+                          <CommandEmpty>No parts found.</CommandEmpty>
+                          <CommandGroup className="max-h-[300px] overflow-y-auto">
+                            {inventoryItems.map((item) => (
+                              <CommandItem
+                                key={item.id}
+                                value={`${item.agPartNumber} ${item.name}`}
+                                onSelect={() => {
+                                  setFormData({
+                                    ...formData,
+                                    partNumber: item.agPartNumber,
+                                    partName: item.name,
+                                  });
+                                  setPartNumberOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    formData.partNumber === item.agPartNumber
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{item.agPartNumber}</span>
+                                  <span className="text-sm text-muted-foreground">{item.name}</span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                   <Input
-                    id="partNumber"
-                    list="inventory-items-list"
+                    id="customPartNumber"
                     value={formData.partNumber}
-                    onChange={(e) => {
-                      const partNum = e.target.value;
-                      setFormData({ ...formData, partNumber: partNum });
-                      // Auto-populate part name if matching inventory item found
-                      const matchingItem = inventoryItems.find(
-                        (item) => item.agPartNumber === partNum
-                      );
-                      if (matchingItem) {
-                        setFormData((prev) => ({
-                          ...prev,
-                          partNumber: partNum,
-                          partName: matchingItem.name,
-                        }));
-                      }
-                    }}
-                    required
-                    placeholder="Select from inventory or type custom..."
-                    disabled={isLoadingInventory}
+                    onChange={(e) => setFormData({ ...formData, partNumber: e.target.value })}
+                    placeholder="Or type custom part number..."
+                    className="mt-2"
                   />
-                  <datalist id="inventory-items-list">
-                    {inventoryItems.map((item) => (
-                      <option key={item.id} value={item.agPartNumber}>
-                        {item.name} {item.sku ? `(SKU: ${item.sku})` : ''}
-                      </option>
-                    ))}
-                  </datalist>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="partName">Part Name *</Label>

@@ -69,6 +69,7 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 - **Vendor PO Dual-Unit System**: Users can enter quantities in purchase units with automatic conversion and display in vendor units on Purchase Orders.
 - **Vendor PO Revision System**: Audit-compliant revision workflow for issued Purchase Orders with mandatory change reasons.
 - **Inventory Receiving System**: Enhanced receiving workflow with accordion grouping by VPO-#, dynamic traceability field capture, multi-item auto-advance, batch barcode printing, and per-unit traceability entry for traceable items (when qty > 1, each unit requires separate but copyable traceability data with progress tracking).
+- **P2 Purchase Order Quote Linking**: P2 Purchase Orders can be linked to a Source Quote via the Add/Edit modal. Dropdown displays only quotes with "SENT" status for selection, enabling traceability from customer PO back to the quote that generated it.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

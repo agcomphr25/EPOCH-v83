@@ -20,8 +20,8 @@ interface TraceabilityConfigModalProps {
 
 const TRACEABILITY_OPTIONS = [
   { id: 'supplierPartNumber', label: 'Supplier Part Number', category: 'supplier' },
-  { id: 'supplierBatchLotC', label: 'Supplier Batch/Lot/C #', category: 'supplier' },
-  { id: 'manufactureRoll', label: 'Manufacture Roll #', category: 'manufacturing' },
+  { id: 'batchLotNumber', label: 'Batch/Lot #', category: 'supplier' },
+  { id: 'rollNumber', label: 'Roll Number', category: 'manufacturing' },
   { id: 'manufactureDate', label: 'Manufacture Date', category: 'manufacturing' },
   { id: 'expirationDate', label: 'Expiration Date', category: 'dates' },
   { id: 'receivedDate', label: 'Received Date', category: 'dates' },

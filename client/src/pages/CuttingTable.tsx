@@ -990,10 +990,10 @@ export default function CuttingTable() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Packet Part (from Inventory) *</label>
+                <label className="text-sm font-medium">Packet (from Inventory) *</label>
                 <Select value={recipeInventoryItem} onValueChange={setRecipeInventoryItem}>
                   <SelectTrigger data-testid="select-inventory-item">
-                    <SelectValue placeholder="Select packet part" />
+                    <SelectValue placeholder="Select packet" />
                   </SelectTrigger>
                   <SelectContent>
                     {inventoryItems
@@ -2265,8 +2265,8 @@ export default function CuttingTable() {
                       ? (record.piecesYielded / fabricUsed).toFixed(2)
                       : 'N/A';
                     
-                    // Display category name if available, otherwise show "Packet Part"
-                    const categoryDisplay = category?.categoryName || (record.partNumber ? 'Packet Part' : 'Unknown');
+                    // Display category name if available, otherwise show "Packet"
+                    const categoryDisplay = category?.categoryName || (record.partNumber ? 'Packet' : 'Unknown');
                     
                     return (
                       <tr key={record.id} className="border-b hover:bg-muted/50">

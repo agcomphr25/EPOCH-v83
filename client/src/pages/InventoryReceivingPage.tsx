@@ -57,12 +57,15 @@ import P2ReceivingDialog from '@/components/inventory/P2ReceivingDialog';
 // Traceability field definitions - must match TraceabilityConfigModal
 const TRACEABILITY_FIELD_LABELS: Record<string, string> = {
   supplierPartNumber: 'Supplier Part Number',
-  supplierBatchLotC: 'Supplier Batch/Lot/C #',
-  manufactureRoll: 'Manufacture Roll #',
+  batchLotNumber: 'Batch/Lot #',
+  rollNumber: 'Roll Number',
   manufactureDate: 'Manufacture Date',
   expirationDate: 'Expiration Date',
   receivedDate: 'Received Date',
   aluminumHeat: 'Aluminum Heat #',
+  // Legacy field mappings for backwards compatibility
+  supplierBatchLotC: 'Batch/Lot #',
+  manufactureRoll: 'Roll Number',
 };
 
 // Fields that should use date input
@@ -670,7 +673,7 @@ export default function InventoryReceivingPage() {
             name: selectedReceivingItem.name,
             expectedQuantity: 1,
             receivedQuantity: 1,
-            lotNumber: unitData.supplierBatchLotC || unitData.manufactureRoll || '',
+            lotNumber: unitData.batchLotNumber || unitData.rollNumber || unitData.supplierBatchLotC || unitData.manufactureRoll || '',
             batchNumber: unitData.aluminumHeat || '',
             status: 'complete' as const,
             receivedDate: new Date().toISOString(),
@@ -689,7 +692,7 @@ export default function InventoryReceivingPage() {
             name: selectedReceivingItem.name,
             expectedQuantity: selectedReceivingItem.expectedQuantity,
             receivedQuantity: dialogReceivingData.receivedQuantity,
-            lotNumber: traceabilityData.supplierBatchLotC || traceabilityData.manufactureRoll || '',
+            lotNumber: traceabilityData.batchLotNumber || traceabilityData.rollNumber || traceabilityData.supplierBatchLotC || traceabilityData.manufactureRoll || '',
             batchNumber: traceabilityData.aluminumHeat || '',
             status: 'complete',
             receivedDate: new Date().toISOString(),

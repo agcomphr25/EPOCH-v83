@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -29,6 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -78,7 +80,7 @@ type FabricInventoryItem = {
   expirationDate: string | null;
   location: string;
   barcodeValue: string;
-  status: 'available' | 'low' | 'expired';
+  status: 'available' | 'low' | 'expired' | 'expiring';
   conformanceDocumentLink: string | null;  // Certificate of Conformance link
 };
 
@@ -116,6 +118,58 @@ const STOCK_TARGETS = {
   fiberglass: 40,
 };
 
+// Enhanced fabric type mapping for status thresholds
+// Low threshold determines when status shows as "low" vs "available"
+const FABRIC_TYPE_THRESHOLDS: Record<string, { low: number; target: number }> = {
+  'carbon_fiber': { low: 50, target: 400 },
+  'carbon fiber': { low: 50, target: 400 },
+  'fiberglass': { low: 5, target: 40 },
+  'kevlar': { low: 5, target: 100 },
+  'default': { low: 3, target: 50 },  // Default: low only when 2 or fewer on hand
+};
+
+// Type for resolved fabric with full traceability data for packets
+type ScannedFabricForPacket = {
+  fabricId: string;
+  barcodeValue: string;
+  fabricType: string;
+  fabricPartNumber: string | null;
+  internalControlNumber: string | null;
+  batchNumber: string | null;  // Batch/Lot #
+  rollNumber: string | null;
+  lotNumber: string | null;
+  supplierPartNumber: string | null;
+  expirationDate: string | null;
+  scannedAt: string;
+};
+
+// Helper to get fabric status based on type and quantity
+const getFabricStatus = (fabricType: string | null | undefined, quantity: number | null | undefined, expirationDate: string | null | undefined): 'available' | 'low' | 'expired' | 'expiring' => {
+  // Check expiration first
+  if (expirationDate) {
+    const expDate = new Date(expirationDate);
+    const now = new Date();
+    if (!isNaN(expDate.getTime())) {
+      if (expDate < now) return 'expired';
+      // Warn if expiring within 30 days
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+      if (expDate < thirtyDaysFromNow) return 'expiring';
+    }
+  }
+  
+  // Handle undefined or null quantity - default to available if quantity not tracked
+  const qty = typeof quantity === 'number' ? quantity : null;
+  if (qty === null) return 'available';
+  
+  // Normalize fabric type for lookup
+  const normalizedType = (fabricType || '').toLowerCase().replace(/[-_]/g, ' ').trim();
+  const thresholds = FABRIC_TYPE_THRESHOLDS[normalizedType] || FABRIC_TYPE_THRESHOLDS['default'];
+  
+  if (qty < thresholds.low) return 'low';
+  return 'available';
+};
+
 export default function CuttingTableDashboard() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("overview");
@@ -140,7 +194,7 @@ export default function CuttingTableDashboard() {
   const [packetForm, setPacketForm] = useState({
     packetType: "",
     quantity: "",
-    scannedFabrics: [] as string[],
+    scannedFabrics: [] as ScannedFabricForPacket[],  // Now stores full fabric traceability data
   });
 
   const [mfgQueueStatus, setMfgQueueStatus] = useState<string>('ACTIVE');
@@ -170,6 +224,22 @@ export default function CuttingTableDashboard() {
   const [editingFabric, setEditingFabric] = useState<FabricInventoryItem | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingFabric, setDeletingFabric] = useState<FabricInventoryItem | null>(null);
+  
+  // Multi-select for batch barcode printing
+  const [selectedForPrint, setSelectedForPrint] = useState<Set<string>>(new Set());
+  const [isBatchPrintDialogOpen, setIsBatchPrintDialogOpen] = useState(false);
+  const [printQuantities, setPrintQuantities] = useState<Record<string, number>>({});
+  
+  // Packet scheduling state
+  const [isSchedulePacketDialogOpen, setIsSchedulePacketDialogOpen] = useState(false);
+  const [schedulePacketForm, setSchedulePacketForm] = useState({
+    inventoryItemId: '',
+    quantity: '',
+    priority: '50',
+    dueDate: '',
+    notes: '',
+  });
+  
   const [editForm, setEditForm] = useState({
     fabricType: '',
     internalControlNumber: '',
@@ -205,8 +275,7 @@ export default function CuttingTableDashboard() {
         batchNumber: item.batchNumber,   // Secondary identifier (Aluminum Heat # etc.)
         rollNumber: item.rollNumber,     // Manufacture Roll # from receiving
         barcodeValue: `FAB-${item.internalControlNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
-        status: item.quantityInStock < 10 ? 'low' : 
-                (item.expirationDate && new Date(item.expirationDate) < new Date() ? 'expired' : 'available'),
+        status: getFabricStatus(item.fabric || item.fabricType, item.quantityInStock, item.expirationDate),
         conformanceDocumentLink: item.conformanceDocumentLink || null,
       }));
     },
@@ -249,6 +318,11 @@ export default function CuttingTableDashboard() {
 
   const { data: fabricItems = [], isLoading: loadingFabricItems } = useQuery<any[]>({
     queryKey: ['/api/cutting-table/fabric-items'],
+  });
+
+  // Available packet items for scheduling
+  const { data: availablePackets = [] } = useQuery<any[]>({
+    queryKey: ['/api/cutting-table-mfg-queue/available-packets'],
   });
 
   const { data: mfgQueueItems = [], isLoading: loadingMfgQueue, refetch: refetchMfgQueue } = useQuery<ManufacturingQueueItem[]>({
@@ -380,18 +454,38 @@ export default function CuttingTableDashboard() {
 
   const buildPacketMutation = useMutation({
     mutationFn: async (data: typeof packetForm) => {
+      // Build traceability payload with full fabric details for AS9100 compliance
+      const traceabilityData = data.scannedFabrics.map(fabric => ({
+        fabricId: fabric.fabricId,
+        barcodeValue: fabric.barcodeValue,
+        fabricType: fabric.fabricType,
+        fabricPartNumber: fabric.fabricPartNumber,
+        internalControlNumber: fabric.internalControlNumber,
+        batchNumber: fabric.batchNumber,  // Batch/Lot # for traceability
+        rollNumber: fabric.rollNumber,
+        lotNumber: fabric.lotNumber,
+        supplierPartNumber: fabric.supplierPartNumber,
+        expirationDate: fabric.expirationDate,
+        scannedAt: fabric.scannedAt,
+      }));
+      
       return apiRequest('/api/cutting-table/packet-sessions', {
         method: 'POST',
         body: JSON.stringify({
           packetType: data.packetType,
           packetsBuilt: parseInt(data.quantity) || 1,
-          fabricLots: data.scannedFabrics,
+          fabricTraceability: traceabilityData,  // Full traceability data
+          fabricLots: traceabilityData.map(f => f.barcodeValue),  // Backward compatibility
           createdAt: new Date().toISOString(),
         }),
       });
     },
     onSuccess: () => {
-      toast({ title: "Success", description: "Packet session recorded with traceability" });
+      const fabricCount = packetForm.scannedFabrics.length;
+      toast({ 
+        title: "Packet Created with Traceability", 
+        description: `Packet recorded with ${fabricCount} fabric lot(s) linked for AS9100 compliance` 
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/stock-levels'] });
       setPacketForm({ packetType: "", quantity: "", scannedFabrics: [] });
     },
@@ -587,6 +681,48 @@ export default function CuttingTableDashboard() {
     },
   });
 
+  // Schedule packet mutation
+  const schedulePacketMutation = useMutation({
+    mutationFn: async (data: typeof schedulePacketForm) => {
+      return apiRequest('/api/cutting-table-mfg-queue/schedule-packet', {
+        method: 'POST',
+        body: JSON.stringify({
+          inventoryItemId: parseInt(data.inventoryItemId),
+          quantity: parseInt(data.quantity),
+          priority: parseInt(data.priority) || 50,
+          dueDate: data.dueDate || null,
+          notes: data.notes || null,
+          requestedBy: currentUser?.username || 'unknown',
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ 
+        queryKey: ['/api/cutting-table-mfg-queue/cutting-table'],
+        exact: false 
+      });
+      setIsSchedulePacketDialogOpen(false);
+      setSchedulePacketForm({
+        inventoryItemId: '',
+        quantity: '',
+        priority: '50',
+        dueDate: '',
+        notes: '',
+      });
+      toast({
+        title: 'Packet scheduled',
+        description: 'Packet has been added to the manufacturing queue.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to schedule packet',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const resetProductionForm = () => {
     setQuantityCompleted('');
     setFabricBarcode('');
@@ -600,14 +736,68 @@ export default function CuttingTableDashboard() {
   };
 
   const handleScanBarcode = () => {
-    if (scannedBarcode) {
-      setPacketForm(prev => ({
-        ...prev,
-        scannedFabrics: [...prev.scannedFabrics, scannedBarcode],
-      }));
-      toast({ title: "Scanned", description: `Fabric ${scannedBarcode} added to packet` });
-      setScannedBarcode("");
+    if (!scannedBarcode) return;
+    
+    // Look up the fabric in inventory by barcode or ICN
+    const matchedFabric = fabricInventory.find(f => 
+      f.barcodeValue === scannedBarcode || 
+      f.internalControlNumber === scannedBarcode ||
+      f.barcodeValue?.includes(scannedBarcode) ||
+      scannedBarcode.includes(f.internalControlNumber || '')
+    );
+    
+    if (!matchedFabric) {
+      toast({ 
+        title: "Fabric Not Found", 
+        description: `No fabric found with barcode "${scannedBarcode}". Please verify the barcode is correct.`,
+        variant: "destructive" 
+      });
+      return;
     }
+    
+    // Check if already scanned
+    if (packetForm.scannedFabrics.some(sf => sf.fabricId === matchedFabric.id)) {
+      toast({ 
+        title: "Already Scanned", 
+        description: `This fabric (${matchedFabric.internalControlNumber || matchedFabric.barcodeValue}) is already in this packet.`,
+        variant: "destructive" 
+      });
+      setScannedBarcode("");
+      return;
+    }
+    
+    // Create resolved fabric record with full traceability data
+    const resolvedFabric: ScannedFabricForPacket = {
+      fabricId: matchedFabric.id,
+      barcodeValue: matchedFabric.barcodeValue,
+      fabricType: matchedFabric.fabricType,
+      fabricPartNumber: matchedFabric.fabricPartNumber,
+      internalControlNumber: matchedFabric.internalControlNumber,
+      batchNumber: matchedFabric.batchNumber || matchedFabric.lotNumber,  // Use batch or lot
+      rollNumber: matchedFabric.rollNumber,
+      lotNumber: matchedFabric.lotNumber,
+      supplierPartNumber: matchedFabric.supplierPartNumber,
+      expirationDate: matchedFabric.expirationDate,
+      scannedAt: new Date().toISOString(),
+    };
+    
+    setPacketForm(prev => ({
+      ...prev,
+      scannedFabrics: [...prev.scannedFabrics, resolvedFabric],
+    }));
+    
+    // Show success with fabric details
+    const fabricInfo = [
+      matchedFabric.fabricType,
+      matchedFabric.batchNumber || matchedFabric.lotNumber ? `Batch: ${matchedFabric.batchNumber || matchedFabric.lotNumber}` : null,
+      matchedFabric.rollNumber ? `Roll: ${matchedFabric.rollNumber}` : null,
+    ].filter(Boolean).join(' | ');
+    
+    toast({ 
+      title: "Fabric Scanned", 
+      description: `Added: ${fabricInfo}` 
+    });
+    setScannedBarcode("");
   };
 
   const handlePrintLabel = async (fabric: FabricInventoryItem) => {
@@ -631,6 +821,13 @@ export default function CuttingTableDashboard() {
         if (data.barcodeImage) {
           const printWindow = window.open('', '_blank');
           if (printWindow) {
+            const formatExpDate = (dateStr: string | null) => {
+              if (!dateStr) return 'N/A';
+              try {
+                const d = new Date(dateStr);
+                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+              } catch { return 'N/A'; }
+            };
             printWindow.document.write(`
               <html>
                 <head><title>Fabric Label</title>
@@ -639,21 +836,26 @@ export default function CuttingTableDashboard() {
                   .label { border: 2px solid #000; padding: 15px; width: 320px; }
                   .barcode { text-align: center; margin: 10px 0; }
                   .info { font-size: 11px; margin: 4px 0; }
-                  .type { font-size: 14px; font-weight: bold; margin-bottom: 5px; }
-                  .control-number { font-size: 16px; font-weight: bold; margin-bottom: 8px; }
-                  .nickname { font-size: 12px; font-style: italic; margin-bottom: 5px; color: #555; }
+                  .type { font-size: 12px; margin-bottom: 3px; color: #333; }
+                  .control-number { font-size: 10px; color: #666; margin-bottom: 5px; }
+                  .nickname { font-size: 18px; font-weight: bold; margin-bottom: 5px; color: #000; }
+                  .roll-number { font-size: 16px; font-weight: bold; margin-bottom: 8px; color: #1a56db; }
+                  .expiration { font-size: 14px; font-weight: bold; margin-top: 8px; padding: 4px 8px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 4px; display: inline-block; }
+                  .expiration.expired { background: #fee2e2; border-color: #dc2626; color: #dc2626; }
                 </style>
                 </head>
                 <body>
                   <div class="label">
+                    ${fabric.nickname ? `<div class="nickname">${fabric.nickname}</div>` : `<div class="nickname">${fabric.fabricType || 'Fabric'}</div>`}
+                    <div class="roll-number">Roll #${fabric.rollNumber || 'N/A'}</div>
+                    <div class="type">${fabric.fabricType || ''}</div>
                     <div class="control-number">ICN: ${fabric.internalControlNumber || 'N/A'}</div>
-                    <div class="type">${fabric.fabricType}</div>
-                    ${fabric.nickname ? `<div class="nickname">"${fabric.nickname}"</div>` : ''}
                     <div class="barcode"><img src="${data.barcodeImage}" alt="barcode" /></div>
+                    <div class="info"><strong>Batch/Lot:</strong> ${fabric.batchNumber || fabric.lotNumber || 'N/A'}</div>
                     ${fabric.supplierPartNumber ? `<div class="info"><strong>Supplier P/N:</strong> ${fabric.supplierPartNumber}</div>` : ''}
-                    <div class="info"><strong>Batch:</strong> ${fabric.batchNumber || 'N/A'}</div>
-                    <div class="info"><strong>Roll:</strong> ${fabric.rollNumber || 'N/A'}</div>
-                    <div class="info"><strong>Location:</strong> ${fabric.location || 'N/A'}</div>
+                    <div class="expiration ${fabric.expirationDate && new Date(fabric.expirationDate) < new Date() ? 'expired' : ''}">
+                      EXP: ${formatExpDate(fabric.expirationDate)}
+                    </div>
                   </div>
                   <script>window.print();</script>
                 </body>
@@ -667,6 +869,254 @@ export default function CuttingTableDashboard() {
     } catch (error) {
       toast({ title: "Error", description: "Failed to print label", variant: "destructive" });
     }
+  };
+
+  // Multi-select handlers for batch printing
+  const toggleSelectForPrint = (id: string) => {
+    setSelectedForPrint(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedForPrint.size === fabricInventory.length) {
+      setSelectedForPrint(new Set());
+    } else {
+      setSelectedForPrint(new Set(fabricInventory.map(item => item.id)));
+    }
+  };
+
+  const openBatchPrintDialog = () => {
+    if (selectedForPrint.size === 0) {
+      toast({ title: "No items selected", description: "Please select at least one fabric to print", variant: "destructive" });
+      return;
+    }
+    const initialQuantities: Record<string, number> = {};
+    selectedForPrint.forEach(id => {
+      initialQuantities[id] = printQuantities[id] || 1;
+    });
+    setPrintQuantities(initialQuantities);
+    setIsBatchPrintDialogOpen(true);
+  };
+
+  const handleBatchPrint = () => {
+    const selectedItems = fabricInventory.filter(item => selectedForPrint.has(item.id));
+    
+    if (selectedItems.length === 0) {
+      toast({ title: "Error", description: "No valid items to print", variant: "destructive" });
+      return;
+    }
+
+    // Generate labels array with quantities
+    const labels: Array<{ item: FabricInventoryItem; quantity: number }> = [];
+    selectedItems.forEach(item => {
+      const qty = printQuantities[item.id] || 1;
+      for (let i = 0; i < qty; i++) {
+        labels.push({ item, quantity: qty });
+      }
+    });
+
+    // Create print window with Avery 5160 layout (30 labels per sheet, 3 columns x 10 rows)
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: "Error", description: "Could not open print window. Please allow popups.", variant: "destructive" });
+      return;
+    }
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Fabric Barcode Labels - Avery 5160</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <style>
+    @page {
+      size: letter;
+      margin: 0.5in 0.1875in;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .sheet {
+      width: 8.5in;
+      padding: 0.5in 0.1875in;
+    }
+    .labels-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 2.625in);
+      grid-auto-rows: 1in;
+      gap: 0;
+      justify-content: center;
+    }
+    .label {
+      width: 2.625in;
+      height: 1in;
+      padding: 0.05in 0.1in;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      border: 1px dashed #ccc;
+      page-break-inside: avoid;
+    }
+    @media print {
+      .label {
+        border: none;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+    .label-content {
+      text-align: center;
+      width: 100%;
+    }
+    .label-nickname {
+      font-size: 8px;
+      font-weight: bold;
+      margin-bottom: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .label-roll {
+      font-size: 7px;
+      font-weight: bold;
+      color: #1a56db;
+      margin-bottom: 1px;
+    }
+    .label-exp {
+      font-size: 6px;
+      font-weight: bold;
+      color: #b45309;
+      background: #fef3c7;
+      padding: 1px 3px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+    .label-exp.expired {
+      color: #dc2626;
+      background: #fee2e2;
+    }
+    .barcode-container {
+      margin: 2px 0;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+    .barcode-container svg {
+      max-width: 2.4in;
+      height: 28px;
+    }
+    .barcode-text {
+      font-size: 7px;
+      font-weight: bold;
+      font-family: monospace;
+    }
+    .print-controls {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      z-index: 1000;
+    }
+    .print-btn {
+      padding: 10px 20px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-right: 10px;
+    }
+    .print-btn:hover {
+      background: #1d4ed8;
+    }
+    .close-btn {
+      padding: 10px 20px;
+      background: #6b7280;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="print-controls no-print">
+    <button class="print-btn" onclick="window.print()">Print Labels</button>
+    <button class="close-btn" onclick="window.close()">Close</button>
+    <p style="margin-top: 10px; font-size: 12px; color: #666;">
+      ${labels.length} label(s) ready to print on Avery 5160 sheets
+    </p>
+  </div>
+  
+  <div class="sheet">
+    <div class="labels-grid">
+      ${labels.map((labelData, index) => {
+        const expDate = labelData.item.expirationDate;
+        const isExpired = expDate ? new Date(expDate) < new Date() : false;
+        const formatExp = (d: string | null) => {
+          if (!d) return 'N/A';
+          try { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }); } 
+          catch { return 'N/A'; }
+        };
+        return `
+        <div class="label">
+          <div class="label-content">
+            <div class="label-nickname">${labelData.item.nickname || labelData.item.fabricType || 'Fabric'}</div>
+            <div class="label-roll">Roll #${labelData.item.rollNumber || 'N/A'}</div>
+            <div class="barcode-container">
+              <svg id="barcode-${index}"></svg>
+            </div>
+            <div class="label-exp ${isExpired ? 'expired' : ''}">EXP: ${formatExp(expDate)}</div>
+          </div>
+        </div>
+      `}).join('')}
+    </div>
+  </div>
+  
+  <script>
+    ${labels.map((labelData, index) => `
+      JsBarcode("#barcode-${index}", "${labelData.item.barcodeValue}", {
+        format: "CODE128",
+        width: 1.2,
+        height: 28,
+        displayValue: false,
+        margin: 0
+      });
+    `).join('')}
+  </script>
+</body>
+</html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    
+    setIsBatchPrintDialogOpen(false);
+    setSelectedForPrint(new Set());
+    toast({ title: "Success", description: `Prepared ${labels.length} labels for printing` });
   };
 
   const handleOpenEditDialog = (fabric: FabricInventoryItem) => {
@@ -1196,18 +1646,27 @@ export default function CuttingTableDashboard() {
                     Cutting table production queue with fabric traceability
                   </CardDescription>
                 </div>
-                <Select value={mfgQueueStatus} onValueChange={setMfgQueueStatus}>
-                  <SelectTrigger className="w-[180px]" data-testid="select-mfg-status">
-                    <SelectValue placeholder="Filter by status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All Items</SelectItem>
-                    <SelectItem value="PENDING">Pending</SelectItem>
-                    <SelectItem value="ACTIVE">Active</SelectItem>
-                    <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                    <SelectItem value="COMPLETED">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    onClick={() => setIsSchedulePacketDialogOpen(true)}
+                    data-testid="button-schedule-packet"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Schedule Packet
+                  </Button>
+                  <Select value={mfgQueueStatus} onValueChange={setMfgQueueStatus}>
+                    <SelectTrigger className="w-[180px]" data-testid="select-mfg-status">
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">All Items</SelectItem>
+                      <SelectItem value="PENDING">Pending</SelectItem>
+                      <SelectItem value="ACTIVE">Active</SelectItem>
+                      <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                      <SelectItem value="COMPLETED">Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -1538,14 +1997,44 @@ export default function CuttingTableDashboard() {
 
                 {packetForm.scannedFabrics.length > 0 && (
                   <div className="space-y-2">
-                    <Label>Scanned Fabrics ({packetForm.scannedFabrics.length})</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {packetForm.scannedFabrics.map((code, idx) => (
-                        <Badge key={idx} variant="secondary" className="text-xs">
-                          {code}
-                        </Badge>
+                    <Label className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      Scanned Fabrics for Traceability ({packetForm.scannedFabrics.length})
+                    </Label>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {packetForm.scannedFabrics.map((fabric, idx) => (
+                        <div 
+                          key={idx} 
+                          className="p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-sm">{fabric.fabricType || 'Unknown'}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                              onClick={() => setPacketForm(prev => ({
+                                ...prev,
+                                scannedFabrics: prev.scannedFabrics.filter((_, i) => i !== idx)
+                              }))}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
+                            <div><strong>ICN:</strong> {fabric.internalControlNumber || 'N/A'}</div>
+                            <div><strong>Batch/Lot #:</strong> {fabric.batchNumber || fabric.lotNumber || 'N/A'}</div>
+                            {fabric.rollNumber && <div><strong>Roll #:</strong> {fabric.rollNumber}</div>}
+                            {fabric.supplierPartNumber && <div><strong>Supplier P/N:</strong> {fabric.supplierPartNumber}</div>}
+                            <div className="font-mono text-blue-600">{fabric.barcodeValue}</div>
+                          </div>
+                        </div>
                       ))}
                     </div>
+                    <p className="text-xs text-green-700 dark:text-green-400 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      Full traceability data will be recorded for AS9100 compliance
+                    </p>
                   </div>
                 )}
 
@@ -1611,13 +2100,32 @@ export default function CuttingTableDashboard() {
         <TabsContent value="inventory" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Fabric Inventory
-              </CardTitle>
-              <CardDescription>
-                View all fabric in stock with lot tracking and print labels
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    Fabric Inventory
+                  </CardTitle>
+                  <CardDescription>
+                    View all fabric in stock with lot tracking and print labels
+                    {selectedForPrint.size > 0 && (
+                      <span className="ml-2 text-blue-600 font-medium">
+                        ({selectedForPrint.size} selected)
+                      </span>
+                    )}
+                  </CardDescription>
+                </div>
+                {selectedForPrint.size > 0 && (
+                  <Button
+                    onClick={openBatchPrintDialog}
+                    className="bg-blue-600 hover:bg-blue-700"
+                    data-testid="button-batch-print"
+                  >
+                    <Printer className="h-4 w-4 mr-2" />
+                    Print Labels ({selectedForPrint.size})
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {loadingFabric ? (
@@ -1631,6 +2139,14 @@ export default function CuttingTableDashboard() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={selectedForPrint.size > 0 && selectedForPrint.size === fabricInventory.length}
+                            onCheckedChange={toggleSelectAll}
+                            data-testid="checkbox-select-all"
+                            title="Select all for printing"
+                          />
+                        </TableHead>
                         <TableHead>Part #</TableHead>
                         <TableHead>Inventory Item Name</TableHead>
                         <TableHead>Common Name</TableHead>
@@ -1638,13 +2154,22 @@ export default function CuttingTableDashboard() {
                         <TableHead>Batch #</TableHead>
                         <TableHead>Roll #</TableHead>
                         <TableHead>CoC</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Qty</TableHead>
                         <TableHead>Expiration Date</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {fabricInventory.map((fabric) => (
-                        <TableRow key={fabric.id}>
+                        <TableRow key={fabric.id} className={`${selectedForPrint.has(fabric.id) ? 'bg-blue-50 dark:bg-blue-950' : ''} ${fabric.status === 'expired' ? 'bg-red-50 dark:bg-red-950/30' : fabric.status === 'expiring' ? 'bg-amber-50 dark:bg-amber-950/30' : fabric.status === 'low' ? 'bg-yellow-50 dark:bg-yellow-950/30' : ''}`}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedForPrint.has(fabric.id)}
+                              onCheckedChange={() => toggleSelectForPrint(fabric.id)}
+                              data-testid={`checkbox-print-${fabric.id}`}
+                            />
+                          </TableCell>
                           <TableCell className="font-medium">{fabric.internalControlNumber || '-'}</TableCell>
                           <TableCell>
                             {(() => {
@@ -1685,6 +2210,23 @@ export default function CuttingTableDashboard() {
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            {fabric.status === 'expired' && (
+                              <Badge variant="destructive" className="text-xs">Expired</Badge>
+                            )}
+                            {fabric.status === 'expiring' && (
+                              <Badge variant="outline" className="text-xs bg-amber-100 text-amber-800 border-amber-300">Expiring Soon</Badge>
+                            )}
+                            {fabric.status === 'low' && (
+                              <Badge variant="outline" className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300">Low Stock</Badge>
+                            )}
+                            {fabric.status === 'available' && (
+                              <Badge variant="outline" className="text-xs bg-green-100 text-green-800 border-green-300">Available</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center font-medium">
+                            {fabric.quantityInStock ?? fabric.squareMeters ?? '-'}
                           </TableCell>
                           <TableCell>
                             {fabric.expirationDate 
@@ -2047,6 +2589,163 @@ export default function CuttingTableDashboard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Batch Print Dialog */}
+      <Dialog open={isBatchPrintDialogOpen} onOpenChange={setIsBatchPrintDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Print Barcode Labels</DialogTitle>
+            <DialogDescription>
+              Set the quantity of labels to print for each selected fabric. Labels will be formatted for Avery 5160 sheets (30 labels per sheet).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[400px] overflow-y-auto py-4">
+            <div className="space-y-3">
+              {fabricInventory
+                .filter(item => selectedForPrint.has(item.id))
+                .map(item => (
+                  <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{item.fabricType || 'Unknown Fabric'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.lotNumber || item.batchNumber ? `Batch: ${item.lotNumber || item.batchNumber}` : ''}
+                        {item.rollNumber && ` | Roll: ${item.rollNumber}`}
+                      </p>
+                      <p className="text-xs font-mono text-blue-600">{item.barcodeValue}</p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-4">
+                      <Label htmlFor={`qty-${item.id}`} className="text-sm whitespace-nowrap">Qty:</Label>
+                      <Input
+                        id={`qty-${item.id}`}
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={printQuantities[item.id] || 1}
+                        onChange={(e) => setPrintQuantities(prev => ({
+                          ...prev,
+                          [item.id]: Math.max(1, Math.min(100, parseInt(e.target.value) || 1))
+                        }))}
+                        className="w-20"
+                        data-testid={`input-print-qty-${item.id}`}
+                      />
+                    </div>
+                  </div>
+                ))}
+            </div>
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                <strong>Total Labels:</strong> {Object.values(printQuantities).reduce((a, b) => a + b, 0)}
+              </p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                Labels will be arranged in a 3-column grid for Avery 5160 label sheets
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBatchPrintDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleBatchPrint} className="bg-blue-600 hover:bg-blue-700" data-testid="button-confirm-print">
+              <Printer className="h-4 w-4 mr-2" />
+              Print Labels
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Packet Dialog */}
+      <Dialog open={isSchedulePacketDialogOpen} onOpenChange={setIsSchedulePacketDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Schedule Packet Production</DialogTitle>
+            <DialogDescription>
+              Add a packet item to the cutting table manufacturing queue. Select an inventory item marked as "Packet (Cutting Table)".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="packet-item">Packet Item *</Label>
+              <Select 
+                value={schedulePacketForm.inventoryItemId} 
+                onValueChange={(value) => setSchedulePacketForm(prev => ({ ...prev, inventoryItemId: value }))}
+              >
+                <SelectTrigger data-testid="select-packet-item">
+                  <SelectValue placeholder="Select a packet item" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availablePackets.map((packet: any) => (
+                    <SelectItem key={packet.id} value={packet.id.toString()}>
+                      {packet.agPartNumber} - {packet.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {availablePackets.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No packet items available. Mark inventory items as "Packet (Cutting Table)" in the Parts List to schedule them here.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="packet-quantity">Quantity *</Label>
+              <Input
+                id="packet-quantity"
+                type="number"
+                min={1}
+                value={schedulePacketForm.quantity}
+                onChange={(e) => setSchedulePacketForm(prev => ({ ...prev, quantity: e.target.value }))}
+                placeholder="Enter quantity to produce"
+                data-testid="input-packet-quantity"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="packet-priority">Priority (1-100, lower = higher priority)</Label>
+              <Input
+                id="packet-priority"
+                type="number"
+                min={1}
+                max={100}
+                value={schedulePacketForm.priority}
+                onChange={(e) => setSchedulePacketForm(prev => ({ ...prev, priority: e.target.value }))}
+                placeholder="50"
+                data-testid="input-packet-priority"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="packet-due-date">Due Date (optional)</Label>
+              <Input
+                id="packet-due-date"
+                type="date"
+                value={schedulePacketForm.dueDate}
+                onChange={(e) => setSchedulePacketForm(prev => ({ ...prev, dueDate: e.target.value }))}
+                data-testid="input-packet-due-date"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="packet-notes">Notes (optional)</Label>
+              <Textarea
+                id="packet-notes"
+                value={schedulePacketForm.notes}
+                onChange={(e) => setSchedulePacketForm(prev => ({ ...prev, notes: e.target.value }))}
+                placeholder="Any additional notes..."
+                data-testid="input-packet-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsSchedulePacketDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => schedulePacketMutation.mutate(schedulePacketForm)}
+              disabled={!schedulePacketForm.inventoryItemId || !schedulePacketForm.quantity || schedulePacketMutation.isPending}
+              data-testid="button-confirm-schedule"
+            >
+              {schedulePacketMutation.isPending ? 'Scheduling...' : 'Schedule Packet'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

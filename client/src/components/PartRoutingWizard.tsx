@@ -53,7 +53,7 @@ const TRACEABILITY_FIELDS = [
   { id: 'internalControlNumber', label: 'Internal Control Number', description: 'Internal tracking control number' },
   { id: 'supplier', label: 'Supplier', description: 'Material supplier name' },
   { id: 'inventoryPartNumber', label: 'Inventory Part Number', description: 'Inventory part/item number' },
-  { id: 'supplierBatchLot', label: 'Supplier Batch/Lot/C#', description: 'Supplier batch, lot, or certificate number' },
+  { id: 'batchLotNumber', label: 'Batch/Lot #', description: 'Batch or lot number' },
   { id: 'manufacturer', label: 'Manufacturer', description: 'Material manufacturer' },
   { id: 'rollNumber', label: 'Roll Number', description: 'Material roll number' },
   { id: 'expirationDate', label: 'Expiration Date', description: 'Material expiration date' },

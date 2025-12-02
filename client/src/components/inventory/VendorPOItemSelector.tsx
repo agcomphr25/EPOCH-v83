@@ -64,6 +64,16 @@ type VendorPOItem = {
   conversionFactor?: number;
   lineTotal: number;
   notes?: string;
+  customerPoId?: number;
+  otherIdentifier?: string;
+};
+
+type P2PurchaseOrder = {
+  id: number;
+  poNumber: string;
+  customerId: string;
+  customerName: string;
+  status: string;
 };
 
 type VendorPart = {
@@ -102,6 +112,8 @@ type NewItemState = {
   conversionFactor: number;
   quantity: number;
   unitPrice: number;
+  customerPoId?: number;
+  otherIdentifier: string;
 };
 
 function QuantityDisplay({ item }: { item: VendorPOItem }) {
@@ -195,6 +207,8 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
     conversionFactor: 0,
     quantity: 0,
     unitPrice: 0,
+    customerPoId: undefined,
+    otherIdentifier: '',
   });
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [editedItem, setEditedItem] = useState<Partial<VendorPOItem>>({});
@@ -208,6 +222,10 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
     queryKey: ['/api/inventory/vendor-parts/vendor', vendorId],
     queryFn: () => apiRequest(`/api/inventory/vendor-parts/vendor/${vendorId}`),
     enabled: !!vendorId,
+  });
+
+  const { data: p2PurchaseOrders = [] } = useQuery<P2PurchaseOrder[]>({
+    queryKey: ['/api/p2-purchase-orders-bypass'],
   });
 
   const hasUnitConversion = useMemo(() => {
@@ -269,7 +287,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
         
         if (hasConversion) {
           // Purchase unit mode - user enters in purchase units (e.g., sqm)
-          setNewItem({
+          setNewItem(prev => ({
             agPartNumber: selectedPart.agPartNumber,
             description: selectedPart.itemDescription || `${selectedPart.agPartNumber} - ${inventoryItem.name || ''}`,
             purchaseQty: 0,
@@ -279,11 +297,13 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
             conversionFactor: inventoryItem.purchaseQuantity,
             quantity: 0,
             unitPrice: 0,
-          });
+            customerPoId: prev.customerPoId,
+            otherIdentifier: prev.otherIdentifier,
+          }));
           console.log('Purchase unit mode activated:', { vendorUnit: inventoryItem.vendorUnit, purchaseUnit: inventoryItem.purchaseUnit, conversionFactor: inventoryItem.purchaseQuantity });
         } else {
           // Simple vendor unit mode - user enters vendor units directly
-          setNewItem({
+          setNewItem(prev => ({
             agPartNumber: selectedPart.agPartNumber,
             description: selectedPart.itemDescription || selectedPart.agPartNumber,
             purchaseQty: 0,
@@ -293,13 +313,15 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
             conversionFactor: 0,
             quantity: selectedPart.minimumOrderQty || 1,
             unitPrice: selectedPart.unitPrice || 0,
-          });
+            customerPoId: prev.customerPoId,
+            otherIdentifier: prev.otherIdentifier,
+          }));
           console.log('Simple vendor unit mode - no conversion data available');
         }
       } catch (error) {
         console.error('Failed to fetch inventory item:', error);
         setSelectedInventoryItem(null);
-        setNewItem({
+        setNewItem(prev => ({
           agPartNumber: selectedPart.agPartNumber,
           description: selectedPart.itemDescription || selectedPart.agPartNumber,
           purchaseQty: 0,
@@ -309,7 +331,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
           conversionFactor: 0,
           quantity: selectedPart.minimumOrderQty || 1,
           unitPrice: selectedPart.unitPrice || 0,
-        });
+          customerPoId: prev.customerPoId,
+          otherIdentifier: prev.otherIdentifier,
+        }));
         console.log('Failed to fetch inventory item, using simple mode');
       }
     }
@@ -392,6 +416,8 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
       conversionFactor: 0,
       quantity: 0,
       unitPrice: 0,
+      customerPoId: undefined,
+      otherIdentifier: '',
     });
     setSelectedPartId('');
     setSelectedInventoryItem(null);
@@ -422,6 +448,8 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
         quantity: calculatedVendorValues.vendorQty,
         unitPrice: calculatedVendorValues.vendorUnitPrice,
         lineTotal: lineTotal,
+        customerPoId: newItem.customerPoId || null,
+        otherIdentifier: newItem.otherIdentifier || null,
       };
     } else {
       if (newItem.quantity <= 0 || newItem.unitPrice <= 0) {
@@ -436,6 +464,8 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
         unitPrice: newItem.unitPrice,
         vendorUnit: newItem.vendorUnit || null,
         lineTotal: newItem.quantity * newItem.unitPrice,
+        customerPoId: newItem.customerPoId || null,
+        otherIdentifier: newItem.otherIdentifier || null,
       };
     }
     
@@ -450,6 +480,8 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       notes: item.notes,
+      customerPoId: item.customerPoId,
+      otherIdentifier: item.otherIdentifier,
     });
   };
 
@@ -463,6 +495,8 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
       quantity: editedItem.quantity ?? originalItem.quantity,
       unitPrice: editedItem.unitPrice ?? originalItem.unitPrice,
       notes: editedItem.notes ?? originalItem.notes,
+      customerPoId: editedItem.customerPoId ?? originalItem.customerPoId,
+      otherIdentifier: editedItem.otherIdentifier ?? originalItem.otherIdentifier,
     };
     
     updateItemMutation.mutate({ itemId, data: updatedData });
@@ -644,6 +678,46 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
               <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">💡 Tip: Set up vendorUnit, purchaseUnit, and conversion factor in inventory items for automatic unit conversion</p>
             </div>
           )}
+
+          {/* Internal Tracking Fields - Customer PO and Other Identifier (not visible to vendor) */}
+          <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="font-medium text-purple-800 dark:text-purple-200 text-sm">📋 Internal Tracking (not shown on vendor PO)</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="customerPo">Customer PO</Label>
+                <Select 
+                  value={newItem.customerPoId?.toString() || ''} 
+                  onValueChange={(value) => setNewItem({ ...newItem, customerPoId: value ? parseInt(value) : undefined })}
+                >
+                  <SelectTrigger data-testid="select-customer-po">
+                    <SelectValue placeholder="Select customer PO (optional)..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {p2PurchaseOrders.filter(po => po.status === 'OPEN').map((po) => (
+                      <SelectItem key={po.id} value={po.id.toString()}>
+                        {po.poNumber} - {po.customerName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Link this purchase to a customer order</p>
+              </div>
+              <div>
+                <Label htmlFor="otherIdentifier">Other Identifier</Label>
+                <Input
+                  id="otherIdentifier"
+                  value={newItem.otherIdentifier}
+                  onChange={(e) => setNewItem({ ...newItem, otherIdentifier: e.target.value })}
+                  data-testid="input-other-identifier"
+                  placeholder="e.g., Stock replenishment, Project X..."
+                />
+                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Optional note if not tied to a customer PO</p>
+              </div>
+            </div>
+          </div>
           
           <div className="flex items-center gap-4">
             <Button onClick={handleAddItem} disabled={createItemMutation.isPending} data-testid="button-add-item">
@@ -668,6 +742,8 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
               <TableHead>Qty (Vendor)</TableHead>
               <TableHead>Unit Price</TableHead>
               <TableHead>Line Total</TableHead>
+              <TableHead className="text-purple-600">Customer PO</TableHead>
+              <TableHead className="text-purple-600">Other ID</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -737,6 +813,43 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                       ? formatCurrency((editedItem.quantity || 0) * (editedItem.unitPrice || 0))
                       : formatCurrency(item.lineTotal)
                     }
+                  </TableCell>
+                  <TableCell className="text-purple-600">
+                    {isEditing ? (
+                      <Select 
+                        value={editedItem.customerPoId?.toString() || ''} 
+                        onValueChange={(value) => setEditedItem({ ...editedItem, customerPoId: value ? parseInt(value) : undefined })}
+                      >
+                        <SelectTrigger className="w-32" data-testid={`select-edit-customer-po-${item.id}`}>
+                          <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          {p2PurchaseOrders.filter(po => po.status === 'OPEN').map((po) => (
+                            <SelectItem key={po.id} value={po.id.toString()}>
+                              {po.poNumber}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      item.customerPoId ? 
+                        p2PurchaseOrders.find(po => po.id === item.customerPoId)?.poNumber || '-' 
+                        : '-'
+                    )}
+                  </TableCell>
+                  <TableCell className="text-purple-600">
+                    {isEditing ? (
+                      <Input
+                        value={editedItem.otherIdentifier || ''}
+                        onChange={(e) => setEditedItem({ ...editedItem, otherIdentifier: e.target.value })}
+                        className="w-32"
+                        placeholder="Other ID..."
+                        data-testid={`input-edit-other-identifier-${item.id}`}
+                      />
+                    ) : (
+                      item.otherIdentifier || '-'
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">

@@ -200,6 +200,7 @@ router.post('/', async (req, res) => {
     const modelDescription = `RTS - ${firstItem.stockModel}${data.items.length > 1 ? ` (+${data.items.length - 1} more)` : ''}`;
 
     // Create order in allOrders table
+    // Store the RTS sale subtotal as priceOverride so OrderEntry displays the correct price
     const [order] = await db.insert(allOrders).values({
       orderId: newOrderId,
       orderDate: new Date(),
@@ -211,6 +212,7 @@ router.post('/', async (req, res) => {
       notes: `RTS Sale: ${saleNumber}. ${modelDescription}`,
       isRtsOrder: true, // Mark as RTS order
       rtsSaleId: sale.id, // Link to RTS sale
+      priceOverride: subtotal, // Store RTS sale subtotal as price override for display in OrderEntry
       shipping: data.shipping.cost,
       shippingCarrier: data.shipping.carrier,
       shippingMethod: data.shipping.method,

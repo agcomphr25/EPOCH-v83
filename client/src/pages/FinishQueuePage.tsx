@@ -1421,6 +1421,17 @@ export default function FinishQueuePage() {
         onClose={() => setSalesOrderModalOpen(false)}
         orderId={selectedOrderId}
       />
+
+      {/* Kickback Report Modal */}
+      <KickbackReportModal
+        open={kickbackModalOpen}
+        onOpenChange={(open) => {
+          setKickbackModalOpen(open);
+          if (!open) setSelectedOrderForKickback(null);
+        }}
+        orderId={selectedOrderForKickback?.orderId || ''}
+        department={selectedOrderForKickback?.department || ''}
+      />
     </div>
   );
 }

@@ -303,13 +303,32 @@ export function P2POItemsManager({
                     id="partNumber"
                     list="inventory-items-list"
                     value={formData.partNumber}
-                    onChange={(e) =>
-                      setFormData({ ...formData, partNumber: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const partNum = e.target.value;
+                      setFormData({ ...formData, partNumber: partNum });
+                      // Auto-populate part name if matching inventory item found
+                      const matchingItem = inventoryItems.find(
+                        (item) => item.agPartNumber === partNum
+                      );
+                      if (matchingItem) {
+                        setFormData((prev) => ({
+                          ...prev,
+                          partNumber: partNum,
+                          partName: matchingItem.name,
+                        }));
+                      }
+                    }}
                     required
                     placeholder="Select from inventory or type custom..."
                     disabled={isLoadingInventory}
                   />
+                  <datalist id="inventory-items-list">
+                    {inventoryItems.map((item) => (
+                      <option key={item.id} value={item.agPartNumber}>
+                        {item.name} {item.sku ? `(SKU: ${item.sku})` : ''}
+                      </option>
+                    ))}
+                  </datalist>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="partName">Part Name *</Label>

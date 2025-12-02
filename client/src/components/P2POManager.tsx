@@ -94,6 +94,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
   const [selectedPO, setSelectedPO] = useState<P2PurchaseOrder | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [generatingPoId, setGeneratingPoId] = useState<number | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -214,6 +215,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
       queryClient.invalidateQueries({
         queryKey: ['/api/p2-production-orders'],
       });
+      setGeneratingPoId(null);
     },
     onError: (error: any) => {
       toast({
@@ -221,6 +223,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
         description: error.message || 'Failed to generate production orders. Make sure the PO has items with valid BOMs.',
         variant: 'destructive',
       });
+      setGeneratingPoId(null);
     },
   });
 
@@ -230,6 +233,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
         `Generate production orders for ${po.poNumber}?\n\nThis will explode the BOM for all items in this purchase order and create individual production orders.`
       )
     ) {
+      setGeneratingPoId(po.id);
       generateProductionOrdersMutation.mutate(po.id);
     }
   };
@@ -733,12 +737,12 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                       variant="default"
                       size="sm"
                       onClick={() => handleGenerateProductionOrders(po)}
-                      disabled={generateProductionOrdersMutation.isPending}
+                      disabled={generatingPoId === po.id}
                       data-testid={`button-generate-production-orders-${po.id}`}
                       title="Explode BOM and create production orders"
                     >
                       <Factory className="h-4 w-4 mr-2" />
-                      {generateProductionOrdersMutation.isPending
+                      {generatingPoId === po.id
                         ? 'Generating...'
                         : 'Generate Production Orders'}
                     </Button>

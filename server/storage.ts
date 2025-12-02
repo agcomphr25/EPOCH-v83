@@ -6474,7 +6474,7 @@ export class DatabaseStorage implements IStorage {
     const ytdScores = vendorIds.length > 0 ? await db
       .select({
         vendorId: vendorMonthlyEvaluations.vendorId,
-        totalScore: sql<number>`
+        actualScore: sql<number>`
           COALESCE(SUM(quality_score), 0) +
           COALESCE(SUM(cost_score), 0) +
           COALESCE(SUM(delivery_score), 0) +
@@ -6498,12 +6498,19 @@ export class DatabaseStorage implements IStorage {
       .groupBy(vendorMonthlyEvaluations.vendorId)
     : [];
 
-    // Create a map of vendor ID to YTD total score
+    // Create a map of vendor ID to YTD average score
+    // Formula: (actualScore / possibleScore) * 20
+    // Where possibleScore = recordedScoreCount * 5 (max score per entry)
+    // This gives a score out of 20, ignoring N/A (null) criteria
     const ytdScoreMap = new Map(
-      ytdScores.map(score => [
-        score.vendorId,
-        score.recordedScoreCount > 0 ? score.totalScore : null
-      ])
+      ytdScores.map(score => {
+        if (score.recordedScoreCount > 0) {
+          const possibleScore = score.recordedScoreCount * 5;
+          const averageScore = (score.actualScore / possibleScore) * 20;
+          return [score.vendorId, averageScore];
+        }
+        return [score.vendorId, null];
+      })
     );
 
     // Enrich vendor data with YTD total scores

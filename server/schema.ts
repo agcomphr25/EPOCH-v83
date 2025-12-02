@@ -3560,6 +3560,7 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   status: text('status').notNull().default('OPEN'), // OPEN, CLOSED, CANCELED
   notes: text('notes'),
   attachments: jsonb('attachments').$type<string[]>().default(sql`'[]'::jsonb`),
+  sourceQuoteId: uuid('source_quote_id').references(() => quotes.id), // Links PO to originating quote
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -4254,6 +4255,7 @@ export const insertP2PurchaseOrderSchema = createInsertSchema(p2PurchaseOrders)
     expectedDelivery: z.coerce.date(),
     status: z.enum(['OPEN', 'CLOSED', 'CANCELED']).default('OPEN'),
     notes: z.string().optional().nullable(),
+    sourceQuoteId: z.string().uuid().optional().nullable(),
   });
 
 export const insertP2PurchaseOrderItemSchema = createInsertSchema(

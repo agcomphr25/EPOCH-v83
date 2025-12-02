@@ -642,7 +642,7 @@ function VendorPOForm({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   // Fetch vendors for the dropdown
-  const { data: vendorsResponse } = useQuery({
+  const { data: vendorsResponse } = useQuery<{ data: any[]; meta: any }>({
     queryKey: ['/api/vendors'],
   });
   const vendors = vendorsResponse?.data || [];

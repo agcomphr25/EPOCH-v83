@@ -65,6 +65,7 @@ const p2PurchaseOrderSchema = z.object({
   }),
   status: z.enum(['OPEN', 'CLOSED', 'CANCELED']).default('OPEN'),
   notes: z.string().optional(),
+  sourceQuoteId: z.string().optional().nullable(),
 });
 
 type P2PurchaseOrderForm = z.infer<typeof p2PurchaseOrderSchema>;
@@ -76,12 +77,25 @@ interface P2Customer {
   status: string;
 }
 
+interface Quote {
+  id: string;
+  quoteNumber: string;
+  customerName: string;
+  description: string;
+  totalAmount: number;
+  status: string;
+  validUntil: string;
+  quotedBy: string;
+  createdAt: string;
+}
+
 interface P2PurchaseOrder
   extends Omit<P2PurchaseOrderForm, 'poDate' | 'expectedDelivery'> {
   id: number;
   poDate: string;
   expectedDelivery: string;
   attachments?: string[];
+  sourceQuoteId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -106,6 +120,12 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
     queryKey: ['/api/p2-customers-bypass'],
   });
 
+  const { data: allQuotes = [] } = useQuery<Quote[]>({
+    queryKey: ['/api/quotes'],
+  });
+
+  const sentQuotes = allQuotes.filter((quote) => quote.status === 'SENT');
+
   const form = useForm<P2PurchaseOrderForm>({
     resolver: zodResolver(p2PurchaseOrderSchema),
     defaultValues: {
@@ -118,6 +138,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
         .split('T')[0],
       status: 'OPEN',
       notes: '',
+      sourceQuoteId: null,
     },
   });
 
@@ -302,6 +323,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
       expectedDelivery: po.expectedDelivery,
       status: po.status,
       notes: po.notes || '',
+      sourceQuoteId: po.sourceQuoteId || null,
     });
     setDialogOpen(true);
   };
@@ -318,6 +340,7 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
         .split('T')[0],
       status: 'OPEN',
       notes: '',
+      sourceQuoteId: null,
     });
     setDialogOpen(true);
   };
@@ -549,31 +572,61 @@ export function P2POManager({ onManageItems }: P2POManagerProps) {
                     )}
                   />
                 </div>
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="OPEN">Open</SelectItem>
-                          <SelectItem value="CLOSED">Closed</SelectItem>
-                          <SelectItem value="CANCELED">Canceled</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Status</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="OPEN">Open</SelectItem>
+                            <SelectItem value="CLOSED">Closed</SelectItem>
+                            <SelectItem value="CANCELED">Canceled</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="sourceQuoteId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Source Quote</FormLabel>
+                        <Select
+                          onValueChange={(value) => field.onChange(value === 'none' ? null : value)}
+                          value={field.value || 'none'}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-source-quote">
+                              <SelectValue placeholder="Select source quote" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            {sentQuotes.map((quote) => (
+                              <SelectItem key={quote.id} value={quote.id}>
+                                {quote.quoteNumber} - {quote.customerName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 <FormField
                   control={form.control}
                   name="notes"

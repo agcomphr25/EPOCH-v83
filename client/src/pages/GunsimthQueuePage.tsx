@@ -34,6 +34,7 @@ import { useLocation } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
+import KickbackReportModal from '@/components/KickbackReportModal';
 
 export default function GunsimthQueuePage() {
   // Multi-select state
@@ -43,6 +44,8 @@ export default function GunsimthQueuePage() {
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
     null
   );
+  const [kickbackModalOpen, setKickbackModalOpen] = useState(false);
+  const [selectedOrderForKickback, setSelectedOrderForKickback] = useState<{orderId: string, department: string} | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -669,6 +672,23 @@ export default function GunsimthQueuePage() {
                               >
                                 <Eye className="w-3 h-3" />
                               </Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedOrderForKickback({
+                                    orderId: order.orderId,
+                                    department: 'Gunsmith'
+                                  });
+                                  setKickbackModalOpen(true);
+                                }}
+                                title="Report Kickback"
+                                className="h-6 w-6 p-0 ml-1"
+                                data-testid={`button-report-kickback-${order.orderId}`}
+                              >
+                                <TrendingDown className="h-3 w-3" />
+                              </Button>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -783,6 +803,23 @@ export default function GunsimthQueuePage() {
                               >
                                 <Eye className="w-3 h-3" />
                               </Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedOrderForKickback({
+                                    orderId: order.orderId,
+                                    department: 'Gunsmith'
+                                  });
+                                  setKickbackModalOpen(true);
+                                }}
+                                title="Report Kickback"
+                                className="h-6 w-6 p-0 ml-1"
+                                data-testid={`button-report-kickback-${order.orderId}`}
+                              >
+                                <TrendingDown className="h-3 w-3" />
+                              </Button>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -894,6 +931,23 @@ export default function GunsimthQueuePage() {
                               >
                                 <Eye className="w-3 h-3" />
                               </Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedOrderForKickback({
+                                    orderId: order.orderId,
+                                    department: 'Gunsmith'
+                                  });
+                                  setKickbackModalOpen(true);
+                                }}
+                                title="Report Kickback"
+                                className="h-6 w-6 p-0 ml-1"
+                                data-testid={`button-report-kickback-${order.orderId}`}
+                              >
+                                <TrendingDown className="h-3 w-3" />
+                              </Button>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -1005,6 +1059,23 @@ export default function GunsimthQueuePage() {
                               >
                                 <Eye className="w-3 h-3" />
                               </Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedOrderForKickback({
+                                    orderId: order.orderId,
+                                    department: 'Gunsmith'
+                                  });
+                                  setKickbackModalOpen(true);
+                                }}
+                                title="Report Kickback"
+                                className="h-6 w-6 p-0 ml-1"
+                                data-testid={`button-report-kickback-${order.orderId}`}
+                              >
+                                <TrendingDown className="h-3 w-3" />
+                              </Button>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -1116,6 +1187,23 @@ export default function GunsimthQueuePage() {
                               >
                                 <Eye className="w-3 h-3" />
                               </Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedOrderForKickback({
+                                    orderId: order.orderId,
+                                    department: 'Gunsmith'
+                                  });
+                                  setKickbackModalOpen(true);
+                                }}
+                                title="Report Kickback"
+                                className="h-6 w-6 p-0 ml-1"
+                                data-testid={`button-report-kickback-${order.orderId}`}
+                              >
+                                <TrendingDown className="h-3 w-3" />
+                              </Button>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -1227,6 +1315,23 @@ export default function GunsimthQueuePage() {
                               >
                                 <Eye className="w-3 h-3" />
                               </Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedOrderForKickback({
+                                    orderId: order.orderId,
+                                    department: 'Gunsmith'
+                                  });
+                                  setKickbackModalOpen(true);
+                                }}
+                                title="Report Kickback"
+                                className="h-6 w-6 p-0 ml-1"
+                                data-testid={`button-report-kickback-${order.orderId}`}
+                              >
+                                <TrendingDown className="h-3 w-3" />
+                              </Button>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -1336,6 +1441,23 @@ export default function GunsimthQueuePage() {
                               >
                                 <Eye className="w-3 h-3" />
                               </Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedOrderForKickback({
+                                    orderId: order.orderId,
+                                    department: 'Gunsmith'
+                                  });
+                                  setKickbackModalOpen(true);
+                                }}
+                                title="Report Kickback"
+                                className="h-6 w-6 p-0 ml-1"
+                                data-testid={`button-report-kickback-${order.orderId}`}
+                              >
+                                <TrendingDown className="h-3 w-3" />
+                              </Button>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -1415,6 +1537,17 @@ export default function GunsimthQueuePage() {
         isOpen={salesOrderModalOpen}
         onClose={() => setSalesOrderModalOpen(false)}
         orderId={selectedOrderId}
+      />
+
+      {/* Kickback Report Modal */}
+      <KickbackReportModal
+        open={kickbackModalOpen}
+        onOpenChange={(open) => {
+          setKickbackModalOpen(open);
+          if (!open) setSelectedOrderForKickback(null);
+        }}
+        orderId={selectedOrderForKickback?.orderId || ''}
+        department={selectedOrderForKickback?.department || ''}
       />
     </div>
   );

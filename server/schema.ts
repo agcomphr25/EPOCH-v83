@@ -3569,6 +3569,8 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   // Lock-after-generation - PO becomes immutable once locked
   lockedAt: timestamp('locked_at'), // Set when PO is finalized/generated - prevents further edits
   lockedBy: integer('locked_by').references(() => employees.id), // Who locked the PO
+
+  sourceQuoteId: uuid('source_quote_id').references(() => quotes.id), // Links PO to originating quote
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -4270,6 +4272,7 @@ export const insertP2PurchaseOrderSchema = createInsertSchema(p2PurchaseOrders)
     expectedDelivery: z.coerce.date(),
     status: z.enum(['OPEN', 'CLOSED', 'CANCELED']).default('OPEN'),
     notes: z.string().optional().nullable(),
+    sourceQuoteId: z.string().uuid().optional().nullable(),
   });
 
 export const insertP2PurchaseOrderItemSchema = createInsertSchema(
@@ -5306,7 +5309,7 @@ export const insertKickbackSchema = createInsertSchema(kickbacks)
   })
   .extend({
     orderId: z.string().min(1, 'Order ID is required'),
-    kickbackDept: z.enum(['CNC', 'Finish', 'Gunsmith', 'Paint']),
+    kickbackDept: z.enum(['Barcode', 'Layup', 'Plugging', 'CNC', 'Finish', 'Gunsmith', 'Paint', 'QC', 'Shipping']),
     reasonCode: z.enum([
       'MATERIAL_DEFECT',
       'OPERATOR_ERROR',

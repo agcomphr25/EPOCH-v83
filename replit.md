@@ -33,7 +33,7 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 - **BOM System**: Robust Bill of Materials system with UUID-based architecture and revision control.
 - **Google OAuth Integration**: Production-ready OAuth 2.0 flow with CSRF protection.
 - **Global Search System**: Multi-entity search across Customers, Orders, Vendors, Employees, and Inventory Items.
-- **Vendor Evaluation System**: Question-based evaluation with 4 criteria, automatic status, and monthly reset.
+- **Vendor Evaluation System**: Question-based evaluation with 4 criteria, automatic status, monthly reset, and yearly average scoring. Score formula: (actualScore / possibleScore) × 20, where possibleScore = count of non-null criteria × 5. N/A (null) criteria are excluded from calculation.
 - **Linked Orders Management**: Functionality to link multiple orders.
 - **Urgency/Priority System**: For manually flagged urgent orders with visual badges.
 - **Rush Fee System**: Adjusts due dates for "Expedite" and "Rush" orders.
@@ -74,6 +74,7 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 - **Mixed Fabric Packet Support**: Database tables cuttingBuiltPackets and cuttingBuiltPacketFabricSources support tracking multiple fabric lot/batch sources per packet for AS9100 traceability compliance.
 - **P2 Layup Gating System**: API endpoints for packet availability checking (/api/p2/layup-gating/check-availability), packet allocation (/api/p2/layup-gating/allocate-packets), and allocated packet tracking before P2 Layup scheduling.
 - **Smart Data Entry System**: Streamlined traceability data entry with recent lot number recall (/api/smart-entry/recent-lots), autocomplete suggestions (/api/smart-entry/suggestions), and barcode quick-fill lookup (/api/smart-entry/barcode-lookup/:barcode).
+- **P2 Purchase Order Quote Linking**: P2 Purchase Orders can be linked to a Source Quote via the Add/Edit modal. Dropdown displays only quotes with "SENT" status for selection, enabling traceability from customer PO back to the quote that generated it.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

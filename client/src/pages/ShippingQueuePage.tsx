@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Package, ArrowLeft, CheckCircle, AlertTriangle, Zap } from 'lucide-react';
+import { Package, ArrowLeft, CheckCircle, AlertTriangle, Zap, TrendingDown } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useLocation } from 'wouter';
@@ -28,6 +28,7 @@ import { OrderSearchBox } from '@/components/OrderSearchBox';
 import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 import { LinkedOrderIndicator } from '@/components/LinkedOrderIndicator';
 import { LinkedOrdersManager } from '@/components/LinkedOrdersManager';
+import KickbackReportModal from '@/components/KickbackReportModal';
 
 export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -40,6 +41,8 @@ export default function ShippingQueuePage() {
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
     null
   );
+  const [kickbackModalOpen, setKickbackModalOpen] = useState(false);
+  const [selectedOrderForKickback, setSelectedOrderForKickback] = useState<{orderId: string, department: string} | null>(null);
   const [shippingDetails, setShippingDetails] = useState({
     weight: '10',
     length: '12',
@@ -1336,6 +1339,28 @@ export default function ShippingQueuePage() {
             </div>
           )}
 
+          {/* Report Kickback Button */}
+          <div className="mb-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedOrderForKickback({
+                  orderId: order.orderId,
+                  department: 'Shipping'
+                });
+                setKickbackModalOpen(true);
+              }}
+              title="Report Kickback"
+              className="h-6 px-2 text-xs"
+              data-testid={`button-report-kickback-${order.orderId}`}
+            >
+              <TrendingDown className="h-3 w-3 mr-1" />
+              Report Kickback
+            </Button>
+          </div>
+
           {/* Show Kickback Badge if order has kickbacks */}
           {hasKickbacks(order.orderId) && (
             <div className="mb-2">
@@ -1868,6 +1893,17 @@ export default function ShippingQueuePage() {
           </div>
         </div>
       )}
+
+      {/* Kickback Report Modal */}
+      <KickbackReportModal
+        open={kickbackModalOpen}
+        onOpenChange={(open) => {
+          setKickbackModalOpen(open);
+          if (!open) setSelectedOrderForKickback(null);
+        }}
+        orderId={selectedOrderForKickback?.orderId || ''}
+        department={selectedOrderForKickback?.department || ''}
+      />
     </div>
   );
 }

@@ -92,11 +92,22 @@ router.post('/credit-card', async (req, res) => {
       billingAddress: paymentData.billingAddress,
     });
 
+    // If the charge failed without a reference number, return the error immediately
+    // Don't try to save a failed transaction without proper identifiers
+    if (!result.success && !result.referenceNumber && !result.transactionId) {
+      console.log('❌ Payment failed without transaction reference:', result.message);
+      return res.status(400).json({
+        success: false,
+        error: result.message || 'Payment processing failed',
+        message: result.message,
+      });
+    }
+
     // Process the transaction result
     // Accept.Blue uses reference_number as the primary transaction identifier
     const transactionId = result.referenceNumber 
       ? String(result.referenceNumber) 
-      : (result.transactionId || 'UNKNOWN');
+      : (result.transactionId || `TEMP-${Date.now()}`);
     
     const processedResult = await processTransactionResult({
       orderId: paymentData.orderId,

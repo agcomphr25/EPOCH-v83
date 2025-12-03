@@ -109,7 +109,21 @@ export async function chargeCard(
       body: JSON.stringify(payload),
     });
 
-    const data = await response.json() as any;
+    // Handle non-JSON responses (like "Unauthorized")
+    const responseText = await response.text();
+    let data: any;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.log('❌ Accept.Blue returned non-JSON response:', responseText);
+      return {
+        success: false,
+        responseCode: '3',
+        message: response.status === 401 
+          ? 'Payment gateway authentication failed. Please contact support.' 
+          : `Payment gateway error: ${responseText}`,
+      };
+    }
     console.log('📥 Accept.Blue response received:', JSON.stringify(data, null, 2));
 
     if (data.status === 'Approved' || data.status_code === 'A') {

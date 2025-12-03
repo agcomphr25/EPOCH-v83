@@ -953,10 +953,10 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
                           <div>
                             <h4 className="font-semibold mb-2 flex items-center gap-2">
                               <UserCheck className="h-4 w-4" />
-                              Assigned Technician
+                              Preferred Technician (Optional)
                             </h4>
                             <p className="text-sm text-muted-foreground mb-3">
-                              Assign a certified technician for this part and department
+                              For scheduling reference only. <span className="text-primary font-medium">Any certified technician</span> can complete tasks in this department - certification is verified at task start.
                             </p>
                             {(() => {
                               const certifiedEmployees = getCertifiedEmployees(dept);

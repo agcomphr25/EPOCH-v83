@@ -390,7 +390,7 @@ export default function PartRoutingManagement() {
                             </Badge>
                           )}
                           {hasTechnicians && (
-                            <Badge variant="secondary" className="text-xs" title="Has technicians assigned">
+                            <Badge variant="secondary" className="text-xs" title="Has preferred technician (any certified tech can work)">
                               <Users className="h-3 w-3" />
                             </Badge>
                           )}
@@ -587,7 +587,8 @@ export default function PartRoutingManagement() {
                             {config.assignedTechnicianId && (
                               <div className="flex items-center gap-2">
                                 <Users className="h-4 w-4 text-green-600" />
-                                <span className="font-medium">Technician ID:</span> {config.assignedTechnicianId}
+                                <span className="font-medium">Preferred Technician ID:</span> {config.assignedTechnicianId}
+                                <span className="text-xs text-muted-foreground">(optional - any certified tech can work)</span>
                               </div>
                             )}
                             {config.ovenCuringSteps && config.ovenCuringSteps.length > 0 && (

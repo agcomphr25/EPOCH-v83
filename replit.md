@@ -1,7 +1,7 @@
 # EPOCH v8 - Manufacturing ERP System
 
 ## Overview
-EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. It aims to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, inventory tracking, an employee portal, and quality control workflows. The system is a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile. Key capabilities include a robust Bill of Materials (BOM) system, Google OAuth integration, global search, and a comprehensive Parts List Management System. The business vision is to be the leading ERP solution for small-to-medium customizable product manufacturers.
+EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. Its primary purpose is to streamline operations, enhance efficiency, and improve scalability. Key capabilities include end-to-end order management, robust inventory tracking, an employee portal, and quality control workflows. The system features a powerful Bill of Materials (BOM) system, Google OAuth integration, global search, and a comprehensive Parts List Management System. The business vision is to establish EPOCH v8 as the leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -17,76 +17,33 @@ Navigation dropdown behavior: All navbar dropdown menus close automatically afte
 Balance due access: Customer balance due tracking is restricted to username "glennj" only for security. Balance Due column appears in Customer Management only when glennj is logged in.
 
 ## System Architecture
-The application uses a monorepo structure with a full-stack TypeScript approach, prioritizing type safety and cross-platform deployment.
+The application is built as a monorepo using a full-stack TypeScript approach, emphasizing type safety and cross-platform compatibility.
 
 ### Core Architectural Decisions
-- **Type Safety**: Shared TypeScript schemas (Drizzle, Zod) ensure type safety across the stack.
-- **Cross-Platform Deployment**: PWA capabilities with Capacitor for web and mobile (iOS/Android).
-- **Authentication**: Hybrid JWT + Session authentication with capability-based access control and a 3-role system (ADMIN, EMPLOYEE, OWNER).
-- **Data Consistency**: A `features` object acts as the single source of truth for feature data.
-- **Modular Routing**: Backend routes are organized into specialized modules.
-- **Atomic Order ID Reservation**: Database-based atomic reservation system for unique, sequential Order ID generation.
-- **Asset Path Resolution**: Centralized asset path resolver for consistent file access.
-- **Centralized PDF Configuration**: Standardized PDF generation system.
-- **UI/UX**: Leverages ShadCN UI components with Tailwind CSS and Framer Motion for animations.
-- **CI/CD**: Implemented with pre-commit hooks (Husky + lint-staged) and GitHub Actions.
+- **Type Safety & Data Consistency**: Utilizes shared TypeScript schemas (Drizzle, Zod) and a `features` object as a single source of truth.
+- **Cross-Platform Deployment**: PWA capabilities are supported with Capacitor for web, iOS, and Android.
+- **Authentication**: Hybrid JWT + Session authentication with a 3-role (ADMIN, EMPLOYEE, OWNER) capability-based access control system.
+- **UI/UX**: Employs ShadCN UI components, Tailwind CSS, and Framer Motion for a modern and animated user experience.
 - **BOM System**: Robust Bill of Materials system with UUID-based architecture and revision control.
-- **Google OAuth Integration**: Production-ready OAuth 2.0 flow with CSRF protection.
-- **Global Search System**: Multi-entity search across Customers, Orders, Vendors, Employees, and Inventory Items.
-- **Vendor Evaluation System**: Question-based evaluation with 4 criteria, automatic status, monthly reset, and yearly average scoring. Score formula: (actualScore / possibleScore) × 20, where possibleScore = count of non-null criteria × 5. N/A (null) criteria are excluded from calculation.
-- **Linked Orders Management**: Functionality to link multiple orders.
-- **Urgency/Priority System**: For manually flagged urgent orders with visual badges.
-- **Rush Fee System**: Adjusts due dates for "Expedite" and "Rush" orders.
-- **P1 Purchase Orders Queue**: Displays open purchase orders with stock items needing layup, grouped by customer.
-- **Vendor Purchase Order Management**: Full CRUD operations for vendor POs and line items with Zod validation.
-- **Inventory CSV Import**: Transactional "Replace All" with two-phase validation and atomic database operations.
-- **Layup Schedule Enhancement**: Dual-view system (screen/print), production-relevant data columns, print-friendly checklist format, schedule barcode system, and department workflow integration.
-- **PO Product Stock Model Validation**: Exclusion of non-stock model PO products from production queues and layup processes.
-- **Parts List Management**: Enhanced inventory items with MRP/COGS fields, SKU, purchase/usage information, and production line utilization flags.
-- **Department Technician Assignment**: Employee profiles include department-specific assignment flags.
-- **Follow-Up Order Signature Workflow**: Complete pricing calculation system for sign-order pages.
-- **P1 PO Shipping QC Management**: Comprehensive tracking system for P1 purchase orders with department status tracking, UPS integration for label creation, and OEM Shipments history.
-- **P1 PO Department Progression**: Backend endpoints use database query-based detection for production orders.
-- **P1 PO Department Queue Visibility**: Utility handles production orders by checking for `productionStatus` field.
-- **P1 PO Shipping QC Tab Separation**: P1 PO orders appear exclusively in the "PO Orders" tab in Shipping QC.
-- **Production Deployment**: Uses `tsx` to run TypeScript directly in production; static files served from `dist/public/`.
-- **Nonconformance Record System**: Comprehensive quality issue tracking.
-- **Cutting Table Packet Building**: FIFO-based packet production workflow with automatic inventory consumption, two-phase allocation, material linkage validation, expiration-based priority indicators, and real-time inventory balance tracking.
-- **Dynamic Discount System**: Orders save discount metadata at creation for dynamic recalculation.
-- **Cutting Table Inventory Integration**: Fabric inventory items are linked to Cut Management.
-- **Cutting Table Production Progress Tracker**: Automatic calculation of remaining cuts needed to hit weekly production goals.
-- **Cutting Table Multi-Select Barcode Printing**: Batch barcode label printing for fabric inventory with checkbox selection, quantity specification per item, and Avery 5160 label format support (3-column grid, 30 labels per sheet).
-- **Cutting Table AS9100 Traceability System**: Barcode scanning during packet creation resolves to full fabric records (fabric type, batch/lot #, roll #, ICN, supplier P/N, expiration date). Packets are created with complete traceability chain for AS9100 compliance. Type-specific inventory status thresholds (available, low, expired, expiring) based on fabric type and quantity on hand.
-- **Cutting Table Packet Scheduling System**: Inventory items marked as "Packet (Cutting Table)" can be scheduled to the cutting table manufacturing queue. Users can set quantity, priority, due date, and notes. Scheduled packets appear in the Manufacturing Queue tab where users can start production, enter completed quantities, and print barcode labels for finished packets.
-- **P2 Department Manager with Part Routing**: Complete P2 purchase order serialized item tracking system with customizable department workflows, barcode scanning, and mandatory traceability data capture. Features include UUID-based architecture, a part routing wizard, fail-closed traceability gating, fetch-and-merge storage updates, barcode integration, department progression, and production-ready error handling.
-- **P2 Production Queue Gating**: Serialized items begin in "Pending Layup" status and only appear in the Layup department queue after being scheduled via the P2 Production Queue. The Layup queue endpoint joins with p2LayupSchedules to filter items that have SCHEDULED or IN_PROGRESS status. Barcode labels can be printed for scheduled items via the print-barcodes endpoint.
-- **P2 Traveler Viewer System**: AS9100-compliant production data interface for P2 serialized items with comprehensive documentation generation, barcode-based item lookup, and detailed data display.
-- **P2 Electronic Signature System**: AS9100-compliant electronic signature capture for department transfers, ensuring work completion verification per quality standards.
-- **Cost Center Management System**: Financial tracking infrastructure for department-based expense allocation and budgeting.
-- **Vendor PO Optional Settings System**: Flexible optional statements system for Purchase Orders with CRUD management and multiselect interface.
-- **PDF Template Library System**: Comprehensive template management system enabling separate PDF configurations for different business contexts without code changes.
-- **Vendor-Based Parts Request Consolidation**: Enhanced ConsolidatedNeedsListPage with dual-view system ("By Status" and "By Vendor" tabs) for efficient ordering.
-- **Vendor PO Dual-Unit System**: Users can enter quantities in purchase units with automatic conversion and display in vendor units on Purchase Orders.
-- **Vendor PO Revision System**: Audit-compliant revision workflow for issued Purchase Orders with mandatory change reasons.
-- **Inventory Receiving System**: Enhanced receiving workflow with accordion grouping by VPO-#, dynamic traceability field capture, multi-item auto-advance, batch barcode printing, and per-unit traceability entry for traceable items (when qty > 1, each unit requires separate but copyable traceability data with progress tracking).
-- **P2 Control Center**: Unified workflow management interface for P2 purchase orders. Features 4-tab layout (Status, Setup, Schedule, Production), quick stats dashboard, guided wizards for PO creation and BOM configuration, weekly production scheduling with batch barcode printing, workflow progress indicator with live counts, and "What's Next" action indicators. Components: P2ControlCenter.tsx (main page with 5-step workflow progress indicator), P2POCreationWizard.tsx (4-step PO creation with REQUIRED tolerance authorizer selection), P2BOMWizard.tsx (BOM configuration with nested manufactured part detection alert), P2ProductionScheduler.tsx (weekly scheduling with dual-tab Schedule/Summary views, items-per-day calculation, batch week barcode printing), P2StatusDashboard.tsx (status overview). API routes: /api/p2/control-center/* for stats, pending actions, PO statuses, scheduling list, and BOMs-needed list. SmartLotInput component provides autocomplete for batch/lot numbers using smart-entry API.
-- **P2 Tolerance Authorization System**: PO-level tolerance authorizer selection during creation with fields toleranceAuthorizerId, toleranceAuthorizerName, and toleranceNotes. P2ToleranceGate component provides Final QC deviation approval workflow with electronic signature capture.
-- **Mixed Fabric Packet Support**: Database tables cuttingBuiltPackets and cuttingBuiltPacketFabricSources support tracking multiple fabric lot/batch sources per packet for AS9100 traceability compliance.
-- **P2 Layup Gating System**: API endpoints for packet availability checking (/api/p2/layup-gating/check-availability), packet allocation (/api/p2/layup-gating/allocate-packets), and allocated packet tracking before P2 Layup scheduling.
-- **Smart Data Entry System**: Streamlined traceability data entry with recent lot number recall (/api/smart-entry/recent-lots), autocomplete suggestions (/api/smart-entry/suggestions), and barcode quick-fill lookup (/api/smart-entry/barcode-lookup/:barcode).
-- **P2 Purchase Order Quote Linking**: P2 Purchase Orders can be linked to a Source Quote via the Add/Edit modal. Dropdown displays only quotes with "SENT" status for selection, enabling traceability from customer PO back to the quote that generated it.
-- **Cutting Table Control Center**: Unified 3-tab interface (Run/Build/Plan) consolidating cutting table operations. Features universal barcode scanner, packet BOM management with yield-per-cut and square-meters-per-cut tracking, multi-roll packet builder with FIFO guidance, BOM-based estimated cuts calculation, fabric inventory management with per-fabric threshold settings, freezer location assignment during receiving, weekly production goals with BOM-driven estimates, and manufacturing queue integration. Database tables: cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMCuts for tracking packet recipes, materials, and cut records with full traceability.
+- **Order Management**: Features atomic order ID reservation, rush fee adjustments, and an urgency/priority system.
+- **Inventory & Production**: Includes comprehensive parts list management, P1 Purchase Orders Queue, vendor purchase order management with Zod validation, inventory CSV import with two-phase validation, and enhanced layup scheduling.
+- **Quality Control**: Implements a Nonconformance Record System and a Vendor Evaluation System with automated scoring and monthly resets.
+- **Cutting Table Operations**: Features FIFO-based packet building with two-phase allocation, AS9100 traceability via barcode scanning, dynamic inventory status thresholds, and a packet scheduling system.
+- **P2 Serialized Item Tracking**: Complete P2 purchase order serialized item tracking with customizable department workflows, barcode scanning, fail-closed traceability gating, and an AS9100-compliant Traveler Viewer System and Electronic Signature System.
+- **Financial & Reporting**: Incorporates a Cost Center Management System and dynamic discount system.
+- **PDF Management**: Centralized PDF configuration and a flexible PDF Template Library System.
+- **Smart Data Entry**: Streamlined traceability data entry with recent lot number recall, autocomplete, and barcode quick-fill lookup.
+- **Control Centers**: Unified interfaces for P2 Purchase Orders and Cutting Table operations, offering dashboards, guided wizards, scheduling, and progress tracking.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.
 - **Backend**: Express.js, TypeScript, TanStack Query, Zod, Axios.
 - **Database**: PostgreSQL (Neon serverless), Drizzle ORM, Drizzle-kit.
-- **Key Features**: Order Management, Layup Scheduler, Production Queue Manager, Department Manager, Customer Management, Inventory Management, Metal Accessories Tracker, Barcode System, Employee Management, Quality Control, Reporting, Payment Tracking, Shipping Integration, Communications System, Personalized Dashboards, Training Management System, AI-Powered Smart Sorting, Calendar Integration, Magic Link Authentication, and Global Search.
+- **Key Features**: Order Management, Layup Scheduler, Production Queue Manager, Department Manager, Customer Management, Inventory Management, Barcode System, Employee Management, Quality Control, Reporting, Payment Tracking, Shipping Integration, Communications System, Personalized Dashboards, Training Management System, AI-Powered Smart Sorting, Calendar Integration, Magic Link Authentication, and Global Search.
 
 ### Database Schema Standards
-- **Primary Key Pattern (CRITICAL)**: ALL new tables MUST use UUID for primary keys. `serial` data type is strictly forbidden for new tables.
-- **Legacy Tables**: Existing tables using `serial` IDs should not be modified.
-- **Migration Safety**: Never change existing ID column types.
+- **Primary Key Pattern (CRITICAL)**: All new tables must use UUID for primary keys; `serial` is forbidden for new tables.
+- **Migration Safety**: Existing tables with `serial` IDs should not be modified, and existing ID column types must never be changed.
 
 ## External Dependencies
 

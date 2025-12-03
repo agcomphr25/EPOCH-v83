@@ -1441,21 +1441,23 @@ export function registerRoutes(app: Express): Server {
   app.get('/api/p2/control-center/stats', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
-      const pos = await storage.getP2PurchaseOrders();
-      const schedules = await storage.getP2LayupSchedules();
+      const pos = await storage.getAllP2PurchaseOrders();
+      const serializedItems = await storage.getP2SerializedItems({});
       
       const openPOs = pos.filter((po: any) => po.status !== 'COMPLETED').length;
       const pendingBOMs = pos.filter((po: any) => !po.bomConfigured).length;
-      const scheduledItems = schedules.filter((s: any) => s.status === 'SCHEDULED').length;
-      const inProduction = schedules.filter((s: any) => s.status === 'IN_PROGRESS').length;
+      const scheduledItems = serializedItems.filter((s: any) => s.productionStatus === 'SCHEDULED').length;
+      const inProduction = serializedItems.filter((s: any) => 
+        s.productionStatus && !['PENDING', 'SCHEDULED', 'COMPLETED', 'SHIPPED'].includes(s.productionStatus)
+      ).length;
       
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      const completedThisWeek = schedules.filter((s: any) => 
-        s.status === 'COMPLETED' && new Date(s.completedAt) > oneWeekAgo
+      const completedThisWeek = serializedItems.filter((s: any) => 
+        s.productionStatus === 'COMPLETED' && s.completedAt && new Date(s.completedAt) > oneWeekAgo
       ).length;
       
-      const pendingQC = schedules.filter((s: any) => s.status === 'PENDING_QC').length;
+      const pendingQC = serializedItems.filter((s: any) => s.productionStatus === 'FINAL_QC').length;
       
       res.json({
         openPOs,
@@ -1474,7 +1476,7 @@ export function registerRoutes(app: Express): Server {
   app.get('/api/p2/control-center/pending-actions', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
-      const pos = await storage.getP2PurchaseOrders();
+      const pos = await storage.getAllP2PurchaseOrders();
       const actions: any[] = [];
       
       pos.forEach((po: any) => {
@@ -1497,29 +1499,31 @@ export function registerRoutes(app: Express): Server {
   app.get('/api/p2/control-center/po-statuses', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
-      const pos = await storage.getP2PurchaseOrders();
-      const schedules = await storage.getP2LayupSchedules();
+      const pos = await storage.getAllP2PurchaseOrders();
+      const serializedItems = await storage.getP2SerializedItems({});
       const customers = await storage.getCustomers();
       
       const poStatuses = pos.map((po: any) => {
         const customer = customers.find((c: any) => c.id === po.customerId);
-        const poSchedules = schedules.filter((s: any) => s.p2PurchaseOrderId === po.id);
+        const poItems = serializedItems.filter((s: any) => s.poId === po.id);
         
-        const completedItems = poSchedules.filter((s: any) => s.status === 'COMPLETED').length;
-        const inProductionItems = poSchedules.filter((s: any) => s.status === 'IN_PROGRESS').length;
-        const pendingItems = poSchedules.filter((s: any) => s.status === 'PENDING' || s.status === 'SCHEDULED').length;
+        const completedItems = poItems.filter((s: any) => s.productionStatus === 'COMPLETED' || s.productionStatus === 'SHIPPED').length;
+        const inProductionItems = poItems.filter((s: any) => 
+          s.productionStatus && !['PENDING', 'SCHEDULED', 'COMPLETED', 'SHIPPED'].includes(s.productionStatus)
+        ).length;
+        const pendingItems = poItems.filter((s: any) => s.productionStatus === 'PENDING' || s.productionStatus === 'SCHEDULED').length;
         
         return {
           id: po.id,
           poNumber: po.poNumber,
           customerName: customer?.name || 'Unknown',
           dueDate: po.dueDate,
-          totalItems: poSchedules.length,
+          totalItems: poItems.length,
           completedItems,
           inProductionItems,
           pendingItems,
           hasBOMsNeeded: !po.bomConfigured,
-          status: completedItems === poSchedules.length && poSchedules.length > 0 ? 'completed' : 
+          status: completedItems === poItems.length && poItems.length > 0 ? 'completed' : 
                   inProductionItems > 0 ? 'in_progress' : 'pending'
         };
       });
@@ -1534,25 +1538,24 @@ export function registerRoutes(app: Express): Server {
   app.get('/api/p2/control-center/scheduling-list', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
-      const schedules = await storage.getP2LayupSchedules();
-      const pos = await storage.getP2PurchaseOrders();
+      const serializedItems = await storage.getP2SerializedItems({});
+      const pos = await storage.getAllP2PurchaseOrders();
       
-      const schedulingList = schedules
-        .filter((s: any) => s.status !== 'COMPLETED')
+      const schedulingList = serializedItems
+        .filter((s: any) => s.productionStatus === 'PENDING' || s.productionStatus === 'SCHEDULED')
         .map((s: any) => {
-          const po = pos.find((p: any) => p.id === s.p2PurchaseOrderId);
+          const po = pos.find((p: any) => p.id === s.poId);
           return {
             id: s.id,
             poNumber: po?.poNumber || 'Unknown',
             partNumber: s.partNumber || 'Unknown',
             description: s.description || '',
-            totalQuantity: s.quantity || 0,
-            scheduledQuantity: s.scheduledQuantity || 0,
-            remainingQuantity: (s.quantity || 0) - (s.scheduledQuantity || 0),
+            totalQuantity: 1,
+            scheduledQuantity: s.productionStatus === 'SCHEDULED' ? 1 : 0,
+            remainingQuantity: s.productionStatus === 'SCHEDULED' ? 0 : 1,
             dueDate: po?.dueDate,
             priority: s.priority || 'normal',
-            status: s.status === 'SCHEDULED' ? 'scheduled' : 
-                    s.scheduledQuantity > 0 ? 'partial' : 'pending'
+            status: s.productionStatus === 'SCHEDULED' ? 'scheduled' : 'pending'
           };
         });
       
@@ -1566,7 +1569,7 @@ export function registerRoutes(app: Express): Server {
   app.get('/api/p2/control-center/pos-needing-boms', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
-      const pos = await storage.getP2PurchaseOrders();
+      const pos = await storage.getAllP2PurchaseOrders();
       const customers = await storage.getCustomers();
       
       const posNeedingBOMs = pos
@@ -1615,10 +1618,8 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
       
       for (const entry of entries) {
-        await storage.updateP2LayupSchedule(entry.itemId, {
-          scheduledQuantity: entry.quantity,
-          weekNumber: entry.weekNumber,
-          status: 'SCHEDULED'
+        await storage.updateP2SerializedItem(entry.itemId, {
+          productionStatus: 'SCHEDULED'
         });
       }
       

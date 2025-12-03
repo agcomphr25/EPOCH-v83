@@ -69,6 +69,7 @@ The application uses a monorepo structure with a full-stack TypeScript approach,
 - **Vendor PO Dual-Unit System**: Users can enter quantities in purchase units with automatic conversion and display in vendor units on Purchase Orders.
 - **Vendor PO Revision System**: Audit-compliant revision workflow for issued Purchase Orders with mandatory change reasons.
 - **Inventory Receiving System**: Enhanced receiving workflow with accordion grouping by VPO-#, dynamic traceability field capture, multi-item auto-advance, batch barcode printing, and per-unit traceability entry for traceable items (when qty > 1, each unit requires separate but copyable traceability data with progress tracking).
+- **P2 Control Center**: Unified workflow management interface for P2 purchase orders. Features 4-tab layout (Status, Setup, Schedule, Production), quick stats dashboard, guided wizards for PO creation and BOM configuration, weekly production scheduling with batch barcode printing, and "What's Next" action indicators. Components: P2ControlCenter.tsx (main page), P2POCreationWizard.tsx (4-step PO creation), P2BOMWizard.tsx (BOM configuration with nested manufactured part detection), P2ProductionScheduler.tsx (weekly scheduling), P2StatusDashboard.tsx (status overview). API routes: /api/p2/control-center/* for stats, pending actions, PO statuses, scheduling list, and BOMs-needed list.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

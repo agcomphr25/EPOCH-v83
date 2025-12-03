@@ -1,9 +1,12 @@
 import fetch from 'node-fetch';
 
-const isProduction = process.env.NODE_ENV === 'production';
-const ACCEPT_BLUE_API_URL = isProduction 
+const acceptBlueEnv = (process.env.ACCEPT_BLUE_ENVIRONMENT || 'sandbox').toLowerCase();
+const useProductionApi = acceptBlueEnv === 'production';
+const ACCEPT_BLUE_API_URL = useProductionApi 
   ? 'https://api.accept.blue/api/v2'
   : 'https://api.sandbox.accept.blue/api/v2';
+
+console.log(`🔵 Accept.Blue configured for ${useProductionApi ? 'PRODUCTION' : 'SANDBOX'} environment`);
 
 function getCredentials() {
   const apiKey = (process.env.ACCEPT_BLUE_API_KEY || '').trim();
@@ -62,7 +65,7 @@ export async function chargeCard(
     }
 
     console.log(`💳 Processing Accept.Blue charge for order ${request.orderId}, amount: $${request.amount}`);
-    console.log(`🌐 Using ${isProduction ? 'PRODUCTION' : 'SANDBOX'} environment`);
+    console.log(`🌐 Using ${useProductionApi ? 'PRODUCTION' : 'SANDBOX'} environment`);
 
     const [expMonth, expYear] = request.expirationDate.split('/');
     const fullExpYear = expYear.length === 2 ? parseInt(`20${expYear}`, 10) : parseInt(expYear, 10);
@@ -173,7 +176,7 @@ export async function voidTransaction(
     }
 
     console.log(`🔄 Processing Accept.Blue void for reference number ${referenceNumber}`);
-    console.log(`🌐 Using ${isProduction ? 'PRODUCTION' : 'SANDBOX'} environment`);
+    console.log(`🌐 Using ${useProductionApi ? 'PRODUCTION' : 'SANDBOX'} environment`);
 
     const payload = {
       reference_number: typeof referenceNumber === 'string' ? parseInt(referenceNumber, 10) : referenceNumber,
@@ -233,7 +236,7 @@ export async function refundTransaction(
     }
 
     console.log(`💰 Processing Accept.Blue refund for reference number ${referenceNumber}${amount ? `, amount: $${amount}` : ' (full refund)'}`);
-    console.log(`🌐 Using ${isProduction ? 'PRODUCTION' : 'SANDBOX'} environment`);
+    console.log(`🌐 Using ${useProductionApi ? 'PRODUCTION' : 'SANDBOX'} environment`);
 
     const payload: any = {
       reference_number: typeof referenceNumber === 'string' ? parseInt(referenceNumber, 10) : referenceNumber,

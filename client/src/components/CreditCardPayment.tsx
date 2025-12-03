@@ -515,7 +515,7 @@ export default function CreditCardPayment({
                   <p className="font-medium">Secure Payment Processing</p>
                   <p>
                     Your payment information is encrypted and processed securely
-                    through Authorize.Net. We do not store your credit card
+                    through Accept.Blue. We do not store your credit card
                     information.
                   </p>
                 </div>

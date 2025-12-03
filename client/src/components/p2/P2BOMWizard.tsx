@@ -117,7 +117,7 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
       const parts: PartNeedingBOM[] = poData.lineItems.map((item: any) => ({
         id: item.id.toString(),
         partNumber: item.partNumber,
-        description: item.description || '',
+        description: item.partName || item.description || '',
         quantity: item.quantity,
         hasBOM: item.hasBOM || false,
         bomItems: item.bomItems || [],

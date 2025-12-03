@@ -176,6 +176,14 @@ async function processTransactionResult(data: {
     .returning();
 
   // Create credit card transaction record
+  // Extract card details from Accept.Blue response format
+  const lastFourDigits = data.rawResponse?.last_4 || 
+    data.rawResponse?.transaction?.card_details?.last4 ||
+    data.rawResponse?.transactionResponse?.accountNumber?.slice(-4);
+  const cardType = data.rawResponse?.card_type || 
+    data.rawResponse?.transaction?.card_details?.card_type ||
+    data.rawResponse?.transactionResponse?.accountType;
+
   const [transaction] = await db
     .insert(creditCardTransactions)
     .values({
@@ -188,9 +196,8 @@ async function processTransactionResult(data: {
       responseReasonText: data.responseReasonText,
       avsResult: data.avsResult,
       cvvResult: data.cvvResult,
-      lastFourDigits:
-        data.rawResponse?.transactionResponse?.accountNumber?.slice(-4),
-      cardType: data.rawResponse?.transactionResponse?.accountType,
+      lastFourDigits: lastFourDigits,
+      cardType: cardType,
       amount: data.amount,
       taxAmount: data.taxAmount,
       shippingAmount: data.shippingAmount,

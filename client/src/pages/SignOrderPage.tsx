@@ -74,25 +74,32 @@ export default function SignOrderPage() {
 
       const signatureData = signatureRef.current.toDataURL();
       
-      return await apiRequest(`/api/followup-orders/${followupOrder?.id}/sign`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          signatureData,
-          signatureToken: token
-        }),
-      });
+      try {
+        return await apiRequest(`/api/followup-orders/${followupOrder?.id}/sign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            signatureData,
+            signatureToken: token
+          }),
+        });
+      } catch (err: any) {
+        // Extract error message from response if available
+        const errorMessage = err?.message || 'Failed to sign order. Please try again or contact support.';
+        throw new Error(errorMessage);
+      }
     },
     onSuccess: () => {
       toast({
         title: 'Order Signed Successfully',
-        description: 'Your order has been approved and moved to production.',
+        description: 'Your order has been approved and moved to production. You will receive a confirmation email shortly.',
       });
     },
     onError: (error: Error) => {
+      console.error('Sign order error:', error);
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to sign order',
+        title: 'Unable to Sign Order',
+        description: error.message || 'An unexpected error occurred. Please contact support at sales@agcomposites.com',
         variant: 'destructive',
       });
     },

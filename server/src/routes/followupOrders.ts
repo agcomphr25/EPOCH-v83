@@ -689,37 +689,62 @@ router.get('/:id', async (req, res) => {
 router.post('/:id/sign', async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    console.log(`📝 Sign request received for followup order ID: ${id}`);
+    
     if (isNaN(id)) {
+      console.log(`❌ Invalid followup order ID: ${req.params.id}`);
       return res.status(400).json({ error: 'Invalid followup order ID' });
     }
 
     const { signatureData, signatureToken } = req.body;
     if (!signatureData) {
+      console.log(`❌ Missing signature data for order ID: ${id}`);
       return res.status(400).json({ error: 'Signature data is required' });
     }
 
     if (!signatureToken) {
+      console.log(`❌ Missing signature token for order ID: ${id}`);
       return res.status(400).json({ error: 'Signature token is required' });
     }
 
     const followupOrder = await storage.getFollowupOrder(id);
     if (!followupOrder) {
+      console.log(`❌ Followup order not found for ID: ${id}`);
       return res.status(404).json({ error: 'Followup order not found' });
     }
 
+    console.log(`📋 Found followup order: ${followupOrder.orderId}, pdfPath: ${followupOrder.pdfPath || 'MISSING'}`);
+
     // Verify the signature token matches
     if (followupOrder.signatureToken !== signatureToken) {
-      return res.status(403).json({ error: 'Invalid signature token' });
+      console.log(`❌ Token mismatch for order ${followupOrder.orderId}. Expected: ${followupOrder.signatureToken?.substring(0, 8)}..., Got: ${signatureToken?.substring(0, 8)}...`);
+      return res.status(403).json({ error: 'Invalid signature token. This link may have expired. Please request a new signature email.' });
     }
 
     if (followupOrder.signatureSigned) {
+      console.log(`⚠️ Order ${followupOrder.orderId} already signed at ${followupOrder.signedAt}`);
       return res.status(400).json({ error: 'Order already signed' });
     }
 
-    // Embed signature in PDF
+    // Check for PDF path
     if (!followupOrder.pdfPath) {
-      return res.status(400).json({ error: 'Original PDF not found' });
+      console.log(`❌ No PDF path for order ${followupOrder.orderId} - PDF was never generated`);
+      return res.status(400).json({ 
+        error: 'Original PDF not found. Please contact support to resend the signature request.',
+        details: 'PDF was never generated for this order'
+      });
     }
+
+    // Verify the PDF file actually exists
+    if (!fs.existsSync(followupOrder.pdfPath)) {
+      console.log(`❌ PDF file missing at path: ${followupOrder.pdfPath} for order ${followupOrder.orderId}`);
+      return res.status(400).json({ 
+        error: 'Original PDF file not found. Please contact support to resend the signature request.',
+        details: 'PDF file was deleted or moved'
+      });
+    }
+
+    console.log(`✅ PDF verified at: ${followupOrder.pdfPath}`);
 
     const signedPdfBuffer = await embedSignatureInPDF(
       followupOrder.pdfPath,

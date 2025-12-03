@@ -93,11 +93,10 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
   const createPOMutation = useMutation({
     mutationFn: async (data: any) => {
       // Create the PO
-      const response = await apiRequest('/api/p2-purchase-orders-bypass', {
+      const po = await apiRequest('/api/p2-purchase-orders-bypass', {
         method: 'POST',
         body: data,
       });
-      const po = await response.json();
       
       // Lock the PO immediately after creation to prevent edits
       await apiRequest(`/api/p2-purchase-orders/${po.id}/lock`, {

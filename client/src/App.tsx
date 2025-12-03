@@ -54,12 +54,9 @@ import CustomerManagement from './pages/CustomerManagement';
 import VendorManagement from './pages/VendorManagement';
 import ManageGroups from './pages/ManageGroups';
 import PurchaseOrders from './pages/PurchaseOrders';
-import P2PurchaseOrders from './pages/P2PurchaseOrders';
-import P2ProductionQueuePage from './pages/P2ProductionQueuePage';
 import P2ControlCenter from './pages/P2ControlCenter';
 import ManufacturingQueue from './pages/ManufacturingQueue';
 import PartRoutingManagement from './pages/PartRoutingManagement';
-import P2DepartmentManager from './pages/P2DepartmentManager';
 import P2TravelerPage from './pages/P2TravelerPage';
 import P2TravelerViewer from './pages/P2TravelerViewer';
 import P2PackingSlipViewer from './pages/P2PackingSlipViewer';
@@ -68,7 +65,6 @@ import P2TestReportViewer from './pages/P2TestReportViewer';
 import POProductsPage from './pages/POProductsPage';
 import ProductionTracking from './pages/ProductionTracking';
 import BarcodeScannerPage from './pages/BarcodeScannerPage';
-import P2SerializedItemSchedulerPage from './pages/P2SerializedItemSchedulerPage';
 import AllOrdersPage from './pages/AllOrdersPage';
 import OrderReports from './pages/OrderReports';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
@@ -94,7 +90,6 @@ import EmployeePortal from './pages/EmployeePortal';
 import UserManagement from './pages/UserManagement';
 import Settings from './pages/Settings';
 import LoginPage from './pages/LoginPage';
-import P2Forms from '@/pages/P2Forms';
 import MasterDocumentRegister from '@/pages/MasterDocumentRegister';
 import WasteManagementForm from '@/pages/WasteManagementForm';
 import TaskTracker from '@/pages/TaskTracker';
@@ -102,15 +97,10 @@ import KickbackTracking from '@/components/KickbackTracking';
 import DocumentManagement from './pages/DocumentManagement';
 import ShutdownProceduresTraining from '@/pages/ShutdownProceduresTraining';
 import CounterfeitPreventionTraining from '@/pages/CounterfeitPreventionTraining';
-import Training from '@/pages/Training';
+import TrainingControlCenter from '@/pages/TrainingControlCenter';
 import TrainingModule from '@/pages/TrainingModule';
-import TrainingManagement from '@/pages/TrainingManagement';
-import TrainingMatrixView from '@/pages/TrainingMatrixView';
-import TrainingMatrixImport from '@/pages/TrainingMatrixImport';
-import TrainingMatrixManage from '@/pages/TrainingMatrixManage';
 import ImportCertifications from '@/pages/ImportCertifications';
 import CertificationBacklog from '@/pages/CertificationBacklog';
-import P2CertificationsManager from '@/pages/P2CertificationsManager';
 import Calendar from './pages/Calendar';
 import EmailInbox from './pages/EmailInbox';
 import LayupPluggingQueuePage from './pages/LayupPluggingQueuePage';
@@ -355,14 +345,8 @@ function App() {
                     path="/p1-purchase-orders"
                     component={PurchaseOrders}
                   />
-                  <Route
-                    path="/p2-purchase-orders"
-                    component={P2PurchaseOrders}
-                  />
-                  <Route
-                    path="/p2-department-manager"
-                    component={P2DepartmentManager}
-                  />
+                  <Route path="/p2-purchase-orders">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
+                  <Route path="/p2-department-manager">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
                   <Route path="/po-products" component={POProductsPage} />
 
                   {/* Production and BOM Routes */}
@@ -584,15 +568,15 @@ function App() {
                     component={DocumentationPageNew}
                   />
 
-                  {/* P2 Forms Routes */}
+                  {/* P2 Routes - Control Center consolidates all P2 functionality */}
                   <Route path="/p2-control-center" component={P2ControlCenter} />
-                  <Route path="/p2-forms" component={P2Forms} />
+                  <Route path="/p2-forms">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
                   <Route path="/p2-traveler" component={P2TravelerPage} />
                   <Route path="/p2-traveler-viewer" component={P2TravelerViewer} />
                   <Route path="/p2/packing-slip/:id" component={P2PackingSlipViewer} />
                   <Route path="/p2/certificate/:id" component={P2CertificateViewer} />
                   <Route path="/p2/test-report/:id" component={P2TestReportViewer} />
-                  <Route path="/p2-production-queue" component={P2ProductionQueuePage} />
+                  <Route path="/p2-production-queue">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
                   <Route path="/cutting-table-queue">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
                   <Route path="/manufacturing-queue" component={ManufacturingQueue} />
                   <Route path="/cutting-table-mfg-queue">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
@@ -638,47 +622,18 @@ function App() {
                   />
 
                   {/* Training Routes */}
-                  <Route path="/training" component={Training} />
-                  <Route
-                    path="/training-management"
-                    component={TrainingManagement}
-                  />
-                  <Route
-                    path="/training-matrix"
-                    component={TrainingMatrixView}
-                  />
-                  <Route
-                    path="/training-matrix-import"
-                    component={TrainingMatrixImport}
-                  />
-                  <Route
-                    path="/training-matrix-manage"
-                    component={TrainingMatrixManage}
-                  />
-                  <Route
-                    path="/import-certifications"
-                    component={ImportCertifications}
-                  />
-                  <Route
-                    path="/certification-backlog"
-                    component={CertificationBacklog}
-                  />
-                  <Route
-                    path="/p2-certifications"
-                    component={P2CertificationsManager}
-                  />
-                  <Route
-                    path="/training/:moduleId"
-                    component={TrainingModule}
-                  />
-                  <Route
-                    path="/shutdown-training"
-                    component={ShutdownProceduresTraining}
-                  />
-                  <Route
-                    path="/counterfeit-prevention-training"
-                    component={CounterfeitPreventionTraining}
-                  />
+                  <Route path="/training-control-center" component={TrainingControlCenter} />
+                  <Route path="/training">{() => { window.location.href = '/training-control-center'; return null; }}</Route>
+                  <Route path="/training-management">{() => { window.location.href = '/training-control-center'; return null; }}</Route>
+                  <Route path="/training-matrix">{() => { window.location.href = '/training-control-center'; return null; }}</Route>
+                  <Route path="/training-matrix-import">{() => { window.location.href = '/training-control-center'; return null; }}</Route>
+                  <Route path="/training-matrix-manage">{() => { window.location.href = '/training-control-center'; return null; }}</Route>
+                  <Route path="/import-certifications" component={ImportCertifications} />
+                  <Route path="/certification-backlog" component={CertificationBacklog} />
+                  <Route path="/p2-certifications">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
+                  <Route path="/training/:moduleId" component={TrainingModule} />
+                  <Route path="/shutdown-training" component={ShutdownProceduresTraining} />
+                  <Route path="/counterfeit-prevention-training" component={CounterfeitPreventionTraining} />
 
                   <Route path="/calendar" component={Calendar} />
 
@@ -695,10 +650,7 @@ function App() {
                     path="/simplified-layup-scheduler"
                     component={SimplifiedLayupScheduler}
                   />
-                  <Route
-                    path="/p2-serialized-scheduler"
-                    component={P2SerializedItemSchedulerPage}
-                  />
+                  <Route path="/p2-serialized-scheduler">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
                   <Route
                     path="/production-queue"
                     component={ProductionQueueManager}

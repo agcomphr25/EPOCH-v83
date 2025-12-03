@@ -1501,7 +1501,7 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
       const pos = await storage.getAllP2PurchaseOrders();
       const serializedItems = await storage.getP2SerializedItems({});
-      const customers = await storage.getCustomers();
+      const customers = await storage.getAllCustomers();
       
       const poStatuses = pos.map((po: any) => {
         const customer = customers.find((c: any) => c.id === po.customerId);
@@ -1570,7 +1570,7 @@ export function registerRoutes(app: Express): Server {
     try {
       const { storage } = await import('../../storage');
       const pos = await storage.getAllP2PurchaseOrders();
-      const customers = await storage.getCustomers();
+      const customers = await storage.getAllCustomers();
       
       const posNeedingBOMs = pos
         .filter((po: any) => !po.bomConfigured)

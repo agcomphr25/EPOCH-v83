@@ -122,4 +122,4 @@ expertMode = true
 [userenv]
 
 [userenv.shared]
-ACCEPT_BLUE_ENVIRONMENT = "production"
+ACCEPT_BLUE_ENVIRONMENT = "sandbox"

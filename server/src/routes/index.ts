@@ -1501,10 +1501,8 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
       const pos = await storage.getAllP2PurchaseOrders();
       const serializedItems = await storage.getP2SerializedItems({});
-      const customers = await storage.getAllCustomers();
       
       const poStatuses = pos.map((po: any) => {
-        const customer = customers.find((c: any) => c.id === po.customerId);
         const poItems = serializedItems.filter((s: any) => s.poId === po.id);
         
         const completedItems = poItems.filter((s: any) => s.productionStatus === 'COMPLETED' || s.productionStatus === 'SHIPPED').length;
@@ -1516,8 +1514,8 @@ export function registerRoutes(app: Express): Server {
         return {
           id: po.id,
           poNumber: po.poNumber,
-          customerName: customer?.name || 'Unknown',
-          dueDate: po.dueDate,
+          customerName: po.customerName || 'Unknown', // Use denormalized customer name from PO
+          dueDate: po.expectedDelivery,
           totalItems: poItems.length,
           completedItems,
           inProductionItems,
@@ -1570,16 +1568,14 @@ export function registerRoutes(app: Express): Server {
     try {
       const { storage } = await import('../../storage');
       const pos = await storage.getAllP2PurchaseOrders();
-      const customers = await storage.getAllCustomers();
       
       const posNeedingBOMs = pos
         .filter((po: any) => !po.bomConfigured)
         .map((po: any) => {
-          const customer = customers.find((c: any) => c.id === po.customerId);
           return {
             id: po.id,
             poNumber: po.poNumber,
-            customerName: customer?.name || 'Unknown',
+            customerName: po.customerName || 'Unknown', // Use denormalized customer name from PO
             itemCount: po.lineItems?.length || 0
           };
         });

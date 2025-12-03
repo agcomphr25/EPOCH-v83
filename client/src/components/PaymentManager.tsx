@@ -220,10 +220,15 @@ export default function PaymentManager({
 
   // Handle successful live credit card payment
   const handleLivePaymentSuccess = (result: any) => {
+    // Invalidate the payments cache to ensure fresh data
+    queryClient.invalidateQueries({ queryKey: ['/api/orders', orderId, 'payments'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+    
     toast({
       title: 'Payment Processed',
-      description: `Payment of ${formatCurrency(parseFloat(paymentAmount))} was successfully processed.`,
+      description: `Payment of $${parseFloat(paymentAmount).toFixed(2)} was successfully processed. Transaction ID: ${result.transactionId || 'N/A'}`,
     });
+    
     refetch();
     resetForm();
     setShowLivePaymentModal(false);

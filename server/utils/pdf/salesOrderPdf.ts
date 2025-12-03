@@ -1062,37 +1062,54 @@ export async function embedSignatureInPDF(
   originalPdfPath: string,
   signatureDataUrl: string
 ): Promise<Buffer> {
+  // Verify the PDF file exists
+  if (!fs.existsSync(originalPdfPath)) {
+    console.error(`PDF file not found at path: ${originalPdfPath}`);
+    throw new Error(`Original PDF file not found: ${originalPdfPath}`);
+  }
+
   // Load the original PDF
   const existingPdfBytes = fs.readFileSync(originalPdfPath);
   const pdfDoc = await PDFDocument.load(existingPdfBytes);
   
   const pages = pdfDoc.getPages();
-  const page2 = pages[1]; // Signature is on page 2
+  
+  // Use page 2 if it exists, otherwise use the last page
+  const targetPage = pages.length > 1 ? pages[1] : pages[pages.length - 1];
+  
+  if (!targetPage) {
+    throw new Error('PDF has no pages to embed signature');
+  }
 
   // Extract base64 signature data
   const base64Data = signatureDataUrl.replace(/^data:image\/\w+;base64,/, '');
   const signatureBytes = Buffer.from(base64Data, 'base64');
 
+  // Calculate signature position based on page size
+  const signatureWidth = 150;
+  const signatureHeight = 50;
+  const signatureX = 160;
+  // Adjust Y position based on whether it's page 2 or a single-page PDF
+  const signatureY = pages.length > 1 ? 335 : 100;
+  const dateX = 390;
+  const dateY = signatureY + 15;
+
   try {
     // Try to embed as PNG
     const signatureImage = await pdfDoc.embedPng(signatureBytes);
     
-    // Draw signature above the signature line on page 2
-    const signatureWidth = 150;
-    const signatureHeight = 50;
-    
-    page2.drawImage(signatureImage, {
-      x: 160, // Position above the signature line
-      y: 335, // Adjusted for page 2
+    targetPage.drawImage(signatureImage, {
+      x: signatureX,
+      y: signatureY,
       width: signatureWidth,
       height: signatureHeight,
     });
 
     // Add signed date
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    page2.drawText(new Date().toLocaleDateString(), {
-      x: 390,
-      y: 350,
+    targetPage.drawText(new Date().toLocaleDateString(), {
+      x: dateX,
+      y: dateY,
       size: 10,
       font: font,
     });
@@ -1101,17 +1118,17 @@ export async function embedSignatureInPDF(
     try {
       const signatureImage = await pdfDoc.embedJpg(signatureBytes);
       
-      page2.drawImage(signatureImage, {
-        x: 160,
-        y: 335,
-        width: 150,
-        height: 50,
+      targetPage.drawImage(signatureImage, {
+        x: signatureX,
+        y: signatureY,
+        width: signatureWidth,
+        height: signatureHeight,
       });
 
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      page2.drawText(new Date().toLocaleDateString(), {
-        x: 390,
-        y: 350,
+      targetPage.drawText(new Date().toLocaleDateString(), {
+        x: dateX,
+        y: dateY,
         size: 10,
         font: font,
       });

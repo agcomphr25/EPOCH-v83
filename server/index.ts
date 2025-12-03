@@ -186,7 +186,7 @@ app.use((req, res, next) => {
     console.log('📅 Monthly vendor evaluation reset scheduled (1st of each month at 12:01 AM)');
 
     // Set up daily follow-up order reminder check
-    // Runs at 09:00 AM every day to send reminders for orders older than 7 days
+    // Runs at 09:00 AM every day to send reminders for orders older than 5 days
     cron.schedule('0 9 * * *', async () => {
       try {
         console.log('📧 Running daily follow-up order reminder check...');

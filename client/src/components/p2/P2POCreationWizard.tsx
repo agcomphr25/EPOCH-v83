@@ -92,18 +92,27 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
 
   const createPOMutation = useMutation({
     mutationFn: async (data: any) => {
+      // Create the PO
       const response = await apiRequest('/api/p2-purchase-orders-bypass', {
         method: 'POST',
         body: data,
       });
-      return response.json();
+      const po = await response.json();
+      
+      // Lock the PO immediately after creation to prevent edits
+      await apiRequest(`/api/p2-purchase-orders/${po.id}/lock`, {
+        method: 'POST',
+        body: { employeeId: data.toleranceAuthorizerId || null },
+      });
+      
+      return po;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });
       toast({
-        title: 'P2 Order Created',
-        description: `Order ${data.poNumber} has been created successfully.`,
+        title: 'P2 Order Created & Locked',
+        description: `Order ${data.poNumber} has been created and locked for production.`,
       });
       onComplete(data.id);
     },

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 import { 
   Calendar as CalendarIcon, 
   Printer,
@@ -17,7 +18,9 @@ import {
   Package,
   Clock,
   CheckCircle,
-  ArrowUpDown
+  ArrowUpDown,
+  LayoutList,
+  BarChart3
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -44,16 +47,38 @@ interface ScheduleEntry {
   workDays: number;
 }
 
+interface WeeklyQueueData {
+  weekNumber: number;
+  weekStart: string;
+  weekEnd: string;
+  totalItems: number;
+  totalPOs: number;
+  itemsPerDay: number;
+  poSummaries: Array<{
+    poNumber: string;
+    itemCount: number;
+    partNumbers: string[];
+    items: any[];
+  }>;
+  allItems: any[];
+}
+
 export default function P2ProductionScheduler() {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [scheduleEntries, setScheduleEntries] = useState<Record<string, ScheduleEntry>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedWeek, setSelectedWeek] = useState<number>(getCurrentWeekNumber());
+  const [activeTab, setActiveTab] = useState<string>('schedule');
   const { toast } = useToast();
 
   const { data: schedulingList = [], isLoading, refetch } = useQuery<SchedulableItem[]>({
     queryKey: ['/api/p2/control-center/scheduling-list'],
+  });
+
+  const { data: weeklyQueue, isLoading: weeklyLoading, refetch: refetchWeekly } = useQuery<WeeklyQueueData>({
+    queryKey: [`/api/p2/weekly-queue/${selectedWeek}`],
+    enabled: activeTab === 'summary',
   });
 
   const scheduleMutation = useMutation({
@@ -90,11 +115,9 @@ export default function P2ProductionScheduler() {
         method: 'POST',
         body: { itemIds },
       });
-      return response.blob();
+      return response.json();
     },
-    onSuccess: (blob) => {
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+    onSuccess: () => {
       toast({
         title: 'Barcodes Generated',
         description: 'Barcode labels have been generated for printing.',
@@ -104,6 +127,29 @@ export default function P2ProductionScheduler() {
       toast({
         title: 'Error',
         description: error.message || 'Failed to generate barcodes',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const printWeekBarcodesMutation = useMutation({
+    mutationFn: async (weekNumber: number) => {
+      const response = await apiRequest(`/api/p2/print-week-barcodes/${weekNumber}`, {
+        method: 'POST',
+        body: {},
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: 'Week Barcodes Generated',
+        description: `Generated ${data.itemCount} barcode labels for Week ${data.weekNumber}.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to generate week barcodes',
         variant: 'destructive',
       });
     },
@@ -253,7 +299,12 @@ export default function P2ProductionScheduler() {
             <Label>Week:</Label>
             <Select 
               value={selectedWeek.toString()} 
-              onValueChange={(v) => setSelectedWeek(parseInt(v))}
+              onValueChange={(v) => {
+                setSelectedWeek(parseInt(v));
+                if (activeTab === 'summary') {
+                  refetchWeekly();
+                }
+              }}
             >
               <SelectTrigger className="w-32" data-testid="select-week">
                 <SelectValue />
@@ -271,189 +322,293 @@ export default function P2ProductionScheduler() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Filters and Actions */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 flex-1">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search parts..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-                data-testid="input-search"
-              />
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+            <TabsTrigger value="schedule" className="flex items-center gap-2">
+              <LayoutList className="h-4 w-4" />
+              Schedule Items
+            </TabsTrigger>
+            <TabsTrigger value="summary" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Weekly Summary
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="summary" className="space-y-4 mt-4">
+            {/* Weekly Summary View */}
+            {weeklyLoading ? (
+              <div className="text-center py-12 text-muted-foreground">Loading weekly summary...</div>
+            ) : weeklyQueue ? (
+              <div className="space-y-4">
+                {/* Week Stats */}
+                <div className="grid grid-cols-4 gap-4">
+                  <Card className="bg-blue-50 dark:bg-blue-900/20">
+                    <CardContent className="p-4 text-center">
+                      <div className="text-3xl font-bold text-blue-600">{weeklyQueue.totalItems}</div>
+                      <div className="text-sm text-muted-foreground">Total Items</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-green-50 dark:bg-green-900/20">
+                    <CardContent className="p-4 text-center">
+                      <div className="text-3xl font-bold text-green-600">{weeklyQueue.totalPOs}</div>
+                      <div className="text-sm text-muted-foreground">Purchase Orders</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-orange-50 dark:bg-orange-900/20">
+                    <CardContent className="p-4 text-center">
+                      <div className="text-3xl font-bold text-orange-600">{weeklyQueue.itemsPerDay}</div>
+                      <div className="text-sm text-muted-foreground">Items/Day (avg)</div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-purple-50 dark:bg-purple-900/20">
+                    <CardContent className="p-4">
+                      <Button 
+                        className="w-full" 
+                        onClick={() => printWeekBarcodesMutation.mutate(selectedWeek)}
+                        disabled={printWeekBarcodesMutation.isPending || weeklyQueue.totalItems === 0}
+                        data-testid="button-print-week-barcodes"
+                      >
+                        <Printer className="h-4 w-4 mr-2" />
+                        {printWeekBarcodesMutation.isPending ? 'Printing...' : 'Print Week\'s Barcodes'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Separator />
+
+                {/* PO Summaries */}
+                {weeklyQueue.poSummaries.length === 0 ? (
+                  <div className="text-center py-12 border rounded-lg border-dashed">
+                    <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">No items scheduled for Week {selectedWeek}</p>
+                    <p className="text-sm text-muted-foreground">Use the Schedule Items tab to add items</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <h4 className="font-semibold">Scheduled by PO</h4>
+                    {weeklyQueue.poSummaries.map((poSummary) => (
+                      <Card key={poSummary.poNumber} className="border">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-semibold text-blue-600">{poSummary.poNumber}</span>
+                              <span className="text-muted-foreground ml-2">
+                                ({poSummary.itemCount} items)
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {poSummary.partNumbers.slice(0, 3).map((pn) => (
+                                <Badge key={pn} variant="outline" className="text-xs">
+                                  {pn}
+                                </Badge>
+                              ))}
+                              {poSummary.partNumbers.length > 3 && (
+                                <Badge variant="secondary" className="text-xs">
+                                  +{poSummary.partNumbers.length - 3} more
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                No data available for Week {selectedWeek}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="schedule" className="space-y-4 mt-4">
+            {/* Filters and Actions */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 flex-1">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search parts..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9"
+                    data-testid="input-search"
+                  />
+                </div>
+
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-40" data-testid="select-filter-status">
+                    <Filter className="h-4 w-4 mr-2" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="partial">Partial</SelectItem>
+                    <SelectItem value="scheduled">Scheduled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={selectAll}>
+                  Select All
+                </Button>
+                <Button variant="outline" size="sm" onClick={clearSelection}>
+                  Clear
+                </Button>
+              </div>
             </div>
 
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-40" data-testid="select-filter-status">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="partial">Partial</SelectItem>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+            {/* Selection Summary */}
+            {selectedItems.size > 0 && (
+              <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <Badge variant="default" className="text-lg px-3 py-1">
+                        {selectedItems.size} items selected
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">
+                        Total quantity: {
+                          Array.from(selectedItems)
+                            .map((id) => scheduleEntries[id]?.quantity || 0)
+                            .reduce((a, b) => a + b, 0)
+                        }
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={handlePrintBarcodes}
+                        disabled={printBarcodesMutation.isPending}
+                        data-testid="button-print-barcodes"
+                      >
+                        <Printer className="h-4 w-4 mr-2" />
+                        Print Barcodes
+                      </Button>
+                      <Button
+                        onClick={handleScheduleSelected}
+                        disabled={scheduleMutation.isPending}
+                        data-testid="button-schedule-selected"
+                      >
+                        <CalendarIcon className="h-4 w-4 mr-2" />
+                        {scheduleMutation.isPending ? 'Scheduling...' : 'Schedule Selected'}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={selectAll}>
-              Select All
-            </Button>
-            <Button variant="outline" size="sm" onClick={clearSelection}>
-              Clear
-            </Button>
-          </div>
-        </div>
-
-        {/* Selection Summary */}
-        {selectedItems.size > 0 && (
-          <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <Badge variant="default" className="text-lg px-3 py-1">
-                    {selectedItems.size} items selected
-                  </Badge>
-                  <span className="text-sm text-muted-foreground">
-                    Total quantity: {
-                      Array.from(selectedItems)
-                        .map((id) => scheduleEntries[id]?.quantity || 0)
-                        .reduce((a, b) => a + b, 0)
-                    }
-                  </span>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handlePrintBarcodes}
-                    disabled={printBarcodesMutation.isPending}
-                    data-testid="button-print-barcodes"
-                  >
-                    <Printer className="h-4 w-4 mr-2" />
-                    Print Barcodes
-                  </Button>
-                  <Button
-                    onClick={handleScheduleSelected}
-                    disabled={scheduleMutation.isPending}
-                    data-testid="button-schedule-selected"
-                  >
-                    <CalendarIcon className="h-4 w-4 mr-2" />
-                    {scheduleMutation.isPending ? 'Scheduling...' : 'Schedule Selected'}
-                  </Button>
-                </div>
+            {/* Items Table */}
+            {isLoading ? (
+              <div className="text-center py-12 text-muted-foreground">Loading...</div>
+            ) : filteredItems.length === 0 ? (
+              <div className="text-center py-12 border rounded-lg border-dashed">
+                <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No items available for scheduling</p>
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Items Table */}
-        {isLoading ? (
-          <div className="text-center py-12 text-muted-foreground">Loading...</div>
-        ) : filteredItems.length === 0 ? (
-          <div className="text-center py-12 border rounded-lg border-dashed">
-            <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">No items available for scheduling</p>
-          </div>
-        ) : (
-          <div className="border rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12"></TableHead>
-                  <TableHead>PO #</TableHead>
-                  <TableHead>Part Number</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-center">Remaining</TableHead>
-                  <TableHead className="text-center">Schedule Qty</TableHead>
-                  <TableHead className="text-center">Items/Day</TableHead>
-                  <TableHead className="text-center">Days</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredItems.map((item) => {
-                  const isSelected = selectedItems.has(item.id);
-                  const entry = scheduleEntries[item.id];
-
-                  return (
-                    <TableRow 
-                      key={item.id}
-                      className={isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
-                    >
-                      <TableCell>
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => toggleItemSelection(item.id)}
-                          data-testid={`checkbox-item-${item.id}`}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">{item.poNumber}</TableCell>
-                      <TableCell>{item.partNumber}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">{item.description}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline">{item.remainingQuantity}</Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {isSelected ? (
-                          <Input
-                            type="number"
-                            value={entry?.quantity || 0}
-                            onChange={(e) => updateScheduleEntry(item.id, 'quantity', parseInt(e.target.value) || 0)}
-                            className="w-20 text-center"
-                            max={item.remainingQuantity}
-                            data-testid={`input-schedule-qty-${item.id}`}
-                          />
-                        ) : (
-                          '-'
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {isSelected ? (
-                          <Input
-                            type="number"
-                            value={entry?.itemsPerDay || 0}
-                            onChange={(e) => updateScheduleEntry(item.id, 'itemsPerDay', parseInt(e.target.value) || 0)}
-                            className="w-16 text-center"
-                            data-testid={`input-items-per-day-${item.id}`}
-                          />
-                        ) : (
-                          '-'
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {isSelected ? (
-                          <Input
-                            type="number"
-                            value={entry?.workDays || 5}
-                            onChange={(e) => updateScheduleEntry(item.id, 'workDays', parseInt(e.target.value) || 1)}
-                            className="w-12 text-center"
-                            min={1}
-                            max={7}
-                            data-testid={`input-work-days-${item.id}`}
-                          />
-                        ) : (
-                          '-'
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {item.dueDate ? format(new Date(item.dueDate), 'MMM d, yyyy') : '-'}
-                      </TableCell>
-                      <TableCell>{getPriorityBadge(item.priority)}</TableCell>
-                      <TableCell>{getStatusBadge(item.status)}</TableCell>
+            ) : (
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12"></TableHead>
+                      <TableHead>PO #</TableHead>
+                      <TableHead>Part Number</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="text-center">Remaining</TableHead>
+                      <TableHead className="text-center">Schedule Qty</TableHead>
+                      <TableHead className="text-center">Items/Day</TableHead>
+                      <TableHead className="text-center">Days</TableHead>
+                      <TableHead>Due Date</TableHead>
+                      <TableHead>Priority</TableHead>
+                      <TableHead>Status</TableHead>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+                  </TableHeader>
+                  <TableBody>
+                    {filteredItems.map((item) => {
+                      const isSelected = selectedItems.has(item.id);
+                      const entry = scheduleEntries[item.id];
+
+                      return (
+                        <TableRow 
+                          key={item.id}
+                          className={isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
+                        >
+                          <TableCell>
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleItemSelection(item.id)}
+                              data-testid={`checkbox-item-${item.id}`}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">{item.poNumber}</TableCell>
+                          <TableCell>{item.partNumber}</TableCell>
+                          <TableCell className="max-w-[200px] truncate">{item.description}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline">{item.remainingQuantity}</Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {isSelected ? (
+                              <Input
+                                type="number"
+                                value={entry?.quantity || 0}
+                                onChange={(e) => updateScheduleEntry(item.id, 'quantity', parseInt(e.target.value) || 0)}
+                                className="w-20 text-center"
+                                max={item.remainingQuantity}
+                                data-testid={`input-schedule-qty-${item.id}`}
+                              />
+                            ) : (
+                              '-'
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {isSelected ? (
+                              <Input
+                                type="number"
+                                value={entry?.itemsPerDay || 0}
+                                onChange={(e) => updateScheduleEntry(item.id, 'itemsPerDay', parseInt(e.target.value) || 0)}
+                                className="w-16 text-center"
+                                data-testid={`input-items-per-day-${item.id}`}
+                              />
+                            ) : (
+                              '-'
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {isSelected ? (
+                              <Input
+                                type="number"
+                                value={entry?.workDays || 5}
+                                onChange={(e) => updateScheduleEntry(item.id, 'workDays', parseInt(e.target.value) || 1)}
+                                className="w-12 text-center"
+                                min={1}
+                                max={7}
+                                data-testid={`input-work-days-${item.id}`}
+                              />
+                            ) : (
+                              '-'
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {item.dueDate ? format(new Date(item.dueDate), 'MMM d, yyyy') : '-'}
+                          </TableCell>
+                          <TableCell>{getPriorityBadge(item.priority)}</TableCell>
+                          <TableCell>{getStatusBadge(item.status)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );

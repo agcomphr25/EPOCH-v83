@@ -285,7 +285,7 @@ router.get('/fabric-items', async (req, res) => {
         id: item.id,
         agPartNumber: item.agPartNumber,
         name: item.name,
-        fabric: item.fabric || item.name,
+        fabric: item.name,
         sku: item.sku,
       }));
     
@@ -428,7 +428,7 @@ router.post('/packet-sessions/build', async (req, res) => {
 
     try {
       // Step 1: Capture original values for ALL unique inventory items
-      const uniqueItemIds = new Set(itemConsumptions.map(c => c.inventoryItemId));
+      const uniqueItemIds = Array.from(new Set(itemConsumptions.map(c => c.inventoryItemId)));
       for (const itemId of uniqueItemIds) {
         const inventoryItem = await storage.getInventoryItem(itemId);
         if (!inventoryItem) {
@@ -496,7 +496,7 @@ router.post('/packet-sessions/build', async (req, res) => {
       console.error('Error during packet build transaction, rolling back:', transactionError);
       
       // Rollback: Restore ORIGINAL values (not intermediate values)
-      for (const [itemId, originalValues] of originalInventoryValues.entries()) {
+      for (const [itemId, originalValues] of Array.from(originalInventoryValues.entries())) {
         try {
           await storage.updateInventoryItem(itemId, originalValues);
         } catch (rollbackError) {

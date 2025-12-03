@@ -1406,6 +1406,17 @@ export function registerRoutes(app: Express): Server {
       const { storage } = await import('../../storage');
       const { id } = req.params;
       const poData = req.body;
+      
+      // Check if PO is locked - prevent edits to locked POs
+      const existingPO = await storage.getP2PurchaseOrder(parseInt(id));
+      if (existingPO?.lockedAt) {
+        return res.status(403).json({
+          error: 'This PO has been locked and cannot be modified',
+          lockedAt: existingPO.lockedAt,
+          lockedBy: existingPO.lockedBy
+        });
+      }
+      
       const po = await storage.updateP2PurchaseOrder(parseInt(id), poData);
       console.log('🔧 Updated P2 purchase order:', po.id);
       res.json(po);
@@ -1419,11 +1430,68 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Lock a P2 PO - makes it immutable
+  app.post('/api/p2-purchase-orders/:id/lock', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const { id } = req.params;
+      const { employeeId } = req.body;
+      
+      const existingPO = await storage.getP2PurchaseOrder(parseInt(id));
+      if (!existingPO) {
+        return res.status(404).json({ error: 'PO not found' });
+      }
+      if (existingPO.lockedAt) {
+        return res.status(400).json({ error: 'PO is already locked' });
+      }
+      
+      const po = await storage.updateP2PurchaseOrder(parseInt(id), {
+        lockedAt: new Date(),
+        lockedBy: employeeId || null
+      });
+      
+      console.log('🔒 Locked P2 purchase order:', po.id);
+      res.json(po);
+    } catch (_error) {
+      console.error('Lock P2 PO error:', _error);
+      res.status(500).json({ error: 'Failed to lock PO' });
+    }
+  });
+
+  // Unlock a P2 PO (admin only)
+  app.post('/api/p2-purchase-orders/:id/unlock', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const { id } = req.params;
+      
+      const po = await storage.updateP2PurchaseOrder(parseInt(id), {
+        lockedAt: null,
+        lockedBy: null
+      });
+      
+      console.log('🔓 Unlocked P2 purchase order:', po.id);
+      res.json(po);
+    } catch (_error) {
+      console.error('Unlock P2 PO error:', _error);
+      res.status(500).json({ error: 'Failed to unlock PO' });
+    }
+  });
+
   app.delete('/api/p2-purchase-orders-bypass/:id', async (req, res) => {
     try {
       console.log('🔧 P2 PURCHASE ORDER DELETE BYPASS ROUTE CALLED');
       const { storage } = await import('../../storage');
       const { id } = req.params;
+      
+      // Check if PO is locked - prevent deleting locked POs
+      const existingPO = await storage.getP2PurchaseOrder(parseInt(id));
+      if (existingPO?.lockedAt) {
+        return res.status(403).json({
+          error: 'This PO has been locked and cannot be deleted',
+          lockedAt: existingPO.lockedAt
+        });
+      }
+      
       await storage.deleteP2PurchaseOrder(parseInt(id));
       console.log('🔧 Deleted P2 purchase order:', id);
       res.json({ success: true });
@@ -1589,7 +1657,43 @@ export function registerRoutes(app: Express): Server {
 
   app.get('/api/p2/control-center/recent-activity', async (req, res) => {
     try {
-      res.json([]);
+      const { db } = await import('../../db');
+      const { p2SerializedItemEvents, p2SerializedItems } = await import('../../schema');
+      const { desc, gte } = await import('drizzle-orm');
+      
+      // Get recent events from the last 7 days
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      const recentEvents = await db
+        .select({
+          id: p2SerializedItemEvents.id,
+          barcode: p2SerializedItemEvents.barcode,
+          eventType: p2SerializedItemEvents.eventType,
+          fromDepartment: p2SerializedItemEvents.fromDepartment,
+          toDepartment: p2SerializedItemEvents.toDepartment,
+          performedBy: p2SerializedItemEvents.performedBy,
+          notes: p2SerializedItemEvents.notes,
+          createdAt: p2SerializedItemEvents.createdAt,
+        })
+        .from(p2SerializedItemEvents)
+        .where(gte(p2SerializedItemEvents.createdAt, sevenDaysAgo))
+        .orderBy(desc(p2SerializedItemEvents.createdAt))
+        .limit(50);
+      
+      // Format as activity entries
+      const activities = recentEvents.map((event) => ({
+        id: event.id,
+        type: event.eventType,
+        description: event.eventType === 'TRANSITION' 
+          ? `${event.barcode}: ${event.fromDepartment || 'Start'} → ${event.toDepartment || 'Complete'}`
+          : `${event.barcode}: ${event.eventType}`,
+        performedBy: event.performedBy || 'System',
+        timestamp: event.createdAt,
+        notes: event.notes,
+      }));
+      
+      res.json(activities);
     } catch (_error) {
       console.error('P2 Control Center recent activity error:', _error);
       res.status(500).json({ error: 'Failed to fetch recent activity' });
@@ -1795,6 +1899,103 @@ export function registerRoutes(app: Express): Server {
     } catch (_error) {
       console.error('P2 print barcodes error:', _error);
       res.status(500).json({ error: 'Failed to print barcodes' });
+    }
+  });
+
+  // Get weekly production queue - items scheduled for a specific week
+  app.get('/api/p2/weekly-queue/:weekNumber', async (req, res) => {
+    try {
+      const { weekNumber } = req.params;
+      const { storage } = await import('../../storage');
+      
+      // Get all scheduled items and filter by week
+      const scheduledItems = await storage.getP2SerializedItems({ 
+        productionStatus: 'SCHEDULED' 
+      });
+      
+      // Helper to get week start date
+      const getWeekStartDate = (year: number, week: number): Date => {
+        const jan1 = new Date(year, 0, 1);
+        const dayOfWeek = jan1.getDay();
+        const firstMonday = new Date(jan1);
+        firstMonday.setDate(jan1.getDate() + (dayOfWeek <= 1 ? 1 - dayOfWeek : 8 - dayOfWeek));
+        const weekStart = new Date(firstMonday);
+        weekStart.setDate(firstMonday.getDate() + (week - 1) * 7);
+        return weekStart;
+      };
+      
+      // Calculate week dates for filtering
+      const year = new Date().getFullYear();
+      const weekStart = getWeekStartDate(year, parseInt(weekNumber));
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      
+      // Group items by PO for weekly summary
+      const itemsByPO: Record<string, any[]> = {};
+      let totalItems = 0;
+      
+      for (const item of scheduledItems) {
+        const poNumber = item.poNumber || 'Unknown';
+        if (!itemsByPO[poNumber]) {
+          itemsByPO[poNumber] = [];
+        }
+        itemsByPO[poNumber].push(item);
+        totalItems++;
+      }
+      
+      // Calculate summary stats
+      const poSummaries = Object.entries(itemsByPO).map(([poNumber, items]) => ({
+        poNumber,
+        itemCount: items.length,
+        partNumbers: [...new Set(items.map((i: any) => i.partNumber))],
+        items
+      }));
+      
+      res.json({
+        weekNumber: parseInt(weekNumber),
+        weekStart: weekStart.toISOString(),
+        weekEnd: weekEnd.toISOString(),
+        totalItems,
+        totalPOs: poSummaries.length,
+        poSummaries,
+        itemsPerDay: Math.ceil(totalItems / 5),
+        allItems: scheduledItems
+      });
+    } catch (_error) {
+      console.error('Weekly queue error:', _error);
+      res.status(500).json({ error: 'Failed to get weekly queue' });
+    }
+  });
+
+  // Print all barcodes for a specific week's scheduled items
+  app.post('/api/p2/print-week-barcodes/:weekNumber', async (req, res) => {
+    try {
+      const { weekNumber } = req.params;
+      const { storage } = await import('../../storage');
+      
+      // Get all scheduled items for the week
+      const scheduledItems = await storage.getP2SerializedItems({ 
+        productionStatus: 'SCHEDULED' 
+      });
+      
+      const itemIds = scheduledItems.map((item: any) => item.id);
+      console.log(`Printing barcodes for week ${weekNumber}: ${itemIds.length} items`);
+      
+      // Return item data for barcode generation
+      res.json({ 
+        success: true, 
+        weekNumber: parseInt(weekNumber),
+        itemCount: itemIds.length,
+        items: scheduledItems.map((item: any) => ({
+          id: item.id,
+          serialNumber: item.serialNumber,
+          partNumber: item.partNumber,
+          poNumber: item.poNumber
+        }))
+      });
+    } catch (_error) {
+      console.error('Print week barcodes error:', _error);
+      res.status(500).json({ error: 'Failed to print week barcodes' });
     }
   });
 

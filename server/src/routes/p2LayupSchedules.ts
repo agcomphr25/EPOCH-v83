@@ -114,13 +114,67 @@ router.get('/layup-schedules/:id', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/p2/layup-schedules - Create new schedule(s)
+// POST /api/p2/layup-schedules - Create new schedule(s) with layup gating enforcement
 router.post('/layup-schedules', async (req: Request, res: Response) => {
   try {
     const data = req.body;
+    const { skipGatingCheck } = req.query; // Allow bypass for testing/admin
     
     // Support both single schedule and batch scheduling
     const schedulesToCreate = Array.isArray(data) ? data : [data];
+    
+    // Layup Gating Check: Verify packets are allocated before allowing scheduling
+    if (skipGatingCheck !== 'true') {
+      const { cuttingBuiltPackets } = await import('../../schema');
+      const gatingErrors: string[] = [];
+      
+      for (const schedule of schedulesToCreate) {
+        const { serializedItemId, partNumber } = schedule;
+        
+        // Check if packets are allocated for this item
+        const allocatedPackets = await db
+          .select()
+          .from(cuttingBuiltPackets)
+          .where(
+            and(
+              eq(cuttingBuiltPackets.allocatedToOrder, serializedItemId),
+              eq(cuttingBuiltPackets.status, 'ALLOCATED')
+            )
+          );
+        
+        // If no packets are allocated, check if any are available
+        if (allocatedPackets.length === 0) {
+          // Check available packets for this part type
+          const availablePackets = await db
+            .select()
+            .from(cuttingBuiltPackets)
+            .where(eq(cuttingBuiltPackets.status, 'AVAILABLE'));
+          
+          if (availablePackets.length === 0) {
+            gatingErrors.push(
+              `No packets allocated for item ${serializedItemId} (${partNumber || 'unknown part'}). ` +
+              `No available packets found. Please build packets on the Cutting Table before scheduling Layup.`
+            );
+          } else {
+            gatingErrors.push(
+              `Packets must be allocated before scheduling Layup for item ${serializedItemId} (${partNumber || 'unknown part'}). ` +
+              `${availablePackets.length} unallocated packet(s) available. Use the allocation endpoint first.`
+            );
+          }
+        }
+      }
+      
+      // If any gating errors, return them all
+      if (gatingErrors.length > 0) {
+        return res.status(400).json({
+          error: 'Layup gating check failed',
+          gatingFailed: true,
+          details: gatingErrors,
+          message: 'Packets must be built and allocated before Layup can be scheduled. ' +
+                   'Please ensure packets are available from the Cutting Table.'
+        });
+      }
+    }
     
     // Validate all schedules
     const validatedSchedules = schedulesToCreate.map(schedule => {

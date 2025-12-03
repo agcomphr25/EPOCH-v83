@@ -3566,6 +3566,9 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   toleranceNotes: text('tolerance_notes'), // Special tolerance requirements or notes
   // BOM configuration tracking
   bomConfigured: boolean('bom_configured').default(false), // True when all line items have BOMs configured
+  // Lock-after-generation - PO becomes immutable once locked
+  lockedAt: timestamp('locked_at'), // Set when PO is finalized/generated - prevents further edits
+  lockedBy: integer('locked_by').references(() => employees.id), // Who locked the PO
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

@@ -7,14 +7,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
- * Send reminder email for follow-up orders older than 7 days without signature
+ * Send reminder email for follow-up orders older than 5 days without signature
  */
 export async function sendReminderForOverdueOrders() {
-  console.log('📧 Checking for overdue follow-up orders (>7 days without signature)...');
+  console.log('📧 Checking for overdue follow-up orders (>5 days without signature)...');
   
   try {
     // Get all follow-up orders that need reminders
-    const overdueOrders = await storage.getOverdueFollowupOrders(7);
+    const overdueOrders = await storage.getOverdueFollowupOrders(5);
     
     if (overdueOrders.length === 0) {
       console.log('✅ No overdue orders found');
@@ -68,7 +68,7 @@ export async function sendReminderForOverdueOrders() {
                 <p>Hello,</p>
                 
                 <div class="warning">
-                  <strong>Action Required:</strong> We sent you a sales order confirmation over a week ago and haven't received your signature yet.
+                  <strong>Action Required:</strong> We sent you a sales order confirmation 5 days ago and haven't received your signature yet.
                 </div>
                 
                 <p><strong>Order Number:</strong> ${followupOrder.orderId}</p>
@@ -91,9 +91,31 @@ export async function sendReminderForOverdueOrders() {
           </html>
         `;
         
+        const emailText = `
+REMINDER: Sales Order Confirmation Required
+
+Hello,
+
+Action Required: We sent you a sales order confirmation 5 days ago and haven't received your signature yet.
+
+Order Number: ${followupOrder.orderId}
+
+We need your signature to proceed with production of your order. Please review and sign the sales order at your earliest convenience.
+
+Review & Sign Order: ${signatureUrl}
+
+If you have any questions or concerns about your order, please contact us immediately.
+
+Thank you,
+AG Composites Team
+
+This is an automated reminder. Please do not reply to this email.
+        `.trim();
+
         await sendEmailViaSendGrid({
           to: followupOrder.customerEmail,
           subject: `REMINDER: Order ${followupOrder.orderId} - Signature Required`,
+          text: emailText,
           html: emailHtml,
         });
         

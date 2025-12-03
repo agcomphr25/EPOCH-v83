@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Plus, Edit2, Trash2, CreditCard } from 'lucide-react';
+import { Plus, Edit2, Trash2, CreditCard, Zap } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import CreditCardPayment from './CreditCardPayment';
 
 export interface Payment {
   id: number;
@@ -49,6 +50,7 @@ export default function PaymentManager({
 }: PaymentManagerProps) {
   const { toast } = useToast();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showLivePaymentModal, setShowLivePaymentModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
 
   // Form state
@@ -192,6 +194,13 @@ export default function PaymentManager({
       return;
     }
 
+    // If "live" payment type selected, close this modal and open the live payment modal
+    if (paymentType === 'live') {
+      setShowPaymentModal(false);
+      setShowLivePaymentModal(true);
+      return;
+    }
+
     const paymentData = {
       paymentType,
       paymentAmount: parseFloat(paymentAmount),
@@ -207,6 +216,27 @@ export default function PaymentManager({
     } else {
       createPaymentMutation.mutate({ ...paymentData, orderId });
     }
+  };
+
+  // Handle successful live credit card payment
+  const handleLivePaymentSuccess = (result: any) => {
+    // Invalidate the payments cache to ensure fresh data
+    queryClient.invalidateQueries({ queryKey: ['/api/orders', orderId, 'payments'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+    
+    toast({
+      title: 'Payment Processed',
+      description: `Payment of $${parseFloat(paymentAmount).toFixed(2)} was successfully processed. Transaction ID: ${result.transactionId || 'N/A'}`,
+    });
+    
+    refetch();
+    resetForm();
+    setShowLivePaymentModal(false);
+  };
+
+  const handleLivePaymentCancel = () => {
+    setShowLivePaymentModal(false);
+    resetForm();
   };
 
   // Helper function to format currency
@@ -338,6 +368,12 @@ export default function PaymentManager({
                     <SelectValue placeholder="Select payment type" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="live">
+                      <span className="flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-yellow-500" />
+                        Live
+                      </span>
+                    </SelectItem>
                     <SelectItem value="credit_card">Credit Card</SelectItem>
                     <SelectItem value="agr">AGR</SelectItem>
                     <SelectItem value="check">Check</SelectItem>
@@ -411,6 +447,24 @@ export default function PaymentManager({
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Live Payment Modal */}
+        <Dialog open={showLivePaymentModal} onOpenChange={setShowLivePaymentModal}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-yellow-500" />
+                Live Credit Card Payment
+              </DialogTitle>
+            </DialogHeader>
+            <CreditCardPayment
+              orderId={orderId}
+              defaultAmount={parseFloat(paymentAmount) || balanceDue}
+              onSuccess={handleLivePaymentSuccess}
+              onCancel={handleLivePaymentCancel}
+            />
+          </DialogContent>
+        </Dialog>
       </>
     );
   }
@@ -444,6 +498,12 @@ export default function PaymentManager({
                     <SelectValue placeholder="Select payment type" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="live">
+                      <span className="flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-yellow-500" />
+                        Live
+                      </span>
+                    </SelectItem>
                     <SelectItem value="credit_card">Credit Card</SelectItem>
                     <SelectItem value="agr">AGR</SelectItem>
                     <SelectItem value="check">Check</SelectItem>
@@ -515,6 +575,24 @@ export default function PaymentManager({
                     : 'Add Payment'}
               </Button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Live Payment Modal */}
+        <Dialog open={showLivePaymentModal} onOpenChange={setShowLivePaymentModal}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-yellow-500" />
+                Live Credit Card Payment
+              </DialogTitle>
+            </DialogHeader>
+            <CreditCardPayment
+              orderId={orderId}
+              defaultAmount={parseFloat(paymentAmount) || balanceDue}
+              onSuccess={handleLivePaymentSuccess}
+              onCancel={handleLivePaymentCancel}
+            />
           </DialogContent>
         </Dialog>
       </CardContent>

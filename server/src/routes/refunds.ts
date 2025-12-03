@@ -9,120 +9,47 @@ import {
 } from '../../schema';
 import { insertRefundRequestSchema } from '../../schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
-// @ts-ignore - AuthorizeNet doesn't have proper TypeScript definitions
-import AuthorizeNet from 'authorizenet';
+import { refundTransaction, isConfigured as isAcceptBlueConfigured } from '../../utils/acceptBlue';
 
 const router = Router();
 
-// Configure Authorize.Net for refunds
-const apiLoginId = process.env.AUTHORIZE_NET_API_LOGIN_ID;
-const transactionKey = process.env.AUTHORIZE_NET_TRANSACTION_KEY;
-const isTestMode = process.env.NODE_ENV !== 'production';
-
-// Function to process refund through Authorize.Net
-async function processAuthorizeNetRefund(
+// Function to process refund through Accept.Blue
+async function processAcceptBlueRefund(
   transactionId: string,
-  refundAmount: number
+  refundAmount?: number
 ): Promise<{
   success: boolean;
   message: string;
   refundTransactionId?: string;
 }> {
   try {
-    if (!apiLoginId || !transactionKey) {
-      throw new Error('Authorize.Net credentials not configured');
+    if (!isAcceptBlueConfigured()) {
+      throw new Error('Accept.Blue credentials not configured');
     }
 
     console.log(
-      `🔄 Processing Authorize.Net refund for transaction ${transactionId}, amount: $${refundAmount}`
+      `🔄 Processing Accept.Blue refund for transaction ${transactionId}${refundAmount ? `, amount: $${refundAmount}` : ' (full refund)'}`
     );
 
-    const apiContracts = AuthorizeNet.APIContracts;
-    const apiControllers = AuthorizeNet.APIControllers;
+    const result = await refundTransaction(transactionId, refundAmount);
 
-    // Set up merchant authentication
-    const merchantAuthenticationType =
-      new apiContracts.MerchantAuthenticationType();
-    merchantAuthenticationType.setName(apiLoginId);
-    merchantAuthenticationType.setTransactionKey(transactionKey);
-
-    // Set up transaction request for refund
-    const transactionRequestType = new apiContracts.TransactionRequestType();
-    transactionRequestType.setTransactionType(
-      apiContracts.TransactionTypeEnum.REFUNDTRANSACTION
-    );
-    transactionRequestType.setAmount(refundAmount);
-    transactionRequestType.setRefTransId(transactionId);
-
-    // Create the refund request
-    const createRequest = new apiContracts.CreateTransactionRequest();
-    createRequest.setMerchantAuthentication(merchantAuthenticationType);
-    createRequest.setTransactionRequest(transactionRequestType);
-
-    // Execute the refund
-    const ctrl = new apiControllers.CreateTransactionController(
-      createRequest.getJSON()
-    );
-
-    return new Promise((resolve, reject) => {
-      ctrl.execute(() => {
-        const apiResponse = ctrl.getResponse();
-        const response = new apiContracts.CreateTransactionResponse(
-          apiResponse
-        );
-
-        console.log('✅ Authorize.Net refund response received');
-        console.log('Response Code:', response.getMessages().getResultCode());
-
-        if (
-          response.getMessages().getResultCode() ===
-          apiContracts.MessageTypeEnum.OK
-        ) {
-          const transactionResponse = response.getTransactionResponse();
-          if (transactionResponse.getMessages() != null) {
-            console.log('✅ Refund processed successfully');
-            console.log('Transaction ID:', transactionResponse.getTransId());
-            console.log(
-              'Response Code:',
-              transactionResponse.getResponseCode()
-            );
-            console.log(
-              'Message Code:',
-              transactionResponse.getMessages().getMessage()[0].getCode()
-            );
-            console.log(
-              'Description:',
-              transactionResponse.getMessages().getMessage()[0].getDescription()
-            );
-
-            resolve({
-              success: true,
-              message: 'Refund processed successfully',
-              refundTransactionId: transactionResponse.getTransId(),
-            });
-          } else {
-            const errorMessage =
-              transactionResponse.getErrors() != null
-                ? transactionResponse.getErrors().getError()[0].getErrorText()
-                : 'Refund failed';
-            console.error('❌ Refund transaction failed:', errorMessage);
-            resolve({
-              success: false,
-              message: errorMessage,
-            });
-          }
-        } else {
-          const errorMessage = response.getMessages().getMessage()[0].getText();
-          console.error('❌ Refund request failed:', errorMessage);
-          resolve({
-            success: false,
-            message: errorMessage,
-          });
-        }
-      });
-    });
+    if (result.success) {
+      console.log('✅ Refund processed successfully');
+      console.log('New Transaction ID:', result.transactionId);
+      return {
+        success: true,
+        message: 'Refund processed successfully',
+        refundTransactionId: result.transactionId,
+      };
+    } else {
+      console.error('❌ Refund failed:', result.message);
+      return {
+        success: false,
+        message: result.message,
+      };
+    }
   } catch (error) {
-    console.error('❌ Error processing Authorize.Net refund:', error);
+    console.error('❌ Error processing Accept.Blue refund:', error);
     return {
       success: false,
       message:

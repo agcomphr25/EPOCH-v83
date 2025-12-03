@@ -5,25 +5,13 @@ import {
   payments,
   creditCardTransactions,
   allOrders,
-  
   insertPaymentSchema,
   insertCreditCardTransactionSchema,
 } from '../../schema';
 import { eq, desc, inArray } from 'drizzle-orm';
-// @ts-ignore - AuthorizeNet doesn't have proper TypeScript definitions
-import AuthorizeNet from 'authorizenet';
+import { chargeCard, voidTransaction, isConfigured as isAcceptBlueConfigured } from '../../utils/acceptBlue';
 
 const router = Router();
-
-// Configure Authorize.Net
-const apiLoginId = process.env.AUTHORIZE_NET_API_LOGIN_ID;
-const transactionKey = process.env.AUTHORIZE_NET_TRANSACTION_KEY;
-
-if (!apiLoginId || !transactionKey) {
-  console.error(
-    'Missing Authorize.Net credentials. Please set AUTHORIZE_NET_API_LOGIN_ID and AUTHORIZE_NET_TRANSACTION_KEY'
-  );
-}
 
 // Determine if we're in test mode (sandbox)
 const isTestMode = process.env.NODE_ENV !== 'production';
@@ -57,7 +45,7 @@ const creditCardPaymentSchema = z.object({
   shippingAmount: z.number().min(0).default(0),
 });
 
-// Process credit card payment
+// Process credit card payment via Accept.Blue
 router.post('/credit-card', async (req, res) => {
   try {
     console.log(
@@ -71,232 +59,75 @@ router.post('/credit-card', async (req, res) => {
       'amount:',
       paymentData.amount
     );
-    console.log('🔑 Credentials check:', {
-      hasApiLoginId: !!apiLoginId,
-      hasTransactionKey: !!transactionKey,
+    console.log('🔑 Accept.Blue credentials check:', {
+      isConfigured: isAcceptBlueConfigured(),
       isTestMode,
     });
 
-    if (!apiLoginId || !transactionKey) {
+    if (!isAcceptBlueConfigured()) {
       return res.status(500).json({
         error: 'Payment processing not configured. Please contact support.',
       });
     }
 
-    // Verify order exists
+    // Verify order exists (all orders including drafts are in allOrders table)
     const order = await db
       .select()
       .from(allOrders)
       .where(eq(allOrders.orderId, paymentData.orderId))
       .limit(1);
-    const draftOrder = await db
-      .select()
-      .from(orderDrafts)
-      .where(eq(orderDrafts.orderId, paymentData.orderId))
-      .limit(1);
 
-    if (order.length === 0 && draftOrder.length === 0) {
+    if (order.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Create Authorize.Net API instance
-    const apiContracts = AuthorizeNet.APIContracts;
-    const apiControllers = AuthorizeNet.APIControllers;
-
-    // Set up merchant authentication
-    const merchantAuthenticationType =
-      new apiContracts.MerchantAuthenticationType();
-    merchantAuthenticationType.setName(apiLoginId);
-    merchantAuthenticationType.setTransactionKey(transactionKey);
-
-    // Set up credit card
-    const creditCard = new apiContracts.CreditCardType();
-    creditCard.setCardNumber(paymentData.cardNumber);
-    creditCard.setExpirationDate(paymentData.expirationDate);
-    creditCard.setCardCode(paymentData.cvv);
-
-    // Set up payment type
-    const paymentType = new apiContracts.PaymentType();
-    paymentType.setCreditCard(creditCard);
-
-    // Set up customer billing address
-    const customerAddress = new apiContracts.CustomerAddressType();
-    customerAddress.setFirstName(paymentData.billingAddress.firstName);
-    customerAddress.setLastName(paymentData.billingAddress.lastName);
-    customerAddress.setAddress(paymentData.billingAddress.address);
-    customerAddress.setCity(paymentData.billingAddress.city);
-    customerAddress.setState(paymentData.billingAddress.state);
-    customerAddress.setZip(paymentData.billingAddress.zip);
-    customerAddress.setCountry(paymentData.billingAddress.country);
-
-    // Set up transaction request
-    const transactionRequestType = new apiContracts.TransactionRequestType();
-    transactionRequestType.setTransactionType(
-      apiContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION
-    );
-    transactionRequestType.setPayment(paymentType);
-    transactionRequestType.setAmount(paymentData.amount);
-    transactionRequestType.setBillTo(customerAddress);
-
-    // Add order information
-    const orderInfo = new apiContracts.OrderType();
-    orderInfo.setInvoiceNumber(paymentData.orderId);
-    orderInfo.setDescription(`Payment for Order ${paymentData.orderId}`);
-    transactionRequestType.setOrder(orderInfo);
-
-    // Add line items if we have tax or shipping
-    if (paymentData.taxAmount > 0 || paymentData.shippingAmount > 0) {
-      const lineItems = [];
-
-      if (paymentData.taxAmount > 0) {
-        const taxItem = new apiContracts.LineItemType();
-        taxItem.setItemId('TAX');
-        taxItem.setName('Tax');
-        taxItem.setDescription('Sales Tax');
-        taxItem.setQuantity('1');
-        taxItem.setUnitPrice(paymentData.taxAmount);
-        lineItems.push(taxItem);
-      }
-
-      if (paymentData.shippingAmount > 0) {
-        const shippingItem = new apiContracts.LineItemType();
-        shippingItem.setItemId('SHIPPING');
-        shippingItem.setName('Shipping');
-        shippingItem.setDescription('Shipping Fee');
-        shippingItem.setQuantity('1');
-        shippingItem.setUnitPrice(paymentData.shippingAmount);
-        lineItems.push(shippingItem);
-      }
-
-      transactionRequestType.setLineItems(lineItems);
-    }
-
-    // Set up customer email if provided
-    if (paymentData.customerEmail) {
-      const customerDataType = new apiContracts.CustomerDataType();
-      customerDataType.setType(apiContracts.CustomerTypeEnum.INDIVIDUAL);
-      customerDataType.setEmail(paymentData.customerEmail);
-      transactionRequestType.setCustomer(customerDataType);
-    }
-
-    // Create transaction request
-    const createRequest = new apiContracts.CreateTransactionRequest();
-    createRequest.setMerchantAuthentication(merchantAuthenticationType);
-    createRequest.setTransactionRequest(transactionRequestType);
-
-    // Set up controller
-    const ctrl = new apiControllers.CreateTransactionController(
-      createRequest.getJSON()
-    );
-    console.log(
-      '🌐 Setting up Authorize.Net controller, test mode:',
-      isTestMode
-    );
-
-    // Use sandbox for testing
-    if (isTestMode) {
-      ctrl.setEnvironment('https://apitest.authorize.net/xml/v1/request.api');
-      console.log('🧪 Using sandbox environment');
-    }
-
-    // Execute transaction with timeout
-    return new Promise((resolve, reject) => {
-      // Add timeout to prevent hanging
-      const timeoutId = setTimeout(() => {
-        reject(new Error('Payment processing timeout - please try again'));
-      }, 30000); // 30 second timeout
-
-      ctrl.execute(() => {
-        clearTimeout(timeoutId);
-        try {
-          const apiResponse = ctrl.getResponse();
-          const response = new apiContracts.CreateTransactionResponse(
-            apiResponse
-          );
-
-          // Parse response
-          const resultCode = response.getMessages().getResultCode();
-          const messageCode = response.getMessages().getMessage()[0].getCode();
-          const messageText = response.getMessages().getMessage()[0].getText();
-
-          let transactionResponse = null;
-          let authCode = null;
-          let transactionId = null;
-          let avsResult = null;
-          let cvvResult = null;
-          let responseCode = '3'; // Default to error
-          let responseReasonCode = null;
-          let responseReasonText = messageText;
-
-          if (response.getTransactionResponse() != null) {
-            transactionResponse = response.getTransactionResponse();
-            authCode = transactionResponse.getAuthCode();
-            transactionId = transactionResponse.getTransId();
-            responseCode = transactionResponse.getResponseCode();
-
-            // Safely get messages if they exist
-            if (
-              transactionResponse.getMessages() &&
-              transactionResponse.getMessages().getMessage() &&
-              transactionResponse.getMessages().getMessage().length > 0
-            ) {
-              responseReasonCode = transactionResponse
-                .getMessages()
-                .getMessage()[0]
-                .getCode();
-              responseReasonText = transactionResponse
-                .getMessages()
-                .getMessage()[0]
-                .getDescription();
-            } else {
-              // Fallback for transactions without detailed messages
-              responseReasonText = `Transaction ${responseCode === '1' ? 'approved' : 'declined'}`;
-            }
-
-            if (transactionResponse.getAvsResultCode()) {
-              avsResult = transactionResponse.getAvsResultCode();
-            }
-            if (transactionResponse.getCvvResultCode()) {
-              cvvResult = transactionResponse.getCvvResultCode();
-            }
-          }
-
-          // Process the transaction result
-          processTransactionResult({
-            orderId: paymentData.orderId,
-            amount: paymentData.amount,
-            taxAmount: paymentData.taxAmount,
-            shippingAmount: paymentData.shippingAmount,
-            billingAddress: paymentData.billingAddress,
-            customerEmail: paymentData.customerEmail,
-            transactionId: transactionId || 'UNKNOWN',
-            authCode,
-            responseCode,
-            responseReasonCode,
-            responseReasonText,
-            avsResult,
-            cvvResult,
-            rawResponse: apiResponse,
-            isTest: isTestMode,
-          })
-            .then((result) => {
-              res.json(result);
-              resolve(undefined);
-            })
-            .catch((error) => {
-              console.error('Error processing transaction result:', error);
-              res
-                .status(500)
-                .json({ error: 'Failed to save transaction result' });
-              reject(error);
-            });
-        } catch (error) {
-          clearTimeout(timeoutId);
-          console.error('Error parsing Authorize.Net response:', error);
-          reject(error);
-        }
-      });
+    // Process payment via Accept.Blue
+    const result = await chargeCard({
+      amount: paymentData.amount,
+      cardNumber: paymentData.cardNumber,
+      expirationDate: paymentData.expirationDate,
+      cvv: paymentData.cvv,
+      orderId: paymentData.orderId,
+      customerEmail: paymentData.customerEmail,
+      billingAddress: paymentData.billingAddress,
     });
+
+    // If the charge failed without a reference number, return the error immediately
+    // Don't try to save a failed transaction without proper identifiers
+    if (!result.success && !result.referenceNumber && !result.transactionId) {
+      console.log('❌ Payment failed without transaction reference:', result.message);
+      return res.status(400).json({
+        success: false,
+        error: result.message || 'Payment processing failed',
+        message: result.message,
+      });
+    }
+
+    // Process the transaction result
+    // Accept.Blue uses reference_number as the primary transaction identifier
+    const transactionId = result.referenceNumber 
+      ? String(result.referenceNumber) 
+      : (result.transactionId || `TEMP-${Date.now()}`);
+    
+    const processedResult = await processTransactionResult({
+      orderId: paymentData.orderId,
+      amount: paymentData.amount,
+      taxAmount: paymentData.taxAmount,
+      shippingAmount: paymentData.shippingAmount,
+      billingAddress: paymentData.billingAddress,
+      customerEmail: paymentData.customerEmail,
+      transactionId: transactionId,
+      authCode: result.authCode,
+      responseCode: result.responseCode || (result.success ? '1' : '2'),
+      responseReasonCode: undefined,
+      responseReasonText: result.message,
+      avsResult: result.avsResult,
+      cvvResult: result.cvvResult,
+      rawResponse: result.rawResponse,
+      isTest: isTestMode,
+    });
+
+    res.json(processedResult);
   } catch (error) {
     console.error('Credit card payment error:', error);
     if (error instanceof z.ZodError) {
@@ -379,7 +210,7 @@ async function processTransactionResult(data: {
 
   // If payment was approved, update order status
   if (isApproved) {
-    // Update order payment status
+    // Update order payment status (all orders including drafts are in allOrders table)
     await db
       .update(allOrders)
       .set({
@@ -390,18 +221,6 @@ async function processTransactionResult(data: {
         paymentTimestamp: new Date(),
       })
       .where(eq(allOrders.orderId, data.orderId));
-
-    // Also try to update draft order if it exists
-    await db
-      .update(orderDrafts)
-      .set({
-        isPaid: true,
-        paymentType: 'credit_card',
-        paymentAmount: data.amount,
-        paymentDate: new Date(),
-        paymentTimestamp: new Date(),
-      })
-      .where(eq(orderDrafts.orderId, data.orderId));
   }
 
   return {
@@ -465,12 +284,12 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Void a transaction (within 24 hours)
+// Void a transaction (within 24 hours) via Accept.Blue
 router.post('/void/:transactionId', async (req, res) => {
   try {
     const { transactionId } = req.params;
 
-    if (!apiLoginId || !transactionKey) {
+    if (!isAcceptBlueConfigured()) {
       return res.status(500).json({
         error: 'Payment processing not configured. Please contact support.',
       });
@@ -493,68 +312,28 @@ router.post('/void/:transactionId', async (req, res) => {
         .json({ error: 'Can only void completed transactions' });
     }
 
-    // Set up Authorize.Net void request
-    const apiContracts = AuthorizeNet.APIContracts;
-    const apiControllers = AuthorizeNet.APIControllers;
+    // Process void via Accept.Blue
+    const result = await voidTransaction(transactionId);
 
-    const merchantAuthenticationType =
-      new apiContracts.MerchantAuthenticationType();
-    merchantAuthenticationType.setName(apiLoginId);
-    merchantAuthenticationType.setTransactionKey(transactionKey);
+    if (result.success) {
+      // Update transaction status
+      await db.update(creditCardTransactions)
+        .set({
+          status: 'voided',
+          voidedAt: new Date(),
+        })
+        .where(eq(creditCardTransactions.transactionId, transactionId));
 
-    const transactionRequestType = new apiContracts.TransactionRequestType();
-    transactionRequestType.setTransactionType(
-      apiContracts.TransactionTypeEnum.VOIDTRANSACTION
-    );
-    transactionRequestType.setRefTransId(transactionId);
-
-    const createRequest = new apiContracts.CreateTransactionRequest();
-    createRequest.setMerchantAuthentication(merchantAuthenticationType);
-    createRequest.setTransactionRequest(transactionRequestType);
-
-    const ctrl = new apiControllers.CreateTransactionController(
-      createRequest.getJSON()
-    );
-
-    if (isTestMode) {
-      ctrl.setEnvironment('https://apitest.authorize.net/xml/v1/request.api');
-    }
-
-    return new Promise((resolve, reject) => {
-      ctrl.execute(() => {
-        const apiResponse = ctrl.getResponse();
-        const response = new apiContracts.CreateTransactionResponse(
-          apiResponse
-        );
-
-        const resultCode = response.getMessages().getResultCode();
-        const isSuccess = resultCode === apiContracts.MessageTypeEnum.OK;
-
-        if (isSuccess) {
-          // Update transaction status
-          db.update(creditCardTransactions)
-            .set({
-              status: 'voided',
-              voidedAt: new Date(),
-            })
-            .where(eq(creditCardTransactions.transactionId, transactionId))
-            .then(() => {
-              res.json({
-                success: true,
-                message: 'Transaction voided successfully',
-              });
-              resolve(undefined);
-            });
-        } else {
-          const errorMessage = response.getMessages().getMessage()[0].getText();
-          res.status(400).json({
-            success: false,
-            error: errorMessage,
-          });
-          resolve(undefined);
-        }
+      res.json({
+        success: true,
+        message: 'Transaction voided successfully',
       });
-    });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.message,
+      });
+    }
   } catch (error) {
     console.error('Error voiding transaction:', error);
     res.status(500).json({ error: 'Failed to void transaction' });

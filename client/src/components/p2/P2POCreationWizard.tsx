@@ -1,0 +1,575 @@
+import { useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { 
+  ArrowLeft, 
+  ArrowRight, 
+  Check, 
+  User, 
+  FileText, 
+  Package, 
+  ClipboardCheck,
+  Plus,
+  Trash2,
+  AlertCircle
+} from 'lucide-react';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
+
+interface P2POCreationWizardProps {
+  onComplete: (poId: number) => void;
+  onCancel: () => void;
+}
+
+const steps = [
+  { id: 'customer', title: 'Customer', icon: User },
+  { id: 'details', title: 'PO Details', icon: FileText },
+  { id: 'items', title: 'Line Items', icon: Package },
+  { id: 'review', title: 'Review', icon: ClipboardCheck },
+];
+
+const customerSchema = z.object({
+  customerId: z.string().min(1, 'Please select a customer'),
+});
+
+const detailsSchema = z.object({
+  customerPONumber: z.string().min(1, 'Customer PO number is required'),
+  dueDate: z.string().min(1, 'Due date is required'),
+  toleranceAuthorizer: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+interface LineItem {
+  id: string;
+  partNumber: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreationWizardProps) {
+  const [currentStep, setCurrentStep] = useState(0);
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [poDetails, setPODetails] = useState<z.infer<typeof detailsSchema> | null>(null);
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [newItem, setNewItem] = useState<Partial<LineItem>>({});
+  const { toast } = useToast();
+
+  const { data: customers = [] } = useQuery<any[]>({
+    queryKey: ['/api/customers'],
+  });
+
+  const { data: employees = [] } = useQuery<any[]>({
+    queryKey: ['/api/employees'],
+  });
+
+  const customerForm = useForm<z.infer<typeof customerSchema>>({
+    resolver: zodResolver(customerSchema),
+    defaultValues: { customerId: '' },
+  });
+
+  const detailsForm = useForm<z.infer<typeof detailsSchema>>({
+    resolver: zodResolver(detailsSchema),
+    defaultValues: {
+      customerPONumber: '',
+      dueDate: '',
+      toleranceAuthorizer: '',
+      notes: '',
+    },
+  });
+
+  const createPOMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest('/api/p2-purchase-orders-bypass', {
+        method: 'POST',
+        body: data,
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });
+      toast({
+        title: 'P2 Order Created',
+        description: `Order ${data.poNumber} has been created successfully.`,
+      });
+      onComplete(data.id);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create P2 order',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleCustomerSubmit = (data: z.infer<typeof customerSchema>) => {
+    const customer = customers.find((c: any) => c.id.toString() === data.customerId);
+    setSelectedCustomer(customer);
+    setCurrentStep(1);
+  };
+
+  const handleDetailsSubmit = (data: z.infer<typeof detailsSchema>) => {
+    setPODetails(data);
+    setCurrentStep(2);
+  };
+
+  const addLineItem = () => {
+    if (!newItem.partNumber || !newItem.quantity) {
+      toast({
+        title: 'Missing Information',
+        description: 'Please enter part number and quantity',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const item: LineItem = {
+      id: Date.now().toString(),
+      partNumber: newItem.partNumber || '',
+      description: newItem.description || '',
+      quantity: newItem.quantity || 1,
+      unitPrice: newItem.unitPrice || 0,
+    };
+
+    setLineItems([...lineItems, item]);
+    setNewItem({});
+  };
+
+  const removeLineItem = (id: string) => {
+    setLineItems(lineItems.filter((item) => item.id !== id));
+  };
+
+  const handleItemsNext = () => {
+    if (lineItems.length === 0) {
+      toast({
+        title: 'No Items',
+        description: 'Please add at least one line item',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setCurrentStep(3);
+  };
+
+  const handleCreateOrder = () => {
+    const orderData = {
+      customerId: selectedCustomer.id,
+      customerPONumber: poDetails?.customerPONumber,
+      dueDate: poDetails?.dueDate,
+      toleranceAuthorizer: poDetails?.toleranceAuthorizer,
+      notes: poDetails?.notes,
+      lineItems: lineItems.map((item) => ({
+        partNumber: item.partNumber,
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+    };
+
+    createPOMutation.mutate(orderData);
+  };
+
+  const goBack = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  return (
+    <Card className="max-w-4xl mx-auto">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Create New P2 Order</CardTitle>
+            <CardDescription>
+              Step {currentStep + 1} of {steps.length}: {steps[currentStep].title}
+            </CardDescription>
+          </div>
+          <Button variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+
+        {/* Step Indicator */}
+        <div className="flex items-center justify-between mt-6">
+          {steps.map((step, index) => {
+            const Icon = step.icon;
+            const isCompleted = index < currentStep;
+            const isCurrent = index === currentStep;
+
+            return (
+              <div key={step.id} className="flex items-center">
+                <div
+                  className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
+                    isCompleted
+                      ? 'bg-green-600 border-green-600 text-white'
+                      : isCurrent
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-muted text-muted-foreground'
+                  }`}
+                >
+                  {isCompleted ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
+                </div>
+                <span
+                  className={`ml-2 text-sm ${
+                    isCurrent ? 'font-medium' : 'text-muted-foreground'
+                  }`}
+                >
+                  {step.title}
+                </span>
+                {index < steps.length - 1 && (
+                  <div
+                    className={`w-16 h-0.5 mx-4 ${
+                      isCompleted ? 'bg-green-600' : 'bg-muted'
+                    }`}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </CardHeader>
+
+      <CardContent className="min-h-[400px]">
+        {/* Step 1: Customer Selection */}
+        {currentStep === 0 && (
+          <Form {...customerForm}>
+            <form onSubmit={customerForm.handleSubmit(handleCustomerSubmit)} className="space-y-6">
+              <FormField
+                control={customerForm.control}
+                name="customerId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Select Customer</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-customer">
+                          <SelectValue placeholder="Choose a customer..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {customers.map((customer: any) => (
+                          <SelectItem key={customer.id} value={customer.id.toString()}>
+                            {customer.name} - {customer.company || 'No Company'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end">
+                <Button type="submit" data-testid="button-next-customer">
+                  Next <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </form>
+          </Form>
+        )}
+
+        {/* Step 2: PO Details */}
+        {currentStep === 1 && (
+          <Form {...detailsForm}>
+            <form onSubmit={detailsForm.handleSubmit(handleDetailsSubmit)} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={detailsForm.control}
+                  name="customerPONumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Customer PO Number</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="e.g., PO-2024-001" data-testid="input-customer-po" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={detailsForm.control}
+                  name="dueDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Due Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-due-date" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={detailsForm.control}
+                name="toleranceAuthorizer"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tolerance Authorizer (Optional)</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-authorizer">
+                          <SelectValue placeholder="Select authorizer for tolerance decisions..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {employees
+                          .filter((emp: any) => emp.role === 'ADMIN' || emp.role === 'OWNER')
+                          .map((emp: any) => (
+                            <SelectItem key={emp.id} value={emp.id.toString()}>
+                              {emp.firstName} {emp.lastName}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={detailsForm.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} placeholder="Any special instructions..." data-testid="input-notes" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-between">
+                <Button type="button" variant="outline" onClick={goBack}>
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                </Button>
+                <Button type="submit" data-testid="button-next-details">
+                  Next <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </form>
+          </Form>
+        )}
+
+        {/* Step 3: Line Items */}
+        {currentStep === 2 && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-5 gap-2 items-end">
+              <div>
+                <Label>Part Number</Label>
+                <Input
+                  value={newItem.partNumber || ''}
+                  onChange={(e) => setNewItem({ ...newItem, partNumber: e.target.value })}
+                  placeholder="Part #"
+                  data-testid="input-part-number"
+                />
+              </div>
+              <div>
+                <Label>Description</Label>
+                <Input
+                  value={newItem.description || ''}
+                  onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                  placeholder="Description"
+                  data-testid="input-description"
+                />
+              </div>
+              <div>
+                <Label>Quantity</Label>
+                <Input
+                  type="number"
+                  value={newItem.quantity || ''}
+                  onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })}
+                  placeholder="Qty"
+                  data-testid="input-quantity"
+                />
+              </div>
+              <div>
+                <Label>Unit Price</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={newItem.unitPrice || ''}
+                  onChange={(e) => setNewItem({ ...newItem, unitPrice: parseFloat(e.target.value) || 0 })}
+                  placeholder="$0.00"
+                  data-testid="input-unit-price"
+                />
+              </div>
+              <Button onClick={addLineItem} data-testid="button-add-item">
+                <Plus className="h-4 w-4 mr-1" /> Add
+              </Button>
+            </div>
+
+            <Separator />
+
+            {lineItems.length === 0 ? (
+              <div className="text-center py-12 border rounded-lg border-dashed">
+                <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No line items added yet</p>
+                <p className="text-sm text-muted-foreground">Add parts above to continue</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Part Number</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="text-right">Quantity</TableHead>
+                    <TableHead className="text-right">Unit Price</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lineItems.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.partNumber}</TableCell>
+                      <TableCell>{item.description}</TableCell>
+                      <TableCell className="text-right">{item.quantity}</TableCell>
+                      <TableCell className="text-right">${item.unitPrice.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">
+                        ${(item.quantity * item.unitPrice).toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeLineItem(item.id)}
+                          data-testid={`button-remove-item-${item.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+
+            <div className="flex justify-between">
+              <Button type="button" variant="outline" onClick={goBack}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back
+              </Button>
+              <Button onClick={handleItemsNext} data-testid="button-next-items">
+                Next <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Review */}
+        {currentStep === 3 && (
+          <div className="space-y-6">
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                <div>
+                  <h4 className="font-medium text-amber-800 dark:text-amber-200">Ready to Create Order</h4>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                    Once created, the order will be locked and you'll be prompted to set up BOMs for each part.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-6">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Customer</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="font-medium">{selectedCustomer?.name}</p>
+                  <p className="text-sm text-muted-foreground">{selectedCustomer?.company}</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Order Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-1">
+                  <p><span className="text-muted-foreground">Customer PO:</span> {poDetails?.customerPONumber}</p>
+                  <p><span className="text-muted-foreground">Due Date:</span> {poDetails?.dueDate}</p>
+                  {poDetails?.toleranceAuthorizer && (
+                    <p><span className="text-muted-foreground">Authorizer:</span> Set</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Line Items ({lineItems.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Part Number</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="text-right">Quantity</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {lineItems.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">{item.partNumber}</TableCell>
+                        <TableCell>{item.description}</TableCell>
+                        <TableCell className="text-right">{item.quantity}</TableCell>
+                        <TableCell className="text-right">
+                          ${(item.quantity * item.unitPrice).toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="flex justify-end mt-4 pt-4 border-t">
+                  <p className="text-lg font-semibold">
+                    Grand Total: $
+                    {lineItems
+                      .reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
+                      .toFixed(2)}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-between">
+              <Button type="button" variant="outline" onClick={goBack}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back
+              </Button>
+              <Button 
+                onClick={handleCreateOrder} 
+                disabled={createPOMutation.isPending}
+                data-testid="button-create-order"
+              >
+                {createPOMutation.isPending ? 'Creating...' : 'Create Order & Setup BOMs'}
+                <Check className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

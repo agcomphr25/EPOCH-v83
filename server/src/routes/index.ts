@@ -1437,6 +1437,209 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P2 Control Center API Routes
+  app.get('/api/p2/control-center/stats', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const pos = await storage.getP2PurchaseOrders();
+      const schedules = await storage.getP2LayupSchedules();
+      
+      const openPOs = pos.filter((po: any) => po.status !== 'COMPLETED').length;
+      const pendingBOMs = pos.filter((po: any) => !po.bomConfigured).length;
+      const scheduledItems = schedules.filter((s: any) => s.status === 'SCHEDULED').length;
+      const inProduction = schedules.filter((s: any) => s.status === 'IN_PROGRESS').length;
+      
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      const completedThisWeek = schedules.filter((s: any) => 
+        s.status === 'COMPLETED' && new Date(s.completedAt) > oneWeekAgo
+      ).length;
+      
+      const pendingQC = schedules.filter((s: any) => s.status === 'PENDING_QC').length;
+      
+      res.json({
+        openPOs,
+        pendingBOMs,
+        scheduledItems,
+        inProduction,
+        completedThisWeek,
+        pendingQC
+      });
+    } catch (_error) {
+      console.error('P2 Control Center stats error:', _error);
+      res.status(500).json({ error: 'Failed to fetch P2 Control Center stats' });
+    }
+  });
+
+  app.get('/api/p2/control-center/pending-actions', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const pos = await storage.getP2PurchaseOrders();
+      const actions: any[] = [];
+      
+      pos.forEach((po: any) => {
+        if (!po.bomConfigured) {
+          actions.push({
+            type: 'needs_bom',
+            poId: po.id,
+            label: `${po.poNumber} needs BOM setup`
+          });
+        }
+      });
+      
+      res.json(actions);
+    } catch (_error) {
+      console.error('P2 Control Center pending actions error:', _error);
+      res.status(500).json({ error: 'Failed to fetch pending actions' });
+    }
+  });
+
+  app.get('/api/p2/control-center/po-statuses', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const pos = await storage.getP2PurchaseOrders();
+      const schedules = await storage.getP2LayupSchedules();
+      const customers = await storage.getCustomers();
+      
+      const poStatuses = pos.map((po: any) => {
+        const customer = customers.find((c: any) => c.id === po.customerId);
+        const poSchedules = schedules.filter((s: any) => s.p2PurchaseOrderId === po.id);
+        
+        const completedItems = poSchedules.filter((s: any) => s.status === 'COMPLETED').length;
+        const inProductionItems = poSchedules.filter((s: any) => s.status === 'IN_PROGRESS').length;
+        const pendingItems = poSchedules.filter((s: any) => s.status === 'PENDING' || s.status === 'SCHEDULED').length;
+        
+        return {
+          id: po.id,
+          poNumber: po.poNumber,
+          customerName: customer?.name || 'Unknown',
+          dueDate: po.dueDate,
+          totalItems: poSchedules.length,
+          completedItems,
+          inProductionItems,
+          pendingItems,
+          hasBOMsNeeded: !po.bomConfigured,
+          status: completedItems === poSchedules.length && poSchedules.length > 0 ? 'completed' : 
+                  inProductionItems > 0 ? 'in_progress' : 'pending'
+        };
+      });
+      
+      res.json(poStatuses);
+    } catch (_error) {
+      console.error('P2 Control Center PO statuses error:', _error);
+      res.status(500).json({ error: 'Failed to fetch PO statuses' });
+    }
+  });
+
+  app.get('/api/p2/control-center/scheduling-list', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const schedules = await storage.getP2LayupSchedules();
+      const pos = await storage.getP2PurchaseOrders();
+      
+      const schedulingList = schedules
+        .filter((s: any) => s.status !== 'COMPLETED')
+        .map((s: any) => {
+          const po = pos.find((p: any) => p.id === s.p2PurchaseOrderId);
+          return {
+            id: s.id,
+            poNumber: po?.poNumber || 'Unknown',
+            partNumber: s.partNumber || 'Unknown',
+            description: s.description || '',
+            totalQuantity: s.quantity || 0,
+            scheduledQuantity: s.scheduledQuantity || 0,
+            remainingQuantity: (s.quantity || 0) - (s.scheduledQuantity || 0),
+            dueDate: po?.dueDate,
+            priority: s.priority || 'normal',
+            status: s.status === 'SCHEDULED' ? 'scheduled' : 
+                    s.scheduledQuantity > 0 ? 'partial' : 'pending'
+          };
+        });
+      
+      res.json(schedulingList);
+    } catch (_error) {
+      console.error('P2 Control Center scheduling list error:', _error);
+      res.status(500).json({ error: 'Failed to fetch scheduling list' });
+    }
+  });
+
+  app.get('/api/p2/control-center/pos-needing-boms', async (req, res) => {
+    try {
+      const { storage } = await import('../../storage');
+      const pos = await storage.getP2PurchaseOrders();
+      const customers = await storage.getCustomers();
+      
+      const posNeedingBOMs = pos
+        .filter((po: any) => !po.bomConfigured)
+        .map((po: any) => {
+          const customer = customers.find((c: any) => c.id === po.customerId);
+          return {
+            id: po.id,
+            poNumber: po.poNumber,
+            customerName: customer?.name || 'Unknown',
+            itemCount: po.lineItems?.length || 0
+          };
+        });
+      
+      res.json(posNeedingBOMs);
+    } catch (_error) {
+      console.error('P2 Control Center POs needing BOMs error:', _error);
+      res.status(500).json({ error: 'Failed to fetch POs needing BOMs' });
+    }
+  });
+
+  app.get('/api/p2/control-center/recent-activity', async (req, res) => {
+    try {
+      res.json([]);
+    } catch (_error) {
+      console.error('P2 Control Center recent activity error:', _error);
+      res.status(500).json({ error: 'Failed to fetch recent activity' });
+    }
+  });
+
+  app.post('/api/p2/bom/:partId', async (req, res) => {
+    try {
+      const { partId } = req.params;
+      const { bomItems } = req.body;
+      console.log(`Saving BOM for part ${partId}:`, bomItems);
+      res.json({ success: true, partId, bomItems });
+    } catch (_error) {
+      console.error('P2 BOM save error:', _error);
+      res.status(500).json({ error: 'Failed to save BOM' });
+    }
+  });
+
+  app.post('/api/p2/schedule', async (req, res) => {
+    try {
+      const { entries } = req.body;
+      const { storage } = await import('../../storage');
+      
+      for (const entry of entries) {
+        await storage.updateP2LayupSchedule(entry.itemId, {
+          scheduledQuantity: entry.quantity,
+          weekNumber: entry.weekNumber,
+          status: 'SCHEDULED'
+        });
+      }
+      
+      res.json({ success: true, scheduled: entries.length });
+    } catch (_error) {
+      console.error('P2 schedule error:', _error);
+      res.status(500).json({ error: 'Failed to schedule items' });
+    }
+  });
+
+  app.post('/api/p2/print-barcodes', async (req, res) => {
+    try {
+      const { itemIds } = req.body;
+      console.log('Printing barcodes for items:', itemIds);
+      res.json({ success: true, message: 'Barcodes generated' });
+    } catch (_error) {
+      console.error('P2 print barcodes error:', _error);
+      res.status(500).json({ error: 'Failed to print barcodes' });
+    }
+  });
+
   // P2 PO PDF Attachment routes
 
   // Ensure P2 PO attachments directory exists

@@ -1551,17 +1551,57 @@ router.post('/packet-boms/:id/cuts', async (req, res) => {
   try {
     const { squareMetersUsed, piecesYielded, fabricInventoryId, rollNumber, lotNumber, operatorName, notes, mfgQueueItemId } = req.body;
     
+    // Validate required fields for AS9100 traceability
+    if (!rollNumber || !lotNumber) {
+      return res.status(400).json({ error: 'Roll number and lot number are required for traceability' });
+    }
+    
+    if (!squareMetersUsed || squareMetersUsed <= 0) {
+      return res.status(400).json({ error: 'Square meters used must be greater than 0' });
+    }
+    
+    // Record the cut
     const [newCut] = await db.insert(cuttingPacketBOMCuts).values({
       packetBomId: req.params.id,
       fabricInventoryId,
       mfgQueueItemId,
       squareMetersUsed: parseFloat(squareMetersUsed) || 0,
-      piecesYielded: parseInt(piecesYielded) || 0,
+      piecesYielded: parseInt(piecesYielded) || 1,
       rollNumber,
       lotNumber,
-      operatorName,
+      operatorName: operatorName || 'unknown',
       notes,
     }).returning();
+    
+    // Decrement fabric inventory if fabricInventoryId is provided
+    if (fabricInventoryId) {
+      try {
+        const [currentInventory] = await db.select()
+          .from(cuttingFabricInventory)
+          .where(eq(cuttingFabricInventory.id, fabricInventoryId));
+        
+        if (currentInventory) {
+          const currentSquareMeters = parseFloat(currentInventory.squareMeters?.toString() || '0');
+          const usedSquareMeters = parseFloat(squareMetersUsed) || 0;
+          const newSquareMeters = Math.max(0, currentSquareMeters - usedSquareMeters);
+          
+          await db.update(cuttingFabricInventory)
+            .set({ 
+              squareMeters: newSquareMeters.toString(),
+              updatedAt: new Date(),
+            })
+            .where(eq(cuttingFabricInventory.id, fabricInventoryId));
+          
+          console.log(`[CUT RECORDED] Roll ${rollNumber}: ${usedSquareMeters}m² consumed, ${newSquareMeters}m² remaining`);
+        }
+      } catch (inventoryError) {
+        console.error('Warning: Could not update fabric inventory:', inventoryError);
+        // Don't fail the cut recording if inventory update fails
+      }
+    }
+    
+    // Log for audit trail
+    console.log(`[PACKET CUT] BOM ${req.params.id}: ${piecesYielded} pieces from Roll ${rollNumber} (Lot: ${lotNumber}) by ${operatorName}`);
     
     res.status(201).json(newCut);
   } catch (error) {

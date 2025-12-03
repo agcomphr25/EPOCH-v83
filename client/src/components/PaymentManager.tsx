@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Plus, Edit2, Trash2, CreditCard } from 'lucide-react';
+import { Plus, Edit2, Trash2, CreditCard, Zap } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import CreditCardPayment from './CreditCardPayment';
 
 export interface Payment {
   id: number;
@@ -49,6 +50,7 @@ export default function PaymentManager({
 }: PaymentManagerProps) {
   const { toast } = useToast();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showLivePaymentModal, setShowLivePaymentModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
 
   // Form state
@@ -192,6 +194,13 @@ export default function PaymentManager({
       return;
     }
 
+    // If "live" payment type selected, close this modal and open the live payment modal
+    if (paymentType === 'live') {
+      setShowPaymentModal(false);
+      setShowLivePaymentModal(true);
+      return;
+    }
+
     const paymentData = {
       paymentType,
       paymentAmount: parseFloat(paymentAmount),
@@ -207,6 +216,22 @@ export default function PaymentManager({
     } else {
       createPaymentMutation.mutate({ ...paymentData, orderId });
     }
+  };
+
+  // Handle successful live credit card payment
+  const handleLivePaymentSuccess = (result: any) => {
+    toast({
+      title: 'Payment Processed',
+      description: `Payment of ${formatCurrency(parseFloat(paymentAmount))} was successfully processed.`,
+    });
+    refetch();
+    resetForm();
+    setShowLivePaymentModal(false);
+  };
+
+  const handleLivePaymentCancel = () => {
+    setShowLivePaymentModal(false);
+    resetForm();
   };
 
   // Helper function to format currency

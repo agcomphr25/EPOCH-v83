@@ -1857,6 +1857,52 @@ export function registerRoutes(app: Express): Server {
               .update(p2PurchaseOrders)
               .set({ bomConfigured: true })
               .where(eq(p2PurchaseOrders.id, poItem.poId));
+            
+            // Create serialized items for scheduling when BOM is complete
+            const { p2SerializedItems } = await import('../../schema');
+            const { v4: uuidv4 } = await import('uuid');
+            
+            // Get the PO for additional info
+            const [po] = await db
+              .select()
+              .from(p2PurchaseOrders)
+              .where(eq(p2PurchaseOrders.id, poItem.poId))
+              .limit(1);
+            
+            // Check if serialized items already exist for this PO
+            const existingItems = await db
+              .select()
+              .from(p2SerializedItems)
+              .where(eq(p2SerializedItems.poId, poItem.poId));
+            
+            // Only create if none exist yet
+            if (existingItems.length === 0) {
+              console.log(`Creating serialized items for PO ${po?.poNumber} with ${allItems.length} line items`);
+              
+              for (const lineItem of allItems) {
+                // Create one serialized item per quantity
+                for (let i = 0; i < (lineItem.quantity || 1); i++) {
+                  const serialNumber = `${po?.poNumber || 'P2'}-${lineItem.partNumber}-${String(i + 1).padStart(3, '0')}`;
+                  
+                  await db.insert(p2SerializedItems).values({
+                    id: uuidv4(),
+                    poId: poItem.poId,
+                    poItemId: lineItem.id,
+                    poNumber: po?.poNumber || null,
+                    partNumber: lineItem.partNumber,
+                    description: lineItem.description || '',
+                    serialNumber,
+                    productionStatus: 'PENDING',
+                    currentDepartment: null,
+                    priority: 'normal',
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                  });
+                }
+              }
+              
+              console.log(`Created serialized items for PO ${po?.poNumber}`);
+            }
           }
         }
       }

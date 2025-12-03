@@ -111,6 +111,65 @@ export default function P2ControlCenter() {
         </Button>
       </div>
 
+      {/* Workflow Progress Indicator */}
+      <Card className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 border-none">
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${(stats?.openPOs || 0) > 0 ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                  <FileText className="h-4 w-4" />
+                </div>
+                <div className="text-sm">
+                  <div className="font-medium">1. Create PO</div>
+                  <div className="text-xs text-muted-foreground">{stats?.openPOs || 0} active</div>
+                </div>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${(stats?.pendingBOMs || 0) > 0 ? 'bg-amber-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                  <Layers className="h-4 w-4" />
+                </div>
+                <div className="text-sm">
+                  <div className="font-medium">2. Configure BOM</div>
+                  <div className="text-xs text-muted-foreground">{stats?.pendingBOMs || 0} pending</div>
+                </div>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${(stats?.scheduledItems || 0) > 0 ? 'bg-purple-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                  <Calendar className="h-4 w-4" />
+                </div>
+                <div className="text-sm">
+                  <div className="font-medium">3. Schedule</div>
+                  <div className="text-xs text-muted-foreground">{stats?.scheduledItems || 0} scheduled</div>
+                </div>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${(stats?.inProduction || 0) > 0 ? 'bg-green-600 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                  <Factory className="h-4 w-4" />
+                </div>
+                <div className="text-sm">
+                  <div className="font-medium">4. Production</div>
+                  <div className="text-xs text-muted-foreground">{stats?.inProduction || 0} in progress</div>
+                </div>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${(stats?.completedThisWeek || 0) > 0 ? 'bg-emerald-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                  <CheckCircle className="h-4 w-4" />
+                </div>
+                <div className="text-sm">
+                  <div className="font-medium">5. Complete</div>
+                  <div className="text-xs text-muted-foreground">{stats?.completedThisWeek || 0} this week</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Quick Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <Card className="cursor-pointer hover:bg-accent/50" onClick={() => setActiveTab('status')} data-testid="card-open-pos">

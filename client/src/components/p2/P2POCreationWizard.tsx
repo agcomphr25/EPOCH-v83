@@ -47,7 +47,7 @@ const customerSchema = z.object({
 const detailsSchema = z.object({
   customerPONumber: z.string().min(1, 'Customer PO number is required'),
   dueDate: z.string().min(1, 'Due date is required'),
-  toleranceAuthorizer: z.string().optional(),
+  toleranceAuthorizer: z.string().min(1, 'Tolerance authorizer is required for quality control'),
   notes: z.string().optional(),
 });
 
@@ -342,7 +342,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                 name="toleranceAuthorizer"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tolerance Authorizer (Optional)</FormLabel>
+                    <FormLabel>Tolerance Authorizer <span className="text-red-500">*</span></FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-authorizer">

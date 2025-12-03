@@ -20,6 +20,7 @@ import {
 import { QrCode, Printer, Save, Calendar } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
+import SmartLotInput from '@/components/SmartLotInput';
 
 interface P2ReceivingData {
   itemCode: string;
@@ -417,38 +418,36 @@ export default function P2ReceivingDialog({
             </div>
           </div>
 
-          {/* Batch and Lot Information */}
+          {/* Batch and Lot Information with Smart Data Entry */}
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="batchNumber">Batch Number *</Label>
-              <Input
-                id="batchNumber"
-                value={formData.batchNumber}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    batchNumber: e.target.value,
-                  }))
-                }
-                placeholder="Enter batch number"
-                required
-              />
-            </div>
-            <div>
-              <Label htmlFor="lotNumber">Lot Number *</Label>
-              <Input
-                id="lotNumber"
-                value={formData.lotNumber}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    lotNumber: e.target.value,
-                  }))
-                }
-                placeholder="Enter lot number"
-                required
-              />
-            </div>
+            <SmartLotInput
+              id="batchNumber"
+              label="Batch Number"
+              value={formData.batchNumber}
+              onChange={(value) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  batchNumber: value,
+                }))
+              }
+              placeholder="Enter batch number"
+              required
+              type="batch"
+            />
+            <SmartLotInput
+              id="lotNumber"
+              label="Lot Number"
+              value={formData.lotNumber}
+              onChange={(value) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  lotNumber: value,
+                }))
+              }
+              placeholder="Enter lot number"
+              required
+              type="lot"
+            />
           </div>
 
           {/* Aluminum Heat Number */}

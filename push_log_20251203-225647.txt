@@ -1,0 +1,29 @@
+Your branch is behind 'origin/main' by 17 commits, and can be fast-forwarded.
+  (use "git pull" to update your local branch)
+Updating 62aa2e10..46973825
+Fast-forward
+ attached_assets/image_1764792576195.png     | Bin 0 -> 74639 bytes
+ attached_assets/image_1764793318120.png     | Bin 0 -> 93447 bytes
+ attached_assets/image_1764794221490.png     | Bin 0 -> 94258 bytes
+ attached_assets/image_1764794488359.png     | Bin 0 -> 88162 bytes
+ client/src/components/CreditCardPayment.tsx |   2 +-
+ client/src/components/PaymentManager.tsx    |  80 +++++-
+ client/src/pages/AllOrdersPage.tsx          |  37 +++
+ client/src/pages/SignOrderPage.tsx          |  29 ++-
+ push_log_20251203-212433.txt                |   3 +
+ push_log_20251203-212550.txt                |   3 +
+ server/index.ts                             |   2 +-
+ server/src/routes/followupOrders.ts         |  53 +++-
+ server/src/routes/payments.ts               | 369 ++++++----------------------
+ server/src/routes/refunds.ts                | 123 ++--------
+ server/utils/acceptBlue.ts                  | 339 +++++++++++++++++++++++++
+ server/utils/followupOrderReminder.ts       |  30 ++-
+ server/utils/pdf/salesOrderPdf.ts           |  55 +++--
+ 17 files changed, 692 insertions(+), 433 deletions(-)
+ create mode 100644 attached_assets/image_1764792576195.png
+ create mode 100644 attached_assets/image_1764793318120.png
+ create mode 100644 attached_assets/image_1764794221490.png
+ create mode 100644 attached_assets/image_1764794488359.png
+ create mode 100644 push_log_20251203-212433.txt
+ create mode 100644 push_log_20251203-212550.txt
+ create mode 100644 server/utils/acceptBlue.ts

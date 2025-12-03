@@ -15,12 +15,16 @@ import {
   Clock,
   AlertCircle,
   ArrowRight,
-  Layers
+  Layers,
+  Route,
+  Award
 } from 'lucide-react';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
 import P2BOMWizard from '@/components/p2/P2BOMWizard';
 import P2ProductionScheduler from '@/components/p2/P2ProductionScheduler';
 import P2StatusDashboard from '@/components/p2/P2StatusDashboard';
+import P2CertificationsManager from './P2CertificationsManager';
+import PartRoutingManagement from './PartRoutingManagement';
 
 interface P2Stats {
   openPOs: number;
@@ -273,7 +277,7 @@ export default function P2ControlCenter() {
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="status" className="flex items-center gap-2" data-testid="tab-status">
             <BarChart3 className="h-4 w-4" />
             Status
@@ -289,6 +293,14 @@ export default function P2ControlCenter() {
           <TabsTrigger value="production" className="flex items-center gap-2" data-testid="tab-production">
             <Factory className="h-4 w-4" />
             Production
+          </TabsTrigger>
+          <TabsTrigger value="routing" className="flex items-center gap-2" data-testid="tab-routing">
+            <Route className="h-4 w-4" />
+            Routing
+          </TabsTrigger>
+          <TabsTrigger value="certifications" className="flex items-center gap-2" data-testid="tab-certifications">
+            <Award className="h-4 w-4" />
+            Certifications
           </TabsTrigger>
         </TabsList>
 
@@ -369,6 +381,14 @@ export default function P2ControlCenter() {
               </Button>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="routing">
+          <PartRoutingManagement />
+        </TabsContent>
+
+        <TabsContent value="certifications">
+          <P2CertificationsManager />
         </TabsContent>
       </Tabs>
     </div>

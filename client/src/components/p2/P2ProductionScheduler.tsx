@@ -1,26 +1,17 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
 import { 
   Calendar as CalendarIcon, 
-  Printer,
   Search,
-  Filter,
   Package,
   Clock,
-  CheckCircle,
-  ArrowUpDown,
-  LayoutList,
-  BarChart3
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -35,69 +26,121 @@ interface SchedulableItem {
   scheduledQuantity: number;
   remainingQuantity: number;
   dueDate: string;
-  priority: 'normal' | 'high' | 'urgent';
-  status: 'pending' | 'partial' | 'scheduled';
+  priority: string;
+  status: string;
 }
 
-interface ScheduleEntry {
-  itemId: string;
-  quantity: number;
-  weekNumber: number;
-  itemsPerDay: number;
-  workDays: number;
-}
-
-interface WeeklyQueueData {
-  weekNumber: number;
-  weekStart: string;
-  weekEnd: string;
-  totalItems: number;
-  totalPOs: number;
-  itemsPerDay: number;
-  poSummaries: Array<{
-    poNumber: string;
-    itemCount: number;
-    partNumbers: string[];
-    items: any[];
-  }>;
-  allItems: any[];
+interface GroupedPart {
+  key: string;
+  poNumber: string;
+  partNumber: string;
+  description: string;
+  dueDate: string;
+  pendingCount: number;
+  scheduledCount: number;
+  totalCount: number;
+  itemIds: string[];
 }
 
 export default function P2ProductionScheduler() {
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const [scheduleEntries, setScheduleEntries] = useState<Record<string, ScheduleEntry>>({});
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [selectedWeek, setSelectedWeek] = useState<number>(getCurrentWeekNumber());
-  const [activeTab, setActiveTab] = useState<string>('schedule');
+  const [scheduleAmounts, setScheduleAmounts] = useState<Record<string, number>>({});
   const { toast } = useToast();
 
   const { data: schedulingList = [], isLoading, refetch } = useQuery<SchedulableItem[]>({
     queryKey: ['/api/p2/control-center/scheduling-list'],
   });
 
-  const { data: weeklyQueue, isLoading: weeklyLoading, refetch: refetchWeekly } = useQuery<WeeklyQueueData>({
-    queryKey: [`/api/p2/weekly-queue/${selectedWeek}`],
-    enabled: activeTab === 'summary',
-  });
+  // Group items by PO + Part Number
+  const groupedParts = useMemo(() => {
+    const groups: Record<string, GroupedPart> = {};
+    
+    schedulingList.forEach((item) => {
+      const key = `${item.poNumber}-${item.partNumber}`;
+      
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          poNumber: item.poNumber,
+          partNumber: item.partNumber,
+          description: item.description,
+          dueDate: item.dueDate,
+          pendingCount: 0,
+          scheduledCount: 0,
+          totalCount: 0,
+          itemIds: [],
+        };
+      }
+      
+      groups[key].totalCount++;
+      groups[key].itemIds.push(item.id);
+      
+      if (item.status === 'pending') {
+        groups[key].pendingCount++;
+      } else {
+        groups[key].scheduledCount++;
+      }
+    });
+    
+    return Object.values(groups).sort((a, b) => {
+      // Sort by due date, then by PO number
+      if (a.dueDate && b.dueDate) {
+        const dateComp = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        if (dateComp !== 0) return dateComp;
+      }
+      return a.poNumber.localeCompare(b.poNumber);
+    });
+  }, [schedulingList]);
+
+  // Filter by search
+  const filteredGroups = useMemo(() => {
+    if (!searchTerm) return groupedParts;
+    const term = searchTerm.toLowerCase();
+    return groupedParts.filter(
+      (g) =>
+        g.poNumber.toLowerCase().includes(term) ||
+        g.partNumber.toLowerCase().includes(term) ||
+        g.description.toLowerCase().includes(term)
+    );
+  }, [groupedParts, searchTerm]);
+
+  // Count totals
+  const totalPending = groupedParts.reduce((sum, g) => sum + g.pendingCount, 0);
+  const totalScheduled = groupedParts.reduce((sum, g) => sum + g.scheduledCount, 0);
+  const totalToSchedule = Object.values(scheduleAmounts).reduce((sum, amt) => sum + (amt || 0), 0);
 
   const scheduleMutation = useMutation({
-    mutationFn: async (entries: ScheduleEntry[]) => {
-      const response = await apiRequest('/api/p2/schedule', {
+    mutationFn: async (data: { groupKey: string; quantity: number; itemIds: string[] }) => {
+      // Get the first N pending item IDs to schedule
+      const pendingItems = schedulingList.filter(
+        (item) => 
+          data.itemIds.includes(item.id) && 
+          item.status === 'pending'
+      );
+      
+      const itemsToSchedule = pendingItems.slice(0, data.quantity);
+      
+      if (itemsToSchedule.length === 0) {
+        throw new Error('No pending items to schedule');
+      }
+
+      // Update items to move to Layup department (scheduled)
+      const response = await apiRequest('/api/p2/schedule-items', {
         method: 'POST',
-        body: { entries },
+        body: { 
+          itemIds: itemsToSchedule.map(i => i.id),
+        },
       });
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/p2-layup-schedules'] });
       toast({
         title: 'Items Scheduled',
-        description: 'Selected items have been scheduled for production.',
+        description: `${variables.quantity} items have been scheduled for production.`,
       });
-      setSelectedItems(new Set());
-      setScheduleEntries({});
+      // Clear the amount for this group
+      setScheduleAmounts(prev => ({ ...prev, [variables.groupKey]: 0 }));
       refetch();
     },
     onError: (error: any) => {
@@ -109,527 +152,269 @@ export default function P2ProductionScheduler() {
     },
   });
 
-  const printBarcodesMutation = useMutation({
-    mutationFn: async (itemIds: string[]) => {
-      const response = await apiRequest('/api/p2/print-barcodes', {
+  const scheduleAllMutation = useMutation({
+    mutationFn: async () => {
+      // Collect all items to schedule based on amounts entered
+      const allItemsToSchedule: string[] = [];
+      
+      for (const group of groupedParts) {
+        const amount = scheduleAmounts[group.key] || 0;
+        if (amount > 0) {
+          const pendingItems = schedulingList.filter(
+            (item) => 
+              group.itemIds.includes(item.id) && 
+              item.status === 'pending'
+          );
+          const itemsToAdd = pendingItems.slice(0, amount).map(i => i.id);
+          allItemsToSchedule.push(...itemsToAdd);
+        }
+      }
+      
+      if (allItemsToSchedule.length === 0) {
+        throw new Error('No items to schedule. Enter quantities first.');
+      }
+
+      const response = await apiRequest('/api/p2/schedule-items', {
         method: 'POST',
-        body: { itemIds },
+        body: { itemIds: allItemsToSchedule },
       });
       return response.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });
       toast({
-        title: 'Barcodes Generated',
-        description: 'Barcode labels have been generated for printing.',
+        title: 'Items Scheduled',
+        description: `${totalToSchedule} items have been scheduled for production.`,
       });
+      setScheduleAmounts({});
+      refetch();
     },
     onError: (error: any) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to generate barcodes',
+        description: error.message || 'Failed to schedule items',
         variant: 'destructive',
       });
     },
   });
 
-  const printWeekBarcodesMutation = useMutation({
-    mutationFn: async (weekNumber: number) => {
-      const response = await apiRequest(`/api/p2/print-week-barcodes/${weekNumber}`, {
-        method: 'POST',
-        body: {},
-      });
-      return response.json();
-    },
-    onSuccess: (data) => {
+  const handleScheduleGroup = (group: GroupedPart) => {
+    const amount = scheduleAmounts[group.key] || 0;
+    if (amount <= 0) {
       toast({
-        title: 'Week Barcodes Generated',
-        description: `Generated ${data.itemCount} barcode labels for Week ${data.weekNumber}.`,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to generate week barcodes',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const filteredItems = schedulingList.filter((item) => {
-    const matchesSearch = 
-      item.partNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.poNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
-    
-    return matchesSearch && matchesStatus;
-  });
-
-  const toggleItemSelection = (itemId: string) => {
-    const newSelected = new Set(selectedItems);
-    if (newSelected.has(itemId)) {
-      newSelected.delete(itemId);
-      const newEntries = { ...scheduleEntries };
-      delete newEntries[itemId];
-      setScheduleEntries(newEntries);
-    } else {
-      newSelected.add(itemId);
-      const item = schedulingList.find((i) => i.id === itemId);
-      if (item) {
-        setScheduleEntries({
-          ...scheduleEntries,
-          [itemId]: {
-            itemId,
-            quantity: item.remainingQuantity,
-            weekNumber: selectedWeek,
-            itemsPerDay: Math.ceil(item.remainingQuantity / 5),
-            workDays: 5,
-          },
-        });
-      }
-    }
-    setSelectedItems(newSelected);
-  };
-
-  const updateScheduleEntry = (itemId: string, field: keyof ScheduleEntry, value: number) => {
-    const entry = scheduleEntries[itemId];
-    if (!entry) return;
-
-    const updated = { ...entry, [field]: value };
-    
-    if (field === 'itemsPerDay' || field === 'workDays') {
-      updated.quantity = updated.itemsPerDay * updated.workDays;
-    } else if (field === 'quantity') {
-      updated.itemsPerDay = Math.ceil(value / updated.workDays);
-    }
-
-    setScheduleEntries({ ...scheduleEntries, [itemId]: updated });
-  };
-
-  const handleScheduleSelected = () => {
-    const entries = Array.from(selectedItems).map((id) => scheduleEntries[id]).filter(Boolean);
-    if (entries.length === 0) {
-      toast({
-        title: 'No Items Selected',
-        description: 'Please select items to schedule',
+        title: 'Enter Quantity',
+        description: 'Please enter the number of items to schedule.',
         variant: 'destructive',
       });
       return;
     }
-    scheduleMutation.mutate(entries);
-  };
-
-  const handlePrintBarcodes = () => {
-    const itemIds = Array.from(selectedItems);
-    if (itemIds.length === 0) {
+    if (amount > group.pendingCount) {
       toast({
-        title: 'No Items Selected',
-        description: 'Please select items to print barcodes',
+        title: 'Invalid Quantity',
+        description: `Only ${group.pendingCount} items are pending. Cannot schedule ${amount}.`,
         variant: 'destructive',
       });
       return;
     }
-    printBarcodesMutation.mutate(itemIds);
-  };
-
-  const selectAll = () => {
-    const allIds = new Set(filteredItems.map((item) => item.id));
-    setSelectedItems(allIds);
-    
-    const entries: Record<string, ScheduleEntry> = {};
-    filteredItems.forEach((item) => {
-      entries[item.id] = {
-        itemId: item.id,
-        quantity: item.remainingQuantity,
-        weekNumber: selectedWeek,
-        itemsPerDay: Math.ceil(item.remainingQuantity / 5),
-        workDays: 5,
-      };
+    scheduleMutation.mutate({
+      groupKey: group.key,
+      quantity: amount,
+      itemIds: group.itemIds,
     });
-    setScheduleEntries(entries);
   };
 
-  const clearSelection = () => {
-    setSelectedItems(new Set());
-    setScheduleEntries({});
+  const updateAmount = (key: string, value: number) => {
+    setScheduleAmounts(prev => ({ ...prev, [key]: Math.max(0, value) }));
   };
 
-  const getPriorityBadge = (priority: string) => {
-    const config: Record<string, { variant: 'default' | 'secondary' | 'destructive'; label: string }> = {
-      normal: { variant: 'secondary', label: 'Normal' },
-      high: { variant: 'default', label: 'High' },
-      urgent: { variant: 'destructive', label: 'Urgent' },
-    };
-    const c = config[priority] || config.normal;
-    return <Badge variant={c.variant}>{c.label}</Badge>;
-  };
-
-  const getStatusBadge = (status: string) => {
-    const config: Record<string, { variant: 'default' | 'secondary' | 'outline'; label: string; icon: typeof Clock }> = {
-      pending: { variant: 'outline', label: 'Pending', icon: Clock },
-      partial: { variant: 'secondary', label: 'Partial', icon: Clock },
-      scheduled: { variant: 'default', label: 'Scheduled', icon: CheckCircle },
-    };
-    const c = config[status] || config.pending;
-    const Icon = c.icon;
-    return (
-      <Badge variant={c.variant} className="gap-1">
-        <Icon className="h-3 w-3" />
-        {c.label}
-      </Badge>
-    );
+  const setMaxAmount = (group: GroupedPart) => {
+    setScheduleAmounts(prev => ({ ...prev, [group.key]: group.pendingCount }));
   };
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5" />
-              Production Scheduler
-            </CardTitle>
-            <CardDescription>
-              Schedule P2 items for weekly production
-            </CardDescription>
+        <CardTitle className="flex items-center gap-2">
+          <CalendarIcon className="h-5 w-5" />
+          Production Scheduling
+        </CardTitle>
+        <CardDescription>
+          Schedule parts for production. Enter quantities and click Schedule to move items to production.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Summary Stats */}
+        <div className="grid grid-cols-3 gap-4">
+          <Card className="bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-600" />
+                <span className="text-sm text-muted-foreground">Pending</span>
+              </div>
+              <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">{totalPending}</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <span className="text-sm text-muted-foreground">Scheduled</span>
+              </div>
+              <div className="text-2xl font-bold text-green-700 dark:text-green-400">{totalScheduled}</div>
+            </CardContent>
+          </Card>
+          <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="h-4 w-4 text-blue-600" />
+                <span className="text-sm text-muted-foreground">To Schedule</span>
+              </div>
+              <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">{totalToSchedule}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Search and Actions */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by PO, part number, or description..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+              data-testid="input-search"
+            />
           </div>
-          
-          <div className="flex items-center gap-2">
-            <Label>Week:</Label>
-            <Select 
-              value={selectedWeek.toString()} 
-              onValueChange={(v) => {
-                setSelectedWeek(parseInt(v));
-                if (activeTab === 'summary') {
-                  refetchWeekly();
-                }
-              }}
+
+          {totalToSchedule > 0 && (
+            <Button
+              onClick={() => scheduleAllMutation.mutate()}
+              disabled={scheduleAllMutation.isPending}
+              data-testid="button-schedule-all"
             >
-              <SelectTrigger className="w-32" data-testid="select-week">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {getWeekOptions().map((week) => (
-                  <SelectItem key={week.number} value={week.number.toString()}>
-                    Week {week.number}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <CalendarIcon className="h-4 w-4 mr-2" />
+              {scheduleAllMutation.isPending ? 'Scheduling...' : `Schedule All (${totalToSchedule})`}
+            </Button>
+          )}
+        </div>
+
+        {/* Parts Table */}
+        {isLoading ? (
+          <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        ) : filteredGroups.length === 0 ? (
+          <div className="text-center py-12 border rounded-lg border-dashed">
+            <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">No items available for scheduling</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Configure BOMs to generate schedulable items
+            </p>
+          </div>
+        ) : (
+          <div className="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>PO #</TableHead>
+                  <TableHead>Part Number</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-center">Pending</TableHead>
+                  <TableHead className="text-center">Scheduled</TableHead>
+                  <TableHead className="text-center w-32">Qty to Schedule</TableHead>
+                  <TableHead>Due Date</TableHead>
+                  <TableHead className="w-24"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredGroups.map((group) => {
+                  const amount = scheduleAmounts[group.key] || 0;
+                  const hasAmount = amount > 0;
+                  
+                  return (
+                    <TableRow 
+                      key={group.key}
+                      className={hasAmount ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
+                    >
+                      <TableCell className="font-medium text-blue-600">{group.poNumber}</TableCell>
+                      <TableCell className="font-mono">{group.partNumber}</TableCell>
+                      <TableCell className="max-w-[200px] truncate" title={group.description}>
+                        {group.description}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {group.pendingCount > 0 ? (
+                          <Badge 
+                            variant="outline" 
+                            className="bg-amber-50 text-amber-700 border-amber-300 cursor-pointer hover:bg-amber-100"
+                            onClick={() => setMaxAmount(group)}
+                            title="Click to schedule all"
+                          >
+                            {group.pendingCount}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {group.scheduledCount > 0 ? (
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+                            {group.scheduledCount}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center gap-1 justify-center">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={group.pendingCount}
+                            value={amount || ''}
+                            onChange={(e) => updateAmount(group.key, parseInt(e.target.value) || 0)}
+                            placeholder="0"
+                            className="w-20 text-center"
+                            disabled={group.pendingCount === 0}
+                            data-testid={`input-qty-${group.key}`}
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {group.dueDate ? (
+                          <span className="text-sm">
+                            {format(new Date(group.dueDate), 'MMM d, yyyy')}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant={hasAmount ? 'default' : 'outline'}
+                          onClick={() => handleScheduleGroup(group)}
+                          disabled={!hasAmount || scheduleMutation.isPending || group.pendingCount === 0}
+                          data-testid={`button-schedule-${group.key}`}
+                        >
+                          Schedule
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        {/* Help Text */}
+        <div className="text-sm text-muted-foreground flex items-start gap-2 bg-muted/50 p-3 rounded-md">
+          <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <div>
+            <strong>Tip:</strong> Click on the pending count badge to auto-fill the quantity. 
+            Enter quantities for multiple parts and click "Schedule All" to schedule them together.
           </div>
         </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
-            <TabsTrigger value="schedule" className="flex items-center gap-2">
-              <LayoutList className="h-4 w-4" />
-              Schedule Items
-            </TabsTrigger>
-            <TabsTrigger value="summary" className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Weekly Summary
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="summary" className="space-y-4 mt-4">
-            {/* Weekly Summary View */}
-            {weeklyLoading ? (
-              <div className="text-center py-12 text-muted-foreground">Loading weekly summary...</div>
-            ) : weeklyQueue ? (
-              <div className="space-y-4">
-                {/* Week Stats */}
-                <div className="grid grid-cols-4 gap-4">
-                  <Card className="bg-blue-50 dark:bg-blue-900/20">
-                    <CardContent className="p-4 text-center">
-                      <div className="text-3xl font-bold text-blue-600">{weeklyQueue.totalItems}</div>
-                      <div className="text-sm text-muted-foreground">Total Items</div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-green-50 dark:bg-green-900/20">
-                    <CardContent className="p-4 text-center">
-                      <div className="text-3xl font-bold text-green-600">{weeklyQueue.totalPOs}</div>
-                      <div className="text-sm text-muted-foreground">Purchase Orders</div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-orange-50 dark:bg-orange-900/20">
-                    <CardContent className="p-4 text-center">
-                      <div className="text-3xl font-bold text-orange-600">{weeklyQueue.itemsPerDay}</div>
-                      <div className="text-sm text-muted-foreground">Items/Day (avg)</div>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-purple-50 dark:bg-purple-900/20">
-                    <CardContent className="p-4">
-                      <Button 
-                        className="w-full" 
-                        onClick={() => printWeekBarcodesMutation.mutate(selectedWeek)}
-                        disabled={printWeekBarcodesMutation.isPending || weeklyQueue.totalItems === 0}
-                        data-testid="button-print-week-barcodes"
-                      >
-                        <Printer className="h-4 w-4 mr-2" />
-                        {printWeekBarcodesMutation.isPending ? 'Printing...' : 'Print Week\'s Barcodes'}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <Separator />
-
-                {/* PO Summaries */}
-                {weeklyQueue.poSummaries.length === 0 ? (
-                  <div className="text-center py-12 border rounded-lg border-dashed">
-                    <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">No items scheduled for Week {selectedWeek}</p>
-                    <p className="text-sm text-muted-foreground">Use the Schedule Items tab to add items</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <h4 className="font-semibold">Scheduled by PO</h4>
-                    {weeklyQueue.poSummaries.map((poSummary) => (
-                      <Card key={poSummary.poNumber} className="border">
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <span className="font-semibold text-blue-600">{poSummary.poNumber}</span>
-                              <span className="text-muted-foreground ml-2">
-                                ({poSummary.itemCount} items)
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-1">
-                              {poSummary.partNumbers.slice(0, 3).map((pn) => (
-                                <Badge key={pn} variant="outline" className="text-xs">
-                                  {pn}
-                                </Badge>
-                              ))}
-                              {poSummary.partNumbers.length > 3 && (
-                                <Badge variant="secondary" className="text-xs">
-                                  +{poSummary.partNumbers.length - 3} more
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">
-                No data available for Week {selectedWeek}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="schedule" className="space-y-4 mt-4">
-            {/* Filters and Actions */}
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2 flex-1">
-                <div className="relative flex-1 max-w-sm">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search parts..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9"
-                    data-testid="input-search"
-                  />
-                </div>
-
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-40" data-testid="select-filter-status">
-                    <Filter className="h-4 w-4 mr-2" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="partial">Partial</SelectItem>
-                    <SelectItem value="scheduled">Scheduled</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={selectAll}>
-                  Select All
-                </Button>
-                <Button variant="outline" size="sm" onClick={clearSelection}>
-                  Clear
-                </Button>
-              </div>
-            </div>
-
-            {/* Selection Summary */}
-            {selectedItems.size > 0 && (
-              <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <Badge variant="default" className="text-lg px-3 py-1">
-                        {selectedItems.size} items selected
-                      </Badge>
-                      <span className="text-sm text-muted-foreground">
-                        Total quantity: {
-                          Array.from(selectedItems)
-                            .map((id) => scheduleEntries[id]?.quantity || 0)
-                            .reduce((a, b) => a + b, 0)
-                        }
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={handlePrintBarcodes}
-                        disabled={printBarcodesMutation.isPending}
-                        data-testid="button-print-barcodes"
-                      >
-                        <Printer className="h-4 w-4 mr-2" />
-                        Print Barcodes
-                      </Button>
-                      <Button
-                        onClick={handleScheduleSelected}
-                        disabled={scheduleMutation.isPending}
-                        data-testid="button-schedule-selected"
-                      >
-                        <CalendarIcon className="h-4 w-4 mr-2" />
-                        {scheduleMutation.isPending ? 'Scheduling...' : 'Schedule Selected'}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Items Table */}
-            {isLoading ? (
-              <div className="text-center py-12 text-muted-foreground">Loading...</div>
-            ) : filteredItems.length === 0 ? (
-              <div className="text-center py-12 border rounded-lg border-dashed">
-                <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">No items available for scheduling</p>
-              </div>
-            ) : (
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12"></TableHead>
-                      <TableHead>PO #</TableHead>
-                      <TableHead>Part Number</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead className="text-center">Remaining</TableHead>
-                      <TableHead className="text-center">Schedule Qty</TableHead>
-                      <TableHead className="text-center">Items/Day</TableHead>
-                      <TableHead className="text-center">Days</TableHead>
-                      <TableHead>Due Date</TableHead>
-                      <TableHead>Priority</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredItems.map((item) => {
-                      const isSelected = selectedItems.has(item.id);
-                      const entry = scheduleEntries[item.id];
-
-                      return (
-                        <TableRow 
-                          key={item.id}
-                          className={isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
-                        >
-                          <TableCell>
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => toggleItemSelection(item.id)}
-                              data-testid={`checkbox-item-${item.id}`}
-                            />
-                          </TableCell>
-                          <TableCell className="font-medium">{item.poNumber}</TableCell>
-                          <TableCell>{item.partNumber}</TableCell>
-                          <TableCell className="max-w-[200px] truncate">{item.description}</TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="outline">{item.remainingQuantity}</Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {isSelected ? (
-                              <Input
-                                type="number"
-                                value={entry?.quantity || 0}
-                                onChange={(e) => updateScheduleEntry(item.id, 'quantity', parseInt(e.target.value) || 0)}
-                                className="w-20 text-center"
-                                max={item.remainingQuantity}
-                                data-testid={`input-schedule-qty-${item.id}`}
-                              />
-                            ) : (
-                              '-'
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {isSelected ? (
-                              <Input
-                                type="number"
-                                value={entry?.itemsPerDay || 0}
-                                onChange={(e) => updateScheduleEntry(item.id, 'itemsPerDay', parseInt(e.target.value) || 0)}
-                                className="w-16 text-center"
-                                data-testid={`input-items-per-day-${item.id}`}
-                              />
-                            ) : (
-                              '-'
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {isSelected ? (
-                              <Input
-                                type="number"
-                                value={entry?.workDays || 5}
-                                onChange={(e) => updateScheduleEntry(item.id, 'workDays', parseInt(e.target.value) || 1)}
-                                className="w-12 text-center"
-                                min={1}
-                                max={7}
-                                data-testid={`input-work-days-${item.id}`}
-                              />
-                            ) : (
-                              '-'
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {item.dueDate ? format(new Date(item.dueDate), 'MMM d, yyyy') : '-'}
-                          </TableCell>
-                          <TableCell>{getPriorityBadge(item.priority)}</TableCell>
-                          <TableCell>{getStatusBadge(item.status)}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
       </CardContent>
     </Card>
   );
-}
-
-function getCurrentWeekNumber(): number {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 1);
-  const diff = now.getTime() - start.getTime();
-  const oneWeek = 1000 * 60 * 60 * 24 * 7;
-  return Math.ceil(diff / oneWeek);
-}
-
-function getWeekOptions(): { number: number; label: string }[] {
-  const currentWeek = getCurrentWeekNumber();
-  const options = [];
-  for (let i = 0; i < 8; i++) {
-    options.push({
-      number: currentWeek + i,
-      label: `Week ${currentWeek + i}`,
-    });
-  }
-  return options;
 }

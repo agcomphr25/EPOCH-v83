@@ -6202,6 +6202,60 @@ export const cuttingPacketCompositions = pgTable('cutting_packet_compositions', 
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// Cutting Table - Packet BOMs (defines packet recipes with materials and yields)
+export const cuttingPacketBOMs = pgTable('cutting_packet_boms', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  packetType: text('packet_type').notNull(), // e.g., "CF_P2", "FG_P1"
+  partNumber: text('part_number').notNull(), // Part number for the packet
+  description: text('description'), // Description of the packet
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id), // Link to inventory item that triggered this BOM
+  squareMetersPerCut: real('square_meters_per_cut').notNull().default(0), // Square meters consumed per cut
+  yieldPerCut: integer('yield_per_cut').notNull().default(4), // Number of pieces yielded per cut
+  wasteFactor: real('waste_factor').notNull().default(0.05), // Waste factor percentage
+  isP2: boolean('is_p2').default(false), // Whether this is a P2 packet (for label generation)
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  partNumberIdx: index('cutting_packet_boms_part_number_idx').on(table.partNumber),
+  packetTypeIdx: index('cutting_packet_boms_packet_type_idx').on(table.packetType),
+}));
+
+// Cutting Table - Packet BOM Materials (materials needed for each packet BOM)
+export const cuttingPacketBOMMaterials = pgTable('cutting_packet_bom_materials', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  packetBomId: uuid('packet_bom_id').references(() => cuttingPacketBOMs.id, { onDelete: 'cascade' }).notNull(),
+  fabricType: text('fabric_type').notNull(), // Type of fabric required
+  commonName: text('common_name'), // Common/nickname for the fabric
+  quantityNeeded: integer('quantity_needed').notNull().default(1), // Quantity needed per packet
+  rollsRequired: integer('rolls_required').notNull().default(1), // Number of rolls needed (for multi-roll packets)
+  squareMetersRequired: real('square_meters_required'), // Square meters required from this material
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  packetBomIdx: index('cutting_packet_bom_materials_bom_idx').on(table.packetBomId),
+}));
+
+// Cutting Table - Packet BOM Cut Tracking (tracks actual cuts and yields for a packet BOM)
+export const cuttingPacketBOMCuts = pgTable('cutting_packet_bom_cuts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  packetBomId: uuid('packet_bom_id').references(() => cuttingPacketBOMs.id, { onDelete: 'cascade' }).notNull(),
+  fabricInventoryId: uuid('fabric_inventory_id').references(() => cuttingFabricInventory.id),
+  mfgQueueItemId: integer('mfg_queue_item_id'), // Link to manufacturing queue item
+  cutDate: timestamp('cut_date').notNull().defaultNow(),
+  squareMetersUsed: real('square_meters_used').notNull(), // Actual square meters used
+  piecesYielded: integer('pieces_yielded').notNull(), // Actual pieces yielded
+  rollNumber: text('roll_number'), // Roll number used for traceability
+  lotNumber: text('lot_number'), // Lot number for traceability
+  operatorName: text('operator_name'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  packetBomIdx: index('cutting_packet_bom_cuts_bom_idx').on(table.packetBomId),
+  dateIdx: index('cutting_packet_bom_cuts_date_idx').on(table.cutDate),
+}));
+
 // Cutting Table - Weekly Production Data
 export const cuttingWeeklyData = pgTable('cutting_weekly_data', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -6453,6 +6507,23 @@ export const insertCuttingPacketCompositionSchema = createInsertSchema(cuttingPa
   updatedAt: true,
 });
 
+export const insertCuttingPacketBOMSchema = createInsertSchema(cuttingPacketBOMs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCuttingPacketBOMMaterialSchema = createInsertSchema(cuttingPacketBOMMaterials).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCuttingPacketBOMCutSchema = createInsertSchema(cuttingPacketBOMCuts).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertCuttingPacketSessionSchema = createInsertSchema(cuttingPacketSessions).omit({
   id: true,
   createdAt: true,
@@ -6521,6 +6592,15 @@ export type InsertCuttingFabricInventory = z.infer<typeof insertCuttingFabricInv
 
 export type CuttingPacketComposition = typeof cuttingPacketCompositions.$inferSelect;
 export type InsertCuttingPacketComposition = z.infer<typeof insertCuttingPacketCompositionSchema>;
+
+export type CuttingPacketBOM = typeof cuttingPacketBOMs.$inferSelect;
+export type InsertCuttingPacketBOM = z.infer<typeof insertCuttingPacketBOMSchema>;
+
+export type CuttingPacketBOMMaterial = typeof cuttingPacketBOMMaterials.$inferSelect;
+export type InsertCuttingPacketBOMMaterial = z.infer<typeof insertCuttingPacketBOMMaterialSchema>;
+
+export type CuttingPacketBOMCut = typeof cuttingPacketBOMCuts.$inferSelect;
+export type InsertCuttingPacketBOMCut = z.infer<typeof insertCuttingPacketBOMCutSchema>;
 
 export type CuttingPacketSession = typeof cuttingPacketSessions.$inferSelect;
 export type InsertCuttingPacketSession = z.infer<typeof insertCuttingPacketSessionSchema>;

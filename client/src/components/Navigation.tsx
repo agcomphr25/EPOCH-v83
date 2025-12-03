@@ -391,12 +391,6 @@ export default function Navigation() {
     //     'Comprehensive pricing analysis for AG bottom metal orders by price tiers',
     // },
     {
-      path: '/p2-forms',
-      label: 'P2 Forms',
-      icon: ClipboardList,
-      description: 'P2 specialized forms and documentation',
-    },
-    {
       path: '/waste-management-form',
       label: 'Waste Management Form',
       icon: FileText,
@@ -465,40 +459,10 @@ export default function Navigation() {
 
   const trainingItems = [
     {
-      path: '/training',
-      label: 'All Training Modules',
+      path: '/training-control-center',
+      label: 'Training Control Center',
       icon: GraduationCap,
-      description: 'View all available training modules',
-    },
-    {
-      path: '/training-management',
-      label: 'Training Management',
-      icon: GraduationCap,
-      description: 'Manage training modules and content',
-    },
-    {
-      path: '/training-matrix',
-      label: 'Training Matrix',
-      icon: GraduationCap,
-      description: 'View employee training completion matrix',
-    },
-    {
-      path: '/training-matrix-import',
-      label: 'Import Training Matrix',
-      icon: FileSpreadsheet,
-      description: 'Import training matrix from Google Sheets',
-    },
-    {
-      path: '/training-matrix-manage',
-      label: 'Manage Training Assignments',
-      icon: GraduationCap,
-      description: 'Add, edit, and delete training assignments for employees',
-    },
-    {
-      path: '/p2-certifications',
-      label: 'P2 Certifications Manager',
-      icon: Award,
-      description: 'Manage P2 part certifications and track employee competency',
+      description: 'Unified training management: modules, matrix, and assignments',
     },
   ];
 
@@ -678,18 +642,10 @@ export default function Navigation() {
       description: 'Module 12: Customer PO management',
     },
     {
-      path: '/p2-purchase-orders',
-      label: 'P2 Purchase Orders',
-      icon: FileText,
-      description:
-        'P2 customer management and purchase orders with Part #, Quantity, Price',
-    },
-    {
-      path: '/p2-production-queue',
-      label: 'P2 Production Queue',
+      path: '/p2-control-center',
+      label: 'P2 Control Center',
       icon: Factory,
-      description:
-        'View production orders from BOMs, schedule layup dates, and track manufacturing progress',
+      description: 'Complete P2 workflow: orders, BOMs, scheduling, routing, and certifications',
     },
     {
       path: '/manufacturing-queue',
@@ -697,27 +653,6 @@ export default function Navigation() {
       icon: Factory,
       description:
         'View and manage manufactured parts queue by department (Cutting Table, CNC, Cores)',
-    },
-    {
-      path: '/cutting-table-mfg-queue',
-      label: 'Cutting Table Mfg Queue',
-      icon: Scissors,
-      description:
-        'Record cutting table production with fabric traceability and print barcode labels',
-    },
-    {
-      path: '/part-routing-management',
-      label: 'Part Routing Management',
-      icon: Route,
-      description:
-        'Configure department sequences and traceability requirements for manufactured parts',
-    },
-    {
-      path: '/p2-department-manager',
-      label: 'P2 Department Manager',
-      icon: ClipboardList,
-      description:
-        'Track serialized P2 items through manufacturing workflow with barcode scanning',
     },
     {
       path: '/po-products',
@@ -786,28 +721,10 @@ export default function Navigation() {
 
   const productionSchedulingItems = [
     {
-      path: '/cutting-table',
-      label: 'Cutting Table',
+      path: '/cutting-control-center',
+      label: 'Cutting Table Control Center',
       icon: Scissors,
-      description: 'Fabric cutting production planning for two production lines',
-    },
-    {
-      path: '/cutting-dashboard',
-      label: 'Cutting Dashboard',
-      icon: Scissors,
-      description: 'Fabric receiving, packet building, and stock target management',
-    },
-    {
-      path: '/fabric-inventory',
-      label: 'Fabric Inventory',
-      icon: Package,
-      description: 'Full CRUD management for cutting table fabric inventory',
-    },
-    {
-      path: '/p2-serialized-scheduler',
-      label: 'P2 Serialized Item Scheduler',
-      icon: Calendar,
-      description: 'Drag-and-drop scheduler for P2 serialized items with barcode labels',
+      description: 'Unified control for production, materials, and planning',
     },
     {
       path: '/production-tracking',

@@ -57,9 +57,7 @@ import PurchaseOrders from './pages/PurchaseOrders';
 import P2PurchaseOrders from './pages/P2PurchaseOrders';
 import P2ProductionQueuePage from './pages/P2ProductionQueuePage';
 import P2ControlCenter from './pages/P2ControlCenter';
-import CuttingTableProductionQueue from './pages/CuttingTableProductionQueue';
 import ManufacturingQueue from './pages/ManufacturingQueue';
-import CuttingTableManufacturingQueue from './pages/CuttingTableManufacturingQueue';
 import PartRoutingManagement from './pages/PartRoutingManagement';
 import P2DepartmentManager from './pages/P2DepartmentManager';
 import P2TravelerPage from './pages/P2TravelerPage';
@@ -150,8 +148,6 @@ import AdminPanelPage from './pages/AdminPanelPage';
 import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
 import PDFTemplateManager from './pages/PDFTemplateManager';
-import CuttingTable from './pages/CuttingTable';
-import CuttingTableDashboard from './pages/CuttingTableDashboard';
 import CuttingTableControlCenter from './pages/CuttingTableControlCenter';
 import FabricInventoryPage from './pages/FabricInventoryPage';
 import MetalAccessoriesTracker from './pages/MetalAccessoriesTracker';
@@ -504,8 +500,8 @@ function App() {
 
                   {/* Cutting Table Routes */}
                   <Route path="/cutting-control-center" component={CuttingTableControlCenter} />
-                  <Route path="/cutting-table" component={CuttingTable} />
-                  <Route path="/cutting-dashboard" component={CuttingTableDashboard} />
+                  <Route path="/cutting-table">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
+                  <Route path="/cutting-dashboard">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
                   <Route path="/fabric-inventory" component={FabricInventoryPage} />
 
                   {/* Employee Badge Routes */}
@@ -597,9 +593,9 @@ function App() {
                   <Route path="/p2/certificate/:id" component={P2CertificateViewer} />
                   <Route path="/p2/test-report/:id" component={P2TestReportViewer} />
                   <Route path="/p2-production-queue" component={P2ProductionQueuePage} />
-                  <Route path="/cutting-table-queue" component={CuttingTableProductionQueue} />
+                  <Route path="/cutting-table-queue">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
                   <Route path="/manufacturing-queue" component={ManufacturingQueue} />
-                  <Route path="/cutting-table-mfg-queue" component={CuttingTableManufacturingQueue} />
+                  <Route path="/cutting-table-mfg-queue">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
                   <Route path="/part-routing-management" component={PartRoutingManagement} />
                   <Route
                     path="/master-document-register"

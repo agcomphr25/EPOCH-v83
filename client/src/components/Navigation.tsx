@@ -699,13 +699,6 @@ export default function Navigation() {
         'View and manage manufactured parts queue by department (Cutting Table, CNC, Cores)',
     },
     {
-      path: '/cutting-table-mfg-queue',
-      label: 'Cutting Table Mfg Queue',
-      icon: Scissors,
-      description:
-        'Record cutting table production with fabric traceability and print barcode labels',
-    },
-    {
       path: '/part-routing-management',
       label: 'Part Routing Management',
       icon: Route,
@@ -790,24 +783,6 @@ export default function Navigation() {
       label: 'Cutting Table Control Center',
       icon: Scissors,
       description: 'Unified control for production, materials, and planning',
-    },
-    {
-      path: '/cutting-table',
-      label: 'Cutting Table (Legacy)',
-      icon: Scissors,
-      description: 'Fabric cutting production planning for two production lines',
-    },
-    {
-      path: '/cutting-dashboard',
-      label: 'Cutting Dashboard (Legacy)',
-      icon: Scissors,
-      description: 'Fabric receiving, packet building, and stock target management',
-    },
-    {
-      path: '/fabric-inventory',
-      label: 'Fabric Inventory (Legacy)',
-      icon: Package,
-      description: 'Full CRUD management for cutting table fabric inventory',
     },
     {
       path: '/p2-serialized-scheduler',

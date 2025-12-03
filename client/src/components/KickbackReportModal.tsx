@@ -46,6 +46,7 @@ const kickbackFormSchema = insertKickbackSchema.extend({
 });
 
 type KickbackFormData = z.infer<typeof kickbackFormSchema>;
+type KickbackDept = KickbackFormData['kickbackDept'];
 
 interface KickbackReportModalProps {
   open: boolean;
@@ -69,7 +70,7 @@ export default function KickbackReportModal({
     resolver: zodResolver(kickbackFormSchema),
     defaultValues: {
       orderId,
-      kickbackDept: department,
+      kickbackDept: (department || undefined) as KickbackDept,
       reportedBy,
       kickbackDate: new Date(),
       status: 'OPEN',
@@ -83,7 +84,7 @@ export default function KickbackReportModal({
     if (open) {
       form.reset({
         orderId,
-        kickbackDept: department,
+        kickbackDept: (department || undefined) as KickbackDept,
         reportedBy,
         kickbackDate: new Date(),
         status: 'OPEN',

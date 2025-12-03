@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   FileText,
   Zap,
+  TrendingDown,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -33,6 +34,7 @@ import { useLocation } from 'wouter';
 import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
+import KickbackReportModal from '@/components/KickbackReportModal';
 
 export default function FinishQueuePage() {
   // Multi-select state
@@ -44,6 +46,8 @@ export default function FinishQueuePage() {
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(
     null
   );
+  const [kickbackModalOpen, setKickbackModalOpen] = useState(false);
+  const [selectedOrderForKickback, setSelectedOrderForKickback] = useState<{orderId: string, department: string} | null>(null);
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
@@ -634,6 +638,24 @@ export default function FinishQueuePage() {
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
                               </Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedOrderForKickback({
+                                    orderId: order.orderId,
+                                    department: 'Finish'
+                                  });
+                                  setKickbackModalOpen(true);
+                                }}
+                                title="Report Kickback"
+                                className="h-6 px-2 text-xs"
+                                data-testid={`button-report-kickback-${order.orderId}`}
+                              >
+                                <TrendingDown className="h-3 w-3 mr-1" />
+                                Report Kickback
+                              </Button>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -748,6 +770,24 @@ export default function FinishQueuePage() {
                                 <FileText className="w-3 h-3 mr-1" />
                                 Sales Order
                               </Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedOrderForKickback({
+                                    orderId: order.orderId,
+                                    department: 'Finish'
+                                  });
+                                  setKickbackModalOpen(true);
+                                }}
+                                title="Report Kickback"
+                                className="h-6 px-2 text-xs"
+                                data-testid={`button-report-kickback-${order.orderId}`}
+                              >
+                                <TrendingDown className="h-3 w-3 mr-1" />
+                                Report Kickback
+                              </Button>
                               {hasKickbacks(order.orderId) && (
                                 <Badge
                                   variant="destructive"
@@ -1380,6 +1420,17 @@ export default function FinishQueuePage() {
         isOpen={salesOrderModalOpen}
         onClose={() => setSalesOrderModalOpen(false)}
         orderId={selectedOrderId}
+      />
+
+      {/* Kickback Report Modal */}
+      <KickbackReportModal
+        open={kickbackModalOpen}
+        onOpenChange={(open) => {
+          setKickbackModalOpen(open);
+          if (!open) setSelectedOrderForKickback(null);
+        }}
+        orderId={selectedOrderForKickback?.orderId || ''}
+        department={selectedOrderForKickback?.department || ''}
       />
     </div>
   );

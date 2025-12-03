@@ -103,44 +103,18 @@ export default function CNCQueuePage() {
     return highestPriority;
   };
 
-  // Create kickback mutation
-  const createKickbackMutation = useMutation({
-    mutationFn: (kickbackData: any) =>
-      fetch('/api/kickbacks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(kickbackData),
-      }).then((res) => res.json()),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/kickbacks'] });
-      toast({
-        title: 'Kickback reported',
-        description: 'Kickback report has been created successfully',
-      });
-    },
-    onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to create kickback report',
-        variant: 'destructive',
-      });
-    },
-  });
+  // Function to open kickback modal for a specific order
+  const handleReportKickback = (orderId: string) => {
+    setSelectedOrderForKickback({
+      orderId,
+      department: 'CNC'
+    });
+    setKickbackModalOpen(true);
+  };
 
-  // Function to handle kickback badge click - now creates a new kickback
-  const handleKickbackClick = (orderId: string) => {
-    const kickbackData = {
-      orderId: orderId,
-      kickbackDept: 'CNC', // Current department
-      reasonCode: 'QUALITY_ISSUE', // Default reason
-      priority: 'MEDIUM', // Default priority
-      kickbackDate: new Date().toISOString(),
-      reportedBy: 'Production Floor', // Default reporter
-      reasonText: `Issue reported from CNC department for order ${orderId}`,
-      status: 'OPEN',
-    };
-
-    createKickbackMutation.mutate(kickbackData);
+  // Navigate to kickback tracking page
+  const handleKickbackBadgeClick = (orderId: string) => {
+    setLocation('/kickback-tracking');
   };
 
   // Function to handle sales order modal
@@ -851,10 +825,11 @@ export default function CNCQueuePage() {
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleKickbackClick(order.orderId);
+                              handleReportKickback(order.orderId);
                             }}
                             title="Report Kickback"
                             className="h-6 w-6 p-0"
+                            data-testid={`button-report-kickback-${order.orderId}`}
                           >
                             <TrendingDown className="h-3 w-3" />
                           </Button>
@@ -873,7 +848,7 @@ export default function CNCQueuePage() {
                               }`}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleKickbackClick(order.orderId);
+                                handleKickbackBadgeClick(order.orderId);
                               }}
                             >
                               <AlertTriangle className="w-3 h-3 mr-1" />
@@ -1211,6 +1186,17 @@ export default function CNCQueuePage() {
         isOpen={salesOrderModalOpen}
         onClose={() => setSalesOrderModalOpen(false)}
         orderId={selectedOrderId}
+      />
+
+      {/* Kickback Report Modal */}
+      <KickbackReportModal
+        open={kickbackModalOpen}
+        onOpenChange={(open) => {
+          setKickbackModalOpen(open);
+          if (!open) setSelectedOrderForKickback(null);
+        }}
+        orderId={selectedOrderForKickback?.orderId || ''}
+        department={selectedOrderForKickback?.department || ''}
       />
     </div>
   );

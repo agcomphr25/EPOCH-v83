@@ -56,6 +56,7 @@ import ManageGroups from './pages/ManageGroups';
 import PurchaseOrders from './pages/PurchaseOrders';
 import P2PurchaseOrders from './pages/P2PurchaseOrders';
 import P2ProductionQueuePage from './pages/P2ProductionQueuePage';
+import P2ControlCenter from './pages/P2ControlCenter';
 import CuttingTableProductionQueue from './pages/CuttingTableProductionQueue';
 import ManufacturingQueue from './pages/ManufacturingQueue';
 import CuttingTableManufacturingQueue from './pages/CuttingTableManufacturingQueue';
@@ -586,6 +587,7 @@ function App() {
                   />
 
                   {/* P2 Forms Routes */}
+                  <Route path="/p2-control-center" component={P2ControlCenter} />
                   <Route path="/p2-forms" component={P2Forms} />
                   <Route path="/p2-traveler" component={P2TravelerPage} />
                   <Route path="/p2-traveler-viewer" component={P2TravelerViewer} />

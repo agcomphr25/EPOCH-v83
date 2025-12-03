@@ -428,6 +428,51 @@ router.post('/complete-task', async (req: Request, res: Response) => {
     const nextIndex = currentIndex + 1;
     const nextDepartment = departmentSequence[nextIndex];
 
+    // TOLERANCE GATE ENFORCEMENT: If progressing FROM Final QC, check for failed inspections
+    if (currentDepartment === 'Final QC') {
+      // Check if item has any failed inspection data in metadata
+      const itemMetadata = serializedItem.metadata as any;
+      const hasFinalQCFailures = itemMetadata?.finalQcFailures?.length > 0 || 
+                                  itemMetadata?.hasToleranceDeviation === true;
+      
+      if (hasFinalQCFailures) {
+        // Check if tolerance authorization has been recorded on the item
+        const hasToleranceAuthorization = itemMetadata?.toleranceDeviationApproved === true;
+        
+        if (!hasToleranceAuthorization) {
+          // Also check PO for tolerance authorizer if poItemId exists
+          let poHasAuthorizer = false;
+          
+          if (serializedItem.poItemId) {
+            const { p2PurchaseOrders, p2PurchaseOrderItems } = await import('../../schema');
+            
+            const poItem = await db.query.p2PurchaseOrderItems.findFirst({
+              where: eq(p2PurchaseOrderItems.id, serializedItem.poItemId),
+            });
+            
+            if (poItem) {
+              const po = await db.query.p2PurchaseOrders.findFirst({
+                where: eq(p2PurchaseOrders.id, poItem.poId),
+              });
+              poHasAuthorizer = !!(po as any)?.toleranceAuthorizerId;
+            }
+          }
+          
+          if (!poHasAuthorizer) {
+            return res.status(403).json({
+              error: 'Tolerance authorization required',
+              gatingFailed: true,
+              message: 'This item has failed Final QC inspections. Tolerance authorizer signature is required before the item can proceed. ' +
+                       'Please use the Tolerance Gate approval workflow.',
+              currentDepartment,
+              requiresToleranceAuth: true,
+              serializedItemId: serializedItem.id,
+            });
+          }
+        }
+      }
+    }
+
     // Update department completion timestamp
     const completionField = `${currentDepartment.toLowerCase().replace(/[^a-z]/g, '')}CompletedAt`;
     const updates: any = {

@@ -299,17 +299,66 @@ router.post('/execute-badge-action', async (req, res) => {
         }
 
         case 'P2_DEPARTMENT_PROGRESS': {
-          const { p2SerializedItems } = await import('../../schema');
+          const { p2SerializedItems, p2PurchaseOrderItems, p2PurchaseOrders } = await import('../../schema');
+          
+          // Get current item to check for tolerance gate
+          const currentItem = await db
+            .select()
+            .from(p2SerializedItems)
+            .where(eq(p2SerializedItems.barcode, targetBarcode))
+            .limit(1);
+          
+          if (!currentItem.length) {
+            throw new Error(`P2 item ${targetBarcode} not found`);
+          }
+          
+          const item = currentItem[0];
+          const fromDepartment = item.currentDepartment;
+          const toDepartment = actionConfig.departmentName;
+          
+          // TOLERANCE GATE ENFORCEMENT: If progressing FROM Final QC, check for failed inspections
+          if (fromDepartment === 'Final QC') {
+            const itemMetadata = item.metadata as any;
+            const hasFinalQCFailures = itemMetadata?.finalQcFailures?.length > 0 || 
+                                        itemMetadata?.hasToleranceDeviation === true;
+            
+            if (hasFinalQCFailures) {
+              // Check if tolerance authorization has been recorded
+              const hasToleranceAuthorization = itemMetadata?.toleranceDeviationApproved === true;
+              
+              if (!hasToleranceAuthorization) {
+                // Check PO for tolerance authorizer
+                if (item.poItemId) {
+                  const poItem = await db.query.p2PurchaseOrderItems.findFirst({
+                    where: eq(p2PurchaseOrderItems.id, item.poItemId),
+                  });
+                  
+                  if (poItem) {
+                    const po = await db.query.p2PurchaseOrders.findFirst({
+                      where: eq(p2PurchaseOrders.id, poItem.poId),
+                    });
+                    
+                    if (!(po as any)?.toleranceAuthorizerId) {
+                      throw new Error('Tolerance authorization required for items with QC failures. Please use the Tolerance Gate approval workflow.');
+                    }
+                  }
+                } else {
+                  throw new Error('Tolerance authorization required for items with QC failures. Please use the Tolerance Gate approval workflow.');
+                }
+              }
+            }
+          }
+          
           const updatedItems = await db
             .update(p2SerializedItems)
-            .set({ currentDepartment: actionConfig.departmentName })
+            .set({ currentDepartment: toDepartment })
             .where(eq(p2SerializedItems.barcode, targetBarcode))
             .returning();
           
           if (!updatedItems.length) {
             throw new Error(`Failed to update P2 item ${targetBarcode} - item may have been deleted`);
           }
-          executionResult = { success: true, message: 'P2 item department updated' };
+          executionResult = { success: true, message: `P2 item advanced from ${fromDepartment} to ${toDepartment}` };
           break;
         }
 

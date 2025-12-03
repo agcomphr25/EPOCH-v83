@@ -86,7 +86,7 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
 
   const saveBOMMutation = useMutation({
     mutationFn: async (data: { partId: string; bomItems: BOMItem[]; poItemId?: string; partNumber?: string }) => {
-      const response = await apiRequest(`/api/p2/bom/${data.partId}`, {
+      return await apiRequest(`/api/p2/bom/${data.partId}`, {
         method: 'POST',
         body: { 
           bomItems: data.bomItems,
@@ -94,7 +94,6 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
           partNumber: data.partNumber
         },
       });
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });

@@ -3564,6 +3564,8 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   toleranceAuthorizerId: integer('tolerance_authorizer_id').references(() => employees.id),
   toleranceAuthorizerName: text('tolerance_authorizer_name'), // Denormalized for display
   toleranceNotes: text('tolerance_notes'), // Special tolerance requirements or notes
+  // BOM configuration tracking
+  bomConfigured: boolean('bom_configured').default(false), // True when all line items have BOMs configured
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

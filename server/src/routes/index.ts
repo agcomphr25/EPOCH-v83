@@ -1600,12 +1600,173 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Get P2 PO with line items and BOM status
+  app.get('/api/p2-purchase-orders/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { storage } = await import('../../storage');
+      const { db } = await import('../../db');
+      const { bomDefinitions, bomItems: bomItemsTable } = await import('../../schema');
+      const { eq, and } = await import('drizzle-orm');
+      
+      const po = await storage.getP2PurchaseOrder(parseInt(id), { includeItems: true });
+      
+      if (!po) {
+        return res.status(404).json({ error: 'P2 Purchase Order not found' });
+      }
+      
+      // Get line items with BOM status
+      const lineItems = await Promise.all((po.items || []).map(async (item: any) => {
+        // Check if a BOM exists for this part number
+        const existingBOM = await db
+          .select()
+          .from(bomDefinitions)
+          .where(and(
+            eq(bomDefinitions.sku, item.partNumber),
+            eq(bomDefinitions.isActive, true)
+          ))
+          .limit(1);
+        
+        let bomItemsList: any[] = [];
+        if (existingBOM.length > 0) {
+          bomItemsList = await db
+            .select()
+            .from(bomItemsTable)
+            .where(and(
+              eq(bomItemsTable.bomId, existingBOM[0].id),
+              eq(bomItemsTable.isActive, true)
+            ));
+        }
+        
+        return {
+          ...item,
+          hasBOM: existingBOM.length > 0,
+          bomDefinitionId: existingBOM[0]?.id || null,
+          bomItems: bomItemsList.map(bi => ({
+            id: bi.id,
+            partNumber: bi.partName,
+            description: bi.notes || '',
+            quantity: bi.quantity,
+            isManufactured: bi.itemType === 'manufactured',
+            firstDepartment: bi.firstDept
+          }))
+        };
+      }));
+      
+      res.json({
+        ...po,
+        lineItems
+      });
+    } catch (_error) {
+      console.error('Get P2 Purchase Order error:', _error);
+      res.status(500).json({ error: 'Failed to fetch P2 Purchase Order' });
+    }
+  });
+
   app.post('/api/p2/bom/:partId', async (req, res) => {
     try {
       const { partId } = req.params;
-      const { bomItems } = req.body;
-      console.log(`Saving BOM for part ${partId}:`, bomItems);
-      res.json({ success: true, partId, bomItems });
+      const { bomItems: bomItemsInput, poItemId, partNumber } = req.body;
+      
+      const { db } = await import('../../db');
+      const { bomDefinitions, bomItems: bomItemsTable, p2PurchaseOrders, p2PurchaseOrderItems } = await import('../../schema');
+      const { eq, and, sql } = await import('drizzle-orm');
+      
+      console.log(`Saving BOM for part ${partId}, partNumber: ${partNumber}:`, bomItemsInput);
+      
+      // First check if a BOM definition already exists for this part number
+      let bomDef: any = null;
+      if (partNumber) {
+        const existing = await db
+          .select()
+          .from(bomDefinitions)
+          .where(eq(bomDefinitions.sku, partNumber))
+          .limit(1);
+        
+        if (existing.length > 0) {
+          bomDef = existing[0];
+        }
+      }
+      
+      // Create new BOM definition if it doesn't exist
+      if (!bomDef) {
+        const [newBom] = await db.insert(bomDefinitions).values({
+          sku: partNumber || `P2-PART-${partId}`,
+          modelName: partNumber || `Part ${partId}`,
+          revision: 'A',
+          description: `BOM for P2 part ${partNumber || partId}`,
+          isActive: true
+        }).returning();
+        bomDef = newBom;
+      }
+      
+      // Clear existing BOM items for this definition
+      await db
+        .update(bomItemsTable)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(bomItemsTable.bomId, bomDef.id));
+      
+      // Insert new BOM items
+      const insertedItems = [];
+      for (const item of bomItemsInput || []) {
+        const [inserted] = await db.insert(bomItemsTable).values({
+          bomId: bomDef.id,
+          partName: item.partNumber,
+          quantity: item.quantity || 1,
+          firstDept: item.firstDepartment || 'Layup',
+          itemType: item.isManufactured ? 'manufactured' : 'material',
+          notes: item.description || '',
+          isActive: true
+        }).returning();
+        insertedItems.push(inserted);
+      }
+      
+      // Update the PO's bomConfigured flag if we have a poItemId
+      if (poItemId) {
+        const [poItem] = await db
+          .select()
+          .from(p2PurchaseOrderItems)
+          .where(eq(p2PurchaseOrderItems.id, parseInt(poItemId)))
+          .limit(1);
+        
+        if (poItem) {
+          // Check if all items for this PO have BOMs
+          const allItems = await db
+            .select()
+            .from(p2PurchaseOrderItems)
+            .where(eq(p2PurchaseOrderItems.poId, poItem.poId));
+          
+          let allHaveBOMs = true;
+          for (const pi of allItems) {
+            const hasBOM = await db
+              .select()
+              .from(bomDefinitions)
+              .where(and(
+                eq(bomDefinitions.sku, pi.partNumber),
+                eq(bomDefinitions.isActive, true)
+              ))
+              .limit(1);
+            if (hasBOM.length === 0) {
+              allHaveBOMs = false;
+              break;
+            }
+          }
+          
+          if (allHaveBOMs) {
+            await db
+              .update(p2PurchaseOrders)
+              .set({ bomConfigured: true })
+              .where(eq(p2PurchaseOrders.id, poItem.poId));
+          }
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        partId, 
+        bomDefinitionId: bomDef.id,
+        bomItems: insertedItems
+      });
     } catch (_error) {
       console.error('P2 BOM save error:', _error);
       res.status(500).json({ error: 'Failed to save BOM' });

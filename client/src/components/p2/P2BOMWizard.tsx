@@ -77,10 +77,14 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
   });
 
   const saveBOMMutation = useMutation({
-    mutationFn: async (data: { partId: string; bomItems: BOMItem[] }) => {
+    mutationFn: async (data: { partId: string; bomItems: BOMItem[]; poItemId?: string; partNumber?: string }) => {
       const response = await apiRequest(`/api/p2/bom/${data.partId}`, {
         method: 'POST',
-        body: { bomItems: data.bomItems },
+        body: { 
+          bomItems: data.bomItems,
+          poItemId: data.poItemId,
+          partNumber: data.partNumber
+        },
       });
       return response.json();
     },
@@ -184,6 +188,8 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
     await saveBOMMutation.mutateAsync({
       partId: currentPart.id,
       bomItems: currentBOMItems,
+      poItemId: currentPart.id,
+      partNumber: currentPart.partNumber
     });
 
     const updatedParts = [...partsNeedingBOM];

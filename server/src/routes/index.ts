@@ -1573,16 +1573,24 @@ export function registerRoutes(app: Express): Server {
       const poStatuses = pos.map((po: any) => {
         const poItems = serializedItems.filter((s: any) => s.poId === po.id);
         
-        const completedItems = poItems.filter((s: any) => s.productionStatus === 'COMPLETED' || s.productionStatus === 'SHIPPED').length;
-        const inProductionItems = poItems.filter((s: any) => 
-          s.productionStatus && !['PENDING', 'SCHEDULED', 'COMPLETED', 'SHIPPED'].includes(s.productionStatus)
-        ).length;
-        const pendingItems = poItems.filter((s: any) => s.productionStatus === 'PENDING' || s.productionStatus === 'SCHEDULED').length;
+        // Use actual column names: status (ACTIVE/COMPLETED/SCRAPPED/HOLD) and currentDepartment
+        const completedItems = poItems.filter((s: any) => s.status === 'COMPLETED').length;
+        const inProductionItems = poItems.filter((s: any) => {
+          if (s.status !== 'ACTIVE') return false;
+          const dept = s.currentDepartment || '';
+          // In production if past Pending Layup stage
+          return dept !== 'Pending Layup' && dept !== '';
+        }).length;
+        const pendingItems = poItems.filter((s: any) => {
+          if (s.status !== 'ACTIVE') return false;
+          const dept = s.currentDepartment || '';
+          return dept === 'Pending Layup' || dept === '';
+        }).length;
         
         return {
           id: po.id,
           poNumber: po.poNumber,
-          customerName: po.customerName || 'Unknown', // Use denormalized customer name from PO
+          customerName: po.customerName || 'Unknown',
           dueDate: po.expectedDelivery,
           totalItems: poItems.length,
           completedItems,
@@ -1607,21 +1615,30 @@ export function registerRoutes(app: Express): Server {
       const serializedItems = await storage.getP2SerializedItems({});
       const pos = await storage.getAllP2PurchaseOrders();
       
+      // Filter for items that are ACTIVE and either pending layup or in early production stages
+      // Items are schedulable if they haven't completed production yet
       const schedulingList = serializedItems
-        .filter((s: any) => s.productionStatus === 'PENDING' || s.productionStatus === 'SCHEDULED')
+        .filter((s: any) => {
+          // Must be ACTIVE (not completed, scrapped, or on hold)
+          if (s.status !== 'ACTIVE') return false;
+          // Schedulable if in Pending Layup or Layup department (early stages)
+          const dept = s.currentDepartment || '';
+          return dept === 'Pending Layup' || dept === 'Layup' || dept === '' || !dept;
+        })
         .map((s: any) => {
           const po = pos.find((p: any) => p.id === s.poId);
+          const isScheduled = s.currentDepartment === 'Layup';
           return {
             id: s.id,
-            poNumber: po?.poNumber || 'Unknown',
+            poNumber: s.poNumber || po?.poNumber || 'Unknown',
             partNumber: s.partNumber || 'Unknown',
-            description: s.description || '',
+            description: s.partName || '',
             totalQuantity: 1,
-            scheduledQuantity: s.productionStatus === 'SCHEDULED' ? 1 : 0,
-            remainingQuantity: s.productionStatus === 'SCHEDULED' ? 0 : 1,
-            dueDate: po?.dueDate,
-            priority: s.priority || 'normal',
-            status: s.productionStatus === 'SCHEDULED' ? 'scheduled' : 'pending'
+            scheduledQuantity: isScheduled ? 1 : 0,
+            remainingQuantity: isScheduled ? 0 : 1,
+            dueDate: po?.expectedDelivery || po?.dueDate,
+            priority: 'normal',
+            status: isScheduled ? 'scheduled' : 'pending'
           };
         });
       
@@ -1882,19 +1899,25 @@ export function registerRoutes(app: Express): Server {
               for (const lineItem of allItems) {
                 // Create one serialized item per quantity
                 for (let i = 0; i < (lineItem.quantity || 1); i++) {
-                  const serialNumber = `${po?.poNumber || 'P2'}-${lineItem.partNumber}-${String(i + 1).padStart(3, '0')}`;
+                  const sequenceNum = i + 1;
+                  const serialNumber = `${po?.poNumber || 'P2'}-${lineItem.partNumber}-${String(sequenceNum).padStart(3, '0')}`;
+                  const barcode = serialNumber; // Use same format for barcode
                   
                   await db.insert(p2SerializedItems).values({
                     id: uuidv4(),
                     poId: poItem.poId,
                     poItemId: lineItem.id,
-                    poNumber: po?.poNumber || null,
+                    poNumber: po?.poNumber || 'Unknown',
                     partNumber: lineItem.partNumber,
-                    description: lineItem.description || '',
+                    partName: lineItem.partName || lineItem.partNumber,
+                    customerId: po?.customerId || 'Unknown',
+                    customerName: po?.customerName || 'Unknown',
+                    sequenceNumber: sequenceNum,
                     serialNumber,
-                    productionStatus: 'PENDING',
-                    currentDepartment: null,
-                    priority: 'normal',
+                    barcode,
+                    status: 'ACTIVE',
+                    currentDepartment: 'Pending Layup',
+                    currentStageIndex: 0,
                     createdAt: new Date(),
                     updatedAt: new Date()
                   });

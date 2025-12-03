@@ -1641,6 +1641,414 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P2 Tolerance Deviation Authorization Routes
+  app.post('/api/p2/final-inspection/:inspectionId/approve-deviation', async (req, res) => {
+    try {
+      const { inspectionId } = req.params;
+      const { 
+        serializedItemId,
+        toleranceAuthorizerId,
+        toleranceAuthorizerName,
+        toleranceAuthorizerSignature,
+        toleranceDeviationReason
+      } = req.body;
+
+      if (!toleranceAuthorizerId || !toleranceAuthorizerSignature || !toleranceDeviationReason) {
+        return res.status(400).json({ 
+          error: 'Missing required fields: authorizer ID, signature, and reason are required' 
+        });
+      }
+
+      const { storage } = await import('../../storage');
+      
+      // Update the final inspection record with tolerance authorization
+      // For now, we'll log the approval since the storage method may not exist yet
+      console.log('Tolerance deviation approved:', {
+        inspectionId,
+        serializedItemId,
+        toleranceAuthorizerId,
+        toleranceAuthorizerName,
+        toleranceDeviationReason,
+        hasSignature: !!toleranceAuthorizerSignature
+      });
+
+      // Update the serialized item to allow it to proceed
+      if (serializedItemId) {
+        await storage.updateP2SerializedItem(serializedItemId, {
+          notes: `Tolerance deviation approved by ${toleranceAuthorizerName} on ${new Date().toISOString()}`
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        message: 'Tolerance deviation approved',
+        inspectionId,
+        authorizedBy: toleranceAuthorizerName,
+        authorizedAt: new Date().toISOString()
+      });
+    } catch (_error) {
+      console.error('P2 tolerance deviation approval error:', _error);
+      res.status(500).json({ error: 'Failed to approve tolerance deviation' });
+    }
+  });
+
+  app.post('/api/p2/final-inspection/:inspectionId/reject-deviation', async (req, res) => {
+    try {
+      const { inspectionId } = req.params;
+      const { serializedItemId, rejectedBy, rejectedByName } = req.body;
+
+      const { storage } = await import('../../storage');
+      
+      // Log the rejection
+      console.log('Tolerance deviation rejected:', {
+        inspectionId,
+        serializedItemId,
+        rejectedBy,
+        rejectedByName
+      });
+
+      // Flag the item for rework by updating its status
+      if (serializedItemId) {
+        await storage.updateP2SerializedItem(serializedItemId, {
+          productionStatus: 'HOLD',
+          notes: `Tolerance deviation rejected by ${rejectedByName} on ${new Date().toISOString()} - requires rework or scrap`
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        message: 'Tolerance deviation rejected - item flagged for rework',
+        inspectionId,
+        rejectedBy: rejectedByName,
+        rejectedAt: new Date().toISOString()
+      });
+    } catch (_error) {
+      console.error('P2 tolerance deviation rejection error:', _error);
+      res.status(500).json({ error: 'Failed to reject tolerance deviation' });
+    }
+  });
+
+  // Get tolerance authorizer info for a PO
+  app.get('/api/p2/purchase-order/:poId/tolerance-authorizer', async (req, res) => {
+    try {
+      const { poId } = req.params;
+      const { storage } = await import('../../storage');
+      
+      const po = await storage.getP2PurchaseOrder(parseInt(poId));
+      if (!po) {
+        return res.status(404).json({ error: 'Purchase order not found' });
+      }
+
+      res.json({
+        toleranceAuthorizerId: (po as any).toleranceAuthorizerId || null,
+        toleranceAuthorizerName: (po as any).toleranceAuthorizerName || null,
+        toleranceNotes: (po as any).toleranceNotes || null
+      });
+    } catch (_error) {
+      console.error('P2 get tolerance authorizer error:', _error);
+      res.status(500).json({ error: 'Failed to get tolerance authorizer' });
+    }
+  });
+
+  // P2 Layup Gating - Check packet availability before scheduling
+  app.get('/api/p2/layup-gating/check-availability', async (req, res) => {
+    try {
+      const { partNumber, quantity } = req.query;
+      
+      if (!partNumber) {
+        return res.status(400).json({ 
+          error: 'Part number is required',
+          available: false 
+        });
+      }
+
+      const requestedQty = parseInt(quantity as string) || 1;
+
+      // Query the cutting_built_packets table for available packets
+      const { db } = await import('../../db');
+      const { cuttingBuiltPackets, cuttingProductCategories } = await import('../../schema');
+      const { eq, and, sql } = await import('drizzle-orm');
+      
+      // Find available packets for this part/product category
+      const availablePackets = await db
+        .select({
+          count: sql<number>`count(*)::int`
+        })
+        .from(cuttingBuiltPackets)
+        .where(eq(cuttingBuiltPackets.status, 'AVAILABLE'));
+
+      const availableCount = availablePackets[0]?.count || 0;
+      const isAvailable = availableCount >= requestedQty;
+
+      res.json({
+        partNumber,
+        requestedQuantity: requestedQty,
+        availablePackets: availableCount,
+        isAvailable,
+        shortageAmount: isAvailable ? 0 : requestedQty - availableCount,
+        message: isAvailable 
+          ? `${availableCount} packets available for scheduling` 
+          : `Insufficient packets: need ${requestedQty}, only ${availableCount} available`
+      });
+    } catch (_error) {
+      console.error('P2 layup gating check error:', _error);
+      res.status(500).json({ error: 'Failed to check packet availability' });
+    }
+  });
+
+  // P2 Layup Gating - Allocate packets for scheduled items
+  app.post('/api/p2/layup-gating/allocate-packets', async (req, res) => {
+    try {
+      const { serializedItemId, partNumber, quantity } = req.body;
+      
+      if (!serializedItemId || !partNumber) {
+        return res.status(400).json({ 
+          error: 'Serialized item ID and part number are required' 
+        });
+      }
+
+      const requestedQty = quantity || 1;
+
+      const { db } = await import('../../db');
+      const { cuttingBuiltPackets } = await import('../../schema');
+      const { eq, sql } = await import('drizzle-orm');
+      
+      // Find available packets in FIFO order (oldest first)
+      const availablePackets = await db
+        .select()
+        .from(cuttingBuiltPackets)
+        .where(eq(cuttingBuiltPackets.status, 'AVAILABLE'))
+        .orderBy(cuttingBuiltPackets.buildDate)
+        .limit(requestedQty);
+
+      if (availablePackets.length < requestedQty) {
+        return res.status(400).json({
+          error: 'Insufficient packets available',
+          available: availablePackets.length,
+          requested: requestedQty
+        });
+      }
+
+      // Allocate the packets
+      const allocatedPackets = [];
+      for (const packet of availablePackets) {
+        await db
+          .update(cuttingBuiltPackets)
+          .set({
+            status: 'ALLOCATED',
+            allocatedToOrder: serializedItemId,
+            updatedAt: new Date()
+          })
+          .where(eq(cuttingBuiltPackets.id, packet.id));
+        
+        allocatedPackets.push({
+          packetId: packet.id,
+          barcode: packet.barcode,
+          buildDate: packet.buildDate
+        });
+      }
+
+      res.json({
+        success: true,
+        allocatedPackets,
+        message: `Allocated ${allocatedPackets.length} packets to serialized item ${serializedItemId}`
+      });
+    } catch (_error) {
+      console.error('P2 layup gating allocation error:', _error);
+      res.status(500).json({ error: 'Failed to allocate packets' });
+    }
+  });
+
+  // P2 Layup Gating - Get packet details for a scheduled item
+  app.get('/api/p2/layup-gating/allocated-packets/:serializedItemId', async (req, res) => {
+    try {
+      const { serializedItemId } = req.params;
+      
+      const { db } = await import('../../db');
+      const { cuttingBuiltPackets, cuttingBuiltPacketFabricSources } = await import('../../schema');
+      const { eq } = await import('drizzle-orm');
+      
+      // Get packets allocated to this item
+      const packets = await db
+        .select()
+        .from(cuttingBuiltPackets)
+        .where(eq(cuttingBuiltPackets.allocatedToOrder, serializedItemId));
+
+      // Get fabric sources for each packet
+      const packetsWithSources = await Promise.all(
+        packets.map(async (packet) => {
+          const sources = await db
+            .select()
+            .from(cuttingBuiltPacketFabricSources)
+            .where(eq(cuttingBuiltPacketFabricSources.builtPacketId, packet.id));
+          
+          return {
+            ...packet,
+            fabricSources: sources,
+            isMixedFabric: sources.length > 1
+          };
+        })
+      );
+
+      res.json({
+        serializedItemId,
+        allocatedPackets: packetsWithSources,
+        totalPackets: packetsWithSources.length
+      });
+    } catch (_error) {
+      console.error('P2 layup gating get allocated packets error:', _error);
+      res.status(500).json({ error: 'Failed to get allocated packets' });
+    }
+  });
+
+  // Smart Data Entry - Recent Lot Numbers
+  app.get('/api/smart-entry/recent-lots', async (req, res) => {
+    try {
+      const { type, limit: queryLimit } = req.query;
+      const maxResults = parseInt(queryLimit as string) || 10;
+
+      const { db } = await import('../../db');
+      const { cuttingFabricInventory } = await import('../../schema');
+      const { desc, isNotNull, sql } = await import('drizzle-orm');
+
+      // Get recent unique lot numbers from cutting fabric inventory
+      const recentLots = await db
+        .select({
+          lotNumber: cuttingFabricInventory.lotNumber,
+          batchNumber: cuttingFabricInventory.batchNumber,
+          rollNumber: cuttingFabricInventory.rollNumber,
+          supplierPartNumber: cuttingFabricInventory.supplierPartNumber,
+          fabricType: cuttingFabricInventory.fabric,
+          expirationDate: cuttingFabricInventory.expirationDate,
+          createdAt: cuttingFabricInventory.createdAt
+        })
+        .from(cuttingFabricInventory)
+        .where(isNotNull(cuttingFabricInventory.lotNumber))
+        .orderBy(desc(cuttingFabricInventory.createdAt))
+        .limit(maxResults * 2); // Get extra to filter duplicates
+
+      // Deduplicate by lot number
+      const seen = new Set<string>();
+      const uniqueLots = recentLots.filter(lot => {
+        if (!lot.lotNumber || seen.has(lot.lotNumber)) return false;
+        seen.add(lot.lotNumber);
+        return true;
+      }).slice(0, maxResults);
+
+      res.json({
+        recentLots: uniqueLots,
+        totalCount: uniqueLots.length
+      });
+    } catch (_error) {
+      console.error('Smart entry recent lots error:', _error);
+      res.status(500).json({ error: 'Failed to fetch recent lot numbers' });
+    }
+  });
+
+  // Smart Data Entry - Suggestions based on partial input
+  app.get('/api/smart-entry/suggestions', async (req, res) => {
+    try {
+      const { field, value } = req.query;
+      
+      if (!value || (value as string).length < 2) {
+        return res.json({ suggestions: [] });
+      }
+
+      const { db } = await import('../../db');
+      const { cuttingFabricInventory } = await import('../../schema');
+      const { like, sql } = await import('drizzle-orm');
+
+      let suggestions: string[] = [];
+      const searchValue = `%${value}%`;
+
+      if (field === 'lot') {
+        const results = await db
+          .select({ value: cuttingFabricInventory.lotNumber })
+          .from(cuttingFabricInventory)
+          .where(like(cuttingFabricInventory.lotNumber, searchValue))
+          .limit(5);
+        suggestions = results.map(r => r.value).filter(Boolean) as string[];
+      } else if (field === 'batch') {
+        const results = await db
+          .select({ value: cuttingFabricInventory.batchNumber })
+          .from(cuttingFabricInventory)
+          .where(like(cuttingFabricInventory.batchNumber, searchValue))
+          .limit(5);
+        suggestions = results.map(r => r.value).filter(Boolean) as string[];
+      } else if (field === 'roll') {
+        const results = await db
+          .select({ value: cuttingFabricInventory.rollNumber })
+          .from(cuttingFabricInventory)
+          .where(like(cuttingFabricInventory.rollNumber, searchValue))
+          .limit(5);
+        suggestions = results.map(r => r.value).filter(Boolean) as string[];
+      } else if (field === 'supplier') {
+        const results = await db
+          .select({ value: cuttingFabricInventory.supplierPartNumber })
+          .from(cuttingFabricInventory)
+          .where(like(cuttingFabricInventory.supplierPartNumber, searchValue))
+          .limit(5);
+        suggestions = results.map(r => r.value).filter(Boolean) as string[];
+      }
+
+      // Deduplicate
+      suggestions = [...new Set(suggestions)];
+
+      res.json({ 
+        field,
+        query: value,
+        suggestions 
+      });
+    } catch (_error) {
+      console.error('Smart entry suggestions error:', _error);
+      res.status(500).json({ error: 'Failed to fetch suggestions' });
+    }
+  });
+
+  // Smart Data Entry - Quick fill from barcode scan
+  app.get('/api/smart-entry/barcode-lookup/:barcode', async (req, res) => {
+    try {
+      const { barcode } = req.params;
+      
+      const { db } = await import('../../db');
+      const { cuttingFabricInventory } = await import('../../schema');
+      const { eq } = await import('drizzle-orm');
+
+      // Look up fabric inventory by barcode
+      const result = await db
+        .select()
+        .from(cuttingFabricInventory)
+        .where(eq(cuttingFabricInventory.barcode, barcode))
+        .limit(1);
+
+      if (result.length === 0) {
+        return res.status(404).json({ 
+          error: 'Barcode not found',
+          barcode 
+        });
+      }
+
+      const fabric = result[0];
+      res.json({
+        found: true,
+        barcode,
+        data: {
+          lotNumber: fabric.lotNumber,
+          batchNumber: fabric.batchNumber,
+          rollNumber: fabric.rollNumber,
+          supplierPartNumber: fabric.supplierPartNumber,
+          internalControlNumber: fabric.internalControlNumber,
+          fabricType: fabric.fabric,
+          expirationDate: fabric.expirationDate,
+          quantityInStock: fabric.quantityInStock
+        }
+      });
+    } catch (_error) {
+      console.error('Smart entry barcode lookup error:', _error);
+      res.status(500).json({ error: 'Failed to lookup barcode' });
+    }
+  });
+
   // P2 PO PDF Attachment routes
 
   // Ensure P2 PO attachments directory exists

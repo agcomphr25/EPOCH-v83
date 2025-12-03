@@ -166,11 +166,22 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
   };
 
   const handleCreateOrder = () => {
+    // Find the selected tolerance authorizer employee
+    const selectedAuthorizerId = poDetails?.toleranceAuthorizer;
+    const selectedAuthorizer = selectedAuthorizerId 
+      ? employees.find((emp: any) => emp.id.toString() === selectedAuthorizerId)
+      : null;
+
     const orderData = {
       customerId: selectedCustomer.id,
       customerPONumber: poDetails?.customerPONumber,
       dueDate: poDetails?.dueDate,
-      toleranceAuthorizer: poDetails?.toleranceAuthorizer,
+      // Properly map tolerance authorizer fields
+      toleranceAuthorizerId: selectedAuthorizer?.id || null,
+      toleranceAuthorizerName: selectedAuthorizer 
+        ? `${selectedAuthorizer.firstName} ${selectedAuthorizer.lastName}` 
+        : null,
+      toleranceNotes: poDetails?.notes,
       notes: poDetails?.notes,
       lineItems: lineItems.map((item) => ({
         partNumber: item.partNumber,

@@ -3560,6 +3560,10 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   status: text('status').notNull().default('OPEN'), // OPEN, CLOSED, CANCELED
   notes: text('notes'),
   attachments: jsonb('attachments').$type<string[]>().default(sql`'[]'::jsonb`),
+  // Tolerance authorization - who can approve tolerance deviations for this PO
+  toleranceAuthorizerId: integer('tolerance_authorizer_id').references(() => employees.id),
+  toleranceAuthorizerName: text('tolerance_authorizer_name'), // Denormalized for display
+  toleranceNotes: text('tolerance_notes'), // Special tolerance requirements or notes
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -3925,6 +3929,13 @@ export const p2FinalInspectionResults = pgTable('p2_final_inspection_results', {
   signature: text('signature'), // Base64 encoded signature
   qaMgrApproval: text('qa_mgr_approval'), // QA Manager signature if needed
   qaMgrApprovalDate: timestamp('qa_mgr_approval_date'),
+  // Tolerance deviation authorization - required when tolerance checks fail
+  toleranceDeviationRequired: boolean('tolerance_deviation_required').default(false), // True if any tolerance check failed
+  toleranceAuthorizerId: integer('tolerance_authorizer_id').references(() => employees.id),
+  toleranceAuthorizerName: text('tolerance_authorizer_name'),
+  toleranceAuthorizerSignature: text('tolerance_authorizer_signature'), // Base64 encoded signature
+  toleranceAuthorizationDate: timestamp('tolerance_authorization_date'),
+  toleranceDeviationReason: text('tolerance_deviation_reason'), // Why tolerance deviation was approved
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -6298,6 +6309,56 @@ export const cuttingCutRecords = pgTable('cutting_cut_records', {
   productCategoryIdx: index('cutting_cut_records_category_idx').on(table.productCategoryId),
 }));
 
+// Cutting Table - Built Packets (individual packets with full traceability)
+export const cuttingBuiltPackets = pgTable('cutting_built_packets', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sessionId: uuid('session_id').references(() => cuttingPacketSessions.id, { onDelete: 'cascade' }),
+  productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id).notNull(),
+  barcode: text('barcode').notNull().unique(), // Auto-generated barcode for this packet
+  packetNumber: integer('packet_number').notNull(), // Sequential number within the session
+  buildDate: timestamp('build_date').notNull().defaultNow(),
+  status: text('status').notNull().default('AVAILABLE'), // AVAILABLE, ALLOCATED, CONSUMED, SCRAPPED
+  allocatedToOrder: text('allocated_to_order'), // Order ID if allocated
+  consumedAt: timestamp('consumed_at'),
+  consumedBy: text('consumed_by'),
+  isMixedFabric: boolean('is_mixed_fabric').default(false), // True if packet contains multiple fabric sources
+  fabricSourceCount: integer('fabric_source_count').default(1), // Number of different fabric sources
+  notes: text('notes'),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  barcodeIdx: index('cutting_built_packets_barcode_idx').on(table.barcode),
+  statusIdx: index('cutting_built_packets_status_idx').on(table.status),
+  sessionIdx: index('cutting_built_packets_session_idx').on(table.sessionId),
+}));
+
+// Cutting Table - Built Packet Fabric Sources (for mixed fabric traceability)
+export const cuttingBuiltPacketFabricSources = pgTable('cutting_built_packet_fabric_sources', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  builtPacketId: uuid('built_packet_id')
+    .references(() => cuttingBuiltPackets.id, { onDelete: 'cascade' })
+    .notNull(),
+  fabricInventoryId: uuid('fabric_inventory_id')
+    .references(() => cuttingFabricInventory.id)
+    .notNull(),
+  componentId: uuid('component_id').references(() => cuttingComponents.id),
+  // Denormalized traceability data for label printing
+  fabricType: text('fabric_type'),
+  lotNumber: text('lot_number'),
+  batchNumber: text('batch_number'),
+  rollNumber: text('roll_number'),
+  supplierPartNumber: text('supplier_part_number'),
+  internalControlNumber: text('internal_control_number'),
+  expirationDate: date('expiration_date'),
+  quantityUsed: integer('quantity_used').notNull().default(1), // Quantity from this source
+  isPrimary: boolean('is_primary').default(true), // Primary source indicator
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  packetIdx: index('cutting_built_packet_sources_packet_idx').on(table.builtPacketId),
+  inventoryIdx: index('cutting_built_packet_sources_inventory_idx').on(table.fabricInventoryId),
+}));
+
 // Manufacturing Queue - Track items that need to be manufactured by department
 export const manufacturingQueue = pgTable('manufacturing_queue', {
   id: serial('id').primaryKey(),
@@ -6411,6 +6472,17 @@ export const insertCuttingFabricInventoryTransactionSchema = createInsertSchema(
   updatedAt: true,
 });
 
+export const insertCuttingBuiltPacketSchema = createInsertSchema(cuttingBuiltPackets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCuttingBuiltPacketFabricSourceSchema = createInsertSchema(cuttingBuiltPacketFabricSources).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertManufacturingQueueSchema = createInsertSchema(manufacturingQueue).omit({
   id: true,
   createdAt: true,
@@ -6450,6 +6522,12 @@ export type InsertCuttingPacketSessionLot = z.infer<typeof insertCuttingPacketSe
 
 export type CuttingFabricInventoryTransaction = typeof cuttingFabricInventoryTransactions.$inferSelect;
 export type InsertCuttingFabricInventoryTransaction = z.infer<typeof insertCuttingFabricInventoryTransactionSchema>;
+
+export type CuttingBuiltPacket = typeof cuttingBuiltPackets.$inferSelect;
+export type InsertCuttingBuiltPacket = z.infer<typeof insertCuttingBuiltPacketSchema>;
+
+export type CuttingBuiltPacketFabricSource = typeof cuttingBuiltPacketFabricSources.$inferSelect;
+export type InsertCuttingBuiltPacketFabricSource = z.infer<typeof insertCuttingBuiltPacketFabricSourceSchema>;
 
 export type ManufacturingQueue = typeof manufacturingQueue.$inferSelect;
 export type InsertManufacturingQueue = z.infer<typeof insertManufacturingQueueSchema>;

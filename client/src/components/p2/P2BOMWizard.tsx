@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   ArrowLeft, 
   ArrowRight, 
@@ -18,7 +21,9 @@ import {
   Trash2,
   AlertCircle,
   CheckCircle,
-  Package
+  Package,
+  ChevronsUpDown,
+  Search
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -65,6 +70,9 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
   const [partsNeedingBOM, setPartsNeedingBOM] = useState<PartNeedingBOM[]>([]);
   const [currentBOMItems, setCurrentBOMItems] = useState<BOMItem[]>([]);
   const [newItem, setNewItem] = useState<Partial<BOMItem>>({});
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [selectedInventoryItem, setSelectedInventoryItem] = useState<any>(null);
   const { toast } = useToast();
 
   const { data: poData } = useQuery<any>({
@@ -126,6 +134,29 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
     ? ((currentPartIndex + 1) / partsNeedingBOM.length) * 100 
     : 0;
 
+  // Filter inventory items based on search
+  const filteredInventoryItems = useMemo(() => {
+    if (!inventorySearch.trim()) return inventoryItems.slice(0, 50); // Show first 50 if no search
+    const search = inventorySearch.toLowerCase();
+    return inventoryItems.filter((item: any) => {
+      const partNumber = (item.agPartNumber || item.partNumber || item.sku || '').toLowerCase();
+      const name = (item.name || item.description || '').toLowerCase();
+      return partNumber.includes(search) || name.includes(search);
+    }).slice(0, 50);
+  }, [inventoryItems, inventorySearch]);
+
+  const handleInventoryItemSelect = (item: any) => {
+    setSelectedInventoryItem(item);
+    setNewItem({
+      ...newItem,
+      inventoryItemId: item.id.toString(),
+      partNumber: item.agPartNumber || item.partNumber || item.sku || '',
+      description: item.name || item.description || '',
+    });
+    setInventoryOpen(false);
+    setInventorySearch('');
+  };
+
   const addBOMItem = () => {
     if (!newItem.partNumber || !newItem.quantity) {
       toast({
@@ -148,6 +179,7 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
 
     setCurrentBOMItems([...currentBOMItems, item]);
     setNewItem({});
+    setSelectedInventoryItem(null);
 
     if (item.isManufactured) {
       const newPart: PartNeedingBOM = {
@@ -214,18 +246,6 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
       setCurrentBOMItems(partsNeedingBOM[currentPartIndex + 1]?.bomItems || []);
     } else {
       onComplete();
-    }
-  };
-
-  const handleInventorySelect = (value: string) => {
-    const item = inventoryItems.find((inv: any) => inv.id.toString() === value);
-    if (item) {
-      setNewItem({
-        ...newItem,
-        inventoryItemId: value,
-        partNumber: item.partNumber || item.sku || '',
-        description: item.description || item.name || '',
-      });
     }
   };
 
@@ -301,23 +321,81 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
         <div className="space-y-4">
           <h4 className="font-medium">Add Component</h4>
           
-          <div className="grid grid-cols-6 gap-2 items-end">
-            <div className="col-span-2">
-              <Label>From Inventory (Optional)</Label>
-              <Select onValueChange={handleInventorySelect}>
-                <SelectTrigger data-testid="select-inventory">
-                  <SelectValue placeholder="Select item..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {inventoryItems.map((item: any) => (
-                    <SelectItem key={item.id} value={item.id.toString()}>
-                      {item.partNumber || item.sku} - {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
+          {/* Inventory Search - Full Width */}
+          <div className="space-y-2">
+            <Label>Search Inventory (Optional)</Label>
+            <Popover open={inventoryOpen} onOpenChange={setInventoryOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={inventoryOpen}
+                  className="w-full justify-between font-normal"
+                  data-testid="select-inventory"
+                >
+                  {selectedInventoryItem ? (
+                    <span className="truncate">
+                      <span className="font-medium text-blue-600">
+                        {selectedInventoryItem.agPartNumber || selectedInventoryItem.partNumber || selectedInventoryItem.sku}
+                      </span>
+                      <span className="text-muted-foreground"> - {selectedInventoryItem.name}</span>
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">Type to search by part number or name...</span>
+                  )}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[600px] p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput 
+                    placeholder="Search by part number or name..." 
+                    value={inventorySearch}
+                    onValueChange={setInventorySearch}
+                  />
+                  <CommandList>
+                    <CommandEmpty>
+                      {inventorySearch.length < 2 
+                        ? "Type at least 2 characters to search..."
+                        : "No inventory items found."
+                      }
+                    </CommandEmpty>
+                    <CommandGroup heading={`${filteredInventoryItems.length} items found`}>
+                      <ScrollArea className="h-[300px]">
+                        {filteredInventoryItems.map((item: any) => (
+                          <CommandItem
+                            key={item.id}
+                            value={item.id.toString()}
+                            onSelect={() => handleInventoryItemSelect(item)}
+                            className="cursor-pointer"
+                          >
+                            <div className="flex flex-col gap-0.5 w-full">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-semibold text-blue-600 min-w-[100px]">
+                                  {item.agPartNumber || item.partNumber || item.sku || 'N/A'}
+                                </span>
+                                <span className="truncate">{item.name}</span>
+                              </div>
+                              {item.description && (
+                                <span className="text-xs text-muted-foreground truncate">
+                                  {item.description}
+                                </span>
+                              )}
+                            </div>
+                            {selectedInventoryItem?.id === item.id && (
+                              <Check className="ml-auto h-4 w-4 text-green-600" />
+                            )}
+                          </CommandItem>
+                        ))}
+                      </ScrollArea>
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+          
+          <div className="grid grid-cols-5 gap-2 items-end">
             <div>
               <Label>Part Number</Label>
               <Input
@@ -325,6 +403,16 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
                 onChange={(e) => setNewItem({ ...newItem, partNumber: e.target.value })}
                 placeholder="Part #"
                 data-testid="input-bom-part-number"
+              />
+            </div>
+
+            <div className="col-span-2">
+              <Label>Description</Label>
+              <Input
+                value={newItem.description || ''}
+                onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
+                placeholder="Description"
+                data-testid="input-bom-description"
               />
             </div>
 
@@ -357,13 +445,9 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
                 </SelectContent>
               </Select>
             </div>
-
-            <Button onClick={addBOMItem} data-testid="button-add-bom-item">
-              <Plus className="h-4 w-4 mr-1" /> Add
-            </Button>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -373,6 +457,10 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
               />
               <span className="text-sm">This is a manufactured part (will prompt for its BOM next)</span>
             </label>
+            
+            <Button onClick={addBOMItem} data-testid="button-add-bom-item">
+              <Plus className="h-4 w-4 mr-1" /> Add Component
+            </Button>
           </div>
         </div>
 

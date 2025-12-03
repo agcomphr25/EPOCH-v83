@@ -786,20 +786,26 @@ export default function Navigation() {
 
   const productionSchedulingItems = [
     {
+      path: '/cutting-control-center',
+      label: 'Cutting Table Control Center',
+      icon: Scissors,
+      description: 'Unified control for production, materials, and planning',
+    },
+    {
       path: '/cutting-table',
-      label: 'Cutting Table',
+      label: 'Cutting Table (Legacy)',
       icon: Scissors,
       description: 'Fabric cutting production planning for two production lines',
     },
     {
       path: '/cutting-dashboard',
-      label: 'Cutting Dashboard',
+      label: 'Cutting Dashboard (Legacy)',
       icon: Scissors,
       description: 'Fabric receiving, packet building, and stock target management',
     },
     {
       path: '/fabric-inventory',
-      label: 'Fabric Inventory',
+      label: 'Fabric Inventory (Legacy)',
       icon: Package,
       description: 'Full CRUD management for cutting table fabric inventory',
     },

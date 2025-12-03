@@ -152,6 +152,7 @@ import VendorPOPage from './pages/VendorPOPage';
 import PDFTemplateManager from './pages/PDFTemplateManager';
 import CuttingTable from './pages/CuttingTable';
 import CuttingTableDashboard from './pages/CuttingTableDashboard';
+import CuttingTableControlCenter from './pages/CuttingTableControlCenter';
 import FabricInventoryPage from './pages/FabricInventoryPage';
 import MetalAccessoriesTracker from './pages/MetalAccessoriesTracker';
 import DocumentIntelligence from './pages/DocumentIntelligence';
@@ -501,7 +502,8 @@ function App() {
                   {/* Watch Rules Management Route */}
                   <Route path="/watch-rules" component={WatchRulesPage} />
 
-                  {/* Cutting Table Route */}
+                  {/* Cutting Table Routes */}
+                  <Route path="/cutting-control-center" component={CuttingTableControlCenter} />
                   <Route path="/cutting-table" component={CuttingTable} />
                   <Route path="/cutting-dashboard" component={CuttingTableDashboard} />
                   <Route path="/fabric-inventory" component={FabricInventoryPage} />

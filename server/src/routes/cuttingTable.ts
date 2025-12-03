@@ -1,8 +1,16 @@
 import { Router } from 'express';
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { cuttingCutRecords, cuttingPacketCompositions, inventoryItems } from '../../schema';
-import { and, gte, lte, eq } from 'drizzle-orm';
+import { 
+  cuttingCutRecords, 
+  cuttingPacketCompositions, 
+  inventoryItems,
+  cuttingPacketBOMs,
+  cuttingPacketBOMMaterials,
+  cuttingPacketBOMCuts,
+  cuttingFabricInventory,
+} from '../../schema';
+import { and, gte, lte, eq, desc } from 'drizzle-orm';
 import {
   insertCuttingMaterialSchema,
   insertCuttingProductionLineSchema,
@@ -16,6 +24,9 @@ import {
   insertCuttingFabricInventoryTransactionSchema,
   insertCuttingPacketCompositionSchema,
   insertCuttingCutRecordSchema,
+  insertCuttingPacketBOMSchema,
+  insertCuttingPacketBOMMaterialSchema,
+  insertCuttingPacketBOMCutSchema,
 } from '../../schema';
 
 const router = Router();
@@ -1404,6 +1415,254 @@ router.get('/weekly-packet-needs', async (req, res) => {
   } catch (error) {
     console.error('Error fetching weekly packet needs:', error);
     res.status(500).json({ error: 'Failed to fetch weekly packet needs' });
+  }
+});
+
+// ========== Packet BOM Endpoints ==========
+
+// Get all packet BOMs with their materials
+router.get('/packet-boms', async (req, res) => {
+  try {
+    const boms = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.isActive, true));
+    
+    const bomsWithMaterials = await Promise.all(
+      boms.map(async (bom) => {
+        const materials = await db.select().from(cuttingPacketBOMMaterials)
+          .where(eq(cuttingPacketBOMMaterials.packetBomId, bom.id));
+        return { ...bom, materials };
+      })
+    );
+    
+    res.json(bomsWithMaterials);
+  } catch (error) {
+    console.error('Error fetching packet BOMs:', error);
+    res.status(500).json({ error: 'Failed to fetch packet BOMs' });
+  }
+});
+
+// Get single packet BOM with materials
+router.get('/packet-boms/:id', async (req, res) => {
+  try {
+    const [bom] = await db.select().from(cuttingPacketBOMs)
+      .where(eq(cuttingPacketBOMs.id, req.params.id));
+    
+    if (!bom) {
+      return res.status(404).json({ error: 'Packet BOM not found' });
+    }
+    
+    const materials = await db.select().from(cuttingPacketBOMMaterials)
+      .where(eq(cuttingPacketBOMMaterials.packetBomId, bom.id));
+    
+    res.json({ ...bom, materials });
+  } catch (error) {
+    console.error('Error fetching packet BOM:', error);
+    res.status(500).json({ error: 'Failed to fetch packet BOM' });
+  }
+});
+
+// Create packet BOM (auto-created when inventory item has cutting selected)
+router.post('/packet-boms', async (req, res) => {
+  try {
+    const validatedData = insertCuttingPacketBOMSchema.parse(req.body);
+    
+    const [newBom] = await db.insert(cuttingPacketBOMs).values(validatedData).returning();
+    
+    // If materials are provided, add them
+    if (req.body.materials && Array.isArray(req.body.materials)) {
+      for (const material of req.body.materials) {
+        await db.insert(cuttingPacketBOMMaterials).values({
+          packetBomId: newBom.id,
+          fabricType: material.fabricType,
+          commonName: material.commonName,
+          quantityNeeded: material.quantityNeeded || 1,
+          rollsRequired: material.rollsRequired || 1,
+          squareMetersRequired: material.squareMetersRequired,
+        });
+      }
+    }
+    
+    const materials = await db.select().from(cuttingPacketBOMMaterials)
+      .where(eq(cuttingPacketBOMMaterials.packetBomId, newBom.id));
+    
+    res.status(201).json({ ...newBom, materials });
+  } catch (error) {
+    console.error('Error creating packet BOM:', error);
+    res.status(400).json({ error: 'Failed to create packet BOM' });
+  }
+});
+
+// Update packet BOM
+router.put('/packet-boms/:id', async (req, res) => {
+  try {
+    const validatedData = insertCuttingPacketBOMSchema.partial().parse(req.body);
+    
+    const [updated] = await db.update(cuttingPacketBOMs)
+      .set({ ...validatedData, updatedAt: new Date() })
+      .where(eq(cuttingPacketBOMs.id, req.params.id))
+      .returning();
+    
+    if (!updated) {
+      return res.status(404).json({ error: 'Packet BOM not found' });
+    }
+    
+    // Update materials if provided
+    if (req.body.materials && Array.isArray(req.body.materials)) {
+      await db.delete(cuttingPacketBOMMaterials)
+        .where(eq(cuttingPacketBOMMaterials.packetBomId, updated.id));
+      
+      for (const material of req.body.materials) {
+        await db.insert(cuttingPacketBOMMaterials).values({
+          packetBomId: updated.id,
+          fabricType: material.fabricType,
+          commonName: material.commonName,
+          quantityNeeded: material.quantityNeeded || 1,
+          rollsRequired: material.rollsRequired || 1,
+          squareMetersRequired: material.squareMetersRequired,
+        });
+      }
+    }
+    
+    const materials = await db.select().from(cuttingPacketBOMMaterials)
+      .where(eq(cuttingPacketBOMMaterials.packetBomId, updated.id));
+    
+    res.json({ ...updated, materials });
+  } catch (error) {
+    console.error('Error updating packet BOM:', error);
+    res.status(400).json({ error: 'Failed to update packet BOM' });
+  }
+});
+
+// Delete packet BOM (soft delete)
+router.delete('/packet-boms/:id', async (req, res) => {
+  try {
+    await db.update(cuttingPacketBOMs)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(cuttingPacketBOMs.id, req.params.id));
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting packet BOM:', error);
+    res.status(500).json({ error: 'Failed to delete packet BOM' });
+  }
+});
+
+// Record cut for a packet BOM (tracks square meters and yield)
+router.post('/packet-boms/:id/cuts', async (req, res) => {
+  try {
+    const { squareMetersUsed, piecesYielded, fabricInventoryId, rollNumber, lotNumber, operatorName, notes, mfgQueueItemId } = req.body;
+    
+    const [newCut] = await db.insert(cuttingPacketBOMCuts).values({
+      packetBomId: req.params.id,
+      fabricInventoryId,
+      mfgQueueItemId,
+      squareMetersUsed: parseFloat(squareMetersUsed) || 0,
+      piecesYielded: parseInt(piecesYielded) || 0,
+      rollNumber,
+      lotNumber,
+      operatorName,
+      notes,
+    }).returning();
+    
+    res.status(201).json(newCut);
+  } catch (error) {
+    console.error('Error recording packet BOM cut:', error);
+    res.status(400).json({ error: 'Failed to record cut' });
+  }
+});
+
+// Get cut history for a packet BOM
+router.get('/packet-boms/:id/cuts', async (req, res) => {
+  try {
+    const cuts = await db.select().from(cuttingPacketBOMCuts)
+      .where(eq(cuttingPacketBOMCuts.packetBomId, req.params.id))
+      .orderBy(desc(cuttingPacketBOMCuts.cutDate));
+    
+    res.json(cuts);
+  } catch (error) {
+    console.error('Error fetching packet BOM cuts:', error);
+    res.status(500).json({ error: 'Failed to fetch cuts' });
+  }
+});
+
+// Calculate estimated cuts needed based on packet quantity and BOM yield
+router.get('/packet-boms/:id/estimate-cuts', async (req, res) => {
+  try {
+    const { quantity } = req.query;
+    const packetQuantity = parseInt(quantity as string) || 1;
+    
+    const [bom] = await db.select().from(cuttingPacketBOMs)
+      .where(eq(cuttingPacketBOMs.id, req.params.id));
+    
+    if (!bom) {
+      return res.status(404).json({ error: 'Packet BOM not found' });
+    }
+    
+    const yieldPerCut = bom.yieldPerCut || 4;
+    const wasteFactor = bom.wasteFactor || 0.05;
+    const effectiveYield = Math.floor(yieldPerCut * (1 - wasteFactor));
+    const estimatedCuts = Math.ceil(packetQuantity / effectiveYield);
+    const estimatedSquareMeters = estimatedCuts * (bom.squareMetersPerCut || 0);
+    
+    res.json({
+      packetQuantity,
+      yieldPerCut,
+      wasteFactor,
+      effectiveYield,
+      estimatedCuts,
+      estimatedSquareMeters,
+      squareMetersPerCut: bom.squareMetersPerCut,
+    });
+  } catch (error) {
+    console.error('Error calculating estimated cuts:', error);
+    res.status(500).json({ error: 'Failed to calculate estimate' });
+  }
+});
+
+// Weekly goals with auto-calculated cuts from BOMs
+router.get('/weekly-goals', async (req, res) => {
+  try {
+    const weekDate = req.query.weekDate as string || new Date().toISOString().split('T')[0];
+    
+    // Get weekly data
+    const weeklyData = await storage.getCuttingWeeklyDataByWeek(weekDate);
+    
+    // Enhance with estimated cuts from packet BOMs
+    const goalsWithEstimates = await Promise.all(
+      weeklyData.map(async (goal: any) => {
+        // Try to find a packet BOM for this category
+        const [bom] = await db.select().from(cuttingPacketBOMs)
+          .where(eq(cuttingPacketBOMs.productCategoryId, goal.productCategoryId))
+          .limit(1);
+        
+        let estimatedCuts = 0;
+        if (bom) {
+          const effectiveYield = Math.floor((bom.yieldPerCut || 4) * (1 - (bom.wasteFactor || 0.05)));
+          estimatedCuts = Math.ceil(goal.quantity / Math.max(effectiveYield, 1));
+        } else {
+          estimatedCuts = Math.ceil(goal.quantity / 4); // Default 4 pieces per cut
+        }
+        
+        // Get production line and category names
+        const lines = await storage.getAllCuttingProductionLines();
+        const categories = await storage.getAllCuttingProductCategories();
+        const line = lines.find((l: any) => l.id === goal.productionLineId);
+        const category = categories.find((c: any) => c.id === goal.productCategoryId);
+        
+        return {
+          ...goal,
+          lineName: line?.lineName || 'Unknown',
+          categoryName: category?.categoryName || 'Unknown',
+          estimatedCuts,
+          completedCuts: 0, // TODO: Calculate from actual cut records
+          completedQuantity: 0, // TODO: Calculate from completed production
+        };
+      })
+    );
+    
+    res.json(goalsWithEstimates);
+  } catch (error) {
+    console.error('Error fetching weekly goals:', error);
+    res.status(500).json({ error: 'Failed to fetch weekly goals' });
   }
 });
 

@@ -274,7 +274,8 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
               BOM Configuration
             </CardTitle>
             <CardDescription>
-              Part {currentPartIndex + 1} of {partsNeedingBOM.length}
+              Part {currentPartIndex + 1} of {partsNeedingBOM.length}: <span className="font-semibold text-foreground">{currentPart.partNumber}</span>
+              {currentPart.description && <span className="ml-1">- {currentPart.description}</span>}
             </CardDescription>
           </div>
           <Button variant="ghost" onClick={onCancel}>

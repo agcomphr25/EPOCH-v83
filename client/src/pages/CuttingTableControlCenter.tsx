@@ -369,6 +369,32 @@ export default function CuttingTableControlCenter() {
     },
   });
 
+  const { data: p1ScheduleNeeds = { carbon_fiber: 0, fiberglass: 0 } } = useQuery({
+    queryKey: ['/api/cutting-table/p1-schedule-needs'],
+    queryFn: async () => {
+      try {
+        const res = await fetch('/api/layup-schedule/weekly-summary');
+        if (!res.ok) return { carbon_fiber: 0, fiberglass: 0 };
+        const data = await res.json();
+        let cfCount = 0;
+        let fgCount = 0;
+        if (Array.isArray(data)) {
+          data.forEach((item: any) => {
+            const model = (item.stockModel || item.stock_model || '').toLowerCase();
+            if (model.includes('cf_') || model.includes('carbon')) {
+              cfCount += item.quantity || 1;
+            } else if (model.includes('fg_') || model.includes('fiber')) {
+              fgCount += item.quantity || 1;
+            }
+          });
+        }
+        return { carbon_fiber: cfCount, fiberglass: fgCount };
+      } catch {
+        return { carbon_fiber: 0, fiberglass: 0 };
+      }
+    },
+  });
+
   const handleUniversalBarcodeScan = (barcode: string) => {
     if (!barcode.trim()) return;
     
@@ -1154,6 +1180,59 @@ export default function CuttingTableControlCenter() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="border-2 border-dashed border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-blue-600" />
+              P1 Layup Schedule - Packets Needed This Week
+            </CardTitle>
+            <CardDescription>
+              Calculated from the P1 Layup Schedule based on scheduled orders
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-6">
+              <div className="flex items-center justify-between p-4 rounded-lg bg-white dark:bg-slate-900 border">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 rounded-full bg-blue-600"></div>
+                  <div>
+                    <p className="font-medium">Carbon Fiber Packets</p>
+                    <p className="text-sm text-muted-foreground">From scheduled CF orders</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-bold text-blue-600">{p1ScheduleNeeds.carbon_fiber}</p>
+                  <Badge variant={stockLevels.carbon_fiber >= p1ScheduleNeeds.carbon_fiber ? "default" : "destructive"} className="mt-1">
+                    {stockLevels.carbon_fiber >= p1ScheduleNeeds.carbon_fiber 
+                      ? `Stock OK (${stockLevels.carbon_fiber} on hand)` 
+                      : `Need ${p1ScheduleNeeds.carbon_fiber - stockLevels.carbon_fiber} more`}
+                  </Badge>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-4 rounded-lg bg-white dark:bg-slate-900 border">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 rounded-full bg-amber-600"></div>
+                  <div>
+                    <p className="font-medium">Fiberglass Packets</p>
+                    <p className="text-sm text-muted-foreground">From scheduled FG orders</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-bold text-amber-600">{p1ScheduleNeeds.fiberglass}</p>
+                  <Badge variant={stockLevels.fiberglass >= p1ScheduleNeeds.fiberglass ? "default" : "destructive"} className="mt-1">
+                    {stockLevels.fiberglass >= p1ScheduleNeeds.fiberglass 
+                      ? `Stock OK (${stockLevels.fiberglass} on hand)` 
+                      : `Need ${p1ScheduleNeeds.fiberglass - stockLevels.fiberglass} more`}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-4 text-center">
+              Packet counts are derived from the P1 Layup Scheduler scheduled orders for this week
+            </p>
+          </CardContent>
+        </Card>
 
         {loadingGoals ? (
           <div className="flex items-center justify-center h-32">

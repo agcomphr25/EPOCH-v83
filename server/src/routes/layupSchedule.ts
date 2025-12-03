@@ -1118,6 +1118,65 @@ router.get('/week/:weekStart', async (req: Request, res: Response) => {
   }
 });
 
+// Weekly Summary - Get count of scheduled items by material type for cutting table packet needs
+router.get('/weekly-summary', async (req: Request, res: Response) => {
+  try {
+    console.log('📊 WEEKLY SUMMARY: Fetching packets needed from P1 schedule...');
+    
+    // Get current week's start (Monday) and end (Sunday)
+    const today = new Date();
+    const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday
+    const weekEnd = addDays(currentWeekStart, 7);
+    
+    const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
+    const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+    
+    console.log(`📅 Week range: ${weekStartStr} to ${weekEndStr}`);
+    
+    // Get all schedule entries for this week with their stock model info
+    const scheduleResult = await pool.query(`
+      SELECT 
+        ls.order_id,
+        COALESCE(ao.model_id, poi.item_id) AS stock_model
+      FROM layup_schedule ls
+      LEFT JOIN all_orders ao ON ls.order_id = ao.order_id AND ls.order_id NOT LIKE 'PO-%'
+      LEFT JOIN production_orders po ON ls.order_id = po.order_id AND ls.order_id LIKE 'PO-%'
+      LEFT JOIN purchase_order_items poi ON po.po_item_id = poi.id
+      WHERE ls.layup_day >= $1::date 
+        AND ls.layup_day < $2::date
+    `, [weekStartStr, weekEndStr]);
+    
+    let carbonFiberCount = 0;
+    let fiberglassCount = 0;
+    
+    const scheduleRows = Array.isArray(scheduleResult) ? scheduleResult : (scheduleResult as any).rows || [];
+    scheduleRows.forEach((row: any) => {
+      const stockModel = (row.stock_model || '').toLowerCase();
+      if (stockModel.includes('_cf_') || stockModel.includes('_cf') || stockModel.includes('cf_')) {
+        carbonFiberCount++;
+      } else if (stockModel.includes('_fg_') || stockModel.includes('_fg') || stockModel.includes('fg_')) {
+        fiberglassCount++;
+      }
+    });
+    
+    console.log(`✅ Weekly summary: ${carbonFiberCount} CF, ${fiberglassCount} FG from ${scheduleRows.length} scheduled items`);
+    
+    // Return as array format that CuttingTableDashboard expects
+    const summaryItems = [];
+    if (carbonFiberCount > 0) {
+      summaryItems.push({ stockModel: 'cf_packet', quantity: carbonFiberCount });
+    }
+    if (fiberglassCount > 0) {
+      summaryItems.push({ stockModel: 'fg_packet', quantity: fiberglassCount });
+    }
+    
+    res.json(summaryItems);
+  } catch (error) {
+    console.error('❌ Error fetching weekly summary:', error);
+    res.status(500).json({ error: 'Failed to fetch weekly summary' });
+  }
+});
+
 // Helper functions for badge extraction
 function extractMaterial(stockModel: string | null): string | null {
   if (!stockModel) return null;

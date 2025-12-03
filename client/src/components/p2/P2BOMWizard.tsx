@@ -297,7 +297,10 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
               }}
             >
               {part.hasBOM && <Check className="h-3 w-3 mr-1" />}
-              {part.partNumber}
+              <span className="font-semibold">{part.partNumber}</span>
+              {part.description && (
+                <span className="ml-1 font-normal opacity-80">- {part.description}</span>
+              )}
             </Badge>
           ))}
         </div>

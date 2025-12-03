@@ -6,6 +6,7 @@ import { generateSalesOrderPDF, embedSignatureInPDF } from '../../utils/pdf/sale
 import { sendFollowupOrderEmail } from '../../utils/followupOrderEmail';
 import { sendOrderSignedConfirmation } from '../../utils/orderSignedConfirmation';
 import { calculatePriorityScore } from '../../utils/priorityScore';
+import { sendReminderForOverdueOrders } from '../../utils/followupOrderReminder';
 import * as fs from 'fs';
 import * as path from 'path';
 import { nanoid } from 'nanoid';
@@ -1128,6 +1129,27 @@ router.post('/:orderId/resend-email', async (req, res) => {
     console.error('Error resending follow-up order email:', error);
     res.status(500).json({ 
       error: 'Failed to resend email',
+      details: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
+// POST /api/followup-orders/test-reminder - Manually trigger the 5-day reminder check
+router.post('/test-reminder', async (req, res) => {
+  try {
+    console.log('🧪 Manual trigger: Running follow-up order reminder check...');
+    
+    const result = await sendReminderForOverdueOrders();
+    
+    res.json({
+      success: true,
+      message: `Reminder check completed. ${result.sent} reminder(s) sent.`,
+      details: result,
+    });
+  } catch (error) {
+    console.error('Error running reminder check:', error);
+    res.status(500).json({ 
+      error: 'Failed to run reminder check',
       details: error instanceof Error ? error.message : 'Unknown error' 
     });
   }

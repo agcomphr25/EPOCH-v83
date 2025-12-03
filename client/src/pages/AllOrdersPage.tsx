@@ -333,6 +333,29 @@ export default function AllOrdersPage() {
     },
   });
 
+  // Test reminder mutation - manually triggers the 5-day reminder check
+  const testReminderMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest(`/api/followup-orders/test-reminder`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: 'Reminder Check Complete',
+        description: data.message || 'Reminder check finished.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description:
+          'Failed to run reminder check: ' + (error.message || 'Unknown error'),
+        variant: 'destructive',
+      });
+    },
+  });
+
   // CSV Export handlers
   const handleExportCSV = async () => {
     try {
@@ -717,6 +740,20 @@ export default function AllOrdersPage() {
                     <SelectItem value="DRAFT">Draft</SelectItem>
                   </SelectContent>
                 </Select>
+                {/* Test Reminder Button - visible when filtering for PENDING_SIGNATURE or for admin */}
+                {(selectedStatus === 'PENDING_SIGNATURE' || currentUser?.role === 'ADMIN') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => testReminderMutation.mutate()}
+                    disabled={testReminderMutation.isPending}
+                    title="Manually run the 5-day reminder check for unsigned orders"
+                    data-testid="button-test-reminder"
+                  >
+                    <Mail className="h-4 w-4 mr-1" />
+                    {testReminderMutation.isPending ? 'Checking...' : 'Test Reminder'}
+                  </Button>
+                )}
               </div>
 
               <div className="flex items-center gap-2">

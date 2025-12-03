@@ -5,18 +5,17 @@ const ACCEPT_BLUE_API_URL = isProduction
   ? 'https://api.accept.blue/api/v2'
   : 'https://api.sandbox.accept.blue/api/v2';
 
-const apiKey = process.env.ACCEPT_BLUE_API_KEY;
-const apiPin = process.env.ACCEPT_BLUE_PIN;
-
-if (!apiKey || !apiPin) {
-  console.error(
-    'Missing Accept.Blue credentials. Please set ACCEPT_BLUE_API_KEY and ACCEPT_BLUE_PIN'
-  );
+function getCredentials() {
+  const apiKey = (process.env.ACCEPT_BLUE_API_KEY || '').trim();
+  const apiPin = (process.env.ACCEPT_BLUE_PIN || '').trim();
+  return { apiKey, apiPin };
 }
 
 function getAuthHeader(): string {
+  const { apiKey, apiPin } = getCredentials();
   const credentials = `${apiKey}:${apiPin}`;
   const base64Credentials = Buffer.from(credentials).toString('base64');
+  console.log(`🔐 Auth header created (key length: ${apiKey.length}, pin length: ${apiPin.length})`);
   return `Basic ${base64Credentials}`;
 }
 
@@ -54,6 +53,7 @@ export async function chargeCard(
   request: AcceptBlueChargeRequest
 ): Promise<AcceptBlueResponse> {
   try {
+    const { apiKey, apiPin } = getCredentials();
     if (!apiKey || !apiPin) {
       return {
         success: false,
@@ -164,6 +164,7 @@ export async function voidTransaction(
   referenceNumber: string | number
 ): Promise<AcceptBlueResponse> {
   try {
+    const { apiKey, apiPin } = getCredentials();
     if (!apiKey || !apiPin) {
       return {
         success: false,
@@ -223,6 +224,7 @@ export async function refundTransaction(
   amount?: number
 ): Promise<AcceptBlueResponse> {
   try {
+    const { apiKey, apiPin } = getCredentials();
     if (!apiKey || !apiPin) {
       return {
         success: false,
@@ -285,6 +287,7 @@ export async function getTransaction(
   referenceNumber: string | number
 ): Promise<AcceptBlueResponse> {
   try {
+    const { apiKey, apiPin } = getCredentials();
     if (!apiKey || !apiPin) {
       return {
         success: false,
@@ -331,5 +334,6 @@ export async function getTransaction(
 }
 
 export function isConfigured(): boolean {
+  const { apiKey, apiPin } = getCredentials();
   return !!(apiKey && apiPin);
 }

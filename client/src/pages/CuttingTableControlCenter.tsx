@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -302,8 +302,8 @@ export default function CuttingTableControlCenter() {
     },
   });
 
-  const { data: mfgQueueItems = [], isLoading: loadingMfgQueue, refetch: refetchMfgQueue } = useQuery<ManufacturingQueueItem[]>({
-    queryKey: ['/api/cutting-table-mfg-queue/cutting-table', selectedStatus, packetBOMs],
+  const { data: mfgQueueItemsRaw = [], isLoading: loadingMfgQueue, refetch: refetchMfgQueue } = useQuery<any[]>({
+    queryKey: ['/api/cutting-table-mfg-queue/cutting-table', selectedStatus],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (selectedStatus && selectedStatus !== 'ALL') {
@@ -311,44 +311,54 @@ export default function CuttingTableControlCenter() {
       }
       const res = await fetch(`/api/cutting-table-mfg-queue/cutting-table?${params.toString()}`);
       if (!res.ok) return [];
-      const data = await res.json();
-      return data.map((item: any) => {
-        const remaining = item.quantityOrdered - item.quantityCompleted;
-        const matchingBOM = packetBOMs.find(bom => 
-          bom.partNumber === item.partNumber || bom.id === item.packetBomId
-        );
-        const yieldPerCut = matchingBOM?.yieldPerCut || 4;
-        return {
-          ...item,
-          estimatedCuts: Math.ceil(remaining / yieldPerCut),
-          packetBomId: item.packetBomId || matchingBOM?.id,
-        };
-      });
+      return res.json();
     },
-    enabled: packetBOMs !== undefined,
   });
 
-  const { data: weeklyGoals = [], isLoading: loadingGoals } = useQuery<WeeklyGoal[]>({
-    queryKey: ['/api/cutting-table/weekly-goals', currentWeek, packetBOMs],
+  const mfgQueueItems: ManufacturingQueueItem[] = useMemo(() => {
+    return mfgQueueItemsRaw.map((item: any) => {
+      const quantityOrdered = item.quantityOrdered || item.quantityRequested || 0;
+      const quantityCompleted = item.quantityCompleted || 0;
+      const remaining = Math.max(0, quantityOrdered - quantityCompleted);
+      const matchingBOM = (packetBOMs || []).find((bom: PacketBOM) => 
+        bom.partNumber === item.partNumber || bom.id === item.packetBomId
+      );
+      const yieldPerCut = matchingBOM?.yieldPerCut || 4;
+      const estimatedCuts = remaining > 0 ? Math.ceil(remaining / yieldPerCut) : 0;
+      return {
+        ...item,
+        quantityOrdered,
+        quantityCompleted,
+        estimatedCuts,
+        packetBomId: item.packetBomId || matchingBOM?.id,
+      };
+    });
+  }, [mfgQueueItemsRaw, packetBOMs]);
+
+  const { data: weeklyGoalsRaw = [], isLoading: loadingGoals } = useQuery<any[]>({
+    queryKey: ['/api/cutting-table/weekly-goals', currentWeek],
     queryFn: async () => {
       const res = await fetch(`/api/cutting-table/weekly-data/by-week?weekDate=${currentWeek}`);
       if (!res.ok) return [];
-      const data = await res.json();
-      return data.map((item: any) => {
-        const matchingBOM = packetBOMs.find(bom => 
-          bom.partNumber === item.categoryName || bom.packetType === item.categoryName
-        );
-        const yieldPerCut = matchingBOM?.yieldPerCut || 4;
-        return {
-          ...item,
-          estimatedCuts: Math.ceil(item.quantity / yieldPerCut),
-          completedCuts: item.completedCuts || 0,
-          completedQuantity: item.completedQuantity || 0,
-        };
-      });
+      return res.json();
     },
-    enabled: packetBOMs !== undefined,
   });
+
+  const weeklyGoals: WeeklyGoal[] = useMemo(() => {
+    return weeklyGoalsRaw.map((item: any) => {
+      const matchingBOM = (packetBOMs || []).find((bom: PacketBOM) => 
+        bom.partNumber === item.categoryName || bom.packetType === item.categoryName
+      );
+      const yieldPerCut = matchingBOM?.yieldPerCut || 4;
+      const quantity = item.quantity || 0;
+      return {
+        ...item,
+        estimatedCuts: quantity > 0 ? Math.ceil(quantity / yieldPerCut) : 0,
+        completedCuts: item.completedCuts || 0,
+        completedQuantity: item.completedQuantity || 0,
+      };
+    });
+  }, [weeklyGoalsRaw, packetBOMs]);
 
   const { data: stockLevels = { carbon_fiber: 0, fiberglass: 0 } } = useQuery({
     queryKey: ['/api/cutting-table/stock-levels'],

@@ -56,7 +56,6 @@ import ManageGroups from './pages/ManageGroups';
 import PurchaseOrders from './pages/PurchaseOrders';
 import P2ControlCenter from './pages/P2ControlCenter';
 import ManufacturingQueue from './pages/ManufacturingQueue';
-import PartRoutingManagement from './pages/PartRoutingManagement';
 import P2TravelerPage from './pages/P2TravelerPage';
 import P2TravelerViewer from './pages/P2TravelerViewer';
 import P2PackingSlipViewer from './pages/P2PackingSlipViewer';
@@ -580,7 +579,7 @@ function App() {
                   <Route path="/cutting-table-queue">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
                   <Route path="/manufacturing-queue" component={ManufacturingQueue} />
                   <Route path="/cutting-table-mfg-queue">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
-                  <Route path="/part-routing-management" component={PartRoutingManagement} />
+                  <Route path="/part-routing-management">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
                   <Route
                     path="/master-document-register"
                     component={MasterDocumentRegister}

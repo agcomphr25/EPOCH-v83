@@ -645,7 +645,7 @@ export default function Navigation() {
       path: '/p2-control-center',
       label: 'P2 Control Center',
       icon: Factory,
-      description: 'Complete P2 workflow: orders, BOMs, scheduling, and production tracking',
+      description: 'Complete P2 workflow: orders, BOMs, scheduling, routing, and certifications',
     },
     {
       path: '/manufacturing-queue',
@@ -653,13 +653,6 @@ export default function Navigation() {
       icon: Factory,
       description:
         'View and manage manufactured parts queue by department (Cutting Table, CNC, Cores)',
-    },
-    {
-      path: '/part-routing-management',
-      label: 'Part Routing Management',
-      icon: Route,
-      description:
-        'Configure department sequences and traceability requirements for manufactured parts',
     },
     {
       path: '/po-products',

@@ -1960,6 +1960,48 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Schedule items by moving them from "Pending Layup" to "Layup" department
+  app.post('/api/p2/schedule-items', async (req, res) => {
+    try {
+      const { itemIds } = req.body;
+      
+      if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
+        return res.status(400).json({ error: 'Item IDs array is required' });
+      }
+
+      const { db } = await import('../../db');
+      const { p2SerializedItems } = await import('../../schema');
+      const { eq, inArray, and } = await import('drizzle-orm');
+      
+      // Update all items to move to Layup department (scheduled for production)
+      const result = await db
+        .update(p2SerializedItems)
+        .set({ 
+          currentDepartment: 'Layup',
+          updatedAt: new Date()
+        })
+        .where(
+          and(
+            inArray(p2SerializedItems.id, itemIds),
+            eq(p2SerializedItems.status, 'ACTIVE'),
+            eq(p2SerializedItems.currentDepartment, 'Pending Layup')
+          )
+        )
+        .returning({ id: p2SerializedItems.id });
+      
+      console.log(`Scheduled ${result.length} items for production`);
+      
+      res.json({ 
+        success: true, 
+        scheduled: result.length,
+        message: `${result.length} items moved to Layup department`
+      });
+    } catch (_error) {
+      console.error('P2 schedule-items error:', _error);
+      res.status(500).json({ error: 'Failed to schedule items' });
+    }
+  });
+
   app.post('/api/p2/print-barcodes', async (req, res) => {
     try {
       const { itemIds } = req.body;

@@ -32,6 +32,7 @@ const creditCardPaymentSchema = z.object({
     .min(3, 'CVV must be at least 3 digits')
     .max(4, 'CVV must be at most 4 digits'),
   billingAddress: z.object({
+    companyName: z.string().optional(),
     firstName: z.string().min(1, 'First name is required'),
     lastName: z.string().min(1, 'Last name is required'),
     address: z.string().min(1, 'Address is required'),

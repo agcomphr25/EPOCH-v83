@@ -383,7 +383,13 @@ export default function PaymentManager({
               {/* Payment Type */}
               <div className="space-y-2">
                 <Label htmlFor="payment-type">Payment Type</Label>
-                <Select value={paymentType} onValueChange={setPaymentType}>
+                <Select value={paymentType} onValueChange={(value) => {
+                  setPaymentType(value);
+                  if (value === 'live') {
+                    setShowPaymentModal(false);
+                    setShowLivePaymentModal(true);
+                  }
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select payment type" />
                   </SelectTrigger>
@@ -515,7 +521,13 @@ export default function PaymentManager({
               {/* Payment Type */}
               <div className="space-y-2">
                 <Label htmlFor="payment-type">Payment Type</Label>
-                <Select value={paymentType} onValueChange={setPaymentType}>
+                <Select value={paymentType} onValueChange={(value) => {
+                  setPaymentType(value);
+                  if (value === 'live') {
+                    setShowPaymentModal(false);
+                    setShowLivePaymentModal(true);
+                  }
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select payment type" />
                   </SelectTrigger>

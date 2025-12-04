@@ -65,17 +65,23 @@ const creditCardSchema = z.object({
     .regex(/^\d+$/, 'CVV must contain only digits'),
   billingAddress: z.object({
     companyName: z.string().optional(),
-    firstName: z.string().min(1, 'First name is required'),
-    lastName: z.string().min(1, 'Last name is required'),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
     address: z.string().min(1, 'Address is required'),
     city: z.string().min(1, 'City is required'),
     state: z.string().min(2, 'State is required'),
     zip: z.string().min(5, 'ZIP code is required'),
     country: z.string().default('US'),
-  }),
+  }).refine(
+    (data) => {
+      const hasCompany = data.companyName && data.companyName.trim().length > 0;
+      const hasFirstName = data.firstName && data.firstName.trim().length > 0;
+      const hasLastName = data.lastName && data.lastName.trim().length > 0;
+      return hasCompany || hasFirstName || hasLastName;
+    },
+    { message: 'Either Company Name or a Name (First or Last) is required', path: ['firstName'] }
+  ),
   customerEmail: z.string().email().optional().or(z.literal('')),
-  taxAmount: z.number().min(0).default(0),
-  shippingAmount: z.number().min(0).default(0),
 });
 
 type CreditCardFormData = z.infer<typeof creditCardSchema>;
@@ -147,8 +153,6 @@ export default function CreditCardPayment({
       cvv: '',
       billingAddress: getInitialBillingAddress(),
       customerEmail: customerInfo?.email || '',
-      taxAmount: 0,
-      shippingAmount: 0,
     },
   });
 
@@ -336,28 +340,6 @@ export default function CreditCardPayment({
               />
             </div>
 
-            {/* Tax Amount */}
-            <FormField
-              control={form.control}
-              name="taxAmount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tax Amount ($)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      {...field}
-                      onChange={(e) =>
-                        field.onChange(parseFloat(e.target.value) || 0)
-                      }
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             {/* Credit Card Information */}
             <div className="border-t pt-6">
@@ -443,13 +425,14 @@ export default function CreditCardPayment({
             {/* Billing Address */}
             <div className="border-t pt-6">
               <h3 className="text-lg font-semibold mb-4">Billing Address</h3>
+              <p className="text-sm text-muted-foreground mb-4">Enter Company Name OR First/Last Name (or both)</p>
               <div className="space-y-4">
                 <FormField
                   control={form.control}
                   name="billingAddress.companyName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Company Name (Optional)</FormLabel>
+                      <FormLabel>Company Name</FormLabel>
                       <FormControl>
                         <Input {...field} placeholder="Company Name" data-testid="input-company-name" />
                       </FormControl>
@@ -463,7 +446,7 @@ export default function CreditCardPayment({
                     name="billingAddress.firstName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>First Name</FormLabel>
+                        <FormLabel>First Name (Optional if Company provided)</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="John" data-testid="input-first-name" />
                         </FormControl>
@@ -476,7 +459,7 @@ export default function CreditCardPayment({
                     name="billingAddress.lastName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Last Name</FormLabel>
+                        <FormLabel>Last Name (Optional)</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="Doe" data-testid="input-last-name" />
                         </FormControl>

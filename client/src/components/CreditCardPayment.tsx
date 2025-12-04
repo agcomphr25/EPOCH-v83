@@ -119,14 +119,11 @@ export default function CreditCardPayment({
 
   const getInitialBillingAddress = () => {
     const address = getBillingAddress();
-    const { firstName, lastName } = customerInfo
-      ? parseCustomerName(customerInfo.contact || customerInfo.name)
-      : { firstName: '', lastName: '' };
 
     return {
-      companyName: customerInfo?.company || '',
-      firstName,
-      lastName,
+      companyName: '',
+      firstName: '',
+      lastName: '',
       address: address ? `${address.street}${address.street2 ? ' ' + address.street2 : ''}` : '',
       city: address?.city || '',
       state: address?.state || '',

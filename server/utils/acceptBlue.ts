@@ -30,6 +30,7 @@ export interface AcceptBlueChargeRequest {
   orderId: string;
   customerEmail?: string;
   billingAddress: {
+    companyName?: string;
     firstName: string;
     lastName: string;
     address: string;
@@ -80,6 +81,7 @@ export async function chargeCard(
       avs_address: request.billingAddress.address,
       avs_zip: request.billingAddress.zip,
       billing_info: {
+        company: request.billingAddress.companyName || undefined,
         first_name: request.billingAddress.firstName,
         last_name: request.billingAddress.lastName,
         street: request.billingAddress.address,

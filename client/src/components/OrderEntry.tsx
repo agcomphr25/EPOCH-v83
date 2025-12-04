@@ -975,7 +975,7 @@ export default function OrderEntry() {
     }
   }, [features.action_length, features.bottom_metal, toast]);
 
-  // Business rule: Clear Tikka-specific options when stock model changes to non-Tikka
+  // Business rule: Tikka model compatibility - Tikka models only show Tikka options, non-Tikka models hide Tikka options
   useEffect(() => {
     if (!modelId || modelOptions.length === 0) return;
 
@@ -983,8 +983,48 @@ export default function OrderEntry() {
     const modelName = selectedModel?.displayName || selectedModel?.name || '';
     const isTikkaModel = modelName.toLowerCase().includes('tikka');
 
-    // If not a Tikka model, clear any Tikka-specific selections
-    if (!isTikkaModel) {
+    const clearedFields: string[] = [];
+    const updates: Record<string, undefined> = {};
+
+    // If Tikka model, clear any NON-Tikka selections
+    if (isTikkaModel) {
+      const hasNonTikkaAction =
+        features.action_inlet &&
+        !features.action_inlet.toLowerCase().includes('tikka');
+      const hasNonTikkaBarrel =
+        features.barrel_inlet &&
+        !features.barrel_inlet.toLowerCase().includes('tikka');
+      const hasNonTikkaBottomMetal =
+        features.bottom_metal &&
+        !features.bottom_metal.toLowerCase().includes('tikka');
+
+      if (hasNonTikkaAction) {
+        updates.action_inlet = undefined;
+        clearedFields.push('Action Inlet');
+      }
+      if (hasNonTikkaBarrel) {
+        updates.barrel_inlet = undefined;
+        clearedFields.push('Barrel Inlet');
+      }
+      if (hasNonTikkaBottomMetal) {
+        updates.bottom_metal = undefined;
+        clearedFields.push('Bottom Metal');
+      }
+
+      if (clearedFields.length > 0) {
+        setFeatures((prev) => ({
+          ...prev,
+          ...updates,
+        }));
+
+        toast({
+          title: 'Options Updated',
+          description: `${clearedFields.join(', ')} cleared - Only Tikka options are available for this stock model.`,
+          variant: 'default',
+        });
+      }
+    } else {
+      // If not a Tikka model, clear any Tikka-specific selections
       const hasTikkaAction =
         features.action_inlet &&
         features.action_inlet.toLowerCase().includes('tikka');
@@ -995,23 +1035,20 @@ export default function OrderEntry() {
         features.bottom_metal &&
         features.bottom_metal.toLowerCase().includes('tikka');
 
-      if (hasTikkaAction || hasTikkaBarrel || hasTikkaBottomMetal) {
-        const clearedFields: string[] = [];
-        const updates: Record<string, undefined> = {};
+      if (hasTikkaAction) {
+        updates.action_inlet = undefined;
+        clearedFields.push('Action Inlet');
+      }
+      if (hasTikkaBarrel) {
+        updates.barrel_inlet = undefined;
+        clearedFields.push('Barrel Inlet');
+      }
+      if (hasTikkaBottomMetal) {
+        updates.bottom_metal = undefined;
+        clearedFields.push('Bottom Metal');
+      }
 
-        if (hasTikkaAction) {
-          updates.action_inlet = undefined;
-          clearedFields.push('Action Inlet');
-        }
-        if (hasTikkaBarrel) {
-          updates.barrel_inlet = undefined;
-          clearedFields.push('Barrel Inlet');
-        }
-        if (hasTikkaBottomMetal) {
-          updates.bottom_metal = undefined;
-          clearedFields.push('Bottom Metal');
-        }
-
+      if (clearedFields.length > 0) {
         setFeatures((prev) => ({
           ...prev,
           ...updates,
@@ -2964,14 +3001,28 @@ export default function OrderEntry() {
                               opt.value.toLowerCase().includes('tikka') ||
                               opt.label.toLowerCase().includes('tikka')
                           );
-                          return (
-                            !isTikkaModel &&
-                            hasTikkaOptions && (
+                          const hasNonTikkaOptions = smartSortedActionInlet.some(
+                            (opt) =>
+                              !opt.value.toLowerCase().includes('tikka') &&
+                              !opt.label.toLowerCase().includes('tikka') &&
+                              opt.value.trim() !== ''
+                          );
+
+                          if (isTikkaModel && hasNonTikkaOptions) {
+                            return (
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                                Tikka only
+                              </span>
+                            );
+                          }
+                          if (!isTikkaModel && hasTikkaOptions) {
+                            return (
                               <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
                                 Tikka options hidden
                               </span>
-                            )
-                          );
+                            );
+                          }
+                          return null;
                         })()}
                       </Label>
                       <Select
@@ -3035,11 +3086,16 @@ export default function OrderEntry() {
                                 if (!option.value || option.value.trim() === '')
                                   return false;
 
-                                // Business rule: Filter out Tikka options when stock model is NOT a Tikka model
                                 const isTikkaOption =
                                   option.value.toLowerCase().includes('tikka') ||
                                   option.label.toLowerCase().includes('tikka');
 
+                                // Business rule: Tikka model shows ONLY Tikka options
+                                if (isTikkaModel && !isTikkaOption) {
+                                  return false;
+                                }
+
+                                // Business rule: Non-Tikka model hides Tikka options
                                 if (!isTikkaModel && isTikkaOption) {
                                   return false;
                                 }
@@ -3101,14 +3157,29 @@ export default function OrderEntry() {
                               opt.value.toLowerCase().includes('tikka') ||
                               opt.label.toLowerCase().includes('tikka')
                           );
-                          return (
-                            !isTikkaModel &&
-                            hasTikkaOptions && (
+                          const hasNonTikkaOptions =
+                            barrelFeature?.options?.some(
+                              (opt) =>
+                                !opt.value.toLowerCase().includes('tikka') &&
+                                !opt.label.toLowerCase().includes('tikka') &&
+                                opt.value.trim() !== ''
+                            );
+
+                          if (isTikkaModel && hasNonTikkaOptions) {
+                            return (
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                                Tikka only
+                              </span>
+                            );
+                          }
+                          if (!isTikkaModel && hasTikkaOptions) {
+                            return (
                               <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
                                 Tikka options hidden
                               </span>
-                            )
-                          );
+                            );
+                          }
+                          return null;
                         })()}
                       </Label>
                       <Select
@@ -3172,7 +3243,6 @@ export default function OrderEntry() {
                                   )
                                     return false;
 
-                                  // Business rule: Filter out Tikka options when stock model is NOT a Tikka model
                                   const isTikkaOption =
                                     option.value
                                       .toLowerCase()
@@ -3181,6 +3251,12 @@ export default function OrderEntry() {
                                       .toLowerCase()
                                       .includes('tikka');
 
+                                  // Business rule: Tikka model shows ONLY Tikka options
+                                  if (isTikkaModel && !isTikkaOption) {
+                                    return false;
+                                  }
+
+                                  // Business rule: Non-Tikka model hides Tikka options
                                   if (!isTikkaModel && isTikkaOption) {
                                     return false;
                                   }
@@ -3720,14 +3796,29 @@ export default function OrderEntry() {
                                 opt.value.toLowerCase().includes('tikka') ||
                                 opt.label.toLowerCase().includes('tikka')
                             );
-                          return (
-                            !isTikkaModel &&
-                            hasTikkaOptions && (
+                          const hasNonTikkaOptions =
+                            bottomMetalFeature?.options?.some(
+                              (opt) =>
+                                !opt.value.toLowerCase().includes('tikka') &&
+                                !opt.label.toLowerCase().includes('tikka') &&
+                                opt.value.trim() !== ''
+                            );
+
+                          if (isTikkaModel && hasNonTikkaOptions) {
+                            return (
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                                Tikka only
+                              </span>
+                            );
+                          }
+                          if (!isTikkaModel && hasTikkaOptions) {
+                            return (
                               <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
                                 Tikka options hidden
                               </span>
-                            )
-                          );
+                            );
+                          }
+                          return null;
                         })()}
                       </Label>
                       <Select
@@ -3783,7 +3874,6 @@ export default function OrderEntry() {
                                   )
                                     return false;
 
-                                  // Business rule: Filter out Tikka options when stock model is NOT a Tikka model
                                   const isTikkaOption =
                                     option.value
                                       .toLowerCase()
@@ -3792,6 +3882,12 @@ export default function OrderEntry() {
                                       .toLowerCase()
                                       .includes('tikka');
 
+                                  // Business rule: Tikka model shows ONLY Tikka options
+                                  if (isTikkaModel && !isTikkaOption) {
+                                    return false;
+                                  }
+
+                                  // Business rule: Non-Tikka model hides Tikka options
                                   if (!isTikkaModel && isTikkaOption) {
                                     return false;
                                   }

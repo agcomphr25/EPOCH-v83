@@ -107,35 +107,18 @@ export default function BulkPaymentPage() {
   });
 
   useEffect(() => {
-    if (customerDetails || customerAddresses.length > 0) {
+    if (customerAddresses.length > 0) {
       const billingAddr = customerAddresses.find(
         (addr) => addr.type === 'billing' || addr.type === 'both'
       );
       const defaultAddr = customerAddresses.find((addr) => addr.isDefault);
       const address = billingAddr || defaultAddr || customerAddresses[0];
 
-      // Try to extract first/last name from customer contact or name field
-      let firstName = '';
-      let lastName = '';
-      const contactOrName = customerDetails?.contact || customerDetails?.name || '';
-      if (contactOrName) {
-        const nameParts = contactOrName.trim().split(/\s+/);
-        if (nameParts.length >= 2) {
-          firstName = nameParts[0];
-          lastName = nameParts.slice(1).join(' ');
-        } else if (nameParts.length === 1) {
-          firstName = nameParts[0];
-        }
-      }
-
       setCreditCardData(prev => ({
         ...prev,
         customerEmail: customerDetails?.email || '',
         billingAddress: {
           ...prev.billingAddress,
-          companyName: customerDetails?.company || '',
-          firstName: firstName,
-          lastName: lastName,
           address: address ? `${address.street}${address.street2 ? ' ' + address.street2 : ''}` : '',
           city: address?.city || '',
           state: address?.state || '',

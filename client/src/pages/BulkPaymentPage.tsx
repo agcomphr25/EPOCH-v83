@@ -50,9 +50,6 @@ interface CreditCardData {
   expirationDate: string;
   cvv: string;
   billingAddress: {
-    companyName: string;
-    firstName: string;
-    lastName: string;
     address: string;
     city: string;
     state: string;
@@ -77,9 +74,6 @@ export default function BulkPaymentPage() {
     expirationDate: '',
     cvv: '',
     billingAddress: {
-      companyName: '',
-      firstName: '',
-      lastName: '',
       address: '',
       city: '',
       state: '',
@@ -209,9 +203,6 @@ export default function BulkPaymentPage() {
       expirationDate: '',
       cvv: '',
       billingAddress: {
-        companyName: customerDetails?.company || '',
-        firstName: '',
-        lastName: '',
         address: creditCardData.billingAddress.address,
         city: creditCardData.billingAddress.city,
         state: creditCardData.billingAddress.state,
@@ -230,9 +221,6 @@ export default function BulkPaymentPage() {
       expirationDate: '',
       cvv: '',
       billingAddress: {
-        companyName: '',
-        firstName: '',
-        lastName: '',
         address: '',
         city: '',
         state: '',
@@ -339,19 +327,6 @@ export default function BulkPaymentPage() {
         toast({
           title: 'Missing Billing Address',
           description: 'Please complete the billing address.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      const hasCompanyName = creditCardData.billingAddress.companyName?.trim();
-      const hasFirstName = creditCardData.billingAddress.firstName?.trim();
-      const hasLastName = creditCardData.billingAddress.lastName?.trim();
-      
-      if (!hasCompanyName && !hasFirstName && !hasLastName) {
-        toast({
-          title: 'Missing Cardholder Name',
-          description: 'Please enter Company Name OR First/Last Name for the cardholder.',
           variant: 'destructive',
         });
         return;
@@ -669,51 +644,7 @@ export default function BulkPaymentPage() {
 
                           <div className="border-t pt-4 space-y-4">
                             <h4 className="font-semibold">Billing Address</h4>
-                            <p className="text-sm text-muted-foreground">Enter Company Name OR First/Last Name (or both)</p>
                             
-                            <div className="space-y-2">
-                              <Label htmlFor="company-name">Company Name</Label>
-                              <Input
-                                id="company-name"
-                                placeholder="Company Name"
-                                value={creditCardData.billingAddress.companyName}
-                                onChange={(e) => setCreditCardData(prev => ({
-                                  ...prev,
-                                  billingAddress: { ...prev.billingAddress, companyName: e.target.value }
-                                }))}
-                                data-testid="input-company-name"
-                              />
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="first-name">First Name</Label>
-                                <Input
-                                  id="first-name"
-                                  placeholder="John"
-                                  value={creditCardData.billingAddress.firstName}
-                                  onChange={(e) => setCreditCardData(prev => ({
-                                    ...prev,
-                                    billingAddress: { ...prev.billingAddress, firstName: e.target.value }
-                                  }))}
-                                  data-testid="input-first-name"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="last-name">Last Name</Label>
-                                <Input
-                                  id="last-name"
-                                  placeholder="Doe"
-                                  value={creditCardData.billingAddress.lastName}
-                                  onChange={(e) => setCreditCardData(prev => ({
-                                    ...prev,
-                                    billingAddress: { ...prev.billingAddress, lastName: e.target.value }
-                                  }))}
-                                  data-testid="input-last-name"
-                                />
-                              </div>
-                            </div>
-
                             <div className="space-y-2">
                               <Label htmlFor="address">Street Address</Label>
                               <Input

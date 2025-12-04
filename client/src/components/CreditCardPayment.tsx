@@ -72,15 +72,7 @@ const creditCardSchema = z.object({
     state: z.string().min(2, 'State is required'),
     zip: z.string().min(5, 'ZIP code is required'),
     country: z.string().default('US'),
-  }).refine(
-    (data) => {
-      const hasCompany = data.companyName && data.companyName.trim().length > 0;
-      const hasFirstName = data.firstName && data.firstName.trim().length > 0;
-      const hasLastName = data.lastName && data.lastName.trim().length > 0;
-      return hasCompany || hasFirstName || hasLastName;
-    },
-    { message: 'Either Company Name or a Name (First or Last) is required', path: ['firstName'] }
-  ),
+  }),
   customerEmail: z.string().email().optional().or(z.literal('')),
 });
 

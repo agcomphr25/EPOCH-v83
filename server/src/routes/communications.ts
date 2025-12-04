@@ -77,11 +77,11 @@ router.post('/email', async (req, res) => {
       // Send via SendGrid (default) using Replit integration
       try {
         const { client, fromEmail } = await getUncachableSendGridClient();
-        senderEmail = fromEmail; // Use verified sender from integration
+        senderEmail = fromEmail.email; // Use verified sender email from integration
 
         const msg = {
           to: data.to,
-          from: senderEmail,
+          from: fromEmail, // Use full from object with email and name
           subject: data.subject,
           text: data.message,
           html: data.html || data.message.replace(/\n/g, '<br>'),

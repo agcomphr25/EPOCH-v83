@@ -114,7 +114,7 @@ export async function chargeCard(
       },
       customer: request.customerEmail ? {
         email: request.customerEmail,
-        send_receipt: false,
+        send_receipt: true,
       } : undefined,
       capture: true,
     };

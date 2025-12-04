@@ -5220,6 +5220,7 @@ export default function OrderEntry() {
                   <PaymentManager
                     orderId={orderId}
                     totalAmount={totalPrice + shipping}
+                    customerInfo={customer}
                     onPaymentsChange={setOrderPayments}
                     isInline={true}
                   />

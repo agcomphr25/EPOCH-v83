@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   PlusCircle,
-  FileText,
   FilePenLine,
   XCircle,
   Users,
@@ -149,22 +148,11 @@ export default function DARLENEBTestDashboard() {
       {/* Special Customer Watch Section */}
       {currentUser?.username === 'darleneb' && (
         <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center mb-3">
             <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
               <Eye className="w-5 h-5 text-purple-600" />
               Customer Watch Rules
             </h2>
-            <Link href="/watch-rules">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2 hover:bg-purple-50 hover:border-purple-300"
-                data-testid="button-manage-watch-rules"
-              >
-                <FileText className="w-4 h-4" />
-                Manage Rules
-              </Button>
-            </Link>
           </div>
           <WatchRuleCards userId={currentUser.username} />
         </div>

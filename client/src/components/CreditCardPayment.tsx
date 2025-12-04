@@ -72,15 +72,7 @@ const creditCardSchema = z.object({
     state: z.string().min(2, 'State is required'),
     zip: z.string().min(5, 'ZIP code is required'),
     country: z.string().default('US'),
-  }).refine(
-    (data) => {
-      const hasCompany = data.companyName && data.companyName.trim().length > 0;
-      const hasFirstName = data.firstName && data.firstName.trim().length > 0;
-      const hasLastName = data.lastName && data.lastName.trim().length > 0;
-      return hasCompany || hasFirstName || hasLastName;
-    },
-    { message: 'Either Company Name or a Name (First or Last) is required', path: ['firstName'] }
-  ),
+  }),
   customerEmail: z.string().email().optional().or(z.literal('')),
 });
 
@@ -127,14 +119,11 @@ export default function CreditCardPayment({
 
   const getInitialBillingAddress = () => {
     const address = getBillingAddress();
-    const { firstName, lastName } = customerInfo
-      ? parseCustomerName(customerInfo.contact || customerInfo.name)
-      : { firstName: '', lastName: '' };
 
     return {
-      companyName: customerInfo?.company || '',
-      firstName,
-      lastName,
+      companyName: '',
+      firstName: '',
+      lastName: '',
       address: address ? `${address.street}${address.street2 ? ' ' + address.street2 : ''}` : '',
       city: address?.city || '',
       state: address?.state || '',

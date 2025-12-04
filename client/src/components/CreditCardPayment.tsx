@@ -64,9 +64,6 @@ const creditCardSchema = z.object({
     .max(4, 'CVV must be at most 4 digits')
     .regex(/^\d+$/, 'CVV must contain only digits'),
   billingAddress: z.object({
-    companyName: z.string().optional(),
-    firstName: z.string().optional(),
-    lastName: z.string().optional(),
     address: z.string().min(1, 'Address is required'),
     city: z.string().min(1, 'City is required'),
     state: z.string().min(2, 'State is required'),
@@ -99,16 +96,6 @@ export default function CreditCardPayment({
   const queryClient = useQueryClient();
   const [paymentResult, setPaymentResult] = useState<any>(null);
 
-  const parseCustomerName = (name: string) => {
-    const parts = name.trim().split(/\s+/);
-    if (parts.length === 1) {
-      return { firstName: parts[0], lastName: '' };
-    }
-    const firstName = parts[0];
-    const lastName = parts.slice(1).join(' ');
-    return { firstName, lastName };
-  };
-
   const getBillingAddress = () => {
     const billingAddr = customerAddresses.find(
       (addr) => addr.type === 'billing' || addr.type === 'both'
@@ -121,9 +108,6 @@ export default function CreditCardPayment({
     const address = getBillingAddress();
 
     return {
-      companyName: '',
-      firstName: '',
-      lastName: '',
       address: address ? `${address.street}${address.street2 ? ' ' + address.street2 : ''}` : '',
       city: address?.city || '',
       state: address?.state || '',
@@ -414,50 +398,7 @@ export default function CreditCardPayment({
             {/* Billing Address */}
             <div className="border-t pt-6">
               <h3 className="text-lg font-semibold mb-4">Billing Address</h3>
-              <p className="text-sm text-muted-foreground mb-4">Enter Company Name OR First/Last Name (or both)</p>
               <div className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="billingAddress.companyName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Company Name</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Company Name" data-testid="input-company-name" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="billingAddress.firstName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>First Name (Optional if Company provided)</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="John" data-testid="input-first-name" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="billingAddress.lastName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Last Name (Optional)</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="Doe" data-testid="input-last-name" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
                 <FormField
                   control={form.control}
                   name="billingAddress.address"

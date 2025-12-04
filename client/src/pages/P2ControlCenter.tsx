@@ -17,8 +17,10 @@ import {
   ArrowRight,
   Layers,
   Route,
-  Award
+  Award,
+  ClipboardList
 } from 'lucide-react';
+import { Link } from 'wouter';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
 import P2BOMWizard from '@/components/p2/P2BOMWizard';
 import P2ProductionScheduler from '@/components/p2/P2ProductionScheduler';
@@ -110,10 +112,18 @@ export default function P2ControlCenter() {
             Complete workflow management for P2 purchase orders
           </p>
         </div>
-        <Button onClick={() => setShowPOWizard(true)} data-testid="button-new-po">
-          <FileText className="h-4 w-4 mr-2" />
-          New P2 Order
-        </Button>
+        <div className="flex items-center gap-3">
+          <Link href="/p2-forms">
+            <Button variant="outline" data-testid="button-p2-forms">
+              <ClipboardList className="h-4 w-4 mr-2" />
+              P2 Forms
+            </Button>
+          </Link>
+          <Button onClick={() => setShowPOWizard(true)} data-testid="button-new-po">
+            <FileText className="h-4 w-4 mr-2" />
+            New P2 Order
+          </Button>
+        </div>
       </div>
 
       {/* Workflow Progress Indicator */}

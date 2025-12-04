@@ -55,6 +55,7 @@ import VendorManagement from './pages/VendorManagement';
 import ManageGroups from './pages/ManageGroups';
 import PurchaseOrders from './pages/PurchaseOrders';
 import P2ControlCenter from './pages/P2ControlCenter';
+import P2Forms from './pages/P2Forms';
 import ManufacturingQueue from './pages/ManufacturingQueue';
 import P2TravelerPage from './pages/P2TravelerPage';
 import P2TravelerViewer from './pages/P2TravelerViewer';
@@ -130,6 +131,7 @@ import P2QuotesList from './pages/P2QuotesList';
 import PaymentManagement from './pages/PaymentManagement';
 import RefundRequest from './pages/RefundRequest';
 import RefundQueue from './pages/RefundQueue';
+import CreditMemoPage from './pages/CreditMemoPage';
 import ProductionQueuePage from './pages/ProductionQueuePage';
 import SimplifiedLayupScheduler from './components/SimplifiedLayupScheduler';
 import CustomerSatisfaction from './pages/CustomerSatisfaction';
@@ -549,6 +551,9 @@ function App() {
                   <Route path="/refund-request" component={RefundRequest} />
                   <Route path="/refund-queue" component={RefundQueue} />
 
+                  {/* Credit Memo Management */}
+                  <Route path="/credit-memo" component={CreditMemoPage} />
+
                   {/* Forms and Reports Routes */}
                   <Route path="/forms" component={AdminFormsPage} />
                   <Route path="/form/:id" component={FormPage} />
@@ -569,7 +574,7 @@ function App() {
 
                   {/* P2 Routes - Control Center consolidates all P2 functionality */}
                   <Route path="/p2-control-center" component={P2ControlCenter} />
-                  <Route path="/p2-forms">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
+                  <Route path="/p2-forms" component={P2Forms} />
                   <Route path="/p2-traveler" component={P2TravelerPage} />
                   <Route path="/p2-traveler-viewer" component={P2TravelerViewer} />
                   <Route path="/p2/packing-slip/:id" component={P2PackingSlipViewer} />

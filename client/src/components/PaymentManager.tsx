@@ -22,7 +22,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import CreditCardPayment from './CreditCardPayment';
+import CreditCardPayment, { CustomerInfo, CustomerAddress } from './CreditCardPayment';
 
 export interface Payment {
   id: number;
@@ -38,6 +38,7 @@ export interface Payment {
 interface PaymentManagerProps {
   orderId: string;
   totalAmount: number;
+  customerInfo?: CustomerInfo | null;
   onPaymentsChange?: (payments: Payment[]) => void;
   isInline?: boolean;
 }
@@ -45,6 +46,7 @@ interface PaymentManagerProps {
 export default function PaymentManager({
   orderId,
   totalAmount,
+  customerInfo,
   onPaymentsChange,
   isInline = false,
 }: PaymentManagerProps) {
@@ -52,6 +54,7 @@ export default function PaymentManager({
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showLivePaymentModal, setShowLivePaymentModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+  const [customerAddresses, setCustomerAddresses] = useState<CustomerAddress[]>([]);
 
   // Form state
   const [paymentType, setPaymentType] = useState('');
@@ -60,6 +63,23 @@ export default function PaymentManager({
     new Date().toISOString().split('T')[0]
   );
   const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    const fetchCustomerAddresses = async () => {
+      if (customerInfo?.id && showLivePaymentModal) {
+        try {
+          const response = await fetch(`/api/customers/${customerInfo.id}/addresses`);
+          if (response.ok) {
+            const addresses = await response.json();
+            setCustomerAddresses(addresses);
+          }
+        } catch (error) {
+          console.error('Failed to fetch customer addresses:', error);
+        }
+      }
+    };
+    fetchCustomerAddresses();
+  }, [customerInfo?.id, showLivePaymentModal]);
 
   // Fetch payments for this order
   const {
@@ -363,7 +383,13 @@ export default function PaymentManager({
               {/* Payment Type */}
               <div className="space-y-2">
                 <Label htmlFor="payment-type">Payment Type</Label>
-                <Select value={paymentType} onValueChange={setPaymentType}>
+                <Select value={paymentType} onValueChange={(value) => {
+                  setPaymentType(value);
+                  if (value === 'live') {
+                    setShowPaymentModal(false);
+                    setShowLivePaymentModal(true);
+                  }
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select payment type" />
                   </SelectTrigger>
@@ -460,6 +486,8 @@ export default function PaymentManager({
             <CreditCardPayment
               orderId={orderId}
               defaultAmount={parseFloat(paymentAmount) || balanceDue}
+              customerInfo={customerInfo}
+              customerAddresses={customerAddresses}
               onSuccess={handleLivePaymentSuccess}
               onCancel={handleLivePaymentCancel}
             />
@@ -493,7 +521,13 @@ export default function PaymentManager({
               {/* Payment Type */}
               <div className="space-y-2">
                 <Label htmlFor="payment-type">Payment Type</Label>
-                <Select value={paymentType} onValueChange={setPaymentType}>
+                <Select value={paymentType} onValueChange={(value) => {
+                  setPaymentType(value);
+                  if (value === 'live') {
+                    setShowPaymentModal(false);
+                    setShowLivePaymentModal(true);
+                  }
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select payment type" />
                   </SelectTrigger>
@@ -590,6 +624,8 @@ export default function PaymentManager({
             <CreditCardPayment
               orderId={orderId}
               defaultAmount={parseFloat(paymentAmount) || balanceDue}
+              customerInfo={customerInfo}
+              customerAddresses={customerAddresses}
               onSuccess={handleLivePaymentSuccess}
               onCancel={handleLivePaymentCancel}
             />

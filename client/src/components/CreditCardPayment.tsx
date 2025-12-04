@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -6,7 +6,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import {
   Form,
@@ -24,6 +23,28 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+export interface CustomerInfo {
+  id: number;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  company?: string | null;
+  contact?: string | null;
+}
+
+export interface CustomerAddress {
+  id: number;
+  customerId: string;
+  street: string;
+  street2?: string | null;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+  type: string;
+  isDefault: boolean;
+}
 
 // Credit card payment form schema
 const creditCardSchema = z.object({
@@ -43,8 +64,6 @@ const creditCardSchema = z.object({
     .max(4, 'CVV must be at most 4 digits')
     .regex(/^\d+$/, 'CVV must contain only digits'),
   billingAddress: z.object({
-    firstName: z.string().min(1, 'First name is required'),
-    lastName: z.string().min(1, 'Last name is required'),
     address: z.string().min(1, 'Address is required'),
     city: z.string().min(1, 'City is required'),
     state: z.string().min(2, 'State is required'),
@@ -52,8 +71,6 @@ const creditCardSchema = z.object({
     country: z.string().default('US'),
   }),
   customerEmail: z.string().email().optional().or(z.literal('')),
-  taxAmount: z.number().min(0).default(0),
-  shippingAmount: z.number().min(0).default(0),
 });
 
 type CreditCardFormData = z.infer<typeof creditCardSchema>;
@@ -61,6 +78,8 @@ type CreditCardFormData = z.infer<typeof creditCardSchema>;
 interface CreditCardPaymentProps {
   orderId: string;
   defaultAmount?: number;
+  customerInfo?: CustomerInfo | null;
+  customerAddresses?: CustomerAddress[];
   onSuccess?: (result: any) => void;
   onCancel?: () => void;
 }
@@ -68,12 +87,34 @@ interface CreditCardPaymentProps {
 export default function CreditCardPayment({
   orderId,
   defaultAmount = 0,
+  customerInfo,
+  customerAddresses = [],
   onSuccess,
   onCancel,
 }: CreditCardPaymentProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [paymentResult, setPaymentResult] = useState<any>(null);
+
+  const getBillingAddress = () => {
+    const billingAddr = customerAddresses.find(
+      (addr) => addr.type === 'billing' || addr.type === 'both'
+    );
+    const defaultAddr = customerAddresses.find((addr) => addr.isDefault);
+    return billingAddr || defaultAddr || customerAddresses[0];
+  };
+
+  const getInitialBillingAddress = () => {
+    const address = getBillingAddress();
+
+    return {
+      address: address ? `${address.street}${address.street2 ? ' ' + address.street2 : ''}` : '',
+      city: address?.city || '',
+      state: address?.state || '',
+      zip: address?.zipCode || '',
+      country: address?.country === 'United States' ? 'US' : (address?.country || 'US'),
+    };
+  };
 
   const form = useForm<CreditCardFormData>({
     resolver: zodResolver(creditCardSchema),
@@ -83,20 +124,21 @@ export default function CreditCardPayment({
       cardNumber: '',
       expirationDate: '',
       cvv: '',
-      billingAddress: {
-        firstName: '',
-        lastName: '',
-        address: '',
-        city: '',
-        state: '',
-        zip: '',
-        country: 'US',
-      },
-      customerEmail: '',
-      taxAmount: 0,
-      shippingAmount: 0,
+      billingAddress: getInitialBillingAddress(),
+      customerEmail: customerInfo?.email || '',
     },
   });
+
+  useEffect(() => {
+    if (customerInfo || customerAddresses.length > 0) {
+      const billingAddress = getInitialBillingAddress();
+      form.reset({
+        ...form.getValues(),
+        billingAddress,
+        customerEmail: customerInfo?.email || form.getValues('customerEmail'),
+      });
+    }
+  }, [customerInfo, customerAddresses]);
 
   const processPaymentMutation = useMutation({
     mutationFn: async (data: CreditCardFormData) => {
@@ -271,51 +313,6 @@ export default function CreditCardPayment({
               />
             </div>
 
-            {/* Additional Amounts */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="taxAmount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tax Amount ($)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(parseFloat(e.target.value) || 0)
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="shippingAmount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Shipping Amount ($)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(parseFloat(e.target.value) || 0)
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
 
             {/* Credit Card Information */}
             <div className="border-t pt-6">
@@ -402,35 +399,6 @@ export default function CreditCardPayment({
             <div className="border-t pt-6">
               <h3 className="text-lg font-semibold mb-4">Billing Address</h3>
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="billingAddress.firstName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>First Name</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="John" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="billingAddress.lastName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Last Name</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="Doe" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
                 <FormField
                   control={form.control}
                   name="billingAddress.address"

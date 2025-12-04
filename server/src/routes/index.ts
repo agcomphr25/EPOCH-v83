@@ -73,6 +73,7 @@ import manufacturingQueueRoutes from './manufacturingQueue';
 import cuttingTableManufacturingQueueRoutes from './cuttingTableManufacturingQueue';
 
 import watchRulesRoutes from './watchRules';
+import creditMemosRoutes from './creditMemos';
 
 
 import p2TravelerRoutes from './p2Traveler';
@@ -276,6 +277,9 @@ export function registerRoutes(app: Express): Server {
 
   // Refund management routes
   app.use('/api/refund-requests', refundRoutes);
+
+  // Credit memo management routes
+  app.use('/api/credit-memos', creditMemosRoutes);
 
   // Reports routes
   app.use('/api/reports', reportsRoutes);

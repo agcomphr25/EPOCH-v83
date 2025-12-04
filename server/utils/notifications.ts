@@ -1,4 +1,5 @@
 import { customers } from '@shared/schema';
+import { allOrders } from '../schema.js';
 import { eq } from 'drizzle-orm';
 
 import { db } from '../db.js';
@@ -122,13 +123,13 @@ export async function sendCustomerNotification(
   // Update order notification status
   if (results.methods.length > 0) {
     await db
-      .update(orderDrafts)
+      .update(allOrders)
       .set({
         customerNotified: true,
         notificationMethod: results.methods.join(', '),
         notificationSentAt: new Date(),
       })
-      .where(eq(orderDrafts.orderId, data.orderId));
+      .where(eq(allOrders.orderId, data.orderId));
 
     results.success = true;
   }
@@ -273,7 +274,7 @@ export async function updateTrackingInfo(
   }
 ) {
   return await db
-    .update(orderDrafts)
+    .update(allOrders)
     .set({
       trackingNumber: trackingData.trackingNumber,
       shippingCarrier: trackingData.carrier || 'UPS',
@@ -281,5 +282,5 @@ export async function updateTrackingInfo(
       estimatedDelivery: trackingData.estimatedDelivery,
       shippingLabelGenerated: true,
     })
-    .where(eq(orderDrafts.orderId, orderId));
+    .where(eq(allOrders.orderId, orderId));
 }

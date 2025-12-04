@@ -32,8 +32,9 @@ const creditCardPaymentSchema = z.object({
     .min(3, 'CVV must be at least 3 digits')
     .max(4, 'CVV must be at most 4 digits'),
   billingAddress: z.object({
-    firstName: z.string().min(1, 'First name is required'),
-    lastName: z.string().min(1, 'Last name is required'),
+    companyName: z.string().optional(),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
     address: z.string().min(1, 'Address is required'),
     city: z.string().min(1, 'City is required'),
     state: z.string().min(2, 'State is required'),
@@ -176,6 +177,14 @@ async function processTransactionResult(data: {
     .returning();
 
   // Create credit card transaction record
+  // Extract card details from Accept.Blue response format
+  const lastFourDigits = data.rawResponse?.last_4 || 
+    data.rawResponse?.transaction?.card_details?.last4 ||
+    data.rawResponse?.transactionResponse?.accountNumber?.slice(-4);
+  const cardType = data.rawResponse?.card_type || 
+    data.rawResponse?.transaction?.card_details?.card_type ||
+    data.rawResponse?.transactionResponse?.accountType;
+
   const [transaction] = await db
     .insert(creditCardTransactions)
     .values({
@@ -188,9 +197,8 @@ async function processTransactionResult(data: {
       responseReasonText: data.responseReasonText,
       avsResult: data.avsResult,
       cvvResult: data.cvvResult,
-      lastFourDigits:
-        data.rawResponse?.transactionResponse?.accountNumber?.slice(-4),
-      cardType: data.rawResponse?.transactionResponse?.accountType,
+      lastFourDigits: lastFourDigits,
+      cardType: cardType,
       amount: data.amount,
       taxAmount: data.taxAmount,
       shippingAmount: data.shippingAmount,
@@ -456,6 +464,273 @@ router.post('/batch', async (req, res) => {
       });
     }
     return res.status(500).json({ error: 'Batch payment processing failed' });
+  }
+});
+
+// Bulk live credit card payment - process a single charge and distribute to multiple orders
+const bulkLivePaymentSchema = z.object({
+  totalAmount: z.number().min(0.01, 'Amount must be greater than 0'),
+  cardNumber: z
+    .string()
+    .min(13, 'Card number must be at least 13 digits')
+    .max(19, 'Card number must be at most 19 digits'),
+  expirationDate: z
+    .string()
+    .regex(/^\d{2}\/\d{2}$/, 'Expiration date must be in MM/YY format'),
+  cvv: z
+    .string()
+    .min(3, 'CVV must be at least 3 digits')
+    .max(4, 'CVV must be at most 4 digits'),
+  billingAddress: z.object({
+    companyName: z.string().optional(),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+    address: z.string().min(1, 'Address is required'),
+    city: z.string().min(1, 'City is required'),
+    state: z.string().min(2, 'State is required'),
+    zip: z.string().min(5, 'ZIP code is required'),
+    country: z.string().default('US'),
+  }),
+  customerEmail: z.string().email().optional().or(z.literal('')),
+  orderAllocations: z
+    .array(
+      z.object({
+        orderId: z.string(),
+        amount: z.number().min(0),
+        orderTotal: z.number().min(0),
+      })
+    )
+    .min(1, 'At least one order must be selected'),
+});
+
+router.post('/bulk-live', async (req, res) => {
+  try {
+    console.log('🔄 Bulk live payment request received');
+    const paymentData = bulkLivePaymentSchema.parse(req.body);
+    
+    console.log('💳 Processing bulk live payment:', {
+      totalAmount: paymentData.totalAmount,
+      orderCount: paymentData.orderAllocations.length,
+      orders: paymentData.orderAllocations.map(o => o.orderId).join(', '),
+    });
+
+    if (!isAcceptBlueConfigured()) {
+      return res.status(500).json({
+        success: false,
+        error: 'Payment processing not configured. Please contact support.',
+      });
+    }
+
+    // Validate that allocations sum to total amount
+    const totalAllocated = paymentData.orderAllocations.reduce(
+      (sum, allocation) => sum + allocation.amount,
+      0
+    );
+    if (Math.abs(totalAllocated - paymentData.totalAmount) > 0.01) {
+      return res.status(400).json({
+        success: false,
+        error: `Total allocation amount (${totalAllocated.toFixed(2)}) does not match payment amount (${paymentData.totalAmount.toFixed(2)})`,
+      });
+    }
+
+    // Verify all orders exist
+    const orderIds = paymentData.orderAllocations.map((a) => a.orderId);
+    const existingOrders = await db
+      .select()
+      .from(allOrders)
+      .where(inArray(allOrders.orderId, orderIds));
+
+    if (existingOrders.length !== orderIds.length) {
+      console.log(`❌ Found ${existingOrders.length} orders out of ${orderIds.length} requested`);
+      return res.status(400).json({
+        success: false,
+        error: 'One or more orders not found',
+      });
+    }
+
+    // Use first order ID as the reference for the transaction description
+    const primaryOrderId = paymentData.orderAllocations[0].orderId;
+    const orderDescription = paymentData.orderAllocations.length > 1
+      ? `${primaryOrderId} (+${paymentData.orderAllocations.length - 1} more)`
+      : primaryOrderId;
+
+    // Process the single credit card charge via Accept.Blue
+    const result = await chargeCard({
+      amount: paymentData.totalAmount,
+      cardNumber: paymentData.cardNumber,
+      expirationDate: paymentData.expirationDate,
+      cvv: paymentData.cvv,
+      orderId: orderDescription,
+      customerEmail: paymentData.customerEmail,
+      billingAddress: paymentData.billingAddress,
+    });
+
+    // If the charge failed without a reference number, return the error immediately
+    if (!result.success && !result.referenceNumber && !result.transactionId) {
+      console.log('❌ Bulk live payment failed:', result.message);
+      return res.status(400).json({
+        success: false,
+        error: result.message || 'Payment processing failed',
+        message: result.message,
+      });
+    }
+
+    const transactionId = result.referenceNumber 
+      ? String(result.referenceNumber) 
+      : (result.transactionId || `BULK-${Date.now()}`);
+
+    const isApproved = result.success;
+
+    if (!isApproved) {
+      console.log('❌ Bulk live payment declined:', result.message);
+      return res.status(400).json({
+        success: false,
+        transactionId,
+        error: result.message || 'Transaction declined',
+        message: result.message,
+      });
+    }
+
+    console.log(`✅ Bulk live charge approved! Transaction ID: ${transactionId}`);
+
+    // Extract card details from Accept.Blue response
+    const lastFourDigits = result.rawResponse?.last_4 || 
+      result.rawResponse?.transaction?.card_details?.last4;
+    const cardType = result.rawResponse?.card_type || 
+      result.rawResponse?.transaction?.card_details?.card_type;
+
+    // Now distribute the payment to each order
+    const paymentResults = [];
+    let ordersProcessed = 0;
+
+    for (const allocation of paymentData.orderAllocations) {
+      if (allocation.amount > 0) {
+        try {
+          // Create payment record for this order
+          const [payment] = await db
+            .insert(payments)
+            .values({
+              orderId: allocation.orderId,
+              paymentType: 'credit_card',
+              paymentAmount: allocation.amount,
+              paymentDate: new Date(),
+              notes: `Live credit card payment - Trans: ${transactionId}, Auth: ${result.authCode || 'N/A'}`,
+            })
+            .returning();
+
+          // Create credit card transaction record for this order
+          const [transaction] = await db
+            .insert(creditCardTransactions)
+            .values({
+              paymentId: payment.id,
+              orderId: allocation.orderId,
+              transactionId: `${transactionId}-${allocation.orderId}`,
+              authCode: result.authCode,
+              responseCode: '1',
+              responseReasonText: 'Transaction approved (bulk payment)',
+              avsResult: result.avsResult,
+              cvvResult: result.cvvResult,
+              lastFourDigits: lastFourDigits,
+              cardType: cardType,
+              amount: allocation.amount,
+              taxAmount: 0,
+              shippingAmount: 0,
+              customerEmail: paymentData.customerEmail,
+              billingFirstName: paymentData.billingAddress.firstName,
+              billingLastName: paymentData.billingAddress.lastName,
+              billingAddress: paymentData.billingAddress.address,
+              billingCity: paymentData.billingAddress.city,
+              billingState: paymentData.billingAddress.state,
+              billingZip: paymentData.billingAddress.zip,
+              billingCountry: paymentData.billingAddress.country,
+              isTest: isTestMode,
+              rawResponse: { 
+                ...result.rawResponse, 
+                bulkPayment: true, 
+                masterTransactionId: transactionId,
+                allocatedAmount: allocation.amount,
+              },
+              status: 'completed',
+            })
+            .returning();
+
+          // Calculate if order is fully paid
+          const allPaymentsForOrder = await db
+            .select()
+            .from(payments)
+            .where(eq(payments.orderId, allocation.orderId));
+          
+          const totalPaid = allPaymentsForOrder.reduce(
+            (sum, p) => sum + (p.paymentAmount || 0),
+            0
+          );
+          
+          const roundedTotalPaid = Math.round(totalPaid * 100) / 100;
+          const roundedOrderTotal = Math.round(allocation.orderTotal * 100) / 100;
+          const isPaidInFull = roundedTotalPaid >= roundedOrderTotal;
+
+          // Update order payment status
+          await db
+            .update(allOrders)
+            .set({
+              isPaid: isPaidInFull,
+              paymentType: 'credit_card',
+              paymentAmount: totalPaid,
+              paymentDate: new Date(),
+              paymentTimestamp: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(allOrders.orderId, allocation.orderId));
+
+          paymentResults.push({
+            orderId: allocation.orderId,
+            paymentId: payment.id,
+            amount: allocation.amount,
+            isPaidInFull,
+          });
+
+          ordersProcessed++;
+        } catch (orderError) {
+          console.error(`Error processing order ${allocation.orderId}:`, orderError);
+          paymentResults.push({
+            orderId: allocation.orderId,
+            error: 'Failed to record payment for this order',
+          });
+        }
+      }
+    }
+
+    console.log('✅ Bulk live payment completed:', {
+      transactionId,
+      ordersProcessed,
+      totalAmount: paymentData.totalAmount,
+    });
+
+    res.json({
+      success: true,
+      transactionId,
+      authCode: result.authCode,
+      message: 'Bulk payment processed successfully',
+      ordersProcessed,
+      totalAmount: paymentData.totalAmount,
+      avsResult: result.avsResult,
+      cvvResult: result.cvvResult,
+      results: paymentResults,
+    });
+
+  } catch (error) {
+    console.error('Bulk live payment error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid payment data',
+        details: error.errors,
+      });
+    }
+    return res.status(500).json({ 
+      success: false,
+      error: 'Payment processing failed' 
+    });
   }
 });
 

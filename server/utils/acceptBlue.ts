@@ -1,9 +1,12 @@
 import fetch from 'node-fetch';
 
-const isProduction = process.env.NODE_ENV === 'production';
-const ACCEPT_BLUE_API_URL = isProduction 
+const acceptBlueEnv = (process.env.ACCEPT_BLUE_ENVIRONMENT || 'sandbox').toLowerCase();
+const useProductionApi = acceptBlueEnv === 'production';
+const ACCEPT_BLUE_API_URL = useProductionApi 
   ? 'https://api.accept.blue/api/v2'
   : 'https://api.sandbox.accept.blue/api/v2';
+
+console.log(`🔵 Accept.Blue configured for ${useProductionApi ? 'PRODUCTION' : 'SANDBOX'} environment`);
 
 function getCredentials() {
   const apiKey = (process.env.ACCEPT_BLUE_API_KEY || '').trim();
@@ -27,8 +30,9 @@ export interface AcceptBlueChargeRequest {
   orderId: string;
   customerEmail?: string;
   billingAddress: {
-    firstName: string;
-    lastName: string;
+    companyName?: string;
+    firstName?: string;
+    lastName?: string;
     address: string;
     city: string;
     state: string;
@@ -62,10 +66,28 @@ export async function chargeCard(
     }
 
     console.log(`💳 Processing Accept.Blue charge for order ${request.orderId}, amount: $${request.amount}`);
-    console.log(`🌐 Using ${isProduction ? 'PRODUCTION' : 'SANDBOX'} environment`);
+    console.log(`🌐 Using ${useProductionApi ? 'PRODUCTION' : 'SANDBOX'} environment`);
 
     const [expMonth, expYear] = request.expirationDate.split('/');
     const fullExpYear = expYear.length === 2 ? parseInt(`20${expYear}`, 10) : parseInt(expYear, 10);
+
+    // Determine the cardholder name - use first/last if provided, otherwise fall back to company name
+    const firstName = request.billingAddress.firstName?.trim() || '';
+    const lastName = request.billingAddress.lastName?.trim() || '';
+    const companyName = request.billingAddress.companyName?.trim() || '';
+    
+    // Build the cardholder name - prefer individual name, fall back to company
+    let cardholderName: string;
+    if (firstName || lastName) {
+      cardholderName = `${firstName} ${lastName}`.trim();
+    } else {
+      cardholderName = companyName;
+    }
+    
+    // For billing_info, use provided names or fall back to company
+    // If only lastName is provided, use it as the first_name for API compatibility
+    const billingFirstName = firstName || (lastName ? lastName : companyName);
+    const billingLastName = firstName ? lastName : '';
 
     const payload = {
       amount: request.amount,
@@ -73,12 +95,13 @@ export async function chargeCard(
       expiry_month: parseInt(expMonth, 10),
       expiry_year: fullExpYear,
       cvv2: request.cvv,
-      name: `${request.billingAddress.firstName} ${request.billingAddress.lastName}`,
+      name: cardholderName,
       avs_address: request.billingAddress.address,
       avs_zip: request.billingAddress.zip,
       billing_info: {
-        first_name: request.billingAddress.firstName,
-        last_name: request.billingAddress.lastName,
+        company: companyName || undefined,
+        first_name: billingFirstName,
+        last_name: billingLastName,
         street: request.billingAddress.address,
         city: request.billingAddress.city,
         state: request.billingAddress.state,
@@ -91,7 +114,7 @@ export async function chargeCard(
       },
       customer: request.customerEmail ? {
         email: request.customerEmail,
-        send_receipt: false,
+        send_receipt: true,
       } : undefined,
       capture: true,
     };
@@ -173,7 +196,7 @@ export async function voidTransaction(
     }
 
     console.log(`🔄 Processing Accept.Blue void for reference number ${referenceNumber}`);
-    console.log(`🌐 Using ${isProduction ? 'PRODUCTION' : 'SANDBOX'} environment`);
+    console.log(`🌐 Using ${useProductionApi ? 'PRODUCTION' : 'SANDBOX'} environment`);
 
     const payload = {
       reference_number: typeof referenceNumber === 'string' ? parseInt(referenceNumber, 10) : referenceNumber,
@@ -233,7 +256,7 @@ export async function refundTransaction(
     }
 
     console.log(`💰 Processing Accept.Blue refund for reference number ${referenceNumber}${amount ? `, amount: $${amount}` : ' (full refund)'}`);
-    console.log(`🌐 Using ${isProduction ? 'PRODUCTION' : 'SANDBOX'} environment`);
+    console.log(`🌐 Using ${useProductionApi ? 'PRODUCTION' : 'SANDBOX'} environment`);
 
     const payload: any = {
       reference_number: typeof referenceNumber === 'string' ? parseInt(referenceNumber, 10) : referenceNumber,

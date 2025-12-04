@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   PlusCircle,
-  FileText,
   FilePenLine,
   XCircle,
   Users,
@@ -21,6 +20,7 @@ import {
   List,
   ClipboardList,
   Eye,
+  Settings,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
@@ -159,14 +159,14 @@ export default function DARLENEBTestDashboard() {
                 variant="outline"
                 size="sm"
                 className="flex items-center gap-2 hover:bg-purple-50 hover:border-purple-300"
-                data-testid="button-manage-watch-rules"
+                data-testid="button-manage-watch-rules-header"
               >
-                <FileText className="w-4 h-4" />
-                Manage Rules
+                <Settings className="w-4 h-4" />
+                Manage Watch Rules
               </Button>
             </Link>
           </div>
-          <WatchRuleCards userId={currentUser.username} />
+          <WatchRuleCards userId={currentUser.username} showManageButton={false} />
         </div>
       )}
 

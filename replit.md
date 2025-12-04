@@ -15,7 +15,7 @@ Critical requirement: All completed functionality must be hard-coded to prevent 
 Search standardization: All department queue pages use unified OrderSearchBox component with "Search orders by Order ID or FishBowl Number..." placeholder for consistent user experience.
 Navigation dropdown behavior: All navbar dropdown menus close automatically after selection.
 Balance due access: Customer balance due tracking is restricted to username "glennj" only for security. Balance Due column appears in Customer Management only when glennj is logged in.
-Tikka compatibility guardrails: On the Order Entry page, Tikka stock models ONLY show Tikka options for action inlet, barrel inlet, and bottom metal (with a green "Tikka only" badge). Non-Tikka stock models hide all Tikka options from these dropdowns (with a blue "Tikka options hidden" badge). When switching between Tikka and non-Tikka models, incompatible selections are automatically cleared with a toast notification.
+Tikka compatibility guardrails: On the Order Entry page, Tikka stock models ONLY show Tikka options for action inlet, barrel inlet, and bottom metal (with a green "Tikka only" badge). Non-Tikka stock models hide all Tikka options from these dropdowns. When switching between Tikka and non-Tikka models, incompatible selections are automatically cleared with a toast notification.
 
 ## System Architecture
 The application is built as a monorepo using a full-stack TypeScript approach, emphasizing type safety and cross-platform compatibility.

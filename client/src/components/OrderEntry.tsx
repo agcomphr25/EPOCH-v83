@@ -3015,13 +3015,6 @@ export default function OrderEntry() {
                               </span>
                             );
                           }
-                          if (!isTikkaModel && hasTikkaOptions) {
-                            return (
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                                Tikka options hidden
-                              </span>
-                            );
-                          }
                           return null;
                         })()}
                       </Label>
@@ -3169,13 +3162,6 @@ export default function OrderEntry() {
                             return (
                               <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
                                 Tikka only
-                              </span>
-                            );
-                          }
-                          if (!isTikkaModel && hasTikkaOptions) {
-                            return (
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                                Tikka options hidden
                               </span>
                             );
                           }
@@ -3808,13 +3794,6 @@ export default function OrderEntry() {
                             return (
                               <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
                                 Tikka only
-                              </span>
-                            );
-                          }
-                          if (!isTikkaModel && hasTikkaOptions) {
-                            return (
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                                Tikka options hidden
                               </span>
                             );
                           }

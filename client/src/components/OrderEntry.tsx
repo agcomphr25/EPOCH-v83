@@ -1906,7 +1906,7 @@ export default function OrderEntry() {
           // Try to match by SKU or model name
           const matchingBom = stockBoms?.find(
             (bom: any) =>
-              bom.sku === selectedModel.sku ||
+              bom.sku === (selectedModel as any).sku ||
               bom.modelName === selectedModel.name ||
               bom.modelName === selectedModel.displayName
           );

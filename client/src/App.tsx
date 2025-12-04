@@ -130,6 +130,7 @@ import P2QuotesList from './pages/P2QuotesList';
 import PaymentManagement from './pages/PaymentManagement';
 import RefundRequest from './pages/RefundRequest';
 import RefundQueue from './pages/RefundQueue';
+import CreditMemoPage from './pages/CreditMemoPage';
 import ProductionQueuePage from './pages/ProductionQueuePage';
 import SimplifiedLayupScheduler from './components/SimplifiedLayupScheduler';
 import CustomerSatisfaction from './pages/CustomerSatisfaction';
@@ -548,6 +549,9 @@ function App() {
                   {/* Refund Management Routes */}
                   <Route path="/refund-request" component={RefundRequest} />
                   <Route path="/refund-queue" component={RefundQueue} />
+
+                  {/* Credit Memo Management */}
+                  <Route path="/credit-memo" component={CreditMemoPage} />
 
                   {/* Forms and Reports Routes */}
                   <Route path="/forms" component={AdminFormsPage} />

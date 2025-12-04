@@ -7410,4 +7410,58 @@ export const insertP2DepartmentTransferSignatureSchema = createInsertSchema(p2De
 export type P2DepartmentTransferSignature = typeof p2DepartmentTransferSignatures.$inferSelect;
 export type InsertP2DepartmentTransferSignature = z.infer<typeof insertP2DepartmentTransferSignatureSchema>;
 
+// Credit Memos - Customer credit management
+export const creditMemos = pgTable('credit_memos', {
+  id: serial('id').primaryKey(),
+  memoNumber: text('memo_number').notNull().unique(),
+  customerId: text('customer_id').notNull(),
+  amount: real('amount').notNull(),
+  appliedAmount: real('applied_amount').default(0),
+  unappliedAmount: real('unapplied_amount').notNull(),
+  reason: text('reason').notNull(),
+  notes: text('notes'),
+  status: text('status').default('active').notNull(),
+  issuedDate: timestamp('issued_date').defaultNow().notNull(),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  customerIdIdx: index('credit_memos_customer_id_idx').on(table.customerId),
+  statusIdx: index('credit_memos_status_idx').on(table.status),
+}));
+
+export const insertCreditMemoSchema = createInsertSchema(creditMemos).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CreditMemo = typeof creditMemos.$inferSelect;
+export type InsertCreditMemo = z.infer<typeof insertCreditMemoSchema>;
+
+// Credit Memo Applications - Track how credit memos are applied to orders/invoices
+export const creditMemoApplications = pgTable('credit_memo_applications', {
+  id: serial('id').primaryKey(),
+  creditMemoId: integer('credit_memo_id')
+    .references(() => creditMemos.id)
+    .notNull(),
+  orderId: text('order_id').notNull(),
+  amountApplied: real('amount_applied').notNull(),
+  appliedDate: timestamp('applied_date').defaultNow().notNull(),
+  appliedBy: text('applied_by'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  creditMemoIdIdx: index('credit_memo_apps_memo_id_idx').on(table.creditMemoId),
+  orderIdIdx: index('credit_memo_apps_order_id_idx').on(table.orderId),
+}));
+
+export const insertCreditMemoApplicationSchema = createInsertSchema(creditMemoApplications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type CreditMemoApplication = typeof creditMemoApplications.$inferSelect;
+export type InsertCreditMemoApplication = z.infer<typeof insertCreditMemoApplicationSchema>;
+
 export * from './calendar.schema';

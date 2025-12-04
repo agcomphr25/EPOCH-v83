@@ -975,6 +975,64 @@ export default function OrderEntry() {
     }
   }, [features.action_length, features.bottom_metal, toast]);
 
+  // Business rule: Clear Tikka-specific options when stock model changes to non-Tikka
+  useEffect(() => {
+    if (!modelId || modelOptions.length === 0) return;
+
+    const selectedModel = modelOptions.find((m) => m.id === modelId);
+    const modelName = selectedModel?.displayName || selectedModel?.name || '';
+    const isTikkaModel = modelName.toLowerCase().includes('tikka');
+
+    // If not a Tikka model, clear any Tikka-specific selections
+    if (!isTikkaModel) {
+      const hasTikkaAction =
+        features.action_inlet &&
+        features.action_inlet.toLowerCase().includes('tikka');
+      const hasTikkaBarrel =
+        features.barrel_inlet &&
+        features.barrel_inlet.toLowerCase().includes('tikka');
+      const hasTikkaBottomMetal =
+        features.bottom_metal &&
+        features.bottom_metal.toLowerCase().includes('tikka');
+
+      if (hasTikkaAction || hasTikkaBarrel || hasTikkaBottomMetal) {
+        const clearedFields: string[] = [];
+        const updates: Record<string, undefined> = {};
+
+        if (hasTikkaAction) {
+          updates.action_inlet = undefined;
+          clearedFields.push('Action Inlet');
+        }
+        if (hasTikkaBarrel) {
+          updates.barrel_inlet = undefined;
+          clearedFields.push('Barrel Inlet');
+        }
+        if (hasTikkaBottomMetal) {
+          updates.bottom_metal = undefined;
+          clearedFields.push('Bottom Metal');
+        }
+
+        setFeatures((prev) => ({
+          ...prev,
+          ...updates,
+        }));
+
+        toast({
+          title: 'Options Updated',
+          description: `${clearedFields.join(', ')} cleared - Tikka options are not available for this stock model.`,
+          variant: 'default',
+        });
+      }
+    }
+  }, [
+    modelId,
+    modelOptions,
+    features.action_inlet,
+    features.barrel_inlet,
+    features.bottom_metal,
+    toast,
+  ]);
+
   // Load existing order data for editing
   const loadExistingOrder = async (orderIdToEdit: string) => {
     try {
@@ -2888,7 +2946,34 @@ export default function OrderEntry() {
 
                     {/* Action Inlet */}
                     <div>
-                      <Label>Action Inlet</Label>
+                      <Label className="flex items-center gap-2">
+                        Action Inlet
+                        {(() => {
+                          const selectedModel = modelOptions.find(
+                            (m) => m.id === modelId
+                          );
+                          const modelName =
+                            selectedModel?.displayName ||
+                            selectedModel?.name ||
+                            '';
+                          const isTikkaModel = modelName
+                            .toLowerCase()
+                            .includes('tikka');
+                          const hasTikkaOptions = smartSortedActionInlet.some(
+                            (opt) =>
+                              opt.value.toLowerCase().includes('tikka') ||
+                              opt.label.toLowerCase().includes('tikka')
+                          );
+                          return (
+                            !isTikkaModel &&
+                            hasTikkaOptions && (
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                                Tikka options hidden
+                              </span>
+                            )
+                          );
+                        })()}
+                      </Label>
                       <Select
                         key={`action-inlet-${renderKey}-${features.action_inlet || 'empty'}`}
                         value={features.action_inlet || undefined}
@@ -2931,46 +3016,101 @@ export default function OrderEntry() {
                           />
                         </SelectTrigger>
                         <SelectContent>
-                          {smartSortedActionInlet
-                            .filter((option) => {
-                              // Filter out empty options
-                              if (!option.value || option.value.trim() === '')
-                                return false;
+                          {(() => {
+                            // Check if selected model is a Tikka model
+                            const selectedModel = modelOptions.find(
+                              (m) => m.id === modelId
+                            );
+                            const modelName =
+                              selectedModel?.displayName ||
+                              selectedModel?.name ||
+                              '';
+                            const isTikkaModel = modelName
+                              .toLowerCase()
+                              .includes('tikka');
 
-                              // Business rule: Filter out Impact options when Action Length is "Long" and Handedness is "Left"
-                              const isLongAction =
-                                features.action_length === 'long';
-                              const isLeftHanded =
-                                features.handedness === 'left';
-                              const isImpactOption =
-                                option.value.toLowerCase().includes('impact') ||
-                                option.label.toLowerCase().includes('impact');
+                            return smartSortedActionInlet
+                              .filter((option) => {
+                                // Filter out empty options
+                                if (!option.value || option.value.trim() === '')
+                                  return false;
 
-                              if (
-                                isLongAction &&
-                                isLeftHanded &&
-                                isImpactOption
-                              ) {
-                                return false;
-                              }
+                                // Business rule: Filter out Tikka options when stock model is NOT a Tikka model
+                                const isTikkaOption =
+                                  option.value.toLowerCase().includes('tikka') ||
+                                  option.label.toLowerCase().includes('tikka');
 
-                              return true;
-                            })
-                            .map((option) => (
-                              <SelectItem
-                                key={option.value}
-                                value={option.value}
-                              >
-                                {option.label}
-                              </SelectItem>
-                            ))}
+                                if (!isTikkaModel && isTikkaOption) {
+                                  return false;
+                                }
+
+                                // Business rule: Filter out Impact options when Action Length is "Long" and Handedness is "Left"
+                                const isLongAction =
+                                  features.action_length === 'long';
+                                const isLeftHanded =
+                                  features.handedness === 'left';
+                                const isImpactOption =
+                                  option.value.toLowerCase().includes('impact') ||
+                                  option.label.toLowerCase().includes('impact');
+
+                                if (
+                                  isLongAction &&
+                                  isLeftHanded &&
+                                  isImpactOption
+                                ) {
+                                  return false;
+                                }
+
+                                return true;
+                              })
+                              .map((option) => (
+                                <SelectItem
+                                  key={option.value}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </SelectItem>
+                              ));
+                          })()}
                         </SelectContent>
                       </Select>
                     </div>
 
                     {/* Barrel Inlet */}
                     <div>
-                      <Label>Barrel Inlet</Label>
+                      <Label className="flex items-center gap-2">
+                        Barrel Inlet
+                        {(() => {
+                          const selectedModel = modelOptions.find(
+                            (m) => m.id === modelId
+                          );
+                          const modelName =
+                            selectedModel?.displayName ||
+                            selectedModel?.name ||
+                            '';
+                          const isTikkaModel = modelName
+                            .toLowerCase()
+                            .includes('tikka');
+                          const barrelFeature = featureDefs.find(
+                            (f) =>
+                              f.name === 'barrel_inlet' ||
+                              f.id === 'barrel_inlet'
+                          );
+                          const hasTikkaOptions = barrelFeature?.options?.some(
+                            (opt) =>
+                              opt.value.toLowerCase().includes('tikka') ||
+                              opt.label.toLowerCase().includes('tikka')
+                          );
+                          return (
+                            !isTikkaModel &&
+                            hasTikkaOptions && (
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                                Tikka options hidden
+                              </span>
+                            )
+                          );
+                        })()}
+                      </Label>
                       <Select
                         value={features.barrel_inlet || undefined}
                         onValueChange={(value) => {
@@ -3004,24 +3144,59 @@ export default function OrderEntry() {
                           />
                         </SelectTrigger>
                         <SelectContent>
-                          {featureDefs
-                            .find(
-                              (f) =>
-                                f.name === 'barrel_inlet' ||
-                                f.id === 'barrel_inlet'
-                            )
-                            ?.options?.filter(
-                              (option) =>
-                                option.value && option.value.trim() !== ''
-                            )
-                            ?.map((option) => (
-                              <SelectItem
-                                key={option.value}
-                                value={option.value}
-                              >
-                                {option.label}
-                              </SelectItem>
-                            )) || []}
+                          {(() => {
+                            // Check if selected model is a Tikka model
+                            const selectedModel = modelOptions.find(
+                              (m) => m.id === modelId
+                            );
+                            const modelName =
+                              selectedModel?.displayName ||
+                              selectedModel?.name ||
+                              '';
+                            const isTikkaModel = modelName
+                              .toLowerCase()
+                              .includes('tikka');
+
+                            return (
+                              featureDefs
+                                .find(
+                                  (f) =>
+                                    f.name === 'barrel_inlet' ||
+                                    f.id === 'barrel_inlet'
+                                )
+                                ?.options?.filter((option) => {
+                                  // Filter out empty options
+                                  if (
+                                    !option.value ||
+                                    option.value.trim() === ''
+                                  )
+                                    return false;
+
+                                  // Business rule: Filter out Tikka options when stock model is NOT a Tikka model
+                                  const isTikkaOption =
+                                    option.value
+                                      .toLowerCase()
+                                      .includes('tikka') ||
+                                    option.label
+                                      .toLowerCase()
+                                      .includes('tikka');
+
+                                  if (!isTikkaModel && isTikkaOption) {
+                                    return false;
+                                  }
+
+                                  return true;
+                                })
+                                ?.map((option) => (
+                                  <SelectItem
+                                    key={option.value}
+                                    value={option.value}
+                                  >
+                                    {option.label}
+                                  </SelectItem>
+                                )) || []
+                            );
+                          })()}
                         </SelectContent>
                       </Select>
                     </div>
@@ -3521,7 +3696,40 @@ export default function OrderEntry() {
 
                     {/* Bottom Metal */}
                     <div>
-                      <Label>Bottom Metal</Label>
+                      <Label className="flex items-center gap-2">
+                        Bottom Metal
+                        {(() => {
+                          const selectedModel = modelOptions.find(
+                            (m) => m.id === modelId
+                          );
+                          const modelName =
+                            selectedModel?.displayName ||
+                            selectedModel?.name ||
+                            '';
+                          const isTikkaModel = modelName
+                            .toLowerCase()
+                            .includes('tikka');
+                          const bottomMetalFeature = featureDefs.find(
+                            (f) =>
+                              f.name === 'bottom_metal' ||
+                              f.id === 'bottom_metal'
+                          );
+                          const hasTikkaOptions =
+                            bottomMetalFeature?.options?.some(
+                              (opt) =>
+                                opt.value.toLowerCase().includes('tikka') ||
+                                opt.label.toLowerCase().includes('tikka')
+                            );
+                          return (
+                            !isTikkaModel &&
+                            hasTikkaOptions && (
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                                Tikka options hidden
+                              </span>
+                            )
+                          );
+                        })()}
+                      </Label>
                       <Select
                         key={`bottom-metal-${renderKey}-${features.bottom_metal || 'empty'}`}
                         value={features.bottom_metal || undefined}
@@ -3547,45 +3755,79 @@ export default function OrderEntry() {
                           />
                         </SelectTrigger>
                         <SelectContent>
-                          {featureDefs
-                            .find(
-                              (f) =>
-                                f.name === 'bottom_metal' ||
-                                f.id === 'bottom_metal'
-                            )
-                            ?.options?.filter((option) => {
-                              // Filter out empty options
-                              if (!option.value || option.value.trim() === '')
-                                return false;
+                          {(() => {
+                            // Check if selected model is a Tikka model
+                            const selectedModel = modelOptions.find(
+                              (m) => m.id === modelId
+                            );
+                            const modelName =
+                              selectedModel?.displayName ||
+                              selectedModel?.name ||
+                              '';
+                            const isTikkaModel = modelName
+                              .toLowerCase()
+                              .includes('tikka');
 
-                              // Business rule: Filter out specific bottom metals when Action Length is "Medium"
-                              const isMediumAction =
-                                features.action_length === 'medium';
-                              const restrictedBottomMetals = [
-                                'ag_m5_sa',
-                                'ag_m5_la',
-                                'ag_m5_la_cip',
-                                'ag_bdl_sa',
-                                'ag_bdl_la',
-                              ];
+                            return (
+                              featureDefs
+                                .find(
+                                  (f) =>
+                                    f.name === 'bottom_metal' ||
+                                    f.id === 'bottom_metal'
+                                )
+                                ?.options?.filter((option) => {
+                                  // Filter out empty options
+                                  if (
+                                    !option.value ||
+                                    option.value.trim() === ''
+                                  )
+                                    return false;
 
-                              if (
-                                isMediumAction &&
-                                restrictedBottomMetals.includes(option.value)
-                              ) {
-                                return false;
-                              }
+                                  // Business rule: Filter out Tikka options when stock model is NOT a Tikka model
+                                  const isTikkaOption =
+                                    option.value
+                                      .toLowerCase()
+                                      .includes('tikka') ||
+                                    option.label
+                                      .toLowerCase()
+                                      .includes('tikka');
 
-                              return true;
-                            })
-                            ?.map((option) => (
-                              <SelectItem
-                                key={option.value}
-                                value={option.value}
-                              >
-                                {option.label}
-                              </SelectItem>
-                            )) || []}
+                                  if (!isTikkaModel && isTikkaOption) {
+                                    return false;
+                                  }
+
+                                  // Business rule: Filter out specific bottom metals when Action Length is "Medium"
+                                  const isMediumAction =
+                                    features.action_length === 'medium';
+                                  const restrictedBottomMetals = [
+                                    'ag_m5_sa',
+                                    'ag_m5_la',
+                                    'ag_m5_la_cip',
+                                    'ag_bdl_sa',
+                                    'ag_bdl_la',
+                                  ];
+
+                                  if (
+                                    isMediumAction &&
+                                    restrictedBottomMetals.includes(
+                                      option.value
+                                    )
+                                  ) {
+                                    return false;
+                                  }
+
+                                  return true;
+                                })
+                                ?.map((option) => (
+                                  <SelectItem
+                                    key={option.value}
+                                    value={option.value}
+                                  >
+                                    {option.label}
+                                  </SelectItem>
+                                )) || []
+                            );
+                          })()}
                         </SelectContent>
                       </Select>
                     </div>

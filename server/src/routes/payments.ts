@@ -33,14 +33,22 @@ const creditCardPaymentSchema = z.object({
     .max(4, 'CVV must be at most 4 digits'),
   billingAddress: z.object({
     companyName: z.string().optional(),
-    firstName: z.string().min(1, 'First name is required'),
-    lastName: z.string().min(1, 'Last name is required'),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
     address: z.string().min(1, 'Address is required'),
     city: z.string().min(1, 'City is required'),
     state: z.string().min(2, 'State is required'),
     zip: z.string().min(5, 'ZIP code is required'),
     country: z.string().default('US'),
-  }),
+  }).refine(
+    (data) => {
+      const hasCompany = data.companyName && data.companyName.trim().length > 0;
+      const hasFirstName = data.firstName && data.firstName.trim().length > 0;
+      const hasLastName = data.lastName && data.lastName.trim().length > 0;
+      return hasCompany || hasFirstName || hasLastName;
+    },
+    { message: 'Either Company Name or a Name (First or Last) is required' }
+  ),
   customerEmail: z.string().email().optional().or(z.literal('')),
   taxAmount: z.number().min(0).default(0),
   shippingAmount: z.number().min(0).default(0),

@@ -543,6 +543,12 @@ export default function Navigation() {
       description: 'Review and approve pending refund requests',
     },
     {
+      path: '/credit-memo',
+      label: 'Credit Memo',
+      icon: FileText,
+      description: 'Create and apply credit memos to customer invoices',
+    },
+    {
       path: '/finance/ap',
       label: 'AP Journal',
       icon: Receipt,

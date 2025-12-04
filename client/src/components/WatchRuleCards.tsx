@@ -19,9 +19,10 @@ interface WatchRule {
 
 interface WatchRuleCardsProps {
   userId: string;
+  showManageButton?: boolean;
 }
 
-export default function WatchRuleCards({ userId }: WatchRuleCardsProps) {
+export default function WatchRuleCards({ userId, showManageButton = true }: WatchRuleCardsProps) {
   const { data: watchRules = [], isLoading, isError } = useQuery<WatchRule[]>({
     queryKey: [`/api/watch-rules?userId=${userId}`],
     enabled: !!userId,
@@ -69,14 +70,16 @@ export default function WatchRuleCards({ userId }: WatchRuleCardsProps) {
           <WatchRuleCard key={rule.id} rule={rule} />
         ))}
       </div>
-      <div className="flex justify-end">
-        <Link href="/watch-rules">
-          <Button variant="outline" size="sm" className="flex items-center gap-2" data-testid="button-manage-watch-rules">
-            <Settings className="w-4 h-4" />
-            Manage Watch Rules
-          </Button>
-        </Link>
-      </div>
+      {showManageButton && (
+        <div className="flex justify-end">
+          <Link href="/watch-rules">
+            <Button variant="outline" size="sm" className="flex items-center gap-2" data-testid="button-manage-watch-rules">
+              <Settings className="w-4 h-4" />
+              Manage Watch Rules
+            </Button>
+          </Link>
+        </div>
+      )}
     </>
   );
 }

@@ -1717,6 +1717,197 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // P2 Production Queue - Get items grouped by department
+  app.get('/api/p2/control-center/production-queue', async (req, res) => {
+    try {
+      const { db } = await import('../../db');
+      const { p2SerializedItems, p2WorkTasks, partRoutings } = await import('../../schema');
+      const { eq, and, inArray } = await import('drizzle-orm');
+      
+      // Get all active serialized items (not completed/scrapped)
+      const items = await db.query.p2SerializedItems.findMany({
+        where: and(
+          eq(p2SerializedItems.status, 'ACTIVE')
+        ),
+      });
+      
+      // Get all active work tasks (IN_PROGRESS)
+      const activeTasks = await db.query.p2WorkTasks.findMany({
+        where: eq(p2WorkTasks.status, 'IN_PROGRESS'),
+      });
+      
+      // Get all routings to know department sequences
+      const allRoutings = await db.query.partRoutings.findMany({
+        where: eq(partRoutings.isActive, true),
+      });
+      
+      // Create task lookup by serialized item ID
+      const taskByItemId = new Map<string, any>();
+      activeTasks.forEach((task: any) => {
+        taskByItemId.set(task.serializedItemId, task);
+      });
+      
+      // Get unique departments from all items and routings
+      const departmentsSet = new Set<string>();
+      items.forEach((item: any) => {
+        if (item.currentDepartment) {
+          departmentsSet.add(item.currentDepartment);
+        }
+      });
+      allRoutings.forEach((routing: any) => {
+        const sequence = routing.departmentSequence as string[] || [];
+        sequence.forEach(dept => departmentsSet.add(dept));
+      });
+      
+      // Standard department order for display
+      const departmentOrder = [
+        'Pending Layup',
+        'Layup',
+        'Assemble/Disassembly',
+        'CNC',
+        'Finish',
+        'Paint',
+        'Final QC',
+        'Shipping'
+      ];
+      
+      // Add any departments not in standard order
+      departmentsSet.forEach(dept => {
+        if (!departmentOrder.includes(dept)) {
+          departmentOrder.push(dept);
+        }
+      });
+      
+      // Group items by department
+      const departmentQueues: Record<string, any[]> = {};
+      departmentOrder.forEach(dept => {
+        departmentQueues[dept] = [];
+      });
+      
+      items.forEach((item: any) => {
+        const dept = item.currentDepartment || 'Pending Layup';
+        if (!departmentQueues[dept]) {
+          departmentQueues[dept] = [];
+        }
+        
+        const activeTask = taskByItemId.get(item.id);
+        
+        departmentQueues[dept].push({
+          id: item.id,
+          barcode: item.barcode,
+          serialNumber: item.serialNumber,
+          partNumber: item.partNumber,
+          partName: item.partName,
+          poNumber: item.poNumber,
+          customerName: item.customerName,
+          status: item.status,
+          currentDepartment: dept,
+          currentStageIndex: item.currentStageIndex || 0,
+          hasActiveTask: !!activeTask,
+          activeTask: activeTask ? {
+            id: activeTask.id,
+            employeeName: activeTask.employeeName,
+            employeeCode: activeTask.employeeCode,
+            startedAt: activeTask.startedAt,
+          } : null,
+        });
+      });
+      
+      // Format response with department summaries
+      const departments = departmentOrder
+        .filter(dept => departmentsSet.has(dept) || dept === 'Pending Layup' || dept === 'Layup')
+        .map(dept => {
+          const queueItems = departmentQueues[dept] || [];
+          const inProgressCount = queueItems.filter(i => i.hasActiveTask).length;
+          const waitingCount = queueItems.length - inProgressCount;
+          
+          return {
+            name: dept,
+            totalItems: queueItems.length,
+            inProgress: inProgressCount,
+            waiting: waitingCount,
+            items: queueItems,
+          };
+        });
+      
+      res.json({
+        departments,
+        summary: {
+          totalActive: items.length,
+          totalInProgress: activeTasks.length,
+          departmentCount: departments.filter(d => d.totalItems > 0).length,
+        },
+      });
+    } catch (_error) {
+      console.error('P2 Production Queue error:', _error);
+      res.status(500).json({ error: 'Failed to fetch production queue' });
+    }
+  });
+
+  // P2 Update item status (Hold/Scrap)
+  app.patch('/api/p2/control-center/item-status/:itemId', async (req, res) => {
+    try {
+      const { itemId } = req.params;
+      const { z } = await import('zod');
+      
+      // Validate request body with Zod
+      const updateStatusSchema = z.object({
+        status: z.enum(['HOLD', 'SCRAPPED', 'ACTIVE']),
+        reason: z.string().min(1, 'Reason is required'),
+        performedBy: z.string().optional().default('System'),
+      });
+      
+      const validationResult = updateStatusSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: 'Validation failed', 
+          details: validationResult.error.flatten() 
+        });
+      }
+      
+      const { status, reason, performedBy } = validationResult.data;
+      
+      const { db } = await import('../../db');
+      const { p2SerializedItems, p2SerializedItemEvents } = await import('../../schema');
+      const { eq } = await import('drizzle-orm');
+      
+      // Get item
+      const item = await db.query.p2SerializedItems.findFirst({
+        where: eq(p2SerializedItems.id, itemId),
+      });
+      
+      if (!item) {
+        return res.status(404).json({ error: 'Item not found' });
+      }
+      
+      // Update item status
+      await db.update(p2SerializedItems)
+        .set({
+          status,
+          updatedAt: new Date(),
+        })
+        .where(eq(p2SerializedItems.id, itemId));
+      
+      // Log event
+      await db.insert(p2SerializedItemEvents).values({
+        serializedItemId: itemId,
+        barcode: item.barcode,
+        eventType: status === 'HOLD' ? 'HOLD' : status === 'SCRAPPED' ? 'SCRAP' : 'NOTE',
+        performedBy: performedBy || 'System',
+        notes: reason || `Status changed to ${status}`,
+        metadata: { previousStatus: item.status, newStatus: status },
+      });
+      
+      res.json({
+        success: true,
+        message: `Item status updated to ${status}`,
+      });
+    } catch (_error) {
+      console.error('P2 Update item status error:', _error);
+      res.status(500).json({ error: 'Failed to update item status' });
+    }
+  });
+
   // Get P2 PO with line items and BOM status
   app.get('/api/p2-purchase-orders/:id', async (req, res) => {
     try {

@@ -1,0 +1,704 @@
+import { useState, type KeyboardEvent } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { 
+  Factory, 
+  Search, 
+  Play, 
+  Pause, 
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  User,
+  Package,
+  Scan,
+  XCircle,
+  Eye,
+  Loader2,
+  ChevronRight
+} from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+
+interface ActiveTask {
+  id: number;
+  employeeName: string;
+  employeeCode: string;
+  startedAt: string;
+}
+
+interface QueueItem {
+  id: string;
+  barcode: string;
+  serialNumber: string;
+  partNumber: string;
+  partName: string;
+  poNumber: string;
+  customerName: string;
+  status: string;
+  currentDepartment: string;
+  currentStageIndex: number;
+  hasActiveTask: boolean;
+  activeTask: ActiveTask | null;
+}
+
+interface Department {
+  name: string;
+  totalItems: number;
+  inProgress: number;
+  waiting: number;
+  items: QueueItem[];
+}
+
+interface ProductionQueueData {
+  departments: Department[];
+  summary: {
+    totalActive: number;
+    totalInProgress: number;
+    departmentCount: number;
+  };
+}
+
+interface PartInfo {
+  serializedItem: {
+    id: string;
+    barcode: string;
+    serialNumber: string;
+    partNumber: string;
+    partName: string;
+    customerName: string;
+    currentDepartment: string;
+    currentStageIndex: number;
+    status: string;
+  };
+  routing: {
+    id: string;
+    departmentSequence: string[];
+  };
+  nextDepartment: string;
+  departmentConfig: any;
+  traceabilityRequirements: any[];
+}
+
+export default function P2ProductionQueue() {
+  const { toast } = useToast();
+  const [scanInput, setScanInput] = useState('');
+  const [scannedItem, setScannedItem] = useState<PartInfo | null>(null);
+  const [showScanDialog, setShowScanDialog] = useState(false);
+  const [showHoldDialog, setShowHoldDialog] = useState(false);
+  const [showScrapDialog, setShowScrapDialog] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<QueueItem | null>(null);
+  const [holdReason, setHoldReason] = useState('');
+  const [scrapReason, setScrapReason] = useState('');
+  const [expandedDepartments, setExpandedDepartments] = useState<string[]>(['Layup', 'Pending Layup']);
+
+  const { data: queueData, isLoading } = useQuery<ProductionQueueData>({
+    queryKey: ['/api/p2/control-center/production-queue'],
+    refetchInterval: 10000,
+  });
+
+  const scanMutation = useMutation({
+    mutationFn: async (barcode: string) => {
+      const response = await fetch(`/api/p2-traveler/part-info/${barcode}`);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to find part');
+      }
+      return response.json();
+    },
+    onSuccess: (data: PartInfo) => {
+      setScannedItem(data);
+      setShowScanDialog(true);
+      setScanInput('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Scan Error',
+        description: error.message || 'Part not found',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ itemId, status, reason }: { itemId: string; status: string; reason: string }) => {
+      return apiRequest(`/api/p2/control-center/item-status/${itemId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, reason, performedBy: 'Supervisor' }),
+      });
+    },
+    onSuccess: (_, variables) => {
+      toast({
+        title: 'Status Updated',
+        description: `Item status changed to ${variables.status}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      setShowHoldDialog(false);
+      setShowScrapDialog(false);
+      setSelectedItem(null);
+      setHoldReason('');
+      setScrapReason('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update status',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleScan = () => {
+    if (scanInput.trim()) {
+      scanMutation.mutate(scanInput.trim());
+    }
+  };
+
+  const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleScan();
+    }
+  };
+
+  const openHoldDialog = (item: QueueItem) => {
+    setSelectedItem(item);
+    setShowHoldDialog(true);
+  };
+
+  const openScrapDialog = (item: QueueItem) => {
+    setSelectedItem(item);
+    setShowScrapDialog(true);
+  };
+
+  const confirmHold = () => {
+    if (selectedItem && holdReason.trim()) {
+      updateStatusMutation.mutate({
+        itemId: selectedItem.id,
+        status: 'HOLD',
+        reason: holdReason,
+      });
+    }
+  };
+
+  const confirmScrap = () => {
+    if (selectedItem && scrapReason.trim()) {
+      updateStatusMutation.mutate({
+        itemId: selectedItem.id,
+        status: 'SCRAPPED',
+        reason: scrapReason,
+      });
+    }
+  };
+
+  const getDepartmentColor = (name: string) => {
+    const colors: Record<string, string> = {
+      'Pending Layup': 'bg-gray-100 dark:bg-gray-800 border-gray-300',
+      'Layup': 'bg-blue-50 dark:bg-blue-950 border-blue-300',
+      'Assemble/Disassembly': 'bg-purple-50 dark:bg-purple-950 border-purple-300',
+      'CNC': 'bg-orange-50 dark:bg-orange-950 border-orange-300',
+      'Finish': 'bg-amber-50 dark:bg-amber-950 border-amber-300',
+      'Paint': 'bg-green-50 dark:bg-green-950 border-green-300',
+      'Final QC': 'bg-emerald-50 dark:bg-emerald-950 border-emerald-300',
+      'Shipping': 'bg-cyan-50 dark:bg-cyan-950 border-cyan-300',
+    };
+    return colors[name] || 'bg-slate-50 dark:bg-slate-900 border-slate-300';
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+          <p className="mt-4 text-muted-foreground">Loading production queue...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Barcode Scanner Input */}
+      <Card className="border-2 border-dashed border-primary/30">
+        <CardContent className="py-4">
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <Scan className="h-5 w-5 text-muted-foreground" />
+                <Input
+                  placeholder="Scan barcode or enter part ID..."
+                  value={scanInput}
+                  onChange={(e) => setScanInput(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  className="text-lg"
+                  data-testid="input-barcode-scan"
+                />
+                <Button 
+                  onClick={handleScan} 
+                  disabled={!scanInput.trim() || scanMutation.isPending}
+                  data-testid="button-scan"
+                >
+                  {scanMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Search className="h-4 w-4 mr-2" />
+                      Look Up
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Summary Stats */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center gap-3">
+              <Factory className="h-8 w-8 text-blue-600" />
+              <div>
+                <div className="text-2xl font-bold">{queueData?.summary.totalActive || 0}</div>
+                <div className="text-sm text-muted-foreground">Total Active Items</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center gap-3">
+              <Play className="h-8 w-8 text-green-600" />
+              <div>
+                <div className="text-2xl font-bold">{queueData?.summary.totalInProgress || 0}</div>
+                <div className="text-sm text-muted-foreground">Being Worked On</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center gap-3">
+              <Package className="h-8 w-8 text-purple-600" />
+              <div>
+                <div className="text-2xl font-bold">{queueData?.summary.departmentCount || 0}</div>
+                <div className="text-sm text-muted-foreground">Active Departments</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Department Queues */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Factory className="h-5 w-5" />
+            Department Queues
+          </CardTitle>
+          <CardDescription>
+            View items at each production stage. Click a department to see items.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Accordion 
+            type="multiple" 
+            value={expandedDepartments}
+            onValueChange={setExpandedDepartments}
+            className="space-y-2"
+          >
+            {queueData?.departments.map((dept) => (
+              <AccordionItem 
+                key={dept.name} 
+                value={dept.name}
+                className={`border rounded-lg ${getDepartmentColor(dept.name)}`}
+              >
+                <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                  <div className="flex items-center justify-between w-full pr-4">
+                    <div className="flex items-center gap-3">
+                      <span className="font-semibold">{dept.name}</span>
+                      <Badge variant="secondary" className="ml-2">
+                        {dept.totalItems} items
+                      </Badge>
+                      {dept.inProgress > 0 && (
+                        <Badge variant="default" className="bg-green-600">
+                          <Play className="h-3 w-3 mr-1" />
+                          {dept.inProgress} in progress
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      {dept.waiting > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {dept.waiting} waiting
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-4">
+                  {dept.items.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>No items in this department</p>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Barcode</TableHead>
+                          <TableHead>Part Number</TableHead>
+                          <TableHead>PO / Customer</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dept.items.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-mono font-semibold">
+                              {item.barcode || item.serialNumber}
+                            </TableCell>
+                            <TableCell>
+                              <div>{item.partNumber}</div>
+                              <div className="text-xs text-muted-foreground">{item.partName}</div>
+                            </TableCell>
+                            <TableCell>
+                              <div>{item.poNumber}</div>
+                              <div className="text-xs text-muted-foreground">{item.customerName}</div>
+                            </TableCell>
+                            <TableCell>
+                              {item.hasActiveTask && item.activeTask ? (
+                                <div className="flex items-center gap-2">
+                                  <Badge className="bg-green-600">
+                                    <Play className="h-3 w-3 mr-1" />
+                                    In Progress
+                                  </Badge>
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <User className="h-3 w-3" />
+                                    {item.activeTask.employeeName}
+                                  </span>
+                                </div>
+                              ) : (
+                                <Badge variant="secondary">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  Waiting
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setScanInput(item.barcode);
+                                    scanMutation.mutate(item.barcode);
+                                  }}
+                                  data-testid={`button-view-${item.id}`}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openHoldDialog(item)}
+                                  className="text-amber-600 hover:text-amber-700"
+                                  data-testid={`button-hold-${item.id}`}
+                                >
+                                  <Pause className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openScrapDialog(item)}
+                                  className="text-red-600 hover:text-red-700"
+                                  data-testid={`button-scrap-${item.id}`}
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </CardContent>
+      </Card>
+
+      {/* Scan Result Dialog */}
+      <Dialog open={showScanDialog} onOpenChange={setShowScanDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Scan className="h-5 w-5" />
+              Part Information
+            </DialogTitle>
+            <DialogDescription>
+              Scanned part details and routing information
+            </DialogDescription>
+          </DialogHeader>
+          
+          {scannedItem && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Barcode</label>
+                  <div className="font-mono text-lg">{scannedItem.serializedItem.barcode}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Serial Number</label>
+                  <div className="font-mono text-lg">{scannedItem.serializedItem.serialNumber}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Part Number</label>
+                  <div className="font-semibold">{scannedItem.serializedItem.partNumber}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Part Name</label>
+                  <div>{scannedItem.serializedItem.partName}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Customer</label>
+                  <div>{scannedItem.serializedItem.customerName}</div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Status</label>
+                  <Badge variant={scannedItem.serializedItem.status === 'ACTIVE' ? 'default' : 'secondary'}>
+                    {scannedItem.serializedItem.status}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <label className="text-sm font-medium text-muted-foreground">Routing Progress</label>
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  {scannedItem.routing.departmentSequence.map((dept, idx) => (
+                    <div key={dept} className="flex items-center">
+                      <Badge 
+                        variant={idx < scannedItem.serializedItem.currentStageIndex 
+                          ? 'default' 
+                          : idx === scannedItem.serializedItem.currentStageIndex
+                            ? 'secondary'
+                            : 'outline'}
+                        className={idx < scannedItem.serializedItem.currentStageIndex 
+                          ? 'bg-green-600' 
+                          : idx === scannedItem.serializedItem.currentStageIndex
+                            ? 'bg-blue-600 text-white'
+                            : ''}
+                      >
+                        {idx < scannedItem.serializedItem.currentStageIndex && (
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                        )}
+                        {dept}
+                      </Badge>
+                      {idx < scannedItem.routing.departmentSequence.length - 1 && (
+                        <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Factory className="h-5 w-5 text-blue-600" />
+                  <div>
+                    <div className="font-medium">Current Department</div>
+                    <div className="text-lg font-semibold">{scannedItem.serializedItem.currentDepartment}</div>
+                  </div>
+                </div>
+                {scannedItem.nextDepartment && (
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    Next: {scannedItem.nextDepartment}
+                  </div>
+                )}
+              </div>
+
+              {scannedItem.traceabilityRequirements.length > 0 && (
+                <div className="border-t pt-4">
+                  <label className="text-sm font-medium text-muted-foreground">Traceability Requirements</label>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {scannedItem.traceabilityRequirements.map((req: any, idx: number) => (
+                      <Badge key={idx} variant="outline">
+                        {req.label || req}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="flex justify-between sm:justify-between">
+            <Button 
+              variant="default"
+              onClick={() => {
+                if (scannedItem) {
+                  window.location.href = `/p2-traveler/${scannedItem.serializedItem.id}`;
+                }
+              }}
+              data-testid="button-open-traveler"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Open Full Traveler
+            </Button>
+            <Button variant="outline" onClick={() => setShowScanDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hold Dialog */}
+      <Dialog open={showHoldDialog} onOpenChange={setShowHoldDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <Pause className="h-5 w-5" />
+              Put Item on Hold
+            </DialogTitle>
+            <DialogDescription>
+              This will pause production on this item until it is released.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedItem && (
+            <div className="space-y-4">
+              <div className="bg-amber-50 dark:bg-amber-950 p-3 rounded-lg">
+                <div className="font-medium">{selectedItem.barcode}</div>
+                <div className="text-sm text-muted-foreground">
+                  {selectedItem.partNumber} - {selectedItem.partName}
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium">Reason for Hold *</label>
+                <Textarea
+                  placeholder="Enter reason for holding this item..."
+                  value={holdReason}
+                  onChange={(e) => setHoldReason(e.target.value)}
+                  className="mt-1"
+                  data-testid="input-hold-reason"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowHoldDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={confirmHold}
+              disabled={!holdReason.trim() || updateStatusMutation.isPending}
+              className="bg-amber-600 hover:bg-amber-700"
+              data-testid="button-confirm-hold"
+            >
+              {updateStatusMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Pause className="h-4 w-4 mr-2" />
+              )}
+              Put on Hold
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Scrap Dialog */}
+      <Dialog open={showScrapDialog} onOpenChange={setShowScrapDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <XCircle className="h-5 w-5" />
+              Scrap Item
+            </DialogTitle>
+            <DialogDescription>
+              This action is permanent and will remove the item from production.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedItem && (
+            <div className="space-y-4">
+              <div className="bg-red-50 dark:bg-red-950 p-3 rounded-lg border border-red-200">
+                <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="font-medium">Warning: This cannot be undone</span>
+                </div>
+                <div className="mt-2">
+                  <div className="font-medium">{selectedItem.barcode}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {selectedItem.partNumber} - {selectedItem.partName}
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium">Reason for Scrapping *</label>
+                <Textarea
+                  placeholder="Enter reason for scrapping this item..."
+                  value={scrapReason}
+                  onChange={(e) => setScrapReason(e.target.value)}
+                  className="mt-1"
+                  data-testid="input-scrap-reason"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowScrapDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={confirmScrap}
+              disabled={!scrapReason.trim() || updateStatusMutation.isPending}
+              variant="destructive"
+              data-testid="button-confirm-scrap"
+            >
+              {updateStatusMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <XCircle className="h-4 w-4 mr-2" />
+              )}
+              Scrap Item
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

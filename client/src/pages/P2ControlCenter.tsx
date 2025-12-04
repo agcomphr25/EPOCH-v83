@@ -23,6 +23,7 @@ import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
 import P2BOMWizard from '@/components/p2/P2BOMWizard';
 import P2ProductionScheduler from '@/components/p2/P2ProductionScheduler';
 import P2StatusDashboard from '@/components/p2/P2StatusDashboard';
+import P2ProductionQueue from '@/components/p2/P2ProductionQueue';
 import P2CertificationsManager from './P2CertificationsManager';
 import PartRoutingManagement from './PartRoutingManagement';
 
@@ -364,23 +365,7 @@ export default function P2ControlCenter() {
         </TabsContent>
 
         <TabsContent value="production">
-          <Card>
-            <CardHeader>
-              <CardTitle>Production Tracking</CardTitle>
-              <CardDescription>
-                Monitor items in production and complete department transfers
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Use the P2 Department Manager for detailed production tracking and barcode scanning.
-              </p>
-              <Button className="mt-4" variant="outline" onClick={() => window.location.href = '/p2-department-manager'}>
-                <Factory className="h-4 w-4 mr-2" />
-                Open Department Manager
-              </Button>
-            </CardContent>
-          </Card>
+          <P2ProductionQueue />
         </TabsContent>
 
         <TabsContent value="routing">

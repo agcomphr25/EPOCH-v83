@@ -39,6 +39,7 @@ import {
   History,
   ChevronLeft,
   ChevronRight,
+  ImageIcon,
 } from 'lucide-react';
 
 interface Customer {
@@ -71,6 +72,7 @@ interface CompanySettings {
   companyPhone: string;
   companyEmail: string;
   companyWebsite: string;
+  companyLogoUrl?: string;
 }
 
 interface MarketingMessage {
@@ -103,9 +105,36 @@ export default function MarketingCommunications() {
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [page, setPage] = useState(1);
+  const [showLogoDialog, setShowLogoDialog] = useState(false);
+  const [logoUrlInput, setLogoUrlInput] = useState('');
 
-  const { data: companySettings } = useQuery<CompanySettings>({
+  const { data: companySettings, refetch: refetchCompanySettings } = useQuery<CompanySettings>({
     queryKey: ['/api/marketing/company-settings'],
+  });
+
+  const updateLogoMutation = useMutation({
+    mutationFn: async (logoUrl: string) => {
+      const response = await apiRequest('/api/marketing/company-settings', {
+        method: 'PATCH',
+        body: JSON.stringify({ companyLogoUrl: logoUrl }),
+      });
+      return response;
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Logo Updated',
+        description: 'Company logo has been updated successfully',
+      });
+      refetchCompanySettings();
+      setShowLogoDialog(false);
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to update company logo',
+        variant: 'destructive',
+      });
+    },
   });
 
   const { data: customerTypes = [] } = useQuery<CustomerType[]>({
@@ -351,6 +380,10 @@ export default function MarketingCommunications() {
       companyWebsite: 'www.agcomposites.com',
     };
 
+    const logoHtml = company.companyLogoUrl 
+      ? `<img src="${company.companyLogoUrl}" alt="${company.companyName}" style="max-height: 60px; max-width: 200px; margin-bottom: 10px;" />`
+      : '';
+
     return `
 <!DOCTYPE html>
 <html>
@@ -370,6 +403,7 @@ export default function MarketingCommunications() {
               <table role="presentation" style="width: 100%;">
                 <tr>
                   <td>
+                    ${logoHtml}
                     <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: bold;">${company.companyName}</h1>
                     <p style="margin: 5px 0 0; color: rgba(255,255,255,0.8); font-size: 14px;">Premium Composite Solutions</p>
                   </td>
@@ -696,7 +730,102 @@ export default function MarketingCommunications() {
                     This information will be included in all emails
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                  {/* Logo Section */}
+                  <div className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg">
+                    <div className="flex-shrink-0">
+                      {companySettings?.companyLogoUrl ? (
+                        <img 
+                          src={companySettings.companyLogoUrl} 
+                          alt="Company Logo" 
+                          className="h-12 max-w-[150px] object-contain"
+                        />
+                      ) : (
+                        <div className="h-12 w-12 bg-muted rounded flex items-center justify-center">
+                          <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Company Logo</p>
+                      <p className="text-xs text-muted-foreground">
+                        {companySettings?.companyLogoUrl ? 'Logo configured' : 'No logo set'}
+                      </p>
+                    </div>
+                    <Dialog open={showLogoDialog} onOpenChange={setShowLogoDialog}>
+                      <DialogTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setLogoUrlInput(companySettings?.companyLogoUrl || '')}
+                          data-testid="btn-set-logo"
+                        >
+                          {companySettings?.companyLogoUrl ? 'Change' : 'Add Logo'}
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Set Company Logo</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div>
+                            <Label htmlFor="logo-url">Logo URL</Label>
+                            <Input
+                              id="logo-url"
+                              value={logoUrlInput}
+                              onChange={(e) => setLogoUrlInput(e.target.value)}
+                              placeholder="https://example.com/logo.png"
+                              data-testid="input-logo-url"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Enter a public URL to your company logo image (PNG, JPG, or SVG recommended)
+                            </p>
+                          </div>
+                          {logoUrlInput && (
+                            <div className="border rounded-lg p-4 bg-muted/50">
+                              <p className="text-sm font-medium mb-2">Preview:</p>
+                              <img 
+                                src={logoUrlInput} 
+                                alt="Logo Preview" 
+                                className="max-h-16 max-w-[200px] object-contain"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <DialogFooter className="flex gap-2">
+                          {companySettings?.companyLogoUrl && (
+                            <Button
+                              variant="destructive"
+                              onClick={() => {
+                                updateLogoMutation.mutate('');
+                                setLogoUrlInput('');
+                              }}
+                              disabled={updateLogoMutation.isPending}
+                              data-testid="btn-remove-logo"
+                            >
+                              Remove Logo
+                            </Button>
+                          )}
+                          <Button
+                            onClick={() => updateLogoMutation.mutate(logoUrlInput)}
+                            disabled={!logoUrlInput.trim() || updateLogoMutation.isPending}
+                            data-testid="btn-save-logo"
+                          >
+                            {updateLogoMutation.isPending && (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            )}
+                            Save Logo
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+
+                  <Separator />
+
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div className="flex items-center gap-2">
                       <Building2 className="h-4 w-4 text-muted-foreground" />

@@ -2890,6 +2890,7 @@ export const companySettings = pgTable('company_settings', {
   companyPhone: text('company_phone'),
   companyEmail: text('company_email'),
   companyWebsite: text('company_website'),
+  companyLogoUrl: text('company_logo_url'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

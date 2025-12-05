@@ -148,7 +148,7 @@ async function getCompanyBranding(): Promise<CompanyBranding> {
     companyPhone: settings[0].companyPhone || '',
     companyEmail: settings[0].companyEmail || '',
     companyWebsite: settings[0].companyWebsite || '',
-    companyLogo: settings[0].companyLogo,
+    companyLogo: settings[0].companyLogoUrl,
   };
 }
 
@@ -188,6 +188,7 @@ router.get('/company-settings', async (req, res) => {
         companyPhone: '(555) 123-4567',
         companyEmail: 'info@agcomposites.com',
         companyWebsite: 'www.agcomposites.com',
+        companyLogoUrl: null,
       });
     }
     
@@ -195,6 +196,40 @@ router.get('/company-settings', async (req, res) => {
   } catch (error: any) {
     console.error('Error fetching company settings:', error);
     res.status(500).json({ error: 'Failed to fetch company settings' });
+  }
+});
+
+router.patch('/company-settings', async (req, res) => {
+  try {
+    const { companyLogoUrl } = req.body;
+    
+    const existingSettings = await db.select().from(companySettings).limit(1);
+    
+    if (existingSettings.length === 0) {
+      const newSettings = await db.insert(companySettings).values({
+        companyName: 'AG Composites',
+        companyAddress: '230 Hamer Road Owens Cross Roads, AL 35763',
+        companyPhone: '256-723-8381',
+        companyEmail: 'sales@agcomposites.com',
+        companyWebsite: 'www.agcomposites.com',
+        companyLogoUrl: companyLogoUrl || null,
+      }).returning();
+      return res.json(newSettings[0]);
+    }
+    
+    const updatedSettings = await db
+      .update(companySettings)
+      .set({ 
+        companyLogoUrl: companyLogoUrl || null,
+        updatedAt: new Date(),
+      })
+      .where(eq(companySettings.id, existingSettings[0].id))
+      .returning();
+    
+    res.json(updatedSettings[0]);
+  } catch (error: any) {
+    console.error('Error updating company settings:', error);
+    res.status(500).json({ error: 'Failed to update company settings' });
   }
 });
 

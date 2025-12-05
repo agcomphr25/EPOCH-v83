@@ -12,8 +12,39 @@ import {
 import { eq, desc, and, sql, inArray, like, or } from 'drizzle-orm';
 import { getUncachableSendGridClient } from '../../utils/sendgrid';
 import twilio from 'twilio';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 const router = Router();
+
+const LOGO_UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'company-branding');
+if (!fs.existsSync(LOGO_UPLOAD_DIR)) {
+  fs.mkdirSync(LOGO_UPLOAD_DIR, { recursive: true });
+}
+
+const logoStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, LOGO_UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `company-logo${ext}`);
+  },
+});
+
+const logoUpload = multer({
+  storage: logoStorage,
+  limits: { fileSize: 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PNG and JPEG files are allowed'));
+    }
+  },
+});
 
 interface CompanyBranding {
   companyName: string;
@@ -22,6 +53,11 @@ interface CompanyBranding {
   companyEmail: string;
   companyWebsite: string;
   companyLogo?: string | null;
+  hasInlineLogo?: boolean;
+}
+
+interface CompanyBrandingWithLogo extends CompanyBranding {
+  logoAttachment?: { content: string; type: string } | null;
 }
 
 function escapeHtml(text: string): string {
@@ -45,6 +81,15 @@ function generateBrandedEmailHtml(
     ? branding.companyWebsite 
     : `https://${branding.companyWebsite}`;
   
+  let logoHtml: string;
+  if (branding.hasInlineLogo) {
+    logoHtml = `<img src="cid:companyLogo" alt="${branding.companyName}" style="max-height: 60px; max-width: 200px;">`;
+  } else if (branding.companyLogo) {
+    logoHtml = `<img src="${branding.companyLogo}" alt="${branding.companyName}" style="max-height: 60px; max-width: 200px;">`;
+  } else {
+    logoHtml = `<h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">${branding.companyName}</h1>`;
+  }
+  
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -61,10 +106,7 @@ function generateBrandedEmailHtml(
           <!-- Header with Logo -->
           <tr>
             <td style="padding: 30px 40px; text-align: center; background: linear-gradient(135deg, #1a365d 0%, #2563eb 100%); border-radius: 8px 8px 0 0;">
-              ${branding.companyLogo 
-                ? `<img src="${branding.companyLogo}" alt="${branding.companyName}" style="max-height: 60px; max-width: 200px;">`
-                : `<h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">${branding.companyName}</h1>`
-              }
+              ${logoHtml}
             </td>
           </tr>
           
@@ -139,8 +181,12 @@ async function getCompanyBranding(): Promise<CompanyBranding> {
       companyPhone: '(555) 123-4567',
       companyEmail: 'info@agcomposites.com',
       companyWebsite: 'www.agcomposites.com',
+      hasInlineLogo: false,
     };
   }
+  
+  const logoData = getLogoForEmail();
+  const hasValidLogoAttachment: boolean = logoData !== null && !!logoData.content && logoData.content.length > 0;
   
   return {
     companyName: settings[0].companyName || 'AG Composites',
@@ -148,7 +194,38 @@ async function getCompanyBranding(): Promise<CompanyBranding> {
     companyPhone: settings[0].companyPhone || '',
     companyEmail: settings[0].companyEmail || '',
     companyWebsite: settings[0].companyWebsite || '',
-    companyLogo: settings[0].companyLogoUrl,
+    companyLogo: hasValidLogoAttachment ? null : settings[0].companyLogoUrl,
+    hasInlineLogo: hasValidLogoAttachment,
+  };
+}
+
+async function getCompanyBrandingWithLogo(): Promise<CompanyBrandingWithLogo> {
+  const settings = await db.select().from(companySettings).limit(1);
+  
+  if (settings.length === 0) {
+    return {
+      companyName: 'AG Composites',
+      companyAddress: '123 Business Street, City, ST 12345',
+      companyPhone: '(555) 123-4567',
+      companyEmail: 'info@agcomposites.com',
+      companyWebsite: 'www.agcomposites.com',
+      hasInlineLogo: false,
+      logoAttachment: null,
+    };
+  }
+  
+  const logoData = getLogoForEmail();
+  const hasValidLogoAttachment: boolean = logoData !== null && !!logoData.content && logoData.content.length > 0;
+  
+  return {
+    companyName: settings[0].companyName || 'AG Composites',
+    companyAddress: settings[0].companyAddress || '',
+    companyPhone: settings[0].companyPhone || '',
+    companyEmail: settings[0].companyEmail || '',
+    companyWebsite: settings[0].companyWebsite || '',
+    companyLogo: hasValidLogoAttachment ? null : settings[0].companyLogoUrl,
+    hasInlineLogo: hasValidLogoAttachment,
+    logoAttachment: hasValidLogoAttachment ? logoData : null,
   };
 }
 
@@ -233,6 +310,137 @@ router.patch('/company-settings', async (req, res) => {
   }
 });
 
+router.post('/company-logo', logoUpload.single('logo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded. Only PNG and JPEG files are allowed.' });
+    }
+
+    const existingSettings = await db.select().from(companySettings).limit(1);
+    
+    if (existingSettings.length > 0 && existingSettings[0].companyLogoFilename) {
+      const oldLogoPath = path.join(LOGO_UPLOAD_DIR, existingSettings[0].companyLogoFilename);
+      if (fs.existsSync(oldLogoPath) && existingSettings[0].companyLogoFilename !== req.file.filename) {
+        try {
+          fs.unlinkSync(oldLogoPath);
+        } catch (e) {
+          console.warn('Could not delete old logo file:', e);
+        }
+      }
+    }
+    
+    if (existingSettings.length === 0) {
+      await db.insert(companySettings).values({
+        companyName: 'AG Composites',
+        companyAddress: '230 Hamer Road Owens Cross Roads, AL 35763',
+        companyPhone: '256-723-8381',
+        companyEmail: 'sales@agcomposites.com',
+        companyWebsite: 'www.agcomposites.com',
+        companyLogoFilename: req.file.filename,
+        companyLogoMimetype: req.file.mimetype,
+      });
+    } else {
+      await db
+        .update(companySettings)
+        .set({
+          companyLogoFilename: req.file.filename,
+          companyLogoMimetype: req.file.mimetype,
+          companyLogoUrl: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(companySettings.id, existingSettings[0].id));
+    }
+
+    res.json({ 
+      success: true, 
+      filename: req.file.filename,
+      mimetype: req.file.mimetype,
+    });
+  } catch (error: any) {
+    console.error('Error uploading logo:', error);
+    res.status(500).json({ error: 'Failed to upload logo' });
+  }
+});
+
+router.get('/company-logo', async (req, res) => {
+  try {
+    const settings = await db.select().from(companySettings).limit(1);
+    
+    if (settings.length === 0 || !settings[0].companyLogoFilename) {
+      return res.status(404).json({ error: 'No logo found' });
+    }
+
+    const logoPath = path.join(LOGO_UPLOAD_DIR, settings[0].companyLogoFilename);
+    
+    if (!fs.existsSync(logoPath)) {
+      return res.status(404).json({ error: 'Logo file not found' });
+    }
+
+    const logoData = fs.readFileSync(logoPath);
+    const base64Logo = logoData.toString('base64');
+    const mimetype = settings[0].companyLogoMimetype || 'image/png';
+    
+    res.json({
+      dataUrl: `data:${mimetype};base64,${base64Logo}`,
+      filename: settings[0].companyLogoFilename,
+      mimetype: mimetype,
+    });
+  } catch (error: any) {
+    console.error('Error fetching logo:', error);
+    res.status(500).json({ error: 'Failed to fetch logo' });
+  }
+});
+
+router.delete('/company-logo', async (req, res) => {
+  try {
+    const settings = await db.select().from(companySettings).limit(1);
+    
+    if (settings.length > 0 && settings[0].companyLogoFilename) {
+      const logoPath = path.join(LOGO_UPLOAD_DIR, settings[0].companyLogoFilename);
+      if (fs.existsSync(logoPath)) {
+        fs.unlinkSync(logoPath);
+      }
+      
+      await db
+        .update(companySettings)
+        .set({
+          companyLogoFilename: null,
+          companyLogoMimetype: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(companySettings.id, settings[0].id));
+    }
+    
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting logo:', error);
+    res.status(500).json({ error: 'Failed to delete logo' });
+  }
+});
+
+export function getLogoForEmail(): { content: string; type: string } | null {
+  try {
+    const files = fs.readdirSync(LOGO_UPLOAD_DIR);
+    const logoFile = files.find(f => f.startsWith('company-logo'));
+    
+    if (!logoFile) return null;
+    
+    const logoPath = path.join(LOGO_UPLOAD_DIR, logoFile);
+    const logoData = fs.readFileSync(logoPath);
+    const base64Logo = logoData.toString('base64');
+    
+    const ext = path.extname(logoFile).toLowerCase();
+    let mimetype = 'image/png';
+    if (ext === '.jpg' || ext === '.jpeg') mimetype = 'image/jpeg';
+    if (ext === '.svg') mimetype = 'image/svg+xml';
+    
+    return { content: base64Logo, type: mimetype };
+  } catch (error) {
+    console.error('Error reading logo for email:', error);
+    return null;
+  }
+}
+
 router.post('/preview-email', async (req, res) => {
   try {
     const { content, customerName = 'John Smith' } = req.body;
@@ -241,12 +449,19 @@ router.post('/preview-email', async (req, res) => {
       return res.status(400).json({ error: 'Content is required for preview' });
     }
     
-    const branding = await getCompanyBranding();
-    const previewHtml = generateBrandedEmailHtml(content, customerName, branding);
+    const branding = await getCompanyBrandingWithLogo();
+    
+    let previewBranding: CompanyBranding = { ...branding };
+    if (branding.hasInlineLogo && branding.logoAttachment) {
+      previewBranding.companyLogo = `data:${branding.logoAttachment.type};base64,${branding.logoAttachment.content}`;
+      previewBranding.hasInlineLogo = false;
+    }
+    
+    const previewHtml = generateBrandedEmailHtml(content, customerName, previewBranding);
     
     res.json({ 
       html: previewHtml,
-      branding 
+      branding: previewBranding
     });
   } catch (error: any) {
     console.error('Error generating preview:', error);
@@ -579,7 +794,13 @@ router.post('/send-bulk-email', async (req, res) => {
     
     try {
       const { client, fromEmail } = await getUncachableSendGridClient();
-      const branding = await getCompanyBranding();
+      const branding = await getCompanyBrandingWithLogo();
+      
+      console.log('📧 Bulk email branding:', {
+        hasInlineLogo: branding.hasInlineLogo,
+        hasLogoAttachment: !!branding.logoAttachment,
+        logoAttachmentSize: branding.logoAttachment?.content?.length || 0,
+      });
       
       for (const customer of targetCustomers) {
         try {
@@ -589,13 +810,25 @@ router.post('/send-bulk-email', async (req, res) => {
             branding
           );
           
-          await client.send({
+          const emailPayload: any = {
             to: customer.email,
             from: fromEmail,
             subject: data.subject,
             text: data.content.replace(/\{\{name\}\}/g, customer.name || 'Valued Customer'),
             html: brandedHtml,
-          });
+          };
+          
+          if (branding.hasInlineLogo && branding.logoAttachment) {
+            emailPayload.attachments = [{
+              content: branding.logoAttachment.content,
+              filename: 'company-logo.png',
+              type: branding.logoAttachment.type,
+              disposition: 'inline',
+              content_id: 'companyLogo',
+            }];
+          }
+          
+          await client.send(emailPayload);
           
           await db.insert(marketingRecipients).values({
             messageId: marketingMessage.id,

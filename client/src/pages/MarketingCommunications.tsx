@@ -106,36 +106,105 @@ export default function MarketingCommunications() {
   const [templateName, setTemplateName] = useState('');
   const [page, setPage] = useState(1);
   const [showLogoDialog, setShowLogoDialog] = useState(false);
-  const [logoUrlInput, setLogoUrlInput] = useState('');
+  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
 
   const { data: companySettings, refetch: refetchCompanySettings } = useQuery<CompanySettings>({
     queryKey: ['/api/marketing/company-settings'],
   });
 
-  const updateLogoMutation = useMutation({
-    mutationFn: async (logoUrl: string) => {
-      const response = await apiRequest('/api/marketing/company-settings', {
-        method: 'PATCH',
-        body: JSON.stringify({ companyLogoUrl: logoUrl }),
+  const { data: logoData, refetch: refetchLogo } = useQuery<{ dataUrl: string; filename: string; mimetype: string }>({
+    queryKey: ['/api/marketing/company-logo'],
+    retry: false,
+  });
+
+  const uploadLogoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('logo', file);
+      
+      const response = await fetch('/api/marketing/company-logo', {
+        method: 'POST',
+        body: formData,
       });
-      return response;
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to upload logo');
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       toast({
-        title: 'Logo Updated',
-        description: 'Company logo has been updated successfully',
+        title: 'Logo Uploaded',
+        description: 'Company logo has been uploaded successfully',
       });
+      refetchLogo();
+      refetchCompanySettings();
+      setShowLogoDialog(false);
+      setSelectedLogoFile(null);
+      setLogoPreviewUrl(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to upload company logo',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const deleteLogoMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/marketing/company-logo', {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete logo');
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Logo Removed',
+        description: 'Company logo has been removed',
+      });
+      refetchLogo();
       refetchCompanySettings();
       setShowLogoDialog(false);
     },
     onError: () => {
       toast({
         title: 'Error',
-        description: 'Failed to update company logo',
+        description: 'Failed to remove company logo',
         variant: 'destructive',
       });
     },
   });
+
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 1024 * 1024) {
+        toast({
+          title: 'File too large',
+          description: 'Logo must be less than 1MB',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      setSelectedLogoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreviewUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const { data: customerTypes = [] } = useQuery<CustomerType[]>({
     queryKey: ['/api/marketing/customer-types'],
@@ -734,9 +803,9 @@ export default function MarketingCommunications() {
                   {/* Logo Section */}
                   <div className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg">
                     <div className="flex-shrink-0">
-                      {companySettings?.companyLogoUrl ? (
+                      {logoData?.dataUrl ? (
                         <img 
-                          src={companySettings.companyLogoUrl} 
+                          src={logoData.dataUrl} 
                           alt="Company Logo" 
                           className="h-12 max-w-[150px] object-contain"
                         />
@@ -749,75 +818,84 @@ export default function MarketingCommunications() {
                     <div className="flex-1">
                       <p className="text-sm font-medium">Company Logo</p>
                       <p className="text-xs text-muted-foreground">
-                        {companySettings?.companyLogoUrl ? 'Logo configured' : 'No logo set'}
+                        {logoData?.dataUrl ? 'Logo uploaded' : 'No logo set'}
                       </p>
                     </div>
-                    <Dialog open={showLogoDialog} onOpenChange={setShowLogoDialog}>
+                    <Dialog open={showLogoDialog} onOpenChange={(open) => {
+                      setShowLogoDialog(open);
+                      if (!open) {
+                        setSelectedLogoFile(null);
+                        setLogoPreviewUrl(null);
+                      }
+                    }}>
                       <DialogTrigger asChild>
                         <Button 
                           variant="outline" 
                           size="sm"
-                          onClick={() => setLogoUrlInput(companySettings?.companyLogoUrl || '')}
                           data-testid="btn-set-logo"
                         >
-                          {companySettings?.companyLogoUrl ? 'Change' : 'Add Logo'}
+                          {logoData?.dataUrl ? 'Change' : 'Add Logo'}
                         </Button>
                       </DialogTrigger>
                       <DialogContent>
                         <DialogHeader>
-                          <DialogTitle>Set Company Logo</DialogTitle>
+                          <DialogTitle>Upload Company Logo</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4 py-4">
                           <div>
-                            <Label htmlFor="logo-url">Logo URL</Label>
+                            <Label htmlFor="logo-file">Logo Image</Label>
                             <Input
-                              id="logo-url"
-                              value={logoUrlInput}
-                              onChange={(e) => setLogoUrlInput(e.target.value)}
-                              placeholder="https://example.com/logo.png"
-                              data-testid="input-logo-url"
+                              id="logo-file"
+                              type="file"
+                              accept="image/png,image/jpeg,image/jpg"
+                              onChange={handleLogoFileChange}
+                              className="cursor-pointer"
+                              data-testid="input-logo-file"
                             />
                             <p className="text-xs text-muted-foreground mt-1">
-                              Enter a public URL to your company logo image (PNG, JPG, or SVG recommended)
+                              Upload a PNG or JPEG file (max 1MB). The logo will be embedded directly in emails.
                             </p>
                           </div>
-                          {logoUrlInput && (
+                          {(logoPreviewUrl || logoData?.dataUrl) && (
                             <div className="border rounded-lg p-4 bg-muted/50">
-                              <p className="text-sm font-medium mb-2">Preview:</p>
+                              <p className="text-sm font-medium mb-2">
+                                {logoPreviewUrl ? 'New Logo Preview:' : 'Current Logo:'}
+                              </p>
                               <img 
-                                src={logoUrlInput} 
+                                src={logoPreviewUrl || logoData?.dataUrl} 
                                 alt="Logo Preview" 
                                 className="max-h-16 max-w-[200px] object-contain"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display = 'none';
-                                }}
                               />
                             </div>
                           )}
                         </div>
                         <DialogFooter className="flex gap-2">
-                          {companySettings?.companyLogoUrl && (
+                          {logoData?.dataUrl && (
                             <Button
                               variant="destructive"
-                              onClick={() => {
-                                updateLogoMutation.mutate('');
-                                setLogoUrlInput('');
-                              }}
-                              disabled={updateLogoMutation.isPending}
+                              onClick={() => deleteLogoMutation.mutate()}
+                              disabled={deleteLogoMutation.isPending}
                               data-testid="btn-remove-logo"
                             >
+                              {deleteLogoMutation.isPending && (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              )}
                               Remove Logo
                             </Button>
                           )}
                           <Button
-                            onClick={() => updateLogoMutation.mutate(logoUrlInput)}
-                            disabled={!logoUrlInput.trim() || updateLogoMutation.isPending}
+                            onClick={() => {
+                              if (selectedLogoFile) {
+                                uploadLogoMutation.mutate(selectedLogoFile);
+                              }
+                            }}
+                            disabled={!selectedLogoFile || uploadLogoMutation.isPending}
                             data-testid="btn-save-logo"
                           >
-                            {updateLogoMutation.isPending && (
+                            {uploadLogoMutation.isPending && (
                               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                             )}
-                            Save Logo
+                            Upload Logo
                           </Button>
                         </DialogFooter>
                       </DialogContent>

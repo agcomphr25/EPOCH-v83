@@ -388,7 +388,7 @@ export default function MarketingCommunications() {
       // Add current page customers to selection (don't replace)
       setSelectedCustomerIds((prev) => {
         const currentPageIds = customersData.customers.map((c) => c.id);
-        const newIds = [...new Set([...prev, ...currentPageIds])];
+        const newIds = Array.from(new Set([...prev, ...currentPageIds]));
         return newIds;
       });
     } else if (!selectAll && !selectAllPages) {

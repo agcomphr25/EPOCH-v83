@@ -6,6 +6,9 @@ import {
   BarChart3,
   Settings2,
   Package,
+  Users,
+  FileText,
+  PackageCheck,
 } from 'lucide-react';
 import { Link } from 'wouter';
 
@@ -85,6 +88,56 @@ export default function LAURIETTestDashboard() {
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   P2 Workflow Management
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
+      </div>
+
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+          <Users className="w-5 h-5 text-green-600" />
+          Vendors
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Link href="/vendors">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
+              <CardContent className="p-4 text-center">
+                <Users className="w-8 h-8 text-green-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Vendors
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Vendor Management
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/vendor-pos">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
+              <CardContent className="p-4 text-center">
+                <FileText className="w-8 h-8 text-green-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Vendor POs
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Purchase Orders
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/inventory/receiving">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
+              <CardContent className="p-4 text-center">
+                <PackageCheck className="w-8 h-8 text-green-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Receiving
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Inventory Receiving
                 </p>
               </CardContent>
             </Card>

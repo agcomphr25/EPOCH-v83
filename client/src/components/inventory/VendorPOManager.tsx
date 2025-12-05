@@ -186,7 +186,7 @@ function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
                     #{item.agPartNumber}
                   </div>
                 )}
-                <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                <div className="font-medium text-gray-900 dark:text-gray-100 break-words line-clamp-2">
                   {item.description}
                 </div>
                 {item.supplierPartNumber && (

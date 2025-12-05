@@ -475,7 +475,7 @@ function VendorPOCard({
               {/* Show revision indicator if this is a revision */}
               {vendorPo.revisionNumber !== undefined && vendorPo.revisionNumber > 0 && (
                 <Badge className="ml-2 bg-purple-100 text-purple-800" data-testid={`revision-badge-${vendorPo.id}`}>
-                  R{vendorPo.revisionNumber}
+                  R{String.fromCharCode(64 + vendorPo.revisionNumber)}
                 </Badge>
               )}
             </CardTitle>

@@ -6882,9 +6882,10 @@ export class DatabaseStorage implements IStorage {
       .set({ isCurrentRevision: false, updatedAt: new Date() })
       .where(eq(vendorPOs.id, poId));
     
-    // Generate a new unique PO number with revision suffix
-    const basePONumber = originalPO.poNumber.replace(/-R\d+$/, ''); // Remove any existing revision suffix
-    const newPONumber = `${basePONumber}-R${nextRevisionNumber}`;
+    // Generate a new unique PO number with revision suffix (alphabetical: RA, RB, RC, etc.)
+    const basePONumber = originalPO.poNumber.replace(/-R[A-Z]+$/, ''); // Remove any existing revision suffix
+    const revisionLetter = String.fromCharCode(64 + nextRevisionNumber); // 1->A, 2->B, 3->C, etc.
+    const newPONumber = `${basePONumber}-R${revisionLetter}`;
     
     // Create the new revision PO (copy of the original with revision metadata)
     const revisionData = {

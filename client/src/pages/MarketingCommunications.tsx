@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -15,6 +15,8 @@ import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import {
   Mail,
   MessageSquare,
@@ -37,6 +39,7 @@ import {
   History,
   ChevronLeft,
   ChevronRight,
+  ImageIcon,
 } from 'lucide-react';
 
 interface Customer {
@@ -69,6 +72,7 @@ interface CompanySettings {
   companyPhone: string;
   companyEmail: string;
   companyWebsite: string;
+  companyLogoUrl?: string;
 }
 
 interface MarketingMessage {
@@ -101,10 +105,106 @@ export default function MarketingCommunications() {
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [page, setPage] = useState(1);
+  const [showLogoDialog, setShowLogoDialog] = useState(false);
+  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
 
-  const { data: companySettings } = useQuery<CompanySettings>({
+  const { data: companySettings, refetch: refetchCompanySettings } = useQuery<CompanySettings>({
     queryKey: ['/api/marketing/company-settings'],
   });
+
+  const { data: logoData, refetch: refetchLogo } = useQuery<{ dataUrl: string; filename: string; mimetype: string }>({
+    queryKey: ['/api/marketing/company-logo'],
+    retry: false,
+  });
+
+  const uploadLogoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('logo', file);
+      
+      const response = await fetch('/api/marketing/company-logo', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to upload logo');
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Logo Uploaded',
+        description: 'Company logo has been uploaded successfully',
+      });
+      refetchLogo();
+      refetchCompanySettings();
+      setShowLogoDialog(false);
+      setSelectedLogoFile(null);
+      setLogoPreviewUrl(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to upload company logo',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const deleteLogoMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/marketing/company-logo', {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete logo');
+      }
+      
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Logo Removed',
+        description: 'Company logo has been removed',
+      });
+      refetchLogo();
+      refetchCompanySettings();
+      setShowLogoDialog(false);
+    },
+    onError: () => {
+      toast({
+        title: 'Error',
+        description: 'Failed to remove company logo',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 1024 * 1024) {
+        toast({
+          title: 'File too large',
+          description: 'Logo must be less than 1MB',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      setSelectedLogoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreviewUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const { data: customerTypes = [] } = useQuery<CustomerType[]>({
     queryKey: ['/api/marketing/customer-types'],
@@ -340,7 +440,7 @@ export default function MarketingCommunications() {
     }
   };
 
-  const generateHtmlEmail = (text: string, settings?: CompanySettings) => {
+  const generateHtmlEmail = (text: string, settings?: CompanySettings, logoDataUrl?: string) => {
     const company = settings || {
       companyName: 'AG Composites',
       companyAddress: '123 Business Street, City, ST 12345',
@@ -348,6 +448,20 @@ export default function MarketingCommunications() {
       companyEmail: 'info@agcomposites.com',
       companyWebsite: 'www.agcomposites.com',
     };
+
+    const effectiveLogoUrl = logoDataUrl || company.companyLogoUrl;
+    const logoHtml = effectiveLogoUrl 
+      ? `<img src="${effectiveLogoUrl}" alt="${company.companyName}" style="max-height: 60px; max-width: 200px; margin-bottom: 10px;" />`
+      : '';
+
+    const styledText = text
+      .replace(/<h1>/gi, '<h1 style="font-size: 32px; font-weight: bold; margin: 16px 0 8px 0; color: #1a365d;">')
+      .replace(/<h2>/gi, '<h2 style="font-size: 24px; font-weight: bold; margin: 14px 0 6px 0; color: #1a365d;">')
+      .replace(/<h3>/gi, '<h3 style="font-size: 20px; font-weight: bold; margin: 12px 0 4px 0; color: #1a365d;">')
+      .replace(/<p>/gi, '<p style="margin: 8px 0;">')
+      .replace(/<ul>/gi, '<ul style="margin: 8px 0; padding-left: 20px;">')
+      .replace(/<ol>/gi, '<ol style="margin: 8px 0; padding-left: 20px;">')
+      .replace(/<li>/gi, '<li style="margin: 4px 0;">');
 
     return `
 <!DOCTYPE html>
@@ -368,6 +482,7 @@ export default function MarketingCommunications() {
               <table role="presentation" style="width: 100%;">
                 <tr>
                   <td>
+                    ${logoHtml}
                     <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: bold;">${company.companyName}</h1>
                     <p style="margin: 5px 0 0; color: rgba(255,255,255,0.8); font-size: 14px;">Premium Composite Solutions</p>
                   </td>
@@ -380,7 +495,7 @@ export default function MarketingCommunications() {
           <tr>
             <td style="padding: 40px;">
               <div style="font-size: 16px; line-height: 1.6; color: #333333;">
-                ${text.replace(/\n/g, '<br>')}
+                ${styledText}
               </div>
             </td>
           </tr>
@@ -564,19 +679,38 @@ export default function MarketingCommunications() {
                         </span>
                       )}
                     </Label>
-                    <Textarea
-                      id="content"
-                      value={content}
-                      onChange={(e) => setContent(e.target.value)}
-                      placeholder={
-                        messageType === 'email'
-                          ? 'Enter your email message...\n\nUse {{name}} to personalize with customer name'
-                          : 'Enter your SMS message (160 characters max)...'
-                      }
-                      rows={messageType === 'email' ? 10 : 4}
-                      maxLength={messageType === 'sms' ? 160 : undefined}
-                      data-testid="input-content"
-                    />
+                    {messageType === 'email' ? (
+                      <div className="border rounded-md" data-testid="input-content">
+                        <ReactQuill
+                          theme="snow"
+                          value={content}
+                          onChange={setContent}
+                          placeholder="Enter your email message... Use {{name}} to personalize with customer name"
+                          modules={{
+                            toolbar: [
+                              [{ 'header': [1, 2, 3, false] }],
+                              ['bold', 'italic', 'underline', 'strike'],
+                              [{ 'color': [] }, { 'background': [] }],
+                              [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                              [{ 'align': [] }],
+                              ['link'],
+                              ['clean']
+                            ],
+                          }}
+                          style={{ minHeight: '250px' }}
+                        />
+                      </div>
+                    ) : (
+                      <Textarea
+                        id="content"
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                        placeholder="Enter your SMS message (160 characters max)..."
+                        rows={4}
+                        maxLength={160}
+                        data-testid="input-content"
+                      />
+                    )}
                   </div>
 
                   <div className="flex gap-2">
@@ -595,7 +729,7 @@ export default function MarketingCommunications() {
                           <div
                             className="border rounded-lg"
                             dangerouslySetInnerHTML={{
-                              __html: generateHtmlEmail(content, companySettings),
+                              __html: generateHtmlEmail(content, companySettings, logoData?.dataUrl),
                             }}
                           />
                         </DialogContent>
@@ -627,6 +761,16 @@ export default function MarketingCommunications() {
                               data-testid="input-template-name"
                             />
                           </div>
+                          {!subject.trim() && (
+                            <p className="text-sm text-destructive">
+                              Please enter a subject line for your email before saving the template.
+                            </p>
+                          )}
+                          {!content.trim() && (
+                            <p className="text-sm text-destructive">
+                              Please enter content for your email before saving the template.
+                            </p>
+                          )}
                         </div>
                         <DialogFooter>
                           <Button
@@ -638,7 +782,7 @@ export default function MarketingCommunications() {
                               })
                             }
                             disabled={
-                              !templateName.trim() || saveTemplateMutation.isPending
+                              !templateName.trim() || !subject.trim() || !content.trim() || saveTemplateMutation.isPending
                             }
                             data-testid="btn-confirm-save-template"
                           >
@@ -665,7 +809,111 @@ export default function MarketingCommunications() {
                     This information will be included in all emails
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                  {/* Logo Section */}
+                  <div className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg">
+                    <div className="flex-shrink-0">
+                      {logoData?.dataUrl ? (
+                        <img 
+                          src={logoData.dataUrl} 
+                          alt="Company Logo" 
+                          className="h-12 max-w-[150px] object-contain"
+                        />
+                      ) : (
+                        <div className="h-12 w-12 bg-muted rounded flex items-center justify-center">
+                          <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Company Logo</p>
+                      <p className="text-xs text-muted-foreground">
+                        {logoData?.dataUrl ? 'Logo uploaded' : 'No logo set'}
+                      </p>
+                    </div>
+                    <Dialog open={showLogoDialog} onOpenChange={(open) => {
+                      setShowLogoDialog(open);
+                      if (!open) {
+                        setSelectedLogoFile(null);
+                        setLogoPreviewUrl(null);
+                      }
+                    }}>
+                      <DialogTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          data-testid="btn-set-logo"
+                        >
+                          {logoData?.dataUrl ? 'Change' : 'Add Logo'}
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Upload Company Logo</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div>
+                            <Label htmlFor="logo-file">Logo Image</Label>
+                            <Input
+                              id="logo-file"
+                              type="file"
+                              accept="image/png,image/jpeg,image/jpg"
+                              onChange={handleLogoFileChange}
+                              className="cursor-pointer"
+                              data-testid="input-logo-file"
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Upload a PNG or JPEG file (max 1MB). The logo will be embedded directly in emails.
+                            </p>
+                          </div>
+                          {(logoPreviewUrl || logoData?.dataUrl) && (
+                            <div className="border rounded-lg p-4 bg-muted/50">
+                              <p className="text-sm font-medium mb-2">
+                                {logoPreviewUrl ? 'New Logo Preview:' : 'Current Logo:'}
+                              </p>
+                              <img 
+                                src={logoPreviewUrl || logoData?.dataUrl} 
+                                alt="Logo Preview" 
+                                className="max-h-16 max-w-[200px] object-contain"
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <DialogFooter className="flex gap-2">
+                          {logoData?.dataUrl && (
+                            <Button
+                              variant="destructive"
+                              onClick={() => deleteLogoMutation.mutate()}
+                              disabled={deleteLogoMutation.isPending}
+                              data-testid="btn-remove-logo"
+                            >
+                              {deleteLogoMutation.isPending && (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              )}
+                              Remove Logo
+                            </Button>
+                          )}
+                          <Button
+                            onClick={() => {
+                              if (selectedLogoFile) {
+                                uploadLogoMutation.mutate(selectedLogoFile);
+                              }
+                            }}
+                            disabled={!selectedLogoFile || uploadLogoMutation.isPending}
+                            data-testid="btn-save-logo"
+                          >
+                            {uploadLogoMutation.isPending && (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            )}
+                            Upload Logo
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+
+                  <Separator />
+
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div className="flex items-center gap-2">
                       <Building2 className="h-4 w-4 text-muted-foreground" />

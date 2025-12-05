@@ -74,6 +74,7 @@ import JOHNLTestDashboard from './pages/JOHNLTestDashboard';
 import JENSTestDashboard from './pages/JENSTestDashboard';
 import STACIWTestDashboard from './pages/STACIWTestDashboard';
 import DARLENEBTestDashboard from './pages/DARLENEBTestDashboard';
+import LAURIETTestDashboard from './pages/LAURIETTestDashboard';
 import TIMSTestDashboard from './pages/TIMSTestDashboard';
 import WatchRulesPage from './pages/WatchRulesPage';
 import BRADWTestDashboard from './pages/BRADWTestDashboard';
@@ -465,6 +466,10 @@ function App() {
                   <Route
                     path="/darleneb-dashboard"
                     component={DARLENEBTestDashboard}
+                  />
+                  <Route
+                    path="/lauriet-dashboard"
+                    component={LAURIETTestDashboard}
                   />
                   <Route path="/tims-dashboard" component={TIMSTestDashboard} />
                   <Route

@@ -1080,6 +1080,31 @@ export default function VendorPOManager() {
             <title>Purchase Order - ${selectedVendorPO.poNumber}</title>
             <style>
               body { font-family: Arial, sans-serif; padding: 40px; }
+              .print-controls { 
+                position: fixed; 
+                top: 10px; 
+                right: 10px; 
+                z-index: 1000;
+                display: flex;
+                gap: 10px;
+              }
+              .print-btn {
+                background-color: #2563eb;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                font-size: 14px;
+                font-weight: bold;
+                border-radius: 6px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              }
+              .print-btn:hover {
+                background-color: #1d4ed8;
+              }
               .company-header { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #333; }
               .company-header h1 { margin: 0 0 10px 0; font-size: 26px; color: #333; }
               .company-header p { margin: 3px 0; color: #555; font-size: 13px; }
@@ -1095,10 +1120,21 @@ export default function VendorPOManager() {
               .total-line { font-size: 18px; font-weight: bold; }
               @media print {
                 body { padding: 20px; }
+                .print-controls { display: none !important; }
               }
             </style>
           </head>
           <body>
+            <div class="print-controls">
+              <button class="print-btn" onclick="window.print()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                Print PO
+              </button>
+            </div>
             ${settings?.companyName || settings?.companyAddress || settings?.companyPhone || settings?.companyEmail ? `
               <div class="company-header">
                 ${settings.companyName ? `<h1>${settings.companyName}</h1>` : ''}

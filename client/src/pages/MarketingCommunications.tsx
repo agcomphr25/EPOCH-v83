@@ -454,6 +454,15 @@ export default function MarketingCommunications() {
       ? `<img src="${effectiveLogoUrl}" alt="${company.companyName}" style="max-height: 60px; max-width: 200px; margin-bottom: 10px;" />`
       : '';
 
+    const styledText = text
+      .replace(/<h1>/gi, '<h1 style="font-size: 32px; font-weight: bold; margin: 16px 0 8px 0; color: #1a365d;">')
+      .replace(/<h2>/gi, '<h2 style="font-size: 24px; font-weight: bold; margin: 14px 0 6px 0; color: #1a365d;">')
+      .replace(/<h3>/gi, '<h3 style="font-size: 20px; font-weight: bold; margin: 12px 0 4px 0; color: #1a365d;">')
+      .replace(/<p>/gi, '<p style="margin: 8px 0;">')
+      .replace(/<ul>/gi, '<ul style="margin: 8px 0; padding-left: 20px;">')
+      .replace(/<ol>/gi, '<ol style="margin: 8px 0; padding-left: 20px;">')
+      .replace(/<li>/gi, '<li style="margin: 4px 0;">');
+
     return `
 <!DOCTYPE html>
 <html>
@@ -486,7 +495,7 @@ export default function MarketingCommunications() {
           <tr>
             <td style="padding: 40px;">
               <div style="font-size: 16px; line-height: 1.6; color: #333333;">
-                ${text}
+                ${styledText}
               </div>
             </td>
           </tr>

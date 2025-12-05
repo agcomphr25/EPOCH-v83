@@ -6938,7 +6938,7 @@ export class DatabaseStorage implements IStorage {
     // Copy optional settings from original PO
     const originalSettings = await this.getPOOptionalSettings(poId);
     for (const setting of originalSettings) {
-      await this.addPOOptionalSetting(newRevision.id, setting.optionalSettingId);
+      await this.addPOOptionalSetting(newRevision.id, setting.id);
     }
     
     return newRevision;

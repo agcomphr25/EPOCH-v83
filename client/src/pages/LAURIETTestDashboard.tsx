@@ -1,4 +1,4 @@
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   LogOut,
@@ -9,6 +9,8 @@ import {
   Users,
   FileText,
   PackageCheck,
+  List,
+  Plus,
 } from 'lucide-react';
 import { Link } from 'wouter';
 
@@ -95,54 +97,61 @@ export default function LAURIETTestDashboard() {
         </div>
       </div>
 
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
-          <Users className="w-5 h-5 text-green-600" />
-          Vendors
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Link href="/vendors">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
-              <CardContent className="p-4 text-center">
-                <Users className="w-8 h-8 text-green-600 mx-auto mb-3" />
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  Vendors
-                </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Vendor Management
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/vendor-pos">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
-              <CardContent className="p-4 text-center">
-                <FileText className="w-8 h-8 text-green-600 mx-auto mb-3" />
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  Vendor POs
-                </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Purchase Orders
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/inventory/receiving">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
-              <CardContent className="p-4 text-center">
-                <PackageCheck className="w-8 h-8 text-green-600 mx-auto mb-3" />
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  Receiving
-                </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Inventory Receiving
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="h-fit">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center space-x-2 text-lg">
+              <div className="p-2 rounded-lg bg-green-100">
+                <Plus className="w-5 h-5 text-green-600" />
+              </div>
+              <span>Vendors</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            <Link href="/vendors">
+              <Button
+                variant="ghost"
+                className="h-auto p-4 justify-start text-left w-full"
+              >
+                <div className="flex items-center space-x-3">
+                  <Users className="w-5 h-5 text-gray-600" />
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-gray-100">Vendors</div>
+                    <div className="text-xs text-gray-500">Manage vendor contacts</div>
+                  </div>
+                </div>
+              </Button>
+            </Link>
+            <Link href="/vendor-pos">
+              <Button
+                variant="ghost"
+                className="h-auto p-4 justify-start text-left w-full"
+              >
+                <div className="flex items-center space-x-3">
+                  <List className="w-5 h-5 text-gray-600" />
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-gray-100">Vendor POs</div>
+                    <div className="text-xs text-gray-500">View and manage purchase orders</div>
+                  </div>
+                </div>
+              </Button>
+            </Link>
+            <Link href="/inventory/receiving">
+              <Button
+                variant="ghost"
+                className="h-auto p-4 justify-start text-left w-full"
+              >
+                <div className="flex items-center space-x-3">
+                  <PackageCheck className="w-5 h-5 text-gray-600" />
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-gray-100">Receiving</div>
+                    <div className="text-xs text-gray-500">Inventory receiving</div>
+                  </div>
+                </div>
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

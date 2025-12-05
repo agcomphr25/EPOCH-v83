@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -15,6 +15,8 @@ import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import {
   Mail,
   MessageSquare,
@@ -380,7 +382,7 @@ export default function MarketingCommunications() {
           <tr>
             <td style="padding: 40px;">
               <div style="font-size: 16px; line-height: 1.6; color: #333333;">
-                ${text.replace(/\n/g, '<br>')}
+                ${text}
               </div>
             </td>
           </tr>
@@ -564,19 +566,38 @@ export default function MarketingCommunications() {
                         </span>
                       )}
                     </Label>
-                    <Textarea
-                      id="content"
-                      value={content}
-                      onChange={(e) => setContent(e.target.value)}
-                      placeholder={
-                        messageType === 'email'
-                          ? 'Enter your email message...\n\nUse {{name}} to personalize with customer name'
-                          : 'Enter your SMS message (160 characters max)...'
-                      }
-                      rows={messageType === 'email' ? 10 : 4}
-                      maxLength={messageType === 'sms' ? 160 : undefined}
-                      data-testid="input-content"
-                    />
+                    {messageType === 'email' ? (
+                      <div className="border rounded-md" data-testid="input-content">
+                        <ReactQuill
+                          theme="snow"
+                          value={content}
+                          onChange={setContent}
+                          placeholder="Enter your email message... Use {{name}} to personalize with customer name"
+                          modules={{
+                            toolbar: [
+                              [{ 'header': [1, 2, 3, false] }],
+                              ['bold', 'italic', 'underline', 'strike'],
+                              [{ 'color': [] }, { 'background': [] }],
+                              [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                              [{ 'align': [] }],
+                              ['link'],
+                              ['clean']
+                            ],
+                          }}
+                          style={{ minHeight: '250px' }}
+                        />
+                      </div>
+                    ) : (
+                      <Textarea
+                        id="content"
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                        placeholder="Enter your SMS message (160 characters max)..."
+                        rows={4}
+                        maxLength={160}
+                        data-testid="input-content"
+                      />
+                    )}
                   </div>
 
                   <div className="flex gap-2">

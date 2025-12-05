@@ -39,8 +39,7 @@ function generateBrandedEmailHtml(
   branding: CompanyBranding
 ): string {
   const personalizedContent = content.replace(/\{\{name\}\}/g, customerName || 'Valued Customer');
-  const escapedContent = escapeHtml(personalizedContent);
-  const htmlContent = escapedContent.replace(/\n/g, '<br>');
+  const htmlContent = personalizedContent;
   
   const websiteUrl = branding.companyWebsite.startsWith('http') 
     ? branding.companyWebsite 

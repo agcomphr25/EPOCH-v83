@@ -29,6 +29,12 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { Calendar } from '@/components/ui/calendar';
 import {
   Popover,
@@ -1553,19 +1559,50 @@ export default function VendorPOManager() {
           )}
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <Accordion type="multiple" className="space-y-4" data-testid="accordion-vendor-pos">
           {filteredVendorPOs.map((vendorPo) => (
-            <VendorPOCard
+            <AccordionItem
               key={vendorPo.id}
-              vendorPo={vendorPo}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onViewItems={handleViewItems}
-              onIssuePO={handleIssuePO}
-              onCreateRevision={handleCreateRevision}
-            />
+              value={`po-${vendorPo.id}`}
+              className="border rounded-lg px-4 bg-card"
+              data-testid={`accordion-item-vendor-po-${vendorPo.id}`}
+            >
+              <AccordionTrigger className="hover:no-underline" data-testid={`accordion-trigger-${vendorPo.id}`}>
+                <div className="flex items-center justify-between w-full pr-4">
+                  <div className="flex items-center gap-4">
+                    <div className="text-left">
+                      <div className="font-semibold">{vendorPo.poNumber}</div>
+                      <div className="text-sm text-muted-foreground flex items-center gap-1">
+                        <Building2 className="w-3 h-3" />
+                        {vendorPo.vendorName || 'Unknown Vendor'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge className={getStatusColor(vendorPo.status)}>
+                      {vendorPo.status}
+                    </Badge>
+                    {vendorPo.isCurrentRevision === false && (
+                      <Badge className="bg-gray-200 text-gray-600 text-xs">
+                        Superseded
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <VendorPOCard
+                  vendorPo={vendorPo}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onViewItems={handleViewItems}
+                  onIssuePO={handleIssuePO}
+                  onCreateRevision={handleCreateRevision}
+                />
+              </AccordionContent>
+            </AccordionItem>
           ))}
-        </div>
+        </Accordion>
       )}
 
       {/* Create/Edit Form */}

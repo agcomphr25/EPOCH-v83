@@ -1166,7 +1166,7 @@ export default function VendorPOManager() {
             
             <div class="header">
               <h1>PURCHASE ORDER</h1>
-              <p>PO Number: ${selectedVendorPO.poNumber.replace('VPO-', '')}</p>
+              <p>PO Number: ${selectedVendorPO.poNumber.replace('VPO-', '').replace(/-R[A-Z0-9]+$/, '')}</p>
             </div>
             
             <div class="info-section">
@@ -1196,7 +1196,6 @@ export default function VendorPOManager() {
               <thead>
                 <tr>
                   <th>Line</th>
-                  <th>AG Part#</th>
                   <th>Supplier Part#</th>
                   <th>Description</th>
                   <th>Qty</th>
@@ -1209,7 +1208,6 @@ export default function VendorPOManager() {
                 ${items.map(item => `
                   <tr>
                     <td>${item.lineNumber}</td>
-                    <td>${item.agPartNumber || '-'}</td>
                     <td>${item.supplierPartNumber || '-'}</td>
                     <td>${item.description || '-'}${item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit ? `<br/><small style="color: #666;">(${Number(item.purchaseQty).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${item.purchaseUnit} ordered)</small>` : ''}</td>
                     <td>${item.quantity != null ? Number(item.quantity).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>

@@ -579,8 +579,9 @@ router.post('/send-bulk-email', async (req, res) => {
           console.error('📧 SendGrid email error:', {
             email: customer.email,
             error: emailError.message,
-            responseBody: emailError.response?.body,
+            fullErrors: JSON.stringify(emailError.response?.body?.errors, null, 2),
             statusCode: emailError.code,
+            fromEmail: fromEmail,
           });
           results.push({ email: customer.email, success: false, error: errorDetails });
           

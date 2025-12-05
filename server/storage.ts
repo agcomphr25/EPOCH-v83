@@ -111,6 +111,7 @@ import {
   companySettings,
   optionalSettings,
   poOptionalSettings,
+  vendorPoAttachments,
   // Follow-up orders table
   followupOrders,
   // Invoice numbers tracking table
@@ -290,6 +291,9 @@ import {
   // Order attachment types
   type OrderAttachment,
   type InsertOrderAttachment,
+  // Vendor PO attachment types
+  type VendorPoAttachment,
+  type InsertVendorPoAttachment,
   // Gateway reports types - temporarily removed
   // PO Products types
   type POProduct,
@@ -1504,6 +1508,12 @@ export interface IStorage {
   ): Promise<OrderAttachment | undefined>;
   createOrderAttachment(data: InsertOrderAttachment): Promise<OrderAttachment>;
   deleteOrderAttachment(attachmentId: number): Promise<void>;
+
+  // Vendor PO Attachment Methods
+  getVendorPoAttachments(vendorPoId: number): Promise<VendorPoAttachment[]>;
+  getVendorPoAttachment(attachmentId: number): Promise<VendorPoAttachment | undefined>;
+  createVendorPoAttachment(data: InsertVendorPoAttachment): Promise<VendorPoAttachment>;
+  deleteVendorPoAttachment(attachmentId: number): Promise<void>;
 
   // Add methods for finalized orders
   getAllFinalizedOrders(): Promise<AllOrder[]>;
@@ -12788,6 +12798,37 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(orderAttachments)
       .where(eq(orderAttachments.id, attachmentId));
+  }
+
+  // Vendor PO Attachment Methods
+  async getVendorPoAttachments(vendorPoId: number): Promise<VendorPoAttachment[]> {
+    return await db
+      .select()
+      .from(vendorPoAttachments)
+      .where(eq(vendorPoAttachments.vendorPoId, vendorPoId))
+      .orderBy(desc(vendorPoAttachments.createdAt));
+  }
+
+  async getVendorPoAttachment(attachmentId: number): Promise<VendorPoAttachment | undefined> {
+    const [attachment] = await db
+      .select()
+      .from(vendorPoAttachments)
+      .where(eq(vendorPoAttachments.id, attachmentId));
+    return attachment || undefined;
+  }
+
+  async createVendorPoAttachment(data: InsertVendorPoAttachment): Promise<VendorPoAttachment> {
+    const [attachment] = await db
+      .insert(vendorPoAttachments)
+      .values(data)
+      .returning();
+    return attachment;
+  }
+
+  async deleteVendorPoAttachment(attachmentId: number): Promise<void> {
+    await db
+      .delete(vendorPoAttachments)
+      .where(eq(vendorPoAttachments.id, attachmentId));
   }
 
   // Add methods for finalized orders

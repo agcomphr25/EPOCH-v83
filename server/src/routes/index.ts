@@ -24,6 +24,7 @@ import shippingPdfRoute from './shippingPdf';
 import shippingRoutes from './shipping';
 import shippingTestRoutes from './shipping-test';
 import orderAttachmentsRoutes from './orderAttachments';
+import vendorPoAttachmentsRoutes from './vendorPoAttachments';
 import discountsRoutes from './discounts';
 // import bomsRoutes from './boms'; // Legacy BOM routes - replaced by Robust BOM system
 import robustBomsRoutes from './robustBoms';
@@ -207,6 +208,9 @@ export function registerRoutes(app: Express): Server {
 
   // Order attachments routes
   app.use('/api/order-attachments', orderAttachmentsRoutes);
+
+  // Vendor PO attachments routes
+  app.use('/api/vendor-po-attachments', vendorPoAttachmentsRoutes);
 
   // Mold management routes
   app.use('/api/molds', moldsRoutes);

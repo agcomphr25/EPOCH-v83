@@ -2938,6 +2938,22 @@ export const poOptionalSettings = pgTable('po_optional_settings', {
   uniquePoSetting: unique().on(table.vendorPoId, table.optionalSettingId),
 }));
 
+// Vendor PO Attachments - Files attached to vendor POs (emails, reference docs, etc.)
+export const vendorPoAttachments = pgTable('vendor_po_attachments', {
+  id: serial('id').primaryKey(),
+  vendorPoId: integer('vendor_po_id')
+    .references(() => vendorPOs.id, { onDelete: 'cascade' })
+    .notNull(),
+  fileName: text('file_name').notNull(),
+  originalFileName: text('original_file_name').notNull(),
+  fileSize: integer('file_size').notNull(),
+  mimeType: text('mime_type').notNull(),
+  filePath: text('file_path').notNull(),
+  uploadedBy: text('uploaded_by'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 export const communicationLogs = pgTable('communication_logs', {
   id: serial('id').primaryKey(),
   orderId: text('order_id'), // Made nullable for general communications
@@ -3273,6 +3289,14 @@ export const insertPOOptionalSettingSchema = createInsertSchema(poOptionalSettin
   });
 export type InsertPOOptionalSetting = z.infer<typeof insertPOOptionalSettingSchema>;
 export type POOptionalSetting = typeof poOptionalSettings.$inferSelect;
+
+export const insertVendorPoAttachmentSchema = createInsertSchema(vendorPoAttachments)
+  .omit({
+    id: true,
+    createdAt: true,
+  });
+export type InsertVendorPoAttachment = z.infer<typeof insertVendorPoAttachmentSchema>;
+export type VendorPoAttachment = typeof vendorPoAttachments.$inferSelect;
 
 // Order Attachments Table
 export const orderAttachments = pgTable('order_attachments', {

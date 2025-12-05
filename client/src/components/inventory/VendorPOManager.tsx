@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
@@ -443,6 +443,92 @@ function OptionalSettingsSelector({ vendorPoId }: { vendorPoId: number }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Vendor PO Attachments component
+function VendorPOAttachments({ vendorPoId }: { vendorPoId: number }) {
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClientLocal = useQueryClient();
+
+  const { data: attachments = [], isLoading } = useQuery<any[]>({
+    queryKey: ['/api/vendor-po-attachments/list', vendorPoId],
+    queryFn: () => apiRequest(`/api/vendor-po-attachments/list/${vendorPoId}`),
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: async (files: FileList) => {
+      const formData = new FormData();
+      Array.from(files).forEach(file => formData.append('files', file));
+      const response = await fetch(`/api/vendor-po-attachments/upload/${vendorPoId}`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) throw new Error('Upload failed');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClientLocal.invalidateQueries({ queryKey: ['/api/vendor-po-attachments/list', vendorPoId] });
+      toast.success('Files uploaded successfully');
+      setIsUploading(false);
+    },
+    onError: () => {
+      toast.error('Failed to upload files');
+      setIsUploading(false);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (attachmentId: number) => {
+      return apiRequest(`/api/vendor-po-attachments/delete/${attachmentId}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClientLocal.invalidateQueries({ queryKey: ['/api/vendor-po-attachments/list', vendorPoId] });
+      toast.success('Attachment deleted');
+    },
+    onError: () => toast.error('Failed to delete attachment'),
+  });
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setIsUploading(true);
+      uploadMutation.mutate(e.target.files);
+    }
+  };
+
+  if (isLoading) return <div className="text-gray-500">Loading attachments...</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" multiple />
+        <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isUploading} data-testid="button-upload-attachment">
+          {isUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+          {isUploading ? 'Uploading...' : 'Upload Files'}
+        </Button>
+      </div>
+      {attachments.length === 0 ? (
+        <p className="text-sm text-gray-500 italic">No attachments yet</p>
+      ) : (
+        <div className="space-y-2">
+          {attachments.map((att: any) => (
+            <div key={att.id} className="flex items-center justify-between p-3 border rounded-lg bg-gray-50 dark:bg-gray-800" data-testid={`attachment-item-${att.id}`}>
+              <div className="flex items-center gap-3">
+                <FileText className="w-5 h-5 text-blue-600" />
+                <div>
+                  <a href={`/api/vendor-po-attachments/download/${att.id}`} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:underline">{att.originalFileName}</a>
+                  <p className="text-xs text-gray-500">{(att.fileSize / 1024).toFixed(1)} KB - {format(new Date(att.createdAt), 'MMM dd, yyyy')}</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => deleteMutation.mutate(att.id)} className="text-red-600 hover:text-red-800" data-testid={`button-delete-attachment-${att.id}`}>
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1463,6 +1549,18 @@ export default function VendorPOManager() {
                   onSubmit={handleFormSubmit}
                   inline={true}
                 />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Attachments</CardTitle>
+                <CardDescription>
+                  Upload reference documents, emails, or other files related to this PO
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <VendorPOAttachments vendorPoId={selectedVendorPO.id} />
               </CardContent>
             </Card>
           </TabsContent>

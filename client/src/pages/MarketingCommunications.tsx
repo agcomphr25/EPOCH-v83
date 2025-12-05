@@ -440,7 +440,7 @@ export default function MarketingCommunications() {
     }
   };
 
-  const generateHtmlEmail = (text: string, settings?: CompanySettings) => {
+  const generateHtmlEmail = (text: string, settings?: CompanySettings, logoDataUrl?: string) => {
     const company = settings || {
       companyName: 'AG Composites',
       companyAddress: '123 Business Street, City, ST 12345',
@@ -449,8 +449,9 @@ export default function MarketingCommunications() {
       companyWebsite: 'www.agcomposites.com',
     };
 
-    const logoHtml = company.companyLogoUrl 
-      ? `<img src="${company.companyLogoUrl}" alt="${company.companyName}" style="max-height: 60px; max-width: 200px; margin-bottom: 10px;" />`
+    const effectiveLogoUrl = logoDataUrl || company.companyLogoUrl;
+    const logoHtml = effectiveLogoUrl 
+      ? `<img src="${effectiveLogoUrl}" alt="${company.companyName}" style="max-height: 60px; max-width: 200px; margin-bottom: 10px;" />`
       : '';
 
     return `
@@ -719,7 +720,7 @@ export default function MarketingCommunications() {
                           <div
                             className="border rounded-lg"
                             dangerouslySetInnerHTML={{
-                              __html: generateHtmlEmail(content, companySettings),
+                              __html: generateHtmlEmail(content, companySettings, logoData?.dataUrl),
                             }}
                           />
                         </DialogContent>

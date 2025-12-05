@@ -648,6 +648,16 @@ export default function MarketingCommunications() {
                               data-testid="input-template-name"
                             />
                           </div>
+                          {!subject.trim() && (
+                            <p className="text-sm text-destructive">
+                              Please enter a subject line for your email before saving the template.
+                            </p>
+                          )}
+                          {!content.trim() && (
+                            <p className="text-sm text-destructive">
+                              Please enter content for your email before saving the template.
+                            </p>
+                          )}
                         </div>
                         <DialogFooter>
                           <Button
@@ -659,7 +669,7 @@ export default function MarketingCommunications() {
                               })
                             }
                             disabled={
-                              !templateName.trim() || saveTemplateMutation.isPending
+                              !templateName.trim() || !subject.trim() || !content.trim() || saveTemplateMutation.isPending
                             }
                             data-testid="btn-confirm-save-template"
                           >

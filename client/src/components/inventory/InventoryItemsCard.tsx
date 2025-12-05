@@ -1934,7 +1934,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         <div className="flex gap-4">
           <div className="relative flex-1 max-w-md">
             <Input
-              placeholder="Search by AG Part #, SKU, Name..."
+              placeholder="Search by AG Part #, SKU, Name, Notes..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"

@@ -575,14 +575,21 @@ router.post('/send-bulk-email', async (req, res) => {
           results.push({ email: customer.email, success: true });
         } catch (emailError: any) {
           failedCount++;
-          results.push({ email: customer.email, success: false, error: emailError.message });
+          const errorDetails = emailError.response?.body?.errors?.[0]?.message || emailError.message;
+          console.error('📧 SendGrid email error:', {
+            email: customer.email,
+            error: emailError.message,
+            responseBody: emailError.response?.body,
+            statusCode: emailError.code,
+          });
+          results.push({ email: customer.email, success: false, error: errorDetails });
           
           await db.insert(marketingRecipients).values({
             messageId: marketingMessage.id,
             customerId: customer.id,
             recipientEmail: customer.email,
             status: 'failed',
-            errorMessage: emailError.message,
+            errorMessage: errorDetails,
           });
         }
       }

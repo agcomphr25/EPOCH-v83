@@ -472,12 +472,6 @@ function VendorPOCard({
               data-testid={`text-po-number-${vendorPo.id}`}
             >
               {vendorPo.poNumber}
-              {/* Show revision indicator if this is a revision */}
-              {vendorPo.revisionNumber !== undefined && vendorPo.revisionNumber > 0 && (
-                <Badge className="ml-2 bg-purple-100 text-purple-800" data-testid={`revision-badge-${vendorPo.id}`}>
-                  R{String.fromCharCode(64 + vendorPo.revisionNumber)}
-                </Badge>
-              )}
             </CardTitle>
             <CardDescription
               className="mt-1"
@@ -547,18 +541,6 @@ function VendorPOCard({
             {isIssued ? 'View Items' : 'Manage Items'}
           </Button>
           <OptionalSettingsSelector vendorPoId={vendorPo.id} />
-          {vendorPo.status === 'Draft' && (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => onIssuePO(vendorPo.id)}
-              className="bg-green-600 hover:bg-green-700 text-white"
-              data-testid={`button-issue-po-${vendorPo.id}`}
-            >
-              <Send className="w-4 h-4 mr-1" />
-              Issue PO
-            </Button>
-          )}
           {/* Show Edit button only for Draft POs */}
           {!isIssued && (
             <Button

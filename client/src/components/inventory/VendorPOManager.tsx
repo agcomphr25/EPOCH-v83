@@ -531,15 +531,17 @@ function VendorPOCard({
         </div>
 
         <div className="flex gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onViewItems(vendorPo)}
-            data-testid={`button-view-items-${vendorPo.id}`}
-          >
-            <Eye className="w-4 h-4 mr-1" />
-            {isIssued ? 'View Items' : 'Manage Items'}
-          </Button>
+          {isIssued && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onViewItems(vendorPo)}
+              data-testid={`button-view-items-${vendorPo.id}`}
+            >
+              <Eye className="w-4 h-4 mr-1" />
+              View Items
+            </Button>
+          )}
           <OptionalSettingsSelector vendorPoId={vendorPo.id} />
           {/* Show Edit button only for Draft POs */}
           {!isIssued && (

@@ -254,6 +254,25 @@ const bulkSmsSchema = z.object({
   sentBy: z.string().optional(),
 });
 
+router.get('/email-config', async (req, res) => {
+  try {
+    const fromEmail = process.env.SENDGRID_FROM_EMAIL || 'Not configured';
+    const replyToEmail = 'sales@agcomposites.com';
+    const replyToName = 'A G Composites Sales';
+    
+    res.json({
+      fromEmail,
+      fromName: 'A G Composites',
+      replyToEmail,
+      replyToName,
+      isConfigured: !!process.env.SENDGRID_FROM_EMAIL && !!process.env.SENDGRID_API_KEY,
+    });
+  } catch (error: any) {
+    console.error('Error fetching email config:', error);
+    res.status(500).json({ error: 'Failed to fetch email configuration' });
+  }
+});
+
 router.get('/company-settings', async (req, res) => {
   try {
     const settings = await db.select().from(companySettings).limit(1);

@@ -89,6 +89,14 @@ interface MarketingMessage {
   status: string;
 }
 
+interface EmailConfig {
+  fromEmail: string;
+  fromName: string;
+  replyToEmail: string;
+  replyToName: string;
+  isConfigured: boolean;
+}
+
 export default function MarketingCommunications() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('compose');
@@ -111,6 +119,10 @@ export default function MarketingCommunications() {
 
   const { data: companySettings, refetch: refetchCompanySettings } = useQuery<CompanySettings>({
     queryKey: ['/api/marketing/company-settings'],
+  });
+
+  const { data: emailConfig } = useQuery<EmailConfig>({
+    queryKey: ['/api/marketing/email-config'],
   });
 
   const { data: logoData, refetch: refetchLogo } = useQuery<{ dataUrl: string; filename: string; mimetype: string }>({
@@ -632,6 +644,29 @@ export default function MarketingCommunications() {
                       SMS
                     </Button>
                   </div>
+
+                  {messageType === 'email' && emailConfig && (
+                    <div className="bg-muted/50 rounded-lg p-4 border" data-testid="email-config-info">
+                      <div className="flex items-center gap-2 mb-3">
+                        <AtSign className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">Email Settings</span>
+                      </div>
+                      <div className="grid gap-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground min-w-[80px]">From:</span>
+                          <span className="font-medium" data-testid="text-from-email">
+                            {emailConfig.fromName} &lt;{emailConfig.fromEmail}&gt;
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground min-w-[80px]">Reply-To:</span>
+                          <span className="font-medium" data-testid="text-reply-to-email">
+                            {emailConfig.replyToName} &lt;{emailConfig.replyToEmail}&gt;
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {templates.length > 0 && (
                     <div>

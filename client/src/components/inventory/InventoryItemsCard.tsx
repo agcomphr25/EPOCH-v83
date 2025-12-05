@@ -1934,7 +1934,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         <div className="flex gap-4">
           <div className="relative flex-1 max-w-md">
             <Input
-              placeholder="Search by AG Part #, SKU, Name..."
+              placeholder="Search by AG Part #, SKU, Name, Notes..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -2204,15 +2204,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Utilized In
                 </th>
-                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
-                  SDS
-                </th>
-                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
-                  TDS
-                </th>
-                <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
-                  Other Docs
-                </th>
                 <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-left">
                   Actions
                 </th>
@@ -2287,57 +2278,6 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
                           !item.utilizedInServices &&
                           '-'}
                       </div>
-                    </td>
-                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
-                      {item.hasSds && item.sdsFilePath ? (
-                        <a
-                          href={item.sdsFilePath}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
-                          data-testid={`link-sds-${item.id}`}
-                          title="View SDS"
-                        >
-                          <Download className="h-4 w-4" />
-                          PDF
-                        </a>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
-                      {item.hasTds && item.tdsFilePath ? (
-                        <a
-                          href={item.tdsFilePath}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
-                          data-testid={`link-tds-${item.id}`}
-                          title="View TDS"
-                        >
-                          <Download className="h-4 w-4" />
-                          PDF
-                        </a>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                    <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center">
-                      {item.hasOtherDocs && item.otherDocsFilePath ? (
-                        <a
-                          href={item.otherDocsFilePath}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
-                          data-testid={`link-other-docs-${item.id}`}
-                          title="View Other Docs"
-                        >
-                          <Download className="h-4 w-4" />
-                          PDF
-                        </a>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
                     </td>
                     <td className="border border-gray-200 dark:border-gray-700 px-4 py-2">
                       <div className="flex space-x-2">

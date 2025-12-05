@@ -472,12 +472,6 @@ function VendorPOCard({
               data-testid={`text-po-number-${vendorPo.id}`}
             >
               {vendorPo.poNumber}
-              {/* Show revision indicator if this is a revision */}
-              {vendorPo.revisionNumber !== undefined && vendorPo.revisionNumber > 0 && (
-                <Badge className="ml-2 bg-purple-100 text-purple-800" data-testid={`revision-badge-${vendorPo.id}`}>
-                  R{vendorPo.revisionNumber}
-                </Badge>
-              )}
             </CardTitle>
             <CardDescription
               className="mt-1"
@@ -537,28 +531,18 @@ function VendorPOCard({
         </div>
 
         <div className="flex gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onViewItems(vendorPo)}
-            data-testid={`button-view-items-${vendorPo.id}`}
-          >
-            <Eye className="w-4 h-4 mr-1" />
-            {isIssued ? 'View Items' : 'Manage Items'}
-          </Button>
-          <OptionalSettingsSelector vendorPoId={vendorPo.id} />
-          {vendorPo.status === 'Draft' && (
+          {isIssued && (
             <Button
-              variant="default"
+              variant="outline"
               size="sm"
-              onClick={() => onIssuePO(vendorPo.id)}
-              className="bg-green-600 hover:bg-green-700 text-white"
-              data-testid={`button-issue-po-${vendorPo.id}`}
+              onClick={() => onViewItems(vendorPo)}
+              data-testid={`button-view-items-${vendorPo.id}`}
             >
-              <Send className="w-4 h-4 mr-1" />
-              Issue PO
+              <Eye className="w-4 h-4 mr-1" />
+              View Items
             </Button>
           )}
+          <OptionalSettingsSelector vendorPoId={vendorPo.id} />
           {/* Show Edit button only for Draft POs */}
           {!isIssued && (
             <Button
@@ -1166,7 +1150,7 @@ export default function VendorPOManager() {
             
             <div class="header">
               <h1>PURCHASE ORDER</h1>
-              <p>PO Number: ${selectedVendorPO.poNumber.replace('VPO-', '')}</p>
+              <p>PO Number: ${selectedVendorPO.poNumber.replace('VPO-', '').replace(/-R[A-Z0-9]+$/, '')}</p>
             </div>
             
             <div class="info-section">
@@ -1196,7 +1180,6 @@ export default function VendorPOManager() {
               <thead>
                 <tr>
                   <th>Line</th>
-                  <th>AG Part#</th>
                   <th>Supplier Part#</th>
                   <th>Description</th>
                   <th>Qty</th>
@@ -1209,7 +1192,6 @@ export default function VendorPOManager() {
                 ${items.map(item => `
                   <tr>
                     <td>${item.lineNumber}</td>
-                    <td>${item.agPartNumber || '-'}</td>
                     <td>${item.supplierPartNumber || '-'}</td>
                     <td>${item.description || '-'}${item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit ? `<br/><small style="color: #666;">(${Number(item.purchaseQty).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${item.purchaseUnit} ordered)</small>` : ''}</td>
                     <td>${item.quantity != null ? Number(item.quantity).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}</td>

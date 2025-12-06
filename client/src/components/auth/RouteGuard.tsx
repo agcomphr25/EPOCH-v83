@@ -1,0 +1,148 @@
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
+import { hasRouteAccess, hasFullAccess } from '@/config/userPermissions';
+import AccessDenied from '@/pages/AccessDenied';
+
+interface RouteGuardProps {
+  children: React.ReactNode;
+}
+
+interface UserData {
+  id: number;
+  username: string;
+  role: string;
+  employeeId: number | null;
+}
+
+const PUBLIC_ROUTES = [
+  '/',
+  '/login',
+  '/access-denied',
+];
+
+const PUBLIC_ROUTE_PREFIXES = [
+  '/sign-order/',
+];
+
+function isDeploymentEnvironment(): boolean {
+  const hostname = window.location.hostname;
+  const isLocalhost =
+    hostname.includes('localhost') || hostname.includes('127.0.0.1');
+  const isReplitEditor =
+    hostname.includes('replit.dev') && !hostname.includes('.replit.dev');
+  return !isLocalhost && !isReplitEditor;
+}
+
+function isPublicRoute(path: string): boolean {
+  if (PUBLIC_ROUTES.includes(path)) {
+    return true;
+  }
+  
+  for (const prefix of PUBLIC_ROUTE_PREFIXES) {
+    if (path.startsWith(prefix)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+export default function RouteGuard({ children }: RouteGuardProps) {
+  const [location] = useLocation();
+  const [accessChecked, setAccessChecked] = useState(false);
+  const [hasAccess, setHasAccess] = useState(true);
+
+  const { data: currentUser, isLoading } = useQuery<UserData | null>({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
+      const token =
+        localStorage.getItem('sessionToken') ||
+        localStorage.getItem('jwtToken');
+
+      if (!isDeploymentEnvironment()) {
+        const storedUsername = localStorage.getItem('dev_username');
+        if (storedUsername) {
+          return { 
+            id: 0, 
+            username: storedUsername, 
+            role: 'ADMIN',
+            employeeId: null 
+          };
+        }
+        return { 
+          id: 0, 
+          username: 'anonymous', 
+          role: 'ADMIN',
+          employeeId: null 
+        };
+      }
+
+      try {
+        const response = await fetch('/api/auth/session', {
+          credentials: 'include',
+          headers: token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {},
+        });
+
+        if (response.ok) {
+          return await response.json();
+        }
+        return null;
+      } catch (error) {
+        console.error('Failed to fetch user data:', error);
+        return null;
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    if (isPublicRoute(location)) {
+      setHasAccess(true);
+      setAccessChecked(true);
+      return;
+    }
+
+    if (!currentUser) {
+      setHasAccess(false);
+      setAccessChecked(true);
+      return;
+    }
+
+    const username = currentUser.username?.toLowerCase() || '';
+    const userRole = currentUser.role || '';
+
+    if (hasFullAccess(username)) {
+      setHasAccess(true);
+      setAccessChecked(true);
+      return;
+    }
+
+    const canAccess = hasRouteAccess(username, location, userRole);
+    setHasAccess(canAccess);
+    setAccessChecked(true);
+  }, [location, currentUser, isLoading]);
+
+  if (isLoading || !accessChecked) {
+    return null;
+  }
+
+  if (isPublicRoute(location)) {
+    return <>{children}</>;
+  }
+
+  if (!hasAccess) {
+    return <AccessDenied />;
+  }
+
+  return <>{children}</>;
+}

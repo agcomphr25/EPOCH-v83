@@ -7,8 +7,13 @@ import {
   insertAllocationRuleSchema,
   insertAllocationResultSchema,
 } from '../../schema';
+import { authenticateToken } from '../../middleware/auth';
+import { requireAdminAccess } from '../../middleware/routeAuthorization';
 
 const router = Router();
+
+router.use(authenticateToken);
+router.use(requireAdminAccess);
 
 // ========================================
 // ACCOUNT CATEGORIES ROUTES

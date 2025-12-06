@@ -4,8 +4,13 @@ import {
   insertPersistentDiscountSchema,
   insertShortTermSaleSchema,
 } from '@shared/schema';
+import { authenticateToken } from '../../middleware/auth';
+import { requireAdminAccess } from '../../middleware/routeAuthorization';
 
 const router = Router();
+
+router.use(authenticateToken);
+router.use(requireAdminAccess);
 
 // Persistent Discounts routes
 router.get('/persistent-discounts', async (req: Request, res: Response) => {

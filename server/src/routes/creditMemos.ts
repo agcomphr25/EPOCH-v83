@@ -10,8 +10,13 @@ import {
   insertCreditMemoApplicationSchema,
 } from '../../schema';
 import { eq, desc, sql, and } from 'drizzle-orm';
+import { authenticateToken } from '../../middleware/auth';
+import { requireAdminAccess } from '../../middleware/routeAuthorization';
 
 const router = Router();
+
+router.use(authenticateToken);
+router.use(requireAdminAccess);
 
 async function generateMemoNumber(): Promise<string> {
   const year = new Date().getFullYear();

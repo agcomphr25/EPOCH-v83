@@ -8,7 +8,7 @@ import {
 
 import { storage } from '../../storage';
 import { pool, db } from '../../db';
-import { p2LayupSchedules, p2SerializedItems } from '../../schema';
+import { p2LayupSchedules, p2SerializedItems, insertP2PurchaseOrderSchema } from '../../schema';
 import { eq, and, inArray, or } from 'drizzle-orm';
 import { uploadMiddleware } from '../../utils/fileUpload';
 import path from 'path';
@@ -16,6 +16,7 @@ import fs from 'fs';
 import multer from 'multer';
 import crypto from 'crypto';
 import { softAuth } from '../../middleware/auth';
+import { z } from 'zod';
 
 const router = Router();
 
@@ -60,8 +61,17 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       console.log('🔧 P2 PURCHASE ORDER CREATE BYPASS ROUTE CALLED');
-      const poData = req.body;
-      const po = await storage.createP2PurchaseOrder(poData);
+      
+      const validation = insertP2PurchaseOrderSchema.safeParse(req.body);
+      if (!validation.success) {
+        console.error('🔧 P2 PO validation error:', validation.error.format());
+        return res.status(400).json({ 
+          error: 'Invalid P2 purchase order data',
+          details: validation.error.format()
+        });
+      }
+      
+      const po = await storage.createP2PurchaseOrder(validation.data);
       console.log('🔧 Created P2 purchase order:', po.id);
       res.status(201).json(po);
     } catch (error) {
@@ -81,8 +91,17 @@ router.put(
     try {
       console.log('🔧 P2 PURCHASE ORDER UPDATE BYPASS ROUTE CALLED');
       const { id } = req.params;
-      const poData = req.body;
-      const po = await storage.updateP2PurchaseOrder(parseInt(id), poData);
+      
+      const validation = insertP2PurchaseOrderSchema.partial().safeParse(req.body);
+      if (!validation.success) {
+        console.error('🔧 P2 PO update validation error:', validation.error.format());
+        return res.status(400).json({ 
+          error: 'Invalid P2 purchase order update data',
+          details: validation.error.format()
+        });
+      }
+      
+      const po = await storage.updateP2PurchaseOrder(parseInt(id), validation.data);
       console.log('🔧 Updated P2 purchase order:', po.id);
       res.json(po);
     } catch (error) {

@@ -1,10 +1,33 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
+import { z } from 'zod';
 
 import { pool } from '../../db';
 import { storage } from '../../storage';
+import { authenticateToken, requireRole } from '../../middleware/auth';
 
 const router = express.Router();
+
+const createUserSchema = z.object({
+  username: z.string().min(2).max(50),
+  firstName: z.string().min(1).max(100).optional(),
+  lastName: z.string().min(1).max(100).optional(),
+  password: z.string().min(6).max(100),
+  role: z.enum(['ADMIN', 'EMPLOYEE', 'OWNER']).optional().default('EMPLOYEE'),
+  employeeId: z.number().int().positive().optional().nullable(),
+  canOverridePrices: z.boolean().optional().default(false),
+  isActive: z.boolean().optional().default(true),
+  isFinishTechnician: z.boolean().optional().default(false),
+});
+
+const updateUserSchema = createUserSchema.partial().extend({
+  password: z.string().min(6).max(100).optional(),
+});
+
+// Apply authentication to ALL user management routes
+// Only ADMIN users can manage other users
+router.use(authenticateToken);
+router.use(requireRole('ADMIN'));
 
 // User Capability Management Routes (MUST be before /:id to avoid route collision)
 router.get('/:id/capabilities', async (req, res) => {
@@ -98,6 +121,14 @@ router.get('/', async (req, res) => {
 // POST create new user
 router.post('/', async (req, res) => {
   try {
+    const validation = createUserSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ 
+        error: 'Invalid user data',
+        details: validation.error.format()
+      });
+    }
+    
     const {
       username,
       firstName,
@@ -108,7 +139,7 @@ router.post('/', async (req, res) => {
       canOverridePrices,
       isActive,
       isFinishTechnician,
-    } = req.body;
+    } = validation.data;
 
     // Check if username already exists
     const existingUser = await pool.query(

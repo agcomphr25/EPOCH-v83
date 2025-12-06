@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import rateLimit from 'express-rate-limit';
 import { db } from '../../db';
 import {
   payments,
@@ -12,6 +13,17 @@ import { eq, desc, inArray } from 'drizzle-orm';
 import { chargeCard, voidTransaction, isConfigured as isAcceptBlueConfigured } from '../../utils/acceptBlue';
 
 const router = Router();
+
+// Rate limiting for payment endpoints to prevent card testing attacks
+// Strict limits: 10 payment attempts per hour per IP
+const paymentRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // 10 attempts per hour
+  message: { error: 'Too many payment attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false, // Count all attempts, even successful ones
+});
 
 // Determine if we're in test mode (sandbox)
 const isTestMode = process.env.NODE_ENV !== 'production';
@@ -47,13 +59,12 @@ const creditCardPaymentSchema = z.object({
 });
 
 // Process credit card payment via Accept.Blue
-router.post('/credit-card', async (req, res) => {
+// Rate limited to prevent card testing attacks
+router.post('/credit-card', paymentRateLimiter, async (req, res) => {
   try {
-    console.log(
-      '🔄 Payment request received for body:',
-      JSON.stringify(req.body, null, 2)
-    );
+    // SECURITY: Never log payment request body - contains sensitive card data
     const paymentData = creditCardPaymentSchema.parse(req.body);
+    // Only log non-sensitive information
     console.log(
       '💰 Processing payment for order:',
       paymentData.orderId,

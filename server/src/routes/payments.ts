@@ -15,10 +15,10 @@ import { chargeCard, voidTransaction, isConfigured as isAcceptBlueConfigured } f
 const router = Router();
 
 // Rate limiting for payment endpoints to prevent card testing attacks
-// Strict limits: 10 payment attempts per hour per IP
+// Limits: 25 payment attempts per hour per IP
 const paymentRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10, // 10 attempts per hour
+  max: 25, // 25 attempts per hour
   message: { error: 'Too many payment attempts. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,

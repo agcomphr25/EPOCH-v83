@@ -67,7 +67,7 @@ import { cn } from '@/lib/utils';
 import InstallPWAButton from './InstallPWAButton';
 import GlobalSearch from './GlobalSearch';
 import { useQuery } from '@tanstack/react-query';
-import { hasFullAccess, hasRouteAccess } from '@/config/userPermissions';
+import { hasFullAccess, hasRouteAccess, isUserInPermissionsList, DEFAULT_USER_ROUTES } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import {
   NavigationMenu,
@@ -823,6 +823,13 @@ export default function Navigation() {
       return items; // Admin users see everything
     }
 
+    // For users not in the permissions list, only show default routes
+    if (!isUserInPermissionsList(username)) {
+      return items.filter((item) => 
+        DEFAULT_USER_ROUTES.some(route => item.path === route || item.path.startsWith(route + '/'))
+      );
+    }
+
     return items.filter((item) => hasRouteAccess(username, item.path, userRole));
   };
 
@@ -875,9 +882,22 @@ export default function Navigation() {
     
     // Regular users only see their own dashboard
     const ownDashboardPath = `/${currentUser.username.toLowerCase()}-dashboard`;
-    return userDashboardsItems.filter((item) => 
+    const ownDashboard = userDashboardsItems.find((item) => 
       item.path.toLowerCase() === ownDashboardPath
     );
+    
+    // If user's dashboard exists in the list, return it
+    if (ownDashboard) {
+      return [ownDashboard];
+    }
+    
+    // If user's dashboard doesn't exist in predefined list, create a dynamic entry
+    return [{
+      path: ownDashboardPath,
+      label: `${currentUser.username.toUpperCase()} Dashboard`,
+      icon: Home,
+      description: `Personal dashboard for ${currentUser.username}`,
+    }];
   }, [userDashboardsItems, currentUser?.username]);
   const filteredPurchaseOrdersItems = useMemo(
     () => filterByPermissions(purchaseOrdersItems, currentUser?.username, userRole),

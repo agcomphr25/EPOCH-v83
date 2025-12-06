@@ -48,6 +48,17 @@ function isPublicRoute(path: string): boolean {
   return false;
 }
 
+/**
+ * Check if the route is the user's own personal dashboard
+ * Personal dashboards follow the pattern: /{username}-dashboard
+ */
+function isOwnPersonalDashboard(username: string, route: string): boolean {
+  if (!username) return false;
+  const lowerUsername = username.toLowerCase();
+  const lowerRoute = route.toLowerCase();
+  return lowerRoute === `/${lowerUsername}-dashboard`;
+}
+
 export default function RouteGuard({ children }: RouteGuardProps) {
   const [location] = useLocation();
   const [accessChecked, setAccessChecked] = useState(false);
@@ -120,6 +131,13 @@ export default function RouteGuard({ children }: RouteGuardProps) {
 
     const username = currentUser.username?.toLowerCase() || '';
     const userRole = currentUser.role || '';
+
+    // Always allow users to access their own personal dashboard
+    if (isOwnPersonalDashboard(username, location)) {
+      setHasAccess(true);
+      setAccessChecked(true);
+      return;
+    }
 
     if (hasFullAccess(username)) {
       setHasAccess(true);

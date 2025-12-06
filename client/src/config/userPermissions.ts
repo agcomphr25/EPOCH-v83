@@ -221,16 +221,34 @@ function routeMatches(currentRoute: string, allowedRoute: string): boolean {
 }
 
 /**
+ * Check if the route is the user's own personal dashboard
+ * Personal dashboards follow the pattern: /{username}-dashboard
+ */
+function isOwnPersonalDashboard(username: string, route: string): boolean {
+  const lowerUsername = username.toLowerCase();
+  const lowerRoute = route.toLowerCase();
+  return lowerRoute === `/${lowerUsername}-dashboard`;
+}
+
+/**
  * Check if a user has access to a specific route
  * Now supports role-based access in addition to username-based access
  * Also handles dynamic routes with parameters
+ * Users can always access their own personal dashboard
  */
 export function hasRouteAccess(
   username: string, 
   route: string, 
   userRole?: string
 ): boolean {
-  const permissions = USER_PERMISSIONS[username.toLowerCase()];
+  const lowerUsername = username.toLowerCase();
+  
+  // Always allow users to access their own personal dashboard
+  if (isOwnPersonalDashboard(lowerUsername, route)) {
+    return true;
+  }
+  
+  const permissions = USER_PERMISSIONS[lowerUsername];
 
   if (!permissions) {
     return hasRoleBasedAccess(route, userRole);

@@ -1563,7 +1563,7 @@ export default function VendorManagement() {
                               <span className="text-sm font-medium">
                                 {uploadedFile?.name || (
                                   form.watch('approvalPdfUrl')
-                                    ? form.watch('approvalPdfUrl').split('/').pop()
+                                    ? (form.watch('approvalPdfUrl') ?? '').split('/').pop()
                                     : 'Approval Document.pdf'
                                 )}
                               </span>

@@ -214,29 +214,27 @@ export default function STACIWTestDashboard() {
         </Card>
       </div>
 
-      {/* Customer Watch Rules Section */}
-      {currentUser?.username === 'staciw' && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
-              <Eye className="w-5 h-5 text-purple-600" />
-              Customer Watch Rules
-            </h2>
-            <Link href="/watch-rules">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2 hover:bg-purple-50 hover:border-purple-300"
-                data-testid="button-manage-watch-rules-header"
-              >
-                <Settings className="w-4 h-4" />
-                Manage Watch Rules
-              </Button>
-            </Link>
-          </div>
-          <WatchRuleCards userId={currentUser.username} showManageButton={false} />
+      {/* Customer Watch Rules Section - Always show on staciw's dashboard */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+            <Eye className="w-5 h-5 text-purple-600" />
+            Customer Watch Rules
+          </h2>
+          <Link href="/watch-rules">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2 hover:bg-purple-50 hover:border-purple-300"
+              data-testid="button-manage-watch-rules-header"
+            >
+              <Settings className="w-4 h-4" />
+              Manage Watch Rules
+            </Button>
+          </Link>
         </div>
-      )}
+        <WatchRuleCards userId="staciw" showManageButton={false} />
+      </div>
 
       {/* Production Pipeline Overview */}
       <div className="mt-8">

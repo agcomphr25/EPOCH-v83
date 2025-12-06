@@ -33,9 +33,11 @@ import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 import WatchRuleCards from '@/components/WatchRuleCards';
 
 export default function ADMINTestDashboard() {
-  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+  const { data: currentUser, isLoading: isUserLoading } = useQuery<{ id: number; username: string; role: string }>({
     queryKey: ['currentUser'],
   });
+
+  const isStaciw = currentUser?.username === 'staciw';
 
   const orderManagementItems = [
     {
@@ -333,8 +335,8 @@ export default function ADMINTestDashboard() {
         <WeeklyShippingWidget />
       </div>
 
-      {/* Customer Watch Rules Section - Only for staciw */}
-      {currentUser?.username === 'staciw' && (
+      {/* Customer Watch Rules Section - For staciw */}
+      {isStaciw && (
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -358,7 +360,7 @@ export default function ADMINTestDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <WatchRuleCards userId={currentUser.username} showManageButton={false} />
+            <WatchRuleCards userId="staciw" showManageButton={false} />
           </CardContent>
         </Card>
       )}

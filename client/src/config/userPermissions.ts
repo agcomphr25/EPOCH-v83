@@ -1,10 +1,14 @@
 // User Permission Mapping
 // Maps each username to their allowed navigation routes based on dashboard cards
+// This is the SOURCE OF TRUTH for user access - navbar filtering uses these routes
 
 export interface UserPermissions {
   routes: string[];
   fullAccess?: boolean;
 }
+
+// Default routes for users not explicitly listed
+export const DEFAULT_USER_ROUTES: string[] = ['/employee-portal'];
 
 export const USER_PERMISSIONS: Record<string, UserPermissions> = {
   // Admin users with full navigation access
@@ -23,16 +27,20 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
   },
 
   // Regular users with limited access based on their dashboard cards
+  // Routes must match EXACTLY what's in Navigation.tsx for filtering to work
 
   agrace: {
     routes: [
       '/order-entry',
       '/orders-list',
       '/orders',
-      '/layup-scheduler',
-      '/production-queue',
+      '/all-orders',
+      '/enhanced-layup-scheduler',
+      '/simplified-layup-scheduler',
+      '/department-queue/production-queue',
       '/inventory/dashboard',
       '/inventory/manager',
+      '/inventory/enhanced-mrp',
       '/customers',
       '/customer-management',
       '/gateway-reports',
@@ -46,7 +54,9 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/qc-shipping',
       '/department-queue/shipping',
       '/orders-list',
+      '/orders',
       '/all-orders',
+      '/customers',
       '/customer-management',
       '/inventory/parts-request',
     ],
@@ -57,20 +67,26 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/order-entry',
       '/orders-list',
       '/orders',
-      '/production-queue',
-      '/layup-scheduler',
+      '/all-orders',
+      '/department-queue/production-queue',
+      '/enhanced-layup-scheduler',
+      '/simplified-layup-scheduler',
+      '/customers',
       '/customer-management',
     ],
   },
 
   blaket: {
     routes: [
-      '/layup-scheduler',
-      '/production-queue',
+      '/enhanced-layup-scheduler',
+      '/simplified-layup-scheduler',
+      '/department-queue/production-queue',
       '/inventory/dashboard',
       '/inventory/manager',
+      '/inventory/enhanced-mrp',
       '/orders-list',
       '/orders',
+      '/all-orders',
     ],
   },
 
@@ -79,6 +95,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/gunsmith',
       '/orders-list',
       '/orders',
+      '/all-orders',
       '/employee-portal',
       '/inventory/parts-request',
     ],
@@ -89,6 +106,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/order-entry',
       '/orders-list',
       '/orders',
+      '/all-orders',
       '/draft-orders',
       '/customers',
       '/customer-management',
@@ -97,19 +115,23 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
 
   halls: {
     routes: [
-      '/production-queue',
-      '/layup-scheduler',
+      '/department-queue/production-queue',
+      '/enhanced-layup-scheduler',
+      '/simplified-layup-scheduler',
       '/orders-list',
       '/orders',
+      '/all-orders',
     ],
   },
 
   hunta: {
     routes: [
-      '/production-queue',
-      '/layup-scheduler',
+      '/department-queue/production-queue',
+      '/enhanced-layup-scheduler',
+      '/simplified-layup-scheduler',
       '/orders-list',
       '/orders',
+      '/all-orders',
     ],
   },
 
@@ -118,6 +140,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/finish-qc',
       '/orders-list',
       '/orders',
+      '/all-orders',
       '/employee-portal',
       '/barcode-scanner',
       '/inventory/parts-request',
@@ -128,8 +151,10 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
     routes: [
       '/department-queue/cnc',
       '/department-queue/gunsmith',
+      '/cutting-control-center',
       '/orders-list',
       '/orders',
+      '/all-orders',
       '/inventory/parts-request',
     ],
   },
@@ -139,31 +164,44 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/cnc',
       '/orders-list',
       '/orders',
+      '/all-orders',
       '/employee-portal',
       '/inventory/parts-request',
     ],
   },
 
   lauriet: {
-    routes: ['/order-entry', '/orders-list', '/orders', '/customer-management'],
+    routes: [
+      '/order-entry',
+      '/orders-list',
+      '/orders',
+      '/all-orders',
+      '/customers',
+      '/customer-management',
+    ],
   },
 
   tandyd: {
     routes: [
-      '/production-queue',
-      '/layup-scheduler',
+      '/department-queue/production-queue',
+      '/enhanced-layup-scheduler',
+      '/simplified-layup-scheduler',
       '/orders-list',
       '/orders',
+      '/all-orders',
     ],
   },
 
   tandym: {
     routes: [
-      '/production-queue',
-      '/layup-scheduler',
+      '/department-queue/production-queue',
+      '/enhanced-layup-scheduler',
+      '/simplified-layup-scheduler',
       '/orders-list',
       '/orders',
+      '/all-orders',
       '/inventory/dashboard',
+      '/inventory/enhanced-mrp',
     ],
   },
 
@@ -172,6 +210,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/cnc',
       '/department-queue/finish-qc',
       '/orders-list',
+      '/orders',
       '/all-orders',
       '/maintenance',
       '/inventory/parts-request',
@@ -250,7 +289,14 @@ export function hasRouteAccess(
   
   const permissions = USER_PERMISSIONS[lowerUsername];
 
+  // If user is not in permissions list, they get default routes only
   if (!permissions) {
+    // Check if route is in default routes
+    for (const defaultRoute of DEFAULT_USER_ROUTES) {
+      if (routeMatches(route, defaultRoute)) {
+        return true;
+      }
+    }
     return hasRoleBasedAccess(route, userRole);
   }
 
@@ -278,12 +324,28 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/inventory/consolidated-needs': ['ADMIN', 'OWNER'],
   '/user-management': ['ADMIN', 'OWNER'],
   '/settings': ['ADMIN', 'OWNER'],
+  '/employee': ['ADMIN', 'OWNER'],
   '/employee-dashboard': ['ADMIN', 'OWNER'],
   '/employee-detail': ['ADMIN', 'OWNER'],
   '/time-clock-admin': ['ADMIN', 'OWNER'],
   '/finance': ['ADMIN', 'OWNER'],
-  '/cost-accounting': ['ADMIN', 'OWNER'],
+  '/finance/dashboard': ['ADMIN', 'OWNER'],
+  '/finance/cost-centers': ['ADMIN', 'OWNER'],
+  '/finance/cost-accounting': ['ADMIN', 'OWNER'],
+  '/finance/bulk-payment': ['ADMIN', 'OWNER'],
+  '/finance/ap': ['ADMIN', 'OWNER'],
+  '/finance/ar': ['ADMIN', 'OWNER'],
+  '/finance/cogs': ['ADMIN', 'OWNER'],
+  '/finance/monthly-fulfilled': ['ADMIN', 'OWNER'],
   '/refund-queue': ['ADMIN', 'OWNER'],
+  '/credit-memo': ['ADMIN', 'OWNER'],
+  '/badge-configuration': ['ADMIN', 'OWNER'],
+  '/pdf-templates': ['ADMIN', 'OWNER'],
+  '/training-control-center': ['ADMIN', 'OWNER'],
+  '/discounts': ['ADMIN', 'OWNER'],
+  '/feature-manager': ['ADMIN', 'OWNER'],
+  '/stock-models': ['ADMIN', 'OWNER'],
+  '/robust-bom-administration': ['ADMIN', 'OWNER'],
 };
 
 /**
@@ -313,7 +375,7 @@ export function getAllowedRoutes(username: string): string[] {
   const permissions = USER_PERMISSIONS[username.toLowerCase()];
 
   if (!permissions) {
-    return [];
+    return DEFAULT_USER_ROUTES;
   }
 
   if (permissions.fullAccess) {
@@ -329,4 +391,11 @@ export function getAllowedRoutes(username: string): string[] {
 export function hasFullAccess(username: string): boolean {
   const permissions = USER_PERMISSIONS[username.toLowerCase()];
   return permissions?.fullAccess === true;
+}
+
+/**
+ * Get the user's own dashboard route
+ */
+export function getUserDashboardRoute(username: string): string {
+  return `/${username.toLowerCase()}-dashboard`;
 }

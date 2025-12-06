@@ -862,10 +862,23 @@ export default function Navigation() {
     () => filterByPermissions(financeItems, currentUser?.username, userRole),
     [financeItems, currentUser?.username, userRole]
   );
-  const filteredUserDashboardsItems = useMemo(
-    () => filterByPermissions(userDashboardsItems, currentUser?.username, userRole),
-    [userDashboardsItems, currentUser?.username, userRole]
-  );
+  // For User Dashboards: admins see all, regular users see only their own dashboard
+  const filteredUserDashboardsItems = useMemo(() => {
+    if (!currentUser?.username) {
+      return [];
+    }
+    
+    // Admin users with full access see all dashboards
+    if (hasFullAccess(currentUser.username)) {
+      return userDashboardsItems;
+    }
+    
+    // Regular users only see their own dashboard
+    const ownDashboardPath = `/${currentUser.username.toLowerCase()}-dashboard`;
+    return userDashboardsItems.filter((item) => 
+      item.path.toLowerCase() === ownDashboardPath
+    );
+  }, [userDashboardsItems, currentUser?.username]);
   const filteredPurchaseOrdersItems = useMemo(
     () => filterByPermissions(purchaseOrdersItems, currentUser?.username, userRole),
     [purchaseOrdersItems, currentUser?.username, userRole]

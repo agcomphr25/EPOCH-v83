@@ -159,7 +159,6 @@ router.post('/', async (req, res) => {
         username, 
         first_name, 
         last_name, 
-        password, 
         password_hash, 
         role, 
         employee_id, 
@@ -168,7 +167,7 @@ router.post('/', async (req, res) => {
         password_changed_at,
         failed_login_attempts
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), 0)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), 0)
       RETURNING 
         id,
         username,
@@ -183,7 +182,6 @@ router.post('/', async (req, res) => {
         username,
         firstName,
         lastName,
-        password,
         passwordHash,
         role || 'EMPLOYEE',
         employeeId,
@@ -253,9 +251,8 @@ router.put('/:id', async (req, res) => {
     }
     if (password !== undefined && password !== '') {
       // Using 12 salt rounds for security consistency
+      // SECURITY: Only store the hashed password, never plaintext
       const passwordHash = await bcrypt.hash(password, 12);
-      updates.push(`password = $${paramCount++}`);
-      values.push(password);
       updates.push(`password_hash = $${paramCount++}`);
       values.push(passwordHash);
       updates.push(`password_changed_at = NOW()`);

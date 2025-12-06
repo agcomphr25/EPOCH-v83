@@ -77,12 +77,16 @@ The application is built as a monorepo using a full-stack TypeScript approach, e
 - **Migration Safety**: Existing tables with `serial` IDs should not be modified, and existing ID column types must never be changed.
 
 ### Security Architecture
-- **Authentication Model**: NODE_ENV-based authentication with production enforcement and development bypass for convenience.
+- **Authentication Model**: Dual-condition authentication bypass requiring BOTH (1) NODE_ENV != 'production' AND (2) DEV_AUTH_BYPASS=true. This prevents accidental security bypass in preview/staging deployments.
+- **Global API Authentication**: All /api routes require authentication except public routes (/api/auth, /api/magic-link, /api/oauth, /api/calendar/webhook).
 - **JWT Secret**: Required in production - system fails to start if JWT_SECRET environment variable is not set.
-- **Password Hashing**: Uses bcrypt with 12 salt rounds consistently across all authentication paths.
-- **Bypass Routes**: Legacy bypass routes (e.g., `/api/customers/bypass`) use `softAuth` middleware that requires authentication in production but allows development access with logging.
-- **Development Mode Warning**: Clear console warnings at startup when running in development mode to alert about authentication bypass.
-- **Production Deployment**: Set `NODE_ENV=production` before deploying to enable full authentication enforcement.
+- **Password Hashing**: Uses bcrypt with 12 salt rounds consistently. NEVER store plaintext passwords - only password_hash column is used.
+- **Input Validation**: Zod schemas validate all user input before database operations (user creation, P2 purchase orders, etc.).
+- **Bypass Routes**: Legacy bypass routes (e.g., `/api/customers/bypass`) use `softAuth` middleware that requires DEV_AUTH_BYPASS=true for bypass, otherwise enforces full authentication.
+- **Route Authorization**: Backend route authorization middleware (server/middleware/routeAuthorization.ts) mirrors frontend userPermissions.ts.
+- **Admin-Only Routes**: Credit memos, vendors, cost accounting, discounts, and user management require admin role.
+- **Development Mode**: Set DEV_AUTH_BYPASS=true ONLY in development environment for local testing. Never set in production or preview deployments.
+- **Production Deployment**: Set NODE_ENV=production and ensure DEV_AUTH_BYPASS is NOT set before deploying.
 
 ## External Dependencies
 

@@ -7,6 +7,7 @@ import cron from 'node-cron';
 import { registerRoutes } from './src/routes/index';
 import { setupVite, serveStatic, log } from './vite';
 import { db } from './db';
+import { authenticateToken } from './middleware/auth';
 
 // Validate required environment variables
 const requiredEnvVars = ['DATABASE_URL'];
@@ -112,6 +113,27 @@ app.use('/attached_assets', express.static(assetsPath));
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// GLOBAL AUTHENTICATION MIDDLEWARE
+// Apply authentication to ALL /api routes except public endpoints
+// Public routes that don't require authentication:
+const publicRoutes = [
+  '/api/auth',           // Login, logout, session management
+  '/api/magic-link',     // Magic link authentication
+  '/api/oauth',          // OAuth callbacks
+  '/api/calendar/webhook', // Google Calendar webhooks
+];
+
+app.use('/api', (req, res, next) => {
+  // Skip authentication for public routes
+  const isPublicRoute = publicRoutes.some(route => req.path.startsWith(route.replace('/api', '')));
+  if (isPublicRoute) {
+    return next();
+  }
+  
+  // Apply authentication to all other API routes
+  return authenticateToken(req, res, next);
+});
 
 app.use((req, res, next) => {
   const start = Date.now();

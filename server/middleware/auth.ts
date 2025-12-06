@@ -20,19 +20,30 @@ declare global {
 }
 
 /**
- * Check if we're running in deployment environment
- * Simplified to rely solely on NODE_ENV for consistent behavior
+ * Check if authentication bypass is enabled
+ * SECURITY: Authentication bypass requires BOTH conditions:
+ * 1. NODE_ENV is NOT 'production'
+ * 2. DEV_AUTH_BYPASS environment variable is explicitly set to 'true'
+ * 
+ * This prevents accidental security bypass in preview/staging deployments
  */
-function isDeploymentEnvironment(req: Request): boolean {
-  // Only consider production when NODE_ENV is explicitly set to 'production'
-  // This ensures development mode works correctly even on .repl.co preview domains
-  return process.env.NODE_ENV === 'production';
+function isAuthBypassEnabled(): boolean {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const bypassEnabled = process.env.DEV_AUTH_BYPASS === 'true';
+  
+  // Only bypass if NOT production AND bypass is explicitly enabled
+  return !isProduction && bypassEnabled;
 }
 
-// Log warning at startup if in development mode
-if (process.env.NODE_ENV !== 'production') {
-  console.warn('⚠️ SECURITY WARNING: Running in development mode - authentication is bypassed');
-  console.warn('⚠️ Set NODE_ENV=production before deploying to enable full authentication');
+// Log security status at startup
+if (process.env.NODE_ENV === 'production') {
+  console.log('🔒 SECURITY: Running in production mode - full authentication enforced');
+} else if (process.env.DEV_AUTH_BYPASS === 'true') {
+  console.warn('⚠️ SECURITY WARNING: DEV_AUTH_BYPASS is enabled - authentication is bypassed');
+  console.warn('⚠️ Remove DEV_AUTH_BYPASS=true before deploying to any public environment');
+} else {
+  console.log('🔒 SECURITY: Running in development mode with authentication enforced');
+  console.log('💡 Set DEV_AUTH_BYPASS=true if you need to bypass authentication for local testing');
 }
 
 /**
@@ -44,9 +55,9 @@ export async function authenticateToken(
   next: NextFunction
 ) {
   try {
-    // Skip authentication in development environment
-    if (!isDeploymentEnvironment(req)) {
-      // In development, use a real user (admin with id=2) for testing
+    // Only bypass authentication if DEV_AUTH_BYPASS is explicitly enabled
+    if (isAuthBypassEnabled()) {
+      // In development with bypass enabled, use admin user for testing
       req.user = {
         id: 2,
         username: 'admin',
@@ -222,24 +233,24 @@ setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
 
 /**
  * Soft authentication middleware for bypass routes
- * In development: allows unauthenticated access with warning
- * In production: requires authentication (same as authenticateToken)
+ * Only bypasses authentication if DEV_AUTH_BYPASS is explicitly enabled
+ * Otherwise enforces full authentication (same as authenticateToken)
  * 
- * This allows bypass routes to work during development while enforcing
- * authentication in production environments.
+ * This allows bypass routes to work during local development while enforcing
+ * authentication in all deployed environments (preview, staging, production).
  */
 export async function softAuth(
   req: Request,
   res: Response,
   next: NextFunction
 ) {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const bypassEnabled = isAuthBypassEnabled();
   
   // Log that a bypass route is being accessed
-  console.log(`⚠️ BYPASS ROUTE ACCESSED: ${req.method} ${req.originalUrl} (production: ${isProduction})`);
+  console.log(`⚠️ BYPASS ROUTE ACCESSED: ${req.method} ${req.originalUrl} (bypass: ${bypassEnabled})`);
   
-  if (!isProduction) {
-    // In development, attach admin user and allow access
+  if (bypassEnabled) {
+    // Only bypass if explicitly enabled for local development
     req.user = {
       id: 2,
       username: 'admin',
@@ -251,7 +262,7 @@ export async function softAuth(
     return next();
   }
   
-  // In production, enforce full authentication
+  // Enforce full authentication in all other environments
   return authenticateToken(req, res, next);
 }
 

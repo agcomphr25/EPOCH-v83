@@ -76,6 +76,14 @@ The application is built as a monorepo using a full-stack TypeScript approach, e
 - **Primary Key Pattern (CRITICAL)**: All new tables must use UUID for primary keys; `serial` is forbidden for new tables.
 - **Migration Safety**: Existing tables with `serial` IDs should not be modified, and existing ID column types must never be changed.
 
+### Security Architecture
+- **Authentication Model**: NODE_ENV-based authentication with production enforcement and development bypass for convenience.
+- **JWT Secret**: Required in production - system fails to start if JWT_SECRET environment variable is not set.
+- **Password Hashing**: Uses bcrypt with 12 salt rounds consistently across all authentication paths.
+- **Bypass Routes**: Legacy bypass routes (e.g., `/api/customers/bypass`) use `softAuth` middleware that requires authentication in production but allows development access with logging.
+- **Development Mode Warning**: Clear console warnings at startup when running in development mode to alert about authentication bypass.
+- **Production Deployment**: Set `NODE_ENV=production` before deploying to enable full authentication enforcement.
+
 ## External Dependencies
 
 ### Database

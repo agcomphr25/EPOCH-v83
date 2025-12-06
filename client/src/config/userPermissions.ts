@@ -180,33 +180,111 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
 };
 
 /**
+ * Normalize a route by removing dynamic segments (e.g., /employee-detail/123 -> /employee-detail)
+ * This allows matching routes with parameters against their base paths
+ */
+function normalizeRoute(route: string): string {
+  const segments = route.split('/').filter(Boolean);
+  const normalizedSegments: string[] = [];
+  
+  for (const segment of segments) {
+    if (/^\d+$/.test(segment)) {
+      break;
+    }
+    if (/^[a-f0-9-]{20,}$/i.test(segment)) {
+      break;
+    }
+    normalizedSegments.push(segment);
+  }
+  
+  return '/' + normalizedSegments.join('/');
+}
+
+/**
+ * Check if a route matches a pattern (supports base path matching for dynamic routes)
+ */
+function routeMatches(currentRoute: string, allowedRoute: string): boolean {
+  if (currentRoute === allowedRoute) {
+    return true;
+  }
+  
+  const normalizedCurrent = normalizeRoute(currentRoute);
+  if (normalizedCurrent === allowedRoute) {
+    return true;
+  }
+  
+  if (currentRoute.startsWith(allowedRoute + '/')) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Check if the route is the user's own personal dashboard
+ * Personal dashboards follow the pattern: /{username}-dashboard
+ */
+function isOwnPersonalDashboard(username: string, route: string): boolean {
+  const lowerUsername = username.toLowerCase();
+  const lowerRoute = route.toLowerCase();
+  return lowerRoute === `/${lowerUsername}-dashboard`;
+}
+
+/**
  * Check if a user has access to a specific route
  * Now supports role-based access in addition to username-based access
+ * Also handles dynamic routes with parameters
+ * Users can always access their own personal dashboard
  */
 export function hasRouteAccess(
   username: string, 
   route: string, 
   userRole?: string
 ): boolean {
-  const permissions = USER_PERMISSIONS[username.toLowerCase()];
+  const lowerUsername = username.toLowerCase();
+  
+  // Always allow users to access their own personal dashboard
+  if (isOwnPersonalDashboard(lowerUsername, route)) {
+    return true;
+  }
+  
+  const permissions = USER_PERMISSIONS[lowerUsername];
 
   if (!permissions) {
-    // No username permissions defined, check role-based access
     return hasRoleBasedAccess(route, userRole);
   }
 
   if (permissions.fullAccess) {
-    return true; // Full access users can access everything
-  }
-
-  // Check if route is in user's permission list
-  if (permissions.routes.includes(route)) {
     return true;
   }
 
-  // Fall back to role-based access
+  for (const allowedRoute of permissions.routes) {
+    if (routeMatches(route, allowedRoute)) {
+      return true;
+    }
+  }
+
   return hasRoleBasedAccess(route, userRole);
 }
+
+/**
+ * Role-based route access configuration
+ * Maps route patterns to the roles that can access them
+ */
+const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
+  '/admin/orders': ['ADMIN', 'OWNER'],
+  '/gateway-reports': ['ADMIN', 'OWNER'],
+  '/inventory/enhanced-mrp': ['ADMIN', 'INVENTORY_MANAGER'],
+  '/inventory/consolidated-needs': ['ADMIN', 'OWNER'],
+  '/user-management': ['ADMIN', 'OWNER'],
+  '/settings': ['ADMIN', 'OWNER'],
+  '/employee-dashboard': ['ADMIN', 'OWNER'],
+  '/employee-detail': ['ADMIN', 'OWNER'],
+  '/time-clock-admin': ['ADMIN', 'OWNER'],
+  '/finance': ['ADMIN', 'OWNER'],
+  '/cost-accounting': ['ADMIN', 'OWNER'],
+  '/refund-queue': ['ADMIN', 'OWNER'],
+};
 
 /**
  * Check if a role has access to a specific route
@@ -215,29 +293,15 @@ function hasRoleBasedAccess(route: string, userRole?: string): boolean {
   if (!userRole) return false;
 
   const role = userRole.toUpperCase();
+  const normalizedRoute = normalizeRoute(route);
 
-  // Admin Panel route requires ADMIN or OWNER role
-  if (route === '/admin/orders' && (role === 'ADMIN' || role === 'OWNER')) {
-    return true;
+  for (const [routePattern, allowedRoles] of Object.entries(ROLE_ROUTE_ACCESS)) {
+    if (routeMatches(route, routePattern) || routeMatches(normalizedRoute, routePattern)) {
+      if (allowedRoles.includes(role)) {
+        return true;
+      }
+    }
   }
-
-
-  // Gateway Reports route requires ADMIN or OWNER role
-  if (route === '/gateway-reports' && (role === 'ADMIN' || role === 'OWNER')) {
-    return true;
-  }
-
-  // Enhanced Inventory & MRP route requires ADMIN or INVENTORY_MANAGER role
-  if (route === '/inventory/enhanced-mrp' && (role === 'ADMIN' || role === 'INVENTORY_MANAGER')) {
-    return true;
-  }
-
-  // Consolidated Needs List route requires ADMIN or OWNER role
-  if (route === '/inventory/consolidated-needs' && (role === 'ADMIN' || role === 'OWNER')) {
-    return true;
-  }
-
-  // Add more role-based route mappings here as needed
 
   return false;
 }

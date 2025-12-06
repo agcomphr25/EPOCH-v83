@@ -8,6 +8,8 @@ import Navigation from './components/Navigation';
 import OfflineIndicator from './components/OfflineIndicator';
 import MessageNotificationPopup from './components/MessageNotificationPopup';
 import NotFound from './pages/not-found';
+import AccessDenied from './pages/AccessDenied';
+import RouteGuard from './components/auth/RouteGuard';
 import Dashboard from './pages/Dashboard';
 import OrderManagement from './pages/OrderManagement';
 import OrdersManagementPage from './pages/OrdersManagementPage';
@@ -292,8 +294,10 @@ function App() {
               <ConditionalNavigation />
               <OfflineIndicator />
               <main className="container mx-auto px-4 py-8">
-                <Switch>
-                  <Route path="/" component={RootRedirect} />
+                <RouteGuard>
+                  <Switch>
+                    <Route path="/" component={RootRedirect} />
+                    <Route path="/access-denied" component={AccessDenied} />
                   <Route path="/order-management" component={OrderManagement} />
                   <Route
                     path="/orders-management"
@@ -748,9 +752,10 @@ function App() {
                     component={SignOrderPage}
                   />
 
-                  {/* Catch-all route for 404 */}
-                  <Route component={NotFound} />
-                </Switch>
+                    {/* Catch-all route for 404 */}
+                    <Route component={NotFound} />
+                  </Switch>
+                </RouteGuard>
               </main>
             </div>
             <Toaster />

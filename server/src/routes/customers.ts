@@ -15,11 +15,13 @@ import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import crypto from 'crypto';
+import { softAuth } from '../../middleware/auth';
 
 const router = Router();
 
 // P2 Customers Management - Bypass route (must be before parameterized routes)
-router.get('/p2-customers-bypass', async (req: Request, res: Response) => {
+// SECURITY: softAuth enforces authentication in production
+router.get('/p2-customers-bypass', softAuth, async (req: Request, res: Response) => {
   try {
     console.log('🔧 P2 CUSTOMERS BYPASS ROUTE CALLED');
     const p2Customers = await storage.getAllP2Customers();
@@ -32,8 +34,10 @@ router.get('/p2-customers-bypass', async (req: Request, res: Response) => {
 });
 
 // P2 Purchase Orders Bypass Routes (to avoid monolithic route conflicts)
+// SECURITY: softAuth enforces authentication in production
 router.get(
   '/p2-purchase-orders-bypass',
+  softAuth,
   async (req: Request, res: Response) => {
     try {
       console.log('🔧 DIRECT P2 PURCHASE ORDERS BYPASS ROUTE CALLED');
@@ -49,8 +53,10 @@ router.get(
   }
 );
 
+// SECURITY: softAuth enforces authentication in production
 router.post(
   '/p2-purchase-orders-bypass',
+  softAuth,
   async (req: Request, res: Response) => {
     try {
       console.log('🔧 P2 PURCHASE ORDER CREATE BYPASS ROUTE CALLED');
@@ -67,8 +73,10 @@ router.post(
   }
 );
 
+// SECURITY: softAuth enforces authentication in production
 router.put(
   '/p2-purchase-orders-bypass/:id',
+  softAuth,
   async (req: Request, res: Response) => {
     try {
       console.log('🔧 P2 PURCHASE ORDER UPDATE BYPASS ROUTE CALLED');
@@ -86,8 +94,10 @@ router.put(
   }
 );
 
+// SECURITY: softAuth enforces authentication in production
 router.delete(
   '/p2-purchase-orders-bypass/:id',
+  softAuth,
   async (req: Request, res: Response) => {
     try {
       console.log('🔧 P2 PURCHASE ORDER DELETE BYPASS ROUTE CALLED');
@@ -104,8 +114,9 @@ router.delete(
   }
 );
 
-// Bypass route to get all customers (without authentication)
-router.get('/bypass', async (req: Request, res: Response) => {
+// Bypass route to get all customers
+// SECURITY: softAuth enforces authentication in production
+router.get('/bypass', softAuth, async (req: Request, res: Response) => {
   try {
     console.log('🔧 CUSTOMERS BYPASS ROUTE CALLED');
     const customers = await storage.getAllCustomers();
@@ -921,8 +932,9 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Customer creation without authentication (for Order Entry)
-router.post('/create-bypass', async (req: Request, res: Response) => {
+// Customer creation (for Order Entry)
+// SECURITY: softAuth enforces authentication in production
+router.post('/create-bypass', softAuth, async (req: Request, res: Response) => {
   try {
     console.log('🔧 BYPASS CUSTOMER CREATE ROUTE CALLED');
     console.log('🔧 Request body:', req.body);
@@ -941,8 +953,9 @@ router.post('/create-bypass', async (req: Request, res: Response) => {
   }
 });
 
-// Customer update without authentication (for Customer Management)
-router.put('/update-bypass/:id', async (req: Request, res: Response) => {
+// Customer update (for Customer Management)
+// SECURITY: softAuth enforces authentication in production
+router.put('/update-bypass/:id', softAuth, async (req: Request, res: Response) => {
   try {
     console.log('🔧 BYPASS CUSTOMER UPDATE ROUTE CALLED');
     console.log('🔧 Customer ID:', req.params.id);
@@ -960,8 +973,9 @@ router.put('/update-bypass/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Customer delete without authentication (for Customer Management)
-router.delete('/delete-bypass/:id', async (req: Request, res: Response) => {
+// Customer delete (for Customer Management)
+// SECURITY: softAuth enforces authentication in production
+router.delete('/delete-bypass/:id', softAuth, async (req: Request, res: Response) => {
   try {
     console.log('🔧 BYPASS CUSTOMER DELETE ROUTE CALLED');
     console.log('🔧 Customer ID:', req.params.id);
@@ -1151,8 +1165,10 @@ router.get('/:customerId/rfq-next-number', async (req: Request, res: Response) =
 });
 
 // Address autocomplete bypass route (to avoid monolithic route conflicts)
+// SECURITY: softAuth enforces authentication in production
 router.post(
   '/address-autocomplete-bypass',
+  softAuth,
   async (req: Request, res: Response) => {
     try {
       console.log('🔧 BYPASS ADDRESS AUTOCOMPLETE CALLED');

@@ -119,8 +119,8 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Username already exists' });
     }
 
-    // Hash the password
-    const passwordHash = await bcrypt.hash(password, 10);
+    // Hash the password - using 12 salt rounds for security consistency
+    const passwordHash = await bcrypt.hash(password, 12);
 
     const result = await pool.query(
       `
@@ -221,7 +221,8 @@ router.put('/:id', async (req, res) => {
       values.push(lastName);
     }
     if (password !== undefined && password !== '') {
-      const passwordHash = await bcrypt.hash(password, 10);
+      // Using 12 salt rounds for security consistency
+      const passwordHash = await bcrypt.hash(password, 12);
       updates.push(`password = $${paramCount++}`);
       values.push(password);
       updates.push(`password_hash = $${paramCount++}`);

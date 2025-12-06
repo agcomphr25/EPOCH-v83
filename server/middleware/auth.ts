@@ -29,6 +29,12 @@ function isDeploymentEnvironment(req: Request): boolean {
   return process.env.NODE_ENV === 'production';
 }
 
+// Log warning at startup if in development mode
+if (process.env.NODE_ENV !== 'production') {
+  console.warn('⚠️ SECURITY WARNING: Running in development mode - authentication is bypassed');
+  console.warn('⚠️ Set NODE_ENV=production before deploying to enable full authentication');
+}
+
 /**
  * Authentication middleware to verify session tokens (deployment-aware)
  */
@@ -213,3 +219,46 @@ export async function cleanupExpiredSessions() {
 
 // Schedule session cleanup every hour
 setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
+
+/**
+ * Soft authentication middleware for bypass routes
+ * In development: allows unauthenticated access with warning
+ * In production: requires authentication (same as authenticateToken)
+ * 
+ * This allows bypass routes to work during development while enforcing
+ * authentication in production environments.
+ */
+export async function softAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  // Log that a bypass route is being accessed
+  console.log(`⚠️ BYPASS ROUTE ACCESSED: ${req.method} ${req.originalUrl} (production: ${isProduction})`);
+  
+  if (!isProduction) {
+    // In development, attach admin user and allow access
+    req.user = {
+      id: 2,
+      username: 'admin',
+      role: 'ADMIN',
+      employeeId: null,
+      canOverridePrices: true,
+      isActive: true,
+    };
+    return next();
+  }
+  
+  // In production, enforce full authentication
+  return authenticateToken(req, res, next);
+}
+
+/**
+ * Convenience export for admin/owner only routes
+ */
+export const requireAdminOrOwner = [
+  authenticateToken,
+  requireRole('ADMIN', 'OWNER'),
+];

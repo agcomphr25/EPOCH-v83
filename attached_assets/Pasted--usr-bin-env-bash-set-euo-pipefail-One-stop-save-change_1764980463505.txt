@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# One-stop: save changes, auto-branch, push to DONNA-20
+REPO_URL="https://github.com/glennajones/DONNA-20.git"
+
+echo "▶ Using remote repo: $REPO_URL"
+
+# 1) Init repo if needed
+if [ ! -d .git ]; then
+  echo "▶ git init"
+  git init
+fi
+
+# 2) Ensure identity (only if unset)
+git config user.name  >/dev/null 2>&1 || git config user.name  "replit-user"
+git config user.email >/dev/null 2>&1 || git config user.email "replit-user@local"
+
+# 3) Ensure we’re on a base branch (create main if no HEAD yet)
+CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'HEAD')"
+if [ "$CURRENT_BRANCH" = "HEAD" ]; then
+  echo "▶ Creating local main branch"
+  git checkout -B main
+  CURRENT_BRANCH="main"
+else
+  echo "▶ Working from branch: $CURRENT_BRANCH"
+fi
+
+# 4) Stage & commit everything (snapshot)
+echo "▶ Staging changes"
+git add -A
+if ! git diff --cached --quiet; then
+  COMMIT_MSG="chore: snapshot $(date -u +'%Y-%m-%d %H:%M:%S') UTC"
+  echo "▶ Committing: $COMMIT_MSG"
+  git commit -m "$COMMIT_MSG"
+else
+  echo "▶ No staged changes to commit"
+fi
+
+# 5) Set origin to DONNA-20 (add or update)
+if git remote get-url origin >/dev/null 2>&1; then
+  EXISTING_URL="$(git remote get-url origin)"
+  if [ "$EXISTING_URL" != "$REPO_URL" ]; then
+    echo "▶ Updating origin: $EXISTING_URL -> $REPO_URL"
+    git remote set-url origin "$REPO_URL"
+  else
+    echo "▶ Origin already set"
+  fi
+else
+  echo "▶ Adding origin: $REPO_URL"
+  git remote add origin "$REPO_URL"
+fi
+
+# 6) Ensure remote main exists (once), but don’t switch to it
+if ! git show-ref --verify --quiet refs/remotes/origin/main; then
+  # If this is a brand-new repo, push main so the remote exists
+  if git rev-parse --verify main >/dev/null 2>&1; then
+    echo "▶ Creating remote main (first-time setup)"
+    git push -u origin main || true
+  fi
+fi
+
+# 7) Create an auto-named feature branch from current state
+DATE_TAG="$(date +'%Y%m%d-%H%M')"
+SEED="$(git rev-parse --short HEAD 2>/dev/null || echo rnd)"
+AUTO_BRANCH="auto/${DATE_TAG}-${SEED}"
+
+echo "▶ Creating branch: $AUTO_BRANCH"
+git checkout -b "$AUTO_BRANCH" >/dev/null 2>&1 || git checkout "$AUTO_BRANCH"
+
+# 8) Push branch and set upstream
+echo "▶ Pushing $AUTO_BRANCH to origin"
+git push -u origin "$AUTO_BRANCH"
+
+# 9) Summary
+echo ""
+echo "✅ Done!"
+echo "• Local branch: $AUTO_BRANCH"
+echo "• Remote repo:  $REPO_URL"
+echo "Next: open a PR from '$AUTO_BRANCH' -> 'main' on GitHub."

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,11 +15,18 @@ import {
   RefreshCw,
   LogOut,
   Home,
+  Eye,
+  Settings,
 } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
+import WatchRuleCards from '@/components/WatchRuleCards';
 
 export default function STACIWTestDashboard() {
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+    queryKey: ['currentUser'],
+  });
+
   const handleLogout = async () => {
     try {
       // Call backend logout endpoint to destroy session
@@ -204,6 +212,28 @@ export default function STACIWTestDashboard() {
             </p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Customer Watch Rules Section - Always show on staciw's dashboard */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+            <Eye className="w-5 h-5 text-purple-600" />
+            Customer Watch Rules
+          </h2>
+          <Link href="/watch-rules">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2 hover:bg-purple-50 hover:border-purple-300"
+              data-testid="button-manage-watch-rules-header"
+            >
+              <Settings className="w-4 h-4" />
+              Manage Watch Rules
+            </Button>
+          </Link>
+        </div>
+        <WatchRuleCards userId="staciw" showManageButton={false} />
       </div>
 
       {/* Production Pipeline Overview */}

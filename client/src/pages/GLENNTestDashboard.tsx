@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'wouter';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,10 +27,18 @@ import {
   Factory,
   User,
   Settings,
+  Eye,
 } from 'lucide-react';
 import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
+import WatchRuleCards from '@/components/WatchRuleCards';
 
 export default function ADMINTestDashboard() {
+  const { data: currentUser, isLoading: isUserLoading } = useQuery<{ id: number; username: string; role: string }>({
+    queryKey: ['currentUser'],
+  });
+
+  const isStaciw = currentUser?.username === 'staciw';
+
   const orderManagementItems = [
     {
       path: '/order-entry',
@@ -325,6 +334,36 @@ export default function ADMINTestDashboard() {
         {/* Weekly Shipping Widget */}
         <WeeklyShippingWidget />
       </div>
+
+      {/* Customer Watch Rules Section - For staciw */}
+      {isStaciw && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center space-x-2 text-lg">
+                <div className="p-2 rounded-lg bg-purple-100">
+                  <Eye className="w-5 h-5 text-purple-600" />
+                </div>
+                <span>Customer Watch Rules</span>
+              </CardTitle>
+              <Link href="/watch-rules">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2 hover:bg-purple-50 hover:border-purple-300"
+                  data-testid="button-manage-watch-rules-header"
+                >
+                  <Settings className="w-4 h-4" />
+                  Manage Watch Rules
+                </Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <WatchRuleCards userId="staciw" showManageButton={false} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Additional Navigation Items */}
       <Card>

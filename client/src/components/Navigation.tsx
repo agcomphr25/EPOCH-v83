@@ -442,6 +442,54 @@ export default function Navigation() {
     },
   ];
 
+  const travelerItems = [
+    {
+      path: '/p2-traveler-viewer',
+      label: 'Traveler Viewer',
+      icon: ClipboardList,
+      description: 'View and manage P2 travelers',
+    },
+    {
+      path: '/p2-traveler',
+      label: 'Badge Scanner',
+      icon: Scan,
+      description: 'Scan badges for P2 traveler operations',
+    },
+    {
+      path: '/part-routing-management',
+      label: 'Part Routing',
+      icon: Route,
+      description: 'Manage part routing configurations',
+    },
+    {
+      path: '/p2-department-manager',
+      label: 'Department Manager',
+      icon: Factory,
+      description: 'Manage P2 departments',
+    },
+    {
+      path: '/p2-certifications-manager',
+      label: 'Certifications',
+      icon: Award,
+      description: 'Manage P2 certifications',
+    },
+  ];
+
+  const communicationsItems = [
+    {
+      path: '/communications/inbox',
+      label: 'Inbox',
+      icon: Mail,
+      description: 'View and manage messages',
+    },
+    {
+      path: '/marketing-communications',
+      label: 'Marketing Board',
+      icon: Megaphone,
+      description: 'Marketing communications board',
+    },
+  ];
+
   const qcMaintenanceItems = [
     {
       path: '/qc',
@@ -853,6 +901,14 @@ export default function Navigation() {
     () => filterByPermissions(formsReportsItems, currentUser?.username, userRole),
     [formsReportsItems, currentUser?.username, userRole]
   );
+  const filteredTravelerItems = useMemo(
+    () => filterByPermissions(travelerItems, currentUser?.username, userRole),
+    [travelerItems, currentUser?.username, userRole]
+  );
+  const filteredCommunicationsItems = useMemo(
+    () => filterByPermissions(communicationsItems, currentUser?.username, userRole),
+    [communicationsItems, currentUser?.username, userRole]
+  );
   const filteredQcMaintenanceItems = useMemo(
     () => filterByPermissions(qcMaintenanceItems, currentUser?.username, userRole),
     [qcMaintenanceItems, currentUser?.username, userRole]
@@ -1059,112 +1115,108 @@ export default function Navigation() {
             )}
 
             {/* Communications Dropdown */}
-            <div className="relative">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className="flex items-center gap-2 text-sm"
-                  >
-                    <Mail className="h-4 w-4" />
-                    Communications
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuItem
-                    onClick={() => setLocation('/communications/inbox')}
-                    className="cursor-pointer"
-                  >
-                    <Mail className="h-4 w-4 mr-2" />
-                    Inbox
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setLocation('/marketing-communications')}
-                    className="cursor-pointer"
-                  >
-                    <Megaphone className="h-4 w-4 mr-2" />
-                    Marketing Board
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            {filteredCommunicationsItems.length > 0 && (
+              <div className="relative">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <Mail className="h-4 w-4" />
+                      Communications
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                    {filteredCommunicationsItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <DropdownMenuItem
+                          key={item.path}
+                          onClick={() => {
+                            closeAllDropdowns();
+                            setLocation(item.path);
+                          }}
+                          className="cursor-pointer"
+                        >
+                          <Icon className="h-4 w-4 mr-2" />
+                          {item.label}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
 
             {/* Traveler Dropdown - P2 AS9100 Production Tracking */}
-            <div className="relative">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className="flex items-center gap-2 text-sm"
-                  >
-                    <Route className="h-4 w-4" />
-                    Traveler
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuItem
-                    onClick={() => setLocation('/p2-traveler-viewer')}
-                    className="cursor-pointer"
-                  >
-                    <ClipboardList className="h-4 w-4 mr-2" />
-                    Traveler Viewer
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setLocation('/p2-traveler')}
-                    className="cursor-pointer"
-                  >
-                    <Scan className="h-4 w-4 mr-2" />
-                    Badge Scanner
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setLocation('/part-routing-management')}
-                    className="cursor-pointer"
-                  >
-                    <Route className="h-4 w-4 mr-2" />
-                    Part Routing
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setLocation('/p2-department-manager')}
-                    className="cursor-pointer"
-                  >
-                    <Factory className="h-4 w-4 mr-2" />
-                    Department Manager
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setLocation('/p2-certifications-manager')}
-                    className="cursor-pointer"
-                  >
-                    <Award className="h-4 w-4 mr-2" />
-                    Certifications
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-xs text-gray-500">Document Generation (via Traveler)</DropdownMenuLabel>
-                  <DropdownMenuItem
-                    onClick={() => setLocation('/p2-traveler-viewer')}
-                    className="cursor-pointer text-gray-600"
-                  >
-                    <Package className="h-4 w-4 mr-2" />
-                    Generate Packing Slips
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setLocation('/p2-traveler-viewer')}
-                    className="cursor-pointer text-gray-600"
-                  >
-                    <Award className="h-4 w-4 mr-2" />
-                    Generate Certificates
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setLocation('/p2-traveler-viewer')}
-                    className="cursor-pointer text-gray-600"
-                  >
-                    <FileCheck className="h-4 w-4 mr-2" />
-                    Generate Test Reports
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            {filteredTravelerItems.length > 0 && (
+              <div className="relative">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <Route className="h-4 w-4" />
+                      Traveler
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                    {filteredTravelerItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <DropdownMenuItem
+                          key={item.path}
+                          onClick={() => {
+                            closeAllDropdowns();
+                            setLocation(item.path);
+                          }}
+                          className="cursor-pointer"
+                        >
+                          <Icon className="h-4 w-4 mr-2" />
+                          {item.label}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-xs text-gray-500">Document Generation (via Traveler)</DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        closeAllDropdowns();
+                        setLocation('/p2-traveler-viewer');
+                      }}
+                      className="cursor-pointer text-gray-600"
+                    >
+                      <Package className="h-4 w-4 mr-2" />
+                      Generate Packing Slips
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        closeAllDropdowns();
+                        setLocation('/p2-traveler-viewer');
+                      }}
+                      className="cursor-pointer text-gray-600"
+                    >
+                      <Award className="h-4 w-4 mr-2" />
+                      Generate Certificates
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        closeAllDropdowns();
+                        setLocation('/p2-traveler-viewer');
+                      }}
+                      className="cursor-pointer text-gray-600"
+                    >
+                      <FileCheck className="h-4 w-4 mr-2" />
+                      Generate Test Reports
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
 
             {/* Forms & Reports Dropdown */}
             {filteredFormsReportsItems.length > 0 && (

@@ -167,6 +167,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-list',
       '/orders-management',
       '/customers',
+      '/shipping-tracker',
     ],
   },
 

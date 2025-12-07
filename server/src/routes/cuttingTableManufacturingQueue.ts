@@ -3,7 +3,6 @@ import { storage } from '../../storage';
 import { db } from '../../db';
 import { manufacturingQueue, inventoryItems } from '../../schema';
 import { eq, and, or } from 'drizzle-orm';
-import { generateBarcodeImage } from '../utils/barcodeGenerator';
 
 const router = express.Router();
 
@@ -187,10 +186,11 @@ router.post('/:id/generate-labels', async (req: Request, res: Response) => {
     for (let i = 1; i <= quantity; i++) {
       const barcodeValue = `${inventoryItem.agPartNumber}-Q${queueItem.id}-${i}`;
       
-      // Generate barcode image
+      // Generate barcode image (dynamic import to avoid startup failure)
       let barcodeImage;
       try {
-        barcodeImage = generateBarcodeImage(barcodeValue, {
+        const { generateBarcodeImage } = await import('../utils/barcodeGenerator');
+        barcodeImage = await generateBarcodeImage(barcodeValue, {
           width: 2,
           height: 50,
           displayValue: true,
@@ -498,10 +498,11 @@ router.post('/:id/generate-packet-labels', async (req: Request, res: Response) =
           .from(cuttingBuiltPacketFabricSources)
           .where(eq(cuttingBuiltPacketFabricSources.builtPacketId, packet.id));
         
-        // Generate barcode image
+        // Generate barcode image (dynamic import to avoid startup failure)
         let barcodeImage;
         try {
-          barcodeImage = generateBarcodeImage(packet.barcode, {
+          const { generateBarcodeImage } = await import('../utils/barcodeGenerator');
+          barcodeImage = await generateBarcodeImage(packet.barcode, {
             width: 2,
             height: 50,
             displayValue: true,

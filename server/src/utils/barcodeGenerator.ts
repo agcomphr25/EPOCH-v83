@@ -1,5 +1,4 @@
 import JsBarcode from 'jsbarcode';
-import { createCanvas } from 'canvas';
 
 export interface BarcodeOptions {
   format?: string;
@@ -16,10 +15,10 @@ export interface BarcodeOptions {
  * @param options - Barcode generation options
  * @returns Base64-encoded PNG image string
  */
-export function generateBarcodeImage(
+export async function generateBarcodeImage(
   value: string,
   options: BarcodeOptions = {}
-): string {
+): Promise<string> {
   const {
     format = 'CODE128',
     width = 2,
@@ -38,10 +37,13 @@ export function generateBarcodeImage(
   // Height includes barcode height + text (if displayed) + margins
   const canvasHeight = height + (displayValue ? fontSize + 10 : 0) + (margin * 2);
 
-  // Create a canvas with appropriate dimensions
-  const canvas = createCanvas(canvasWidth, canvasHeight);
-
   try {
+    // Dynamic import to avoid loading canvas at module startup
+    const { createCanvas } = await import('canvas');
+    
+    // Create a canvas with appropriate dimensions
+    const canvas = createCanvas(canvasWidth, canvasHeight);
+
     // Generate barcode on canvas
     JsBarcode(canvas, value, {
       format,
@@ -66,9 +68,9 @@ export function generateBarcodeImage(
  * @param options - Barcode generation options
  * @returns Array of base64-encoded PNG images
  */
-export function generateBarcodeImages(
+export async function generateBarcodeImages(
   values: string[],
   options: BarcodeOptions = {}
-): string[] {
-  return values.map((value) => generateBarcodeImage(value, options));
+): Promise<string[]> {
+  return Promise.all(values.map((value) => generateBarcodeImage(value, options)));
 }

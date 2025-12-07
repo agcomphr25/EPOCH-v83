@@ -11,7 +11,6 @@ import { eq, and, gte, lte, desc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import JsBarcode from 'jsbarcode';
-import { createCanvas } from 'canvas';
 
 const router = Router();
 
@@ -506,7 +505,8 @@ router.post('/layup-schedules/print-barcodes', async (req: Request, res: Respons
       const x = leftMargin + col * (labelWidth + horizontalGap);
       const y = pageHeight - topMargin - row * (labelHeight + verticalGap) - labelHeight;
 
-      // Generate barcode as PNG using canvas
+      // Generate barcode as PNG using canvas (dynamic import to avoid startup failure)
+      const { createCanvas } = await import('canvas');
       const canvas = createCanvas(labelWidth * 2, 50);
       const ctx = canvas.getContext('2d');
       

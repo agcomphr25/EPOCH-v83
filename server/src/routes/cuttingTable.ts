@@ -1328,7 +1328,7 @@ router.post('/print-fabric-label', async (req, res) => {
     
     const { generateBarcodeImage } = await import('../utils/barcodeGenerator');
     
-    const barcodeImage = generateBarcodeImage(barcodeValue || `FAB-${lotNumber || 'UNK'}-${fabricId}`, {
+    const barcodeImage = await generateBarcodeImage(barcodeValue || `FAB-${lotNumber || 'UNK'}-${fabricId}`, {
       width: 2,
       height: 60,
       displayValue: true,

@@ -103,9 +103,11 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
       });
     },
     onError: (error: any) => {
+      console.error('BOM save error:', error);
+      const errorMessage = error?.message || error?.details || 'Failed to save BOM';
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to save BOM',
+        title: 'Error Saving BOM',
+        description: errorMessage,
         variant: 'destructive',
       });
     },

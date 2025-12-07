@@ -1996,56 +1996,137 @@ export function registerRoutes(app: Express): Server {
       
       const { db } = await import('../../db');
       const { bomDefinitions, bomItems: bomItemsTable, p2PurchaseOrders, p2PurchaseOrderItems } = await import('../../schema');
-      const { eq, and, sql } = await import('drizzle-orm');
+      const { eq, and, sql, inArray } = await import('drizzle-orm');
       
       console.log(`Saving BOM for part ${partId}, partNumber: ${partNumber}:`, bomItemsInput);
       
-      // First check if a BOM definition already exists for this part number
-      let bomDef: any = null;
-      if (partNumber) {
-        const existing = await db
+      // Gather all manufactured child part numbers upfront for batch lookup
+      const manufacturedPartNumbers = (bomItemsInput || [])
+        .filter((item: any) => item.isManufactured && item.partNumber)
+        .map((item: any) => item.partNumber);
+      
+      // Pre-fetch all existing BOM definitions for manufactured children in one query
+      let existingChildBomMap: Map<string, any> = new Map();
+      if (manufacturedPartNumbers.length > 0) {
+        const existingChildBoms = await db
           .select()
           .from(bomDefinitions)
-          .where(eq(bomDefinitions.sku, partNumber))
-          .limit(1);
-        
-        if (existing.length > 0) {
-          bomDef = existing[0];
+          .where(inArray(bomDefinitions.sku, manufacturedPartNumbers));
+        for (const bom of existingChildBoms) {
+          if (bom.sku) {
+            existingChildBomMap.set(bom.sku, bom);
+          }
         }
       }
       
-      // Create new BOM definition if it doesn't exist
-      if (!bomDef) {
-        const [newBom] = await db.insert(bomDefinitions).values({
-          sku: partNumber || `P2-PART-${partId}`,
-          modelName: partNumber || `Part ${partId}`,
-          revision: 'A',
-          description: `BOM for P2 part ${partNumber || partId}`,
-          isActive: true
-        }).returning();
-        bomDef = newBom;
-      }
+      // Use transaction for atomicity
+      const result = await db.transaction(async (tx) => {
+        // First check if a BOM definition already exists for this part number
+        let bomDef: any = null;
+        if (partNumber) {
+          const existing = await tx
+            .select()
+            .from(bomDefinitions)
+            .where(eq(bomDefinitions.sku, partNumber))
+            .limit(1);
+          
+          if (existing.length > 0) {
+            bomDef = existing[0];
+          }
+        }
+        
+        // Create new BOM definition if it doesn't exist
+        if (!bomDef) {
+          const [newBom] = await tx.insert(bomDefinitions).values({
+            sku: partNumber || `P2-PART-${partId}`,
+            modelName: partNumber || `Part ${partId}`,
+            revision: 'A',
+            description: `BOM for P2 part ${partNumber || partId}`,
+            isActive: true
+          }).returning();
+          bomDef = newBom;
+        }
+        
+        // Clear existing BOM items for this definition
+        await tx
+          .update(bomItemsTable)
+          .set({ isActive: false, updatedAt: new Date() })
+          .where(eq(bomItemsTable.bomId, bomDef.id));
+        
+        // Insert new BOM items and create BOM definitions for manufactured children
+        const insertedItems = [];
+        const createdChildBomDefinitions = [];
+        
+        for (const item of bomItemsInput || []) {
+          let childBomDef = null;
+          
+          // If the item is manufactured, ensure it has a BOM definition
+          if (item.isManufactured && item.partNumber) {
+            // Check if already exists from our pre-fetch
+            childBomDef = existingChildBomMap.get(item.partNumber);
+            
+            if (!childBomDef) {
+              // Re-check within transaction in case of race condition
+              const [existingInTx] = await tx
+                .select()
+                .from(bomDefinitions)
+                .where(eq(bomDefinitions.sku, item.partNumber))
+                .limit(1);
+              
+              if (existingInTx) {
+                childBomDef = existingInTx;
+                existingChildBomMap.set(item.partNumber, existingInTx);
+              } else {
+                // Create BOM definition for the manufactured child
+                try {
+                  const [newChildBom] = await tx.insert(bomDefinitions).values({
+                    sku: item.partNumber,
+                    modelName: item.partNumber,
+                    revision: 'A',
+                    description: item.description || `BOM for manufactured part ${item.partNumber}`,
+                    isActive: true
+                  }).returning();
+                  
+                  if (newChildBom) {
+                    childBomDef = newChildBom;
+                    createdChildBomDefinitions.push(childBomDef);
+                    existingChildBomMap.set(item.partNumber, childBomDef);
+                    console.log(`Auto-created BOM definition for manufactured child: ${item.partNumber}`);
+                  }
+                } catch (childError: any) {
+                  console.error(`Error creating child BOM for ${item.partNumber}:`, childError);
+                  // Try to fetch in case it was just created by concurrent request
+                  const [raceCreated] = await tx
+                    .select()
+                    .from(bomDefinitions)
+                    .where(eq(bomDefinitions.sku, item.partNumber))
+                    .limit(1);
+                  if (raceCreated) {
+                    childBomDef = raceCreated;
+                    existingChildBomMap.set(item.partNumber, raceCreated);
+                  }
+                }
+              }
+            }
+          }
+          
+          const [inserted] = await tx.insert(bomItemsTable).values({
+            bomId: bomDef.id,
+            partName: item.partNumber,
+            quantity: item.quantity || 1,
+            firstDept: item.firstDepartment || 'Layup',
+            itemType: item.isManufactured ? 'manufactured' : 'material',
+            notes: item.description || '',
+            isActive: true,
+            referenceBomId: childBomDef?.id || null
+          }).returning();
+          insertedItems.push(inserted);
+        }
+        
+        return { bomDef, insertedItems, createdChildBomDefinitions };
+      });
       
-      // Clear existing BOM items for this definition
-      await db
-        .update(bomItemsTable)
-        .set({ isActive: false, updatedAt: new Date() })
-        .where(eq(bomItemsTable.bomId, bomDef.id));
-      
-      // Insert new BOM items
-      const insertedItems = [];
-      for (const item of bomItemsInput || []) {
-        const [inserted] = await db.insert(bomItemsTable).values({
-          bomId: bomDef.id,
-          partName: item.partNumber,
-          quantity: item.quantity || 1,
-          firstDept: item.firstDepartment || 'Layup',
-          itemType: item.isManufactured ? 'manufactured' : 'material',
-          notes: item.description || '',
-          isActive: true
-        }).returning();
-        insertedItems.push(inserted);
-      }
+      const { bomDef, insertedItems, createdChildBomDefinitions } = result;
       
       // Update the PO's bomConfigured flag if we have a poItemId
       if (poItemId) {
@@ -2143,11 +2224,22 @@ export function registerRoutes(app: Express): Server {
         success: true, 
         partId, 
         bomDefinitionId: bomDef.id,
-        bomItems: insertedItems
+        bomItems: insertedItems,
+        createdChildBomDefinitions: createdChildBomDefinitions.map(b => ({
+          id: b.id,
+          sku: b.sku,
+          modelName: b.modelName
+        }))
       });
-    } catch (_error) {
+    } catch (_error: any) {
       console.error('P2 BOM save error:', _error);
-      res.status(500).json({ error: 'Failed to save BOM' });
+      const errorMessage = _error?.message || 'Failed to save BOM';
+      const errorDetails = _error?.detail || _error?.hint || '';
+      res.status(500).json({ 
+        error: 'Failed to save BOM', 
+        message: errorMessage,
+        details: errorDetails
+      });
     }
   });
 

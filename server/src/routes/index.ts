@@ -2121,12 +2121,14 @@ export function registerRoutes(app: Express): Server {
         insertedItems.push(inserted);
       }
       
-      // Update the PO's bomConfigured flag if we have a poItemId
-      if (poItemId) {
+      // Update the PO's bomConfigured flag if we have a valid numeric poItemId
+      // Skip this for manufactured child parts (IDs starting with 'mfg-')
+      const poItemIdNum = parseInt(poItemId);
+      if (poItemId && !isNaN(poItemIdNum) && !String(poItemId).startsWith('mfg-')) {
         const [poItem] = await db
           .select()
           .from(p2PurchaseOrderItems)
-          .where(eq(p2PurchaseOrderItems.id, parseInt(poItemId)))
+          .where(eq(p2PurchaseOrderItems.id, poItemIdNum))
           .limit(1);
         
         if (poItem) {

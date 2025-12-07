@@ -327,7 +327,9 @@ router.post('/', async (req: Request, res: Response) => {
     const dateFields = [
       'targetCompletionDate', 'qualityTeamDate', 'generalDate', 
       'cuttingTableDate', 'layupDate', 'moldAssemblyDate', 
-      'finishDate', 'qcShippingDate'
+      'finishDate', 'qcShippingDate', 'dueDate',
+      'preProductionDueDate', 'materialArrivalDate', 'firstArticleDueDate',
+      'as9102CompletionDate', 'firstArticleApprovedDate', 'fullProductionStartDate', 'poDueDate'
     ];
     
     for (const field of dateFields) {

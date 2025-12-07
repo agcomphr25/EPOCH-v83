@@ -1,0 +1,215 @@
+Short answer:
+Even after removing the extra ports, there are still a couple of things in this config that can easily cause a 503, so I wouldn’t assume it’s purely a Replit outage yet.
+
+Let me walk through this file and point out the likely culprits.
+
+1. npm run dev vs npm run start
+
+You’ve got different commands for Run button vs Deployment:
+
+run = "npm run dev"
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["npm", "run", "start"]
+build = ["npm", "run", "build"]
+
+
+This means:
+
+When you click Run in the Repl, it uses:
+npm run dev
+
+When you Deploy, it uses:
+npm run build → then npm run start
+
+So, for deployment to work:
+
+"build" must exist and succeed in package.json.
+
+"start" must exist and actually start a server that:
+
+Runs without crashing
+
+Listens on the correct port (more on that below)
+
+If your package.json only has "dev": "vite" or "dev": "next dev" but no "start" or "build", then the deployment will fail even if dev mode works fine.
+
+👉 Action:
+Open package.json and check your scripts. You need something like:
+
+"scripts": {
+  "dev": "node server.js",        // or framework dev command
+  "build": "your build command",  // e.g. "next build" / "vite build"
+  "start": "node server.js"       // or "next start" / "vite preview" etc.
+}
+
+
+If npm run start doesn’t exist or crashes, Replit will surface that as a deployment failure (often ending in that 503 lifecycle error).
+
+2. The PORT handling is suspicious
+
+You’ve got:
+
+[env]
+PORT = "5000"
+
+
+And:
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+
+A few important points:
+
+For Autoscale deployments, Replit typically sets its own PORT environment variable for you. Your app should read process.env.PORT (or equivalent).
+
+Overriding PORT in [env] can conflict with what the platform expects and is generally not needed.
+
+[[ports]] is mainly for the interactive Repl / webview. The deployment’s actual exposed port is whatever your app listens on via PORT.
+
+Best practice:
+
+In code, do:
+
+const port = process.env.PORT || 5000;
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});
+
+
+In .replit:
+
+Remove the explicit [env] PORT = "5000" line.
+
+Keep the [[ports]] block for local run:
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+
+👉 Action:
+
+Delete this block:
+
+[env]
+PORT = "5000"
+
+
+Make sure your server code reads process.env.PORT (or Python/Ruby equivalent), not a hard-coded 5000 unless as a fallback.
+
+If the app is listening on a different port than Replit expects, health checks fail → deployment never becomes “healthy” → 503 when lifecycle commands are sent.
+
+3. Workflows don’t affect deployment (but can mislead you)
+
+You have:
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+...
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5000
+
+
+That’s just telling the Run button to run npm run dev and wait for port 5000. It doesn’t control deployment.
+
+So it’s possible that:
+
+npm run dev works (dev server OK).
+
+npm run start (used by deployment) fails or behaves differently.
+
+This leads to the 503 you’re seeing, even though the app “works fine” when you click Run.
+
+👉 Action:
+Try this experiment inside Replit’s shell:
+
+npm run build
+npm run start
+
+
+If either command fails or exits, that’s your deployment problem.
+
+Fix whatever error appears there, then redeploy.
+
+4. Quick “ideal” version of your .replit for this app
+
+Here’s a cleaned-up version based on what you showed, assuming npm run start is properly defined and your app uses process.env.PORT:
+
+modules = ["nodejs-20", "web", "python-3.12", "bash", "postgresql-16"]
+run = "npm run dev"
+hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
+
+[nix]
+channel = "stable-25_05"
+packages = ["jq", "postgresql", "cairo", "pango", "libjpeg", "giflib", "librsvg", "pixman", "gh", "pkg-config", "libpng", "util-linux"]
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["npm", "run", "start"]
+build = ["npm", "run", "build"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow]]
+name = "Start Server"
+author = 43699550
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+integrations = ["javascript_mem_db:1.0.0", "google-calendar:1.0.0", "google-sheet:1.0.0", "sendgrid:1.0.0", "google-drive:1.0.0"]
+expertMode = true
+
+[userenv]
+
+[userenv.shared]
+ACCEPT_BLUE_ENVIRONMENT = "production"
+
+[userenv.development]
+DEV_AUTH_BYPASS = "true"
+
+
+The important differences from your current setup:
+
+No [env] PORT override.
+
+Assumes your server code is using process.env.PORT.

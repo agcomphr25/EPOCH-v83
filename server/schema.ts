@@ -6264,6 +6264,25 @@ export const cuttingPacketBOMMaterials = pgTable('cutting_packet_bom_materials',
   packetBomIdx: index('cutting_packet_bom_materials_bom_idx').on(table.packetBomId),
 }));
 
+// Cutting Table - Packet BOM Parts (individual parts that make up a packet with their own yields)
+export const cuttingPacketBOMParts = pgTable('cutting_packet_bom_parts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  packetBomId: uuid('packet_bom_id').references(() => cuttingPacketBOMs.id, { onDelete: 'cascade' }).notNull(),
+  partNumber: text('part_number').notNull(), // Part number for this specific piece (e.g., T501, T502)
+  partDescription: text('part_description'), // Description of this part
+  fabricType: text('fabric_type').notNull(), // Type of fabric used for this part
+  commonName: text('common_name'), // Common/nickname for the fabric
+  yieldPerCut: integer('yield_per_cut').notNull().default(1), // How many of this part are produced per cut
+  squareMetersPerPart: real('square_meters_per_part'), // Square meters consumed per part
+  sortOrder: integer('sort_order').default(0), // Order within the packet
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  packetBomIdx: index('cutting_packet_bom_parts_bom_idx').on(table.packetBomId),
+  partNumberIdx: index('cutting_packet_bom_parts_part_number_idx').on(table.partNumber),
+}));
+
 // Cutting Table - Packet BOM Cut Tracking (tracks actual cuts and yields for a packet BOM)
 export const cuttingPacketBOMCuts = pgTable('cutting_packet_bom_cuts', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -6546,6 +6565,12 @@ export const insertCuttingPacketBOMMaterialSchema = createInsertSchema(cuttingPa
   updatedAt: true,
 });
 
+export const insertCuttingPacketBOMPartSchema = createInsertSchema(cuttingPacketBOMParts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertCuttingPacketBOMCutSchema = createInsertSchema(cuttingPacketBOMCuts).omit({
   id: true,
   createdAt: true,
@@ -6625,6 +6650,9 @@ export type InsertCuttingPacketBOM = z.infer<typeof insertCuttingPacketBOMSchema
 
 export type CuttingPacketBOMMaterial = typeof cuttingPacketBOMMaterials.$inferSelect;
 export type InsertCuttingPacketBOMMaterial = z.infer<typeof insertCuttingPacketBOMMaterialSchema>;
+
+export type CuttingPacketBOMPart = typeof cuttingPacketBOMParts.$inferSelect;
+export type InsertCuttingPacketBOMPart = z.infer<typeof insertCuttingPacketBOMPartSchema>;
 
 export type CuttingPacketBOMCut = typeof cuttingPacketBOMCuts.$inferSelect;
 export type InsertCuttingPacketBOMCut = z.infer<typeof insertCuttingPacketBOMCutSchema>;

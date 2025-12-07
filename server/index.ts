@@ -26,6 +26,13 @@ console.log('Environment check:', {
 
 const app = express();
 
+// CRITICAL: Trust proxy for production deployments behind Replit's infrastructure
+// This is required for express-rate-limit to work correctly with X-Forwarded-For headers
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+  console.log('🔒 Trust proxy enabled for production');
+}
+
 // CORS configuration - critical for production authentication
 // Check if we're on Replit deployment (agcompepoch.xyz) or development
 const isReplitDeployment =

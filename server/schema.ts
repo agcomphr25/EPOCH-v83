@@ -7491,4 +7491,170 @@ export const insertCreditMemoApplicationSchema = createInsertSchema(creditMemoAp
 export type CreditMemoApplication = typeof creditMemoApplications.$inferSelect;
 export type InsertCreditMemoApplication = z.infer<typeof insertCreditMemoApplicationSchema>;
 
+// ==========================================
+// PRE-PRODUCTION CHECKLIST SYSTEM
+// ==========================================
+
+// Pre-Production Checklist Templates - reusable checklist templates
+export const preproductionTemplates = pgTable('preproduction_templates', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  isDefault: boolean('is_default').default(false),
+  isActive: boolean('is_active').default(true),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertPreproductionTemplateSchema = createInsertSchema(preproductionTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PreproductionTemplate = typeof preproductionTemplates.$inferSelect;
+export type InsertPreproductionTemplate = z.infer<typeof insertPreproductionTemplateSchema>;
+
+// Pre-Production Template Sections - sections within a template
+export const preproductionTemplateSections = pgTable('preproduction_template_sections', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  templateId: uuid('template_id')
+    .references(() => preproductionTemplates.id, { onDelete: 'cascade' })
+    .notNull(),
+  name: text('name').notNull(),
+  sortOrder: integer('sort_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  templateIdIdx: index('preproduction_template_sections_template_id_idx').on(table.templateId),
+}));
+
+export const insertPreproductionTemplateSectionSchema = createInsertSchema(preproductionTemplateSections).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PreproductionTemplateSection = typeof preproductionTemplateSections.$inferSelect;
+export type InsertPreproductionTemplateSection = z.infer<typeof insertPreproductionTemplateSectionSchema>;
+
+// Pre-Production Template Tasks - tasks within a template section
+export const preproductionTemplateTasks = pgTable('preproduction_template_tasks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sectionId: uuid('section_id')
+    .references(() => preproductionTemplateSections.id, { onDelete: 'cascade' })
+    .notNull(),
+  description: text('description').notNull(),
+  sortOrder: integer('sort_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  sectionIdIdx: index('preproduction_template_tasks_section_id_idx').on(table.sectionId),
+}));
+
+export const insertPreproductionTemplateTaskSchema = createInsertSchema(preproductionTemplateTasks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PreproductionTemplateTask = typeof preproductionTemplateTasks.$inferSelect;
+export type InsertPreproductionTemplateTask = z.infer<typeof insertPreproductionTemplateTaskSchema>;
+
+// Pre-Production Checklists - project-specific checklist instances
+export const preproductionChecklists = pgTable('preproduction_checklists', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: text('project_id').notNull(), // e.g., STR250015
+  projectName: text('project_name').notNull(), // e.g., "75 Disruptors"
+  poNumber: text('po_number'), // Purchase order reference
+  templateId: uuid('template_id').references(() => preproductionTemplates.id),
+  // Timeline milestones
+  preProductionDueDate: timestamp('pre_production_due_date'),
+  materialArrivalDate: timestamp('material_arrival_date'),
+  firstArticleDueDate: timestamp('first_article_due_date'),
+  as9102CompletionDate: timestamp('as9102_completion_date'),
+  firstArticleApprovedDate: timestamp('first_article_approved_date'),
+  fullProductionStartDate: timestamp('full_production_start_date'),
+  poDueDate: timestamp('po_due_date'),
+  poDueQuantity: integer('po_due_quantity'), // e.g., 75
+  // Milestone visibility toggles (all visible by default)
+  showPreProductionDueDate: boolean('show_pre_production_due_date').default(true),
+  showMaterialArrivalDate: boolean('show_material_arrival_date').default(true),
+  showFirstArticleDueDate: boolean('show_first_article_due_date').default(true),
+  showAs9102CompletionDate: boolean('show_as9102_completion_date').default(true),
+  showFirstArticleApprovedDate: boolean('show_first_article_approved_date').default(true),
+  showFullProductionStartDate: boolean('show_full_production_start_date').default(true),
+  showPoDueDate: boolean('show_po_due_date').default(true),
+  // Status and sign-off
+  status: text('status').default('in_progress'), // in_progress, completed, cancelled
+  signatureData: text('signature_data'), // Base64 signature
+  signedBy: text('signed_by'),
+  signedAt: timestamp('signed_at'),
+  notes: text('notes'),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  projectIdIdx: index('preproduction_checklists_project_id_idx').on(table.projectId),
+  statusIdx: index('preproduction_checklists_status_idx').on(table.status),
+}));
+
+export const insertPreproductionChecklistSchema = createInsertSchema(preproductionChecklists).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PreproductionChecklist = typeof preproductionChecklists.$inferSelect;
+export type InsertPreproductionChecklist = z.infer<typeof insertPreproductionChecklistSchema>;
+
+// Pre-Production Checklist Sections - sections within a project checklist
+export const preproductionChecklistSections = pgTable('preproduction_checklist_sections', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  checklistId: uuid('checklist_id')
+    .references(() => preproductionChecklists.id, { onDelete: 'cascade' })
+    .notNull(),
+  name: text('name').notNull(),
+  sortOrder: integer('sort_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  checklistIdIdx: index('preproduction_checklist_sections_checklist_id_idx').on(table.checklistId),
+}));
+
+export const insertPreproductionChecklistSectionSchema = createInsertSchema(preproductionChecklistSections).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type PreproductionChecklistSection = typeof preproductionChecklistSections.$inferSelect;
+export type InsertPreproductionChecklistSection = z.infer<typeof insertPreproductionChecklistSectionSchema>;
+
+// Pre-Production Checklist Tasks - tasks within a project checklist section
+export const preproductionChecklistTasks = pgTable('preproduction_checklist_tasks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sectionId: uuid('section_id')
+    .references(() => preproductionChecklistSections.id, { onDelete: 'cascade' })
+    .notNull(),
+  description: text('description').notNull(),
+  sortOrder: integer('sort_order').default(0),
+  isCompleted: boolean('is_completed').default(false),
+  completedAt: timestamp('completed_at'),
+  completedBy: text('completed_by'),
+  assignedTo: text('assigned_to'), // Username or employee name
+  assignedToEmployeeId: integer('assigned_to_employee_id').references(() => employees.id),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  sectionIdIdx: index('preproduction_checklist_tasks_section_id_idx').on(table.sectionId),
+  assignedToIdx: index('preproduction_checklist_tasks_assigned_to_idx').on(table.assignedToEmployeeId),
+  completedIdx: index('preproduction_checklist_tasks_completed_idx').on(table.isCompleted),
+}));
+
+export const insertPreproductionChecklistTaskSchema = createInsertSchema(preproductionChecklistTasks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PreproductionChecklistTask = typeof preproductionChecklistTasks.$inferSelect;
+export type InsertPreproductionChecklistTask = z.infer<typeof insertPreproductionChecklistTaskSchema>;
+
 export * from './calendar.schema';

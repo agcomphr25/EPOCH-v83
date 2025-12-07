@@ -336,6 +336,12 @@ router.post('/', async (req: Request, res: Response) => {
       }
     }
     
+    // Auto-generate projectId if not provided (format: PRE + timestamp)
+    if (!checklistData.projectId) {
+      const timestamp = Date.now().toString(36).toUpperCase();
+      checklistData.projectId = `PRE${timestamp}`;
+    }
+    
     // Create the checklist
     const [checklist] = await db
       .insert(preproductionChecklists)

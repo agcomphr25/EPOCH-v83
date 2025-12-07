@@ -122,3 +122,6 @@ ACCEPT_BLUE_ENVIRONMENT = "production"
 
 [userenv.development]
 DEV_AUTH_BYPASS = "true"
+
+[agent]
+expertMode = true

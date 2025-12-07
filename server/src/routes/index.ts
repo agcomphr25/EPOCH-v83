@@ -85,6 +85,7 @@ import partRoutingsRoutes from './partRoutings';
 
 import pdfSettingsRoutes from './pdfSettings';
 import p2LayupSchedulesRoutes from './p2LayupSchedules';
+import preproductionChecklistsRoutes from './preproductionChecklists';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -285,6 +286,9 @@ export function registerRoutes(app: Express): Server {
 
   // Credit memo management routes
   app.use('/api/credit-memos', creditMemosRoutes);
+
+  // Pre-Production Checklists routes
+  app.use('/api/preproduction-checklists', preproductionChecklistsRoutes);
 
   // Reports routes
   app.use('/api/reports', reportsRoutes);

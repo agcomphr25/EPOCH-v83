@@ -51,8 +51,9 @@ args = "npm run dev"
 localPort = 5000
 externalPort = 80
 
-integrations = ["javascript_mem_db:1.0.0", "google-calendar:1.0.0", "google-sheet:1.0.0", "sendgrid:1.0.0", "google-drive:1.0.0"]
-expertMode = true
+[[ports]]
+localPort = 35759
+externalPort = 3000
 
 [userenv]
 

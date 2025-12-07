@@ -13,12 +13,13 @@ const LOCK_TIME = 15 * 60 * 1000; // 15 minutes
 const SESSION_TIMEOUT = 8 * 60 * 60 * 1000; // 8 hours
 
 // SECURITY: JWT_SECRET must be set in production - fail fast if missing
+// Also checks PORTAL_JWT_SECRET as fallback for Replit deployment compatibility
 function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
+  const secret = process.env.JWT_SECRET || process.env.PORTAL_JWT_SECRET;
   const isProduction = process.env.NODE_ENV === 'production';
   
   if (!secret && isProduction) {
-    throw new Error('CRITICAL SECURITY ERROR: JWT_SECRET environment variable must be set in production');
+    throw new Error('CRITICAL SECURITY ERROR: JWT_SECRET or PORTAL_JWT_SECRET environment variable must be set in production');
   }
   
   if (!secret) {
@@ -26,8 +27,12 @@ function getJwtSecret(): string {
     return 'development-only-secret-not-for-production';
   }
   
+  if (process.env.PORTAL_JWT_SECRET && !process.env.JWT_SECRET) {
+    console.log('✅ Using PORTAL_JWT_SECRET for authentication');
+  }
+  
   if (secret.length < 32) {
-    console.warn('⚠️ WARNING: JWT_SECRET should be at least 32 characters for security');
+    console.warn('⚠️ WARNING: JWT secret should be at least 32 characters for security');
   }
   
   return secret;

@@ -2273,7 +2273,19 @@ export function registerRoutes(app: Express): Server {
       res.json({
         hasBOM: true,
         bomDefinitionId: bomDef.id,
-        bomItems: items
+        bomItems: items.map(item => ({
+          id: item.id,
+          partName: item.partName,
+          partNumber: item.partName,
+          notes: item.notes,
+          description: item.notes || '',
+          quantity: item.quantity,
+          itemType: item.itemType,
+          isManufactured: item.itemType === 'manufactured',
+          firstDept: item.firstDept,
+          firstDepartment: item.firstDept,
+          referenceBomId: item.referenceBomId
+        }))
       });
     } catch (_error) {
       console.error('Get BOM items error:', _error);

@@ -26,6 +26,12 @@ console.log('Environment check:', {
 
 const app = express();
 
+// CRITICAL: Health check endpoint MUST be registered FIRST, before any middleware
+// This ensures Replit deployment health probes get instant responses during initialization
+app.get('/healthz', (req, res) => {
+  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
 // CRITICAL: Trust proxy for production deployments behind Replit's infrastructure
 // This is required for express-rate-limit to work correctly with X-Forwarded-For headers
 if (process.env.NODE_ENV === 'production') {
@@ -108,12 +114,6 @@ app.use((req, res, next) => {
   express.json({ limit: '50mb' })(req, res, next);
 });
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
-
-// CRITICAL: Fast health check endpoint for Replit deployment health probes
-// Responds immediately without database operations to pass health checks quickly
-app.get('/healthz', (req, res) => {
-  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
-});
 
 // Also add express.static as fallback
 app.use('/attached_assets', express.static(assetsPath));

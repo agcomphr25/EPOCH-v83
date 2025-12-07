@@ -82,6 +82,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/vendor-pos',
   '/vendors',
   '/waste-management-form',
+  '/preproduction-checklists',
 ];
 
 export const USER_PERMISSIONS: Record<string, UserPermissions> = {

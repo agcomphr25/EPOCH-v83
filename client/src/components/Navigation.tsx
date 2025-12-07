@@ -440,6 +440,12 @@ export default function Navigation() {
       icon: FileText,
       description: 'Comprehensive document register with tracking and management',
     },
+    {
+      path: '/preproduction-checklists',
+      label: 'Preproduction Checklist',
+      icon: FileCheck,
+      description: 'Quality control checklists for preproduction validation',
+    },
   ];
 
   const travelerItems = [

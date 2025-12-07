@@ -323,6 +323,19 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const { templateId, ...checklistData } = req.body;
     
+    // Convert date strings to Date objects for timestamp fields
+    const dateFields = [
+      'targetCompletionDate', 'qualityTeamDate', 'generalDate', 
+      'cuttingTableDate', 'layupDate', 'moldAssemblyDate', 
+      'finishDate', 'qcShippingDate'
+    ];
+    
+    for (const field of dateFields) {
+      if (checklistData[field] && typeof checklistData[field] === 'string') {
+        checklistData[field] = new Date(checklistData[field]);
+      }
+    }
+    
     // Create the checklist
     const [checklist] = await db
       .insert(preproductionChecklists)

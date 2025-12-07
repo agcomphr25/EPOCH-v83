@@ -2019,114 +2019,107 @@ export function registerRoutes(app: Express): Server {
         }
       }
       
-      // Use transaction for atomicity
-      const result = await db.transaction(async (tx) => {
-        // First check if a BOM definition already exists for this part number
-        let bomDef: any = null;
-        if (partNumber) {
-          const existing = await tx
-            .select()
-            .from(bomDefinitions)
-            .where(eq(bomDefinitions.sku, partNumber))
-            .limit(1);
-          
-          if (existing.length > 0) {
-            bomDef = existing[0];
-          }
+      // First check if a BOM definition already exists for this part number
+      let bomDef: any = null;
+      if (partNumber) {
+        const existing = await db
+          .select()
+          .from(bomDefinitions)
+          .where(eq(bomDefinitions.sku, partNumber))
+          .limit(1);
+        
+        if (existing.length > 0) {
+          bomDef = existing[0];
         }
+      }
+      
+      // Create new BOM definition if it doesn't exist
+      if (!bomDef) {
+        const [newBom] = await db.insert(bomDefinitions).values({
+          sku: partNumber || `P2-PART-${partId}`,
+          modelName: partNumber || `Part ${partId}`,
+          revision: 'A',
+          description: `BOM for P2 part ${partNumber || partId}`,
+          isActive: true
+        }).returning();
+        bomDef = newBom;
+      }
+      
+      // Clear existing BOM items for this definition
+      await db
+        .update(bomItemsTable)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(bomItemsTable.bomId, bomDef.id));
+      
+      // Insert new BOM items and create BOM definitions for manufactured children
+      const insertedItems = [];
+      const createdChildBomDefinitions = [];
+      
+      for (const item of bomItemsInput || []) {
+        let childBomDef = null;
         
-        // Create new BOM definition if it doesn't exist
-        if (!bomDef) {
-          const [newBom] = await tx.insert(bomDefinitions).values({
-            sku: partNumber || `P2-PART-${partId}`,
-            modelName: partNumber || `Part ${partId}`,
-            revision: 'A',
-            description: `BOM for P2 part ${partNumber || partId}`,
-            isActive: true
-          }).returning();
-          bomDef = newBom;
-        }
-        
-        // Clear existing BOM items for this definition
-        await tx
-          .update(bomItemsTable)
-          .set({ isActive: false, updatedAt: new Date() })
-          .where(eq(bomItemsTable.bomId, bomDef.id));
-        
-        // Insert new BOM items and create BOM definitions for manufactured children
-        const insertedItems = [];
-        const createdChildBomDefinitions = [];
-        
-        for (const item of bomItemsInput || []) {
-          let childBomDef = null;
+        // If the item is manufactured, ensure it has a BOM definition
+        if (item.isManufactured && item.partNumber) {
+          // Check if already exists from our pre-fetch
+          childBomDef = existingChildBomMap.get(item.partNumber);
           
-          // If the item is manufactured, ensure it has a BOM definition
-          if (item.isManufactured && item.partNumber) {
-            // Check if already exists from our pre-fetch
-            childBomDef = existingChildBomMap.get(item.partNumber);
+          if (!childBomDef) {
+            // Re-check in case of race condition
+            const [existingNow] = await db
+              .select()
+              .from(bomDefinitions)
+              .where(eq(bomDefinitions.sku, item.partNumber))
+              .limit(1);
             
-            if (!childBomDef) {
-              // Re-check within transaction in case of race condition
-              const [existingInTx] = await tx
-                .select()
-                .from(bomDefinitions)
-                .where(eq(bomDefinitions.sku, item.partNumber))
-                .limit(1);
-              
-              if (existingInTx) {
-                childBomDef = existingInTx;
-                existingChildBomMap.set(item.partNumber, existingInTx);
-              } else {
-                // Create BOM definition for the manufactured child
-                try {
-                  const [newChildBom] = await tx.insert(bomDefinitions).values({
-                    sku: item.partNumber,
-                    modelName: item.partNumber,
-                    revision: 'A',
-                    description: item.description || `BOM for manufactured part ${item.partNumber}`,
-                    isActive: true
-                  }).returning();
-                  
-                  if (newChildBom) {
-                    childBomDef = newChildBom;
-                    createdChildBomDefinitions.push(childBomDef);
-                    existingChildBomMap.set(item.partNumber, childBomDef);
-                    console.log(`Auto-created BOM definition for manufactured child: ${item.partNumber}`);
-                  }
-                } catch (childError: any) {
-                  console.error(`Error creating child BOM for ${item.partNumber}:`, childError);
-                  // Try to fetch in case it was just created by concurrent request
-                  const [raceCreated] = await tx
-                    .select()
-                    .from(bomDefinitions)
-                    .where(eq(bomDefinitions.sku, item.partNumber))
-                    .limit(1);
-                  if (raceCreated) {
-                    childBomDef = raceCreated;
-                    existingChildBomMap.set(item.partNumber, raceCreated);
-                  }
+            if (existingNow) {
+              childBomDef = existingNow;
+              existingChildBomMap.set(item.partNumber, existingNow);
+            } else {
+              // Create BOM definition for the manufactured child
+              try {
+                const [newChildBom] = await db.insert(bomDefinitions).values({
+                  sku: item.partNumber,
+                  modelName: item.partNumber,
+                  revision: 'A',
+                  description: item.description || `BOM for manufactured part ${item.partNumber}`,
+                  isActive: true
+                }).returning();
+                
+                if (newChildBom) {
+                  childBomDef = newChildBom;
+                  createdChildBomDefinitions.push(childBomDef);
+                  existingChildBomMap.set(item.partNumber, childBomDef);
+                  console.log(`Auto-created BOM definition for manufactured child: ${item.partNumber}`);
+                }
+              } catch (childError: any) {
+                console.error(`Error creating child BOM for ${item.partNumber}:`, childError);
+                // Try to fetch in case it was just created by concurrent request
+                const [raceCreated] = await db
+                  .select()
+                  .from(bomDefinitions)
+                  .where(eq(bomDefinitions.sku, item.partNumber))
+                  .limit(1);
+                if (raceCreated) {
+                  childBomDef = raceCreated;
+                  existingChildBomMap.set(item.partNumber, raceCreated);
                 }
               }
             }
           }
-          
-          const [inserted] = await tx.insert(bomItemsTable).values({
-            bomId: bomDef.id,
-            partName: item.partNumber,
-            quantity: item.quantity || 1,
-            firstDept: item.firstDepartment || 'Layup',
-            itemType: item.isManufactured ? 'manufactured' : 'material',
-            notes: item.description || '',
-            isActive: true,
-            referenceBomId: childBomDef?.id || null
-          }).returning();
-          insertedItems.push(inserted);
         }
         
-        return { bomDef, insertedItems, createdChildBomDefinitions };
-      });
-      
-      const { bomDef, insertedItems, createdChildBomDefinitions } = result;
+        const [inserted] = await db.insert(bomItemsTable).values({
+          bomId: bomDef.id,
+          partName: item.partNumber,
+          quantity: item.quantity || 1,
+          firstDept: item.firstDepartment || 'Layup',
+          itemType: item.isManufactured ? 'manufactured' : 'material',
+          notes: item.description || '',
+          isActive: true,
+          referenceBomId: childBomDef?.id || null
+        }).returning();
+        insertedItems.push(inserted);
+      }
       
       // Update the PO's bomConfigured flag if we have a poItemId
       if (poItemId) {

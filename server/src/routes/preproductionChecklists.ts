@@ -321,7 +321,12 @@ router.get('/:id', async (req: Request, res: Response) => {
 // Create checklist from template
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { templateId, ...checklistData } = req.body;
+    const parsed = insertPreproductionChecklistSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid checklist data', details: parsed.error });
+    }
+    
+    const { templateId, ...checklistData } = parsed.data;
     
     // Create the checklist
     const [checklist] = await db
@@ -546,6 +551,162 @@ router.get('/employees/list', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching employees:', error);
     res.status(500).json({ error: 'Failed to fetch employees' });
+  }
+});
+
+// Seed default template from existing checklist structure
+router.post('/templates/seed-default', async (req: Request, res: Response) => {
+  try {
+    // Check if default template already exists
+    const existing = await db
+      .select()
+      .from(preproductionTemplates)
+      .where(eq(preproductionTemplates.name, 'Standard Pre-Production Checklist'))
+      .limit(1);
+    
+    if (existing.length > 0) {
+      return res.json({ message: 'Default template already exists', template: existing[0] });
+    }
+    
+    // Create the default template
+    const [template] = await db
+      .insert(preproductionTemplates)
+      .values({
+        name: 'Standard Pre-Production Checklist',
+        description: 'Complete pre-production checklist template covering Quality Team, General, Cutting Table, Layup, Mold Assembly, Finish, and QC/Shipping departments.',
+      })
+      .returning();
+    
+    // Define sections and tasks from the user's checklist
+    const sectionsData = [
+      {
+        name: 'Quality Team',
+        sortOrder: 1,
+        tasks: [
+          'Spec Sheet',
+          'Traveler creation/modified',
+          'Chief engineer approves tolerances',
+          'Manager approval of the traveler',
+          'Trolley wheels ordered',
+          'Wraps for project stocked',
+          'Blades for cutting table stocked',
+          'Project packet created and presented to each corresponding department',
+          'All lot #s and certificates of conformance are on hand for project materials',
+          'Tools calibrated',
+        ]
+      },
+      {
+        name: 'General',
+        sortOrder: 2,
+        tasks: [
+          'Compressor maintenance conducted',
+          'Tool carts are stocked and organized',
+          'Trolley are maintained and wheels changed',
+          'Oven maintenance conducted',
+          'AC working properly',
+          'Wrap Station stocked and organized',
+          'Wraps labeled properly',
+          'Workstations are clean and stocked',
+          'Delegate tasks that need to be completed before full production begins',
+        ]
+      },
+      {
+        name: 'Cutting Table',
+        sortOrder: 3,
+        tasks: [
+          'Packet quantities confirmed',
+          'Cut definitions double-checked',
+          'Cutting table calibrated, blade status',
+          'Extra blades on hand',
+          'Packet table clean and functioning properly',
+          'Production goals established and communicated with team',
+          'Excess stock packets made to continue normal production',
+          'Packet storage location and on hand determined',
+          'Workstation is clean, organized and ready for full production',
+        ]
+      },
+      {
+        name: 'Layup',
+        sortOrder: 4,
+        tasks: [
+          'Materials cut verified and labeled',
+          'Workstations stocked per work instructions',
+          'Mandrels cleaned/prepped',
+          'Traveler reviewed and correct',
+          'All parts necessary for task are readily available',
+          'Production goals established and communicated with team',
+          'All workstations are clean, organized and stocked',
+          'Table is marked for seam placement',
+          'Mandrel is marked for seam placement',
+          'Work instructions updated and communicated',
+          'Layup table is ready for production',
+        ]
+      },
+      {
+        name: 'Mold Assembly/Disassembly',
+        sortOrder: 5,
+        tasks: [
+          'Mandrels matched to product and are labeled correctly',
+          'Mandrels are cleaned, released and free of defects',
+          'Mandrel cart functioning properly',
+          'Cure timing scheduled to meet production of line 1 and 2',
+          'Oven temperature and time sheet is correct and document control in place',
+          'Release magnets on hand and ready',
+          'Inventory in date',
+          'Production goals established and communicated with team',
+          'Workstations clean, organized and stocked',
+        ]
+      },
+      {
+        name: 'Finish',
+        sortOrder: 6,
+        tasks: [
+          'Workstation stocked, organized, and clean',
+          'Inventory in date and labeled with batch# or lot #',
+          'Tools needed to complete task',
+          'Production goals established and communicated with team',
+        ]
+      },
+      {
+        name: 'QC / Shipping',
+        sortOrder: 7,
+        tasks: [
+          'Tools in workstation calibrated and available',
+          'Packaging available for PO',
+          'Research Packaging',
+          'Designate Receiving Area for Tubes',
+          'Create Storage area',
+          'Specs correct based on PO',
+          'Production goals established and communicated with team',
+          'Workstation clean, organized, and stocked',
+        ]
+      },
+    ];
+    
+    // Create sections and tasks
+    for (const sectionData of sectionsData) {
+      const [section] = await db
+        .insert(preproductionTemplateSections)
+        .values({
+          templateId: template.id,
+          name: sectionData.name,
+          sortOrder: sectionData.sortOrder,
+        })
+        .returning();
+      
+      for (let i = 0; i < sectionData.tasks.length; i++) {
+        await db.insert(preproductionTemplateTasks).values({
+          sectionId: section.id,
+          description: sectionData.tasks[i],
+          sortOrder: i + 1,
+        });
+      }
+    }
+    
+    res.status(201).json({ message: 'Default template created successfully', template });
+  } catch (error) {
+    console.error('Error seeding default template:', error);
+    res.status(500).json({ error: 'Failed to seed default template' });
   }
 });
 

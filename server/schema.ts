@@ -7574,6 +7574,14 @@ export const preproductionChecklists = pgTable('preproduction_checklists', {
   fullProductionStartDate: timestamp('full_production_start_date'),
   poDueDate: timestamp('po_due_date'),
   poDueQuantity: integer('po_due_quantity'), // e.g., 75
+  // Milestone visibility toggles (all visible by default)
+  showPreProductionDueDate: boolean('show_pre_production_due_date').default(true),
+  showMaterialArrivalDate: boolean('show_material_arrival_date').default(true),
+  showFirstArticleDueDate: boolean('show_first_article_due_date').default(true),
+  showAs9102CompletionDate: boolean('show_as9102_completion_date').default(true),
+  showFirstArticleApprovedDate: boolean('show_first_article_approved_date').default(true),
+  showFullProductionStartDate: boolean('show_full_production_start_date').default(true),
+  showPoDueDate: boolean('show_po_due_date').default(true),
   // Status and sign-off
   status: text('status').default('in_progress'), // in_progress, completed, cancelled
   signatureData: text('signature_data'), // Base64 signature

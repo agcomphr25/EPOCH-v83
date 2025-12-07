@@ -2243,6 +2243,49 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Get existing BOM items by part number
+  app.get('/api/p2/bom/items/:partNumber', async (req, res) => {
+    try {
+      const { partNumber } = req.params;
+      
+      const { db } = await import('../../db');
+      const { bomDefinitions, bomItems: bomItemsTable } = await import('../../schema');
+      const { eq, and } = await import('drizzle-orm');
+      
+      // Find the BOM definition for this part number
+      const [bomDef] = await db
+        .select()
+        .from(bomDefinitions)
+        .where(and(
+          eq(bomDefinitions.sku, partNumber),
+          eq(bomDefinitions.isActive, true)
+        ))
+        .limit(1);
+      
+      if (!bomDef) {
+        return res.json({ bomItems: [], hasBOM: false });
+      }
+      
+      // Get all active BOM items for this definition
+      const items = await db
+        .select()
+        .from(bomItemsTable)
+        .where(and(
+          eq(bomItemsTable.bomId, bomDef.id),
+          eq(bomItemsTable.isActive, true)
+        ));
+      
+      res.json({
+        hasBOM: true,
+        bomDefinitionId: bomDef.id,
+        bomItems: items
+      });
+    } catch (_error) {
+      console.error('Get BOM items error:', _error);
+      res.status(500).json({ error: 'Failed to fetch BOM items' });
+    }
+  });
+
   app.post('/api/p2/schedule', async (req, res) => {
     try {
       const { entries } = req.body;

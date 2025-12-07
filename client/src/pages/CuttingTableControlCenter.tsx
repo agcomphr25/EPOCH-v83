@@ -255,6 +255,19 @@ export default function CuttingTableControlCenter() {
     notes: "",
   });
   const [selectedBOM, setSelectedBOM] = useState<PacketBOM | null>(null);
+  
+  // Packet BOM Management state
+  const [isPacketBomDialogOpen, setIsPacketBomDialogOpen] = useState(false);
+  const [editingPacketBom, setEditingPacketBom] = useState<PacketBOM | null>(null);
+  const [packetBomForm, setPacketBomForm] = useState({
+    partNumber: "",
+    packetType: "",
+    yieldPerCut: "4",
+    squareMetersPerCut: "0.5",
+    wasteFactor: "0.05",
+    materials: [] as { fabricType: string; commonName: string; quantityNeeded: number }[],
+  });
+  const [newMaterialForm, setNewMaterialForm] = useState({ fabricType: "", commonName: "", quantityNeeded: 1 });
 
   const { data: currentUser } = useQuery<{ username: string }>({
     queryKey: ['currentUser'],
@@ -610,6 +623,143 @@ export default function CuttingTableControlCenter() {
       toast({ title: "Error", description: "Failed to build packets.", variant: "destructive" });
     },
   });
+
+  // Packet BOM CRUD mutations
+  const createPacketBomMutation = useMutation({
+    mutationFn: async (data: {
+      partNumber: string;
+      packetType: string;
+      yieldPerCut: number;
+      squareMetersPerCut: number;
+      wasteFactor?: number;
+      materials: { fabricType: string; commonName: string; quantityNeeded: number }[];
+    }) => {
+      return apiRequest('/api/cutting-table/packet-boms', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-boms'] });
+      toast({ title: "Created", description: "Packet BOM created successfully." });
+      setIsPacketBomDialogOpen(false);
+      resetPacketBomForm();
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create packet BOM.", variant: "destructive" });
+    },
+  });
+
+  const updatePacketBomMutation = useMutation({
+    mutationFn: async ({ id, ...data }: {
+      id: string;
+      partNumber?: string;
+      packetType?: string;
+      yieldPerCut?: number;
+      squareMetersPerCut?: number;
+      wasteFactor?: number;
+      materials?: { fabricType: string; commonName: string; quantityNeeded: number }[];
+    }) => {
+      return apiRequest(`/api/cutting-table/packet-boms/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-boms'] });
+      toast({ title: "Updated", description: "Packet BOM updated successfully." });
+      setIsPacketBomDialogOpen(false);
+      resetPacketBomForm();
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update packet BOM.", variant: "destructive" });
+    },
+  });
+
+  const deletePacketBomMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/cutting-table/packet-boms/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-boms'] });
+      toast({ title: "Deleted", description: "Packet BOM deleted successfully." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete packet BOM.", variant: "destructive" });
+    },
+  });
+
+  const resetPacketBomForm = () => {
+    setEditingPacketBom(null);
+    setPacketBomForm({
+      partNumber: "",
+      packetType: "",
+      yieldPerCut: "4",
+      squareMetersPerCut: "0.5",
+      wasteFactor: "0.05",
+      materials: [],
+    });
+    setNewMaterialForm({ fabricType: "", commonName: "", quantityNeeded: 1 });
+  };
+
+  const openPacketBomDialog = (bom?: PacketBOM) => {
+    if (bom) {
+      setEditingPacketBom(bom);
+      setPacketBomForm({
+        partNumber: bom.partNumber || "",
+        packetType: bom.packetType || "",
+        yieldPerCut: String(bom.yieldPerCut || 4),
+        squareMetersPerCut: String(bom.squareMetersPerCut || 0.5),
+        wasteFactor: "0.05",
+        materials: bom.materials?.map(m => ({
+          fabricType: m.fabricType,
+          commonName: m.commonName || "",
+          quantityNeeded: m.quantityNeeded || 1,
+        })) || [],
+      });
+    } else {
+      resetPacketBomForm();
+    }
+    setIsPacketBomDialogOpen(true);
+  };
+
+  const handleSavePacketBom = () => {
+    const data = {
+      partNumber: packetBomForm.partNumber,
+      packetType: packetBomForm.packetType,
+      yieldPerCut: parseInt(packetBomForm.yieldPerCut) || 4,
+      squareMetersPerCut: parseFloat(packetBomForm.squareMetersPerCut) || 0.5,
+      wasteFactor: parseFloat(packetBomForm.wasteFactor) || 0.05,
+      materials: packetBomForm.materials,
+    };
+
+    if (editingPacketBom) {
+      updatePacketBomMutation.mutate({ id: editingPacketBom.id, ...data });
+    } else {
+      createPacketBomMutation.mutate(data);
+    }
+  };
+
+  const addMaterialToForm = () => {
+    if (!newMaterialForm.fabricType) {
+      toast({ title: "Error", description: "Fabric type is required.", variant: "destructive" });
+      return;
+    }
+    setPacketBomForm(prev => ({
+      ...prev,
+      materials: [...prev.materials, { ...newMaterialForm }],
+    }));
+    setNewMaterialForm({ fabricType: "", commonName: "", quantityNeeded: 1 });
+  };
+
+  const removeMaterialFromForm = (index: number) => {
+    setPacketBomForm(prev => ({
+      ...prev,
+      materials: prev.materials.filter((_, i) => i !== index),
+    }));
+  };
 
   const generateLabelsMutation = useMutation({
     mutationFn: async ({ id, quantity }: { id: number; quantity: number }) => {
@@ -1301,6 +1451,100 @@ export default function CuttingTableControlCenter() {
           </Card>
         )}
 
+        {/* Packet BOM Management Section */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Packet BOM Recipes
+                </CardTitle>
+                <CardDescription>
+                  Define cuts, yields, and fabric requirements for each packet type
+                </CardDescription>
+              </div>
+              <Button onClick={() => openPacketBomDialog()} data-testid="btn-add-packet-bom">
+                <Plus className="h-4 w-4 mr-2" />
+                New Packet BOM
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {packetBOMs.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No packet BOMs defined yet.</p>
+                <p className="text-sm">Create a packet BOM to define cuts, yields, and fabric requirements.</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Part Number</TableHead>
+                    <TableHead>Packet Type</TableHead>
+                    <TableHead className="text-right">Yield/Cut</TableHead>
+                    <TableHead className="text-right">m²/Cut</TableHead>
+                    <TableHead>Materials</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {packetBOMs.map((bom) => (
+                    <TableRow key={bom.id}>
+                      <TableCell className="font-medium">{bom.partNumber}</TableCell>
+                      <TableCell>{bom.packetType}</TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="secondary">{bom.yieldPerCut} pcs</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">{bom.squareMetersPerCut} m²</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {bom.materials?.slice(0, 3).map((m, i) => (
+                            <Badge key={i} variant="outline" className="text-xs">
+                              {m.commonName || m.fabricType}
+                            </Badge>
+                          ))}
+                          {(bom.materials?.length || 0) > 3 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{(bom.materials?.length || 0) - 3} more
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => openPacketBomDialog(bom)}
+                            data-testid={`btn-edit-bom-${bom.id}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (confirm('Delete this packet BOM?')) {
+                                deletePacketBomMutation.mutate(bom.id);
+                              }
+                            }}
+                            data-testid={`btn-delete-bom-${bom.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -1642,6 +1886,162 @@ export default function CuttingTableControlCenter() {
               data-testid="btn-save-threshold"
             >
               {updateThresholdMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Packet BOM Create/Edit Dialog */}
+      <Dialog open={isPacketBomDialogOpen} onOpenChange={setIsPacketBomDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              {editingPacketBom ? 'Edit Packet BOM' : 'Create New Packet BOM'}
+            </DialogTitle>
+            <DialogDescription>
+              Define the part number, yield per cut, and fabric materials needed
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="bom-part-number">Part Number *</Label>
+                <Input
+                  id="bom-part-number"
+                  value={packetBomForm.partNumber}
+                  onChange={(e) => setPacketBomForm({ ...packetBomForm, partNumber: e.target.value })}
+                  placeholder="e.g., T501"
+                  data-testid="input-bom-part-number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bom-packet-type">Packet Type *</Label>
+                <Input
+                  id="bom-packet-type"
+                  value={packetBomForm.packetType}
+                  onChange={(e) => setPacketBomForm({ ...packetBomForm, packetType: e.target.value })}
+                  placeholder="e.g., Buttstock, Handguard"
+                  data-testid="input-bom-packet-type"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="bom-yield">Yield Per Cut *</Label>
+                <Input
+                  id="bom-yield"
+                  type="number"
+                  min="1"
+                  value={packetBomForm.yieldPerCut}
+                  onChange={(e) => setPacketBomForm({ ...packetBomForm, yieldPerCut: e.target.value })}
+                  placeholder="How many pieces per cut"
+                  data-testid="input-bom-yield"
+                />
+                <p className="text-xs text-muted-foreground">Number of pieces from one fabric cut</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bom-sqm">Square Meters Per Cut</Label>
+                <Input
+                  id="bom-sqm"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={packetBomForm.squareMetersPerCut}
+                  onChange={(e) => setPacketBomForm({ ...packetBomForm, squareMetersPerCut: e.target.value })}
+                  placeholder="Fabric used per cut"
+                  data-testid="input-bom-sqm"
+                />
+                <p className="text-xs text-muted-foreground">Amount of fabric consumed per cut</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label>Fabric Materials Required</Label>
+              </div>
+              
+              {packetBomForm.materials.length > 0 && (
+                <div className="border rounded-lg p-3 space-y-2">
+                  {packetBomForm.materials.map((material, index) => (
+                    <div key={index} className="flex items-center justify-between bg-muted/50 p-2 rounded">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{material.fabricType}</Badge>
+                        {material.commonName && (
+                          <span className="text-sm text-muted-foreground">({material.commonName})</span>
+                        )}
+                        <span className="text-sm">x{material.quantityNeeded}</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 text-destructive"
+                        onClick={() => removeMaterialFromForm(index)}
+                        data-testid={`btn-remove-material-${index}`}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                <p className="text-sm font-medium">Add Material</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Fabric Type *</Label>
+                    <Input
+                      value={newMaterialForm.fabricType}
+                      onChange={(e) => setNewMaterialForm({ ...newMaterialForm, fabricType: e.target.value })}
+                      placeholder="e.g., Carbon Fiber"
+                      data-testid="input-material-fabric-type"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Common Name</Label>
+                    <Input
+                      value={newMaterialForm.commonName}
+                      onChange={(e) => setNewMaterialForm({ ...newMaterialForm, commonName: e.target.value })}
+                      placeholder="Nickname"
+                      data-testid="input-material-common-name"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Qty Needed</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min="1"
+                        value={newMaterialForm.quantityNeeded}
+                        onChange={(e) => setNewMaterialForm({ ...newMaterialForm, quantityNeeded: parseInt(e.target.value) || 1 })}
+                        className="w-20"
+                        data-testid="input-material-qty"
+                      />
+                      <Button 
+                        size="sm" 
+                        onClick={addMaterialToForm}
+                        data-testid="btn-add-material"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPacketBomDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSavePacketBom}
+              disabled={!packetBomForm.partNumber || !packetBomForm.packetType || createPacketBomMutation.isPending || updatePacketBomMutation.isPending}
+              data-testid="btn-save-packet-bom"
+            >
+              {createPacketBomMutation.isPending || updatePacketBomMutation.isPending ? 'Saving...' : editingPacketBom ? 'Update' : 'Create'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -198,24 +198,22 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO }: P2StatusDash
                       </div>
 
                       <div className="flex flex-col gap-2">
-                        {po.hasBOMsNeeded && (
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => onStartBOM(po.id)}
-                            data-testid={`button-configure-bom-${po.id}`}
-                          >
-                            <Layers className="h-4 w-4 mr-1" />
-                            BOMs
-                          </Button>
-                        )}
+                        <Button 
+                          size="sm" 
+                          variant={po.hasBOMsNeeded ? "default" : "outline"}
+                          onClick={() => onStartBOM(po.id)}
+                          data-testid={`button-configure-bom-${po.id}`}
+                        >
+                          <Layers className="h-4 w-4 mr-1" />
+                          {po.hasBOMsNeeded ? "Configure BOMs" : "View BOMs"}
+                        </Button>
                         <Button 
                           size="sm" 
                           variant="ghost"
                           onClick={() => onViewPO?.(po.id)}
                           data-testid={`button-view-po-${po.id}`}
                         >
-                          View <ArrowRight className="h-4 w-4 ml-1" />
+                          Schedule <ArrowRight className="h-4 w-4 ml-1" />
                         </Button>
                       </div>
                     </div>

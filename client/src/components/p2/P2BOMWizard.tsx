@@ -127,7 +127,7 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
         partNumber: item.partName || item.partNumber || '',
         description: item.notes || item.description || '',
         quantity: item.quantity || 1,
-        isManufactured: item.itemType === 'manufactured',
+        isManufactured: item.isManufactured === true || item.itemType === 'manufactured',
         firstDepartment: item.firstDept || item.firstDepartment || 'layup',
       }));
     } catch (error) {

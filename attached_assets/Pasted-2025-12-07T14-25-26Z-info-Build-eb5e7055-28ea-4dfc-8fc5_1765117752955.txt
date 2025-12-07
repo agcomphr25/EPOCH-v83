@@ -1,0 +1,100 @@
+2025-12-07T14:25:26Z info: Build: eb5e7055-28ea-4dfc-8fc5-9e270474679c
+2025-12-07T14:25:27Z info: Builder connected
+2025-12-07T14:25:28Z info: Installing packages
+--> npm install
+
+--> npm install
+
+npm warn ERESOLVE overriding peer dependency
+
+npm warn While resolving: rc-color-picker@1.2.6
+npm warn Found: react@18.3.1
+npm warn node_modules/react
+npm warn   react@"^18.3.1" from the root project
+npm warn   156 more (@ant-design/cssinjs, @ant-design/cssinjs-utils, ...)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer react@"16.x" from rc-color-picker@1.2.6
+npm warn node_modules/form-render/node_modules/rc-color-picker
+npm warn   rc-color-picker@"^1.2.6" from form-render@2.5.6
+npm warn   node_modules/form-render
+npm warn
+npm warn Conflicting peer dependency: react@16.14.0
+npm warn node_modules/react
+npm warn   peer react@"16.x" from rc-color-picker@1.2.6
+npm warn   node_modules/form-render/node_modules/rc-color-picker
+npm warn     rc-color-picker@"^1.2.6" from form-render@2.5.6
+npm warn     node_modules/form-render
+
+npm warn ERESOLVE overriding peer dependency
+
+npm warn While resolving: rc-color-picker@1.2.6
+npm warn Found: react-dom@18.3.1
+npm warn node_modules/react-dom
+npm warn   react-dom@"^18.3.1" from the root project
+npm warn   112 more (@ant-design/cssinjs, @ant-design/cssinjs-utils, ...)
+npm warn
+npm warn Could not resolve dependency:
+npm warn peer react-dom@"16.x" from rc-color-picker@1.2.6
+npm warn node_modules/form-render/node_modules/rc-color-picker
+npm warn   rc-color-picker@"^1.2.6" from form-render@2.5.6
+npm warn   node_modules/form-render
+npm warn
+npm warn Conflicting peer dependency: react-dom@16.14.0
+npm warn node_modules/react-dom
+npm warn   peer react-dom@"16.x" from rc-color-picker@1.2.6
+npm warn   node_modules/form-render/node_modules/rc-color-picker
+npm warn     rc-color-picker@"^1.2.6" from form-render@2.5.6
+npm warn     node_modules/form-render
+
+
+> rest-express@1.0.0 prepare
+> husky
+
+
+
+up to date, audited 1516 packages in 7s
+
+250 packages are looking for funding
+  run `npm fund` for details
+
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.6.4
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.6.4
+npm notice To update run: npm install -g npm@11.6.4
+npm notice
+
+2025-12-07T14:25:35Z info: Starting Build
+
+> rest-express@1.0.0 build
+> vite build && mkdir -p dist/attached_assets dist/public && ( [ -d attached_assets ] && cp -r attached_assets dist/attached_assets || true ) && ( [ -f client/public/logo_updated.png ] && cp client/public/logo_updated.png dist/public/logo_updated.png || true )
+
+
+vite v5.4.19 building for production...
+
+transforming...
+
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+✓ 5045 modules transformed.
+
+rendering chunks...
+
+computing gzip size...
+
+../dist/public/assets/logo_updated-CxB2_yGF.png     60.10 kB
+
+✓ built in 26.90s
+
+2025-12-07T14:26:09Z info: Pushing pid1 binary layer...
+2025-12-07T14:26:11Z info: Created pid1 binary layer
+2025-12-07T14:26:15Z info: Pushing Repl layer...
+2025-12-07T14:26:15Z info: Retrieved cached nix layer
+2025-12-07T14:26:15Z info: Created hosting layer
+2025-12-07T14:27:22Z info: Created Repl layer
+2025-12-07T14:27:22Z info: Pushing Repl (cache) layer...
+2025-12-07T14:27:22Z info: Created Repl (cache) layer
+2025-12-07T14:27:25Z info: Pushed image manifest
+2025-12-07T14:27:27Z info: Pushed soci index manifest

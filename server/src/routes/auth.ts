@@ -1,10 +1,43 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import rateLimit from 'express-rate-limit';
 
 import { pool } from '../../db';
 
 const router = Router();
+
+// Rate limiting for authentication endpoints to prevent brute-force attacks
+// Limits: 5 attempts per 15 minutes per IP for login
+const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per window
+  message: { error: 'Too many login attempts. Please try again after 15 minutes.' },
+  standardHeaders: true, // Return rate limit info in headers
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // Don't count successful logins
+});
+
+// More lenient rate limit for password reset requests
+const passwordResetRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // 3 attempts per hour
+  message: { error: 'Too many password reset requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// General auth endpoint rate limiter (for session checks, logout, etc.)
+const generalAuthRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60, // 60 requests per minute
+  message: { error: 'Too many requests. Please slow down.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply general rate limiting to all auth routes
+router.use(generalAuthRateLimiter);
 
 // Hardcoded test users mapped from dashboardMapping.ts
 // Password for all users is 'test123' (hashed with bcrypt)
@@ -190,7 +223,8 @@ function generateSessionToken(): string {
 }
 
 // Badge login endpoint - employees log in with just their employee code
-router.post('/badge-login', async (req, res) => {
+// Rate limited to prevent brute-force attacks
+router.post('/badge-login', loginRateLimiter, async (req, res) => {
   try {
     const { employeeCode } = req.body;
 
@@ -313,8 +347,8 @@ router.post('/badge-login', async (req, res) => {
   }
 });
 
-// Login endpoint
-router.post('/login', async (req, res) => {
+// Login endpoint with rate limiting to prevent brute-force attacks
+router.post('/login', loginRateLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
 

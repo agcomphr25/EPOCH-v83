@@ -7,8 +7,13 @@ import fs from 'fs';
 import crypto from 'crypto';
 
 import { storage } from '../../storage';
+import { authenticateToken } from '../../middleware/auth';
+import { requireAdminAccess } from '../../middleware/routeAuthorization';
 
 const router = Router();
+
+router.use(authenticateToken);
+router.use(requireAdminAccess);
 
 // Ensure vendor-approvals directory exists
 const uploadsDir = path.join(process.cwd(), 'uploads');

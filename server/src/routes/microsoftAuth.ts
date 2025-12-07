@@ -246,7 +246,8 @@ router.get('/callback', async (req: Request, res: Response) => {
       // Auto-create user account for new Microsoft sign-ins
       const generatedUsername = email.split('@')[0];
       const randomPassword = crypto.randomBytes(32).toString('hex');
-      const passwordHash = await bcrypt.hash(randomPassword, 10);
+      // Using 12 salt rounds for security consistency
+      const passwordHash = await bcrypt.hash(randomPassword, 12);
 
       const insertResult = await pool.query(
         `INSERT INTO users (username, email, password_hash, role, is_active) 

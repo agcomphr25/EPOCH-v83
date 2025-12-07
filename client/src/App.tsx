@@ -149,6 +149,7 @@ import DocumentIntelligence from './pages/DocumentIntelligence';
 import SignOrderPage from './pages/SignOrderPage';
 import PDFSettings from './pages/PDFSettings';
 import GatewayReports from './pages/GatewayReports';
+import PreproductionChecklistPage from './pages/PreproductionChecklistPage';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -621,6 +622,7 @@ function App() {
                     component={ManufacturersCertificate}
                   />
                   <Route path="/task-tracker" component={TaskTracker} />
+                  <Route path="/preproduction-checklists" component={PreproductionChecklistPage} />
                   <Route
                     path="/kickback-tracking"
                     component={KickbackTracking}

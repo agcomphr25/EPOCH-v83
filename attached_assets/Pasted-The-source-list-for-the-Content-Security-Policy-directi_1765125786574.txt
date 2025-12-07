@@ -1,0 +1,770 @@
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+agcomphr-12-07?replId=b9da0088-d39c-4d51-928a-b293797aba77&projectPane=true:1 The source list for the Content Security Policy directive 'default-src' contains an invalid source: ''unsafe-dynamic''. It will be ignored.
+agcomphr-12-07?replId=b9da0088-d39c-4d51-928a-b293797aba77&projectPane=true:1 The Content-Security-Policy directive 'default-src' contains 'report-uri' as a source expression. Did you want to add it as a directive and forget a semicolon?
+agcomphr-12-07?replId=b9da0088-d39c-4d51-928a-b293797aba77&projectPane=true:1 The source list for Content Security Policy directive 'default-src' contains a source with an invalid path: '/api/4509669501698048/security/?sentry_key=7eb3d90eb4660416caf507087367e67e'. The query component, including the '?', will be ignored.
+236dc085c4e75a5d.js:2 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+236dc085c4e75a5d.js:2 Download the Apollo DevTools for a better development experience: https://chrome.google.com/webstore/detail/apollo-client-developer-t/jdkknkkbebbapilgoeccciglkfbmbnfm
+236dc085c4e75a5d.js:2 [LaunchDarkly] LaunchDarkly client initialized
+236dc085c4e75a5d.js:2 [Coframe] Replit Enterprise watcher loaded
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+236dc085c4e75a5d.js:2 Cache data may be lost when replacing the dealContext field of a Org object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgDealContext have an ID or a custom merge function, or define a custom merge function for the Org.dealContext field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgDealContext","dealType":"default","salesContactEmail":null}
+  incoming: {"__typename":"OrgDealContext","dealType":"default"}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 236dc085c4e75a5d.js:2
+agcomphr-12-07?replId=b9da0088-d39c-4d51-928a-b293797aba77&projectPane=true:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+e.adora-cdn.com/sessions/019af982-f6ea-770e-b07f-07951e929c19/events:1  Failed to load resource: the server responded with a status of 500 ()
+236dc085c4e75a5d.js:2 Cache data may be lost when replacing the orgReplPresenceSessionEvents field of a Subscription object.
+
+This could cause additional (usually avoidable) network requests to fetch data that were otherwise cached.
+
+To address this problem (which is not a bug in Apollo Client), either ensure all objects of type OrgPresenceSessionInitEvent and OrgPresenceSessionPingEvent have an ID or a custom merge function, or define a custom merge function for the Subscription.orgReplPresenceSessionEvents field, so InMemoryCache can safely merge these objects:
+
+  existing: {"__typename":"OrgPresenceSessionInitEvent","sessions":[{"__ref":"OrgPresenceSession:7367fcd3-1daf-46d6-9057-e78a470700cd"},{"__ref":"OrgPresenceSession:979f6334-839b-4450-acea-47fc69bfa05d"}]}
+  incoming: {"__typename":"OrgPresenceSessionPingEvent","session":{"__ref":"OrgPresenceSession:979f6334-839b-4450-acea-47fc69bfa05d"}}
+
+For more information about these options, please refer to the documentation:
+
+  * Ensuring entity objects have IDs: https://go.apollo.dev/c/generating-unique-identifiers
+  * Defining custom merge functions: https://go.apollo.dev/c/merging-non-normalized-objects
+
+(anonymous) @ 236dc085c4e75a5d.js:2
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+ed1e693c96a75807.js:2 Unrecognized feature: 'ambient-light-sensor'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'battery'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'execution-while-not-rendered'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'execution-while-out-of-viewport'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'layout-animations'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'legacy-image-formats'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'navigation-override'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'oversized-images'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'publickey-credentials'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'speaker-selection'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'unoptimized-images'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'unsized-media'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Unrecognized feature: 'pointer-lock'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Allow attribute will take precedence over 'allowfullscreen'.
+z @ ed1e693c96a75807.js:2
+ed1e693c96a75807.js:2 Allow attribute will take precedence over 'allowpaymentrequest'.
+z @ ed1e693c96a75807.js:2
+236dc085c4e75a5d.js:2 Missing field 'thinkingEnabled' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 Missing field 'modelProfile' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 Missing field 'enableAutomatedTesting' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 Missing field 'webSearchEnabled' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 Missing field 'imageGenerationEnabled' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 Missing field 'autonomyLevel' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 Missing field 'maxAutonomyEnabled' while writing result {
+  "__typename": "AgentSettings",
+  "chatMode": "discussion"
+}
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+236dc085c4e75a5d.js:2 If you do not provide children, you must specify an aria-label for accessibility
+(anonymous) @ 236dc085c4e75a5d.js:2
+41aae84387ee35c4.js:2 WebSocket connection to 'wss://eval.spock.platform.replit.com/wsv2/v2.public.Q2dZSXFzWFd5UVlTQmdqSjRkYkpCaUlGYzNCdlkyc3dBRHJNQVFva1lqbGtZVEF3T0RndFpETTVZeTAwWkRVeExUa3lPR0V0WWpJNU16YzVOMkZpWVRjM0VnTnVhWGdhRjNKbGNHeHBkQzF5WlhCc0xXWnBiR1Z6TFhOd2IyTnJJZzVoWjJOdmJYQm9jaTB4TWkwd055b0lZV2RqYjIxd2FISkNVUW9ZY21Wd2JHbDBMWEpsY0d3dFlteHZZMnR6TFhOd2IyTnJFaFp5WlhCc2FYUXRjbVZ3YkMxdFpYUmhMWE53YjJOckdoMXlaWEJzYVhRdGJXRnlaMkZ5YVc1bExXSnNiMk5yY3kxemNHOWphMG9IQ042YTZ4UVFBVkFBY2d3S0JtVjVibmQ0YXhBQ0lBQjRBRklsQ0FFUWdJQ0FnRUFaQUFBQUFBQUFJRUFoQUFBQUFBQUFJRUFvZ0lDQWdJQUlNQUk0QUdBQWFnOEkzcHJyRkJJSVlXZGpiMjF3YUhLQ0FRSXFBSUlCQWpJQW1nRUtDZ2d3TGpBdU1qSTFPS0FCQVE9PfE5rVEjGa2AeT7ujLx2vxzH20Lh1tYNrma1WZiZG37HlhRoE9cHISUhaV0lZB4Kd0N8Y8wJf3JV39eOWNOzHQs.Q2dad2NtOWtPak1pQ25KbGNHeHBkQzVqYjIwPQ' failed: WebSocket is closed before the connection is established.
+cleanupSocket @ 41aae84387ee35c4.js:2
+api.sorryapp.com/v1/pages/27c7b5fc:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+ae117ec89b8b5fea.js:2 WebSocket connection to 'wss://replit.com/graphql_subscriptions' failed: 
+(anonymous) @ ae117ec89b8b5fea.js:2
+/graphql:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+r.stripe.com/b:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+r.stripe.com/b:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+shared-c34472373551ae199e59adacda5ae900.js:1 Uncaught (in promise) FetchError: Error fetching https://r.stripe.com/b: Failed to fetch
+    at shared-c34472373551ae199e59adacda5ae900.js:1:219723
+events.launchdarkly.com/events/diagnostic/62b35a865152ab14c5942820:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+ingest.app.coframe.com/ingest/v2/batched_events/68c9ad4d4cddb58cf3a1f93d/:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+logs.browser-intake-us5-datadoghq.com/api/v2/logs?ddsource=browser&ddtags=sdk_version%3A4.46.0%2Capi%3Afetch%2Cenv%3Aproduction%2Cservice%3Awebsite%2Cversion%3A0c272af5&dd-api-key=pub31a5047a3a4692afb84a423db984dc57&dd-evp-origin-version=4.46.0&dd-evp-origin=browser&dd-request-id=5a9333a5-2f5b-46fb-9dc4-2d4cc57d986b:1  Failed to load resource: net::ERR_NAME_NOT_RESOLVED
+stallwart.build.js:1 stallwart: failed ping 1
+b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ari3%3A:32 Unrecognized feature: 'ambient-light-sensor'.
+b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ari3%3A:32 Unrecognized feature: 'battery'.
+b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ari3%3A:32 Unrecognized feature: 'execution-while-not-rendered'.
+b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ari3%3A:32 Unrecognized feature: 'execution-while-out-of-viewport'.
+b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ari3%3A:32 Unrecognized feature: 'layout-animations'.
+b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ari3%3A:32 Unrecognized feature: 'legacy-image-formats'.
+b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ari3%3A:32 Unrecognized feature: 'navigation-override'.
+b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ari3%3A:32 Unrecognized feature: 'oversized-images'.
+b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ari3%3A:32 Unrecognized feature: 'publickey-credentials'.
+b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ari3%3A:32 Unrecognized feature: 'speaker-selection'.
+b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ari3%3A:32 Unrecognized feature: 'unoptimized-images'.
+b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ari3%3A:32 Unrecognized feature: 'unsized-media'.
+b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ari3%3A:32 Allow attribute will take precedence over 'allowfullscreen'.
+b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ari3%3A:32 Allow attribute will take precedence over 'allowpaymentrequest'.
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: [object Object]
+injected.js:37 React hooks: [object Object]
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 🌐 API Request to /api/preproduction-checklists?status=all (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/preproduction-checklists?status=all: 200
+injected.js:37 Global error caught: Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+(anonymous) @ injected.js:37
+injected.js:37 Warning: Cannot update a component (`%s`) while rendering a different component (`%s`). To locate the bad setState() call inside `%s`, follow the stack trace as described in https://reactjs.org/link/setstate-in-render%s App SelectItem SelectItem 
+    at @radix-ui_react-select.js:851:7
+    at _c1 (b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/src/components/ui/select.tsx:208:12)
+    at b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/div
+    at chunk-KLMTJC4P.js:43:13
+    at chunk-SBXSPTCP.js:79:13
+    at chunk-SBXSPTCP.js:56:13
+    at chunk-U4NFJIXU.js:41:15
+    at @radix-ui_react-select.js:762:13
+    at b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/div
+    at chunk-SBXSPTCP.js:79:13
+    at chunk-SBXSPTCP.js:56:13
+    at chunk-U4NFJIXU.js:41:15
+    at Provider (chunk-XOUBXFGS.js:38:15)
+    at @radix-ui_react-select.js:305:58
+    at chunk-SBXSPTCP.js:79:13
+    at chunk-SBXSPTCP.js:56:13
+    at chunk-KLMTJC4P.js:43:13
+    at chunk-6NFO7XJS.js:27:22
+    at b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/SelectPortal
+    at _c7 (b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/src/components/ui/select.tsx:123:12)
+    at Provider (chunk-XOUBXFGS.js:38:15)
+    at Provider (chunk-XOUBXFGS.js:38:15)
+    at CollectionProvider (chunk-U4NFJIXU.js:31:13)
+    at Provider (chunk-XOUBXFGS.js:38:15)
+    at Provider (chunk-XOUBXFGS.js:38:15)
+    at Popper (chunk-4QTRNEFJ.js:1947:11)
+    at Select (@radix-ui_react-select.js:91:5)
+    at b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/div
+    at b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/div
+    at b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/div
+    at chunk-KLMTJC4P.js:43:13
+    at chunk-IGIH6I3W.js:57:7
+    at chunk-SBXSPTCP.js:79:13
+    at chunk-SBXSPTCP.js:56:13
+    at chunk-KLMTJC4P.js:43:13
+    at chunk-IBSYTY4L.js:34:5
+    at chunk-MSL5QZCC.js:238:13
+    at chunk-MSL5QZCC.js:161:58
+    at Presence (chunk-ASRF5YTR.js:24:11)
+    at chunk-MSL5QZCC.js:152:64
+    at chunk-SBXSPTCP.js:79:13
+    at chunk-SBXSPTCP.js:56:13
+    at chunk-KLMTJC4P.js:43:13
+    at chunk-6NFO7XJS.js:27:22
+    at Presence (chunk-ASRF5YTR.js:24:11)
+    at Provider (chunk-XOUBXFGS.js:38:15)
+    at DialogPortal (chunk-MSL5QZCC.js:114:11)
+    at _c3 (b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/src/components/ui/dialog.tsx:52:12)
+    at Provider (chunk-XOUBXFGS.js:38:15)
+    at Dialog (chunk-MSL5QZCC.js:54:5)
+    at b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/div
+    at ChecklistsTab (b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/src/pages/PreproductionChecklistPage.tsx:230:3)
+    at b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/div
+    at chunk-KLMTJC4P.js:43:13
+    at Presence (chunk-ASRF5YTR.js:24:11)
+    at @radix-ui_react-tabs.js:177:13
+    at _c5 (b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/src/components/ui/tabs.tsx:72:12)
+    at b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/div
+    at chunk-KLMTJC4P.js:43:13
+    at Provider (chunk-XOUBXFGS.js:38:15)
+    at @radix-ui_react-tabs.js:54:7
+    at b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/div
+    at PreproductionChecklistPage (b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/src/pages/PreproductionChecklistPage.tsx:74:21)
+    at Route (wouter.js:280:16)
+    at Switch (wouter.js:336:17)
+    at RouteGuard (b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/src/components/auth/RouteGuard.tsx:54:38)
+    at b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/main
+    at b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/__replco/div
+    at Router (wouter.js:235:17)
+    at DeploymentAuthWrapper (b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/src/components/DeploymentAuthWrapper.tsx:36:3)
+    at QueryClientProvider (@tanstack_react-query.js:2934:3)
+    at App (b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/src/App.tsx?v=pbNHpmSJzBXpYSkqGPKMZ:252:35)
+    at Router (react-router-dom.js:6332:13)
+    at BrowserRouter (react-router-dom.js:9416:3)
+    at QueryClientProvider (@tanstack_react-query.js:2934:3)
+(anonymous) @ injected.js:37
+@radix-ui_react-select.js?v=89eb45b3:878 Uncaught Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 Global error caught: Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+(anonymous) @ injected.js:37
+@radix-ui_react-select.js?v=89eb45b3:878 Uncaught Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 [vite] connecting...
+injected.js:37 [vite] connected.
+injected.js:37 React initialized: Object
+injected.js:37 React hooks: Object
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 🌐 API Request to /api/preproduction-checklists?status=all (timeout: 120000ms, deployment: false)
+injected.js:37 ✅ API Response from /api/preproduction-checklists?status=all: 200
+injected.js:37 Global error caught: Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at @radix-ui_react-select.js?v=89eb45b3:878:13
+    at renderWithHooks (chunk-NFC5BX5N.js?v=89eb45b3:11548:26)
+    at updateForwardRef (chunk-NFC5BX5N.js?v=89eb45b3:14325:28)
+    at beginWork (chunk-NFC5BX5N.js?v=89eb45b3:15946:22)
+    at HTMLUnknownElement.callCallback2 (chunk-NFC5BX5N.js?v=89eb45b3:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-NFC5BX5N.js?v=89eb45b3:3699:24)
+    at invokeGuardedCallback (chunk-NFC5BX5N.js?v=89eb45b3:3733:39)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=89eb45b3:19765:15)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=89eb45b3:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=89eb45b3:19137:13)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+handleError @ App.tsx:243
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=89eb45b3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=89eb45b3:3733
+beginWork$1 @ chunk-NFC5BX5N.js?v=89eb45b3:19765
+performUnitOfWork @ chunk-NFC5BX5N.js?v=89eb45b3:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=89eb45b3:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=89eb45b3:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=89eb45b3:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=89eb45b3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=89eb45b3:18627
+injected.js:37 Warning: Cannot update a component (`App`) while rendering a different component (`SelectItem`). To locate the bad setState() call inside `SelectItem`, follow the stack trace as described in https://reactjs.org/link/setstate-in-render
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=89eb45b3:851:7
+    at _c1 (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/src/components/ui/select.tsx:208:12)
+    at div
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=89eb45b3:43:13
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=89eb45b3:79:13
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=89eb45b3:56:13
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-U4NFJIXU.js?v=89eb45b3:41:15
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=89eb45b3:762:13
+    at div
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=89eb45b3:79:13
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=89eb45b3:56:13
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-U4NFJIXU.js?v=89eb45b3:41:15
+    at Provider (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=89eb45b3:38:15)
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=89eb45b3:305:58
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=89eb45b3:79:13
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=89eb45b3:56:13
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=89eb45b3:43:13
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-6NFO7XJS.js?v=89eb45b3:27:22
+    at SelectPortal
+    at _c7 (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/src/components/ui/select.tsx:123:12)
+    at Provider (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=89eb45b3:38:15)
+    at Provider (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=89eb45b3:38:15)
+    at CollectionProvider (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-U4NFJIXU.js?v=89eb45b3:31:13)
+    at Provider (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=89eb45b3:38:15)
+    at Provider (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-XOUBXFGS.js?v=89eb45b3:38:15)
+    at Popper (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4QTRNEFJ.js?v=89eb45b3:1947:11)
+    at Select (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=89eb45b3:91:5)
+    at div
+    at div
+    at div
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-KLMTJC4P.js?v=89eb45b3:43:13
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-IGIH6I3W.js?v=89eb45b3:57:7
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-SBXSPTCP.js?v=89eb45b3:79:13
+    at https://b9da0088-d39c-4d
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+printWarning @ chunk-NFC5BX5N.js?v=89eb45b3:521
+error @ chunk-NFC5BX5N.js?v=89eb45b3:505
+warnAboutRenderPhaseUpdatesInDEV @ chunk-NFC5BX5N.js?v=89eb45b3:19793
+scheduleUpdateOnFiber @ chunk-NFC5BX5N.js?v=89eb45b3:18546
+dispatchSetState @ chunk-NFC5BX5N.js?v=89eb45b3:12403
+handleError @ App.tsx:244
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=89eb45b3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=89eb45b3:3733
+beginWork$1 @ chunk-NFC5BX5N.js?v=89eb45b3:19765
+performUnitOfWork @ chunk-NFC5BX5N.js?v=89eb45b3:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=89eb45b3:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=89eb45b3:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=89eb45b3:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=89eb45b3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=89eb45b3:18627
+@radix-ui_react-select.js?v=89eb45b3:878 Uncaught Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at @radix-ui_react-select.js?v=89eb45b3:878:13
+    at renderWithHooks (chunk-NFC5BX5N.js?v=89eb45b3:11548:26)
+    at updateForwardRef (chunk-NFC5BX5N.js?v=89eb45b3:14325:28)
+    at beginWork (chunk-NFC5BX5N.js?v=89eb45b3:15946:22)
+    at HTMLUnknownElement.callCallback2 (chunk-NFC5BX5N.js?v=89eb45b3:3674:22)
+    at Object.invokeGuardedCallbackDev (chunk-NFC5BX5N.js?v=89eb45b3:3699:24)
+    at invokeGuardedCallback (chunk-NFC5BX5N.js?v=89eb45b3:3733:39)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=89eb45b3:19765:15)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=89eb45b3:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=89eb45b3:19137:13)
+(anonymous) @ @radix-ui_react-select.js?v=89eb45b3:878
+renderWithHooks @ chunk-NFC5BX5N.js?v=89eb45b3:11548
+updateForwardRef @ chunk-NFC5BX5N.js?v=89eb45b3:14325
+beginWork @ chunk-NFC5BX5N.js?v=89eb45b3:15946
+callCallback2 @ chunk-NFC5BX5N.js?v=89eb45b3:3674
+invokeGuardedCallbackDev @ chunk-NFC5BX5N.js?v=89eb45b3:3699
+invokeGuardedCallback @ chunk-NFC5BX5N.js?v=89eb45b3:3733
+beginWork$1 @ chunk-NFC5BX5N.js?v=89eb45b3:19765
+performUnitOfWork @ chunk-NFC5BX5N.js?v=89eb45b3:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=89eb45b3:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=89eb45b3:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=89eb45b3:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=89eb45b3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=89eb45b3:18627
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 Global error caught: Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at @radix-ui_react-select.js?v=89eb45b3:878:13
+    at renderWithHooks (chunk-NFC5BX5N.js?v=89eb45b3:11548:26)
+    at updateForwardRef (chunk-NFC5BX5N.js?v=89eb45b3:14325:28)
+    at beginWork (chunk-NFC5BX5N.js?v=89eb45b3:15946:22)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=89eb45b3:19753:22)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=89eb45b3:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=89eb45b3:19137:13)
+    at renderRootSync (chunk-NFC5BX5N.js?v=89eb45b3:19116:15)
+    at performSyncWorkOnRoot (chunk-NFC5BX5N.js?v=89eb45b3:18874:28)
+    at flushSyncCallbacks (chunk-NFC5BX5N.js?v=89eb45b3:9119:30)
+(anonymous) @ injected.js:37
+console.error @ main.tsx:33
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+(anonymous) @ injected.js:37
+handleError @ App.tsx:243
+commitRootImpl @ chunk-NFC5BX5N.js?v=89eb45b3:19403
+commitRoot @ chunk-NFC5BX5N.js?v=89eb45b3:19277
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=89eb45b3:18895
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=89eb45b3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=89eb45b3:18627
+@radix-ui_react-select.js?v=89eb45b3:878 Uncaught Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at @radix-ui_react-select.js?v=89eb45b3:878:13
+    at renderWithHooks (chunk-NFC5BX5N.js?v=89eb45b3:11548:26)
+    at updateForwardRef (chunk-NFC5BX5N.js?v=89eb45b3:14325:28)
+    at beginWork (chunk-NFC5BX5N.js?v=89eb45b3:15946:22)
+    at beginWork$1 (chunk-NFC5BX5N.js?v=89eb45b3:19753:22)
+    at performUnitOfWork (chunk-NFC5BX5N.js?v=89eb45b3:19198:20)
+    at workLoopSync (chunk-NFC5BX5N.js?v=89eb45b3:19137:13)
+    at renderRootSync (chunk-NFC5BX5N.js?v=89eb45b3:19116:15)
+    at performSyncWorkOnRoot (chunk-NFC5BX5N.js?v=89eb45b3:18874:28)
+    at flushSyncCallbacks (chunk-NFC5BX5N.js?v=89eb45b3:9119:30)
+(anonymous) @ @radix-ui_react-select.js?v=89eb45b3:878
+renderWithHooks @ chunk-NFC5BX5N.js?v=89eb45b3:11548
+updateForwardRef @ chunk-NFC5BX5N.js?v=89eb45b3:14325
+beginWork @ chunk-NFC5BX5N.js?v=89eb45b3:15946
+beginWork$1 @ chunk-NFC5BX5N.js?v=89eb45b3:19753
+performUnitOfWork @ chunk-NFC5BX5N.js?v=89eb45b3:19198
+workLoopSync @ chunk-NFC5BX5N.js?v=89eb45b3:19137
+renderRootSync @ chunk-NFC5BX5N.js?v=89eb45b3:19116
+performSyncWorkOnRoot @ chunk-NFC5BX5N.js?v=89eb45b3:18874
+flushSyncCallbacks @ chunk-NFC5BX5N.js?v=89eb45b3:9119
+(anonymous) @ chunk-NFC5BX5N.js?v=89eb45b3:18627
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+injected.js:37 App component is rendering...
+injected.js:37 Environment: development
+injected.js:37 Base URL: /
+chunk-NFC5BX5N.js?v=89eb45b3:18625 [Violation] 'click' handler took 212ms

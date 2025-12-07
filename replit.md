@@ -16,6 +16,36 @@ Search standardization: All department queue pages use unified OrderSearchBox co
 Navigation dropdown behavior: All navbar dropdown menus close automatically after selection.
 Balance due access: Customer balance due tracking is restricted to username "glennj" only for security. Balance Due column appears in Customer Management only when glennj is logged in.
 Tikka compatibility guardrails: On the Order Entry page, Tikka stock models ONLY show Tikka options for action inlet, barrel inlet, and bottom metal (with a green "Tikka only" badge). Non-Tikka stock models hide all Tikka options from these dropdowns. When switching between Tikka and non-Tikka models, incompatible selections are automatically cleared with a toast notification.
+Navbar-permissions alignment: The userPermissions.ts file is the source of truth for user route access. Navigation.tsx filters navbar items based on these permissions. Users not in the permissions list default to only seeing the Employee Portal. Each user sees only their own dashboard in the User Dashboards dropdown (admins see all). Any new navbar items must be added to both Navigation.tsx AND the appropriate user permission lists in userPermissions.ts to stay in sync.
+
+## User Dashboard vs Navbar Configuration (Two Separate Systems)
+
+**IMPORTANT**: Dashboard cards and navbar items are configured separately. Changing one does NOT automatically change the other.
+
+### Dashboard Cards (what shows on a user's personal dashboard page)
+- **Location**: Individual dashboard page components (e.g., `/client/src/pages/DarlenebDashboard.tsx`)
+- **Purpose**: Controls which quick-access cards/widgets appear on the user's personalized dashboard
+- **How to modify**: Edit the specific dashboard component to add/remove cards
+- **Example**: Adding a "Shipping Tracker" card to darleneb's dashboard
+
+### Navbar Items (what appears in the navigation menu)
+- **Location**: `client/src/config/userPermissions.ts` (routes array) AND `client/src/components/Navigation.tsx` (menu structure)
+- **Purpose**: Controls which menu items the user can see and access in the navigation bar
+- **How to modify**: 
+  1. Add the route to the user's `routes` array in `userPermissions.ts`
+  2. Ensure the item exists in `Navigation.tsx` menu structure
+- **Example**: Adding `/shipping-tracker` to darleneb's permissions
+
+### When Adding a New Feature for a User:
+1. **Dashboard access**: Add a card to their dashboard page component
+2. **Navbar access**: Add the route to their permissions in `userPermissions.ts`
+3. **Route protection**: RouteGuard.tsx automatically blocks unauthorized route access
+
+### Key Files:
+- `client/src/config/userPermissions.ts` - Source of truth for route permissions
+- `client/src/config/dashboardMapping.ts` - Maps usernames to dashboard routes
+- `client/src/components/Navigation.tsx` - Navbar menu structure and filtering
+- `client/src/components/auth/RouteGuard.tsx` - Blocks unauthorized route access
 
 ## System Architecture
 The application is built as a monorepo using a full-stack TypeScript approach, emphasizing type safety and cross-platform compatibility.
@@ -45,6 +75,18 @@ The application is built as a monorepo using a full-stack TypeScript approach, e
 ### Database Schema Standards
 - **Primary Key Pattern (CRITICAL)**: All new tables must use UUID for primary keys; `serial` is forbidden for new tables.
 - **Migration Safety**: Existing tables with `serial` IDs should not be modified, and existing ID column types must never be changed.
+
+### Security Architecture
+- **Authentication Model**: Dual-condition authentication bypass requiring BOTH (1) NODE_ENV != 'production' AND (2) DEV_AUTH_BYPASS=true. This prevents accidental security bypass in preview/staging deployments.
+- **Global API Authentication**: All /api routes require authentication except public routes (/api/auth, /api/magic-link, /api/oauth, /api/calendar/webhook).
+- **JWT Secret**: Required in production - system fails to start if JWT_SECRET environment variable is not set.
+- **Password Hashing**: Uses bcrypt with 12 salt rounds consistently. NEVER store plaintext passwords - only password_hash column is used.
+- **Input Validation**: Zod schemas validate all user input before database operations (user creation, P2 purchase orders, etc.).
+- **Bypass Routes**: Legacy bypass routes (e.g., `/api/customers/bypass`) use `softAuth` middleware that requires DEV_AUTH_BYPASS=true for bypass, otherwise enforces full authentication.
+- **Route Authorization**: Backend route authorization middleware (server/middleware/routeAuthorization.ts) mirrors frontend userPermissions.ts.
+- **Admin-Only Routes**: Credit memos, vendors, cost accounting, discounts, and user management require admin role.
+- **Development Mode**: Set DEV_AUTH_BYPASS=true ONLY in development environment for local testing. Never set in production or preview deployments.
+- **Production Deployment**: Set NODE_ENV=production and ensure DEV_AUTH_BYPASS is NOT set before deploying.
 
 ## External Dependencies
 

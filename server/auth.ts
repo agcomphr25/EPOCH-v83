@@ -11,8 +11,29 @@ const SALT_ROUNDS = 12;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_TIME = 15 * 60 * 1000; // 15 minutes
 const SESSION_TIMEOUT = 8 * 60 * 60 * 1000; // 8 hours
-const JWT_SECRET =
-  process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
+// SECURITY: JWT_SECRET must be set in production - fail fast if missing
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  if (!secret && isProduction) {
+    throw new Error('CRITICAL SECURITY ERROR: JWT_SECRET environment variable must be set in production');
+  }
+  
+  if (!secret) {
+    console.warn('⚠️ WARNING: JWT_SECRET not set - using development fallback (NOT SAFE FOR PRODUCTION)');
+    return 'development-only-secret-not-for-production';
+  }
+  
+  if (secret.length < 32) {
+    console.warn('⚠️ WARNING: JWT_SECRET should be at least 32 characters for security');
+  }
+  
+  return secret;
+}
+
+const JWT_SECRET = getJwtSecret();
 
 export interface AuthUser {
   id: number;

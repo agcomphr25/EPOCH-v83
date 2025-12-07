@@ -4,6 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import { softAuth } from '../../middleware/auth';
 import employeesRoutes from './employees';
 import ordersRoutes from './orders';
 import formsRoutes from './forms';
@@ -84,6 +85,7 @@ import partRoutingsRoutes from './partRoutings';
 
 import pdfSettingsRoutes from './pdfSettings';
 import p2LayupSchedulesRoutes from './p2LayupSchedules';
+import preproductionChecklistsRoutes from './preproductionChecklists';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -284,6 +286,9 @@ export function registerRoutes(app: Express): Server {
 
   // Credit memo management routes
   app.use('/api/credit-memos', creditMemosRoutes);
+
+  // Pre-Production Checklists routes
+  app.use('/api/preproduction-checklists', preproductionChecklistsRoutes);
 
   // Reports routes
   app.use('/api/reports', reportsRoutes);
@@ -1182,7 +1187,8 @@ export function registerRoutes(app: Express): Server {
   });
 
   // P2 Customer bypass route to avoid monolithic conflicts
-  app.get('/api/p2-customers-bypass', async (req, res) => {
+  // SECURITY: softAuth enforces authentication in production
+  app.get('/api/p2-customers-bypass', softAuth, async (req, res) => {
     try {
       console.log('🔧 DIRECT P2 CUSTOMERS BYPASS ROUTE CALLED');
       const { storage } = await import('../../storage');
@@ -1259,7 +1265,8 @@ export function registerRoutes(app: Express): Server {
   });
 
   // P2 Purchase Orders bypass route to avoid monolithic conflicts
-  app.get('/api/p2-purchase-orders-bypass', async (req, res) => {
+  // SECURITY: softAuth enforces authentication in production
+  app.get('/api/p2-purchase-orders-bypass', softAuth, async (req, res) => {
     try {
       console.log('🔧 DIRECT P2 PURCHASE ORDERS BYPASS ROUTE CALLED');
       const { storage } = await import('../../storage');
@@ -1390,7 +1397,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.post('/api/p2-purchase-orders-bypass', async (req, res) => {
+  // SECURITY: softAuth enforces authentication in production
+  app.post('/api/p2-purchase-orders-bypass', softAuth, async (req, res) => {
     try {
       console.log('🔧 P2 PURCHASE ORDER CREATE BYPASS ROUTE CALLED');
       const { storage } = await import('../../storage');
@@ -1408,7 +1416,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.put('/api/p2-purchase-orders-bypass/:id', async (req, res) => {
+  // SECURITY: softAuth enforces authentication in production
+  app.put('/api/p2-purchase-orders-bypass/:id', softAuth, async (req, res) => {
     try {
       console.log('🔧 P2 PURCHASE ORDER UPDATE BYPASS ROUTE CALLED');
       const { storage } = await import('../../storage');
@@ -1485,7 +1494,8 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  app.delete('/api/p2-purchase-orders-bypass/:id', async (req, res) => {
+  // SECURITY: softAuth enforces authentication in production
+  app.delete('/api/p2-purchase-orders-bypass/:id', softAuth, async (req, res) => {
     try {
       console.log('🔧 P2 PURCHASE ORDER DELETE BYPASS ROUTE CALLED');
       const { storage } = await import('../../storage');

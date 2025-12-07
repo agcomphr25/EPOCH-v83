@@ -7,6 +7,7 @@ import cron from 'node-cron';
 import { registerRoutes } from './src/routes/index';
 import { setupVite, serveStatic, log } from './vite';
 import { db } from './db';
+import { authenticateToken } from './middleware/auth';
 
 // Validate required environment variables
 const requiredEnvVars = ['DATABASE_URL'];
@@ -24,6 +25,19 @@ console.log('Environment check:', {
 });
 
 const app = express();
+
+// CRITICAL: Health check endpoint MUST be registered FIRST, before any middleware
+// This ensures Replit deployment health probes get instant responses during initialization
+app.get('/healthz', (req, res) => {
+  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+// CRITICAL: Trust proxy for production deployments behind Replit's infrastructure
+// This is required for express-rate-limit to work correctly with X-Forwarded-For headers
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+  console.log('🔒 Trust proxy enabled for production');
+}
 
 // CORS configuration - critical for production authentication
 // Check if we're on Replit deployment (agcompepoch.xyz) or development
@@ -101,17 +115,32 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
-// CRITICAL: Fast health check endpoint for Replit deployment health probes
-// Responds immediately without database operations to pass health checks quickly
-app.get('/healthz', (req, res) => {
-  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
-});
-
 // Also add express.static as fallback
 app.use('/attached_assets', express.static(assetsPath));
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// GLOBAL AUTHENTICATION MIDDLEWARE
+// Apply authentication to ALL /api routes except public endpoints
+// Public routes that don't require authentication:
+const publicRoutes = [
+  '/api/auth',           // Login, logout, session management
+  '/api/magic-link',     // Magic link authentication
+  '/api/oauth',          // OAuth callbacks
+  '/api/calendar/webhook', // Google Calendar webhooks
+];
+
+app.use('/api', (req, res, next) => {
+  // Skip authentication for public routes
+  const isPublicRoute = publicRoutes.some(route => req.path.startsWith(route.replace('/api', '')));
+  if (isPublicRoute) {
+    return next();
+  }
+  
+  // Apply authentication to all other API routes
+  return authenticateToken(req, res, next);
+});
 
 app.use((req, res, next) => {
   const start = Date.now();

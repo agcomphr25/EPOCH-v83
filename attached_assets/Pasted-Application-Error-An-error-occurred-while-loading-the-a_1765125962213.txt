@@ -1,0 +1,18 @@
+Application Error
+An error occurred while loading the application:
+
+A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+
+Stack trace:
+Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-select.js?v=89eb45b3:878:13
+    at renderWithHooks (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=89eb45b3:11548:26)
+    at updateForwardRef (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=89eb45b3:14325:28)
+    at beginWork (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=89eb45b3:15946:22)
+    at beginWork$1 (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=89eb45b3:19753:22)
+    at performUnitOfWork (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=89eb45b3:19198:20)
+    at workLoopSync (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=89eb45b3:19137:13)
+    at renderRootSync (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=89eb45b3:19116:15)
+    at performSyncWorkOnRoot (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=89eb45b3:18874:28)
+    at flushSyncCallbacks (https://b9da0088-d39c-4d51-928a-b293797aba77-00-1yyw3lx1s78sv.spock.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-NFC5BX5N.js?v=89eb45b3:9119:30)
+Reload Application

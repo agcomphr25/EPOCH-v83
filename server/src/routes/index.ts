@@ -2108,11 +2108,16 @@ export function registerRoutes(app: Express): Server {
           }
         }
         
+        // Manufactured parts (packets) automatically go to cutting_table as their first department
+        const effectiveFirstDept = item.isManufactured 
+          ? 'cutting_table' 
+          : (item.firstDepartment || 'layup');
+        
         const [inserted] = await db.insert(bomItemsTable).values({
           bomId: bomDef.id,
           partName: item.partNumber,
           quantity: item.quantity || 1,
-          firstDept: item.firstDepartment || 'Layup',
+          firstDept: effectiveFirstDept,
           itemType: item.isManufactured ? 'manufactured' : 'material',
           notes: item.description || '',
           isActive: true,

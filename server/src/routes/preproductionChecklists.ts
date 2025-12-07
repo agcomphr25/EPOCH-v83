@@ -393,9 +393,27 @@ router.post('/', async (req: Request, res: Response) => {
 router.patch('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const updateData = { ...req.body };
+    
+    // Convert date strings to Date objects for timestamp fields
+    const dateFields = [
+      'targetCompletionDate', 'qualityTeamDate', 'generalDate', 
+      'cuttingTableDate', 'layupDate', 'moldAssemblyDate', 
+      'finishDate', 'qcShippingDate', 'dueDate',
+      'preProductionDueDate', 'materialArrivalDate', 'firstArticleDueDate',
+      'as9102CompletionDate', 'firstArticleApprovedDate', 'fullProductionStartDate',
+      'poDueDate'
+    ];
+    
+    for (const field of dateFields) {
+      if (updateData[field] && typeof updateData[field] === 'string') {
+        updateData[field] = new Date(updateData[field]);
+      }
+    }
+    
     const [checklist] = await db
       .update(preproductionChecklists)
-      .set({ ...req.body, updatedAt: new Date() })
+      .set({ ...updateData, updatedAt: new Date() })
       .where(eq(preproductionChecklists.id, id))
       .returning();
     

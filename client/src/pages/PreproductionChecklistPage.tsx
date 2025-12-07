@@ -116,6 +116,13 @@ interface Checklist {
   fullProductionStartDate: string | null;
   poDueDate: string | null;
   poDueQuantity: number | null;
+  showPreProductionDueDate?: boolean;
+  showMaterialArrivalDate?: boolean;
+  showFirstArticleDueDate?: boolean;
+  showAs9102CompletionDate?: boolean;
+  showFirstArticleApprovedDate?: boolean;
+  showFullProductionStartDate?: boolean;
+  showPoDueDate?: boolean;
 }
 
 interface ChecklistSection {
@@ -606,6 +613,24 @@ function ChecklistDetailView({
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
   const [addTaskSectionId, setAddTaskSectionId] = useState<string | null>(null);
   const [newTaskDescription, setNewTaskDescription] = useState('');
+  const [isEditingMilestones, setIsEditingMilestones] = useState(false);
+  const [milestoneData, setMilestoneData] = useState({
+    preProductionDueDate: '',
+    materialArrivalDate: '',
+    firstArticleDueDate: '',
+    as9102CompletionDate: '',
+    firstArticleApprovedDate: '',
+    fullProductionStartDate: '',
+    poDueDate: '',
+    poDueQuantity: '',
+    showPreProductionDueDate: true,
+    showMaterialArrivalDate: true,
+    showFirstArticleDueDate: true,
+    showAs9102CompletionDate: true,
+    showFirstArticleApprovedDate: true,
+    showFullProductionStartDate: true,
+    showPoDueDate: true,
+  });
 
   const { data: fullChecklist, isLoading, refetch } = useQuery<Checklist>({
     queryKey: ['/api/preproduction-checklists', checklist.id],
@@ -675,6 +700,69 @@ function ChecklistDetailView({
       toast({ title: 'Section deleted' });
     },
   });
+
+  const updateChecklistMutation = useMutation({
+    mutationFn: (data: any) =>
+      apiRequest(`/api/preproduction-checklists/${checklist.id}`, { method: 'PATCH', body: data }),
+    onSuccess: () => {
+      refetch();
+      setIsEditingMilestones(false);
+      toast({ title: 'Success', description: 'Milestones updated' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update milestones', variant: 'destructive' });
+    },
+  });
+
+  const formatDateForInput = (dateStr: string | null): string => {
+    if (!dateStr) return '';
+    try {
+      return format(new Date(dateStr), 'yyyy-MM-dd');
+    } catch {
+      return '';
+    }
+  };
+
+  const startEditingMilestones = () => {
+    setMilestoneData({
+      preProductionDueDate: formatDateForInput(fullChecklist?.preProductionDueDate ?? null),
+      materialArrivalDate: formatDateForInput(fullChecklist?.materialArrivalDate ?? null),
+      firstArticleDueDate: formatDateForInput(fullChecklist?.firstArticleDueDate ?? null),
+      as9102CompletionDate: formatDateForInput(fullChecklist?.as9102CompletionDate ?? null),
+      firstArticleApprovedDate: formatDateForInput(fullChecklist?.firstArticleApprovedDate ?? null),
+      fullProductionStartDate: formatDateForInput(fullChecklist?.fullProductionStartDate ?? null),
+      poDueDate: formatDateForInput(fullChecklist?.poDueDate ?? null),
+      poDueQuantity: fullChecklist?.poDueQuantity?.toString() || '',
+      showPreProductionDueDate: fullChecklist?.showPreProductionDueDate !== false,
+      showMaterialArrivalDate: fullChecklist?.showMaterialArrivalDate !== false,
+      showFirstArticleDueDate: fullChecklist?.showFirstArticleDueDate !== false,
+      showAs9102CompletionDate: fullChecklist?.showAs9102CompletionDate !== false,
+      showFirstArticleApprovedDate: fullChecklist?.showFirstArticleApprovedDate !== false,
+      showFullProductionStartDate: fullChecklist?.showFullProductionStartDate !== false,
+      showPoDueDate: fullChecklist?.showPoDueDate !== false,
+    });
+    setIsEditingMilestones(true);
+  };
+
+  const saveMilestones = () => {
+    updateChecklistMutation.mutate({
+      preProductionDueDate: milestoneData.preProductionDueDate || null,
+      materialArrivalDate: milestoneData.materialArrivalDate || null,
+      firstArticleDueDate: milestoneData.firstArticleDueDate || null,
+      as9102CompletionDate: milestoneData.as9102CompletionDate || null,
+      firstArticleApprovedDate: milestoneData.firstArticleApprovedDate || null,
+      fullProductionStartDate: milestoneData.fullProductionStartDate || null,
+      poDueDate: milestoneData.poDueDate || null,
+      poDueQuantity: milestoneData.poDueQuantity ? parseInt(milestoneData.poDueQuantity) : null,
+      showPreProductionDueDate: milestoneData.showPreProductionDueDate,
+      showMaterialArrivalDate: milestoneData.showMaterialArrivalDate,
+      showFirstArticleDueDate: milestoneData.showFirstArticleDueDate,
+      showAs9102CompletionDate: milestoneData.showAs9102CompletionDate,
+      showFirstArticleApprovedDate: milestoneData.showFirstArticleApprovedDate,
+      showFullProductionStartDate: milestoneData.showFullProductionStartDate,
+      showPoDueDate: milestoneData.showPoDueDate,
+    });
+  };
 
   const handleSignOff = () => {
     if (!sigRef.current || sigRef.current.isEmpty()) {
@@ -748,56 +836,212 @@ function ChecklistDetailView({
       </Card>
 
       {/* Timeline Milestones */}
-      {(fullChecklist.materialArrivalDate || fullChecklist.preProductionDueDate || 
-        fullChecklist.firstArticleDueDate || fullChecklist.as9102CompletionDate ||
-        fullChecklist.firstArticleApprovedDate || fullChecklist.fullProductionStartDate ||
-        fullChecklist.poDueDate || fullChecklist.poDueQuantity) && (
-        <Card>
-          <CardHeader className="pb-2">
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
               <Clock className="h-5 w-5" />
               Timeline Milestones
             </CardTitle>
-          </CardHeader>
-          <CardContent>
+            {!isSigned && !isEditingMilestones && (
+              <Button variant="outline" size="sm" onClick={startEditingMilestones} data-testid="button-edit-milestones">
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isEditingMilestones ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="show-material-arrival"
+                      checked={milestoneData.showMaterialArrivalDate}
+                      onCheckedChange={(c) => setMilestoneData({ ...milestoneData, showMaterialArrivalDate: !!c })}
+                      data-testid="checkbox-show-material-arrival"
+                    />
+                    <Label htmlFor="show-material-arrival" className="text-sm">Material Arrival Date</Label>
+                  </div>
+                  <Input
+                    type="date"
+                    value={milestoneData.materialArrivalDate}
+                    onChange={(e) => setMilestoneData({ ...milestoneData, materialArrivalDate: e.target.value })}
+                    disabled={!milestoneData.showMaterialArrivalDate}
+                    data-testid="input-edit-material-arrival"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="show-preproduction-due"
+                      checked={milestoneData.showPreProductionDueDate}
+                      onCheckedChange={(c) => setMilestoneData({ ...milestoneData, showPreProductionDueDate: !!c })}
+                      data-testid="checkbox-show-preproduction-due"
+                    />
+                    <Label htmlFor="show-preproduction-due" className="text-sm">Pre-Production Due Date</Label>
+                  </div>
+                  <Input
+                    type="date"
+                    value={milestoneData.preProductionDueDate}
+                    onChange={(e) => setMilestoneData({ ...milestoneData, preProductionDueDate: e.target.value })}
+                    disabled={!milestoneData.showPreProductionDueDate}
+                    data-testid="input-edit-preproduction-due"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="show-first-article-due"
+                      checked={milestoneData.showFirstArticleDueDate}
+                      onCheckedChange={(c) => setMilestoneData({ ...milestoneData, showFirstArticleDueDate: !!c })}
+                      data-testid="checkbox-show-first-article-due"
+                    />
+                    <Label htmlFor="show-first-article-due" className="text-sm">First Article Due Date</Label>
+                  </div>
+                  <Input
+                    type="date"
+                    value={milestoneData.firstArticleDueDate}
+                    onChange={(e) => setMilestoneData({ ...milestoneData, firstArticleDueDate: e.target.value })}
+                    disabled={!milestoneData.showFirstArticleDueDate}
+                    data-testid="input-edit-first-article-due"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="show-as9102"
+                      checked={milestoneData.showAs9102CompletionDate}
+                      onCheckedChange={(c) => setMilestoneData({ ...milestoneData, showAs9102CompletionDate: !!c })}
+                      data-testid="checkbox-show-as9102"
+                    />
+                    <Label htmlFor="show-as9102" className="text-sm">AS9102 Completion Date</Label>
+                  </div>
+                  <Input
+                    type="date"
+                    value={milestoneData.as9102CompletionDate}
+                    onChange={(e) => setMilestoneData({ ...milestoneData, as9102CompletionDate: e.target.value })}
+                    disabled={!milestoneData.showAs9102CompletionDate}
+                    data-testid="input-edit-as9102"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="show-first-article-approved"
+                      checked={milestoneData.showFirstArticleApprovedDate}
+                      onCheckedChange={(c) => setMilestoneData({ ...milestoneData, showFirstArticleApprovedDate: !!c })}
+                      data-testid="checkbox-show-first-article-approved"
+                    />
+                    <Label htmlFor="show-first-article-approved" className="text-sm">First Article Approved Date</Label>
+                  </div>
+                  <Input
+                    type="date"
+                    value={milestoneData.firstArticleApprovedDate}
+                    onChange={(e) => setMilestoneData({ ...milestoneData, firstArticleApprovedDate: e.target.value })}
+                    disabled={!milestoneData.showFirstArticleApprovedDate}
+                    data-testid="input-edit-first-article-approved"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="show-full-production"
+                      checked={milestoneData.showFullProductionStartDate}
+                      onCheckedChange={(c) => setMilestoneData({ ...milestoneData, showFullProductionStartDate: !!c })}
+                      data-testid="checkbox-show-full-production"
+                    />
+                    <Label htmlFor="show-full-production" className="text-sm">Full Production Start Date</Label>
+                  </div>
+                  <Input
+                    type="date"
+                    value={milestoneData.fullProductionStartDate}
+                    onChange={(e) => setMilestoneData({ ...milestoneData, fullProductionStartDate: e.target.value })}
+                    disabled={!milestoneData.showFullProductionStartDate}
+                    data-testid="input-edit-full-production"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="show-po-due"
+                      checked={milestoneData.showPoDueDate}
+                      onCheckedChange={(c) => setMilestoneData({ ...milestoneData, showPoDueDate: !!c })}
+                      data-testid="checkbox-show-po-due"
+                    />
+                    <Label htmlFor="show-po-due" className="text-sm">PO Due Date</Label>
+                  </div>
+                  <Input
+                    type="date"
+                    value={milestoneData.poDueDate}
+                    onChange={(e) => setMilestoneData({ ...milestoneData, poDueDate: e.target.value })}
+                    disabled={!milestoneData.showPoDueDate}
+                    data-testid="input-edit-po-due"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">PO Due Quantity</Label>
+                  <Input
+                    type="number"
+                    value={milestoneData.poDueQuantity}
+                    onChange={(e) => setMilestoneData({ ...milestoneData, poDueQuantity: e.target.value })}
+                    placeholder="Enter quantity"
+                    data-testid="input-edit-po-quantity"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button onClick={saveMilestones} disabled={updateChecklistMutation.isPending} data-testid="button-save-milestones">
+                  <Save className="h-4 w-4 mr-2" />
+                  {updateChecklistMutation.isPending ? 'Saving...' : 'Save Changes'}
+                </Button>
+                <Button variant="outline" onClick={() => setIsEditingMilestones(false)} data-testid="button-cancel-milestones">
+                  <X className="h-4 w-4 mr-2" />
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {fullChecklist.materialArrivalDate && (
+              {fullChecklist.showMaterialArrivalDate !== false && fullChecklist.materialArrivalDate && (
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Material Arrival</p>
                   <p className="font-medium">{format(new Date(fullChecklist.materialArrivalDate), 'MMM d, yyyy')}</p>
                 </div>
               )}
-              {fullChecklist.preProductionDueDate && (
+              {fullChecklist.showPreProductionDueDate !== false && fullChecklist.preProductionDueDate && (
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Pre-Production Due</p>
                   <p className="font-medium">{format(new Date(fullChecklist.preProductionDueDate), 'MMM d, yyyy')}</p>
                 </div>
               )}
-              {fullChecklist.firstArticleDueDate && (
+              {fullChecklist.showFirstArticleDueDate !== false && fullChecklist.firstArticleDueDate && (
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">First Article Due</p>
                   <p className="font-medium">{format(new Date(fullChecklist.firstArticleDueDate), 'MMM d, yyyy')}</p>
                 </div>
               )}
-              {fullChecklist.as9102CompletionDate && (
+              {fullChecklist.showAs9102CompletionDate !== false && fullChecklist.as9102CompletionDate && (
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">AS9102 Completion</p>
                   <p className="font-medium">{format(new Date(fullChecklist.as9102CompletionDate), 'MMM d, yyyy')}</p>
                 </div>
               )}
-              {fullChecklist.firstArticleApprovedDate && (
+              {fullChecklist.showFirstArticleApprovedDate !== false && fullChecklist.firstArticleApprovedDate && (
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">First Article Approved</p>
                   <p className="font-medium">{format(new Date(fullChecklist.firstArticleApprovedDate), 'MMM d, yyyy')}</p>
                 </div>
               )}
-              {fullChecklist.fullProductionStartDate && (
+              {fullChecklist.showFullProductionStartDate !== false && fullChecklist.fullProductionStartDate && (
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Full Production Start</p>
                   <p className="font-medium">{format(new Date(fullChecklist.fullProductionStartDate), 'MMM d, yyyy')}</p>
                 </div>
               )}
-              {fullChecklist.poDueDate && (
+              {fullChecklist.showPoDueDate !== false && fullChecklist.poDueDate && (
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">PO Due Date</p>
                   <p className="font-medium">{format(new Date(fullChecklist.poDueDate), 'MMM d, yyyy')}</p>
@@ -809,10 +1053,16 @@ function ChecklistDetailView({
                   <p className="font-medium">{fullChecklist.poDueQuantity}</p>
                 </div>
               )}
+              {!fullChecklist.materialArrivalDate && !fullChecklist.preProductionDueDate && 
+               !fullChecklist.firstArticleDueDate && !fullChecklist.as9102CompletionDate &&
+               !fullChecklist.firstArticleApprovedDate && !fullChecklist.fullProductionStartDate &&
+               !fullChecklist.poDueDate && !fullChecklist.poDueQuantity && (
+                <p className="text-sm text-muted-foreground col-span-full">No milestones set. Click Edit to add timeline milestones.</p>
+              )}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
       {/* Signature Display */}
       {isSigned && fullChecklist.signatureData && (

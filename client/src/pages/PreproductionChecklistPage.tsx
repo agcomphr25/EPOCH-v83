@@ -468,7 +468,7 @@ function ChecklistsTab({
                   <SelectValue placeholder="Select a template (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No template</SelectItem>
+                  <SelectItem value="none">No template</SelectItem>
                   {templates.map((t) => (
                     <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                   ))}
@@ -562,7 +562,7 @@ function ChecklistsTab({
             <Button 
               onClick={() => createMutation.mutate({
                 ...newChecklist,
-                templateId: newChecklist.templateId || undefined,
+                templateId: newChecklist.templateId && newChecklist.templateId !== 'none' ? newChecklist.templateId : undefined,
                 dueDate: newChecklist.dueDate || undefined,
                 preProductionDueDate: newChecklist.preProductionDueDate || undefined,
                 materialArrivalDate: newChecklist.materialArrivalDate || undefined,

@@ -174,26 +174,79 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
+    const server = await registerRoutes(app);
+
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || 'Internal Server Error';
+
+      console.error('=== SERVER ERROR ===');
+      console.error('Status:', status);
+      console.error('Message:', message);
+      console.error('Stack:', err.stack);
+      console.error('URL:', _req.url);
+      console.error('Method:', _req.method);
+      console.error('===================');
+
+      log(`Error ${status}: ${message}`);
+      res.status(status).json({
+        message,
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+      });
+    });
+
+    // Setup vite in development, static serving in production
+    if (app.get('env') === 'development') {
+      await setupVite(app, server);
+    } else {
+      serveStatic(app);
+    }
+
+    // ALWAYS serve the app on the port specified in the environment variable PORT
+    const port = parseInt(process.env.PORT || '5000', 10);
+    server.listen(
+      {
+        port,
+        host: '0.0.0.0',
+      },
+      () => {
+        console.log(`Server started successfully`);
+        console.log(`- Port: ${port}`);
+        console.log(`- Host: 0.0.0.0`);
+        console.log(`- Environment: ${process.env.NODE_ENV || 'development'}`);
+        log(`serving on port ${port}`);
+
+        // Initialize database and cron jobs AFTER server is listening
+        // This ensures health checks pass while background services initialize
+        initializeBackgroundServices();
+      }
+    );
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+})();
+
+// Background initialization - runs after server is listening
+async function initializeBackgroundServices() {
+  try {
+    // Test database connection (non-blocking)
     console.log('Initializing database connection...');
     const { testDatabaseConnection } = await import('./db');
-    console.log('Testing database connection...');
     const dbConnected = await testDatabaseConnection();
 
     if (!dbConnected) {
-      console.error(
-        'Failed to connect to database. Server may not function properly.'
-      );
+      console.error('Failed to connect to database. Server may not function properly.');
+    } else {
+      console.log('✅ Database connection successful');
     }
 
     // Set up monthly vendor evaluation reset
-    // Runs at 00:01 (12:01 AM) on the 1st day of every month
     cron.schedule('1 0 1 * *', async () => {
       try {
         console.log('🔄 Running monthly vendor evaluation reset...');
         const { vendors } = await import('./schema');
-        const { eq } = await import('drizzle-orm');
         
-        // Reset all vendor evaluation statuses and scores
         const result = await db
           .update(vendors)
           .set({
@@ -215,7 +268,6 @@ app.use((req, res, next) => {
     console.log('📅 Monthly vendor evaluation reset scheduled (1st of each month at 12:01 AM)');
 
     // Set up daily follow-up order reminder check
-    // Runs at 09:00 AM every day to send reminders for orders older than 5 days
     cron.schedule('0 9 * * *', async () => {
       try {
         console.log('📧 Running daily follow-up order reminder check...');
@@ -228,79 +280,7 @@ app.use((req, res, next) => {
     });
     
     console.log('📧 Daily follow-up order reminders scheduled (every day at 9:00 AM)');
-
-    const server = await registerRoutes(app);
-
-    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-      const status = err.status || err.statusCode || 500;
-      const message = err.message || 'Internal Server Error';
-
-      // Enhanced error logging
-      console.error('=== SERVER ERROR ===');
-      console.error('Status:', status);
-      console.error('Message:', message);
-      console.error('Stack:', err.stack);
-      console.error('URL:', _req.url);
-      console.error('Method:', _req.method);
-      console.error('===================');
-
-      log(`Error ${status}: ${message}`);
-      res.status(status).json({
-        message,
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
-      });
-    });
-
-    // importantly only setup vite in development and after
-    // setting up all the other routes so the catch-all route
-    // doesn't interfere with the other routes
-    if (app.get('env') === 'development') {
-      await setupVite(app, server);
-    } else {
-      serveStatic(app);
-    }
-
-    // Add debug endpoint to help diagnose deployment issues
-    app.get('/debug-test', (req, res) => {
-      res.sendFile(path.join(__dirname, '../debug-deployment.html'));
-    });
-
-    // ALWAYS serve the app on the port specified in the environment variable PORT
-    // Other ports are firewalled. Default to 5000 if not specified.
-    // this serves both the API and the client.
-    // It is the only port that is not firewalled.
-    const port = parseInt(process.env.PORT || '5000', 10);
-    server.listen(
-      {
-        port,
-        host: '0.0.0.0',
-        reusePort: true,
-      },
-      () => {
-        console.log(`Server started successfully`);
-        console.log(`- Port: ${port}`);
-        console.log(`- Host: 0.0.0.0`);
-        console.log(`- Environment: ${process.env.NODE_ENV || 'development'}`);
-        console.log(
-          `- Server accessible at: https://${process.env.REPL_ID || 'localhost'}.${process.env.REPL_OWNER || 'local'}.repl.co`
-        );
-        log(`serving on port ${port}`);
-        
-        // CRITICAL: Keep the event loop alive in production (prevents ESM bundling exit issue)
-        // Using setInterval ensures Node never thinks the script is complete
-        if (process.env.NODE_ENV === 'production') {
-          setInterval(() => {
-            // Empty interval keeps process alive indefinitely
-          }, 1000 * 60 * 60); // Run every hour (just to keep event loop busy)
-          console.log('✅ Production keep-alive interval started (server will run indefinitely)');
-        }
-
-        // Database seeding removed - order departments/statuses are managed via enums in schema
-        // If future requirements need reference tables, implement with proper schema/migration first
-      }
-    );
   } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
+    console.error('Error initializing background services:', error);
   }
-})();
+}

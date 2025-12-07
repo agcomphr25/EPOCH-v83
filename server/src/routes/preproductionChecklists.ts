@@ -321,12 +321,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 // Create checklist from template
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const parsed = insertPreproductionChecklistSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: 'Invalid checklist data', details: parsed.error });
-    }
-    
-    const { templateId, ...checklistData } = parsed.data;
+    const { templateId, ...checklistData } = req.body;
     
     // Create the checklist
     const [checklist] = await db

@@ -316,10 +316,16 @@ export default function P2ControlCenter() {
         </TabsList>
 
         <TabsContent value="status">
-          <P2StatusDashboard onStartBOM={(poId) => {
-            setSelectedPOForBOM(poId);
-            setShowBOMWizard(true);
-          }} />
+          <P2StatusDashboard 
+            onStartBOM={(poId) => {
+              setSelectedPOForBOM(poId);
+              setShowBOMWizard(true);
+            }} 
+            onViewPO={(poId) => {
+              setSelectedPOForBOM(poId);
+              setActiveTab('schedule');
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="setup">

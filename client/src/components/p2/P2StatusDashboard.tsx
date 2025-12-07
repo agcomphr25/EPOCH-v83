@@ -20,6 +20,7 @@ import { format } from 'date-fns';
 
 interface P2StatusDashboardProps {
   onStartBOM: (poId: number) => void;
+  onViewPO?: (poId: number) => void;
 }
 
 interface POStatus {
@@ -35,7 +36,7 @@ interface POStatus {
   status: 'pending' | 'in_progress' | 'completed';
 }
 
-export default function P2StatusDashboard({ onStartBOM }: P2StatusDashboardProps) {
+export default function P2StatusDashboard({ onStartBOM, onViewPO }: P2StatusDashboardProps) {
   const { data: poStatuses = [], isLoading } = useQuery<POStatus[]>({
     queryKey: ['/api/p2/control-center/po-statuses'],
   });
@@ -211,7 +212,7 @@ export default function P2StatusDashboard({ onStartBOM }: P2StatusDashboardProps
                         <Button 
                           size="sm" 
                           variant="ghost"
-                          onClick={() => window.location.href = `/p2-purchase-orders?id=${po.id}`}
+                          onClick={() => onViewPO?.(po.id)}
                           data-testid={`button-view-po-${po.id}`}
                         >
                           View <ArrowRight className="h-4 w-4 ml-1" />
@@ -260,7 +261,7 @@ export default function P2StatusDashboard({ onStartBOM }: P2StatusDashboardProps
                         <Button 
                           size="sm" 
                           variant="ghost"
-                          onClick={() => window.location.href = `/p2-purchase-orders?id=${po.id}`}
+                          onClick={() => onViewPO?.(po.id)}
                           data-testid={`button-view-completed-po-${po.id}`}
                         >
                           View <ArrowRight className="h-4 w-4 ml-1" />

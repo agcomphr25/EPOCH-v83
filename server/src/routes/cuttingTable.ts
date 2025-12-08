@@ -1421,27 +1421,30 @@ router.get('/weekly-packet-needs', async (req, res) => {
 
 // ========== Packet BOM Endpoints ==========
 
-// Get all packet BOMs with their materials
+// Get all packet BOMs with their materials and parts
 router.get('/packet-boms', async (req, res) => {
   try {
     const boms = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.isActive, true));
     
-    const bomsWithMaterials = await Promise.all(
+    const bomsWithData = await Promise.all(
       boms.map(async (bom) => {
         const materials = await db.select().from(cuttingPacketBOMMaterials)
           .where(eq(cuttingPacketBOMMaterials.packetBomId, bom.id));
-        return { ...bom, materials };
+        const parts = await db.select().from(cuttingPacketBOMParts)
+          .where(eq(cuttingPacketBOMParts.packetBomId, bom.id))
+          .orderBy(cuttingPacketBOMParts.sortOrder);
+        return { ...bom, materials, parts };
       })
     );
     
-    res.json(bomsWithMaterials);
+    res.json(bomsWithData);
   } catch (error) {
     console.error('Error fetching packet BOMs:', error);
     res.status(500).json({ error: 'Failed to fetch packet BOMs' });
   }
 });
 
-// Get single packet BOM with materials
+// Get single packet BOM with materials and parts
 router.get('/packet-boms/:id', async (req, res) => {
   try {
     const [bom] = await db.select().from(cuttingPacketBOMs)
@@ -1453,8 +1456,12 @@ router.get('/packet-boms/:id', async (req, res) => {
     
     const materials = await db.select().from(cuttingPacketBOMMaterials)
       .where(eq(cuttingPacketBOMMaterials.packetBomId, bom.id));
+
+    const parts = await db.select().from(cuttingPacketBOMParts)
+      .where(eq(cuttingPacketBOMParts.packetBomId, bom.id))
+      .orderBy(cuttingPacketBOMParts.sortOrder);
     
-    res.json({ ...bom, materials });
+    res.json({ ...bom, materials, parts });
   } catch (error) {
     console.error('Error fetching packet BOM:', error);
     res.status(500).json({ error: 'Failed to fetch packet BOM' });
@@ -1481,11 +1488,33 @@ router.post('/packet-boms', async (req, res) => {
         });
       }
     }
+
+    // If parts are provided, add them
+    if (req.body.parts && Array.isArray(req.body.parts)) {
+      for (let i = 0; i < req.body.parts.length; i++) {
+        const part = req.body.parts[i];
+        await db.insert(cuttingPacketBOMParts).values({
+          packetBomId: newBom.id,
+          partNumber: part.partNumber,
+          partDescription: part.partName || part.partDescription,
+          fabricType: part.materialName || part.fabricType,
+          commonName: part.materialPartNumber,
+          yieldPerCut: part.yieldPerCut || 1,
+          squareMetersPerPart: null,
+          sortOrder: i,
+          notes: `Qty: ${part.quantity || 1}, Cuts: ${part.cutsNeeded || 1}`,
+        });
+      }
+    }
     
     const materials = await db.select().from(cuttingPacketBOMMaterials)
       .where(eq(cuttingPacketBOMMaterials.packetBomId, newBom.id));
+
+    const parts = await db.select().from(cuttingPacketBOMParts)
+      .where(eq(cuttingPacketBOMParts.packetBomId, newBom.id))
+      .orderBy(cuttingPacketBOMParts.sortOrder);
     
-    res.status(201).json({ ...newBom, materials });
+    res.status(201).json({ ...newBom, materials, parts });
   } catch (error) {
     console.error('Error creating packet BOM:', error);
     res.status(400).json({ error: 'Failed to create packet BOM' });
@@ -1522,11 +1551,36 @@ router.put('/packet-boms/:id', async (req, res) => {
         });
       }
     }
+
+    // Update parts if provided
+    if (req.body.parts && Array.isArray(req.body.parts)) {
+      await db.delete(cuttingPacketBOMParts)
+        .where(eq(cuttingPacketBOMParts.packetBomId, updated.id));
+      
+      for (let i = 0; i < req.body.parts.length; i++) {
+        const part = req.body.parts[i];
+        await db.insert(cuttingPacketBOMParts).values({
+          packetBomId: updated.id,
+          partNumber: part.partNumber,
+          partDescription: part.partName || part.partDescription,
+          fabricType: part.materialName || part.fabricType,
+          commonName: part.materialPartNumber,
+          yieldPerCut: part.yieldPerCut || 1,
+          squareMetersPerPart: null,
+          sortOrder: i,
+          notes: `Qty: ${part.quantity || 1}, Cuts: ${part.cutsNeeded || 1}`,
+        });
+      }
+    }
     
     const materials = await db.select().from(cuttingPacketBOMMaterials)
       .where(eq(cuttingPacketBOMMaterials.packetBomId, updated.id));
+
+    const parts = await db.select().from(cuttingPacketBOMParts)
+      .where(eq(cuttingPacketBOMParts.packetBomId, updated.id))
+      .orderBy(cuttingPacketBOMParts.sortOrder);
     
-    res.json({ ...updated, materials });
+    res.json({ ...updated, materials, parts });
   } catch (error) {
     console.error('Error updating packet BOM:', error);
     res.status(400).json({ error: 'Failed to update packet BOM' });

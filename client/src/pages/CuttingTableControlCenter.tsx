@@ -308,6 +308,16 @@ export default function CuttingTableControlCenter() {
     queryKey: ['/api/cutting-table/packet-boms'],
   });
 
+  // Fetch inventory items marked as packet parts for dropdown selection
+  const { data: availablePacketItems = [] } = useQuery<{ id: number; agPartNumber: string; name: string; description: string | null }[]>({
+    queryKey: ['/api/cutting-table-mfg-queue/available-packets'],
+  });
+
+  // Fetch fabric items for material selection
+  const { data: fabricItems = [] } = useQuery<{ id: number; agPartNumber: string; name: string; fabric: string }[]>({
+    queryKey: ['/api/cutting-table/fabric-items'],
+  });
+
   const { data: fabricInventory = [], isLoading: loadingFabric, refetch: refetchFabric } = useQuery<FabricInventoryItem[]>({
     queryKey: ['/api/cutting-table/fabric-inventory-full'],
     queryFn: async () => {
@@ -2079,23 +2089,46 @@ export default function CuttingTableControlCenter() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="bom-part-number">Part Number *</Label>
-                <Input
-                  id="bom-part-number"
+                <Select
                   value={packetBomForm.partNumber}
-                  onChange={(e) => setPacketBomForm({ ...packetBomForm, partNumber: e.target.value })}
-                  placeholder="e.g., T501"
-                  data-testid="input-bom-part-number"
-                />
+                  onValueChange={(value) => {
+                    const selectedItem = availablePacketItems.find(item => item.agPartNumber === value);
+                    setPacketBomForm({ 
+                      ...packetBomForm, 
+                      partNumber: value,
+                      packetType: selectedItem?.name || packetBomForm.packetType
+                    });
+                  }}
+                >
+                  <SelectTrigger data-testid="select-bom-part-number">
+                    <SelectValue placeholder="Select part number" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availablePacketItems.map((item) => (
+                      <SelectItem key={item.id} value={item.agPartNumber}>
+                        {item.agPartNumber} - {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="bom-packet-type">Packet Type *</Label>
-                <Input
-                  id="bom-packet-type"
+                <Select
                   value={packetBomForm.packetType}
-                  onChange={(e) => setPacketBomForm({ ...packetBomForm, packetType: e.target.value })}
-                  placeholder="e.g., Buttstock, Handguard"
-                  data-testid="input-bom-packet-type"
-                />
+                  onValueChange={(value) => setPacketBomForm({ ...packetBomForm, packetType: value })}
+                >
+                  <SelectTrigger data-testid="select-bom-packet-type">
+                    <SelectValue placeholder="Select packet type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availablePacketItems.map((item) => (
+                      <SelectItem key={item.id} value={item.name}>
+                        {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             
@@ -2164,12 +2197,28 @@ export default function CuttingTableControlCenter() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Fabric Type *</Label>
-                    <Input
+                    <Select
                       value={newMaterialForm.fabricType}
-                      onChange={(e) => setNewMaterialForm({ ...newMaterialForm, fabricType: e.target.value })}
-                      placeholder="e.g., Carbon Fiber"
-                      data-testid="input-material-fabric-type"
-                    />
+                      onValueChange={(value) => {
+                        const selectedFabric = fabricItems.find(f => f.name === value);
+                        setNewMaterialForm({ 
+                          ...newMaterialForm, 
+                          fabricType: value,
+                          commonName: selectedFabric?.fabric || value
+                        });
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-material-fabric-type">
+                        <SelectValue placeholder="Select fabric" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {fabricItems.map((fabric) => (
+                          <SelectItem key={fabric.id} value={fabric.name}>
+                            {fabric.agPartNumber} - {fabric.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Common Name</Label>

@@ -1461,14 +1461,16 @@ router.get('/packet-boms', async (req, res) => {
           .orderBy(cuttingPacketBOMParts.sortOrder);
         const parts = rawParts.map(transformPart);
         
-        // Parse cuts from description field
+        // Get cuts from cutsConfig field (with fallback to description for migration)
         let cuts = [];
-        try {
-          if (bom.description) {
+        if (bom.cutsConfig && Array.isArray(bom.cutsConfig)) {
+          cuts = bom.cutsConfig;
+        } else if (bom.description) {
+          try {
             cuts = JSON.parse(bom.description);
+          } catch (e) {
+            cuts = [];
           }
-        } catch (e) {
-          cuts = [];
         }
         
         return { ...bom, materials, parts, cuts };
@@ -1500,14 +1502,16 @@ router.get('/packet-boms/:id', async (req, res) => {
       .orderBy(cuttingPacketBOMParts.sortOrder);
     const parts = rawParts.map(transformPart);
     
-    // Parse cuts from description field
+    // Get cuts from cutsConfig field (with fallback to description for migration)
     let cuts = [];
-    try {
-      if (bom.description) {
+    if (bom.cutsConfig && Array.isArray(bom.cutsConfig)) {
+      cuts = bom.cutsConfig;
+    } else if (bom.description) {
+      try {
         cuts = JSON.parse(bom.description);
+      } catch (e) {
+        cuts = [];
       }
-    } catch (e) {
-      cuts = [];
     }
     
     res.json({ ...bom, materials, parts, cuts });
@@ -1520,13 +1524,13 @@ router.get('/packet-boms/:id', async (req, res) => {
 // Create packet BOM (auto-created when inventory item has cutting selected)
 router.post('/packet-boms', async (req, res) => {
   try {
-    // Store cuts configuration in description field as JSON
-    const cutsConfig = req.body.cuts ? JSON.stringify(req.body.cuts) : null;
+    // Store cuts configuration in dedicated cutsConfig jsonb field
+    const cutsConfigData = req.body.cuts || null;
     const baseData = insertCuttingPacketBOMSchema.parse(req.body);
     
     const [newBom] = await db.insert(cuttingPacketBOMs).values({
       ...baseData,
-      description: cutsConfig, // Explicitly set after validation to store cuts JSON
+      cutsConfig: cutsConfigData, // Store cuts in dedicated jsonb column
     }).returning();
     
     // If materials are provided, add them
@@ -1569,15 +1573,8 @@ router.post('/packet-boms', async (req, res) => {
       .orderBy(cuttingPacketBOMParts.sortOrder);
     const parts = rawParts.map(transformPart);
     
-    // Parse cuts from description
-    let cuts = [];
-    try {
-      if (newBom.description) {
-        cuts = JSON.parse(newBom.description);
-      }
-    } catch (e) {
-      cuts = [];
-    }
+    // Get cuts from cutsConfig field
+    const cuts = newBom.cutsConfig && Array.isArray(newBom.cutsConfig) ? newBom.cutsConfig : [];
     
     res.status(201).json({ ...newBom, materials, parts, cuts });
   } catch (error) {
@@ -1589,16 +1586,17 @@ router.post('/packet-boms', async (req, res) => {
 // Update packet BOM
 router.put('/packet-boms/:id', async (req, res) => {
   try {
-    // Store cuts configuration in description field as JSON
-    const cutsConfig = req.body.cuts ? JSON.stringify(req.body.cuts) : undefined;
+    // Store cuts configuration in dedicated cutsConfig jsonb field
+    const cutsConfigData = req.body.cuts !== undefined ? req.body.cuts : undefined;
     const baseData = insertCuttingPacketBOMSchema.partial().parse(req.body);
     
+    const updateData: any = { ...baseData, updatedAt: new Date() };
+    if (cutsConfigData !== undefined) {
+      updateData.cutsConfig = cutsConfigData;
+    }
+    
     const [updated] = await db.update(cuttingPacketBOMs)
-      .set({ 
-        ...baseData, 
-        description: cutsConfig, // Explicitly set after validation to store cuts JSON
-        updatedAt: new Date() 
-      })
+      .set(updateData)
       .where(eq(cuttingPacketBOMs.id, req.params.id))
       .returning();
     
@@ -1652,15 +1650,8 @@ router.put('/packet-boms/:id', async (req, res) => {
       .orderBy(cuttingPacketBOMParts.sortOrder);
     const parts = rawParts.map(transformPart);
     
-    // Parse cuts from description
-    let cuts = [];
-    try {
-      if (updated.description) {
-        cuts = JSON.parse(updated.description);
-      }
-    } catch (e) {
-      cuts = [];
-    }
+    // Get cuts from cutsConfig field
+    const cuts = updated.cutsConfig && Array.isArray(updated.cutsConfig) ? updated.cutsConfig : [];
     
     res.json({ ...updated, materials, parts, cuts });
   } catch (error) {

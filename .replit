@@ -56,11 +56,15 @@ localPort = 37591
 externalPort = 3000
 
 [[ports]]
+<<<<<<< HEAD
 localPort = 40401
 externalPort = 3002
 
 [[ports]]
 localPort = 41811
+=======
+localPort = 45423
+>>>>>>> 535f773c (Saved progress at the end of the loop)
 externalPort = 3001
 
 

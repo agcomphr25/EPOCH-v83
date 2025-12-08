@@ -51,15 +51,19 @@ args = "npm run dev"
 localPort = 5000
 externalPort = 80
 
+<<<<<<< HEAD
 [[ports]]
 localPort = 44835
 externalPort = 3000
 
 
+=======
+>>>>>>> 6a37a888 (Published your App)
 [userenv]
 
 [userenv.shared]
 ACCEPT_BLUE_ENVIRONMENT = "production"
+JWT_SECRET = "3adbfd669c7ffae02a7e7493342fc37e1115d182d8ef3ba7874d0a73c0f830814caac3a972cdc39dd185451fe355d6e2c28a81dfe0475d69d98dec1023f71a61"
 
 [userenv.development]
 DEV_AUTH_BYPASS = "true"

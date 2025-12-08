@@ -1658,9 +1658,26 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
 
     console.log(`🎯 Target department: ${targetDepartment}`);
 
+    // Get existing department history and add new entry
+    const existingHistory = (existingOrder as any).departmentHistory || [];
+    const departmentHistory = Array.isArray(existingHistory) ? [...existingHistory] : [];
+    const progressedBy = (req as any).user?.username || 'System';
+    
+    // Add new history entry for department change
+    if (existingOrder.currentDepartment && targetDepartment) {
+      departmentHistory.push({
+        fromDepartment: existingOrder.currentDepartment,
+        toDepartment: targetDepartment,
+        timestamp: now.toISOString(),
+        progressedBy,
+        assignedTechnician: (existingOrder as any).assignedTechnician || null,
+      });
+    }
+
     // Prepare update data
     const updateData: any = {
       ...completionUpdates,
+      departmentHistory,
     };
 
     if (shouldMarkFulfilled) {

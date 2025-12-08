@@ -159,6 +159,19 @@ type PacketBOMMaterial = {
   rollsRequired: number;
 };
 
+type PacketBOMPart = {
+  id: string;
+  packetBomId: string;
+  partNumber: string;
+  partDescription: string | null;
+  fabricType: string;
+  commonName: string | null;
+  yieldPerCut: number;
+  squareMetersPerPart: number | null;
+  sortOrder: number;
+  notes: string | null;
+};
+
 type WeeklyGoal = {
   id: string;
   weekDate: string;
@@ -255,6 +268,33 @@ export default function CuttingTableControlCenter() {
     notes: "",
   });
   const [selectedBOM, setSelectedBOM] = useState<PacketBOM | null>(null);
+  
+  // Packet BOM Management state
+  const [isPacketBomDialogOpen, setIsPacketBomDialogOpen] = useState(false);
+  const [editingPacketBom, setEditingPacketBom] = useState<PacketBOM | null>(null);
+  const [packetBomForm, setPacketBomForm] = useState({
+    partNumber: "",
+    packetType: "",
+    yieldPerCut: "4",
+    squareMetersPerCut: "0.5",
+    wasteFactor: "0.05",
+    materials: [] as { fabricType: string; commonName: string; quantityNeeded: number }[],
+  });
+  const [newMaterialForm, setNewMaterialForm] = useState({ fabricType: "", commonName: "", quantityNeeded: 1 });
+  
+  // Parts management within packet BOMs
+  const [isPartsDialogOpen, setIsPartsDialogOpen] = useState(false);
+  const [selectedBomForParts, setSelectedBomForParts] = useState<PacketBOM | null>(null);
+  const [bomParts, setBomParts] = useState<PacketBOMPart[]>([]);
+  const [newPartForm, setNewPartForm] = useState({
+    partNumber: "",
+    partDescription: "",
+    fabricType: "",
+    commonName: "",
+    yieldPerCut: "1",
+    squareMetersPerPart: "",
+  });
+  const [editingPart, setEditingPart] = useState<PacketBOMPart | null>(null);
 
   const { data: currentUser } = useQuery<{ username: string }>({
     queryKey: ['currentUser'],
@@ -610,6 +650,279 @@ export default function CuttingTableControlCenter() {
       toast({ title: "Error", description: "Failed to build packets.", variant: "destructive" });
     },
   });
+
+  // Packet BOM CRUD mutations
+  const createPacketBomMutation = useMutation({
+    mutationFn: async (data: {
+      partNumber: string;
+      packetType: string;
+      yieldPerCut: number;
+      squareMetersPerCut: number;
+      wasteFactor?: number;
+      materials: { fabricType: string; commonName: string; quantityNeeded: number }[];
+    }) => {
+      return apiRequest('/api/cutting-table/packet-boms', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-boms'] });
+      toast({ title: "Created", description: "Packet BOM created successfully." });
+      setIsPacketBomDialogOpen(false);
+      resetPacketBomForm();
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create packet BOM.", variant: "destructive" });
+    },
+  });
+
+  const updatePacketBomMutation = useMutation({
+    mutationFn: async ({ id, ...data }: {
+      id: string;
+      partNumber?: string;
+      packetType?: string;
+      yieldPerCut?: number;
+      squareMetersPerCut?: number;
+      wasteFactor?: number;
+      materials?: { fabricType: string; commonName: string; quantityNeeded: number }[];
+    }) => {
+      return apiRequest(`/api/cutting-table/packet-boms/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-boms'] });
+      toast({ title: "Updated", description: "Packet BOM updated successfully." });
+      setIsPacketBomDialogOpen(false);
+      resetPacketBomForm();
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update packet BOM.", variant: "destructive" });
+    },
+  });
+
+  const deletePacketBomMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/cutting-table/packet-boms/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-boms'] });
+      toast({ title: "Deleted", description: "Packet BOM deleted successfully." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete packet BOM.", variant: "destructive" });
+    },
+  });
+
+  // Parts mutations
+  const addPartMutation = useMutation({
+    mutationFn: async ({ bomId, ...data }: {
+      bomId: string;
+      partNumber: string;
+      partDescription?: string;
+      fabricType: string;
+      commonName?: string;
+      yieldPerCut: number;
+      squareMetersPerPart?: number;
+    }) => {
+      return apiRequest(`/api/cutting-table/packet-boms/${bomId}/parts`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      if (selectedBomForParts) {
+        fetchPartsForBom(selectedBomForParts.id);
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-boms'] });
+      toast({ title: "Added", description: "Part added successfully." });
+      resetPartForm();
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to add part.", variant: "destructive" });
+    },
+  });
+
+  const updatePartMutation = useMutation({
+    mutationFn: async ({ partId, ...data }: {
+      partId: string;
+      partNumber?: string;
+      partDescription?: string;
+      fabricType?: string;
+      commonName?: string;
+      yieldPerCut?: number;
+      squareMetersPerPart?: number;
+    }) => {
+      return apiRequest(`/api/cutting-table/packet-bom-parts/${partId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      if (selectedBomForParts) {
+        fetchPartsForBom(selectedBomForParts.id);
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-boms'] });
+      toast({ title: "Updated", description: "Part updated successfully." });
+      resetPartForm();
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update part.", variant: "destructive" });
+    },
+  });
+
+  const deletePartMutation = useMutation({
+    mutationFn: async (partId: string) => {
+      return apiRequest(`/api/cutting-table/packet-bom-parts/${partId}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      if (selectedBomForParts) {
+        fetchPartsForBom(selectedBomForParts.id);
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/packet-boms'] });
+      toast({ title: "Deleted", description: "Part deleted successfully." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete part.", variant: "destructive" });
+    },
+  });
+
+  const fetchPartsForBom = async (bomId: string) => {
+    try {
+      const res = await fetch(`/api/cutting-table/packet-boms/${bomId}/parts`);
+      if (res.ok) {
+        const parts = await res.json();
+        setBomParts(parts);
+      }
+    } catch (error) {
+      console.error('Error fetching parts:', error);
+    }
+  };
+
+  const openPartsDialog = (bom: PacketBOM) => {
+    setSelectedBomForParts(bom);
+    fetchPartsForBom(bom.id);
+    setIsPartsDialogOpen(true);
+  };
+
+  const resetPartForm = () => {
+    setEditingPart(null);
+    setNewPartForm({
+      partNumber: "",
+      partDescription: "",
+      fabricType: "",
+      commonName: "",
+      yieldPerCut: "1",
+      squareMetersPerPart: "",
+    });
+  };
+
+  const handleSavePart = () => {
+    if (!selectedBomForParts) return;
+    
+    const data = {
+      partNumber: newPartForm.partNumber,
+      partDescription: newPartForm.partDescription || undefined,
+      fabricType: newPartForm.fabricType,
+      commonName: newPartForm.commonName || undefined,
+      yieldPerCut: parseInt(newPartForm.yieldPerCut) || 1,
+      squareMetersPerPart: newPartForm.squareMetersPerPart ? parseFloat(newPartForm.squareMetersPerPart) : undefined,
+    };
+
+    if (editingPart) {
+      updatePartMutation.mutate({ partId: editingPart.id, ...data });
+    } else {
+      addPartMutation.mutate({ bomId: selectedBomForParts.id, ...data });
+    }
+  };
+
+  const startEditPart = (part: PacketBOMPart) => {
+    setEditingPart(part);
+    setNewPartForm({
+      partNumber: part.partNumber,
+      partDescription: part.partDescription || "",
+      fabricType: part.fabricType,
+      commonName: part.commonName || "",
+      yieldPerCut: String(part.yieldPerCut),
+      squareMetersPerPart: part.squareMetersPerPart ? String(part.squareMetersPerPart) : "",
+    });
+  };
+
+  const resetPacketBomForm = () => {
+    setEditingPacketBom(null);
+    setPacketBomForm({
+      partNumber: "",
+      packetType: "",
+      yieldPerCut: "4",
+      squareMetersPerCut: "0.5",
+      wasteFactor: "0.05",
+      materials: [],
+    });
+    setNewMaterialForm({ fabricType: "", commonName: "", quantityNeeded: 1 });
+  };
+
+  const openPacketBomDialog = (bom?: PacketBOM) => {
+    if (bom) {
+      setEditingPacketBom(bom);
+      setPacketBomForm({
+        partNumber: bom.partNumber || "",
+        packetType: bom.packetType || "",
+        yieldPerCut: String(bom.yieldPerCut || 4),
+        squareMetersPerCut: String(bom.squareMetersPerCut || 0.5),
+        wasteFactor: "0.05",
+        materials: bom.materials?.map(m => ({
+          fabricType: m.fabricType,
+          commonName: m.commonName || "",
+          quantityNeeded: m.quantityNeeded || 1,
+        })) || [],
+      });
+    } else {
+      resetPacketBomForm();
+    }
+    setIsPacketBomDialogOpen(true);
+  };
+
+  const handleSavePacketBom = () => {
+    const data = {
+      partNumber: packetBomForm.partNumber,
+      packetType: packetBomForm.packetType,
+      yieldPerCut: parseInt(packetBomForm.yieldPerCut) || 4,
+      squareMetersPerCut: parseFloat(packetBomForm.squareMetersPerCut) || 0.5,
+      wasteFactor: parseFloat(packetBomForm.wasteFactor) || 0.05,
+      materials: packetBomForm.materials,
+    };
+
+    if (editingPacketBom) {
+      updatePacketBomMutation.mutate({ id: editingPacketBom.id, ...data });
+    } else {
+      createPacketBomMutation.mutate(data);
+    }
+  };
+
+  const addMaterialToForm = () => {
+    if (!newMaterialForm.fabricType) {
+      toast({ title: "Error", description: "Fabric type is required.", variant: "destructive" });
+      return;
+    }
+    setPacketBomForm(prev => ({
+      ...prev,
+      materials: [...prev.materials, { ...newMaterialForm }],
+    }));
+    setNewMaterialForm({ fabricType: "", commonName: "", quantityNeeded: 1 });
+  };
+
+  const removeMaterialFromForm = (index: number) => {
+    setPacketBomForm(prev => ({
+      ...prev,
+      materials: prev.materials.filter((_, i) => i !== index),
+    }));
+  };
 
   const generateLabelsMutation = useMutation({
     mutationFn: async ({ id, quantity }: { id: number; quantity: number }) => {
@@ -1301,6 +1614,109 @@ export default function CuttingTableControlCenter() {
           </Card>
         )}
 
+        {/* Packet BOM Management Section */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Packet BOM Recipes
+                </CardTitle>
+                <CardDescription>
+                  Define cuts, yields, and fabric requirements for each packet type
+                </CardDescription>
+              </div>
+              <Button onClick={() => openPacketBomDialog()} data-testid="btn-add-packet-bom">
+                <Plus className="h-4 w-4 mr-2" />
+                New Packet BOM
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {packetBOMs.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No packet BOMs defined yet.</p>
+                <p className="text-sm">Create a packet BOM to define cuts, yields, and fabric requirements.</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Part Number</TableHead>
+                    <TableHead>Packet Type</TableHead>
+                    <TableHead className="text-right">Yield/Cut</TableHead>
+                    <TableHead className="text-right">m²/Cut</TableHead>
+                    <TableHead>Materials</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {packetBOMs.map((bom) => (
+                    <TableRow key={bom.id}>
+                      <TableCell className="font-medium">{bom.partNumber}</TableCell>
+                      <TableCell>{bom.packetType}</TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="secondary">{bom.yieldPerCut} pcs</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">{bom.squareMetersPerCut} m²</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {bom.materials?.slice(0, 3).map((m, i) => (
+                            <Badge key={i} variant="outline" className="text-xs">
+                              {m.commonName || m.fabricType}
+                            </Badge>
+                          ))}
+                          {(bom.materials?.length || 0) > 3 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{(bom.materials?.length || 0) - 3} more
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openPartsDialog(bom)}
+                            data-testid={`btn-manage-parts-${bom.id}`}
+                          >
+                            <Layers className="h-4 w-4 mr-1" />
+                            Parts
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => openPacketBomDialog(bom)}
+                            data-testid={`btn-edit-bom-${bom.id}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (confirm('Delete this packet BOM?')) {
+                                deletePacketBomMutation.mutate(bom.id);
+                              }
+                            }}
+                            data-testid={`btn-delete-bom-${bom.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -1642,6 +2058,366 @@ export default function CuttingTableControlCenter() {
               data-testid="btn-save-threshold"
             >
               {updateThresholdMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Packet BOM Create/Edit Dialog */}
+      <Dialog open={isPacketBomDialogOpen} onOpenChange={setIsPacketBomDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              {editingPacketBom ? 'Edit Packet BOM' : 'Create New Packet BOM'}
+            </DialogTitle>
+            <DialogDescription>
+              Define the part number, yield per cut, and fabric materials needed
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="bom-part-number">Part Number *</Label>
+                <Input
+                  id="bom-part-number"
+                  value={packetBomForm.partNumber}
+                  onChange={(e) => setPacketBomForm({ ...packetBomForm, partNumber: e.target.value })}
+                  placeholder="e.g., T501"
+                  data-testid="input-bom-part-number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bom-packet-type">Packet Type *</Label>
+                <Input
+                  id="bom-packet-type"
+                  value={packetBomForm.packetType}
+                  onChange={(e) => setPacketBomForm({ ...packetBomForm, packetType: e.target.value })}
+                  placeholder="e.g., Buttstock, Handguard"
+                  data-testid="input-bom-packet-type"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="bom-yield">Yield Per Cut *</Label>
+                <Input
+                  id="bom-yield"
+                  type="number"
+                  min="1"
+                  value={packetBomForm.yieldPerCut}
+                  onChange={(e) => setPacketBomForm({ ...packetBomForm, yieldPerCut: e.target.value })}
+                  placeholder="How many pieces per cut"
+                  data-testid="input-bom-yield"
+                />
+                <p className="text-xs text-muted-foreground">Number of pieces from one fabric cut</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bom-sqm">Square Meters Per Cut</Label>
+                <Input
+                  id="bom-sqm"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={packetBomForm.squareMetersPerCut}
+                  onChange={(e) => setPacketBomForm({ ...packetBomForm, squareMetersPerCut: e.target.value })}
+                  placeholder="Fabric used per cut"
+                  data-testid="input-bom-sqm"
+                />
+                <p className="text-xs text-muted-foreground">Amount of fabric consumed per cut</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label>Fabric Materials Required</Label>
+              </div>
+              
+              {packetBomForm.materials.length > 0 && (
+                <div className="border rounded-lg p-3 space-y-2">
+                  {packetBomForm.materials.map((material, index) => (
+                    <div key={index} className="flex items-center justify-between bg-muted/50 p-2 rounded">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{material.fabricType}</Badge>
+                        {material.commonName && (
+                          <span className="text-sm text-muted-foreground">({material.commonName})</span>
+                        )}
+                        <span className="text-sm">x{material.quantityNeeded}</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 text-destructive"
+                        onClick={() => removeMaterialFromForm(index)}
+                        data-testid={`btn-remove-material-${index}`}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                <p className="text-sm font-medium">Add Material</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Fabric Type *</Label>
+                    <Input
+                      value={newMaterialForm.fabricType}
+                      onChange={(e) => setNewMaterialForm({ ...newMaterialForm, fabricType: e.target.value })}
+                      placeholder="e.g., Carbon Fiber"
+                      data-testid="input-material-fabric-type"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Common Name</Label>
+                    <Input
+                      value={newMaterialForm.commonName}
+                      onChange={(e) => setNewMaterialForm({ ...newMaterialForm, commonName: e.target.value })}
+                      placeholder="Nickname"
+                      data-testid="input-material-common-name"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Qty Needed</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min="1"
+                        value={newMaterialForm.quantityNeeded}
+                        onChange={(e) => setNewMaterialForm({ ...newMaterialForm, quantityNeeded: parseInt(e.target.value) || 1 })}
+                        className="w-20"
+                        data-testid="input-material-qty"
+                      />
+                      <Button 
+                        size="sm" 
+                        onClick={addMaterialToForm}
+                        data-testid="btn-add-material"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPacketBomDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSavePacketBom}
+              disabled={!packetBomForm.partNumber || !packetBomForm.packetType || createPacketBomMutation.isPending || updatePacketBomMutation.isPending}
+              data-testid="btn-save-packet-bom"
+            >
+              {createPacketBomMutation.isPending || updatePacketBomMutation.isPending ? 'Saving...' : editingPacketBom ? 'Update' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Parts Management Dialog */}
+      <Dialog open={isPartsDialogOpen} onOpenChange={(open) => {
+        setIsPartsDialogOpen(open);
+        if (!open) {
+          resetPartForm();
+          setBomParts([]);
+        }
+      }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5" />
+              Manage Parts - {selectedBomForParts?.packetType}
+            </DialogTitle>
+            <DialogDescription>
+              Add individual parts to this packet. Each part has its own part number, fabric type, and yield per cut.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            {/* Existing Parts List */}
+            {bomParts.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-base font-medium">Parts in this Packet</Label>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Part Number</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Fabric</TableHead>
+                      <TableHead className="text-right">Yield/Cut</TableHead>
+                      <TableHead className="text-right">m²/Part</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bomParts.map((part) => (
+                      <TableRow key={part.id}>
+                        <TableCell className="font-medium">{part.partNumber}</TableCell>
+                        <TableCell className="text-muted-foreground">{part.partDescription || '-'}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Badge variant="outline">{part.fabricType}</Badge>
+                            {part.commonName && <span className="text-xs text-muted-foreground">({part.commonName})</span>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant="secondary">{part.yieldPerCut}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right">{part.squareMetersPerPart || '-'}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => startEditPart(part)}
+                              data-testid={`btn-edit-part-${part.id}`}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => {
+                                if (confirm('Delete this part?')) {
+                                  deletePartMutation.mutate(part.id);
+                                }
+                              }}
+                              data-testid={`btn-delete-part-${part.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+
+            {bomParts.length === 0 && (
+              <div className="text-center py-6 border rounded-lg bg-muted/30">
+                <Layers className="h-10 w-10 mx-auto mb-2 text-muted-foreground opacity-50" />
+                <p className="text-muted-foreground">No parts added yet.</p>
+                <p className="text-sm text-muted-foreground">Add parts below to define what makes up this packet.</p>
+              </div>
+            )}
+
+            {/* Add/Edit Part Form */}
+            <div className="border rounded-lg p-4 bg-muted/30 space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-medium">
+                  {editingPart ? 'Edit Part' : 'Add New Part'}
+                </Label>
+                {editingPart && (
+                  <Button size="sm" variant="ghost" onClick={resetPartForm}>
+                    Cancel Edit
+                  </Button>
+                )}
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="part-number">Part Number *</Label>
+                  <Input
+                    id="part-number"
+                    value={newPartForm.partNumber}
+                    onChange={(e) => setNewPartForm({ ...newPartForm, partNumber: e.target.value })}
+                    placeholder="e.g., T501"
+                    data-testid="input-part-number"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="part-description">Description</Label>
+                  <Input
+                    id="part-description"
+                    value={newPartForm.partDescription}
+                    onChange={(e) => setNewPartForm({ ...newPartForm, partDescription: e.target.value })}
+                    placeholder="Optional description"
+                    data-testid="input-part-description"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="part-fabric-type">Fabric Type *</Label>
+                  <Input
+                    id="part-fabric-type"
+                    value={newPartForm.fabricType}
+                    onChange={(e) => setNewPartForm({ ...newPartForm, fabricType: e.target.value })}
+                    placeholder="e.g., Carbon Fiber"
+                    data-testid="input-part-fabric-type"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="part-common-name">Common Name</Label>
+                  <Input
+                    id="part-common-name"
+                    value={newPartForm.commonName}
+                    onChange={(e) => setNewPartForm({ ...newPartForm, commonName: e.target.value })}
+                    placeholder="Nickname for fabric"
+                    data-testid="input-part-common-name"
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="part-yield">Yield Per Cut *</Label>
+                  <Input
+                    id="part-yield"
+                    type="number"
+                    min="1"
+                    value={newPartForm.yieldPerCut}
+                    onChange={(e) => setNewPartForm({ ...newPartForm, yieldPerCut: e.target.value })}
+                    placeholder="How many of this part per cut"
+                    data-testid="input-part-yield"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    How many of this part are produced in one cut
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="part-sqm">Square Meters Per Part</Label>
+                  <Input
+                    id="part-sqm"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newPartForm.squareMetersPerPart}
+                    onChange={(e) => setNewPartForm({ ...newPartForm, squareMetersPerPart: e.target.value })}
+                    placeholder="Optional"
+                    data-testid="input-part-sqm"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSavePart}
+                  disabled={!newPartForm.partNumber || !newPartForm.fabricType || addPartMutation.isPending || updatePartMutation.isPending}
+                  data-testid="btn-save-part"
+                >
+                  {addPartMutation.isPending || updatePartMutation.isPending 
+                    ? 'Saving...' 
+                    : editingPart 
+                      ? 'Update Part' 
+                      : 'Add Part'}
+                </Button>
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPartsDialogOpen(false)}>
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>

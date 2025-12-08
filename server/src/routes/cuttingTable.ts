@@ -7,6 +7,7 @@ import {
   inventoryItems,
   cuttingPacketBOMs,
   cuttingPacketBOMMaterials,
+  cuttingPacketBOMParts,
   cuttingPacketBOMCuts,
   cuttingFabricInventory,
 } from '../../schema';
@@ -1703,6 +1704,101 @@ router.get('/weekly-goals', async (req, res) => {
   } catch (error) {
     console.error('Error fetching weekly goals:', error);
     res.status(500).json({ error: 'Failed to fetch weekly goals' });
+  }
+});
+
+// ============ PACKET BOM PARTS ROUTES ============
+
+// Get all parts for a packet BOM
+router.get('/packet-boms/:id/parts', async (req, res) => {
+  try {
+    const parts = await db.select().from(cuttingPacketBOMParts)
+      .where(eq(cuttingPacketBOMParts.packetBomId, req.params.id))
+      .orderBy(cuttingPacketBOMParts.sortOrder);
+    
+    res.json(parts);
+  } catch (error) {
+    console.error('Error fetching packet BOM parts:', error);
+    res.status(500).json({ error: 'Failed to fetch parts' });
+  }
+});
+
+// Add a part to a packet BOM
+router.post('/packet-boms/:id/parts', async (req, res) => {
+  try {
+    const { partNumber, partDescription, fabricType, commonName, yieldPerCut, squareMetersPerPart, sortOrder, notes } = req.body;
+    
+    if (!partNumber || !fabricType) {
+      return res.status(400).json({ error: 'Part number and fabric type are required' });
+    }
+    
+    const [newPart] = await db.insert(cuttingPacketBOMParts)
+      .values({
+        packetBomId: req.params.id,
+        partNumber,
+        partDescription,
+        fabricType,
+        commonName,
+        yieldPerCut: yieldPerCut || 1,
+        squareMetersPerPart: squareMetersPerPart || null,
+        sortOrder: sortOrder || 0,
+        notes,
+      })
+      .returning();
+    
+    res.status(201).json(newPart);
+  } catch (error) {
+    console.error('Error adding packet BOM part:', error);
+    res.status(400).json({ error: 'Failed to add part' });
+  }
+});
+
+// Update a part
+router.put('/packet-bom-parts/:partId', async (req, res) => {
+  try {
+    const { partNumber, partDescription, fabricType, commonName, yieldPerCut, squareMetersPerPart, sortOrder, notes } = req.body;
+    
+    const [updated] = await db.update(cuttingPacketBOMParts)
+      .set({
+        partNumber,
+        partDescription,
+        fabricType,
+        commonName,
+        yieldPerCut,
+        squareMetersPerPart,
+        sortOrder,
+        notes,
+        updatedAt: new Date(),
+      })
+      .where(eq(cuttingPacketBOMParts.id, req.params.partId))
+      .returning();
+    
+    if (!updated) {
+      return res.status(404).json({ error: 'Part not found' });
+    }
+    
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating packet BOM part:', error);
+    res.status(400).json({ error: 'Failed to update part' });
+  }
+});
+
+// Delete a part
+router.delete('/packet-bom-parts/:partId', async (req, res) => {
+  try {
+    const [deleted] = await db.delete(cuttingPacketBOMParts)
+      .where(eq(cuttingPacketBOMParts.id, req.params.partId))
+      .returning();
+    
+    if (!deleted) {
+      return res.status(404).json({ error: 'Part not found' });
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting packet BOM part:', error);
+    res.status(500).json({ error: 'Failed to delete part' });
   }
 });
 

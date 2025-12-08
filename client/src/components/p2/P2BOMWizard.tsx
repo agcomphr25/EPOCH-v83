@@ -103,13 +103,38 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
       });
     },
     onError: (error: any) => {
+      console.error('BOM save error:', error);
+      const errorMessage = error?.message || error?.details || 'Failed to save BOM';
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to save BOM',
+        title: 'Error Saving BOM',
+        description: errorMessage,
         variant: 'destructive',
       });
     },
   });
+
+  // Fetch existing BOM items for a manufactured part
+  const fetchExistingBOMItems = async (partNumber: string): Promise<BOMItem[]> => {
+    try {
+      const response = await fetch(`/api/p2/bom/items/${encodeURIComponent(partNumber)}`);
+      if (!response.ok) {
+        return [];
+      }
+      const data = await response.json();
+      return (data.bomItems || []).map((item: any) => ({
+        id: item.id?.toString() || Date.now().toString(),
+        inventoryItemId: item.inventoryItemId || null,
+        partNumber: item.partName || item.partNumber || '',
+        description: item.notes || item.description || '',
+        quantity: item.quantity || 1,
+        isManufactured: item.isManufactured === true || item.itemType === 'manufactured',
+        firstDepartment: item.firstDept || item.firstDepartment || 'layup',
+      }));
+    } catch (error) {
+      console.error('Error fetching existing BOM items:', error);
+      return [];
+    }
+  };
 
   useEffect(() => {
     if (poData?.lineItems) {
@@ -181,24 +206,41 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
     setSelectedInventoryItem(null);
 
     if (item.isManufactured) {
-      const newPart: PartNeedingBOM = {
-        id: `mfg-${Date.now()}`,
-        partNumber: item.partNumber,
-        description: item.description,
-        quantity: item.quantity,
-        hasBOM: false,
-        bomItems: [],
-      };
+      // Check if this manufactured part already exists in the queue
+      const existsInQueue = partsNeedingBOM.some(p => p.partNumber === item.partNumber);
       
-      const insertIndex = currentPartIndex + 1;
-      const updatedParts = [...partsNeedingBOM];
-      updatedParts.splice(insertIndex, 0, newPart);
-      setPartsNeedingBOM(updatedParts);
+      if (!existsInQueue) {
+        // Fetch existing BOM items for this manufactured part if it has a BOM
+        fetchExistingBOMItems(item.partNumber).then((existingItems) => {
+          const newPart: PartNeedingBOM = {
+            id: `mfg-${Date.now()}`,
+            partNumber: item.partNumber,
+            description: item.description,
+            quantity: item.quantity,
+            hasBOM: existingItems.length > 0,
+            bomItems: existingItems,
+          };
+          
+          const insertIndex = currentPartIndex + 1;
+          setPartsNeedingBOM(prev => {
+            const updatedParts = [...prev];
+            updatedParts.splice(insertIndex, 0, newPart);
+            return updatedParts;
+          });
 
-      toast({
-        title: 'Manufactured Part Added',
-        description: `${item.partNumber} has been added to the BOM queue for configuration.`,
-      });
+          toast({
+            title: 'Manufactured Part Added',
+            description: existingItems.length > 0 
+              ? `${item.partNumber} added to queue with existing BOM for review.`
+              : `${item.partNumber} has been added to the BOM queue for configuration.`,
+          });
+        });
+      } else {
+        toast({
+          title: 'Part Already in Queue',
+          description: `${item.partNumber} is already in the BOM configuration queue.`,
+        });
+      }
     }
   };
 

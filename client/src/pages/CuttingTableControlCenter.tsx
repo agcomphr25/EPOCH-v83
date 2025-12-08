@@ -2374,13 +2374,28 @@ export default function CuttingTableControlCenter() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="part-number">Part Number *</Label>
-                  <Input
-                    id="part-number"
+                  <Select
                     value={newPartForm.partNumber}
-                    onChange={(e) => setNewPartForm({ ...newPartForm, partNumber: e.target.value })}
-                    placeholder="e.g., T501"
-                    data-testid="input-part-number"
-                  />
+                    onValueChange={(value) => {
+                      const selectedItem = availablePacketItems.find(item => item.agPartNumber === value);
+                      setNewPartForm({ 
+                        ...newPartForm, 
+                        partNumber: value,
+                        partDescription: selectedItem?.name || newPartForm.partDescription
+                      });
+                    }}
+                  >
+                    <SelectTrigger data-testid="select-part-number">
+                      <SelectValue placeholder="Select part number" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availablePacketItems.map((item) => (
+                        <SelectItem key={item.id} value={item.agPartNumber}>
+                          {item.agPartNumber} - {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="part-description">Description</Label>
@@ -2397,13 +2412,28 @@ export default function CuttingTableControlCenter() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="part-fabric-type">Fabric Type *</Label>
-                  <Input
-                    id="part-fabric-type"
+                  <Select
                     value={newPartForm.fabricType}
-                    onChange={(e) => setNewPartForm({ ...newPartForm, fabricType: e.target.value })}
-                    placeholder="e.g., Carbon Fiber"
-                    data-testid="input-part-fabric-type"
-                  />
+                    onValueChange={(value) => {
+                      const selectedFabric = fabricItems.find(f => f.name === value);
+                      setNewPartForm({ 
+                        ...newPartForm, 
+                        fabricType: value,
+                        commonName: selectedFabric?.fabric || value
+                      });
+                    }}
+                  >
+                    <SelectTrigger data-testid="select-part-fabric-type">
+                      <SelectValue placeholder="Select fabric" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fabricItems.map((fabric) => (
+                        <SelectItem key={fabric.id} value={fabric.name}>
+                          {fabric.agPartNumber} - {fabric.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="part-common-name">Common Name</Label>

@@ -88,6 +88,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { BarcodeInputField } from "@/components/BarcodeInputField";
 
 type FabricInventoryItem = {
   id: string;
@@ -239,6 +240,7 @@ export default function CuttingTableControlCenter() {
   const [quantityCompleted, setQuantityCompleted] = useState('');
   const [fabricBarcode, setFabricBarcode] = useState('');
   const [completionNotes, setCompletionNotes] = useState('');
+  const [labelQuantity, setLabelQuantity] = useState('');
   
   const [isReceivingDialogOpen, setIsReceivingDialogOpen] = useState(false);
   const [receivingForm, setReceivingForm] = useState({
@@ -520,6 +522,8 @@ export default function CuttingTableControlCenter() {
     },
   });
 
+  const pendingLabelPrint = useRef<{ id: number; quantity: number } | null>(null);
+  
   const completeItemMutation = useMutation({
     mutationFn: async (data: {
       id: number;
@@ -527,7 +531,14 @@ export default function CuttingTableControlCenter() {
       fabricLot?: string;
       completionNotes?: string;
       completedBy?: string;
+      labelsToPrint?: number;
     }) => {
+      // Store label print info before making request
+      if (data.labelsToPrint && data.labelsToPrint > 0) {
+        pendingLabelPrint.current = { id: data.id, quantity: data.labelsToPrint };
+      } else {
+        pendingLabelPrint.current = null;
+      }
       return apiRequest(`/api/cutting-table-mfg-queue/${data.id}/complete`, {
         method: 'POST',
         body: JSON.stringify(data),
@@ -537,6 +548,13 @@ export default function CuttingTableControlCenter() {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/weekly-goals'] });
       setIsProductionDialogOpen(false);
+      
+      // Trigger label printing if requested
+      if (pendingLabelPrint.current) {
+        generateLabelsMutation.mutate(pendingLabelPrint.current);
+        pendingLabelPrint.current = null;
+      }
+      
       resetProductionForm();
       
       toast({
@@ -547,6 +565,7 @@ export default function CuttingTableControlCenter() {
       });
     },
     onError: () => {
+      pendingLabelPrint.current = null;
       toast({ title: 'Error', description: 'Failed to complete.', variant: 'destructive' });
     },
   });
@@ -1226,6 +1245,7 @@ export default function CuttingTableControlCenter() {
     setQuantityCompleted('');
     setFabricBarcode('');
     setCompletionNotes('');
+    setLabelQuantity('');
     setSelectedMfgItem(null);
   };
 
@@ -1238,6 +1258,7 @@ export default function CuttingTableControlCenter() {
       fabricLot: fabricBarcode,
       completionNotes,
       completedBy: currentUser?.username || 'unknown',
+      labelsToPrint: parseInt(labelQuantity) || 0,
     });
   };
 
@@ -2101,12 +2122,12 @@ export default function CuttingTableControlCenter() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="fabric-barcode">Fabric Lot/Barcode (for traceability)</Label>
-                <Input
+                <Label htmlFor="fabric-barcode">Fabric Lot/Barcode (scan or type)</Label>
+                <BarcodeInputField
                   id="fabric-barcode"
                   value={fabricBarcode}
-                  onChange={(e) => setFabricBarcode(e.target.value)}
-                  placeholder="Scan or enter fabric barcode"
+                  onChange={setFabricBarcode}
+                  placeholder="Scan fabric barcode for traceability"
                   data-testid="input-fabric-barcode"
                 />
               </div>
@@ -2119,6 +2140,25 @@ export default function CuttingTableControlCenter() {
                   placeholder="Optional notes..."
                   data-testid="input-completion-notes"
                 />
+              </div>
+              <div className="border-t pt-4 mt-4">
+                <Label className="text-sm font-medium mb-2 block">Print Labels After Completion</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="label-quantity"
+                    type="number"
+                    min="0"
+                    value={labelQuantity}
+                    onChange={(e) => setLabelQuantity(e.target.value)}
+                    placeholder="# of labels"
+                    className="w-32"
+                    data-testid="input-label-quantity"
+                  />
+                  <span className="text-sm text-muted-foreground">labels to print</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Leave empty to skip printing, or enter quantity to auto-print after completion
+                </p>
               </div>
             </div>
           )}

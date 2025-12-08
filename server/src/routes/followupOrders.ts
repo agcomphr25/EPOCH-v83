@@ -880,8 +880,8 @@ router.post('/:orderId/resend-email', async (req, res) => {
     let followupOrder = await storage.getFollowupOrderByOrderId(orderId);
     
     // Always generate a FRESH signature token when resending to ensure the link works
-    const { randomBytes } = await import('crypto');
-    const newSignatureToken = randomBytes(32).toString('hex');
+    // Use nanoid(32) to match the original token format used in Create Order flow
+    const newSignatureToken = nanoid(32);
     
     if (!followupOrder) {
       console.log(`⚠️ No followup_order found for ${orderId} - creating one automatically`);

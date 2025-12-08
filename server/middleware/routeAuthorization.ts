@@ -237,6 +237,7 @@ const API_TO_FRONTEND_ROUTE_MAPPING: Record<string, string[]> = {
   '/api/training': ['/training-control-center'],
   '/api/analytics': ['/analytics'],
   '/api/gateway-reports': ['/gateway-reports'],
+  '/api/reports': ['/finish-qc-completed-report'],
 };
 
 function normalizeRoute(route: string): string {

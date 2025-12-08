@@ -110,6 +110,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/order-entry',
       '/orders-list',
       '/orders-management',
+      '/department-queue/production-queue',
       '/department-queue/layup-plugging',
       '/department-queue/barcode',
       '/department-queue/finish',

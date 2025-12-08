@@ -1462,15 +1462,19 @@ router.get('/packet-boms', async (req, res) => {
         const parts = rawParts.map(transformPart);
         
         // Get cuts from cutsConfig field (with fallback to description for migration)
-        let cuts = [];
-        if (bom.cutsConfig && Array.isArray(bom.cutsConfig)) {
-          cuts = bom.cutsConfig;
-        } else if (bom.description) {
-          try {
-            cuts = JSON.parse(bom.description);
-          } catch (e) {
-            cuts = [];
+        let cuts: any[] = [];
+        if (bom.cutsConfig) {
+          if (Array.isArray(bom.cutsConfig)) {
+            cuts = bom.cutsConfig;
+          } else if (typeof bom.cutsConfig === 'string') {
+            try { cuts = JSON.parse(bom.cutsConfig); } catch (e) { cuts = []; }
           }
+        }
+        if (cuts.length === 0 && bom.description) {
+          try {
+            const parsed = JSON.parse(bom.description);
+            if (Array.isArray(parsed)) cuts = parsed;
+          } catch (e) { /* ignore */ }
         }
         
         return { ...bom, materials, parts, cuts };
@@ -1503,15 +1507,19 @@ router.get('/packet-boms/:id', async (req, res) => {
     const parts = rawParts.map(transformPart);
     
     // Get cuts from cutsConfig field (with fallback to description for migration)
-    let cuts = [];
-    if (bom.cutsConfig && Array.isArray(bom.cutsConfig)) {
-      cuts = bom.cutsConfig;
-    } else if (bom.description) {
-      try {
-        cuts = JSON.parse(bom.description);
-      } catch (e) {
-        cuts = [];
+    let cuts: any[] = [];
+    if (bom.cutsConfig) {
+      if (Array.isArray(bom.cutsConfig)) {
+        cuts = bom.cutsConfig;
+      } else if (typeof bom.cutsConfig === 'string') {
+        try { cuts = JSON.parse(bom.cutsConfig); } catch (e) { cuts = []; }
       }
+    }
+    if (cuts.length === 0 && bom.description) {
+      try {
+        const parsed = JSON.parse(bom.description);
+        if (Array.isArray(parsed)) cuts = parsed;
+      } catch (e) { /* ignore */ }
     }
     
     res.json({ ...bom, materials, parts, cuts });
@@ -1574,7 +1582,14 @@ router.post('/packet-boms', async (req, res) => {
     const parts = rawParts.map(transformPart);
     
     // Get cuts from cutsConfig field
-    const cuts = newBom.cutsConfig && Array.isArray(newBom.cutsConfig) ? newBom.cutsConfig : [];
+    let cuts: any[] = [];
+    if (newBom.cutsConfig) {
+      if (Array.isArray(newBom.cutsConfig)) {
+        cuts = newBom.cutsConfig;
+      } else if (typeof newBom.cutsConfig === 'string') {
+        try { cuts = JSON.parse(newBom.cutsConfig); } catch (e) { cuts = []; }
+      }
+    }
     
     res.status(201).json({ ...newBom, materials, parts, cuts });
   } catch (error) {
@@ -1651,7 +1666,14 @@ router.put('/packet-boms/:id', async (req, res) => {
     const parts = rawParts.map(transformPart);
     
     // Get cuts from cutsConfig field
-    const cuts = updated.cutsConfig && Array.isArray(updated.cutsConfig) ? updated.cutsConfig : [];
+    let cuts: any[] = [];
+    if (updated.cutsConfig) {
+      if (Array.isArray(updated.cutsConfig)) {
+        cuts = updated.cutsConfig;
+      } else if (typeof updated.cutsConfig === 'string') {
+        try { cuts = JSON.parse(updated.cutsConfig); } catch (e) { cuts = []; }
+      }
+    }
     
     res.json({ ...updated, materials, parts, cuts });
   } catch (error) {

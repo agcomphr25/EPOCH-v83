@@ -1460,7 +1460,18 @@ router.get('/packet-boms', async (req, res) => {
           .where(eq(cuttingPacketBOMParts.packetBomId, bom.id))
           .orderBy(cuttingPacketBOMParts.sortOrder);
         const parts = rawParts.map(transformPart);
-        return { ...bom, materials, parts };
+        
+        // Parse cuts from description field
+        let cuts = [];
+        try {
+          if (bom.description) {
+            cuts = JSON.parse(bom.description);
+          }
+        } catch (e) {
+          cuts = [];
+        }
+        
+        return { ...bom, materials, parts, cuts };
       })
     );
     
@@ -1489,7 +1500,17 @@ router.get('/packet-boms/:id', async (req, res) => {
       .orderBy(cuttingPacketBOMParts.sortOrder);
     const parts = rawParts.map(transformPart);
     
-    res.json({ ...bom, materials, parts });
+    // Parse cuts from description field
+    let cuts = [];
+    try {
+      if (bom.description) {
+        cuts = JSON.parse(bom.description);
+      }
+    } catch (e) {
+      cuts = [];
+    }
+    
+    res.json({ ...bom, materials, parts, cuts });
   } catch (error) {
     console.error('Error fetching packet BOM:', error);
     res.status(500).json({ error: 'Failed to fetch packet BOM' });
@@ -1499,9 +1520,14 @@ router.get('/packet-boms/:id', async (req, res) => {
 // Create packet BOM (auto-created when inventory item has cutting selected)
 router.post('/packet-boms', async (req, res) => {
   try {
-    const validatedData = insertCuttingPacketBOMSchema.parse(req.body);
+    // Store cuts configuration in description field as JSON
+    const cutsConfig = req.body.cuts ? JSON.stringify(req.body.cuts) : null;
+    const baseData = insertCuttingPacketBOMSchema.parse(req.body);
     
-    const [newBom] = await db.insert(cuttingPacketBOMs).values(validatedData).returning();
+    const [newBom] = await db.insert(cuttingPacketBOMs).values({
+      ...baseData,
+      description: cutsConfig, // Explicitly set after validation to store cuts JSON
+    }).returning();
     
     // If materials are provided, add them
     if (req.body.materials && Array.isArray(req.body.materials)) {
@@ -1517,7 +1543,7 @@ router.post('/packet-boms', async (req, res) => {
       }
     }
 
-    // If parts are provided, add them
+    // If parts are provided, add them (simplified structure for new model)
     if (req.body.parts && Array.isArray(req.body.parts)) {
       for (let i = 0; i < req.body.parts.length; i++) {
         const part = req.body.parts[i];
@@ -1525,12 +1551,12 @@ router.post('/packet-boms', async (req, res) => {
           packetBomId: newBom.id,
           partNumber: part.partNumber,
           partDescription: part.partName || part.partDescription,
-          fabricType: part.materialName || part.fabricType || "",
-          commonName: part.materialPartNumber || part.commonName,
-          yieldPerCut: part.yieldPerCut || 1,
+          fabricType: "", // Material is now on cuts, not parts
+          commonName: "",
+          yieldPerCut: 1,
           squareMetersPerPart: null,
           sortOrder: i,
-          notes: JSON.stringify({ quantity: part.quantity || 1, cutsNeeded: part.cutsNeeded || 1 }),
+          notes: JSON.stringify({ quantity: part.quantity || 1 }),
         });
       }
     }
@@ -1543,7 +1569,17 @@ router.post('/packet-boms', async (req, res) => {
       .orderBy(cuttingPacketBOMParts.sortOrder);
     const parts = rawParts.map(transformPart);
     
-    res.status(201).json({ ...newBom, materials, parts });
+    // Parse cuts from description
+    let cuts = [];
+    try {
+      if (newBom.description) {
+        cuts = JSON.parse(newBom.description);
+      }
+    } catch (e) {
+      cuts = [];
+    }
+    
+    res.status(201).json({ ...newBom, materials, parts, cuts });
   } catch (error) {
     console.error('Error creating packet BOM:', error);
     res.status(400).json({ error: 'Failed to create packet BOM' });
@@ -1553,10 +1589,16 @@ router.post('/packet-boms', async (req, res) => {
 // Update packet BOM
 router.put('/packet-boms/:id', async (req, res) => {
   try {
-    const validatedData = insertCuttingPacketBOMSchema.partial().parse(req.body);
+    // Store cuts configuration in description field as JSON
+    const cutsConfig = req.body.cuts ? JSON.stringify(req.body.cuts) : undefined;
+    const baseData = insertCuttingPacketBOMSchema.partial().parse(req.body);
     
     const [updated] = await db.update(cuttingPacketBOMs)
-      .set({ ...validatedData, updatedAt: new Date() })
+      .set({ 
+        ...baseData, 
+        description: cutsConfig, // Explicitly set after validation to store cuts JSON
+        updatedAt: new Date() 
+      })
       .where(eq(cuttingPacketBOMs.id, req.params.id))
       .returning();
     
@@ -1581,7 +1623,7 @@ router.put('/packet-boms/:id', async (req, res) => {
       }
     }
 
-    // Update parts if provided
+    // Update parts if provided (simplified structure for new model)
     if (req.body.parts && Array.isArray(req.body.parts)) {
       await db.delete(cuttingPacketBOMParts)
         .where(eq(cuttingPacketBOMParts.packetBomId, updated.id));
@@ -1592,12 +1634,12 @@ router.put('/packet-boms/:id', async (req, res) => {
           packetBomId: updated.id,
           partNumber: part.partNumber,
           partDescription: part.partName || part.partDescription,
-          fabricType: part.materialName || part.fabricType || "",
-          commonName: part.materialPartNumber || part.commonName,
-          yieldPerCut: part.yieldPerCut || 1,
+          fabricType: "", // Material is now on cuts, not parts
+          commonName: "",
+          yieldPerCut: 1,
           squareMetersPerPart: null,
           sortOrder: i,
-          notes: JSON.stringify({ quantity: part.quantity || 1, cutsNeeded: part.cutsNeeded || 1 }),
+          notes: JSON.stringify({ quantity: part.quantity || 1 }),
         });
       }
     }
@@ -1610,7 +1652,17 @@ router.put('/packet-boms/:id', async (req, res) => {
       .orderBy(cuttingPacketBOMParts.sortOrder);
     const parts = rawParts.map(transformPart);
     
-    res.json({ ...updated, materials, parts });
+    // Parse cuts from description
+    let cuts = [];
+    try {
+      if (updated.description) {
+        cuts = JSON.parse(updated.description);
+      }
+    } catch (e) {
+      cuts = [];
+    }
+    
+    res.json({ ...updated, materials, parts, cuts });
   } catch (error) {
     console.error('Error updating packet BOM:', error);
     res.status(400).json({ error: 'Failed to update packet BOM' });

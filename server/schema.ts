@@ -6235,6 +6235,7 @@ export const cuttingPacketBOMs = pgTable('cutting_packet_boms', {
   packetType: text('packet_type').notNull(), // e.g., "CF_P2", "FG_P1"
   partNumber: text('part_number').notNull(), // Part number for the packet
   description: text('description'), // Description of the packet
+  cutsConfig: jsonb('cuts_config'), // JSON config for cuts with assigned parts: [{materialPartNumber, materialName, cutsNeeded, assignedParts: [{partNumber, partsPerCut}]}]
   productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
   inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id), // Link to inventory item that triggered this BOM
   squareMetersPerCut: real('square_meters_per_cut').notNull().default(0), // Square meters consumed per cut

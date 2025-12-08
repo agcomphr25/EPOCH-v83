@@ -51,7 +51,13 @@ args = "npm run dev"
 localPort = 5000
 externalPort = 80
 
+<<<<<<< HEAD
 
+=======
+[[ports]]
+localPort = 45707
+externalPort = 3000
+>>>>>>> 83882733 (Saved progress at the end of the loop)
 
 [userenv]
 

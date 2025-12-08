@@ -222,7 +222,7 @@ const API_TO_FRONTEND_ROUTE_MAPPING: Record<string, string[]> = {
   '/api/cost-centers': ['/finance/cost-centers'],
   '/api/cost-accounting': ['/finance/cost-accounting'],
   '/api/discounts': ['/discounts'],
-  '/api/stock-models': ['/stock-models'],
+  // '/api/stock-models' removed - stock models are read-only reference data needed by many pages
   '/api/bom': ['/robust-bom-administration'],
   '/api/p2': ['/p2-control-center'],
   '/api/manufacturing': ['/manufacturing-queue'],

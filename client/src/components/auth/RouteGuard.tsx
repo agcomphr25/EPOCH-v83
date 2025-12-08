@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { hasRouteAccess, hasFullAccess } from '@/config/userPermissions';
+import { getDashboardRoute } from '@/config/dashboardMapping';
 import AccessDenied from '@/pages/AccessDenied';
 
 interface RouteGuardProps {
@@ -50,12 +51,21 @@ function isPublicRoute(path: string): boolean {
 
 /**
  * Check if the route is the user's own personal dashboard
- * Personal dashboards follow the pattern: /{username}-dashboard
+ * Uses the dashboard mapping to handle cases where dashboard URLs don't follow
+ * the /{username}-dashboard pattern (e.g., agrace uses /ag-dashboard)
  */
 function isOwnPersonalDashboard(username: string, route: string): boolean {
   if (!username) return false;
   const lowerUsername = username.toLowerCase();
   const lowerRoute = route.toLowerCase();
+  
+  // Check if route matches the user's mapped dashboard
+  const userDashboard = getDashboardRoute(lowerUsername);
+  if (userDashboard && lowerRoute === userDashboard.toLowerCase()) {
+    return true;
+  }
+  
+  // Also check the standard pattern as a fallback
   return lowerRoute === `/${lowerUsername}-dashboard`;
 }
 

@@ -3,6 +3,8 @@
 // This is the SOURCE OF TRUTH for user access - navbar filtering uses these routes
 // IMPORTANT: Routes must match EXACTLY what's in Navigation.tsx for filtering to work
 
+import { getDashboardRoute } from './dashboardMapping';
+
 export interface UserPermissions {
   routes: string[];
   fullAccess?: boolean;
@@ -305,11 +307,20 @@ function routeMatches(currentRoute: string, allowedRoute: string): boolean {
 
 /**
  * Check if the route is the user's own personal dashboard
- * Personal dashboards follow the pattern: /{username}-dashboard
+ * Uses the dashboard mapping to handle cases where dashboard URLs don't follow
+ * the /{username}-dashboard pattern (e.g., agrace uses /ag-dashboard)
  */
 function isOwnPersonalDashboard(username: string, route: string): boolean {
   const lowerUsername = username.toLowerCase();
   const lowerRoute = route.toLowerCase();
+  
+  // Check if route matches the user's mapped dashboard
+  const userDashboard = getDashboardRoute(lowerUsername);
+  if (userDashboard && lowerRoute === userDashboard.toLowerCase()) {
+    return true;
+  }
+  
+  // Also check the standard pattern as a fallback
   return lowerRoute === `/${lowerUsername}-dashboard`;
 }
 

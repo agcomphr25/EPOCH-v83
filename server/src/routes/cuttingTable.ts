@@ -1421,6 +1421,32 @@ router.get('/weekly-packet-needs', async (req, res) => {
 
 // ========== Packet BOM Endpoints ==========
 
+// Helper to transform parts data for frontend
+const transformPart = (part: any) => {
+  let quantity = 1;
+  let cutsNeeded = 1;
+  try {
+    if (part.notes) {
+      const parsed = JSON.parse(part.notes);
+      quantity = parsed.quantity || 1;
+      cutsNeeded = parsed.cutsNeeded || 1;
+    }
+  } catch {
+    // Legacy format: "Qty: X, Cuts: Y"
+    const qtyMatch = part.notes?.match(/Qty:\s*(\d+)/);
+    const cutsMatch = part.notes?.match(/Cuts:\s*(\d+)/);
+    if (qtyMatch) quantity = parseInt(qtyMatch[1]) || 1;
+    if (cutsMatch) cutsNeeded = parseInt(cutsMatch[1]) || 1;
+  }
+  return {
+    ...part,
+    quantity,
+    cutsNeeded,
+    materialPartNumber: part.commonName || "",
+    materialName: part.fabricType || "",
+  };
+};
+
 // Get all packet BOMs with their materials and parts
 router.get('/packet-boms', async (req, res) => {
   try {
@@ -1430,9 +1456,10 @@ router.get('/packet-boms', async (req, res) => {
       boms.map(async (bom) => {
         const materials = await db.select().from(cuttingPacketBOMMaterials)
           .where(eq(cuttingPacketBOMMaterials.packetBomId, bom.id));
-        const parts = await db.select().from(cuttingPacketBOMParts)
+        const rawParts = await db.select().from(cuttingPacketBOMParts)
           .where(eq(cuttingPacketBOMParts.packetBomId, bom.id))
           .orderBy(cuttingPacketBOMParts.sortOrder);
+        const parts = rawParts.map(transformPart);
         return { ...bom, materials, parts };
       })
     );
@@ -1457,9 +1484,10 @@ router.get('/packet-boms/:id', async (req, res) => {
     const materials = await db.select().from(cuttingPacketBOMMaterials)
       .where(eq(cuttingPacketBOMMaterials.packetBomId, bom.id));
 
-    const parts = await db.select().from(cuttingPacketBOMParts)
+    const rawParts = await db.select().from(cuttingPacketBOMParts)
       .where(eq(cuttingPacketBOMParts.packetBomId, bom.id))
       .orderBy(cuttingPacketBOMParts.sortOrder);
+    const parts = rawParts.map(transformPart);
     
     res.json({ ...bom, materials, parts });
   } catch (error) {
@@ -1497,12 +1525,12 @@ router.post('/packet-boms', async (req, res) => {
           packetBomId: newBom.id,
           partNumber: part.partNumber,
           partDescription: part.partName || part.partDescription,
-          fabricType: part.materialName || part.fabricType,
-          commonName: part.materialPartNumber,
+          fabricType: part.materialName || part.fabricType || "",
+          commonName: part.materialPartNumber || part.commonName,
           yieldPerCut: part.yieldPerCut || 1,
           squareMetersPerPart: null,
           sortOrder: i,
-          notes: `Qty: ${part.quantity || 1}, Cuts: ${part.cutsNeeded || 1}`,
+          notes: JSON.stringify({ quantity: part.quantity || 1, cutsNeeded: part.cutsNeeded || 1 }),
         });
       }
     }
@@ -1510,9 +1538,10 @@ router.post('/packet-boms', async (req, res) => {
     const materials = await db.select().from(cuttingPacketBOMMaterials)
       .where(eq(cuttingPacketBOMMaterials.packetBomId, newBom.id));
 
-    const parts = await db.select().from(cuttingPacketBOMParts)
+    const rawParts = await db.select().from(cuttingPacketBOMParts)
       .where(eq(cuttingPacketBOMParts.packetBomId, newBom.id))
       .orderBy(cuttingPacketBOMParts.sortOrder);
+    const parts = rawParts.map(transformPart);
     
     res.status(201).json({ ...newBom, materials, parts });
   } catch (error) {
@@ -1563,12 +1592,12 @@ router.put('/packet-boms/:id', async (req, res) => {
           packetBomId: updated.id,
           partNumber: part.partNumber,
           partDescription: part.partName || part.partDescription,
-          fabricType: part.materialName || part.fabricType,
-          commonName: part.materialPartNumber,
+          fabricType: part.materialName || part.fabricType || "",
+          commonName: part.materialPartNumber || part.commonName,
           yieldPerCut: part.yieldPerCut || 1,
           squareMetersPerPart: null,
           sortOrder: i,
-          notes: `Qty: ${part.quantity || 1}, Cuts: ${part.cutsNeeded || 1}`,
+          notes: JSON.stringify({ quantity: part.quantity || 1, cutsNeeded: part.cutsNeeded || 1 }),
         });
       }
     }
@@ -1576,9 +1605,10 @@ router.put('/packet-boms/:id', async (req, res) => {
     const materials = await db.select().from(cuttingPacketBOMMaterials)
       .where(eq(cuttingPacketBOMMaterials.packetBomId, updated.id));
 
-    const parts = await db.select().from(cuttingPacketBOMParts)
+    const rawParts = await db.select().from(cuttingPacketBOMParts)
       .where(eq(cuttingPacketBOMParts.packetBomId, updated.id))
       .orderBy(cuttingPacketBOMParts.sortOrder);
+    const parts = rawParts.map(transformPart);
     
     res.json({ ...updated, materials, parts });
   } catch (error) {

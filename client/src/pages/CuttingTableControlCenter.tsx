@@ -145,6 +145,7 @@ type PacketBOM = {
   partNumber: string;
   description: string;
   materials: PacketBOMMaterial[];
+  parts?: PacketBOMPart[];
   squareMetersPerCut: number;
   yieldPerCut: number;
   createdAt: string;
@@ -272,6 +273,7 @@ export default function CuttingTableControlCenter() {
   // Packet BOM Management state
   const [isPacketBomDialogOpen, setIsPacketBomDialogOpen] = useState(false);
   const [editingPacketBom, setEditingPacketBom] = useState<PacketBOM | null>(null);
+  const [packetBomWizardStep, setPacketBomWizardStep] = useState(1); // 1: Select Packet, 2: Add Parts, 3: Configure Cuts/Yield/Material
   const [packetBomForm, setPacketBomForm] = useState({
     partNumber: "",
     packetType: "",
@@ -279,12 +281,12 @@ export default function CuttingTableControlCenter() {
     squareMetersPerCut: "0.5",
     wasteFactor: "0.05",
     materials: [] as { fabricType: string; commonName: string; quantityNeeded: number }[],
-    parts: [] as { partNumber: string; partName: string; quantity: number; cutsNeeded: number; yieldPerCut: number; materialPartNumber: string; materialName: string }[],
+    parts: [] as { partNumber: string; partDescription: string; quantity: number; cutsNeeded: number; yieldPerCut: number; materialPartNumber: string; materialName: string }[],
   });
   const [newMaterialForm, setNewMaterialForm] = useState({ fabricType: "", commonName: "", quantityNeeded: 1 });
   const [newPacketPartForm, setNewPacketPartForm] = useState({
     partNumber: "",
-    partName: "",
+    partDescription: "",
     quantity: 1,
     cutsNeeded: 1,
     yieldPerCut: 1,
@@ -876,6 +878,7 @@ export default function CuttingTableControlCenter() {
 
   const resetPacketBomForm = () => {
     setEditingPacketBom(null);
+    setPacketBomWizardStep(1);
     setPacketBomForm({
       partNumber: "",
       packetType: "",
@@ -888,7 +891,7 @@ export default function CuttingTableControlCenter() {
     setNewMaterialForm({ fabricType: "", commonName: "", quantityNeeded: 1 });
     setNewPacketPartForm({
       partNumber: "",
-      partName: "",
+      partDescription: "",
       quantity: 1,
       cutsNeeded: 1,
       yieldPerCut: 1,
@@ -912,7 +915,7 @@ export default function CuttingTableControlCenter() {
     }));
     setNewPacketPartForm({
       partNumber: "",
-      partName: "",
+      partDescription: "",
       quantity: 1,
       cutsNeeded: 1,
       yieldPerCut: 1,
@@ -931,6 +934,7 @@ export default function CuttingTableControlCenter() {
   const openPacketBomDialog = (bom?: PacketBOM) => {
     if (bom) {
       setEditingPacketBom(bom);
+      setPacketBomWizardStep(1); // Start at step 1 for editing too
       setPacketBomForm({
         partNumber: bom.partNumber || "",
         packetType: bom.packetType || "",
@@ -942,7 +946,15 @@ export default function CuttingTableControlCenter() {
           commonName: m.commonName || "",
           quantityNeeded: m.quantityNeeded || 1,
         })) || [],
-        parts: [],
+        parts: bom.parts?.map((p: any) => ({
+          partNumber: p.partNumber || "",
+          partDescription: p.partDescription || "",
+          quantity: p.quantity || 1,
+          cutsNeeded: p.cutsNeeded || 1,
+          yieldPerCut: p.yieldPerCut || 1,
+          materialPartNumber: p.materialPartNumber || p.commonName || "",
+          materialName: p.materialName || p.fabricType || "",
+        })) || [],
       });
     } else {
       resetPacketBomForm();
@@ -950,7 +962,57 @@ export default function CuttingTableControlCenter() {
     setIsPacketBomDialogOpen(true);
   };
 
+  // Step 2: Add part with just part number and quantity
+  const addPartStep2 = () => {
+    if (!newPacketPartForm.partNumber) {
+      toast({ title: "Error", description: "Please select a part.", variant: "destructive" });
+      return;
+    }
+    setPacketBomForm(prev => ({
+      ...prev,
+      parts: [...prev.parts, { 
+        partNumber: newPacketPartForm.partNumber,
+        partDescription: newPacketPartForm.partDescription,
+        quantity: newPacketPartForm.quantity,
+        cutsNeeded: 1, // Will be set in step 3
+        yieldPerCut: 1, // Will be set in step 3
+        materialPartNumber: "", // Will be set in step 3
+        materialName: "", // Will be set in step 3
+      }],
+    }));
+    setNewPacketPartForm({
+      partNumber: "",
+      partDescription: "",
+      quantity: 1,
+      cutsNeeded: 1,
+      yieldPerCut: 1,
+      materialPartNumber: "",
+      materialName: "",
+    });
+  };
+
+  // Step 3: Update part with cuts, yield, and material
+  const updatePartStep3 = (index: number, field: string, value: any) => {
+    setPacketBomForm(prev => ({
+      ...prev,
+      parts: prev.parts.map((part, i) => 
+        i === index ? { ...part, [field]: value } : part
+      ),
+    }));
+  };
+
   const handleSavePacketBom = () => {
+    // Validate all parts have required fields
+    const invalidParts = packetBomForm.parts.filter(p => !p.materialPartNumber);
+    if (invalidParts.length > 0) {
+      toast({ 
+        title: "Validation Error", 
+        description: `Please select a material for all parts. ${invalidParts.length} part(s) missing material.`, 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
     const data = {
       partNumber: packetBomForm.partNumber,
       packetType: packetBomForm.packetType,
@@ -2126,8 +2188,11 @@ export default function CuttingTableControlCenter() {
         </DialogContent>
       </Dialog>
 
-      {/* Packet BOM Create/Edit Dialog */}
-      <Dialog open={isPacketBomDialogOpen} onOpenChange={setIsPacketBomDialogOpen}>
+      {/* Packet BOM Create/Edit Dialog - 3-Step Wizard */}
+      <Dialog open={isPacketBomDialogOpen} onOpenChange={(open) => {
+        if (!open) resetPacketBomForm();
+        setIsPacketBomDialogOpen(open);
+      }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2135,256 +2200,319 @@ export default function CuttingTableControlCenter() {
               {editingPacketBom ? 'Edit Packet BOM' : 'Create New Packet BOM'}
             </DialogTitle>
             <DialogDescription>
-              Define the part number, yield per cut, and fabric materials needed
+              Step {packetBomWizardStep} of 3: {
+                packetBomWizardStep === 1 ? 'Select Packet' :
+                packetBomWizardStep === 2 ? 'Add Parts' :
+                'Configure Cuts, Yield & Materials'
+              }
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-6 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="bom-part-number">Part Number *</Label>
-                <Select
-                  value={packetBomForm.partNumber}
-                  onValueChange={(value) => {
-                    const selectedItem = availablePacketItems.find(item => item.agPartNumber === value);
-                    setPacketBomForm({ 
-                      ...packetBomForm, 
-                      partNumber: value,
-                      packetType: selectedItem?.name || packetBomForm.packetType
-                    });
-                  }}
-                >
-                  <SelectTrigger data-testid="select-bom-part-number">
-                    <SelectValue placeholder="Select part number" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availablePacketItems.map((item) => (
-                      <SelectItem key={item.id} value={item.agPartNumber}>
-                        {item.agPartNumber} - {item.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bom-packet-type">Packet Type *</Label>
-                <Select
-                  value={packetBomForm.packetType}
-                  onValueChange={(value) => setPacketBomForm({ ...packetBomForm, packetType: value })}
-                >
-                  <SelectTrigger data-testid="select-bom-packet-type">
-                    <SelectValue placeholder="Select packet type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availablePacketItems.map((item) => (
-                      <SelectItem key={item.id} value={item.name}>
-                        {item.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="bom-yield">Yield Per Cut *</Label>
-                <Input
-                  id="bom-yield"
-                  type="number"
-                  min="1"
-                  value={packetBomForm.yieldPerCut}
-                  onChange={(e) => setPacketBomForm({ ...packetBomForm, yieldPerCut: e.target.value })}
-                  placeholder="How many pieces per cut"
-                  data-testid="input-bom-yield"
-                />
-                <p className="text-xs text-muted-foreground">Number of pieces from one fabric cut</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bom-sqm">Square Meters Per Cut</Label>
-                <Input
-                  id="bom-sqm"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={packetBomForm.squareMetersPerCut}
-                  onChange={(e) => setPacketBomForm({ ...packetBomForm, squareMetersPerCut: e.target.value })}
-                  placeholder="Fabric used per cut"
-                  data-testid="input-bom-sqm"
-                />
-                <p className="text-xs text-muted-foreground">Amount of fabric consumed per cut</p>
-              </div>
-            </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label className="text-base font-medium">Parts in this Packet</Label>
+          {/* Step Progress Indicator */}
+          <div className="flex items-center justify-center gap-2 py-2">
+            {[1, 2, 3].map((step) => (
+              <div key={step} className="flex items-center">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                  packetBomWizardStep === step 
+                    ? 'bg-primary text-primary-foreground' 
+                    : packetBomWizardStep > step 
+                    ? 'bg-green-500 text-white' 
+                    : 'bg-muted text-muted-foreground'
+                }`}>
+                  {packetBomWizardStep > step ? '✓' : step}
+                </div>
+                {step < 3 && (
+                  <div className={`w-12 h-1 mx-1 ${
+                    packetBomWizardStep > step ? 'bg-green-500' : 'bg-muted'
+                  }`} />
+                )}
               </div>
-              
-              {packetBomForm.parts.length > 0 && (
-                <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Part</TableHead>
-                        <TableHead className="text-center">Qty</TableHead>
-                        <TableHead className="text-center">Cuts</TableHead>
-                        <TableHead className="text-center">Yield/Cut</TableHead>
-                        <TableHead>Material</TableHead>
-                        <TableHead className="w-10"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {packetBomForm.parts.map((part, index) => (
-                        <TableRow key={index}>
-                          <TableCell>
-                            <div className="font-medium">{part.partNumber}</div>
-                            <div className="text-xs text-muted-foreground">{part.partName}</div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="secondary">{part.quantity}</Badge>
-                          </TableCell>
-                          <TableCell className="text-center">{part.cutsNeeded}</TableCell>
-                          <TableCell className="text-center">{part.yieldPerCut}</TableCell>
-                          <TableCell>
-                            <div className="text-sm">{part.materialPartNumber}</div>
-                            <div className="text-xs text-muted-foreground">{part.materialName}</div>
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 w-6 p-0 text-destructive"
-                              onClick={() => removePacketPartFromForm(index)}
-                              data-testid={`btn-remove-part-${index}`}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-
-              {packetBomForm.parts.length === 0 && (
-                <div className="text-center py-4 border rounded-lg bg-muted/30">
-                  <Layers className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
-                  <p className="text-sm text-muted-foreground">No parts added yet. Add parts below.</p>
-                </div>
-              )}
-              
-              <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
-                <p className="text-sm font-medium">Add Part to Packet</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Part *</Label>
-                    <Select
-                      value={newPacketPartForm.partNumber}
-                      onValueChange={(value) => {
-                        const selectedItem = availablePacketItems.find(item => item.agPartNumber === value);
-                        setNewPacketPartForm({ 
-                          ...newPacketPartForm, 
-                          partNumber: value,
-                          partName: selectedItem?.name || ""
-                        });
-                      }}
-                    >
-                      <SelectTrigger data-testid="select-new-part">
-                        <SelectValue placeholder="Select part" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availablePacketItems.map((item) => (
-                          <SelectItem key={item.id} value={item.agPartNumber}>
-                            {item.agPartNumber} - {item.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Material *</Label>
-                    <Select
-                      value={newPacketPartForm.materialPartNumber}
-                      onValueChange={(value) => {
-                        const selectedFabric = fabricItems.find(f => f.agPartNumber === value);
-                        setNewPacketPartForm({ 
-                          ...newPacketPartForm, 
-                          materialPartNumber: value,
-                          materialName: selectedFabric?.name || ""
-                        });
-                      }}
-                    >
-                      <SelectTrigger data-testid="select-new-material">
-                        <SelectValue placeholder="Select material" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {fabricItems.map((fabric) => (
-                          <SelectItem key={fabric.id} value={fabric.agPartNumber}>
-                            {fabric.agPartNumber} - {fabric.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-4 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Quantity</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={newPacketPartForm.quantity}
-                      onChange={(e) => setNewPacketPartForm({ ...newPacketPartForm, quantity: parseInt(e.target.value) || 1 })}
-                      data-testid="input-new-part-qty"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Cuts Needed</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={newPacketPartForm.cutsNeeded}
-                      onChange={(e) => setNewPacketPartForm({ ...newPacketPartForm, cutsNeeded: parseInt(e.target.value) || 1 })}
-                      data-testid="input-new-part-cuts"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Yield/Cut</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={newPacketPartForm.yieldPerCut}
-                      onChange={(e) => setNewPacketPartForm({ ...newPacketPartForm, yieldPerCut: parseInt(e.target.value) || 1 })}
-                      data-testid="input-new-part-yield"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">&nbsp;</Label>
-                    <Button 
-                      className="w-full"
-                      size="sm" 
-                      onClick={addPacketPartToForm}
-                      data-testid="btn-add-part-to-packet"
-                    >
-                      <Plus className="h-4 w-4 mr-1" /> Add Part
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsPacketBomDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSavePacketBom}
-              disabled={!packetBomForm.partNumber || !packetBomForm.packetType || createPacketBomMutation.isPending || updatePacketBomMutation.isPending}
-              data-testid="btn-save-packet-bom"
-            >
-              {createPacketBomMutation.isPending || updatePacketBomMutation.isPending ? 'Saving...' : editingPacketBom ? 'Update' : 'Create'}
-            </Button>
+
+          <div className="space-y-6 py-4">
+            {/* STEP 1: Select Packet */}
+            {packetBomWizardStep === 1 && (
+              <div className="space-y-4">
+                <div className="text-center mb-4">
+                  <Layers className="h-12 w-12 mx-auto mb-2 text-primary opacity-70" />
+                  <h3 className="text-lg font-medium">Select a Packet</h3>
+                  <p className="text-sm text-muted-foreground">Choose the packet type from your inventory</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bom-part-number">Packet Part Number *</Label>
+                  <Select
+                    value={packetBomForm.partNumber}
+                    onValueChange={(value) => {
+                      const selectedItem = availablePacketItems.find(item => item.agPartNumber === value);
+                      setPacketBomForm({ 
+                        ...packetBomForm, 
+                        partNumber: value,
+                        packetType: selectedItem?.name || packetBomForm.packetType
+                      });
+                    }}
+                  >
+                    <SelectTrigger data-testid="select-bom-part-number">
+                      <SelectValue placeholder="Select packet from inventory" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availablePacketItems.map((item) => (
+                        <SelectItem key={item.id} value={item.agPartNumber}>
+                          {item.agPartNumber} - {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {packetBomForm.partNumber && (
+                  <div className="p-4 border rounded-lg bg-muted/30">
+                    <p className="text-sm font-medium">Selected Packet:</p>
+                    <p className="text-lg font-bold text-primary">{packetBomForm.partNumber}</p>
+                    <p className="text-sm text-muted-foreground">{packetBomForm.packetType}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* STEP 2: Add Parts with Quantities */}
+            {packetBomWizardStep === 2 && (
+              <div className="space-y-4">
+                <div className="text-center mb-4">
+                  <Plus className="h-12 w-12 mx-auto mb-2 text-primary opacity-70" />
+                  <h3 className="text-lg font-medium">Add Parts to Packet</h3>
+                  <p className="text-sm text-muted-foreground">Select parts and specify quantities for "{packetBomForm.packetType}"</p>
+                </div>
+
+                {/* Added Parts List */}
+                {packetBomForm.parts.length > 0 && (
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Part</TableHead>
+                          <TableHead className="text-center">Quantity</TableHead>
+                          <TableHead className="w-10"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {packetBomForm.parts.map((part, index) => (
+                          <TableRow key={index}>
+                            <TableCell>
+                              <div className="font-medium">{part.partNumber}</div>
+                              <div className="text-xs text-muted-foreground">{part.partDescription}</div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="secondary">{part.quantity}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0 text-destructive"
+                                onClick={() => removePacketPartFromForm(index)}
+                                data-testid={`btn-remove-part-${index}`}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+
+                {packetBomForm.parts.length === 0 && (
+                  <div className="text-center py-4 border rounded-lg bg-muted/30">
+                    <Layers className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+                    <p className="text-sm text-muted-foreground">No parts added yet. Add parts below.</p>
+                  </div>
+                )}
+                
+                {/* Add Part Form */}
+                <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+                  <p className="text-sm font-medium">Add Part</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2 space-y-1">
+                      <Label className="text-xs">Part *</Label>
+                      <Select
+                        value={newPacketPartForm.partNumber}
+                        onValueChange={(value) => {
+                          const selectedItem = availablePacketItems.find(item => item.agPartNumber === value);
+                          setNewPacketPartForm({ 
+                            ...newPacketPartForm, 
+                            partNumber: value,
+                            partDescription: selectedItem?.name || ""
+                          });
+                        }}
+                      >
+                        <SelectTrigger data-testid="select-new-part-step2">
+                          <SelectValue placeholder="Select part from inventory" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availablePacketItems.map((item) => (
+                            <SelectItem key={item.id} value={item.agPartNumber}>
+                              {item.agPartNumber} - {item.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Quantity</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={newPacketPartForm.quantity}
+                        onChange={(e) => setNewPacketPartForm({ ...newPacketPartForm, quantity: parseInt(e.target.value) || 1 })}
+                        data-testid="input-new-part-qty-step2"
+                      />
+                    </div>
+                  </div>
+                  <Button 
+                    className="w-full"
+                    size="sm" 
+                    onClick={addPartStep2}
+                    data-testid="btn-add-part-step2"
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Add Part
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3: Configure Cuts, Yield, and Materials for each part */}
+            {packetBomWizardStep === 3 && (
+              <div className="space-y-4">
+                <div className="text-center mb-4">
+                  <Settings className="h-12 w-12 mx-auto mb-2 text-primary opacity-70" />
+                  <h3 className="text-lg font-medium">Configure Each Part</h3>
+                  <p className="text-sm text-muted-foreground">Set cuts needed, yield per cut, and material for each part</p>
+                </div>
+
+                {packetBomForm.parts.length === 0 ? (
+                  <div className="text-center py-8 border rounded-lg bg-muted/30">
+                    <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-yellow-500" />
+                    <p className="text-sm text-muted-foreground">No parts to configure. Go back and add some parts.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {packetBomForm.parts.map((part, index) => (
+                      <div key={index} className={`border rounded-lg p-4 space-y-3 ${!part.materialPartNumber ? 'border-red-300 bg-red-50 dark:bg-red-950/20' : ''}`}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">{part.partNumber}</p>
+                            <p className="text-xs text-muted-foreground">{part.partDescription} - Qty: {part.quantity}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {!part.materialPartNumber && (
+                              <Badge variant="destructive" className="text-xs">Missing Material</Badge>
+                            )}
+                            <Badge variant="outline">Part {index + 1}</Badge>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Cuts Needed</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={part.cutsNeeded}
+                              onChange={(e) => updatePartStep3(index, 'cutsNeeded', parseInt(e.target.value) || 1)}
+                              data-testid={`input-cuts-${index}`}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Yield Per Cut</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={part.yieldPerCut}
+                              onChange={(e) => updatePartStep3(index, 'yieldPerCut', parseInt(e.target.value) || 1)}
+                              data-testid={`input-yield-${index}`}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className={`text-xs ${!part.materialPartNumber ? 'text-red-500' : ''}`}>Material *</Label>
+                            <Select
+                              value={part.materialPartNumber}
+                              onValueChange={(value) => {
+                                const selectedFabric = fabricItems.find(f => f.agPartNumber === value);
+                                updatePartStep3(index, 'materialPartNumber', value);
+                                updatePartStep3(index, 'materialName', selectedFabric?.name || "");
+                              }}
+                            >
+                              <SelectTrigger data-testid={`select-material-${index}`} className={!part.materialPartNumber ? 'border-red-300' : ''}>
+                                <SelectValue placeholder="Select material" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {fabricItems.map((fabric) => (
+                                  <SelectItem key={fabric.id} value={fabric.agPartNumber}>
+                                    {fabric.agPartNumber} - {fabric.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        {part.materialPartNumber ? (
+                          <div className="text-xs text-green-600 dark:text-green-400">
+                            Material: {part.materialName}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-red-500">
+                            Please select a material for this part
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex justify-between">
+            <div>
+              {packetBomWizardStep > 1 && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => setPacketBomWizardStep(prev => prev - 1)}
+                  data-testid="btn-wizard-back"
+                >
+                  Back
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsPacketBomDialogOpen(false)}>
+                Cancel
+              </Button>
+              {packetBomWizardStep < 3 ? (
+                <Button
+                  onClick={() => setPacketBomWizardStep(prev => prev + 1)}
+                  disabled={
+                    (packetBomWizardStep === 1 && !packetBomForm.partNumber) ||
+                    (packetBomWizardStep === 2 && packetBomForm.parts.length === 0)
+                  }
+                  data-testid="btn-wizard-next"
+                >
+                  Next
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleSavePacketBom}
+                  disabled={
+                    packetBomForm.parts.some(p => !p.materialPartNumber) ||
+                    createPacketBomMutation.isPending || 
+                    updatePacketBomMutation.isPending
+                  }
+                  data-testid="btn-save-packet-bom"
+                >
+                  {createPacketBomMutation.isPending || updatePacketBomMutation.isPending ? 'Saving...' : editingPacketBom ? 'Update' : 'Create'}
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

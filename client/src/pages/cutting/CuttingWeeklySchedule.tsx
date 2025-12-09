@@ -31,10 +31,9 @@ import {
   ChevronRight,
   Factory,
   TrendingUp,
-  AlertCircle,
   Package,
+  Layers,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 type WeeklyCuttingQueueItem = {
   id: string;
@@ -42,7 +41,7 @@ type WeeklyCuttingQueueItem = {
   stockModel: string;
   source: 'P1' | 'P1_PO' | 'P2';
   orderType: 'regular' | 'oem' | 'p2_po';
-  materialType: 'carbon_fiber' | 'fiberglass' | 'unknown';
+  materialType: 'carbon_fiber' | 'fiberglass' | 'mesa' | 'unknown';
   scheduledDate: string;
   dueDate: string;
   customer: string;
@@ -81,7 +80,7 @@ export default function CuttingWeeklySchedule() {
   
   const [currentWeek] = useState(getMondayOfWeek(new Date()));
   const [scheduleQuantities, setScheduleQuantities] = useState<Record<string, number>>({});
-  const [expandedCustomers, setExpandedCustomers] = useState<Record<string, boolean>>({});
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({ p1: true, p2: true });
 
   const { data: weeklyQueueData, isLoading, refetch } = useQuery<{
     items: WeeklyCuttingQueueItem[];
@@ -96,11 +95,11 @@ export default function CuttingWeeklySchedule() {
     },
   });
 
-  const { data: stockLevels = { carbon_fiber: 0, fiberglass: 0 } } = useQuery({
+  const { data: stockLevels = { carbon_fiber: 0, fiberglass: 0, mesa: 0 } } = useQuery({
     queryKey: ['/api/cutting-table/stock-levels'],
     queryFn: async () => {
       const res = await fetch('/api/cutting-table/stock-levels');
-      if (!res.ok) return { carbon_fiber: 0, fiberglass: 0 };
+      if (!res.ok) return { carbon_fiber: 0, fiberglass: 0, mesa: 0 };
       return res.json();
     },
   });
@@ -114,69 +113,98 @@ export default function CuttingWeeklySchedule() {
     },
   });
 
-  const demandByCustomer = useMemo(() => {
-    if (!weeklyQueueData?.items) return [];
+  const p1Demand = useMemo(() => {
+    if (!weeklyQueueData?.items) return { cf: 0, fg: 0, mesa: 0, total: 0, byCustomer: [] };
     
-    const grouped: Record<string, {
-      customer: string;
-      cfCount: number;
-      fgCount: number;
-      totalCount: number;
-      items: WeeklyCuttingQueueItem[];
-      sources: Set<string>;
-    }> = {};
+    const p1Items = weeklyQueueData.items.filter(i => i.source === 'P1' || i.source === 'P1_PO');
     
-    weeklyQueueData.items.forEach(item => {
+    let cf = 0, fg = 0, mesa = 0;
+    const customerMap: Record<string, { cf: number; fg: number; mesa: number }> = {};
+    
+    p1Items.forEach(item => {
       const customer = item.customer || 'Unknown';
-      if (!grouped[customer]) {
-        grouped[customer] = {
-          customer,
-          cfCount: 0,
-          fgCount: 0,
-          totalCount: 0,
-          items: [],
-          sources: new Set(),
-        };
-      }
-      grouped[customer].items.push(item);
-      grouped[customer].totalCount += item.packetsNeeded;
-      grouped[customer].sources.add(item.source);
-      if (item.materialType === 'carbon_fiber') {
-        grouped[customer].cfCount += item.packetsNeeded;
-      } else if (item.materialType === 'fiberglass') {
-        grouped[customer].fgCount += item.packetsNeeded;
+      if (!customerMap[customer]) customerMap[customer] = { cf: 0, fg: 0, mesa: 0 };
+      
+      const stockModel = (item.stockModel || '').toLowerCase();
+      if (stockModel.includes('mesa') || item.materialType === 'mesa') {
+        mesa += item.packetsNeeded;
+        customerMap[customer].mesa += item.packetsNeeded;
+      } else if (item.materialType === 'carbon_fiber' || stockModel.includes('cf')) {
+        cf += item.packetsNeeded;
+        customerMap[customer].cf += item.packetsNeeded;
+      } else if (item.materialType === 'fiberglass' || stockModel.includes('fg')) {
+        fg += item.packetsNeeded;
+        customerMap[customer].fg += item.packetsNeeded;
       }
     });
     
-    return Object.values(grouped).sort((a, b) => b.totalCount - a.totalCount);
+    const byCustomer = Object.entries(customerMap)
+      .map(([customer, counts]) => ({ customer, ...counts, total: counts.cf + counts.fg + counts.mesa }))
+      .sort((a, b) => b.total - a.total);
+    
+    return { cf, fg, mesa, total: cf + fg + mesa, byCustomer };
+  }, [weeklyQueueData?.items]);
+
+  const p2Demand = useMemo(() => {
+    if (!weeklyQueueData?.items) return [];
+    
+    const p2Items = weeklyQueueData.items.filter(i => i.source === 'P2');
+    
+    const poMap: Record<string, {
+      poId: string;
+      customer: string;
+      items: { name: string; qty: number; materialType: string }[];
+      total: number;
+    }> = {};
+    
+    p2Items.forEach(item => {
+      const poId = item.orderId.split('-')[1] || item.orderId;
+      if (!poMap[poId]) {
+        poMap[poId] = {
+          poId,
+          customer: item.customer || 'P2 Order',
+          items: [],
+          total: 0,
+        };
+      }
+      poMap[poId].items.push({
+        name: item.stockModel,
+        qty: item.packetsNeeded,
+        materialType: item.materialType,
+      });
+      poMap[poId].total += item.packetsNeeded;
+    });
+    
+    return Object.values(poMap).sort((a, b) => b.total - a.total);
   }, [weeklyQueueData?.items]);
 
   const scheduledCounts = useMemo(() => {
-    let cf = 0, fg = 0;
+    let cf = 0, fg = 0, mesa = 0;
     (mfgQueueData || []).forEach((item: any) => {
       try {
         const notes = item.notes ? JSON.parse(item.notes) : {};
         const remaining = item.quantityRequested - (item.quantityCompleted || 0);
         if (notes.materialType === 'carbon_fiber') cf += remaining;
         else if (notes.materialType === 'fiberglass') fg += remaining;
+        else if (notes.materialType === 'mesa') mesa += remaining;
       } catch {}
     });
-    return { carbon_fiber: cf, fiberglass: fg };
+    return { carbon_fiber: cf, fiberglass: fg, mesa };
   }, [mfgQueueData]);
 
   const schedulePacketsMutation = useMutation({
-    mutationFn: async (data: { packetType: string; quantity: number; materialType: string; customer?: string }) => {
+    mutationFn: async (data: { packetType: string; quantity: number; materialType: string; description?: string }) => {
       return apiRequest('/api/cutting-table/schedule-to-cutting', {
         method: 'POST',
         body: JSON.stringify({
-          orderId: `SCHED-${data.packetType}-${Date.now()}`,
+          orderId: `SCHED-${data.packetType.toUpperCase()}-${Date.now()}`,
           bomId: 'generic-p2-packet',
           quantity: data.quantity,
           priority: 50,
           dueDate: new Date(currentWeek).toISOString(),
           source: 'MANUAL',
           materialType: data.materialType,
-          notes: `Scheduled ${data.quantity} ${data.packetType} packets${data.customer ? ` for ${data.customer}` : ''}`,
+          notes: data.description || `Scheduled ${data.quantity} ${data.packetType} packets`,
         }),
       });
     },
@@ -205,26 +233,14 @@ export default function CuttingWeeklySchedule() {
     }));
   };
 
-  const handleSchedule = (packetType: string, materialType: string, customer?: string) => {
-    const key = customer ? `${customer}-${materialType}` : materialType;
-    const qty = scheduleQuantities[key] || 0;
+  const handleSchedule = (packetType: string, materialType: string, description?: string) => {
+    const qty = scheduleQuantities[materialType] || 0;
     if (qty <= 0) {
       toast({ title: "Invalid", description: "Enter a quantity greater than 0.", variant: "destructive" });
       return;
     }
-    schedulePacketsMutation.mutate({
-      packetType,
-      quantity: qty,
-      materialType,
-      customer,
-    });
+    schedulePacketsMutation.mutate({ packetType, quantity: qty, materialType, description });
   };
-
-  const summary = weeklyQueueData?.summary;
-  const cfDemand = summary?.carbon_fiber?.total || 0;
-  const fgDemand = summary?.fiberglass?.total || 0;
-  const cfNeedsCutting = summary?.carbon_fiber?.needsCutting || 0;
-  const fgNeedsCutting = summary?.fiberglass?.needsCutting || 0;
 
   return (
     <div className="space-y-6">
@@ -232,7 +248,7 @@ export default function CuttingWeeklySchedule() {
         <div>
           <h2 className="text-2xl font-bold" data-testid="text-page-title">Weekly Cutting Schedule</h2>
           <p className="text-muted-foreground">
-            Demand from P1, P1 PO, and P2 queues • Week of {formatWeekRange(currentWeek)}
+            Week of {formatWeekRange(currentWeek)} • P1 Stock Packets + P2 PO Packets
           </p>
         </div>
         <Button variant="outline" onClick={() => refetch()} data-testid="button-refresh">
@@ -241,277 +257,230 @@ export default function CuttingWeeklySchedule() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-l-gray-800">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              CF Demand
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{cfDemand}</div>
-            <div className="text-sm text-muted-foreground mt-1">
-              <span className="text-red-600 font-medium">{cfNeedsCutting} need cutting</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-amber-500">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              FG Demand
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{fgDemand}</div>
-            <div className="text-sm text-muted-foreground mt-1">
-              <span className="text-red-600 font-medium">{fgNeedsCutting} need cutting</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-blue-500">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Box className="h-4 w-4" />
-              CF On-Hand
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{stockLevels.carbon_fiber}</div>
-            <div className="text-sm text-muted-foreground mt-1">
-              <span className="font-medium">{scheduledCounts.carbon_fiber} scheduled</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-green-500">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Box className="h-4 w-4" />
-              FG On-Hand
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{stockLevels.fiberglass}</div>
-            <div className="text-sm text-muted-foreground mt-1">
-              <span className="font-medium">{scheduledCounts.fiberglass} scheduled</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Scissors className="h-5 w-5" />
-              Schedule Carbon Fiber Packets
-            </CardTitle>
-            <CardDescription>
-              Demand: {cfDemand} • On-hand: {stockLevels.carbon_fiber} • Gap: {Math.max(0, cfNeedsCutting - scheduledCounts.carbon_fiber)}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-3 p-4 bg-gray-900 rounded-lg text-white">
-              <div className="flex-1">
-                <p className="font-bold text-lg">Carbon Fiber Packets</p>
-                <p className="text-sm opacity-80">Schedule for cutting queue</p>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Layers className="h-5 w-5" />
+            <CardTitle>P1 Stock Packet Demand</CardTitle>
+          </div>
+          <CardDescription>
+            3 standard packet types for P1 orders: CF, FG, and Mesa
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="p-4 bg-gray-900 text-white rounded-lg">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <p className="text-sm opacity-80">Carbon Fiber Packets</p>
+                  <p className="text-3xl font-bold">{p1Demand.cf}</p>
+                  <p className="text-xs opacity-60">demand</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.carbon_fiber}</span></p>
+                  <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.carbon_fiber}</span></p>
+                </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="secondary" size="icon" onClick={() => updateQuantity('carbon_fiber', -10)}>
-                  <Minus className="h-4 w-4" />
+                <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity('carbon_fiber', -10)}>
+                  <Minus className="h-3 w-3" />
                 </Button>
                 <Input
                   type="number"
                   value={scheduleQuantities['carbon_fiber'] || 0}
                   onChange={(e) => setQuantity('carbon_fiber', e.target.value)}
-                  className="text-center text-lg font-bold w-20 bg-white text-black"
+                  className="text-center font-bold w-20 h-8 bg-white text-black"
                   data-testid="input-qty-cf"
                 />
-                <Button variant="secondary" size="icon" onClick={() => updateQuantity('carbon_fiber', 10)}>
-                  <Plus className="h-4 w-4" />
+                <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity('carbon_fiber', 10)}>
+                  <Plus className="h-3 w-3" />
+                </Button>
+                <Button 
+                  size="sm"
+                  onClick={() => handleSchedule('CF Stock', 'carbon_fiber')}
+                  disabled={!scheduleQuantities['carbon_fiber'] || schedulePacketsMutation.isPending}
+                  className="bg-white text-black hover:bg-gray-200"
+                  data-testid="button-schedule-cf"
+                >
+                  <Send className="h-3 w-3 mr-1" />
+                  Schedule
                 </Button>
               </div>
-              <Button 
-                onClick={() => handleSchedule('Carbon Fiber', 'carbon_fiber')}
-                disabled={!scheduleQuantities['carbon_fiber'] || schedulePacketsMutation.isPending}
-                className="bg-white text-black hover:bg-gray-200"
-                data-testid="button-schedule-cf"
-              >
-                <Send className="h-4 w-4 mr-2" />
-                Schedule
-              </Button>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Scissors className="h-5 w-5" />
-              Schedule Fiberglass Packets
-            </CardTitle>
-            <CardDescription>
-              Demand: {fgDemand} • On-hand: {stockLevels.fiberglass} • Gap: {Math.max(0, fgNeedsCutting - scheduledCounts.fiberglass)}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-3 p-4 bg-amber-500 rounded-lg text-white">
-              <div className="flex-1">
-                <p className="font-bold text-lg">Fiberglass Packets</p>
-                <p className="text-sm opacity-80">Schedule for cutting queue</p>
+            <div className="p-4 bg-amber-500 text-white rounded-lg">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <p className="text-sm opacity-80">Fiberglass Packets</p>
+                  <p className="text-3xl font-bold">{p1Demand.fg}</p>
+                  <p className="text-xs opacity-60">demand</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.fiberglass}</span></p>
+                  <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.fiberglass}</span></p>
+                </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="secondary" size="icon" onClick={() => updateQuantity('fiberglass', -10)}>
-                  <Minus className="h-4 w-4" />
+                <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity('fiberglass', -10)}>
+                  <Minus className="h-3 w-3" />
                 </Button>
                 <Input
                   type="number"
                   value={scheduleQuantities['fiberglass'] || 0}
                   onChange={(e) => setQuantity('fiberglass', e.target.value)}
-                  className="text-center text-lg font-bold w-20 bg-white text-black"
+                  className="text-center font-bold w-20 h-8 bg-white text-black"
                   data-testid="input-qty-fg"
                 />
-                <Button variant="secondary" size="icon" onClick={() => updateQuantity('fiberglass', 10)}>
-                  <Plus className="h-4 w-4" />
+                <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity('fiberglass', 10)}>
+                  <Plus className="h-3 w-3" />
+                </Button>
+                <Button 
+                  size="sm"
+                  onClick={() => handleSchedule('FG Stock', 'fiberglass')}
+                  disabled={!scheduleQuantities['fiberglass'] || schedulePacketsMutation.isPending}
+                  className="bg-white text-black hover:bg-gray-200"
+                  data-testid="button-schedule-fg"
+                >
+                  <Send className="h-3 w-3 mr-1" />
+                  Schedule
                 </Button>
               </div>
-              <Button 
-                onClick={() => handleSchedule('Fiberglass', 'fiberglass')}
-                disabled={!scheduleQuantities['fiberglass'] || schedulePacketsMutation.isPending}
-                className="bg-white text-black hover:bg-gray-200"
-                data-testid="button-schedule-fg"
-              >
-                <Send className="h-4 w-4 mr-2" />
-                Schedule
-              </Button>
             </div>
-          </CardContent>
-        </Card>
-      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Factory className="h-5 w-5" />
-            Demand by Customer
-          </CardTitle>
-          <CardDescription>
-            {weeklyQueueData?.totalItems || 0} total items from {demandByCustomer.length} customers
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading demand data...</div>
-          ) : demandByCustomer.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">No pending demand</div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8"></TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead className="text-center">CF</TableHead>
-                  <TableHead className="text-center">FG</TableHead>
-                  <TableHead className="text-center">Total</TableHead>
-                  <TableHead>Sources</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {demandByCustomer.map(row => (
-                  <Collapsible key={row.customer} asChild>
-                    <>
-                      <TableRow className="cursor-pointer hover:bg-muted/50">
-                        <TableCell>
-                          <CollapsibleTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setExpandedCustomers(prev => ({ ...prev, [row.customer]: !prev[row.customer] }))}>
-                              {expandedCustomers[row.customer] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                            </Button>
-                          </CollapsibleTrigger>
-                        </TableCell>
+            <div className="p-4 bg-orange-600 text-white rounded-lg">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <p className="text-sm opacity-80">Mesa Packets</p>
+                  <p className="text-3xl font-bold">{p1Demand.mesa}</p>
+                  <p className="text-xs opacity-60">demand</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.mesa || 0}</span></p>
+                  <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.mesa}</span></p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity('mesa', -10)}>
+                  <Minus className="h-3 w-3" />
+                </Button>
+                <Input
+                  type="number"
+                  value={scheduleQuantities['mesa'] || 0}
+                  onChange={(e) => setQuantity('mesa', e.target.value)}
+                  className="text-center font-bold w-20 h-8 bg-white text-black"
+                  data-testid="input-qty-mesa"
+                />
+                <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity('mesa', 10)}>
+                  <Plus className="h-3 w-3" />
+                </Button>
+                <Button 
+                  size="sm"
+                  onClick={() => handleSchedule('Mesa Stock', 'mesa')}
+                  disabled={!scheduleQuantities['mesa'] || schedulePacketsMutation.isPending}
+                  className="bg-white text-black hover:bg-gray-200"
+                  data-testid="button-schedule-mesa"
+                >
+                  <Send className="h-3 w-3 mr-1" />
+                  Schedule
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {p1Demand.byCustomer.length > 0 && (
+            <Collapsible open={expandedSections.p1} onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, p1: open }))}>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" className="w-full justify-start gap-2 text-sm text-muted-foreground">
+                  {expandedSections.p1 ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  P1 Demand by Customer ({p1Demand.byCustomer.length})
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Customer</TableHead>
+                      <TableHead className="text-center">CF</TableHead>
+                      <TableHead className="text-center">FG</TableHead>
+                      <TableHead className="text-center">Mesa</TableHead>
+                      <TableHead className="text-center">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {p1Demand.byCustomer.map(row => (
+                      <TableRow key={row.customer}>
                         <TableCell className="font-medium">{row.customer}</TableCell>
                         <TableCell className="text-center">
-                          {row.cfCount > 0 && (
-                            <Badge variant="outline" className="bg-gray-900 text-white">{row.cfCount}</Badge>
-                          )}
+                          {row.cf > 0 && <Badge variant="outline" className="bg-gray-900 text-white">{row.cf}</Badge>}
                         </TableCell>
                         <TableCell className="text-center">
-                          {row.fgCount > 0 && (
-                            <Badge variant="outline" className="bg-amber-100 text-amber-800">{row.fgCount}</Badge>
-                          )}
+                          {row.fg > 0 && <Badge variant="outline" className="bg-amber-100 text-amber-800">{row.fg}</Badge>}
                         </TableCell>
-                        <TableCell className="text-center font-bold">{row.totalCount}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            {Array.from(row.sources).map(src => (
-                              <Badge key={src} variant="outline" className="text-xs">
-                                {src}
-                              </Badge>
-                            ))}
-                          </div>
+                        <TableCell className="text-center">
+                          {row.mesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{row.mesa}</Badge>}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Input
-                              type="number"
-                              value={scheduleQuantities[`${row.customer}-carbon_fiber`] || 0}
-                              onChange={(e) => setQuantity(`${row.customer}-carbon_fiber`, e.target.value)}
-                              className="w-16 h-8 text-center"
-                              placeholder="CF"
-                              data-testid={`input-qty-${row.customer}-cf`}
-                            />
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleSchedule(`CF for ${row.customer}`, 'carbon_fiber', row.customer)}
-                              disabled={!scheduleQuantities[`${row.customer}-carbon_fiber`]}
-                              data-testid={`button-schedule-${row.customer}-cf`}
-                            >
-                              CF
-                            </Button>
-                          </div>
-                        </TableCell>
+                        <TableCell className="text-center font-bold">{row.total}</TableCell>
                       </TableRow>
-                      <CollapsibleContent asChild>
-                        <TableRow className="bg-muted/30">
-                          <TableCell colSpan={7} className="py-2">
-                            <div className="pl-8 text-sm">
-                              <p className="font-medium mb-2">Order Details:</p>
-                              <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto">
-                                {row.items.slice(0, 20).map(item => (
-                                  <div key={item.id} className="text-xs p-1 bg-background rounded border">
-                                    <span className="font-medium">{item.orderId}</span>
-                                    <span className="text-muted-foreground ml-1">({item.source})</span>
-                                  </div>
-                                ))}
-                                {row.items.length > 20 && (
-                                  <div className="text-xs p-1 text-muted-foreground">
-                                    +{row.items.length - 20} more...
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      </CollapsibleContent>
-                    </>
-                  </Collapsible>
-                ))}
-              </TableBody>
-            </Table>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CollapsibleContent>
+            </Collapsible>
           )}
         </CardContent>
       </Card>
+
+      {p2Demand.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              <CardTitle>P2 PO Packet Demand</CardTitle>
+            </div>
+            <CardDescription>
+              Individual packet types specific to each purchase order
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Collapsible open={expandedSections.p2} onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, p2: open }))}>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
+                  {expandedSections.p2 ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  {p2Demand.length} Purchase Orders with Packet Demand
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="space-y-3 mt-2">
+                  {p2Demand.map(po => (
+                    <div key={po.poId} className="p-3 border rounded-lg">
+                      <div className="flex justify-between items-center mb-2">
+                        <div>
+                          <span className="font-medium">PO-{po.poId}</span>
+                          <span className="text-muted-foreground ml-2">• {po.customer}</span>
+                        </div>
+                        <Badge>{po.total} packets</Badge>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {po.items.map((item, idx) => (
+                          <Badge key={idx} variant="outline" className="text-xs">
+                            {item.name}: {item.qty}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            Currently Scheduled
+            Currently Scheduled for Cutting
           </CardTitle>
         </CardHeader>
         <CardContent>

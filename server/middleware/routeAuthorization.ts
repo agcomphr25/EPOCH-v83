@@ -325,26 +325,36 @@ function getFrontendRoutesForApi(apiPath: string): string[] {
 export function authorizeApiRoute(requiredFrontendRoutes?: string[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
+      console.log(`🔐 AUTH CHECK: No user on request for ${req.method} ${req.originalUrl}`);
       return res.status(401).json({ error: 'Authentication required' });
     }
 
     const { username, role } = req.user;
+    console.log(`🔐 AUTH CHECK: User ${username} (role: ${role}) accessing ${req.method} ${req.originalUrl}`);
     
     if (hasFullAccess(username)) {
+      console.log(`🔐 AUTH CHECK: ${username} has full access - GRANTED`);
       return next();
     }
 
     if (role === 'ADMIN' || role === 'OWNER') {
+      console.log(`🔐 AUTH CHECK: ${username} is ${role} - GRANTED`);
       return next();
     }
 
     const routesToCheck = requiredFrontendRoutes || getFrontendRoutesForApi(req.baseUrl || req.path);
+    console.log(`🔐 AUTH CHECK: Routes to check for ${req.baseUrl || req.path}:`, routesToCheck);
 
     if (routesToCheck.length === 0) {
+      console.log(`🔐 AUTH CHECK: No routes to check - GRANTED by default`);
       return next();
     }
 
-    const hasAccess = routesToCheck.some(route => hasRouteAccess(username, route, role));
+    const hasAccess = routesToCheck.some(route => {
+      const access = hasRouteAccess(username, route, role);
+      console.log(`🔐 AUTH CHECK: hasRouteAccess(${username}, ${route}, ${role}) = ${access}`);
+      return access;
+    });
 
     if (!hasAccess) {
       console.warn(`⚠️ ACCESS DENIED: User ${username} (role: ${role}) attempted to access ${req.method} ${req.originalUrl}`);
@@ -354,6 +364,7 @@ export function authorizeApiRoute(requiredFrontendRoutes?: string[]) {
       });
     }
 
+    console.log(`🔐 AUTH CHECK: ${username} access to ${req.originalUrl} - GRANTED`);
     next();
   };
 }

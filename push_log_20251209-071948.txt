@@ -1,3 +1,87 @@
 Your branch is ahead of 'origin/main' by 36 commits.
   (use "git push" to publish your local commits)
 Already up to date.
+[feature-20251209-0719-my-change ef812166] feat: my-change
+ 1 file changed, 3 insertions(+)
+ create mode 100644 push_log_20251209-071948.txt
+branch 'feature-20251209-0719-my-change' set up to track 'origin/feature-20251209-0719-my-change'.
+> ef812166 (HEAD -> feature-20251209-0719-my-change, origin/feature-20251209-0719-my-change) feat: my-change
+> c156b50e (gitsafe-backup/main, gitsafe-backup/HEAD, main) Fix message filtering for users by correctly identifying the logged-in user
+> aec42ff5 Update internal communication board to display messages correctly
+> 8034fa12 Fix issue where sent messages do not appear in the inbox
+> f3e74635 Allow all users to access the communications inbox
+> 0a866d8b Make communications accessible and ensure users see only their messages
+> 4c1e7298 Add communications card to AG's dashboard
+> b625f8f1 Add personal task dashboard to all user dashboards
+> bbda54c2 Saved progress at the end of the loop
+> 7ed8bc8c Add employee ID to user session and display user tasks on dashboard
+> 51e724ac Add personal task tracking and assignment notifications to the system
+> a8287b8f Saved your changes before starting work
+> 99aae7a8 Published your App
+> 2e7efbce Update discount API endpoints to improve access control and routing
+> 3b46960f Published your App
+> 560885ec Add a version check to confirm code deployment
+> 5c849a7c Published your App
+> 145dd933 Add a version check endpoint to confirm production deployment
+> 644e473d Add version check endpoint to verify production deployment status
+> 4a34cbae Published your App
+> 89eafe06 Add a version check endpoint to verify production deployment status
+> 85998626 Published your App
+> 9a86d7fe Add debug endpoint for current user authentication checks
+> 53c854cf Published your App
+> 9c2776f6 Fix admin access error on production queue page
+> 365c2596 Published your App
+> a61a1da1 Add debugging tools and error handling to production queue
+> 28186279 Add detailed logging to production queue access for better debugging
+> e32901fb Add detailed logging to authorization checks for better debugging
+> 99c72862 Saved progress at the end of the loop
+> f1aff97b Published your App
+> 12853c0c Saved progress at the end of the loop
+> ac5b9997 Add authorization middleware to production and P1 PO queue routes
+> 1d2e43a0 Published your App
+> f4fb216c Saved progress at the end of the loop
+> fb4c6457 Published your App
+> 2b8cf9d4 Saved progress at the end of the loop
+ .replit                                            |   8 +
+ ...eally-help-If-you-re-up-for-i_1765252882119.txt | 232 ++++++++
+ attached_assets/image_1765249617774.png            | Bin 0 -> 268055 bytes
+ attached_assets/image_1765253605091.png            | Bin 0 -> 75240 bytes
+ attached_assets/image_1765254478879.png            | Bin 0 -> 85947 bytes
+ attached_assets/image_1765255183762.png            | Bin 0 -> 40735 bytes
+ attached_assets/image_1765256243803.png            | Bin 0 -> 44745 bytes
+ attached_assets/image_1765256592292.png            | Bin 0 -> 42617 bytes
+ attached_assets/image_1765257290933.png            | Bin 0 -> 37838 bytes
+ attached_assets/image_1765258231937.png            | Bin 0 -> 38351 bytes
+ attached_assets/image_1765263191187.png            | Bin 0 -> 53394 bytes
+ attached_assets/image_1765263372814.png            | Bin 0 -> 66157 bytes
+ attached_assets/image_1765263803277.png            | Bin 0 -> 66449 bytes
+ attached_assets/image_1765264344272.png            | Bin 0 -> 81759 bytes
+ client/src/components/DiscountAdmin.tsx            |  16 +-
+ .../src/components/InternalCommunicationBoard.tsx  |  11 +-
+ client/src/components/MyTasksControlCenter.tsx     | 590 +++++++++++++++++++++
+ client/src/components/OrderEntry.tsx               |  12 +-
+ client/src/components/POOrderEntry.tsx             |   4 +-
+ .../src/components/PersistentDiscountManager.tsx   |  16 +-
+ client/src/components/ProductionQueueManager.tsx   |  36 +-
+ client/src/config/userPermissions.ts               |  10 +
+ client/src/pages/AGTestDashboard.tsx               |  34 ++
+ client/src/pages/BRADWTestDashboard.tsx            |  15 +
+ client/src/pages/DARLENEBTestDashboard.tsx         |  12 +-
+ client/src/pages/FALEESHAHTestDashboard.tsx        |  15 +
+ client/src/pages/GLENNTestDashboard.tsx            |  13 +-
+ client/src/pages/JENSTestDashboard.tsx             |  15 +
+ client/src/pages/JOEYBTestDashboard.tsx            |  15 +
+ client/src/pages/JOHNLTestDashboard.tsx            |  15 +
+ client/src/pages/LAURIETTestDashboard.tsx          |  15 +
+ client/src/pages/STACIWTestDashboard.tsx           |  12 +-
+ client/src/pages/TIMSTestDashboard.tsx             |  15 +
+ push_log_20251209-071948.txt                       |   3 +
+ server/middleware/routeAuthorization.ts            |  13 +-
+ server/src/routes/auth.ts                          |   3 +-
+ server/src/routes/index.ts                         |   2 +-
+ server/src/routes/internalMessages.ts              |  33 +-
+ server/src/routes/p1POQueue.ts                     |   3 +
+ server/src/routes/preproductionChecklists.ts       | 214 ++++++++
+ server/src/routes/productionQueue.ts               |  54 +-
+ 41 files changed, 1397 insertions(+), 39 deletions(-)
+Open PR: https://github.com/agcomphr25/EPOCH-v83/compare/feature-20251209-0719-my-change?expand=1

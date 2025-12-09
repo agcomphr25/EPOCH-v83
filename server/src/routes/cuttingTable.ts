@@ -1796,7 +1796,11 @@ router.get('/weekly-cutting-queue', async (req, res) => {
     };
 
     res.json({
-      items: queueItems.sort((a, b) => (b.priority || 0) - (a.priority || 0)),
+      items: queueItems.sort((a, b) => {
+        const customerA = (a.customer || '').toString().toLowerCase();
+        const customerB = (b.customer || '').toString().toLowerCase();
+        return customerA.localeCompare(customerB);
+      }),
       summary,
       totalItems: queueItems.length,
     });

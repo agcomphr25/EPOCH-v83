@@ -55,6 +55,8 @@ import {
   FileText,
   Calendar,
   Package2,
+  Eye,
+  Printer,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -123,6 +125,7 @@ export default function OrderReports() {
   const [presetName, setPresetName] = useState('');
   const [presetDescription, setPresetDescription] = useState('');
   const [deletePresetId, setDeletePresetId] = useState<number | null>(null);
+  const [viewReportOpen, setViewReportOpen] = useState(false);
 
   // Fetch filter options
   const { data: filterOptions } = useQuery<FilterOptions>({
@@ -916,14 +919,25 @@ export default function OrderReports() {
                 <Package2 className="h-5 w-5" />
                 <span>Query Results ({results.length} orders)</span>
               </div>
-              <Button
-                onClick={handleExportCSV}
-                className="flex items-center gap-2"
-                data-testid="button-export-csv"
-              >
-                <Download className="h-4 w-4" />
-                Export to CSV
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => setViewReportOpen(true)}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  data-testid="button-view-report"
+                >
+                  <Eye className="h-4 w-4" />
+                  View Report
+                </Button>
+                <Button
+                  onClick={handleExportCSV}
+                  className="flex items-center gap-2"
+                  data-testid="button-export-csv"
+                >
+                  <Download className="h-4 w-4" />
+                  Export to CSV
+                </Button>
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -988,6 +1002,165 @@ export default function OrderReports() {
           </CardContent>
         </Card>
       )}
+
+      {/* View Report Dialog */}
+      <Dialog open={viewReportOpen} onOpenChange={setViewReportOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Order Report
+            </DialogTitle>
+            <DialogDescription>
+              Report generated on {format(new Date(), 'MMMM d, yyyy h:mm a')} - {results.length} orders
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto py-4">
+            <div className="space-y-4">
+              {/* Report Summary */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <div className="text-sm text-gray-500">Total Orders</div>
+                  <div className="text-2xl font-bold">{results.length}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Departments</div>
+                  <div className="text-2xl font-bold">
+                    {new Set(results.map(o => o.currentDepartment)).size}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Models</div>
+                  <div className="text-2xl font-bold">
+                    {new Set(results.map(o => o.modelId || o.modelDisplayName)).size}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Statuses</div>
+                  <div className="text-2xl font-bold">
+                    {new Set(results.map(o => o.status)).size}
+                  </div>
+                </div>
+              </div>
+
+              {/* Active Filters Summary */}
+              <div className="p-4 border rounded-lg">
+                <h3 className="font-medium mb-2 text-sm text-gray-700">Applied Filters</h3>
+                <div className="flex flex-wrap gap-2">
+                  {filters.stockModels.length > 0 && (
+                    <Badge variant="secondary">Models: {filters.stockModels.length}</Badge>
+                  )}
+                  {filters.barrelInlets.length > 0 && (
+                    <Badge variant="secondary">Barrel Inlets: {filters.barrelInlets.length}</Badge>
+                  )}
+                  {filters.actionInlets.length > 0 && (
+                    <Badge variant="secondary">Action Inlets: {filters.actionInlets.length}</Badge>
+                  )}
+                  {filters.actionLengths.length > 0 && (
+                    <Badge variant="secondary">Action Lengths: {filters.actionLengths.length}</Badge>
+                  )}
+                  {filters.paintOptions.length > 0 && (
+                    <Badge variant="secondary">Paint Options: {filters.paintOptions.length}</Badge>
+                  )}
+                  {filters.railAccessories.length > 0 && (
+                    <Badge variant="secondary">Rail Accessories: {filters.railAccessories.length}</Badge>
+                  )}
+                  {filters.bottomMetalOptions.length > 0 && (
+                    <Badge variant="secondary">Bottom Metal: {filters.bottomMetalOptions.length}</Badge>
+                  )}
+                  {filters.otherOptions.length > 0 && (
+                    <Badge variant="secondary">Other Options: {filters.otherOptions.length}</Badge>
+                  )}
+                  {filters.departments.length > 0 && (
+                    <Badge variant="secondary">Departments: {filters.departments.length}</Badge>
+                  )}
+                  {filters.statuses.length > 0 && (
+                    <Badge variant="secondary">Statuses: {filters.statuses.length}</Badge>
+                  )}
+                  {filters.dateRange.start && (
+                    <Badge variant="secondary">From: {filters.dateRange.start}</Badge>
+                  )}
+                  {filters.dateRange.end && (
+                    <Badge variant="secondary">To: {filters.dateRange.end}</Badge>
+                  )}
+                  <Badge variant="outline">Logic: {filters.logicMode}</Badge>
+                </div>
+              </div>
+
+              {/* Orders Table */}
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50">
+                      <TableHead className="font-semibold">Order ID</TableHead>
+                      <TableHead className="font-semibold">Order Date</TableHead>
+                      <TableHead className="font-semibold">Customer</TableHead>
+                      <TableHead className="font-semibold">Model</TableHead>
+                      <TableHead className="font-semibold">Department</TableHead>
+                      <TableHead className="font-semibold">Status</TableHead>
+                      <TableHead className="font-semibold">Barrel Inlet</TableHead>
+                      <TableHead className="font-semibold">Action Inlet</TableHead>
+                      <TableHead className="font-semibold">Rail Accessory</TableHead>
+                      <TableHead className="font-semibold">Paint</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {results.map((order, index) => (
+                      <TableRow 
+                        key={order.id} 
+                        className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                        data-testid={`report-row-${order.orderId}`}
+                      >
+                        <TableCell className="font-medium">{order.orderId}</TableCell>
+                        <TableCell>
+                          {order.orderDate
+                            ? format(new Date(order.orderDate), 'MMM d, yyyy')
+                            : '-'}
+                        </TableCell>
+                        <TableCell>{order.customer || order.customerId || '-'}</TableCell>
+                        <TableCell>{order.modelDisplayName || order.modelId || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{order.currentDepartment}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge>{order.status}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">{order.features?.barrel_inlet || '-'}</TableCell>
+                        <TableCell className="text-sm">{order.features?.action_inlet || '-'}</TableCell>
+                        <TableCell className="text-sm">
+                          {Array.isArray(order.features?.rail_accessory)
+                            ? order.features.rail_accessory.join(', ')
+                            : order.features?.rail_accessory || '-'}
+                        </TableCell>
+                        <TableCell className="text-sm">{order.features?.paint || '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="flex-shrink-0 border-t pt-4">
+            <Button
+              variant="outline"
+              onClick={() => window.print()}
+              className="flex items-center gap-2"
+              data-testid="button-print-report"
+            >
+              <Printer className="h-4 w-4" />
+              Print Report
+            </Button>
+            <Button
+              onClick={handleExportCSV}
+              className="flex items-center gap-2"
+              data-testid="button-export-from-report"
+            >
+              <Download className="h-4 w-4" />
+              Export to CSV
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Preset Confirmation */}
       <AlertDialog

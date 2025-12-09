@@ -1538,7 +1538,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               'regular' as orderType
             FROM layup_schedule ls
             LEFT JOIN orders o ON ls.order_id = o.order_id
-            LEFT JOIN customers c ON o.customer_id = c.id
+            LEFT JOIN customers c ON o.customer = c.id
             ORDER BY ls.scheduled_date DESC
             LIMIT 500
           `)
@@ -1555,7 +1555,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               'regular' as orderType
             FROM layup_schedule ls
             LEFT JOIN orders o ON ls.order_id = o.order_id
-            LEFT JOIN customers c ON o.customer_id = c.id
+            LEFT JOIN customers c ON o.customer = c.id
             WHERE ls.scheduled_date >= $1 AND ls.scheduled_date < $2
             ORDER BY ls.scheduled_date ASC
           `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
@@ -1699,7 +1699,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               po.order_id as "poNumber",
               po.priority,
               po.status,
-              COALESCE(p2.vendor_name, 'P2 Order') as "customer",
+              COALESCE(p2.customer_name, 'P2 Order') as "customer",
               'P2' as source
             FROM p2_production_orders po
             LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
@@ -1717,7 +1717,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               po.order_id as "poNumber",
               po.priority,
               po.status,
-              COALESCE(p2.vendor_name, 'P2 Order') as "customer",
+              COALESCE(p2.customer_name, 'P2 Order') as "customer",
               'P2' as source
             FROM p2_production_orders po
             LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
@@ -1840,10 +1840,59 @@ router.post('/schedule-to-cutting', async (req, res) => {
       validBomId = null; // P2 generic packet
     }
 
-    // Create manufacturing queue entry via the existing endpoint
-    const { manufacturingQueue } = await import('../../schema');
+    // Find or create an inventory item for this packet type
+    const { manufacturingQueue, inventoryItems } = await import('../../schema');
+    const { pool } = await import('../../db');
+    
+    // Determine packet name based on material type
+    const packetName = materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
+                       materialType === 'fiberglass' ? 'Fiberglass Packet' :
+                       materialType === 'mesa' ? 'Mesa Packet' : 'Stock Packet';
+    
+    // Try to find existing packet inventory item
+    let inventoryItemId: number | null = null;
+    try {
+      const result = await pool.query(
+        `SELECT id FROM inventory_items WHERE name ILIKE $1 LIMIT 1`,
+        [`%${packetName}%`]
+      );
+      const rows = Array.isArray(result) ? result : (result as any).rows || [];
+      if (rows.length > 0) {
+        inventoryItemId = rows[0].id;
+      }
+    } catch (e) {
+      console.log('Could not find inventory item:', e);
+    }
+    
+    // If no inventory item found, use a default packet item
+    if (!inventoryItemId) {
+      try {
+        const result = await pool.query(
+          `SELECT id FROM inventory_items WHERE name ILIKE '%packet%' LIMIT 1`
+        );
+        const rows = Array.isArray(result) ? result : (result as any).rows || [];
+        if (rows.length > 0) {
+          inventoryItemId = rows[0].id;
+        }
+      } catch (e) {
+        console.log('Could not find any packet inventory item:', e);
+      }
+    }
+    
+    // If still no item found, create one
+    if (!inventoryItemId) {
+      const [newItem] = await db.insert(inventoryItems).values({
+        name: packetName,
+        agPartNumber: `PKT-${materialType?.toUpperCase() || 'STK'}`,
+        category: 'packet',
+        quantityInStock: 0,
+      }).returning();
+      inventoryItemId = newItem.id;
+    }
+
+    // Create manufacturing queue entry
     const [queueItem] = await db.insert(manufacturingQueue).values({
-      inventoryItemId: null as any,
+      inventoryItemId,
       department: 'Cutting Table',
       quantityRequested: quantity,
       quantityCompleted: 0,

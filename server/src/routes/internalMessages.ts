@@ -10,8 +10,8 @@ const router = Router();
 router.get('/', async (req, res) => {
   try {
     const { sentBy, sentTo } = req.query;
-    const sessionUser = (req as any).session?.user;
-    const currentUserId = sessionUser?.id;
+    const currentUser = (req as any).user;
+    const currentUserId = currentUser?.id;
 
     if (sentBy) {
       const messages = await storage.getMessagesBySender(

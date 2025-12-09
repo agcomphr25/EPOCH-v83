@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../../db';
-import { allOrders, customers, customerAddresses, stockModels, features } from '../../../shared/schema';
+import { allOrders, customers, customerAddresses, stockModels, features, payments } from '../../../shared/schema';
 import { eq } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { z } from 'zod';
@@ -59,6 +59,7 @@ interface ParsedOrderDetails {
   hand?: string;
   longShort?: string;
   action?: string;
+  actionLength?: string;
   port?: string;
   ejectionPort?: string;
   bottomMetal?: string;
@@ -68,7 +69,6 @@ interface ParsedOrderDetails {
   note?: string;
   features: string[];
   quantity: number;
-  paintOption?: string;
   railAccessory?: string;
   qdAccessory?: string;
   swivelStuds?: string;
@@ -84,11 +84,17 @@ interface StockModel {
   isActive: boolean;
 }
 
+interface FeatureOption {
+  value: string;
+  label: string;
+  price?: number;
+}
+
 interface Feature {
   id: string;
   name: string;
   displayName: string;
-  options?: { value: string; label: string; price?: number }[];
+  options?: FeatureOption[];
 }
 
 function parseOrderDetails(orderedHtml: string): ParsedOrderDetails {
@@ -123,8 +129,12 @@ function parseOrderDetails(orderedHtml: string): ParsedOrderDetails {
       details.hand = trimmedLine.replace('Hand:', '').trim();
     } else if (trimmedLine.startsWith('Long Short:')) {
       details.longShort = trimmedLine.replace('Long Short:', '').trim();
-    } else if (trimmedLine.startsWith('Action:') || trimmedLine.startsWith('Action Inlet:')) {
-      details.action = trimmedLine.replace(/^Action( Inlet)?:/, '').trim();
+    } else if (trimmedLine.startsWith('Action Inlet:')) {
+      details.action = trimmedLine.replace('Action Inlet:', '').trim();
+    } else if (trimmedLine.startsWith('Action Length:')) {
+      details.actionLength = trimmedLine.replace('Action Length:', '').trim();
+    } else if (trimmedLine.startsWith('Action:')) {
+      details.action = trimmedLine.replace('Action:', '').trim();
     } else if (trimmedLine.startsWith('Port:')) {
       details.port = trimmedLine.replace('Port:', '').trim();
     } else if (trimmedLine.startsWith('Ejection Port:') || trimmedLine.startsWith('Ejection:')) {
@@ -133,10 +143,14 @@ function parseOrderDetails(orderedHtml: string): ParsedOrderDetails {
       details.bottomMetal = trimmedLine.replace(/^(AG )?Bottom Metal:/, '').trim();
     } else if (trimmedLine.startsWith('Metal:')) {
       details.metal = trimmedLine.replace('Metal:', '').trim();
-    } else if (trimmedLine.startsWith('Barrel:') || trimmedLine.startsWith('Barrel Inlet:') || trimmedLine.startsWith('Barrel Channel:')) {
-      details.barrel = trimmedLine.replace(/^Barrel( Inlet| Channel)?:/, '').trim();
-    } else if (trimmedLine.startsWith('Color:') || trimmedLine.startsWith('Paint:') || trimmedLine.startsWith('Finish:')) {
-      details.color = trimmedLine.replace(/^(Color|Paint|Finish):/, '').trim();
+    } else if (trimmedLine.startsWith('Barrel Inlet:')) {
+      details.barrel = trimmedLine.replace('Barrel Inlet:', '').trim();
+    } else if (trimmedLine.startsWith('Barrel Channel:')) {
+      details.barrel = trimmedLine.replace('Barrel Channel:', '').trim();
+    } else if (trimmedLine.startsWith('Barrel:')) {
+      details.barrel = trimmedLine.replace('Barrel:', '').trim();
+    } else if (trimmedLine.startsWith('Color:') || trimmedLine.startsWith('Paint:') || trimmedLine.startsWith('Finish:') || trimmedLine.startsWith('Pattern:')) {
+      details.color = trimmedLine.replace(/^(Color|Paint|Finish|Pattern):/, '').trim();
     } else if (trimmedLine.startsWith('Note:')) {
       details.note = trimmedLine.replace('Note:', '').trim();
     } else if (trimmedLine.startsWith('Quantity:')) {
@@ -144,10 +158,10 @@ function parseOrderDetails(orderedHtml: string): ParsedOrderDetails {
       if (!isNaN(qty)) details.quantity = qty;
     } else if (trimmedLine.startsWith('Product:')) {
       details.stock = trimmedLine.replace('Product:', '').trim();
-    } else if (trimmedLine.startsWith('Rail:') || trimmedLine.startsWith('Rail Accessory:')) {
-      details.railAccessory = trimmedLine.replace(/^Rail( Accessory)?:/, '').trim();
-    } else if (trimmedLine.startsWith('QD:') || trimmedLine.startsWith('QD Accessory:')) {
-      details.qdAccessory = trimmedLine.replace(/^QD( Accessory)?:/, '').trim();
+    } else if (trimmedLine.startsWith('Rail:') || trimmedLine.startsWith('Rail Accessory:') || trimmedLine.startsWith('Rails:')) {
+      details.railAccessory = trimmedLine.replace(/^(Rail|Rails)( Accessory)?:/, '').trim();
+    } else if (trimmedLine.startsWith('QD:') || trimmedLine.startsWith('QD Accessory:') || trimmedLine.startsWith('QDs:')) {
+      details.qdAccessory = trimmedLine.replace(/^QD(s)?( Accessory)?:/, '').trim();
     } else if (trimmedLine.startsWith('Swivel:') || trimmedLine.startsWith('Swivel Studs:')) {
       details.swivelStuds = trimmedLine.replace(/^Swivel( Studs)?:/, '').trim();
     } else if (trimmedLine.startsWith('Texture:') || trimmedLine.startsWith('Texture Options:')) {
@@ -166,25 +180,123 @@ function normalizeString(str: string): string {
   return str.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-function findBestMatch(searchValue: string, options: { value: string; label: string }[]): string | null {
+function matchStockModel(stockName: string, models: StockModel[]): StockModel | null {
+  if (!stockName || models.length === 0) return null;
+  
+  const normalizedSearch = normalizeString(stockName);
+  console.log(`[Stock Match] Searching for: "${stockName}" (normalized: "${normalizedSearch}")`);
+  
+  // Exact match on ID, name, or displayName
+  for (const model of models) {
+    if (!model.isActive) continue;
+    const normalizedId = normalizeString(model.id);
+    const normalizedName = normalizeString(model.name);
+    const normalizedDisplay = normalizeString(model.displayName);
+    
+    if (normalizedId === normalizedSearch || 
+        normalizedName === normalizedSearch || 
+        normalizedDisplay === normalizedSearch) {
+      console.log(`[Stock Match] Exact match found: ${model.id}`);
+      return model;
+    }
+  }
+  
+  // Handle common prefixes like "CF" and "FG"
+  const prefixMap: Record<string, string> = {
+    'cf': 'cf_',
+    'fg': 'fg_',
+    'carbon': 'cf_',
+    'carbon fiber': 'cf_',
+    'carbonfiber': 'cf_',
+    'fiberglass': 'fg_',
+  };
+  
+  // Extract base name after removing CF/FG prefixes
+  let baseSearch = normalizedSearch;
+  let matchPrefix = '';
+  
+  for (const [prefix, replacement] of Object.entries(prefixMap)) {
+    const normalizedPrefix = normalizeString(prefix);
+    if (normalizedSearch.startsWith(normalizedPrefix)) {
+      baseSearch = normalizedSearch.substring(normalizedPrefix.length);
+      matchPrefix = replacement;
+      break;
+    }
+  }
+  
+  // Try to find model by base name
+  for (const model of models) {
+    if (!model.isActive) continue;
+    const normalizedId = normalizeString(model.id);
+    
+    // Check if model ID contains the base search
+    if (normalizedId.includes(baseSearch) && baseSearch.length >= 4) {
+      // If we have a prefix, prefer models that start with that prefix
+      if (matchPrefix && normalizedId.startsWith(normalizeString(matchPrefix))) {
+        console.log(`[Stock Match] Base match with prefix: ${model.id}`);
+        return model;
+      }
+    }
+  }
+  
+  // Fallback: try base search without prefix requirement
+  for (const model of models) {
+    if (!model.isActive) continue;
+    const normalizedId = normalizeString(model.id);
+    const normalizedDisplay = normalizeString(model.displayName);
+    
+    if ((normalizedId.includes(baseSearch) || normalizedDisplay.includes(baseSearch)) && baseSearch.length >= 4) {
+      console.log(`[Stock Match] Base match found: ${model.id}`);
+      return model;
+    }
+  }
+  
+  // Word-based partial matching
+  const searchWords = normalizedSearch.split(/\s+/).filter(w => w.length > 2);
+  for (const model of models) {
+    if (!model.isActive) continue;
+    const displayNorm = normalizeString(model.displayName);
+    const idNorm = normalizeString(model.id);
+    
+    // Check if any significant word matches
+    for (const word of searchWords) {
+      if (word.length >= 4 && (displayNorm.includes(word) || idNorm.includes(word))) {
+        // Make sure it's not just a prefix match
+        if (word !== 'cf' && word !== 'fg' && word !== 'carbon' && word !== 'fiber') {
+          console.log(`[Stock Match] Word match (${word}): ${model.id}`);
+          return model;
+        }
+      }
+    }
+  }
+  
+  console.log(`[Stock Match] No match found for: "${stockName}"`);
+  return null;
+}
+
+function findBestMatch(searchValue: string, options: FeatureOption[]): string | null {
   if (!searchValue || !options || options.length === 0) return null;
   
   const normalizedSearch = normalizeString(searchValue);
   
+  // Exact match
   for (const opt of options) {
     if (normalizeString(opt.value) === normalizedSearch || normalizeString(opt.label) === normalizedSearch) {
       return opt.value;
     }
   }
   
+  // Partial match - label contains search or search contains label
   for (const opt of options) {
-    if (normalizeString(opt.label).includes(normalizedSearch) || normalizedSearch.includes(normalizeString(opt.label))) {
+    const labelNorm = normalizeString(opt.label);
+    if (labelNorm.includes(normalizedSearch) || normalizedSearch.includes(labelNorm)) {
       return opt.value;
     }
   }
   
+  // Word-based matching
+  const searchWords = normalizedSearch.split(/\s+/).filter(w => w.length > 2);
   for (const opt of options) {
-    const searchWords = normalizedSearch.split(/\s+/);
     const labelNormalized = normalizeString(opt.label);
     if (searchWords.some(word => word.length > 3 && labelNormalized.includes(word))) {
       return opt.value;
@@ -194,36 +306,20 @@ function findBestMatch(searchValue: string, options: { value: string; label: str
   return null;
 }
 
-function matchStockModel(stockName: string, models: StockModel[]): StockModel | null {
-  if (!stockName || models.length === 0) return null;
+function findPaintMatch(colorValue: string, allFeatures: Feature[]): string | null {
+  if (!colorValue) return null;
   
-  const normalizedSearch = normalizeString(stockName);
+  // Paint options can come from multiple feature categories
+  const paintFeatureIds = ['base_colors', 'premium_patterns', 'camo_patterns', 'custom_graphics', 'special_effects'];
   
-  for (const model of models) {
-    if (!model.isActive) continue;
-    if (normalizeString(model.id) === normalizedSearch || 
-        normalizeString(model.name) === normalizedSearch || 
-        normalizeString(model.displayName) === normalizedSearch) {
-      return model;
-    }
-  }
-  
-  for (const model of models) {
-    if (!model.isActive) continue;
-    const normalizedDisplay = normalizeString(model.displayName);
-    const normalizedName = normalizeString(model.name);
-    if (normalizedDisplay.includes(normalizedSearch) || normalizedSearch.includes(normalizedDisplay) ||
-        normalizedName.includes(normalizedSearch) || normalizedSearch.includes(normalizedName)) {
-      return model;
-    }
-  }
-  
-  const searchWords = normalizedSearch.split(/\s+/).filter(w => w.length > 2);
-  for (const model of models) {
-    if (!model.isActive) continue;
-    const displayNorm = normalizeString(model.displayName);
-    if (searchWords.some(word => displayNorm.includes(word))) {
-      return model;
+  for (const featureId of paintFeatureIds) {
+    const feature = allFeatures.find(f => f.id === featureId);
+    if (feature?.options) {
+      const match = findBestMatch(colorValue, feature.options as FeatureOption[]);
+      if (match) {
+        console.log(`[Paint Match] Found "${match}" in ${featureId}`);
+        return match;
+      }
     }
   }
   
@@ -277,15 +373,11 @@ router.post('/', async (req: Request, res: Response) => {
     const allStockModels = await db.select().from(stockModels);
     const allFeatures = await db.select().from(features);
     
-    const actionFeature = allFeatures.find(f => f.id === 'action' || f.name === 'action_inlet');
-    const barrelFeature = allFeatures.find(f => f.id === 'barrel_inlet' || f.name === 'barrel_inlet');
-    const bottomMetalFeature = allFeatures.find(f => f.id === 'bottom_metal' || f.name === 'bottom_metal');
-    const paintFeature = allFeatures.find(f => f.id === 'paint_options' || f.name === 'paint_options' || f.displayName?.includes('Paint'));
-    const qdFeature = allFeatures.find(f => f.id === 'qd_accessory' || f.name === 'qd_accessory');
-    const swivelFeature = allFeatures.find(f => f.id === 'swivel_studs' || f.name === 'swivel_studs');
-    const textureFeature = allFeatures.find(f => f.id === 'texture_options' || f.name === 'texture_options');
-    const lopFeature = allFeatures.find(f => f.id === 'length_of_pull' || f.name === 'length_of_pull');
-    const railFeature = allFeatures.find(f => f.id === 'rail_accessory' || f.name === 'rail_accessory');
+    // Map features by their ID for easy lookup
+    const featureMap: Record<string, Feature> = {};
+    for (const f of allFeatures) {
+      featureMap[f.id] = f as Feature;
+    }
 
     for (const websiteOrder of orders) {
       try {
@@ -369,97 +461,126 @@ router.post('/', async (req: Request, res: Response) => {
         }
 
         const orderDetails = parseOrderDetails(websiteOrder.ordered);
+        console.log(`[Order ${websiteOrder.OrderID}] Parsed details:`, JSON.stringify(orderDetails, null, 2));
         
         const matchedModel = matchStockModel(orderDetails.stock || orderDetails.category || '', allStockModels as StockModel[]);
         const modelId = matchedModel?.id || null;
         
         const matchedFeaturesList: string[] = [];
-        const orderFeatures: Record<string, any> = {};
         
+        // Build features object matching the expected structure from order entry
+        const orderFeatures: Record<string, any> = {
+          miscItems: [],
+          other_options: [],
+        };
+        
+        // Handedness is stored at top level, not in features
+        let handednessValue: 'left' | 'right' | null = null;
         if (orderDetails.hand) {
           const handValue = orderDetails.hand.toLowerCase();
-          orderFeatures.handedness = handValue.includes('left') ? 'left' : 'right';
-          matchedFeaturesList.push(`Handedness: ${orderFeatures.handedness}`);
+          handednessValue = handValue.includes('left') ? 'left' : 'right';
+          matchedFeaturesList.push(`Handedness: ${handednessValue}`);
         }
         
-        if (orderDetails.action && actionFeature?.options) {
-          const matchedAction = findBestMatch(orderDetails.action, actionFeature.options as { value: string; label: string }[]);
-          if (matchedAction) {
-            orderFeatures.action_inlet = matchedAction;
-            matchedFeaturesList.push(`Action: ${matchedAction}`);
+        // Action Inlet
+        if (orderDetails.action && featureMap['action']?.options) {
+          const matched = findBestMatch(orderDetails.action, featureMap['action'].options as FeatureOption[]);
+          if (matched) {
+            orderFeatures.action_inlet = matched;
+            matchedFeaturesList.push(`Action Inlet: ${matched}`);
           }
         }
         
-        if (orderDetails.barrel && barrelFeature?.options) {
-          const matchedBarrel = findBestMatch(orderDetails.barrel, barrelFeature.options as { value: string; label: string }[]);
-          if (matchedBarrel) {
-            orderFeatures.barrel_inlet = matchedBarrel;
-            matchedFeaturesList.push(`Barrel: ${matchedBarrel}`);
+        // Action Length
+        if (orderDetails.actionLength && featureMap['action_length']?.options) {
+          const matched = findBestMatch(orderDetails.actionLength, featureMap['action_length'].options as FeatureOption[]);
+          if (matched) {
+            orderFeatures.action_length = matched;
+            matchedFeaturesList.push(`Action Length: ${matched}`);
           }
         }
         
-        if (orderDetails.bottomMetal && bottomMetalFeature?.options) {
-          const matchedBM = findBestMatch(orderDetails.bottomMetal, bottomMetalFeature.options as { value: string; label: string }[]);
-          if (matchedBM) {
-            orderFeatures.bottom_metal = matchedBM;
-            matchedFeaturesList.push(`Bottom Metal: ${matchedBM}`);
+        // Barrel Inlet
+        if (orderDetails.barrel && featureMap['barrel_inlet']?.options) {
+          const matched = findBestMatch(orderDetails.barrel, featureMap['barrel_inlet'].options as FeatureOption[]);
+          if (matched) {
+            orderFeatures.barrel_inlet = matched;
+            matchedFeaturesList.push(`Barrel Inlet: ${matched}`);
           }
         }
         
-        if (orderDetails.color && paintFeature?.options) {
-          const matchedPaint = findBestMatch(orderDetails.color, paintFeature.options as { value: string; label: string }[]);
+        // Bottom Metal
+        if (orderDetails.bottomMetal && featureMap['bottom_metal']?.options) {
+          const matched = findBestMatch(orderDetails.bottomMetal, featureMap['bottom_metal'].options as FeatureOption[]);
+          if (matched) {
+            orderFeatures.bottom_metal = matched;
+            matchedFeaturesList.push(`Bottom Metal: ${matched}`);
+          }
+        }
+        
+        // Paint Options (search across all paint feature categories)
+        if (orderDetails.color) {
+          const matchedPaint = findPaintMatch(orderDetails.color, allFeatures as Feature[]);
           if (matchedPaint) {
             orderFeatures.paint_options = matchedPaint;
             matchedFeaturesList.push(`Paint: ${matchedPaint}`);
           }
         }
         
-        if (orderDetails.qdAccessory && qdFeature?.options) {
-          const matched = findBestMatch(orderDetails.qdAccessory, qdFeature.options as { value: string; label: string }[]);
+        // QD Accessory
+        if (orderDetails.qdAccessory && featureMap['qd_accessory']?.options) {
+          const matched = findBestMatch(orderDetails.qdAccessory, featureMap['qd_accessory'].options as FeatureOption[]);
           if (matched) {
             orderFeatures.qd_accessory = matched;
             matchedFeaturesList.push(`QD: ${matched}`);
           }
         }
         
-        if (orderDetails.swivelStuds && swivelFeature?.options) {
-          const matched = findBestMatch(orderDetails.swivelStuds, swivelFeature.options as { value: string; label: string }[]);
+        // Swivel Studs
+        if (orderDetails.swivelStuds && featureMap['swivel_studs']?.options) {
+          const matched = findBestMatch(orderDetails.swivelStuds, featureMap['swivel_studs'].options as FeatureOption[]);
           if (matched) {
             orderFeatures.swivel_studs = matched;
-            matchedFeaturesList.push(`Swivel: ${matched}`);
+            matchedFeaturesList.push(`Swivel Studs: ${matched}`);
           }
         }
         
-        if (orderDetails.textureOptions && textureFeature?.options) {
-          const matched = findBestMatch(orderDetails.textureOptions, textureFeature.options as { value: string; label: string }[]);
+        // Texture Options
+        if (orderDetails.textureOptions && featureMap['texture_options']?.options) {
+          const matched = findBestMatch(orderDetails.textureOptions, featureMap['texture_options'].options as FeatureOption[]);
           if (matched) {
             orderFeatures.texture_options = matched;
             matchedFeaturesList.push(`Texture: ${matched}`);
           }
         }
         
-        if (orderDetails.lengthOfPull && lopFeature?.options) {
-          const matched = findBestMatch(orderDetails.lengthOfPull, lopFeature.options as { value: string; label: string }[]);
+        // Length of Pull
+        if (orderDetails.lengthOfPull && featureMap['length_of_pull']?.options) {
+          const matched = findBestMatch(orderDetails.lengthOfPull, featureMap['length_of_pull'].options as FeatureOption[]);
           if (matched) {
             orderFeatures.length_of_pull = matched;
             matchedFeaturesList.push(`LOP: ${matched}`);
           }
         }
         
-        if (orderDetails.railAccessory && railFeature?.options) {
-          const matched = findBestMatch(orderDetails.railAccessory, railFeature.options as { value: string; label: string }[]);
+        // Rail Accessory (stored as array)
+        if (orderDetails.railAccessory && featureMap['rail_accessory']?.options) {
+          const matched = findBestMatch(orderDetails.railAccessory, featureMap['rail_accessory'].options as FeatureOption[]);
           if (matched) {
             orderFeatures.rail_accessory = [matched];
             matchedFeaturesList.push(`Rail: ${matched}`);
           }
         }
         
+        // Store any unmatched features in notes
         if (orderDetails.features.length > 0) {
           orderFeatures.additional_features = orderDetails.features;
         }
 
         const orderId = await storage.generateNextOrderId();
         const orderDate = websiteOrder.date ? new Date(websiteOrder.date) : new Date();
+        
+        // Calculate due date: 6 weeks (42 days) from order date
         const dueDate = new Date(orderDate);
         dueDate.setDate(dueDate.getDate() + 42);
 
@@ -481,15 +602,34 @@ router.post('/', async (req: Request, res: Response) => {
           fbOrderNumber: websiteOrder.OrderID || undefined,
           agrOrderDetails: websiteOrder.ordered,
           modelId,
-          handedness: orderDetails.hand?.toLowerCase().includes('left') ? 'left' : (orderDetails.hand ? 'right' : null),
+          handedness: handednessValue,
           features: orderFeatures,
           notes: rawNotes,
           shipping: 36.95,
           status: 'FINALIZED',
           currentDepartment: 'P1 Production Queue',
-          isPaid,
+          isPaid: false, // We'll set this after creating payment record
           isVerified: false,
         });
+
+        // If order is paid, create a payment record
+        if (isPaid && totalAmount > 0) {
+          try {
+            await storage.createPayment({
+              orderId: newOrder.orderId,
+              paymentType: 'credit_card',
+              paymentAmount: totalAmount,
+              paymentDate: orderDate,
+              notes: `Imported from website order ${websiteOrder.OrderID}`,
+            });
+            console.log(`[Order ${orderId}] Created payment record for $${totalAmount}`);
+            
+            // Update order isPaid status
+            await storage.updateFinalizedOrder(orderId, { isPaid: true });
+          } catch (paymentError) {
+            console.error(`Failed to create payment for order ${orderId}:`, paymentError);
+          }
+        }
 
         results.push({
           success: true,

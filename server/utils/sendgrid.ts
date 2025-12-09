@@ -5,19 +5,19 @@ let connectionSettings: any;
 async function getCredentials() {
   // Always use environment variables for consistent behavior
   // This ensures dev and production work the same way
+  // Support both SENDGRID_FROM_EMAIL and SENDGRID_FROM for backwards compatibility
+  const apiKey = process.env.SENDGRID_API_KEY;
+  const email = process.env.SENDGRID_FROM_EMAIL || process.env.SENDGRID_FROM;
+
   console.log('🔍 SendGrid credentials check:', {
-    hasEnvApiKey: !!process.env.SENDGRID_API_KEY,
-    hasEnvFromEmail: !!process.env.SENDGRID_FROM_EMAIL,
+    hasEnvApiKey: !!apiKey,
+    hasEnvFromEmail: !!email,
     nodeEnv: process.env.NODE_ENV,
   });
 
-  // Fallback to environment variables
-  const apiKey = process.env.SENDGRID_API_KEY;
-  const email = process.env.SENDGRID_FROM_EMAIL;
-
   if (!apiKey || !email) {
-    console.error('❌ SendGrid not configured - missing SENDGRID_API_KEY or SENDGRID_FROM_EMAIL');
-    throw new Error('SendGrid not configured. Please set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL environment variables.');
+    console.error('❌ SendGrid not configured - missing SENDGRID_API_KEY or SENDGRID_FROM_EMAIL/SENDGRID_FROM');
+    throw new Error('SendGrid not configured. Please set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL (or SENDGRID_FROM) environment variables.');
   }
 
   console.log('✅ Using SendGrid credentials from environment variables');

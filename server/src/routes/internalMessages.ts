@@ -6,10 +6,12 @@ import { insertInternalMessageSchema } from '../../schema';
 
 const router = Router();
 
-// Get all messages (filtered by user)
+// Get all messages (filtered by user - users only see messages they sent or received)
 router.get('/', async (req, res) => {
   try {
     const { sentBy, sentTo } = req.query;
+    const sessionUser = (req as any).session?.user;
+    const currentUserId = sessionUser?.id;
 
     if (sentBy) {
       const messages = await storage.getMessagesBySender(
@@ -21,9 +23,31 @@ router.get('/', async (req, res) => {
         parseInt(sentTo as string)
       );
       res.json(messages);
+    } else if (currentUserId) {
+      // Return only messages the current user sent or is a recipient of
+      const sentMessages = await storage.getMessagesBySender(currentUserId);
+      const receivedMessages = await storage.getMessagesForUser(currentUserId);
+      
+      // Merge and deduplicate by message id
+      const messageMap = new Map();
+      for (const msg of sentMessages) {
+        messageMap.set(msg.id, msg);
+      }
+      for (const msg of receivedMessages) {
+        messageMap.set(msg.id, msg);
+      }
+      
+      // Sort by createdAt descending
+      const allMessages = Array.from(messageMap.values()).sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
+      
+      res.json(allMessages);
     } else {
-      const messages = await storage.getAllInternalMessages();
-      res.json(messages);
+      // No session user - return empty array for security
+      res.json([]);
     }
   } catch (error) {
     console.error('Get internal messages error:', error);

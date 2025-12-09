@@ -11,7 +11,7 @@ export interface UserPermissions {
 }
 
 // Default routes for users not explicitly listed - only employee portal
-export const DEFAULT_USER_ROUTES: string[] = ['/employee-portal'];
+export const DEFAULT_USER_ROUTES: string[] = ['/employee-portal', '/communications/inbox'];
 
 // All valid navbar routes for reference (from Navigation.tsx)
 // This helps ensure permissions use correct paths

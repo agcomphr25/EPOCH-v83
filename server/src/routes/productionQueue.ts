@@ -307,8 +307,9 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
 // Get Production Queue with priority scores (for regular orders)
 router.get('/prioritized', async (req: Request, res: Response) => {
   try {
+    const requestUser = req.user;
     console.log(
-      '🏭 PRIORITIZED QUEUE: Fetching prioritized production queue...'
+      `🏭 PRIORITIZED QUEUE: Fetching for user ${requestUser?.username} (role: ${requestUser?.role})...`
     );
 
     // AUTOMATIC CLEANUP: Handle orders that need attention or movement
@@ -352,9 +353,14 @@ router.get('/prioritized', async (req: Request, res: Response) => {
     `;
 
     const queueResult = await pool.query(queueQuery);
+    console.log(`🏭 PRIORITIZED QUEUE: Raw result type: ${typeof queueResult}, isArray: ${Array.isArray(queueResult)}`);
+    console.log(`🏭 PRIORITIZED QUEUE: Raw result length/rows: ${Array.isArray(queueResult) ? queueResult.length : (queueResult?.rows?.length || 'no rows')}`);
+    
     const prioritizedQueue = Array.isArray(queueResult)
       ? queueResult
       : queueResult.rows || [];
+    
+    console.log(`🏭 PRIORITIZED QUEUE: Processed queue length: ${prioritizedQueue.length}`);
 
     // Calculate current priority metrics
     const now = new Date();

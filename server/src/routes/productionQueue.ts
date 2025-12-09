@@ -5,46 +5,6 @@ import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 
 const router = Router();
 
-// VERSION CHECK: Simple endpoint to verify deployment version
-// No auth required - just returns version info
-router.get('/version', (req: Request, res: Response) => {
-  return res.json({
-    version: '2.0.1-agrace-fix',
-    deployedAt: '2024-12-09T05:00:00Z',
-    message: 'authorizeApiRoute middleware active - not requireAdminAccess',
-    hasUser: !!req.user,
-    username: req.user?.username || 'not-authenticated'
-  });
-});
-
-// DEBUG ENDPOINT: Show current user data (for debugging auth issues in production)
-// This endpoint does NOT use authorizeApiRoute to help debug auth issues
-router.get('/debug/current-user', (req: Request, res: Response) => {
-  console.log('🔍 DEBUG /current-user endpoint hit');
-  console.log('🔍 DEBUG req.user:', JSON.stringify(req.user, null, 2));
-  
-  if (!req.user) {
-    return res.json({
-      authenticated: false,
-      message: 'No user attached to request - authentication may have failed',
-      headers: {
-        hasAuthHeader: !!req.headers['authorization'],
-        hasCookie: !!req.cookies?.sessionToken,
-      }
-    });
-  }
-  
-  return res.json({
-    authenticated: true,
-    userId: req.user.id,
-    username: req.user.username,
-    role: req.user.role,
-    employeeId: req.user.employeeId,
-    canOverridePrices: req.user.canOverridePrices,
-    isActive: req.user.isActive,
-  });
-});
-
 // Helper function to automatically handle orders that need attention or movement
 async function autoMoveInvalidStockModelOrders(storage: any) {
   try {

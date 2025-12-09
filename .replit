@@ -67,10 +67,13 @@ externalPort = 3002
 localPort = 43645
 externalPort = 3003
 
+<<<<<<< HEAD
 [[ports]]
 localPort = 44857
 externalPort = 4200
 
+=======
+>>>>>>> 72a5981f (Remove unused debug and version check endpoints from the application)
 
 
 [userenv]

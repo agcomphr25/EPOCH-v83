@@ -1532,12 +1532,13 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               ls.stock_model as "stockModel",
               ls.scheduled_date as "scheduledDate",
               ls.material_type as "materialTypeRaw",
-              ls.customer_name as "customer",
+              COALESCE(ls.customer_name, c.name, 'Regular Order') as "customer",
               o.due_date as "dueDate",
               'P1' as source,
               'regular' as orderType
             FROM layup_schedule ls
             LEFT JOIN orders o ON ls.order_id = o.order_id
+            LEFT JOIN customers c ON o.customer_id = c.id
             ORDER BY ls.scheduled_date DESC
             LIMIT 500
           `)
@@ -1548,12 +1549,13 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               ls.stock_model as "stockModel",
               ls.scheduled_date as "scheduledDate",
               ls.material_type as "materialTypeRaw",
-              ls.customer_name as "customer",
+              COALESCE(ls.customer_name, c.name, 'Regular Order') as "customer",
               o.due_date as "dueDate",
               'P1' as source,
               'regular' as orderType
             FROM layup_schedule ls
             LEFT JOIN orders o ON ls.order_id = o.order_id
+            LEFT JOIN customers c ON o.customer_id = c.id
             WHERE ls.scheduled_date >= $1 AND ls.scheduled_date < $2
             ORDER BY ls.scheduled_date ASC
           `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
@@ -1697,8 +1699,10 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               po.order_id as "poNumber",
               po.priority,
               po.status,
+              COALESCE(p2.vendor_name, 'P2 Order') as "customer",
               'P2' as source
             FROM p2_production_orders po
+            LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
             ORDER BY po.due_date ASC NULLS LAST
             LIMIT 500
@@ -1713,8 +1717,10 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               po.order_id as "poNumber",
               po.priority,
               po.status,
+              COALESCE(p2.vendor_name, 'P2 Order') as "customer",
               'P2' as source
             FROM p2_production_orders po
+            LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
               AND po.due_date >= $1 AND po.due_date < $2
             ORDER BY po.due_date ASC

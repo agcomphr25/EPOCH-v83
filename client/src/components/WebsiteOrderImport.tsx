@@ -144,6 +144,8 @@ function parseOrderDetails(orderedHtml: string): ParsedOrderDetails {
   return details;
 }
 
+const isWebsiteImportEnabled = import.meta.env.VITE_FEATURE_WEBSITE_IMPORT === 'true';
+
 export function WebsiteOrderImport() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -157,6 +159,7 @@ export function WebsiteOrderImport() {
 
   const { data: existingOrders = [] } = useQuery<any[]>({
     queryKey: ['/api/orders'],
+    enabled: isWebsiteImportEnabled,
   });
 
   const importMutation = useMutation({
@@ -188,6 +191,10 @@ export function WebsiteOrderImport() {
       });
     },
   });
+
+  if (!isWebsiteImportEnabled) {
+    return null;
+  }
 
   const handleFileSelect = (file: File) => {
     if (!file) return;
@@ -338,14 +345,18 @@ export function WebsiteOrderImport() {
   };
 
   return (
-    <Card>
+    <Card className="border-amber-200 bg-amber-50/30">
       <CardHeader>
         <CardTitle className="flex items-center gap-3" data-testid="title-website-import">
           <FileSpreadsheet className="h-5 w-5 text-primary" />
           Website Order Import
+          <Badge variant="outline" className="ml-2 bg-amber-100 text-amber-700 border-amber-300">
+            Beta
+          </Badge>
         </CardTitle>
         <CardDescription>
           Import orders from your website CSV export file
+          <span className="ml-2 text-amber-600 text-xs">(Experimental feature - under development)</span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

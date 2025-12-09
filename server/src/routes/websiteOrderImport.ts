@@ -432,6 +432,13 @@ function isPaidFromCSV(websiteOrder: WebsiteOrder): boolean {
 }
 
 router.post('/', async (req: Request, res: Response) => {
+  if (process.env.FEATURE_WEBSITE_IMPORT !== 'true') {
+    return res.status(403).json({ 
+      error: 'Website Order Import feature is currently disabled',
+      message: 'This feature is under development and not available in this environment.'
+    });
+  }
+
   try {
     const parseResult = importRequestSchema.safeParse(req.body);
     

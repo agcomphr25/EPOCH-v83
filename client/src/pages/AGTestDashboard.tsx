@@ -22,6 +22,7 @@ import {
   Package,
   GraduationCap,
   ClipboardList,
+  MessageSquare,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -310,6 +311,25 @@ export default function AGTestDashboard() {
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
               Weekly production metrics and gateway tracking
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card
+          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-violet-50 dark:hover:bg-violet-900/20"
+          onClick={() => navigateTo('/communications/inbox')}
+          data-testid="card-communications"
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <MessageSquare className="w-5 h-5 text-violet-600" />
+                <span className="text-sm font-medium">Communications</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Internal messages and notifications
             </p>
           </CardContent>
         </Card>

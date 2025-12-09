@@ -36,19 +36,19 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
 
   // Fetch short term sales from database
   const { data: sales = [], isLoading } = useQuery({
-    queryKey: ['/api/short-term-sales'],
-    queryFn: () => apiRequest('/api/short-term-sales'),
+    queryKey: ['/api/discounts/short-term-sales'],
+    queryFn: () => apiRequest('/api/discounts/short-term-sales'),
   });
 
   // Create mutation
   const createMutation = useMutation({
     mutationFn: (data: any) =>
-      apiRequest('/api/short-term-sales', {
+      apiRequest('/api/discounts/short-term-sales', {
         method: 'POST',
         body: data,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/short-term-sales'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/discounts/short-term-sales'] });
       setFormSale({
         id: null,
         name: '',
@@ -74,12 +74,12 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) =>
-      apiRequest(`/api/short-term-sales/${id}`, {
+      apiRequest(`/api/discounts/short-term-sales/${id}`, {
         method: 'PUT',
         body: data,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/short-term-sales'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/discounts/short-term-sales'] });
       setFormSale({
         id: null,
         name: '',
@@ -105,11 +105,11 @@ export default function DiscountAdmin({ onSalesChange }: DiscountAdminProps) {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: (id: number) =>
-      apiRequest(`/api/short-term-sales/${id}`, {
+      apiRequest(`/api/discounts/short-term-sales/${id}`, {
         method: 'DELETE',
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/short-term-sales'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/discounts/short-term-sales'] });
       toast({
         title: 'Success',
         description: 'Short-term sale deleted successfully',

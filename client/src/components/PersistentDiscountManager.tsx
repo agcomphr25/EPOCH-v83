@@ -83,8 +83,8 @@ export default function PersistentDiscountManager() {
   const queryClient = useQueryClient();
 
   const { data: persistentDiscounts = [], isLoading } = useQuery({
-    queryKey: ['/api/persistent-discounts'],
-    queryFn: () => apiRequest('/api/persistent-discounts'),
+    queryKey: ['/api/discounts/persistent-discounts'],
+    queryFn: () => apiRequest('/api/discounts/persistent-discounts'),
   });
 
   const { data: customerTypes = [] } = useQuery({
@@ -94,13 +94,13 @@ export default function PersistentDiscountManager() {
 
   const createMutation = useMutation({
     mutationFn: (data: PersistentDiscountFormData) =>
-      apiRequest('/api/persistent-discounts', {
+      apiRequest('/api/discounts/persistent-discounts', {
         method: 'POST',
         body: data,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['/api/persistent-discounts'],
+        queryKey: ['/api/discounts/persistent-discounts'],
       });
       setIsCreateDialogOpen(false);
       toast({
@@ -125,13 +125,13 @@ export default function PersistentDiscountManager() {
       id: number;
       data: Partial<PersistentDiscountFormData>;
     }) =>
-      apiRequest(`/api/persistent-discounts/${id}`, {
+      apiRequest(`/api/discounts/persistent-discounts/${id}`, {
         method: 'PUT',
         body: data,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['/api/persistent-discounts'],
+        queryKey: ['/api/discounts/persistent-discounts'],
       });
       setEditingDiscount(null);
       toast({
@@ -150,12 +150,12 @@ export default function PersistentDiscountManager() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) =>
-      apiRequest(`/api/persistent-discounts/${id}`, {
+      apiRequest(`/api/discounts/persistent-discounts/${id}`, {
         method: 'DELETE',
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['/api/persistent-discounts'],
+        queryKey: ['/api/discounts/persistent-discounts'],
       });
       toast({
         title: 'Success',

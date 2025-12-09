@@ -1348,7 +1348,7 @@ export default function OrderEntry() {
                     ''
                   );
                   const persistentDiscounts = await apiRequest(
-                    '/api/persistent-discounts'
+                    '/api/discounts/persistent-discounts'
                   );
                   const discount = persistentDiscounts.find(
                     (d: any) => d.id.toString() === discountId
@@ -1363,7 +1363,7 @@ export default function OrderEntry() {
                 } else if (order.discountCode.startsWith('short_term_')) {
                   const saleId = order.discountCode.replace('short_term_', '');
                   const shortTermSales = await apiRequest(
-                    '/api/short-term-sales'
+                    '/api/discounts/short-term-sales'
                   );
                   const sale = shortTermSales.find(
                     (s: any) => s.id.toString() === saleId
@@ -1721,8 +1721,8 @@ export default function OrderEntry() {
   const loadDiscountCodes = async () => {
     try {
       const [shortTermSales, persistentDiscounts] = await Promise.all([
-        apiRequest('/api/short-term-sales'),
-        apiRequest('/api/persistent-discounts'),
+        apiRequest('/api/discounts/short-term-sales'),
+        apiRequest('/api/discounts/persistent-discounts'),
       ]);
 
       const discounts: { value: string; label: string }[] = [];
@@ -5352,7 +5352,7 @@ export default function OrderEntry() {
                                 ''
                               );
                               const persistentDiscounts = await apiRequest(
-                                '/api/persistent-discounts'
+                                '/api/discounts/persistent-discounts'
                               );
                               const discount = persistentDiscounts.find(
                                 (d: any) => d.id.toString() === discountId
@@ -5361,7 +5361,7 @@ export default function OrderEntry() {
                             } else if (value.startsWith('short_term_')) {
                               const saleId = value.replace('short_term_', '');
                               const shortTermSales = await apiRequest(
-                                '/api/short-term-sales'
+                                '/api/discounts/short-term-sales'
                               );
                               const sale = shortTermSales.find(
                                 (s: any) => s.id.toString() === saleId

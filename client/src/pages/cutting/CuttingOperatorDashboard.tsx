@@ -456,7 +456,7 @@ export default function CuttingOperatorDashboard() {
     },
   });
 
-  const handleCompleteProduction = () => {
+  const handleCompleteProduction = async () => {
     if (!selectedMfgItem) return;
     
     const qty = parseInt(productionForm.quantityCompleted) || 0;
@@ -465,15 +465,20 @@ export default function CuttingOperatorDashboard() {
       return;
     }
 
-    // Process any depleted rolls
+    // Process any depleted rolls first (await all depletion calls)
     if (productionForm.depletedRolls.length > 0) {
-      productionForm.depletedRolls.forEach(rollId => {
-        depleteRollMutation.mutate(rollId);
-      });
-      toast({
-        title: "Rolls Depleted",
-        description: `${productionForm.depletedRolls.length} roll(s) marked as depleted.`,
-      });
+      try {
+        await Promise.all(
+          productionForm.depletedRolls.map(rollId => depleteRollMutation.mutateAsync(rollId))
+        );
+        toast({
+          title: "Rolls Depleted",
+          description: `${productionForm.depletedRolls.length} roll(s) marked as depleted.`,
+        });
+      } catch (err) {
+        console.error('Error depleting rolls:', err);
+        toast({ title: "Warning", description: "Some rolls may not have been marked as depleted.", variant: "destructive" });
+      }
     }
 
     // Use enhanced completion with full traceability if fabrics were scanned

@@ -5,15 +5,15 @@ import {
   insertShortTermSaleSchema,
 } from '@shared/schema';
 import { authenticateToken } from '../../middleware/auth';
-import { requireAdminAccess } from '../../middleware/routeAuthorization';
+import { requireAdminAccess, authorizeApiRoute } from '../../middleware/routeAuthorization';
 
 const router = Router();
 
 router.use(authenticateToken);
-router.use(requireAdminAccess);
 
+// GET routes - allow access for users with order-entry access (they need to apply discounts)
 // Persistent Discounts routes
-router.get('/persistent-discounts', async (req: Request, res: Response) => {
+router.get('/persistent-discounts', authorizeApiRoute(['/order-entry', '/discounts']), async (req: Request, res: Response) => {
   try {
     const discounts = await storage.getAllPersistentDiscounts();
     res.json(discounts);
@@ -23,7 +23,8 @@ router.get('/persistent-discounts', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/persistent-discounts', async (req: Request, res: Response) => {
+// Write operations for persistent discounts - admin only
+router.post('/persistent-discounts', requireAdminAccess, async (req: Request, res: Response) => {
   try {
     const result = insertPersistentDiscountSchema.parse(req.body);
     const discount = await storage.createPersistentDiscount(result);
@@ -34,7 +35,7 @@ router.post('/persistent-discounts', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/persistent-discounts/:id', async (req: Request, res: Response) => {
+router.put('/persistent-discounts/:id', requireAdminAccess, async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     const result = insertPersistentDiscountSchema.partial().parse(req.body);
@@ -48,6 +49,7 @@ router.put('/persistent-discounts/:id', async (req: Request, res: Response) => {
 
 router.delete(
   '/persistent-discounts/:id',
+  requireAdminAccess,
   async (req: Request, res: Response) => {
     try {
       const id = parseInt(req.params.id);
@@ -60,8 +62,8 @@ router.delete(
   }
 );
 
-// Short Term Sales routes
-router.get('/short-term-sales', async (req: Request, res: Response) => {
+// Short Term Sales routes - GET allows order-entry users, write operations require admin
+router.get('/short-term-sales', authorizeApiRoute(['/order-entry', '/discounts']), async (req: Request, res: Response) => {
   try {
     const sales = await storage.getAllShortTermSales();
     res.json(sales);
@@ -71,7 +73,7 @@ router.get('/short-term-sales', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/short-term-sales', async (req: Request, res: Response) => {
+router.post('/short-term-sales', requireAdminAccess, async (req: Request, res: Response) => {
   try {
     const result = insertShortTermSaleSchema.parse(req.body);
     const sale = await storage.createShortTermSale(result);
@@ -82,7 +84,7 @@ router.post('/short-term-sales', async (req: Request, res: Response) => {
   }
 });
 
-router.put('/short-term-sales/:id', async (req: Request, res: Response) => {
+router.put('/short-term-sales/:id', requireAdminAccess, async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     const result = insertShortTermSaleSchema.partial().parse(req.body);
@@ -94,7 +96,7 @@ router.put('/short-term-sales/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/short-term-sales/:id', async (req: Request, res: Response) => {
+router.delete('/short-term-sales/:id', requireAdminAccess, async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
     await storage.deleteShortTermSale(id);

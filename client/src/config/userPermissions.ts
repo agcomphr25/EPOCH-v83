@@ -143,6 +143,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/customer-management',
       '/inventory/parts-request',
       '/shipping-tracker',
+      '/shipping/label',
       '/all-orders',
       '/order-department-transfer',
       '/barcode-scanner',
@@ -185,11 +186,13 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
 
   darleneb: {
     routes: [
+      '/darleneb-dashboard',
       '/order-entry',
       '/orders-list',
       '/orders-management',
       '/customers',
       '/shipping-tracker',
+      '/discounts',
     ],
   },
 

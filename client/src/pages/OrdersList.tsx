@@ -98,6 +98,7 @@ import { getDisplayOrderId } from '@/lib/orderUtils';
 import toast from 'react-hot-toast';
 import CommunicationCompose from '@/components/CommunicationCompose';
 import LinkOrdersDialog from '@/components/LinkOrdersDialog';
+import { WebsiteOrderImport } from '@/components/WebsiteOrderImport';
 
 // Form validation schema for kickback creation
 const kickbackFormSchema = insertKickbackSchema.extend({
@@ -1190,6 +1191,11 @@ export default function OrdersList() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Website Order Import Section */}
+        <div className="mb-6">
+          <WebsiteOrderImport />
         </div>
 
         {!filteredOrders || filteredOrders.length === 0 ? (

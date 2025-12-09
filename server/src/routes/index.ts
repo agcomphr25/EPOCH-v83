@@ -76,6 +76,7 @@ import cuttingTableManufacturingQueueRoutes from './cuttingTableManufacturingQue
 
 import watchRulesRoutes from './watchRules';
 import creditMemosRoutes from './creditMemos';
+import websiteOrderImportRoutes from './websiteOrderImport';
 
 
 import p2TravelerRoutes from './p2Traveler';
@@ -124,6 +125,9 @@ export function registerRoutes(app: Express): Server {
 
   // Order management routes
   app.use('/api/orders', ordersRoutes);
+  
+  // Website order import routes
+  app.use('/api/orders/import-website', websiteOrderImportRoutes);
 
   // Forms and submissions routes
   app.use('/api/forms', formsRoutes);

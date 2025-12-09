@@ -4,6 +4,7 @@ import { OrderIDGenerator } from '@/components/OrderIDGenerator';
 import { CSVImport } from '@/components/CSVImport';
 import { DataDisplay } from '@/components/DataDisplay';
 import { TestResults } from '@/components/TestResults';
+import { WebsiteOrderImport } from '@/components/WebsiteOrderImport';
 
 export default function OrderManagement() {
   return (
@@ -11,6 +12,10 @@ export default function OrderManagement() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <OrderIDGenerator />
         <CSVImport />
+      </div>
+
+      <div className="mt-8">
+        <WebsiteOrderImport />
       </div>
 
       <div className="mt-8 space-y-8">

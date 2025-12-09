@@ -81,7 +81,7 @@ interface StockModel {
   name: string;
   displayName: string;
   price: number;
-  isActive: boolean;
+  isActive: boolean | null;
 }
 
 interface FeatureOption {
@@ -180,93 +180,153 @@ function normalizeString(str: string): string {
   return str.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-function matchStockModel(stockName: string, models: StockModel[]): StockModel | null {
+function parseCSVDate(dateStr: string): Date {
+  if (!dateStr) return new Date();
+  
+  const formats = [
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(AM|PM))?$/i,
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/,
+    /^(\d{4})-(\d{2})-(\d{2})$/,
+  ];
+  
+  const match1 = dateStr.match(formats[0]);
+  if (match1) {
+    const [, month, day, year, hours, minutes, seconds, ampm] = match1;
+    let hour = parseInt(hours);
+    if (ampm?.toUpperCase() === 'PM' && hour < 12) hour += 12;
+    if (ampm?.toUpperCase() === 'AM' && hour === 12) hour = 0;
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), hour, parseInt(minutes), parseInt(seconds || '0'));
+  }
+  
+  const match2 = dateStr.match(formats[1]);
+  if (match2) {
+    const [, month, day, year] = match2;
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  }
+  
+  const match3 = dateStr.match(formats[2]);
+  if (match3) {
+    return new Date(dateStr);
+  }
+  
+  const match4 = dateStr.match(formats[3]);
+  if (match4) {
+    const [, year, month, day] = match4;
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  }
+  
+  const parsed = new Date(dateStr);
+  if (!isNaN(parsed.getTime())) {
+    return parsed;
+  }
+  
+  console.log(`[Date Parse] Could not parse date: "${dateStr}", using current date`);
+  return new Date();
+}
+
+function matchStockModel(stockName: string, category: string, models: StockModel[]): StockModel | null {
   if (!stockName || models.length === 0) return null;
   
-  const normalizedSearch = normalizeString(stockName);
-  console.log(`[Stock Match] Searching for: "${stockName}" (normalized: "${normalizedSearch}")`);
+  const isCarbonFiber = category?.toLowerCase().includes('carbon');
+  const isFiberglass = category?.toLowerCase().includes('fiberglass') || category?.toLowerCase().includes('fiber glass');
+  const prefix = isCarbonFiber ? 'cf_' : isFiberglass ? 'fg_' : '';
   
-  // Exact match on ID, name, or displayName
-  for (const model of models) {
-    if (!model.isActive) continue;
-    const normalizedId = normalizeString(model.id);
-    const normalizedName = normalizeString(model.name);
-    const normalizedDisplay = normalizeString(model.displayName);
-    
-    if (normalizedId === normalizedSearch || 
-        normalizedName === normalizedSearch || 
-        normalizedDisplay === normalizedSearch) {
-      console.log(`[Stock Match] Exact match found: ${model.id}`);
+  let cleanedStock = stockName
+    .replace(/^AG\s+/i, '')
+    .replace(/\(.*?\)/g, '')
+    .trim();
+  
+  const isAdjustable = /\b(adjustable|adj)\b/i.test(cleanedStock);
+  cleanedStock = cleanedStock.replace(/\b(adjustable|adj)\b/i, '').trim();
+  
+  const stockLower = cleanedStock.toLowerCase().replace(/\s+/g, '_');
+  const normalizedStock = normalizeString(cleanedStock);
+  
+  console.log(`[Stock Match] Input: "${stockName}", Category: "${category}", Prefix: "${prefix}", Adjustable: ${isAdjustable}, Cleaned: "${cleanedStock}"`);
+  
+  const activeModels = models.filter(m => m.isActive !== false);
+  
+  const modelNameMappings: Record<string, string[]> = {
+    'alpine_hunter': ['alpinehunter', 'alpine_hunter', 'alp_hunter'],
+    'chalk_branch': ['chalkbranch', 'chalk_branch'],
+    'visigoth': ['visigoth'],
+    'armor': ['armor'],
+    'ferrata': ['ferrata'],
+    'k2': ['k2'],
+    'privateer': ['privateer'],
+    'm1a': ['m1a'],
+    'sportsman': ['sportsman'],
+    'mesa_universal': ['mesauniversal', 'mesa_universal'],
+  };
+  
+  const candidateIds: string[] = [];
+  
+  for (const [baseName, variants] of Object.entries(modelNameMappings)) {
+    if (variants.some(v => normalizedStock.includes(v) || v.includes(normalizedStock))) {
+      if (prefix) {
+        if (isAdjustable) {
+          candidateIds.push(`${prefix}adj_${baseName}`);
+          candidateIds.push(`${prefix}adj_${baseName.replace('alpine_hunter', 'alp_hunter')}`);
+        }
+        candidateIds.push(`${prefix}${baseName}`);
+      } else {
+        if (isAdjustable) {
+          candidateIds.push(`cf_adj_${baseName}`);
+          candidateIds.push(`fg_adj_${baseName}`);
+          candidateIds.push(`cf_adj_${baseName.replace('alpine_hunter', 'alp_hunter')}`);
+          candidateIds.push(`fg_adj_${baseName.replace('alpine_hunter', 'alp_hunter')}`);
+        }
+        candidateIds.push(`cf_${baseName}`);
+        candidateIds.push(`fg_${baseName}`);
+      }
+    }
+  }
+  
+  for (const candidateId of candidateIds) {
+    const model = activeModels.find(m => m.id === candidateId);
+    if (model) {
+      console.log(`[Stock Match] Found by candidate ID: ${model.id}`);
       return model;
     }
   }
   
-  // Handle common prefixes like "CF" and "FG"
-  const prefixMap: Record<string, string> = {
-    'cf': 'cf_',
-    'fg': 'fg_',
-    'carbon': 'cf_',
-    'carbon fiber': 'cf_',
-    'carbonfiber': 'cf_',
-    'fiberglass': 'fg_',
-  };
-  
-  // Extract base name after removing CF/FG prefixes
-  let baseSearch = normalizedSearch;
-  let matchPrefix = '';
-  
-  for (const [prefix, replacement] of Object.entries(prefixMap)) {
-    const normalizedPrefix = normalizeString(prefix);
-    if (normalizedSearch.startsWith(normalizedPrefix)) {
-      baseSearch = normalizedSearch.substring(normalizedPrefix.length);
-      matchPrefix = replacement;
-      break;
+  for (const model of activeModels) {
+    const modelIdNorm = normalizeString(model.id);
+    const displayNorm = normalizeString(model.displayName || '');
+    
+    if (modelIdNorm === normalizedStock || displayNorm === normalizedStock) {
+      console.log(`[Stock Match] Exact match: ${model.id}`);
+      return model;
     }
   }
   
-  // Try to find model by base name
-  for (const model of models) {
-    if (!model.isActive) continue;
-    const normalizedId = normalizeString(model.id);
+  for (const model of activeModels) {
+    const modelIdNorm = normalizeString(model.id);
+    const displayNorm = normalizeString(model.displayName || '');
     
-    // Check if model ID contains the base search
-    if (normalizedId.includes(baseSearch) && baseSearch.length >= 4) {
-      // If we have a prefix, prefer models that start with that prefix
-      if (matchPrefix && normalizedId.startsWith(normalizeString(matchPrefix))) {
-        console.log(`[Stock Match] Base match with prefix: ${model.id}`);
+    const hasCorrectPrefix = !prefix || model.id.startsWith(prefix);
+    const hasCorrectAdj = isAdjustable ? model.id.includes('adj') : !model.id.includes('adj');
+    
+    if (hasCorrectPrefix && hasCorrectAdj) {
+      if (modelIdNorm.includes(normalizedStock) || normalizedStock.includes(modelIdNorm.replace(/^(cf|fg)_?(adj)?_?/, ''))) {
+        console.log(`[Stock Match] Partial match with prefix: ${model.id}`);
+        return model;
+      }
+      if (displayNorm.includes(normalizedStock) || normalizedStock.includes(displayNorm.replace(/^(cf|fg)\s*(adj)?/i, ''))) {
+        console.log(`[Stock Match] Display name match: ${model.id}`);
         return model;
       }
     }
   }
   
-  // Fallback: try base search without prefix requirement
-  for (const model of models) {
-    if (!model.isActive) continue;
-    const normalizedId = normalizeString(model.id);
-    const normalizedDisplay = normalizeString(model.displayName);
+  for (const model of activeModels) {
+    const modelIdClean = model.id.replace(/^(cf|fg)_?(adj)?_?/, '');
+    const modelIdNorm = normalizeString(modelIdClean);
     
-    if ((normalizedId.includes(baseSearch) || normalizedDisplay.includes(baseSearch)) && baseSearch.length >= 4) {
-      console.log(`[Stock Match] Base match found: ${model.id}`);
+    if (modelIdNorm === normalizedStock || normalizedStock.includes(modelIdNorm) || modelIdNorm.includes(normalizedStock)) {
+      console.log(`[Stock Match] Base name match (ignoring prefix): ${model.id}`);
       return model;
-    }
-  }
-  
-  // Word-based partial matching
-  const searchWords = normalizedSearch.split(/\s+/).filter(w => w.length > 2);
-  for (const model of models) {
-    if (!model.isActive) continue;
-    const displayNorm = normalizeString(model.displayName);
-    const idNorm = normalizeString(model.id);
-    
-    // Check if any significant word matches
-    for (const word of searchWords) {
-      if (word.length >= 4 && (displayNorm.includes(word) || idNorm.includes(word))) {
-        // Make sure it's not just a prefix match
-        if (word !== 'cf' && word !== 'fg' && word !== 'carbon' && word !== 'fiber') {
-          console.log(`[Stock Match] Word match (${word}): ${model.id}`);
-          return model;
-        }
-      }
     }
   }
   
@@ -279,14 +339,12 @@ function findBestMatch(searchValue: string, options: FeatureOption[]): string | 
   
   const normalizedSearch = normalizeString(searchValue);
   
-  // Exact match
   for (const opt of options) {
     if (normalizeString(opt.value) === normalizedSearch || normalizeString(opt.label) === normalizedSearch) {
       return opt.value;
     }
   }
   
-  // Partial match - label contains search or search contains label
   for (const opt of options) {
     const labelNorm = normalizeString(opt.label);
     if (labelNorm.includes(normalizedSearch) || normalizedSearch.includes(labelNorm)) {
@@ -294,7 +352,6 @@ function findBestMatch(searchValue: string, options: FeatureOption[]): string | 
     }
   }
   
-  // Word-based matching
   const searchWords = normalizedSearch.split(/\s+/).filter(w => w.length > 2);
   for (const opt of options) {
     const labelNormalized = normalizeString(opt.label);
@@ -309,7 +366,6 @@ function findBestMatch(searchValue: string, options: FeatureOption[]): string | 
 function findPaintMatch(colorValue: string, allFeatures: Feature[]): string | null {
   if (!colorValue) return null;
   
-  // Paint options can come from multiple feature categories
   const paintFeatureIds = ['base_colors', 'premium_patterns', 'camo_patterns', 'custom_graphics', 'special_effects'];
   
   for (const featureId of paintFeatureIds) {
@@ -335,24 +391,43 @@ function formatPhoneNumber(phone: string): string {
   return phone;
 }
 
+function isTruthyValue(value: string | undefined | null): boolean {
+  if (!value) return false;
+  const lower = value.toLowerCase().trim();
+  return ['1', 'true', 'yes', 'y', 'on'].includes(lower);
+}
+
+function isFalsyValue(value: string | undefined | null): boolean {
+  if (value === undefined || value === null || value === '') return true;
+  const lower = value.toLowerCase().trim();
+  return ['0', 'false', 'no', 'n', 'off', ''].includes(lower);
+}
+
 function isPaidFromCSV(websiteOrder: WebsiteOrder): boolean {
   const totalAmount = parseFloat(websiteOrder.total) || 0;
   if (totalAmount <= 0) return false;
   
   const status = (websiteOrder.status || '').toLowerCase();
   const orderStatus = (websiteOrder.order_status || '').toLowerCase();
-  const processed = websiteOrder.order_processed === '1' || websiteOrder.processing === '1';
   
   if (status.includes('paid') || status.includes('complete') || status.includes('success')) {
+    console.log(`[Payment Check] Paid based on status: "${websiteOrder.status}"`);
     return true;
   }
   if (orderStatus.includes('paid') || orderStatus.includes('complete') || orderStatus.includes('success')) {
-    return true;
-  }
-  if (processed && !websiteOrder.fail) {
+    console.log(`[Payment Check] Paid based on order_status: "${websiteOrder.order_status}"`);
     return true;
   }
   
+  const processed = isTruthyValue(websiteOrder.order_processed) || isTruthyValue(websiteOrder.processing);
+  const failed = isTruthyValue(websiteOrder.fail);
+  
+  if (processed && !failed) {
+    console.log(`[Payment Check] Paid based on processed=${websiteOrder.order_processed || websiteOrder.processing}, fail=${websiteOrder.fail}`);
+    return true;
+  }
+  
+  console.log(`[Payment Check] NOT paid: status="${websiteOrder.status}", order_status="${websiteOrder.order_status}", processed="${websiteOrder.order_processed}", fail="${websiteOrder.fail}"`);
   return false;
 }
 
@@ -373,11 +448,13 @@ router.post('/', async (req: Request, res: Response) => {
     const allStockModels = await db.select().from(stockModels);
     const allFeatures = await db.select().from(features);
     
-    // Map features by their ID for easy lookup
     const featureMap: Record<string, Feature> = {};
     for (const f of allFeatures) {
       featureMap[f.id] = f as Feature;
     }
+
+    console.log(`[Import] Loaded ${allStockModels.length} stock models, ${allFeatures.length} features`);
+    console.log(`[Import] Feature IDs available: ${Object.keys(featureMap).join(', ')}`);
 
     for (const websiteOrder of orders) {
       try {
@@ -463,18 +540,16 @@ router.post('/', async (req: Request, res: Response) => {
         const orderDetails = parseOrderDetails(websiteOrder.ordered);
         console.log(`[Order ${websiteOrder.OrderID}] Parsed details:`, JSON.stringify(orderDetails, null, 2));
         
-        const matchedModel = matchStockModel(orderDetails.stock || orderDetails.category || '', allStockModels as StockModel[]);
+        const matchedModel = matchStockModel(orderDetails.stock || '', orderDetails.category || '', allStockModels as StockModel[]);
         const modelId = matchedModel?.id || null;
         
         const matchedFeaturesList: string[] = [];
         
-        // Build features object matching the expected structure from order entry
         const orderFeatures: Record<string, any> = {
           miscItems: [],
           other_options: [],
         };
         
-        // Handedness is stored at top level, not in features
         let handednessValue: 'left' | 'right' | null = null;
         if (orderDetails.hand) {
           const handValue = orderDetails.hand.toLowerCase();
@@ -482,16 +557,16 @@ router.post('/', async (req: Request, res: Response) => {
           matchedFeaturesList.push(`Handedness: ${handednessValue}`);
         }
         
-        // Action Inlet
         if (orderDetails.action && featureMap['action']?.options) {
           const matched = findBestMatch(orderDetails.action, featureMap['action'].options as FeatureOption[]);
           if (matched) {
             orderFeatures.action_inlet = matched;
             matchedFeaturesList.push(`Action Inlet: ${matched}`);
+          } else {
+            orderFeatures.other_options.push(`Action: ${orderDetails.action}`);
           }
         }
         
-        // Action Length
         if (orderDetails.actionLength && featureMap['action_length']?.options) {
           const matched = findBestMatch(orderDetails.actionLength, featureMap['action_length'].options as FeatureOption[]);
           if (matched) {
@@ -500,34 +575,40 @@ router.post('/', async (req: Request, res: Response) => {
           }
         }
         
-        // Barrel Inlet
         if (orderDetails.barrel && featureMap['barrel_inlet']?.options) {
           const matched = findBestMatch(orderDetails.barrel, featureMap['barrel_inlet'].options as FeatureOption[]);
           if (matched) {
             orderFeatures.barrel_inlet = matched;
             matchedFeaturesList.push(`Barrel Inlet: ${matched}`);
+          } else {
+            orderFeatures.other_options.push(`Barrel: ${orderDetails.barrel}`);
           }
         }
         
-        // Bottom Metal
         if (orderDetails.bottomMetal && featureMap['bottom_metal']?.options) {
           const matched = findBestMatch(orderDetails.bottomMetal, featureMap['bottom_metal'].options as FeatureOption[]);
           if (matched) {
             orderFeatures.bottom_metal = matched;
             matchedFeaturesList.push(`Bottom Metal: ${matched}`);
+          } else {
+            orderFeatures.other_options.push(`Bottom Metal: ${orderDetails.bottomMetal}`);
           }
         }
         
-        // Paint Options (search across all paint feature categories)
+        if (orderDetails.metal) {
+          orderFeatures.other_options.push(`Metal: ${orderDetails.metal}`);
+        }
+        
         if (orderDetails.color) {
           const matchedPaint = findPaintMatch(orderDetails.color, allFeatures as Feature[]);
           if (matchedPaint) {
             orderFeatures.paint_options = matchedPaint;
             matchedFeaturesList.push(`Paint: ${matchedPaint}`);
+          } else {
+            orderFeatures.other_options.push(`Color: ${orderDetails.color}`);
           }
         }
         
-        // QD Accessory
         if (orderDetails.qdAccessory && featureMap['qd_accessory']?.options) {
           const matched = findBestMatch(orderDetails.qdAccessory, featureMap['qd_accessory'].options as FeatureOption[]);
           if (matched) {
@@ -536,7 +617,6 @@ router.post('/', async (req: Request, res: Response) => {
           }
         }
         
-        // Swivel Studs
         if (orderDetails.swivelStuds && featureMap['swivel_studs']?.options) {
           const matched = findBestMatch(orderDetails.swivelStuds, featureMap['swivel_studs'].options as FeatureOption[]);
           if (matched) {
@@ -545,7 +625,6 @@ router.post('/', async (req: Request, res: Response) => {
           }
         }
         
-        // Texture Options
         if (orderDetails.textureOptions && featureMap['texture_options']?.options) {
           const matched = findBestMatch(orderDetails.textureOptions, featureMap['texture_options'].options as FeatureOption[]);
           if (matched) {
@@ -554,7 +633,6 @@ router.post('/', async (req: Request, res: Response) => {
           }
         }
         
-        // Length of Pull
         if (orderDetails.lengthOfPull && featureMap['length_of_pull']?.options) {
           const matched = findBestMatch(orderDetails.lengthOfPull, featureMap['length_of_pull'].options as FeatureOption[]);
           if (matched) {
@@ -563,7 +641,6 @@ router.post('/', async (req: Request, res: Response) => {
           }
         }
         
-        // Rail Accessory (stored as array)
         if (orderDetails.railAccessory && featureMap['rail_accessory']?.options) {
           const matched = findBestMatch(orderDetails.railAccessory, featureMap['rail_accessory'].options as FeatureOption[]);
           if (matched) {
@@ -572,20 +649,24 @@ router.post('/', async (req: Request, res: Response) => {
           }
         }
         
-        // Store any unmatched features in notes
         if (orderDetails.features.length > 0) {
-          orderFeatures.additional_features = orderDetails.features;
+          for (const feat of orderDetails.features) {
+            orderFeatures.miscItems.push(feat);
+          }
         }
 
         const orderId = await storage.generateNextOrderId();
-        const orderDate = websiteOrder.date ? new Date(websiteOrder.date) : new Date();
+        const orderDate = parseCSVDate(websiteOrder.date);
         
-        // Calculate due date: 6 weeks (42 days) from order date
         const dueDate = new Date(orderDate);
         dueDate.setDate(dueDate.getDate() + 42);
 
         const isPaid = isPaidFromCSV(websiteOrder);
         const totalAmount = parseFloat(websiteOrder.total) || 0;
+
+        console.log(`[Order ${websiteOrder.OrderID}] Order date: ${orderDate.toISOString()}, Due date: ${dueDate.toISOString()}`);
+        console.log(`[Order ${websiteOrder.OrderID}] Matched model: ${modelId}, Features: ${JSON.stringify(orderFeatures)}`);
+        console.log(`[Order ${websiteOrder.OrderID}] Is paid: ${isPaid}, Total: ${totalAmount}`);
 
         const rawNotes = [
           orderDetails.note,
@@ -608,11 +689,10 @@ router.post('/', async (req: Request, res: Response) => {
           shipping: 36.95,
           status: 'FINALIZED',
           currentDepartment: 'P1 Production Queue',
-          isPaid: false, // We'll set this after creating payment record
+          isPaid: false,
           isVerified: false,
         });
 
-        // If order is paid, create a payment record
         if (isPaid && totalAmount > 0) {
           try {
             await storage.createPayment({
@@ -624,10 +704,10 @@ router.post('/', async (req: Request, res: Response) => {
             });
             console.log(`[Order ${orderId}] Created payment record for $${totalAmount}`);
             
-            // Update order isPaid status
-            await storage.updateFinalizedOrder(orderId, { isPaid: true });
+            await storage.updateFinalizedOrder(newOrder.orderId, { isPaid: true });
+            console.log(`[Order ${orderId}] Updated isPaid status to true`);
           } catch (paymentError) {
-            console.error(`Failed to create payment for order ${orderId}:`, paymentError);
+            console.error(`[Order ${orderId}] Failed to create payment:`, paymentError);
           }
         }
 
@@ -636,26 +716,28 @@ router.post('/', async (req: Request, res: Response) => {
           orderId: newOrder.orderId,
           websiteOrderId: websiteOrder.OrderID,
           customerName,
-          matchedModel: matchedModel?.displayName || 'Not matched',
-          matchedFeatures: matchedFeaturesList,
+          matchedModel: matchedModel?.displayName || undefined,
+          matchedFeatures: matchedFeaturesList.length > 0 ? matchedFeaturesList : undefined,
           isPaid,
         });
-
-      } catch (error: any) {
-        console.error(`Error importing order ${websiteOrder.OrderID}:`, error);
+      } catch (orderError: any) {
+        console.error(`[Order ${websiteOrder.OrderID}] Import error:`, orderError);
         results.push({
           success: false,
-          error: error.message || 'Unknown error',
+          error: orderError.message || 'Unknown error',
           websiteOrderId: websiteOrder.OrderID,
           customerName: `${websiteOrder.firstname} ${websiteOrder.lastname}`.trim(),
         });
       }
     }
 
-    res.json(results);
+    return res.json(results);
   } catch (error: any) {
-    console.error('Website order import error:', error);
-    res.status(500).json({ error: 'Failed to import orders', details: error.message });
+    console.error('[Import] Error:', error);
+    return res.status(500).json({ 
+      error: 'Failed to import orders', 
+      details: error.message 
+    });
   }
 });
 

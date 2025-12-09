@@ -30,11 +30,16 @@ import LayupScheduler from '@/components/LayupScheduler';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import { useLocation } from 'wouter';
 import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
+import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 
 export default function AGTestDashboard() {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [, setLocation] = useLocation();
+
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
+    queryKey: ['currentUser'],
+  });
 
   const toggleExpand = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
@@ -312,6 +317,15 @@ export default function AGTestDashboard() {
         {/* Weekly Shipping Widget */}
         <WeeklyShippingWidget />
       </div>
+
+      {/* My Tasks Control Center */}
+      {currentUser?.employeeId && (
+        <MyTasksControlCenter
+          employeeId={currentUser.employeeId}
+          userName={currentUser.username}
+          compact={false}
+        />
+      )}
 
       {/* Dashboard Layout */}
       {!expandedSection ? (

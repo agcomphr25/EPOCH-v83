@@ -152,6 +152,7 @@ export default function CuttingOperatorDashboard() {
     squareMetersUsed: '',
     completionNotes: '',
     labelQuantity: '',
+    depletedRolls: [] as string[],
   });
 
   const [scannedFabrics, setScannedFabrics] = useState<FabricInventoryItem[]>([]);
@@ -360,10 +361,31 @@ export default function CuttingOperatorDashboard() {
       squareMetersUsed: '',
       completionNotes: '',
       labelQuantity: '',
+      depletedRolls: [],
     });
     setScannedFabrics([]);
     setSelectedMfgItem(null);
   };
+
+  const toggleRollDepleted = (rollId: string) => {
+    setProductionForm(prev => ({
+      ...prev,
+      depletedRolls: prev.depletedRolls.includes(rollId)
+        ? prev.depletedRolls.filter(id => id !== rollId)
+        : [...prev.depletedRolls, rollId]
+    }));
+  };
+
+  const depleteRollMutation = useMutation({
+    mutationFn: async (rollId: string) => {
+      return apiRequest(`/api/cutting-table/fabric-inventory/${rollId}/deplete`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
+    },
+  });
 
   const handleBarcodeScan = (barcode: string) => {
     if (!barcode.trim()) return;
@@ -443,6 +465,17 @@ export default function CuttingOperatorDashboard() {
       return;
     }
 
+    // Process any depleted rolls
+    if (productionForm.depletedRolls.length > 0) {
+      productionForm.depletedRolls.forEach(rollId => {
+        depleteRollMutation.mutate(rollId);
+      });
+      toast({
+        title: "Rolls Depleted",
+        description: `${productionForm.depletedRolls.length} roll(s) marked as depleted.`,
+      });
+    }
+
     // Use enhanced completion with full traceability if fabrics were scanned
     if (scannedFabrics.length > 0) {
       const fabricSources = scannedFabrics.map(f => ({
@@ -454,6 +487,7 @@ export default function CuttingOperatorDashboard() {
         internalControlNumber: f.internalControlNumber,
         expirationDate: f.expirationDate,
         quantityUsed: 1,
+        isDepleted: productionForm.depletedRolls.includes(f.id),
       }));
 
       completeWithTraceabilityMutation.mutate({
@@ -841,11 +875,32 @@ export default function CuttingOperatorDashboard() {
                 />
               </div>
               {scannedFabrics.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="space-y-2 mt-2">
+                  <p className="text-sm font-medium">Scanned Rolls:</p>
                   {scannedFabrics.map(fabric => (
-                    <Badge key={fabric.id} variant="secondary" className="text-xs">
-                      {fabric.fabricType} - Roll {fabric.rollNumber} (Lot: {fabric.lotNumber || fabric.batchNumber || 'N/A'})
-                    </Badge>
+                    <div key={fabric.id} className="flex items-center justify-between p-2 border rounded-lg bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-xs">
+                          {fabric.fabricType}
+                        </Badge>
+                        <span className="text-sm">Roll {fabric.rollNumber}</span>
+                        <span className="text-xs text-muted-foreground">(Lot: {fabric.lotNumber || fabric.batchNumber || 'N/A'})</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={productionForm.depletedRolls.includes(fabric.id)}
+                            onChange={() => toggleRollDepleted(fabric.id)}
+                            className="rounded border-gray-300"
+                            data-testid={`checkbox-depleted-${fabric.id}`}
+                          />
+                          <span className={productionForm.depletedRolls.includes(fabric.id) ? "text-red-500 font-medium" : ""}>
+                            Roll Depleted
+                          </span>
+                        </label>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}

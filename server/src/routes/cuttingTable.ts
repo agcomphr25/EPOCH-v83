@@ -745,6 +745,28 @@ router.delete('/fabric-inventory/:id', async (req, res) => {
   }
 });
 
+router.post('/fabric-inventory/:id/deplete', async (req, res) => {
+  try {
+    const rollId = req.params.id;
+    const depletedBy = (req as any).user?.username || 'unknown';
+    
+    const inventory = await storage.updateCuttingFabricInventory(rollId, {
+      squareMeters: '0',
+      notes: `DEPLETED by ${depletedBy} on ${new Date().toISOString()}`,
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Roll marked as depleted',
+      rollId,
+      depletedBy,
+    });
+  } catch (error) {
+    console.error('Error depleting fabric roll:', error);
+    res.status(500).json({ error: 'Failed to deplete fabric roll' });
+  }
+});
+
 // Recommended Cuts endpoint - calculates cuts needed based on packet recipes and weekly goals
 router.get('/recommended-cuts/:weekDate', async (req, res) => {
   try {
@@ -1614,23 +1636,47 @@ router.get('/weekly-cutting-queue', async (req, res) => {
 
       const p1PORows = Array.isArray(p1POResult) ? p1POResult : (p1POResult as any).rows || [];
       for (const item of p1PORows) {
-        const stockModel = item.stockModel || '';
-        const materialType = stockModel.toLowerCase().includes('cf_') ? 'carbon_fiber' : 
-                            stockModel.toLowerCase().includes('fg_') ? 'fiberglass' : 'unknown';
+        // Parse specifications JSON to get material type
+        let specs: any = {};
+        try {
+          specs = typeof item.specifications === 'string' 
+            ? JSON.parse(item.specifications) 
+            : (item.specifications || {});
+        } catch (e) {
+          specs = {};
+        }
+        
+        // Get material from specifications.material field (e.g., "carbon_fiber", "fiberglass")
+        const specMaterial = (specs.material || '').toLowerCase();
+        const stockModelName = specs.stockModel || item.stockModel || '';
+        
+        // Determine material type from specs.material first, then fall back to stock model name
+        let materialType = 'unknown';
+        if (specMaterial === 'carbon_fiber' || specMaterial === 'carbon' || specMaterial === 'cf') {
+          materialType = 'carbon_fiber';
+        } else if (specMaterial === 'fiberglass' || specMaterial === 'fg') {
+          materialType = 'fiberglass';
+        } else if (stockModelName.toLowerCase().includes('cf_') || stockModelName.toLowerCase().includes('cf ')) {
+          materialType = 'carbon_fiber';
+        } else if (stockModelName.toLowerCase().includes('fg_') || stockModelName.toLowerCase().includes('fg ')) {
+          materialType = 'fiberglass';
+        }
+        
         queueItems.push({
           id: `p1po-${item.id}`,
           orderId: item.orderId,
-          stockModel: stockModel,
+          stockModel: stockModelName || `Item ${item.stockModel}`,
           source: 'P1_PO',
           orderType: 'oem',
           materialType,
           scheduledDate: item.dueDate,
           dueDate: item.dueDate,
-          customer: item.customerId,
+          customer: specs.customerName || item.customerId,
           priority: 80,
           packetsNeeded: 1,
           usesInventory: false,
           requiresNewCut: true,
+          specifications: specs,
         });
       }
     } catch (err) {

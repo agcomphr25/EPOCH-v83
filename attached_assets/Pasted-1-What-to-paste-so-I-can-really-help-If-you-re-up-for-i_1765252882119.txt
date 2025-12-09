@@ -1,0 +1,232 @@
+1. What to paste so I can really help
+
+If you’re up for it, paste these pieces (scrub secrets first):
+
+A. Backend (Express/TS)
+
+Auth middleware – the thing that attaches req.user:
+
+// authenticateToken (or whatever you called it)
+
+
+Any new permission / role guard you added, for example:
+
+function requirePermission(permission: string) { ... }
+function requireRole(role: string) { ... }
+
+
+The orders endpoint that the “no orders” page calls, e.g.:
+
+router.get("/api/orders", authenticateToken, requirePermission("VIEW_ORDERS"), async (req, res) => {
+  // Drizzle query here
+});
+
+
+Keep all the where/filter logic — that’s where the bug is usually hiding. Just remove secrets.
+
+B. Frontend (React/TS)
+
+Route + guard for the page where users see “no orders”:
+
+<Route
+  path="/orders"
+  element={
+    <ProtectedRoute requiredPermission="VIEW_ORDERS">
+      <OrdersPage />
+    </ProtectedRoute>
+  }
+/>
+
+
+The data-fetching code on that page (or hook):
+
+const response = await fetch("/api/orders", {
+  headers: { Authorization: `Bearer ${token}` },
+});
+
+
+Any new client-side checks like:
+
+if (!user.permissions.includes("VIEW_ORDERS")) return <NoAccess />;
+
+C. Example JWT payload
+
+For one user who can see orders in prod and one who cannot, decode their JWT locally (e.g. jwt.io) and paste just the payload:
+
+{
+  "userId": 123,
+  "username": "csrUser",
+  "role": "CSR",
+  "permissions": ["VIEW_ORDERS"],
+  "companyId": 1,
+  "areas": ["Layup"],
+  "iat": 1733693471,
+  "exp": 1734298271
+}
+
+
+Seeing how those differ often makes the issue obvious.
+
+2. Debugging steps you can run immediately in EPOCH
+
+Even before you paste anything, here’s a targeted checklist based on your stack (Express + JWT + Drizzle + role-based security).
+
+Step 1 – Look at the failing user’s network calls in prod
+
+On the actual user’s machine (or impersonate their account):
+
+Go to the orders page in prod.
+
+Open DevTools → Network.
+
+Reload the page and look for the call like /api/orders (or similar).
+
+Check:
+
+Status code
+
+200 with [] → auth passed, but query returned nothing (filters).
+
+401 / 403 → auth/permissions problem.
+
+Response body
+
+Is it an error like Missing permission VIEW_ORDERS, Invalid token, etc.?
+
+Or a success with empty data?
+
+Copy/paste that status + response here if you can.
+
+Step 2 – Add temporary logging to the orders endpoint
+
+In your backend, find the orders route, and add something like this near the top:
+
+router.get(
+  "/api/orders",
+  authenticateToken,
+  async (req, res) => {
+    console.log("Orders request in PROD", {
+      userId: req.user?.id,
+      username: req.user?.username,
+      role: req.user?.role,
+      permissions: req.user?.permissions,
+      companyId: req.user?.companyId,
+      areas: req.user?.areas,
+    });
+
+    // existing query code...
+  }
+);
+
+
+Then, for:
+
+You (who can see orders in prod), hit the endpoint and check logs.
+
+A user who sees no orders, have them hit the page and check logs again.
+
+You’re looking for differences like:
+
+companyId or areas being null / empty.
+
+Missing VIEW_ORDERS in permissions.
+
+Different role than you expect (e.g. User vs CSR).
+
+Step 3 – Compare the query filters vs the user fields
+
+What often happens after “security fixes” is something like this:
+
+const orders = await db
+  .select()
+  .from(ordersTable)
+  .where(
+    and(
+      eq(ordersTable.companyId, req.user.companyId),
+      inArray(ordersTable.area, req.user.allowedAreas) // new
+    )
+  );
+
+
+If:
+
+Your user’s allowedAreas is ["Cutting", "Layup"], and…
+
+The other user’s allowedAreas is [] or null…
+
+…then:
+
+You see orders ✅
+
+They get an empty array ✅ (but confusing)
+
+You may want a fallback like:
+
+const allowedAreas = req.user.allowedAreas;
+const baseFilter = eq(ordersTable.companyId, req.user.companyId);
+
+const whereClause =
+  allowedAreas && allowedAreas.length > 0
+    ? and(baseFilter, inArray(ordersTable.area, allowedAreas))
+    : baseFilter; // fallback: see all company orders if no areas configured
+
+const orders = await db
+  .select()
+  .from(ordersTable)
+  .where(whereClause);
+
+
+That pattern fixes a ton of “dev works, prod doesn’t” issues after tightening security.
+
+Step 4 – Confirm prod env vars vs dev
+
+Check in Replit / your env management:
+
+JWT_SECRET – did you change it recently?
+
+If yes, old tokens issued before the change will silently fail or decode differently.
+
+Have affected users log out and back in to get new tokens.
+
+Any flags like:
+
+AUTH_DISABLED, BYPASS_RBAC, ENVIRONMENT, DB_URL, etc.
+
+DB connection:
+
+Is prod maybe pointing to a different DB where those users simply don’t have any orders?
+
+If you see orders using your account and they don’t, but you’re all hitting the same DB, it’s almost always the combination of “user fields in JWT” + “filters in the query”.
+
+Step 5 – Add a temporary “who am I” debug endpoint
+
+This is super useful to understand what prod thinks each user is:
+
+router.get("/api/debug/current-user", authenticateToken, (req, res) => {
+  res.json({
+    userId: req.user?.id,
+    username: req.user?.username,
+    role: req.user?.role,
+    permissions: req.user?.permissions,
+    companyId: req.user?.companyId,
+    areas: req.user?.areas,
+  });
+});
+
+
+Then in the frontend, you can even temporarily show a tiny debug widget for admins only:
+
+useEffect(() => {
+  fetch("/api/debug/current-user", { headers: { Authorization: `Bearer ${token}` } })
+    .then(res => res.json())
+    .then(console.log);
+}, []);
+
+
+Have:
+
+You, and
+
+A failing user
+
+hit this endpoint and compare.

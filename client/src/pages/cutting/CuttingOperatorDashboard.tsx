@@ -924,15 +924,40 @@ export default function CuttingOperatorDashboard() {
       </Dialog>
 
       <Dialog open={isProductionDialogOpen} onOpenChange={setIsProductionDialogOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Complete Production: {selectedMfgItem?.partNumber}</DialogTitle>
+            <DialogTitle>Complete Production: {selectedMfgItem?.partNumber || selectedMfgItem?.partName}</DialogTitle>
             <DialogDescription>
               Enter completion details with fabric traceability
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <h4 className="font-medium mb-2 flex items-center gap-2">
+                <Package className="h-4 w-4" />
+                Production Summary
+              </h4>
+              <div className="grid grid-cols-4 gap-4 text-sm">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Ordered</Label>
+                  <p className="font-bold text-lg">{selectedMfgItem?.quantityOrdered || 0}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Completed</Label>
+                  <p className="font-bold text-lg">{selectedMfgItem?.quantityCompleted || 0}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Remaining</Label>
+                  <p className="font-bold text-lg text-orange-600">{(selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Est. Cuts</Label>
+                  <p className="font-bold text-lg">{selectedMfgItem?.estimatedCuts || 0}</p>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Quantity Completed</Label>

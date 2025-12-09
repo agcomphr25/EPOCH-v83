@@ -159,11 +159,23 @@ export default function ProductionQueueManager() {
   const {
     data: productionQueue = [],
     isLoading,
+    isError,
+    error,
     refetch,
   } = useQuery<ProductionQueueOrder[]>({
     queryKey: ['/api/production-queue/prioritized'],
-    queryFn: () => apiRequest('/api/production-queue/prioritized'),
+    queryFn: async () => {
+      console.log('🔍 Fetching production queue...');
+      const result = await apiRequest('/api/production-queue/prioritized');
+      console.log('🔍 Production queue result:', result?.length || 0, 'orders');
+      return result;
+    },
   });
+
+  // Log errors for debugging
+  if (isError) {
+    console.error('❌ Production queue fetch error:', error);
+  }
 
   // Fetch open P1 Purchase Orders
   const {
@@ -790,6 +802,28 @@ export default function ProductionQueueManager() {
         <Card>
           <CardContent className="p-8">
             <div className="text-center">Loading production queues...</div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        <Card className="border-red-300 bg-red-50">
+          <CardContent className="p-8">
+            <div className="text-center">
+              <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h2 className="text-lg font-semibold text-red-700 mb-2">Error Loading Production Queue</h2>
+              <p className="text-red-600 mb-4">
+                {error instanceof Error ? error.message : 'An unexpected error occurred'}
+              </p>
+              <Button onClick={() => refetch()} variant="outline" className="mr-2">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Try Again
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

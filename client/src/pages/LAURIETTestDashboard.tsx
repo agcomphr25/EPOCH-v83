@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,8 +14,13 @@ import {
   Plus,
 } from 'lucide-react';
 import { Link } from 'wouter';
+import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 
 export default function LAURIETTestDashboard() {
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
+    queryKey: ['currentUser'],
+  });
+
   const handleLogout = () => {
     localStorage.removeItem('sessionToken');
     localStorage.removeItem('jwtToken');
@@ -153,6 +159,15 @@ export default function LAURIETTestDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* My Tasks Control Center */}
+      {currentUser?.employeeId && (
+        <MyTasksControlCenter
+          employeeId={currentUser.employeeId}
+          userName={currentUser.username}
+          compact={false}
+        />
+      )}
     </div>
   );
 }

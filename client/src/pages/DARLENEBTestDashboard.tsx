@@ -25,9 +25,10 @@ import {
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
 import WatchRuleCards from '@/components/WatchRuleCards';
+import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 
 export default function DARLENEBTestDashboard() {
-  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
 
@@ -275,6 +276,15 @@ export default function DARLENEBTestDashboard() {
           </Link>
         </div>
       </div>
+
+      {/* My Tasks Control Center */}
+      {currentUser?.employeeId && (
+        <MyTasksControlCenter
+          employeeId={currentUser.employeeId}
+          userName={currentUser.username}
+          compact={false}
+        />
+      )}
 
       {/* Production Pipeline Overview */}
       <div className="mt-8">

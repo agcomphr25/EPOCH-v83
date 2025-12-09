@@ -231,7 +231,7 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/shipping-test', shippingTestRoutes);
 
   // Discount management routes
-  app.use('/api', discountsRoutes);
+  app.use('/api/discounts', discountsRoutes);
 
   // BOM management routes - Legacy BOM system commented out, replaced by Robust BOM
   // app.use('/api/boms', bomsRoutes);

@@ -1,6 +1,49 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../../db';
 import { storage } from '../../storage';
+import { authorizeApiRoute } from '../../middleware/routeAuthorization';
+
+const router = Router();
+
+// VERSION CHECK: Simple endpoint to verify deployment version
+// No auth required - just returns version info
+router.get('/version', (req: Request, res: Response) => {
+  return res.json({
+    version: '2.0.1-agrace-fix',
+    deployedAt: '2024-12-09T05:00:00Z',
+    message: 'authorizeApiRoute middleware active - not requireAdminAccess',
+    hasUser: !!req.user,
+    username: req.user?.username || 'not-authenticated'
+  });
+});
+
+// DEBUG ENDPOINT: Show current user data (for debugging auth issues in production)
+// This endpoint does NOT use authorizeApiRoute to help debug auth issues
+router.get('/debug/current-user', (req: Request, res: Response) => {
+  console.log('🔍 DEBUG /current-user endpoint hit');
+  console.log('🔍 DEBUG req.user:', JSON.stringify(req.user, null, 2));
+  
+  if (!req.user) {
+    return res.json({
+      authenticated: false,
+      message: 'No user attached to request - authentication may have failed',
+      headers: {
+        hasAuthHeader: !!req.headers['authorization'],
+        hasCookie: !!req.cookies?.sessionToken,
+      }
+    });
+  }
+  
+  return res.json({
+    authenticated: true,
+    userId: req.user.id,
+    username: req.user.username,
+    role: req.user.role,
+    employeeId: req.user.employeeId,
+    canOverridePrices: req.user.canOverridePrices,
+    isActive: req.user.isActive,
+  });
+});
 
 // Helper function to automatically handle orders that need attention or movement
 async function autoMoveInvalidStockModelOrders(storage: any) {
@@ -96,7 +139,8 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
   }
 }
 
-const router = Router();
+// Apply authorization middleware to all routes AFTER the debug endpoint
+router.use(authorizeApiRoute());
 
 // Auto-populate Production Queue with all finalized orders that have valid stock models
 router.post('/auto-populate', async (req: Request, res: Response) => {
@@ -304,8 +348,9 @@ router.get('/p1-queue', async (req: Request, res: Response) => {
 // Get Production Queue with priority scores (for regular orders)
 router.get('/prioritized', async (req: Request, res: Response) => {
   try {
+    const requestUser = req.user;
     console.log(
-      '🏭 PRIORITIZED QUEUE: Fetching prioritized production queue...'
+      `🏭 PRIORITIZED QUEUE: Fetching for user ${requestUser?.username} (role: ${requestUser?.role})...`
     );
 
     // AUTOMATIC CLEANUP: Handle orders that need attention or movement
@@ -349,9 +394,14 @@ router.get('/prioritized', async (req: Request, res: Response) => {
     `;
 
     const queueResult = await pool.query(queueQuery);
+    console.log(`🏭 PRIORITIZED QUEUE: Raw result type: ${typeof queueResult}, isArray: ${Array.isArray(queueResult)}`);
+    console.log(`🏭 PRIORITIZED QUEUE: Raw result length/rows: ${Array.isArray(queueResult) ? queueResult.length : (queueResult?.rows?.length || 'no rows')}`);
+    
     const prioritizedQueue = Array.isArray(queueResult)
       ? queueResult
       : queueResult.rows || [];
+    
+    console.log(`🏭 PRIORITIZED QUEUE: Processed queue length: ${prioritizedQueue.length}`);
 
     // Calculate current priority metrics
     const now = new Date();

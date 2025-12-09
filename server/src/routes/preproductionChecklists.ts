@@ -8,6 +8,7 @@ import {
   preproductionChecklistSections, 
   preproductionChecklistTasks,
   employees,
+  users,
   insertPreproductionTemplateSchema,
   insertPreproductionChecklistSchema,
 } from '../../schema';
@@ -512,6 +513,13 @@ router.patch('/tasks/:taskId', async (req: Request, res: Response) => {
     const { taskId } = req.params;
     const updates = { ...req.body, updatedAt: new Date() };
     
+    // Get current task to check if assignment is changing
+    const [currentTask] = await db
+      .select()
+      .from(preproductionChecklistTasks)
+      .where(eq(preproductionChecklistTasks.id, taskId))
+      .limit(1);
+    
     // If marking as completed, set completedAt
     if (req.body.isCompleted === true && !req.body.completedAt) {
       updates.completedAt = new Date();
@@ -527,6 +535,64 @@ router.patch('/tasks/:taskId', async (req: Request, res: Response) => {
       .set(updates)
       .where(eq(preproductionChecklistTasks.id, taskId))
       .returning();
+    
+    // Send notification if assignment changed to a new employee
+    if (
+      req.body.assignedToEmployeeId && 
+      req.body.assignedToEmployeeId !== currentTask?.assignedToEmployeeId
+    ) {
+      try {
+        // Get the checklist info for the notification
+        const [section] = await db
+          .select()
+          .from(preproductionChecklistSections)
+          .where(eq(preproductionChecklistSections.id, task.sectionId))
+          .limit(1);
+        
+        if (section) {
+          const [checklist] = await db
+            .select()
+            .from(preproductionChecklists)
+            .where(eq(preproductionChecklists.id, section.checklistId))
+            .limit(1);
+          
+          if (checklist) {
+            // Get employee info for notification
+            const [employee] = await db
+              .select()
+              .from(employees)
+              .where(eq(employees.id, req.body.assignedToEmployeeId))
+              .limit(1);
+            
+            if (employee) {
+              // Look up user by employeeId to get userId for notification
+              const [user] = await db
+                .select()
+                .from(users)
+                .where(eq(users.employeeId, employee.id))
+                .limit(1);
+              
+              // Create internal message notification
+              const { storage } = await import('../../storage');
+              await storage.createInternalMessage({
+                subject: `New Task Assigned: ${checklist.projectName}`,
+                message: `You have been assigned a new task:\n\n"${task.description}"\n\nProject: ${checklist.projectName}\nSection: ${section.name}\n\nView your tasks in My Tasks on your dashboard.`,
+                senderId: 1, // System sender
+                senderName: 'System',
+                recipientType: 'person',
+                recipientUserId: user?.id || undefined,
+                recipientName: employee.name,
+                isUrgent: false,
+                hasReminder: false,
+              });
+            }
+          }
+        }
+      } catch (notifyError) {
+        console.error('Failed to send task assignment notification:', notifyError);
+        // Don't fail the request if notification fails
+      }
+    }
     
     res.json(task);
   } catch (error) {
@@ -544,6 +610,154 @@ router.delete('/tasks/:taskId', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error deleting task:', error);
     res.status(500).json({ error: 'Failed to delete task' });
+  }
+});
+
+// Get all tasks assigned to a specific employee (My Tasks endpoint)
+router.get('/my-tasks/:employeeId', async (req: Request, res: Response) => {
+  try {
+    const employeeId = parseInt(req.params.employeeId);
+    const { status, projectName, startDate, endDate } = req.query;
+    
+    if (isNaN(employeeId)) {
+      return res.status(400).json({ error: 'Invalid employee ID' });
+    }
+    
+    // Get all tasks assigned to this employee
+    const tasks = await db
+      .select({
+        task: preproductionChecklistTasks,
+        section: preproductionChecklistSections,
+        checklist: preproductionChecklists,
+      })
+      .from(preproductionChecklistTasks)
+      .innerJoin(
+        preproductionChecklistSections, 
+        eq(preproductionChecklistTasks.sectionId, preproductionChecklistSections.id)
+      )
+      .innerJoin(
+        preproductionChecklists, 
+        eq(preproductionChecklistSections.checklistId, preproductionChecklists.id)
+      )
+      .where(eq(preproductionChecklistTasks.assignedToEmployeeId, employeeId))
+      .orderBy(
+        asc(preproductionChecklists.preProductionDueDate),
+        asc(preproductionChecklists.projectName)
+      );
+    
+    // Transform to a flattened structure with checklist context
+    let result = tasks.map(({ task, section, checklist }) => ({
+      id: task.id,
+      description: task.description,
+      isCompleted: task.isCompleted,
+      completedAt: task.completedAt,
+      completedBy: task.completedBy,
+      notes: task.notes,
+      assignedTo: task.assignedTo,
+      assignedToEmployeeId: task.assignedToEmployeeId,
+      createdAt: task.createdAt,
+      sectionId: section.id,
+      sectionName: section.name,
+      checklistId: checklist.id,
+      projectName: checklist.projectName,
+      projectId: checklist.projectId,
+      poNumber: checklist.poNumber,
+      dueDate: checklist.preProductionDueDate,
+      preProductionDueDate: checklist.preProductionDueDate,
+      checklistStatus: checklist.status,
+      source: 'preproduction-checklist' as const,
+    }));
+    
+    // Apply filters
+    if (status === 'completed') {
+      result = result.filter(t => t.isCompleted);
+    } else if (status === 'pending') {
+      result = result.filter(t => !t.isCompleted);
+    }
+    
+    if (projectName) {
+      result = result.filter(t => 
+        t.projectName.toLowerCase().includes((projectName as string).toLowerCase())
+      );
+    }
+    
+    if (startDate) {
+      const start = new Date(startDate as string);
+      result = result.filter(t => t.dueDate && new Date(t.dueDate) >= start);
+    }
+    
+    if (endDate) {
+      const end = new Date(endDate as string);
+      result = result.filter(t => t.dueDate && new Date(t.dueDate) <= end);
+    }
+    
+    // Get summary stats
+    const stats = {
+      total: result.length,
+      completed: result.filter(t => t.isCompleted).length,
+      pending: result.filter(t => !t.isCompleted).length,
+      overdue: result.filter(t => !t.isCompleted && t.dueDate && new Date(t.dueDate) < new Date()).length,
+    };
+    
+    res.json({ tasks: result, stats });
+  } catch (error) {
+    console.error('Error fetching my tasks:', error);
+    res.status(500).json({ error: 'Failed to fetch assigned tasks' });
+  }
+});
+
+// Get task assignment history for an employee
+router.get('/my-tasks/:employeeId/history', async (req: Request, res: Response) => {
+  try {
+    const employeeId = parseInt(req.params.employeeId);
+    const { limit = 50 } = req.query;
+    
+    if (isNaN(employeeId)) {
+      return res.status(400).json({ error: 'Invalid employee ID' });
+    }
+    
+    // Get completed tasks (history)
+    const tasks = await db
+      .select({
+        task: preproductionChecklistTasks,
+        section: preproductionChecklistSections,
+        checklist: preproductionChecklists,
+      })
+      .from(preproductionChecklistTasks)
+      .innerJoin(
+        preproductionChecklistSections, 
+        eq(preproductionChecklistTasks.sectionId, preproductionChecklistSections.id)
+      )
+      .innerJoin(
+        preproductionChecklists, 
+        eq(preproductionChecklistSections.checklistId, preproductionChecklists.id)
+      )
+      .where(
+        and(
+          eq(preproductionChecklistTasks.assignedToEmployeeId, employeeId),
+          eq(preproductionChecklistTasks.isCompleted, true)
+        )
+      )
+      .orderBy(desc(preproductionChecklistTasks.completedAt))
+      .limit(parseInt(limit as string));
+    
+    const result = tasks.map(({ task, section, checklist }) => ({
+      id: task.id,
+      description: task.description,
+      isCompleted: task.isCompleted,
+      completedAt: task.completedAt,
+      completedBy: task.completedBy,
+      sectionName: section.name,
+      checklistId: checklist.id,
+      projectName: checklist.projectName,
+      projectId: checklist.projectId,
+      source: 'preproduction-checklist' as const,
+    }));
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching task history:', error);
+    res.status(500).json({ error: 'Failed to fetch task history' });
   }
 });
 

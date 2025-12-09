@@ -130,8 +130,8 @@ export default function POOrderEntry({
   const loadDiscountCodes = async () => {
     try {
       const [persistentDiscounts, shortTermSales] = await Promise.all([
-        apiRequest('/api/persistent-discounts'),
-        apiRequest('/api/short-term-sales'),
+        apiRequest('/api/discounts/persistent-discounts'),
+        apiRequest('/api/discounts/short-term-sales'),
       ]);
 
       const discountOptionsMap: Record<string, any> = {};

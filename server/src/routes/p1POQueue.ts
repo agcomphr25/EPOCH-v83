@@ -3,8 +3,11 @@ import { storage } from '../../storage';
 import { pool } from '../../db';
 import { insertPOProductSelectionSchema } from '@shared/schema';
 import { nanoid } from 'nanoid';
+import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 
 const router = Router();
+
+router.use(authorizeApiRoute());
 
 // Get all open P1 Purchase Orders grouped by customer
 router.get('/purchase-orders/open', async (req: Request, res: Response) => {

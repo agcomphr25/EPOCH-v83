@@ -1,4 +1,5 @@
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Shield,
@@ -17,8 +18,13 @@ import {
 import { Link } from 'wouter';
 import PipelineVisualization from '@/components/PipelineVisualization';
 import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
+import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 
 export default function FALEESHAHTestDashboard() {
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
+    queryKey: ['currentUser'],
+  });
+
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
       {/* Header */}
@@ -167,6 +173,15 @@ export default function FALEESHAHTestDashboard() {
         {/* Weekly Shipping Widget */}
         <WeeklyShippingWidget />
       </div>
+
+      {/* My Tasks Control Center */}
+      {currentUser?.employeeId && (
+        <MyTasksControlCenter
+          employeeId={currentUser.employeeId}
+          userName={currentUser.username}
+          compact={false}
+        />
+      )}
 
       {/* Production Pipeline Overview */}
       <div className="mt-8">

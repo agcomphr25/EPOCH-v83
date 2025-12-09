@@ -1,0 +1,4 @@
+M	.replit
+Your branch and 'origin/main' have diverged,
+and have 5 and 2 different commits each, respectively.
+  (use "git pull" if you want to integrate the remote branch with yours)

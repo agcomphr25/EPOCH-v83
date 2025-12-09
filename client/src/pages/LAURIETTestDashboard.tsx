@@ -100,6 +100,20 @@ export default function LAURIETTestDashboard() {
               </CardContent>
             </Card>
           </Link>
+
+          <Link href="/inventory/consolidated-needs">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
+              <CardContent className="p-4 text-center">
+                <List className="w-8 h-8 text-green-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Consolidated Parts Needs
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  View all parts requirements
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
       </div>
 

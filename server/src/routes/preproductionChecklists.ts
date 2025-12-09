@@ -8,6 +8,7 @@ import {
   preproductionChecklistSections, 
   preproductionChecklistTasks,
   employees,
+  users,
   insertPreproductionTemplateSchema,
   insertPreproductionChecklistSchema,
 } from '../../schema';
@@ -564,6 +565,13 @@ router.patch('/tasks/:taskId', async (req: Request, res: Response) => {
               .limit(1);
             
             if (employee) {
+              // Look up user by employeeId to get userId for notification
+              const [user] = await db
+                .select()
+                .from(users)
+                .where(eq(users.employeeId, employee.id))
+                .limit(1);
+              
               // Create internal message notification
               const { storage } = await import('../../storage');
               await storage.createInternalMessage({
@@ -572,7 +580,7 @@ router.patch('/tasks/:taskId', async (req: Request, res: Response) => {
                 senderId: 1, // System sender
                 senderName: 'System',
                 recipientType: 'person',
-                recipientUserId: employee.userId || undefined,
+                recipientUserId: user?.id || undefined,
                 recipientName: employee.name,
                 isUrgent: false,
                 hasReminder: false,
@@ -633,7 +641,7 @@ router.get('/my-tasks/:employeeId', async (req: Request, res: Response) => {
       )
       .where(eq(preproductionChecklistTasks.assignedToEmployeeId, employeeId))
       .orderBy(
-        asc(preproductionChecklists.dueDate),
+        asc(preproductionChecklists.preProductionDueDate),
         asc(preproductionChecklists.projectName)
       );
     
@@ -654,7 +662,7 @@ router.get('/my-tasks/:employeeId', async (req: Request, res: Response) => {
       projectName: checklist.projectName,
       projectId: checklist.projectId,
       poNumber: checklist.poNumber,
-      dueDate: checklist.dueDate,
+      dueDate: checklist.preProductionDueDate,
       preProductionDueDate: checklist.preProductionDueDate,
       checklistStatus: checklist.status,
       source: 'preproduction-checklist' as const,

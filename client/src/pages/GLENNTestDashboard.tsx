@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,9 +30,10 @@ import {
 } from 'lucide-react';
 import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 import WatchRuleCards from '@/components/WatchRuleCards';
+import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 
 export default function ADMINTestDashboard() {
-  const { data: currentUser, isLoading: isUserLoading } = useQuery<{ id: number; username: string; role: string }>({
+  const { data: currentUser, isLoading: isUserLoading } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
 
@@ -363,6 +363,15 @@ export default function ADMINTestDashboard() {
             <WatchRuleCards userId="staciw" showManageButton={false} />
           </CardContent>
         </Card>
+      )}
+
+      {/* My Tasks Control Center - Shows assigned tasks for logged-in user */}
+      {currentUser?.employeeId && (
+        <MyTasksControlCenter
+          employeeId={currentUser.employeeId}
+          userName={currentUser.username}
+          compact={false}
+        />
       )}
 
       {/* Additional Navigation Items */}

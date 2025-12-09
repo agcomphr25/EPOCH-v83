@@ -1815,14 +1815,23 @@ router.post('/schedule-to-cutting', async (req, res) => {
   try {
     const { orderId, bomId, quantity, priority, dueDate, source, materialType, notes } = req.body;
     
-    if (!bomId || !quantity) {
-      return res.status(400).json({ error: 'BOM ID and quantity are required' });
+    if (!quantity) {
+      return res.status(400).json({ error: 'Quantity is required' });
     }
 
-    // Verify BOM exists
-    const [bom] = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.id, bomId));
-    if (!bom) {
-      return res.status(404).json({ error: 'Packet BOM not found' });
+    // For P2 items, allow scheduling without a valid BOM
+    let validBomId = bomId;
+    if (bomId && bomId !== 'generic-p2-packet') {
+      const [bom] = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.id, bomId));
+      if (!bom) {
+        // If BOM not found and not P2 source, return error
+        if (source !== 'P2') {
+          return res.status(404).json({ error: 'Packet BOM not found' });
+        }
+        validBomId = null; // Allow P2 without BOM
+      }
+    } else if (bomId === 'generic-p2-packet') {
+      validBomId = null; // P2 generic packet
     }
 
     // Create manufacturing queue entry via the existing endpoint
@@ -1835,7 +1844,7 @@ router.post('/schedule-to-cutting', async (req, res) => {
       priority: priority || 50,
       status: 'PENDING',
       dueDate: dueDate ? new Date(dueDate) : null,
-      notes: JSON.stringify({ orderId, source, materialType, bomId, userNotes: notes }),
+      notes: JSON.stringify({ orderId, source, materialType, bomId: validBomId, userNotes: notes, isP2Packet: source === 'P2' }),
       requestedBy: 'system',
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -1843,7 +1852,7 @@ router.post('/schedule-to-cutting', async (req, res) => {
 
     res.status(201).json({
       ...queueItem,
-      bomId,
+      bomId: validBomId,
       orderId,
       source,
       materialType,

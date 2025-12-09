@@ -126,7 +126,7 @@ export default function CuttingWeeklySchedule() {
   });
 
   const scheduleItemMutation = useMutation({
-    mutationFn: async (data: { orderId: string; bomId: string; quantity: number; priority: number; dueDate: string; source: string; materialType: string }) => {
+    mutationFn: async (data: { orderId: string; bomId: string; quantity: number; priority: number; dueDate: string; source: string; materialType: string; notes?: string }) => {
       return apiRequest('/api/cutting-table/schedule-to-cutting', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -172,23 +172,34 @@ export default function CuttingWeeklySchedule() {
   };
 
   const handleScheduleItem = (item: WeeklyCuttingQueueItem) => {
-    const matchingBom = packetBOMs.find(b => 
-      b.packetType?.toLowerCase().includes(item.materialType === 'carbon_fiber' ? 'cf' : 'fg')
-    );
+    // First check if item already has a bomId
+    let bomId = item.bomId;
     
-    if (!matchingBom) {
+    // If no bomId, try to find a matching BOM by material type or stock model
+    if (!bomId) {
+      const matchingBom = packetBOMs.find(b => 
+        b.packetType?.toLowerCase().includes(item.materialType === 'carbon_fiber' ? 'cf' : 'fg') ||
+        b.packetType?.toLowerCase().includes(item.stockModel?.toLowerCase() || '') ||
+        b.partNumber?.toLowerCase().includes(item.stockModel?.toLowerCase() || '')
+      );
+      bomId = matchingBom?.id;
+    }
+    
+    // For P2 items, allow scheduling without a BOM (will use generic packet workflow)
+    if (!bomId && item.source !== 'P2') {
       toast({ title: "No BOM Found", description: "Please create a packet BOM for this material type first.", variant: "destructive" });
       return;
     }
 
     scheduleItemMutation.mutate({
       orderId: item.orderId,
-      bomId: matchingBom.id,
+      bomId: bomId || 'generic-p2-packet',
       quantity: item.packetsNeeded,
       priority: item.priority,
       dueDate: item.dueDate,
       source: item.source,
       materialType: item.materialType,
+      notes: item.source === 'P2' ? `P2 PO Item: ${item.stockModel}` : undefined,
     });
   };
 

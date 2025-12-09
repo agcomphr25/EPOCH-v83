@@ -140,6 +140,9 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-management',
       '/customers',
       '/inventory/parts-request',
+      '/shipping-tracker',
+      '/all-orders',
+      '/order-department-transfer',
     ],
   },
 
@@ -237,10 +240,17 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
 
   lauriet: {
     routes: [
+      '/lauriet-dashboard',
       '/order-entry',
       '/orders-list',
       '/orders-management',
       '/customers',
+      '/inventory/enhanced-mrp',
+      '/p2-control-center',
+      '/inventory/consolidated-needs',
+      '/vendors',
+      '/vendor-pos',
+      '/inventory/receiving',
     ],
   },
 

@@ -732,40 +732,114 @@ export default function CuttingOperatorDashboard() {
       </Card>
 
       <Dialog open={isCuttingWorkflowOpen} onOpenChange={setIsCuttingWorkflowOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Scissors className="h-5 w-5" />
-              Cutting Workflow: {selectedMfgItem?.partNumber}
+              Cutting Workflow: {selectedMfgItem?.partNumber || selectedMfgItem?.partName}
             </DialogTitle>
             <DialogDescription>
-              Follow the ply schedule and cut suggestions below
+              Follow the steps below to cut packets. Scan fabric from suggested locations.
             </DialogDescription>
           </DialogHeader>
 
-          {matchingBOM && matchingBOM.cuts && matchingBOM.cuts.length > 0 ? (
-            <div className="space-y-4">
-              <div className="bg-muted/50 rounded-lg p-4">
-                <h4 className="font-medium mb-2">Cut Suggestions</h4>
-                <div className="grid grid-cols-3 gap-4 text-sm mb-4">
-                  <div>
-                    <Label className="text-muted-foreground">Yield Per Cut</Label>
-                    <p className="font-medium">{matchingBOM.yieldPerCut} pieces</p>
-                  </div>
-                  <div>
-                    <Label className="text-muted-foreground">Sq Meters/Cut</Label>
-                    <p className="font-medium">{matchingBOM.squareMetersPerCut} m²</p>
-                  </div>
-                  <div>
-                    <Label className="text-muted-foreground">Estimated Cuts</Label>
-                    <p className="font-medium">{selectedMfgItem?.estimatedCuts}</p>
-                  </div>
+          <div className="space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <h4 className="font-medium mb-2 flex items-center gap-2">
+                <Package className="h-4 w-4" />
+                Production Summary
+              </h4>
+              <div className="grid grid-cols-4 gap-4 text-sm">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Packets Needed</Label>
+                  <p className="font-bold text-lg">{(selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Yield Per Cut</Label>
+                  <p className="font-bold text-lg">{matchingBOM?.yieldPerCut || 4}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Cuts Needed</Label>
+                  <p className="font-bold text-lg">{selectedMfgItem?.estimatedCuts || Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / (matchingBOM?.yieldPerCut || 4))}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Sq Meters/Cut</Label>
+                  <p className="font-bold text-lg">{matchingBOM?.squareMetersPerCut || 0.5} m²</p>
                 </div>
               </div>
+            </div>
 
+            <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-4">
+              <h4 className="font-medium mb-2 flex items-center gap-2">
+                <Snowflake className="h-4 w-4" />
+                Fabric Location (FIFO)
+              </h4>
+              <p className="text-sm text-muted-foreground mb-3">Get fabric from these locations - oldest expiration first:</p>
+              <div className="space-y-2">
+                {(() => {
+                  const materialType = (() => {
+                    try {
+                      const notes = selectedMfgItem?.notes ? JSON.parse(selectedMfgItem.notes) : {};
+                      return notes.materialType || 'carbon_fiber';
+                    } catch { return 'carbon_fiber'; }
+                  })();
+                  const relevantFabrics = fabricInventory
+                    .filter(f => f.squareMeters > 0 && f.status !== 'expired')
+                    .filter(f => {
+                      const ft = (f.fabricType || '').toLowerCase();
+                      if (materialType === 'carbon_fiber') return ft.includes('carbon') || ft.includes('cf');
+                      if (materialType === 'fiberglass') return ft.includes('fiber') || ft.includes('fg');
+                      if (materialType === 'mesa') return ft.includes('mesa');
+                      return true;
+                    })
+                    .sort((a, b) => {
+                      if (!a.expirationDate) return 1;
+                      if (!b.expirationDate) return -1;
+                      return new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime();
+                    })
+                    .slice(0, 3);
+                  
+                  if (relevantFabrics.length === 0) {
+                    return <p className="text-sm text-amber-600">No matching fabric in inventory. Check stock levels.</p>;
+                  }
+                  
+                  return relevantFabrics.map((fabric, idx) => (
+                    <div key={fabric.id} className="flex items-center justify-between p-2 bg-background rounded border">
+                      <div className="flex items-center gap-3">
+                        {idx === 0 && <Badge className="bg-green-600">FIFO</Badge>}
+                        <div>
+                          <p className="font-medium">{fabric.fabricType} - Roll {fabric.rollNumber}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Location: <span className="font-bold text-foreground">{fabric.freezerLocation || fabric.location || 'Not specified'}</span>
+                            {fabric.expirationDate && ` • Expires: ${new Date(fabric.expirationDate).toLocaleDateString()}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">{fabric.squareMeters.toFixed(2)} m²</p>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleBarcodeScan(fabric.barcodeValue)}
+                          data-testid={`button-select-fabric-${fabric.id}`}
+                        >
+                          <Scan className="h-3 w-3 mr-1" />
+                          Select
+                        </Button>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+
+            {matchingBOM && matchingBOM.cuts && matchingBOM.cuts.length > 0 ? (
               <div className="space-y-3">
-                <h4 className="font-medium">Ply Schedule</h4>
-                {matchingBOM.cuts.map((cut, idx) => (
+                <h4 className="font-medium flex items-center gap-2">
+                  <Layers className="h-4 w-4" />
+                  Ply Schedule
+                </h4>
+                {matchingBOM.cuts.map((cut) => (
                   <div key={cut.id} className="border rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
                       <span className="font-medium">{cut.label}</span>
@@ -801,13 +875,36 @@ export default function CuttingOperatorDashboard() {
                   </div>
                 ))}
               </div>
-            </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <AlertTriangle className="h-8 w-8 mx-auto mb-2" />
-              No BOM configured for this packet. Create a BOM to see cut suggestions.
-            </div>
-          )}
+            ) : (
+              <div className="border rounded-lg p-4 bg-amber-50 dark:bg-amber-950">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium">No BOM Configured</p>
+                    <p className="text-sm text-muted-foreground">Standard cutting procedure applies. Create a BOM for custom ply schedules.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {scannedFabrics.length > 0 && (
+              <div className="bg-muted/50 rounded-lg p-4">
+                <h4 className="font-medium mb-2">Selected Fabric Rolls</h4>
+                <div className="space-y-2">
+                  {scannedFabrics.map(fabric => (
+                    <div key={fabric.id} className="flex items-center justify-between p-2 bg-background rounded border">
+                      <div>
+                        <span className="font-medium">{fabric.fabricType}</span>
+                        <span className="text-muted-foreground ml-2">Roll {fabric.rollNumber}</span>
+                        <span className="text-xs text-muted-foreground ml-2">(Lot: {fabric.lotNumber || 'N/A'})</span>
+                      </div>
+                      <Badge variant="secondary">{fabric.squareMeters.toFixed(2)} m²</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCuttingWorkflowOpen(false)} data-testid="button-close-workflow">

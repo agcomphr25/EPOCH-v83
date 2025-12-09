@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../../db';
 import { storage } from '../../storage';
+import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 
 // Helper function to automatically handle orders that need attention or movement
 async function autoMoveInvalidStockModelOrders(storage: any) {
@@ -97,6 +98,8 @@ async function autoMoveInvalidStockModelOrders(storage: any) {
 }
 
 const router = Router();
+
+router.use(authorizeApiRoute());
 
 // Auto-populate Production Queue with all finalized orders that have valid stock models
 router.post('/auto-populate', async (req: Request, res: Response) => {

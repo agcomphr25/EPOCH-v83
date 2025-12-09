@@ -11,7 +11,10 @@ export interface UserPermissions {
 }
 
 // Default routes for users not explicitly listed - only employee portal
-export const DEFAULT_USER_ROUTES: string[] = ['/employee-portal', '/communications/inbox'];
+export const DEFAULT_USER_ROUTES: string[] = ['/employee-portal'];
+
+// Universal routes that ALL authenticated users can access regardless of permissions
+export const UNIVERSAL_ACCESS_ROUTES: string[] = ['/communications/inbox', '/employee-portal'];
 
 // All valid navbar routes for reference (from Navigation.tsx)
 // This helps ensure permissions use correct paths
@@ -348,6 +351,13 @@ export function hasRouteAccess(
   // Always allow users to access their own personal dashboard
   if (isOwnPersonalDashboard(lowerUsername, route)) {
     return true;
+  }
+  
+  // Always allow access to universal routes (communications, employee portal)
+  for (const universalRoute of UNIVERSAL_ACCESS_ROUTES) {
+    if (routeMatches(route, universalRoute)) {
+      return true;
+    }
   }
   
   const permissions = USER_PERMISSIONS[lowerUsername];

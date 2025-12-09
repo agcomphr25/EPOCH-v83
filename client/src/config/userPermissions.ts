@@ -132,6 +132,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
 
   faleeshah: {
     routes: [
+      '/faleeshah-dashboard',
       '/department-queue/finish-qc',
       '/department-queue/paint',
       '/department-queue/qc-shipping',
@@ -139,10 +140,14 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-list',
       '/orders-management',
       '/customers',
+      '/customer-management',
       '/inventory/parts-request',
       '/shipping-tracker',
       '/all-orders',
       '/order-department-transfer',
+      '/barcode-scanner',
+      '/metal-accessories',
+      '/training',
     ],
   },
 

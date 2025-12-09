@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -14,33 +13,51 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Calendar,
-  Package,
   Scissors,
   RefreshCw,
   Plus,
   Minus,
   Send,
   Box,
-  Layers,
+  ChevronDown,
+  ChevronRight,
+  Factory,
+  TrendingUp,
+  AlertCircle,
+  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type PacketBOM = {
+type WeeklyCuttingQueueItem = {
   id: string;
-  partNumber: string;
-  packetType: string;
-  yieldPerCut: number;
-  squareMetersPerCut: number;
-  description?: string;
+  orderId: string;
+  stockModel: string;
+  source: 'P1' | 'P1_PO' | 'P2';
+  orderType: 'regular' | 'oem' | 'p2_po';
+  materialType: 'carbon_fiber' | 'fiberglass' | 'unknown';
+  scheduledDate: string;
+  dueDate: string;
+  customer: string;
+  priority: number;
+  packetsNeeded: number;
+  usesInventory: boolean;
+  requiresNewCut: boolean;
+  bomId?: string;
 };
 
-type ScheduleEntry = {
-  bomId: string;
-  packetType: string;
-  quantity: number;
+type WeeklySummary = {
+  carbon_fiber: { regular: number; oem: number; p2: number; total: number; fromInventory: number; needsCutting: number; onHand: number };
+  fiberglass: { regular: number; oem: number; p2: number; total: number; fromInventory: number; needsCutting: number; onHand: number };
+  weekStart: string;
+  weekEnd: string;
 };
 
 function getMondayOfWeek(date: Date): string {
@@ -64,9 +81,19 @@ export default function CuttingWeeklySchedule() {
   
   const [currentWeek] = useState(getMondayOfWeek(new Date()));
   const [scheduleQuantities, setScheduleQuantities] = useState<Record<string, number>>({});
+  const [expandedCustomers, setExpandedCustomers] = useState<Record<string, boolean>>({});
 
-  const { data: packetBOMs = [], isLoading: loadingBOMs, refetch } = useQuery<PacketBOM[]>({
-    queryKey: ['/api/cutting-table/packet-boms'],
+  const { data: weeklyQueueData, isLoading, refetch } = useQuery<{
+    items: WeeklyCuttingQueueItem[];
+    summary: WeeklySummary;
+    totalItems: number;
+  }>({
+    queryKey: ['/api/cutting-table/weekly-cutting-queue', 'showAll'],
+    queryFn: async () => {
+      const res = await fetch('/api/cutting-table/weekly-cutting-queue?showAll=true');
+      if (!res.ok) throw new Error('Failed to fetch queue');
+      return res.json();
+    },
   });
 
   const { data: stockLevels = { carbon_fiber: 0, fiberglass: 0 } } = useQuery({
@@ -87,38 +114,75 @@ export default function CuttingWeeklySchedule() {
     },
   });
 
+  const demandByCustomer = useMemo(() => {
+    if (!weeklyQueueData?.items) return [];
+    
+    const grouped: Record<string, {
+      customer: string;
+      cfCount: number;
+      fgCount: number;
+      totalCount: number;
+      items: WeeklyCuttingQueueItem[];
+      sources: Set<string>;
+    }> = {};
+    
+    weeklyQueueData.items.forEach(item => {
+      const customer = item.customer || 'Unknown';
+      if (!grouped[customer]) {
+        grouped[customer] = {
+          customer,
+          cfCount: 0,
+          fgCount: 0,
+          totalCount: 0,
+          items: [],
+          sources: new Set(),
+        };
+      }
+      grouped[customer].items.push(item);
+      grouped[customer].totalCount += item.packetsNeeded;
+      grouped[customer].sources.add(item.source);
+      if (item.materialType === 'carbon_fiber') {
+        grouped[customer].cfCount += item.packetsNeeded;
+      } else if (item.materialType === 'fiberglass') {
+        grouped[customer].fgCount += item.packetsNeeded;
+      }
+    });
+    
+    return Object.values(grouped).sort((a, b) => b.totalCount - a.totalCount);
+  }, [weeklyQueueData?.items]);
+
   const scheduledCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
+    let cf = 0, fg = 0;
     (mfgQueueData || []).forEach((item: any) => {
       try {
         const notes = item.notes ? JSON.parse(item.notes) : {};
-        if (notes.bomId) {
-          counts[notes.bomId] = (counts[notes.bomId] || 0) + (item.quantityRequested - (item.quantityCompleted || 0));
-        }
+        const remaining = item.quantityRequested - (item.quantityCompleted || 0);
+        if (notes.materialType === 'carbon_fiber') cf += remaining;
+        else if (notes.materialType === 'fiberglass') fg += remaining;
       } catch {}
     });
-    return counts;
+    return { carbon_fiber: cf, fiberglass: fg };
   }, [mfgQueueData]);
 
   const schedulePacketsMutation = useMutation({
-    mutationFn: async (data: { bomId: string; quantity: number; packetType: string }) => {
+    mutationFn: async (data: { packetType: string; quantity: number; materialType: string; customer?: string }) => {
       return apiRequest('/api/cutting-table/schedule-to-cutting', {
         method: 'POST',
         body: JSON.stringify({
-          orderId: `SCHED-${Date.now()}`,
-          bomId: data.bomId,
+          orderId: `SCHED-${data.packetType}-${Date.now()}`,
+          bomId: 'generic-p2-packet',
           quantity: data.quantity,
           priority: 50,
           dueDate: new Date(currentWeek).toISOString(),
           source: 'MANUAL',
-          materialType: data.packetType.toLowerCase().includes('cf') || data.packetType.toLowerCase().includes('carbon') ? 'carbon_fiber' : 'fiberglass',
-          notes: `Scheduled ${data.quantity} ${data.packetType} packets`,
+          materialType: data.materialType,
+          notes: `Scheduled ${data.quantity} ${data.packetType} packets${data.customer ? ` for ${data.customer}` : ''}`,
         }),
       });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
-      setScheduleQuantities(prev => ({ ...prev, [variables.bomId]: 0 }));
+      setScheduleQuantities({});
       toast({ title: "Scheduled", description: `${variables.quantity} ${variables.packetType} packets added to cutting queue.` });
     },
     onError: () => {
@@ -126,81 +190,41 @@ export default function CuttingWeeklySchedule() {
     },
   });
 
-  const updateQuantity = (bomId: string, delta: number) => {
+  const updateQuantity = (key: string, delta: number) => {
     setScheduleQuantities(prev => ({
       ...prev,
-      [bomId]: Math.max(0, (prev[bomId] || 0) + delta),
+      [key]: Math.max(0, (prev[key] || 0) + delta),
     }));
   };
 
-  const setQuantity = (bomId: string, value: string) => {
+  const setQuantity = (key: string, value: string) => {
     const num = parseInt(value) || 0;
     setScheduleQuantities(prev => ({
       ...prev,
-      [bomId]: Math.max(0, num),
+      [key]: Math.max(0, num),
     }));
   };
 
-  const handleSchedule = (bom: PacketBOM) => {
-    const qty = scheduleQuantities[bom.id] || 0;
+  const handleSchedule = (packetType: string, materialType: string, customer?: string) => {
+    const key = customer ? `${customer}-${materialType}` : materialType;
+    const qty = scheduleQuantities[key] || 0;
     if (qty <= 0) {
       toast({ title: "Invalid", description: "Enter a quantity greater than 0.", variant: "destructive" });
       return;
     }
     schedulePacketsMutation.mutate({
-      bomId: bom.id,
+      packetType,
       quantity: qty,
-      packetType: bom.packetType,
+      materialType,
+      customer,
     });
   };
 
-  const predefinedPackets = [
-    { id: 'antenna-50', name: 'Antenna Packets 50', materialType: 'carbon_fiber', color: 'bg-gray-900 text-white' },
-    { id: 'redhawk-cf', name: 'Red Hawk CF Packet', materialType: 'carbon_fiber', color: 'bg-red-600 text-white' },
-    { id: 'fiberglass', name: 'Fiberglass Packet', materialType: 'fiberglass', color: 'bg-amber-500 text-white' },
-    { id: 'regular-cf', name: 'Regular Orders CF', materialType: 'carbon_fiber', color: 'bg-blue-600 text-white' },
-    { id: 'regular-fg', name: 'Regular Orders FG', materialType: 'fiberglass', color: 'bg-green-600 text-white' },
-  ];
-
-  const scheduleQuickPacketMutation = useMutation({
-    mutationFn: async (data: { packetId: string; packetName: string; quantity: number; materialType: string }) => {
-      return apiRequest('/api/cutting-table/schedule-to-cutting', {
-        method: 'POST',
-        body: JSON.stringify({
-          orderId: `QUICK-${data.packetId}-${Date.now()}`,
-          bomId: 'generic-p2-packet',
-          quantity: data.quantity,
-          priority: 50,
-          dueDate: new Date(currentWeek).toISOString(),
-          source: 'MANUAL',
-          materialType: data.materialType,
-          notes: `Quick schedule: ${data.quantity} ${data.packetName}`,
-        }),
-      });
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
-      setScheduleQuantities(prev => ({ ...prev, [variables.packetId]: 0 }));
-      toast({ title: "Scheduled", description: `${variables.quantity} ${variables.packetName} added to cutting queue.` });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to schedule packets.", variant: "destructive" });
-    },
-  });
-
-  const handleQuickSchedule = (packet: typeof predefinedPackets[0]) => {
-    const qty = scheduleQuantities[packet.id] || 0;
-    if (qty <= 0) {
-      toast({ title: "Invalid", description: "Enter a quantity greater than 0.", variant: "destructive" });
-      return;
-    }
-    scheduleQuickPacketMutation.mutate({
-      packetId: packet.id,
-      packetName: packet.name,
-      quantity: qty,
-      materialType: packet.materialType,
-    });
-  };
+  const summary = weeklyQueueData?.summary;
+  const cfDemand = summary?.carbon_fiber?.total || 0;
+  const fgDemand = summary?.fiberglass?.total || 0;
+  const cfNeedsCutting = summary?.carbon_fiber?.needsCutting || 0;
+  const fgNeedsCutting = summary?.fiberglass?.needsCutting || 0;
 
   return (
     <div className="space-y-6">
@@ -208,7 +232,7 @@ export default function CuttingWeeklySchedule() {
         <div>
           <h2 className="text-2xl font-bold" data-testid="text-page-title">Weekly Cutting Schedule</h2>
           <p className="text-muted-foreground">
-            Schedule packets for the week of {formatWeekRange(currentWeek)}
+            Demand from P1, P1 PO, and P2 queues • Week of {formatWeekRange(currentWeek)}
           </p>
         </div>
         <Button variant="outline" onClick={() => refetch()} data-testid="button-refresh">
@@ -217,30 +241,154 @@ export default function CuttingWeeklySchedule() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="border-l-4 border-l-gray-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              CF Demand
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{cfDemand}</div>
+            <div className="text-sm text-muted-foreground mt-1">
+              <span className="text-red-600 font-medium">{cfNeedsCutting} need cutting</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-amber-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              FG Demand
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{fgDemand}</div>
+            <div className="text-sm text-muted-foreground mt-1">
+              <span className="text-red-600 font-medium">{fgNeedsCutting} need cutting</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-blue-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Box className="h-4 w-4" />
-              Carbon Fiber On-Hand
+              CF On-Hand
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{stockLevels.carbon_fiber}</div>
-            <p className="text-sm text-muted-foreground">packets available</p>
+            <div className="text-sm text-muted-foreground mt-1">
+              <span className="font-medium">{scheduledCounts.carbon_fiber} scheduled</span>
+            </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-green-500">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Box className="h-4 w-4 text-amber-600" />
-              Fiberglass On-Hand
+              <Box className="h-4 w-4" />
+              FG On-Hand
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{stockLevels.fiberglass}</div>
-            <p className="text-sm text-muted-foreground">packets available</p>
+            <div className="text-sm text-muted-foreground mt-1">
+              <span className="font-medium">{scheduledCounts.fiberglass} scheduled</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Scissors className="h-5 w-5" />
+              Schedule Carbon Fiber Packets
+            </CardTitle>
+            <CardDescription>
+              Demand: {cfDemand} • On-hand: {stockLevels.carbon_fiber} • Gap: {Math.max(0, cfNeedsCutting - scheduledCounts.carbon_fiber)}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3 p-4 bg-gray-900 rounded-lg text-white">
+              <div className="flex-1">
+                <p className="font-bold text-lg">Carbon Fiber Packets</p>
+                <p className="text-sm opacity-80">Schedule for cutting queue</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="icon" onClick={() => updateQuantity('carbon_fiber', -10)}>
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <Input
+                  type="number"
+                  value={scheduleQuantities['carbon_fiber'] || 0}
+                  onChange={(e) => setQuantity('carbon_fiber', e.target.value)}
+                  className="text-center text-lg font-bold w-20 bg-white text-black"
+                  data-testid="input-qty-cf"
+                />
+                <Button variant="secondary" size="icon" onClick={() => updateQuantity('carbon_fiber', 10)}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              <Button 
+                onClick={() => handleSchedule('Carbon Fiber', 'carbon_fiber')}
+                disabled={!scheduleQuantities['carbon_fiber'] || schedulePacketsMutation.isPending}
+                className="bg-white text-black hover:bg-gray-200"
+                data-testid="button-schedule-cf"
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Schedule
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Scissors className="h-5 w-5" />
+              Schedule Fiberglass Packets
+            </CardTitle>
+            <CardDescription>
+              Demand: {fgDemand} • On-hand: {stockLevels.fiberglass} • Gap: {Math.max(0, fgNeedsCutting - scheduledCounts.fiberglass)}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3 p-4 bg-amber-500 rounded-lg text-white">
+              <div className="flex-1">
+                <p className="font-bold text-lg">Fiberglass Packets</p>
+                <p className="text-sm opacity-80">Schedule for cutting queue</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="icon" onClick={() => updateQuantity('fiberglass', -10)}>
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <Input
+                  type="number"
+                  value={scheduleQuantities['fiberglass'] || 0}
+                  onChange={(e) => setQuantity('fiberglass', e.target.value)}
+                  className="text-center text-lg font-bold w-20 bg-white text-black"
+                  data-testid="input-qty-fg"
+                />
+                <Button variant="secondary" size="icon" onClick={() => updateQuantity('fiberglass', 10)}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              <Button 
+                onClick={() => handleSchedule('Fiberglass', 'fiberglass')}
+                disabled={!scheduleQuantities['fiberglass'] || schedulePacketsMutation.isPending}
+                className="bg-white text-black hover:bg-gray-200"
+                data-testid="button-schedule-fg"
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Schedule
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -248,151 +396,126 @@ export default function CuttingWeeklySchedule() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Scissors className="h-5 w-5" />
-            Quick Schedule Packets
+            <Factory className="h-5 w-5" />
+            Demand by Customer
           </CardTitle>
           <CardDescription>
-            Select quantity and schedule packets for cutting
+            {weeklyQueueData?.totalItems || 0} total items from {demandByCustomer.length} customers
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {predefinedPackets.map(packet => (
-              <Card key={packet.id} className="border-2">
-                <CardHeader className={cn("py-3 rounded-t-lg", packet.color)}>
-                  <CardTitle className="text-lg">{packet.name}</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => updateQuantity(packet.id, -1)}
-                      data-testid={`button-minus-${packet.id}`}
-                    >
-                      <Minus className="h-4 w-4" />
-                    </Button>
-                    <Input
-                      type="number"
-                      value={scheduleQuantities[packet.id] || 0}
-                      onChange={(e) => setQuantity(packet.id, e.target.value)}
-                      className="text-center text-lg font-bold w-20"
-                      data-testid={`input-qty-${packet.id}`}
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => updateQuantity(packet.id, 1)}
-                      data-testid={`button-plus-${packet.id}`}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <Button 
-                    className="w-full" 
-                    onClick={() => handleQuickSchedule(packet)}
-                    disabled={!scheduleQuantities[packet.id] || scheduleQuickPacketMutation.isPending}
-                    data-testid={`button-schedule-${packet.id}`}
-                  >
-                    <Send className="h-4 w-4 mr-2" />
-                    Schedule
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {packetBOMs.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Layers className="h-5 w-5" />
-              Schedule from Packet BOMs
-            </CardTitle>
-            <CardDescription>
-              Schedule packets using defined Bill of Materials
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+          {isLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Loading demand data...</div>
+          ) : demandByCustomer.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">No pending demand</div>
+          ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Packet Type</TableHead>
-                  <TableHead>Part Number</TableHead>
-                  <TableHead className="text-center">Currently Scheduled</TableHead>
-                  <TableHead className="text-center">Quantity</TableHead>
-                  <TableHead></TableHead>
+                  <TableHead className="w-8"></TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead className="text-center">CF</TableHead>
+                  <TableHead className="text-center">FG</TableHead>
+                  <TableHead className="text-center">Total</TableHead>
+                  <TableHead>Sources</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {packetBOMs.map(bom => (
-                  <TableRow key={bom.id}>
-                    <TableCell className="font-medium">{bom.packetType}</TableCell>
-                    <TableCell>{bom.partNumber}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline">{scheduledCounts[bom.id] || 0}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-center gap-1">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => updateQuantity(bom.id, -1)}
-                          data-testid={`button-minus-bom-${bom.id}`}
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <Input
-                          type="number"
-                          value={scheduleQuantities[bom.id] || 0}
-                          onChange={(e) => setQuantity(bom.id, e.target.value)}
-                          className="text-center w-16 h-8"
-                          data-testid={`input-qty-bom-${bom.id}`}
-                        />
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => updateQuantity(bom.id, 1)}
-                          data-testid={`button-plus-bom-${bom.id}`}
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Button 
-                        size="sm"
-                        onClick={() => handleSchedule(bom)}
-                        disabled={!scheduleQuantities[bom.id] || schedulePacketsMutation.isPending}
-                        data-testid={`button-schedule-bom-${bom.id}`}
-                      >
-                        <Send className="h-4 w-4 mr-1" />
-                        Schedule
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                {demandByCustomer.map(row => (
+                  <Collapsible key={row.customer} asChild>
+                    <>
+                      <TableRow className="cursor-pointer hover:bg-muted/50">
+                        <TableCell>
+                          <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setExpandedCustomers(prev => ({ ...prev, [row.customer]: !prev[row.customer] }))}>
+                              {expandedCustomers[row.customer] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            </Button>
+                          </CollapsibleTrigger>
+                        </TableCell>
+                        <TableCell className="font-medium">{row.customer}</TableCell>
+                        <TableCell className="text-center">
+                          {row.cfCount > 0 && (
+                            <Badge variant="outline" className="bg-gray-900 text-white">{row.cfCount}</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {row.fgCount > 0 && (
+                            <Badge variant="outline" className="bg-amber-100 text-amber-800">{row.fgCount}</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center font-bold">{row.totalCount}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            {Array.from(row.sources).map(src => (
+                              <Badge key={src} variant="outline" className="text-xs">
+                                {src}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Input
+                              type="number"
+                              value={scheduleQuantities[`${row.customer}-carbon_fiber`] || 0}
+                              onChange={(e) => setQuantity(`${row.customer}-carbon_fiber`, e.target.value)}
+                              className="w-16 h-8 text-center"
+                              placeholder="CF"
+                              data-testid={`input-qty-${row.customer}-cf`}
+                            />
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleSchedule(`CF for ${row.customer}`, 'carbon_fiber', row.customer)}
+                              disabled={!scheduleQuantities[`${row.customer}-carbon_fiber`]}
+                              data-testid={`button-schedule-${row.customer}-cf`}
+                            >
+                              CF
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      <CollapsibleContent asChild>
+                        <TableRow className="bg-muted/30">
+                          <TableCell colSpan={7} className="py-2">
+                            <div className="pl-8 text-sm">
+                              <p className="font-medium mb-2">Order Details:</p>
+                              <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto">
+                                {row.items.slice(0, 20).map(item => (
+                                  <div key={item.id} className="text-xs p-1 bg-background rounded border">
+                                    <span className="font-medium">{item.orderId}</span>
+                                    <span className="text-muted-foreground ml-1">({item.source})</span>
+                                  </div>
+                                ))}
+                                {row.items.length > 20 && (
+                                  <div className="text-xs p-1 text-muted-foreground">
+                                    +{row.items.length - 20} more...
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      </CollapsibleContent>
+                    </>
+                  </Collapsible>
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            Currently Scheduled for Cutting
+            Currently Scheduled
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {loadingBOMs ? (
-            <div className="text-center py-8 text-muted-foreground">Loading...</div>
-          ) : (mfgQueueData || []).length === 0 ? (
+          {(mfgQueueData || []).length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No packets currently scheduled for cutting
             </div>
@@ -400,15 +523,14 @@ export default function CuttingWeeklySchedule() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead className="text-center">Quantity</TableHead>
-                  <TableHead className="text-center">Completed</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-center">Qty</TableHead>
+                  <TableHead className="text-center">Done</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Due Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(mfgQueueData || []).slice(0, 20).map((item: any) => {
+                {(mfgQueueData || []).slice(0, 15).map((item: any) => {
                   let notes: any = {};
                   try { notes = JSON.parse(item.notes || '{}'); } catch {}
                   return (
@@ -422,9 +544,6 @@ export default function CuttingWeeklySchedule() {
                         <Badge variant={item.status === 'COMPLETED' ? 'default' : 'outline'}>
                           {item.status}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {item.dueDate ? new Date(item.dueDate).toLocaleDateString() : '-'}
                       </TableCell>
                     </TableRow>
                   );

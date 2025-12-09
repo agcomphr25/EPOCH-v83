@@ -1422,10 +1422,16 @@ router.get('/weekly-packet-needs', async (req, res) => {
 // ========== Weekly Cutting Queue - Aggregates P1, P1 PO, and P2 demand ==========
 router.get('/weekly-cutting-queue', async (req, res) => {
   try {
-    const { weekStart } = req.query;
+    const { weekStart, showAll } = req.query;
     const startDate = weekStart ? new Date(weekStart as string) : new Date();
     const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 7);
+    
+    // If showAll is true, extend to 90 days out to capture all pending work
+    if (showAll === 'true') {
+      endDate.setDate(endDate.getDate() + 90);
+    } else {
+      endDate.setDate(endDate.getDate() + 7);
+    }
 
     // Get all packet BOMs for matching
     const boms = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.isActive, true));
@@ -1473,7 +1479,8 @@ router.get('/weekly-cutting-queue', async (req, res) => {
         WHERE category = 'packet' OR name ILIKE '%packet%'
         GROUP BY material_type
       `);
-      for (const row of stockResult.rows || []) {
+      const stockRows = Array.isArray(stockResult) ? stockResult : (stockResult as any).rows || [];
+      for (const row of stockRows) {
         if (row.material_type === 'carbon_fiber') cfOnHand = parseInt(row.count) || 0;
         if (row.material_type === 'fiberglass') fgOnHand = parseInt(row.count) || 0;
       }
@@ -1481,9 +1488,10 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       // If inventory_items doesn't have packet data, use the existing stock-levels values
       try {
         const sl = await pool.query(`SELECT * FROM cutting_stock_levels LIMIT 1`);
-        if (sl.rows && sl.rows[0]) {
-          cfOnHand = parseInt(sl.rows[0].carbon_fiber) || 0;
-          fgOnHand = parseInt(sl.rows[0].fiberglass) || 0;
+        const slRows = Array.isArray(sl) ? sl : (sl as any).rows || [];
+        if (slRows.length > 0) {
+          cfOnHand = parseInt(slRows[0].carbon_fiber) || 0;
+          fgOnHand = parseInt(slRows[0].fiberglass) || 0;
         }
       } catch (e) {
         // Default to 0 if no stock data available
@@ -1493,25 +1501,43 @@ router.get('/weekly-cutting-queue', async (req, res) => {
 
     // 1. P1 Layup Schedule - Regular orders that need packets from inventory
     try {
-      const layupScheduleResult = await pool.query(`
-        SELECT 
-          ls.id,
-          ls.order_id as "orderId",
-          ls.stock_model as "stockModel",
-          ls.scheduled_date as "scheduledDate",
-          ls.priority,
-          o.due_date as "dueDate",
-          o.customer,
-          'P1' as source,
-          'regular' as orderType
-        FROM layup_schedule ls
-        LEFT JOIN orders o ON ls.order_id = o.order_id
-        WHERE ls.scheduled_date >= $1 AND ls.scheduled_date < $2
-          AND ls.status IN ('scheduled', 'pending')
-        ORDER BY ls.priority DESC, ls.scheduled_date ASC
-      `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
+      // If showAll, don't filter by date - get all pending layup items
+      const layupScheduleResult = showAll === 'true' 
+        ? await pool.query(`
+            SELECT 
+              ls.id,
+              ls.order_id as "orderId",
+              ls.stock_model as "stockModel",
+              ls.scheduled_date as "scheduledDate",
+              ls.material_type as "materialTypeRaw",
+              ls.customer_name as "customer",
+              o.due_date as "dueDate",
+              'P1' as source,
+              'regular' as orderType
+            FROM layup_schedule ls
+            LEFT JOIN orders o ON ls.order_id = o.order_id
+            ORDER BY ls.scheduled_date DESC
+            LIMIT 500
+          `)
+        : await pool.query(`
+            SELECT 
+              ls.id,
+              ls.order_id as "orderId",
+              ls.stock_model as "stockModel",
+              ls.scheduled_date as "scheduledDate",
+              ls.material_type as "materialTypeRaw",
+              ls.customer_name as "customer",
+              o.due_date as "dueDate",
+              'P1' as source,
+              'regular' as orderType
+            FROM layup_schedule ls
+            LEFT JOIN orders o ON ls.order_id = o.order_id
+            WHERE ls.scheduled_date >= $1 AND ls.scheduled_date < $2
+            ORDER BY ls.scheduled_date ASC
+          `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
 
-      for (const item of layupScheduleResult.rows || []) {
+      const layupRows = Array.isArray(layupScheduleResult) ? layupScheduleResult : (layupScheduleResult as any).rows || [];
+      for (const item of layupRows) {
         const materialType = item.stockModel?.toLowerCase().includes('cf_') ? 'carbon_fiber' : 
                             item.stockModel?.toLowerCase().includes('fg_') ? 'fiberglass' : 'unknown';
         
@@ -1551,25 +1577,43 @@ router.get('/weekly-cutting-queue', async (req, res) => {
 
     // 2. P1 PO Orders - OEM orders always require new cuts
     try {
-      const p1POResult = await pool.query(`
-        SELECT 
-          po.id,
-          po.order_id as "orderId",
-          po.item_id as "stockModel",
-          po.due_date as "dueDate",
-          po.customer_id as "customerId",
-          po.specifications,
-          'P1_PO' as source,
-          'oem' as orderType
-        FROM production_orders po
-        WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
-          AND po.production_status IN ('PENDING', 'ACTIVE')
-          AND po.item_type = 'stock_model'
-          AND po.due_date >= $1 AND po.due_date < $2
-        ORDER BY po.due_date ASC
-      `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
+      // If showAll, get all pending P1 PO items without date filter
+      const p1POResult = showAll === 'true'
+        ? await pool.query(`
+            SELECT 
+              po.id,
+              po.order_id as "orderId",
+              po.item_id as "stockModel",
+              po.due_date as "dueDate",
+              po.customer_id as "customerId",
+              po.specifications,
+              'P1_PO' as source,
+              'oem' as orderType
+            FROM production_orders po
+            WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
+              AND po.production_status IN ('PENDING', 'ACTIVE')
+            ORDER BY po.due_date ASC
+            LIMIT 500
+          `)
+        : await pool.query(`
+            SELECT 
+              po.id,
+              po.order_id as "orderId",
+              po.item_id as "stockModel",
+              po.due_date as "dueDate",
+              po.customer_id as "customerId",
+              po.specifications,
+              'P1_PO' as source,
+              'oem' as orderType
+            FROM production_orders po
+            WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
+              AND po.production_status IN ('PENDING', 'ACTIVE')
+              AND po.due_date >= $1 AND po.due_date < $2
+            ORDER BY po.due_date ASC
+          `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
 
-      for (const item of p1POResult.rows || []) {
+      const p1PORows = Array.isArray(p1POResult) ? p1POResult : (p1POResult as any).rows || [];
+      for (const item of p1PORows) {
         const stockModel = item.stockModel || '';
         const materialType = stockModel.toLowerCase().includes('cf_') ? 'carbon_fiber' : 
                             stockModel.toLowerCase().includes('fg_') ? 'fiberglass' : 'unknown';
@@ -1595,25 +1639,43 @@ router.get('/weekly-cutting-queue', async (req, res) => {
 
     // 3. P2 PO Items - Purchase order items with BOMs requiring cutting
     try {
-      // Query P2 production queue and vendor PO items
-      const p2Result = await pool.query(`
-        SELECT 
-          pq.id,
-          pq.po_id as "poId",
-          pq.item_name as "itemName",
-          pq.quantity_ordered as "quantity",
-          pq.due_date as "dueDate",
-          pq.po_number as "poNumber",
-          pq.customer_name as "customer",
-          pq.status,
-          'P2' as source
-        FROM p2_production_queue pq
-        WHERE pq.status IN ('pending', 'in_progress', 'queued')
-          AND pq.due_date >= $1 AND pq.due_date < $2
-        ORDER BY pq.due_date ASC
-      `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
+      // Query P2 production orders table - all pending items need cutting
+      const p2Result = showAll === 'true'
+        ? await pool.query(`
+            SELECT 
+              po.id,
+              po.p2_po_id as "poId",
+              po.part_name as "itemName",
+              po.quantity,
+              po.due_date as "dueDate",
+              po.order_id as "poNumber",
+              po.priority,
+              po.status,
+              'P2' as source
+            FROM p2_production_orders po
+            WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
+            ORDER BY po.due_date ASC NULLS LAST
+            LIMIT 500
+          `)
+        : await pool.query(`
+            SELECT 
+              po.id,
+              po.p2_po_id as "poId",
+              po.part_name as "itemName",
+              po.quantity,
+              po.due_date as "dueDate",
+              po.order_id as "poNumber",
+              po.priority,
+              po.status,
+              'P2' as source
+            FROM p2_production_orders po
+            WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
+              AND po.due_date >= $1 AND po.due_date < $2
+            ORDER BY po.due_date ASC
+          `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
 
-      for (const item of p2Result.rows || []) {
+      const p2Rows = Array.isArray(p2Result) ? p2Result : (p2Result as any).rows || [];
+      for (const item of p2Rows) {
         // Match with a BOM by item name or part number
         const matchingBom = boms.find(b => 
           b.partNumber === item.itemName || 

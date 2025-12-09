@@ -93,15 +93,20 @@ export default function CuttingWeeklySchedule() {
   const [currentWeek, setCurrentWeek] = useState(getMondayOfWeek(new Date()));
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [materialFilter, setMaterialFilter] = useState<string>("all");
+  const [showAllPending, setShowAllPending] = useState(true);
 
   const { data: weeklyQueueData, isLoading, refetch } = useQuery<{
     items: WeeklyCuttingQueueItem[];
     summary: WeeklySummary;
     totalItems: number;
   }>({
-    queryKey: ['/api/cutting-table/weekly-cutting-queue', currentWeek],
+    queryKey: ['/api/cutting-table/weekly-cutting-queue', currentWeek, showAllPending],
     queryFn: async () => {
-      const res = await fetch(`/api/cutting-table/weekly-cutting-queue?weekStart=${currentWeek}`);
+      const params = new URLSearchParams({
+        weekStart: currentWeek,
+        showAll: showAllPending.toString(),
+      });
+      const res = await fetch(`/api/cutting-table/weekly-cutting-queue?${params}`);
       if (!res.ok) throw new Error('Failed to fetch queue');
       return res.json();
     },
@@ -209,22 +214,50 @@ export default function CuttingWeeklySchedule() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-4">
         <div>
-          <h2 className="text-2xl font-bold" data-testid="text-page-title">Weekly Schedule</h2>
-          <p className="text-muted-foreground">Aggregated demand from P1, P1 PO, and P2 production queues</p>
+          <h2 className="text-2xl font-bold" data-testid="text-page-title">
+            {showAllPending ? "Cutting Task List" : "Weekly Schedule"}
+          </h2>
+          <p className="text-muted-foreground">
+            {showAllPending 
+              ? "All pending orders that need packets scheduled for cutting" 
+              : "Aggregated demand from P1, P1 PO, and P2 production queues"}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => navigateWeek(-1)} data-testid="button-prev-week">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md min-w-[200px] justify-center">
-            <Calendar className="h-4 w-4" />
-            <span className="font-medium">{formatWeekRange(currentWeek)}</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 mr-4">
+            <Button 
+              variant={showAllPending ? "default" : "outline"} 
+              size="sm"
+              onClick={() => setShowAllPending(true)}
+              data-testid="button-show-all"
+            >
+              All Pending
+            </Button>
+            <Button 
+              variant={!showAllPending ? "default" : "outline"} 
+              size="sm"
+              onClick={() => setShowAllPending(false)}
+              data-testid="button-show-week"
+            >
+              This Week Only
+            </Button>
           </div>
-          <Button variant="outline" size="icon" onClick={() => navigateWeek(1)} data-testid="button-next-week">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          {!showAllPending && (
+            <>
+              <Button variant="outline" size="icon" onClick={() => navigateWeek(-1)} data-testid="button-prev-week">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md min-w-[200px] justify-center">
+                <Calendar className="h-4 w-4" />
+                <span className="font-medium">{formatWeekRange(currentWeek)}</span>
+              </div>
+              <Button variant="outline" size="icon" onClick={() => navigateWeek(1)} data-testid="button-next-week">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </>
+          )}
           <Button variant="outline" onClick={() => refetch()} data-testid="button-refresh">
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh

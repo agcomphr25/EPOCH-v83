@@ -32,15 +32,6 @@ app.get('/healthz', (req, res) => {
   res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-// DEPLOYMENT VERSION CHECK - registered BEFORE all middleware to verify code is deployed
-app.get('/api/deploy-version', (req, res) => {
-  res.status(200).json({ 
-    version: '2.0.2-deploy-check',
-    timestamp: '2024-12-09T05:15:00Z',
-    message: 'If you see this, the new code is deployed'
-  });
-});
-
 // CRITICAL: Trust proxy for production deployments behind Replit's infrastructure
 // This is required for express-rate-limit to work correctly with X-Forwarded-For headers
 if (process.env.NODE_ENV === 'production') {

@@ -88,6 +88,20 @@ The application is built as a monorepo using a full-stack TypeScript approach, e
 - **Development Mode**: Set DEV_AUTH_BYPASS=true ONLY in development environment for local testing. Never set in production or preview deployments.
 - **Production Deployment**: Set NODE_ENV=production and ensure DEV_AUTH_BYPASS is NOT set before deploying.
 
+### Feature Flags (Beta/Experimental Features)
+Some features are gated behind environment variables to allow controlled rollout:
+
+| Feature | Frontend Variable | Backend Variable | Default | Description |
+|---------|------------------|------------------|---------|-------------|
+| Website Order Import | `VITE_FEATURE_WEBSITE_IMPORT` | `FEATURE_WEBSITE_IMPORT` | `false` | CSV import of orders from external website |
+
+**How to enable in development:**
+- Set both variables to `true` in the development environment
+- Frontend uses `import.meta.env.VITE_FEATURE_WEBSITE_IMPORT`
+- Backend uses `process.env.FEATURE_WEBSITE_IMPORT`
+
+**For production:** Do not set these flags unless the feature is ready for release.
+
 ## External Dependencies
 
 ### Database

@@ -83,6 +83,8 @@ PORTAL_JWT_SECRET = "3adbfd669c7ffae02a7e7493342fc37e1115d182d8ef3ba7874d0a73c0f
 
 [userenv.development]
 DEV_AUTH_BYPASS = "true"
+FEATURE_WEBSITE_IMPORT = "true"
+VITE_FEATURE_WEBSITE_IMPORT = "true"
 
 [agent]
 expertMode = true

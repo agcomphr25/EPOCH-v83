@@ -1430,49 +1430,47 @@ router.get('/weekly-cutting-queue', async (req, res) => {
     // Get all packet BOMs for matching
     const boms = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.isActive, true));
     
-    // Get current packet inventory levels by category
-    const { cuttingBuiltPackets, cuttingProductCategories } = await import('../../schema');
-    const packetInventory = await db.select({
-      categoryId: cuttingBuiltPackets.productCategoryId,
-      count: db.$count(cuttingBuiltPackets.id),
-    }).from(cuttingBuiltPackets)
-      .where(eq(cuttingBuiltPackets.status, 'AVAILABLE'))
-      .groupBy(cuttingBuiltPackets.productCategoryId);
-    
-    const inventoryByCategory = new Map(packetInventory.map(p => [p.categoryId, Number(p.count) || 0]));
-    
     // Get manufacturing queue items for demand already scheduled
     const { manufacturingQueue } = await import('../../schema');
-    const mfgQueueItems = await db.select().from(manufacturingQueue)
-      .where(eq(manufacturingQueue.department, 'Cutting Table'));
-    const scheduledQuantities = mfgQueueItems.reduce((acc, item) => {
-      const key = item.notes ? JSON.parse(item.notes)?.bomId : null;
-      if (key) {
-        acc[key] = (acc[key] || 0) + (item.quantityRequested - (item.quantityCompleted || 0));
-      }
-      return acc;
-    }, {} as Record<string, number>);
+    let scheduledQuantities: Record<string, number> = {};
+    try {
+      const mfgQueueItems = await db.select().from(manufacturingQueue)
+        .where(eq(manufacturingQueue.department, 'Cutting Table'));
+      scheduledQuantities = mfgQueueItems.reduce((acc, item) => {
+        try {
+          const key = item.notes ? JSON.parse(item.notes)?.bomId : null;
+          if (key) {
+            acc[key] = (acc[key] || 0) + (item.quantityRequested - (item.quantityCompleted || 0));
+          }
+        } catch (e) {}
+        return acc;
+      }, {} as Record<string, number>);
+    } catch (mfgErr) {
+      console.log('Mfg queue query skipped:', mfgErr);
+    }
 
     // Aggregate demand from multiple sources
     const queueItems: any[] = [];
     let cfInventoryUsed = 0;
     let fgInventoryUsed = 0;
 
-    // Get on-hand stock levels for CF and FG packets by counting available built packets
+    // Get on-hand stock levels from stock-levels endpoint data or default
     const { pool } = await import('../../db');
     let cfOnHand = 0;
     let fgOnHand = 0;
+    
+    // Try to get stock levels from the existing stock_levels API data (inventory_items table)
     try {
       const stockResult = await pool.query(`
         SELECT 
           CASE 
-            WHEN bp.fabric_type ILIKE '%carbon%' OR bp.fabric_type ILIKE '%cf%' THEN 'carbon_fiber'
-            WHEN bp.fabric_type ILIKE '%fiber%' OR bp.fabric_type ILIKE '%fg%' THEN 'fiberglass'
+            WHEN name ILIKE '%carbon%' OR name ILIKE '%cf%' THEN 'carbon_fiber'
+            WHEN name ILIKE '%fiberglass%' OR name ILIKE '%fg%' THEN 'fiberglass'
             ELSE 'other'
           END as material_type,
-          COUNT(*) as count
-        FROM cutting_built_packets bp
-        WHERE bp.status = 'AVAILABLE'
+          SUM(COALESCE(quantity_in_stock, 0)) as count
+        FROM inventory_items
+        WHERE category = 'packet' OR name ILIKE '%packet%'
         GROUP BY material_type
       `);
       for (const row of stockResult.rows || []) {
@@ -1480,7 +1478,17 @@ router.get('/weekly-cutting-queue', async (req, res) => {
         if (row.material_type === 'fiberglass') fgOnHand = parseInt(row.count) || 0;
       }
     } catch (stockErr) {
-      console.log('Stock levels query skipped:', stockErr);
+      // If inventory_items doesn't have packet data, use the existing stock-levels values
+      try {
+        const sl = await pool.query(`SELECT * FROM cutting_stock_levels LIMIT 1`);
+        if (sl.rows && sl.rows[0]) {
+          cfOnHand = parseInt(sl.rows[0].carbon_fiber) || 0;
+          fgOnHand = parseInt(sl.rows[0].fiberglass) || 0;
+        }
+      } catch (e) {
+        // Default to 0 if no stock data available
+        console.log('Stock levels query skipped - using defaults');
+      }
     }
 
     // 1. P1 Layup Schedule - Regular orders that need packets from inventory

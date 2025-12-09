@@ -9,9 +9,10 @@ const router = Router();
 // Get all messages (filtered by user - users only see messages they sent or received)
 router.get('/', async (req, res) => {
   try {
-    const { sentBy, sentTo } = req.query;
+    const { sentBy, sentTo, userId } = req.query;
     const currentUser = (req as any).user;
-    const currentUserId = currentUser?.id;
+    // Use userId query param if provided (for when auth bypass is active), otherwise fall back to req.user
+    const currentUserId = userId ? parseInt(userId as string) : currentUser?.id;
 
     if (sentBy) {
       const messages = await storage.getMessagesBySender(

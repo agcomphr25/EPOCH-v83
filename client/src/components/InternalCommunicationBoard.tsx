@@ -97,7 +97,16 @@ export default function InternalCommunicationBoard() {
   });
 
   const { data: messages = [], isLoading } = useQuery<MessageWithDetails[]>({
-    queryKey: ['/api/internal-messages'],
+    queryKey: ['/api/internal-messages', currentUserId],
+    queryFn: async () => {
+      if (!currentUserId) return [];
+      const response = await fetch(`/api/internal-messages?userId=${currentUserId}`, {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch messages');
+      return response.json();
+    },
+    enabled: currentUserId > 0,
   });
 
   const { data: orders = [] } = useQuery<any[]>({

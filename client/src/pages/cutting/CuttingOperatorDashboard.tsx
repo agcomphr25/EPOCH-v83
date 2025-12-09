@@ -700,15 +700,26 @@ export default function CuttingOperatorDashboard() {
                           </Button>
                         )}
                         {item.status === 'IN_PROGRESS' && (
-                          <Button 
-                            size="sm" 
-                            variant="secondary"
-                            onClick={() => { setSelectedMfgItem(item); setIsProductionDialogOpen(true); }}
-                            data-testid={`button-complete-${item.id}`}
-                          >
-                            <CheckCircle2 className="h-4 w-4 mr-1" />
-                            Complete
-                          </Button>
+                          <>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => { setSelectedMfgItem(item); setIsCuttingWorkflowOpen(true); }}
+                              data-testid={`button-view-workflow-${item.id}`}
+                            >
+                              <Scissors className="h-4 w-4 mr-1" />
+                              View
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="secondary"
+                              onClick={() => { setSelectedMfgItem(item); setIsProductionDialogOpen(true); }}
+                              data-testid={`button-complete-${item.id}`}
+                            >
+                              <CheckCircle2 className="h-4 w-4 mr-1" />
+                              Complete
+                            </Button>
+                          </>
                         )}
                         {item.status === 'COMPLETED' && (
                           <Button 

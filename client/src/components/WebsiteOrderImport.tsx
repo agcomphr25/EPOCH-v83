@@ -79,6 +79,9 @@ interface ImportResult {
   error?: string;
   websiteOrderId: string;
   customerName: string;
+  matchedModel?: string;
+  matchedFeatures?: string[];
+  isPaid?: boolean;
 }
 
 function parseOrderDetails(orderedHtml: string): ParsedOrderDetails {
@@ -532,23 +535,65 @@ export function WebsiteOrderImport() {
             </ScrollArea>
 
             {importResults.length > 0 && (
-              <Alert>
-                <Info className="h-4 w-4" />
-                <AlertTitle>Import Results</AlertTitle>
-                <AlertDescription>
-                  {importResults.filter(r => r.success).length} orders imported successfully,{' '}
-                  {importResults.filter(r => !r.success).length} failed.
-                  {importResults.some(r => !r.success) && (
-                    <ul className="mt-2 list-disc list-inside text-sm">
+              <div className="space-y-4">
+                <Alert variant={importResults.every(r => r.success) ? 'default' : 'destructive'}>
+                  <Info className="h-4 w-4" />
+                  <AlertTitle>Import Results</AlertTitle>
+                  <AlertDescription>
+                    {importResults.filter(r => r.success).length} orders imported successfully,{' '}
+                    {importResults.filter(r => !r.success).length} failed.
+                    {importResults.filter(r => r.success && r.isPaid).length > 0 && (
+                      <span className="ml-2 text-green-600 font-medium">
+                        ({importResults.filter(r => r.success && r.isPaid).length} marked as paid)
+                      </span>
+                    )}
+                  </AlertDescription>
+                </Alert>
+
+                {importResults.filter(r => r.success).length > 0 && (
+                  <div className="border rounded-lg p-4 bg-green-50">
+                    <h4 className="font-medium text-green-800 mb-2">Successfully Imported Orders</h4>
+                    <div className="space-y-2">
+                      {importResults.filter(r => r.success).map(r => (
+                        <div key={r.websiteOrderId} className="text-sm border-b border-green-200 pb-2 last:border-0">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            <span className="font-mono font-medium">{r.orderId}</span>
+                            <span className="text-gray-600">← Website #{r.websiteOrderId}</span>
+                            {r.isPaid && (
+                              <Badge variant="default" className="bg-green-600 text-xs">Paid</Badge>
+                            )}
+                          </div>
+                          <div className="ml-6 text-gray-600">
+                            <span>{r.customerName}</span>
+                            {r.matchedModel && (
+                              <span className="ml-2">• Model: <span className="font-medium">{r.matchedModel}</span></span>
+                            )}
+                          </div>
+                          {r.matchedFeatures && r.matchedFeatures.length > 0 && (
+                            <div className="ml-6 text-xs text-gray-500 mt-1">
+                              Features matched: {r.matchedFeatures.join(', ')}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {importResults.some(r => !r.success) && (
+                  <div className="border rounded-lg p-4 bg-red-50">
+                    <h4 className="font-medium text-red-800 mb-2">Failed Imports</h4>
+                    <ul className="list-disc list-inside text-sm text-red-700">
                       {importResults.filter(r => !r.success).map(r => (
                         <li key={r.websiteOrderId}>
-                          Order {r.websiteOrderId}: {r.error}
+                          Order {r.websiteOrderId} ({r.customerName}): {r.error}
                         </li>
                       ))}
                     </ul>
-                  )}
-                </AlertDescription>
-              </Alert>
+                  </div>
+                )}
+              </div>
             )}
 
             <div className="flex justify-end gap-3">

@@ -41,12 +41,36 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
       .where(whereClause)
       .orderBy(manufacturingQueue.priority, manufacturingQueue.createdAt);
     
-    const formattedItems = queueItems.map(row => ({
-      ...row.queue,
-      partNumber: row.item?.agPartNumber,
-      partName: row.item?.name,
-      inventoryItem: row.item,
-    }));
+    const formattedItems = queueItems.map(row => {
+      // Extract bomId and other data from notes JSON if present
+      let packetBomId = null;
+      let materialType = null;
+      let source = null;
+      let orderId = null;
+      
+      try {
+        if (row.queue.notes) {
+          const parsedNotes = JSON.parse(row.queue.notes);
+          packetBomId = parsedNotes.bomId || null;
+          materialType = parsedNotes.materialType || null;
+          source = parsedNotes.source || null;
+          orderId = parsedNotes.orderId || null;
+        }
+      } catch (e) {
+        // Notes might not be JSON, that's ok
+      }
+      
+      return {
+        ...row.queue,
+        partNumber: row.item?.agPartNumber,
+        partName: row.item?.name,
+        inventoryItem: row.item,
+        packetBomId,
+        materialType,
+        source,
+        orderId,
+      };
+    });
     
     res.json(formattedItems);
   } catch (error) {

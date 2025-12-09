@@ -745,6 +745,28 @@ router.delete('/fabric-inventory/:id', async (req, res) => {
   }
 });
 
+router.post('/fabric-inventory/:id/deplete', async (req, res) => {
+  try {
+    const rollId = req.params.id;
+    const depletedBy = (req as any).user?.username || 'unknown';
+    
+    const inventory = await storage.updateCuttingFabricInventory(rollId, {
+      squareMeters: '0',
+      notes: `DEPLETED by ${depletedBy} on ${new Date().toISOString()}`,
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Roll marked as depleted',
+      rollId,
+      depletedBy,
+    });
+  } catch (error) {
+    console.error('Error depleting fabric roll:', error);
+    res.status(500).json({ error: 'Failed to deplete fabric roll' });
+  }
+});
+
 // Recommended Cuts endpoint - calculates cuts needed based on packet recipes and weekly goals
 router.get('/recommended-cuts/:weekDate', async (req, res) => {
   try {
@@ -1416,6 +1438,506 @@ router.get('/weekly-packet-needs', async (req, res) => {
   } catch (error) {
     console.error('Error fetching weekly packet needs:', error);
     res.status(500).json({ error: 'Failed to fetch weekly packet needs' });
+  }
+});
+
+// ========== Weekly Cutting Queue - Aggregates P1, P1 PO, and P2 demand ==========
+router.get('/weekly-cutting-queue', async (req, res) => {
+  try {
+    const { weekStart, showAll } = req.query;
+    const startDate = weekStart ? new Date(weekStart as string) : new Date();
+    const endDate = new Date(startDate);
+    
+    // If showAll is true, extend to 90 days out to capture all pending work
+    if (showAll === 'true') {
+      endDate.setDate(endDate.getDate() + 90);
+    } else {
+      endDate.setDate(endDate.getDate() + 7);
+    }
+
+    // Get all packet BOMs for matching
+    const boms = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.isActive, true));
+    
+    // Get manufacturing queue items for demand already scheduled
+    const { manufacturingQueue } = await import('../../schema');
+    let scheduledQuantities: Record<string, number> = {};
+    try {
+      const mfgQueueItems = await db.select().from(manufacturingQueue)
+        .where(eq(manufacturingQueue.department, 'Cutting Table'));
+      scheduledQuantities = mfgQueueItems.reduce((acc, item) => {
+        try {
+          const key = item.notes ? JSON.parse(item.notes)?.bomId : null;
+          if (key) {
+            acc[key] = (acc[key] || 0) + (item.quantityRequested - (item.quantityCompleted || 0));
+          }
+        } catch (e) {}
+        return acc;
+      }, {} as Record<string, number>);
+    } catch (mfgErr) {
+      console.log('Mfg queue query skipped:', mfgErr);
+    }
+
+    // Aggregate demand from multiple sources
+    const queueItems: any[] = [];
+    let cfInventoryUsed = 0;
+    let fgInventoryUsed = 0;
+
+    // Get on-hand stock levels from stock-levels endpoint data or default
+    const { pool } = await import('../../db');
+    let cfOnHand = 0;
+    let fgOnHand = 0;
+    
+    // Try to get stock levels from the existing stock_levels API data (inventory_items table)
+    try {
+      const stockResult = await pool.query(`
+        SELECT 
+          CASE 
+            WHEN name ILIKE '%carbon%' OR name ILIKE '%cf%' THEN 'carbon_fiber'
+            WHEN name ILIKE '%fiberglass%' OR name ILIKE '%fg%' THEN 'fiberglass'
+            ELSE 'other'
+          END as material_type,
+          SUM(COALESCE(quantity_in_stock, 0)) as count
+        FROM inventory_items
+        WHERE category = 'packet' OR name ILIKE '%packet%'
+        GROUP BY material_type
+      `);
+      const stockRows = Array.isArray(stockResult) ? stockResult : (stockResult as any).rows || [];
+      for (const row of stockRows) {
+        if (row.material_type === 'carbon_fiber') cfOnHand = parseInt(row.count) || 0;
+        if (row.material_type === 'fiberglass') fgOnHand = parseInt(row.count) || 0;
+      }
+    } catch (stockErr) {
+      // If inventory_items doesn't have packet data, use the existing stock-levels values
+      try {
+        const sl = await pool.query(`SELECT * FROM cutting_stock_levels LIMIT 1`);
+        const slRows = Array.isArray(sl) ? sl : (sl as any).rows || [];
+        if (slRows.length > 0) {
+          cfOnHand = parseInt(slRows[0].carbon_fiber) || 0;
+          fgOnHand = parseInt(slRows[0].fiberglass) || 0;
+        }
+      } catch (e) {
+        // Default to 0 if no stock data available
+        console.log('Stock levels query skipped - using defaults');
+      }
+    }
+
+    // 1. P1 Layup Schedule - Regular orders that need packets from inventory
+    try {
+      // If showAll, don't filter by date - get all pending layup items
+      const layupScheduleResult = showAll === 'true' 
+        ? await pool.query(`
+            SELECT 
+              ls.id,
+              ls.order_id as "orderId",
+              ls.stock_model as "stockModel",
+              ls.scheduled_date as "scheduledDate",
+              ls.material_type as "materialTypeRaw",
+              COALESCE(ls.customer_name, c.name, 'Regular Order') as "customer",
+              o.due_date as "dueDate",
+              'P1' as source,
+              'regular' as orderType
+            FROM layup_schedule ls
+            LEFT JOIN orders o ON ls.order_id = o.order_id
+            LEFT JOIN customers c ON o.customer = c.id
+            ORDER BY ls.scheduled_date DESC
+            LIMIT 500
+          `)
+        : await pool.query(`
+            SELECT 
+              ls.id,
+              ls.order_id as "orderId",
+              ls.stock_model as "stockModel",
+              ls.scheduled_date as "scheduledDate",
+              ls.material_type as "materialTypeRaw",
+              COALESCE(ls.customer_name, c.name, 'Regular Order') as "customer",
+              o.due_date as "dueDate",
+              'P1' as source,
+              'regular' as orderType
+            FROM layup_schedule ls
+            LEFT JOIN orders o ON ls.order_id = o.order_id
+            LEFT JOIN customers c ON o.customer = c.id
+            WHERE ls.scheduled_date >= $1 AND ls.scheduled_date < $2
+            ORDER BY ls.scheduled_date ASC
+          `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
+
+      const layupRows = Array.isArray(layupScheduleResult) ? layupScheduleResult : (layupScheduleResult as any).rows || [];
+      for (const item of layupRows) {
+        const materialType = item.stockModel?.toLowerCase().includes('cf_') ? 'carbon_fiber' : 
+                            item.stockModel?.toLowerCase().includes('fg_') ? 'fiberglass' : 'unknown';
+        
+        // Check if we can use inventory or need new cut
+        let usesInventory = false;
+        let requiresNewCut = true;
+        
+        if (materialType === 'carbon_fiber' && cfInventoryUsed < cfOnHand) {
+          usesInventory = true;
+          requiresNewCut = false;
+          cfInventoryUsed++;
+        } else if (materialType === 'fiberglass' && fgInventoryUsed < fgOnHand) {
+          usesInventory = true;
+          requiresNewCut = false;
+          fgInventoryUsed++;
+        }
+        
+        queueItems.push({
+          id: `p1-${item.id}`,
+          orderId: item.orderId,
+          stockModel: item.stockModel,
+          source: 'P1',
+          orderType: 'regular',
+          materialType,
+          scheduledDate: item.scheduledDate,
+          dueDate: item.dueDate,
+          customer: item.customer,
+          priority: item.priority || 50,
+          packetsNeeded: 1,
+          usesInventory,
+          requiresNewCut,
+        });
+      }
+    } catch (err) {
+      console.log('P1 layup schedule query skipped:', err);
+    }
+
+    // 2. P1 PO Orders - OEM orders always require new cuts
+    try {
+      // If showAll, get all pending P1 PO items without date filter
+      const p1POResult = showAll === 'true'
+        ? await pool.query(`
+            SELECT 
+              po.id,
+              po.order_id as "orderId",
+              po.item_id as "stockModel",
+              po.due_date as "dueDate",
+              po.customer_id as "customerId",
+              po.specifications,
+              'P1_PO' as source,
+              'oem' as orderType
+            FROM production_orders po
+            WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
+              AND po.production_status IN ('PENDING', 'ACTIVE')
+            ORDER BY po.due_date ASC
+            LIMIT 500
+          `)
+        : await pool.query(`
+            SELECT 
+              po.id,
+              po.order_id as "orderId",
+              po.item_id as "stockModel",
+              po.due_date as "dueDate",
+              po.customer_id as "customerId",
+              po.specifications,
+              'P1_PO' as source,
+              'oem' as orderType
+            FROM production_orders po
+            WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
+              AND po.production_status IN ('PENDING', 'ACTIVE')
+              AND po.due_date >= $1 AND po.due_date < $2
+            ORDER BY po.due_date ASC
+          `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
+
+      const p1PORows = Array.isArray(p1POResult) ? p1POResult : (p1POResult as any).rows || [];
+      for (const item of p1PORows) {
+        // Parse specifications JSON to get material type
+        let specs: any = {};
+        try {
+          specs = typeof item.specifications === 'string' 
+            ? JSON.parse(item.specifications) 
+            : (item.specifications || {});
+        } catch (e) {
+          specs = {};
+        }
+        
+        // Get material from specifications.material field (e.g., "carbon_fiber", "fiberglass")
+        const specMaterial = (specs.material || '').toLowerCase();
+        const stockModelName = specs.stockModel || item.stockModel || '';
+        
+        // Determine material type from specs.material first, then fall back to stock model name
+        let materialType = 'unknown';
+        if (specMaterial === 'carbon_fiber' || specMaterial === 'carbon' || specMaterial === 'cf') {
+          materialType = 'carbon_fiber';
+        } else if (specMaterial === 'fiberglass' || specMaterial === 'fg') {
+          materialType = 'fiberglass';
+        } else if (stockModelName.toLowerCase().includes('cf_') || stockModelName.toLowerCase().includes('cf ')) {
+          materialType = 'carbon_fiber';
+        } else if (stockModelName.toLowerCase().includes('fg_') || stockModelName.toLowerCase().includes('fg ')) {
+          materialType = 'fiberglass';
+        }
+        
+        queueItems.push({
+          id: `p1po-${item.id}`,
+          orderId: item.orderId,
+          stockModel: stockModelName || `Item ${item.stockModel}`,
+          source: 'P1_PO',
+          orderType: 'oem',
+          materialType,
+          scheduledDate: item.dueDate,
+          dueDate: item.dueDate,
+          customer: specs.customerName || item.customerId,
+          priority: 80,
+          packetsNeeded: 1,
+          usesInventory: false,
+          requiresNewCut: true,
+          specifications: specs,
+        });
+      }
+    } catch (err) {
+      console.log('P1 PO query skipped:', err);
+    }
+
+    // 3. P2 PO Items - Purchase order items with BOMs requiring cutting
+    try {
+      // Query P2 production orders table - all pending items need cutting
+      const p2Result = showAll === 'true'
+        ? await pool.query(`
+            SELECT 
+              po.id,
+              po.p2_po_id as "poId",
+              po.part_name as "itemName",
+              po.quantity,
+              po.due_date as "dueDate",
+              po.order_id as "poNumber",
+              po.priority,
+              po.status,
+              COALESCE(p2.customer_name, 'P2 Order') as "customer",
+              'P2' as source
+            FROM p2_production_orders po
+            LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
+            WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
+            ORDER BY po.due_date ASC NULLS LAST
+            LIMIT 500
+          `)
+        : await pool.query(`
+            SELECT 
+              po.id,
+              po.p2_po_id as "poId",
+              po.part_name as "itemName",
+              po.quantity,
+              po.due_date as "dueDate",
+              po.order_id as "poNumber",
+              po.priority,
+              po.status,
+              COALESCE(p2.customer_name, 'P2 Order') as "customer",
+              'P2' as source
+            FROM p2_production_orders po
+            LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
+            WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
+              AND po.due_date >= $1 AND po.due_date < $2
+            ORDER BY po.due_date ASC
+          `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
+
+      const p2Rows = Array.isArray(p2Result) ? p2Result : (p2Result as any).rows || [];
+      for (const item of p2Rows) {
+        // Match with a BOM by item name or part number
+        const matchingBom = boms.find(b => 
+          b.partNumber === item.itemName || 
+          b.packetType?.toLowerCase() === item.itemName?.toLowerCase() ||
+          b.partNumber?.toLowerCase().includes(item.itemName?.toLowerCase() || '')
+        );
+        
+        // Determine material type from BOM or item name
+        let materialType = 'unknown';
+        if (matchingBom) {
+          const materials = await db.select().from(cuttingPacketBOMMaterials)
+            .where(eq(cuttingPacketBOMMaterials.packetBomId, matchingBom.id));
+          const primaryMaterial = materials[0];
+          materialType = primaryMaterial?.fabricType?.toLowerCase().includes('carbon') ? 'carbon_fiber' : 
+                        primaryMaterial?.fabricType?.toLowerCase().includes('fiber') ? 'fiberglass' : 'unknown';
+        } else {
+          // Infer from item name
+          const itemNameLower = (item.itemName || '').toLowerCase();
+          materialType = itemNameLower.includes('cf') || itemNameLower.includes('carbon') ? 'carbon_fiber' :
+                        itemNameLower.includes('fg') || itemNameLower.includes('fiber') ? 'fiberglass' : 'unknown';
+        }
+        
+        queueItems.push({
+          id: `p2-${item.id}`,
+          orderId: item.poNumber ? `PO-${item.poNumber}-${item.id}` : `P2-${item.id}`,
+          stockModel: item.itemName,
+          source: 'P2',
+          orderType: 'p2_po',
+          materialType,
+          scheduledDate: item.dueDate,
+          dueDate: item.dueDate,
+          customer: item.customer,
+          priority: 60,
+          packetsNeeded: item.quantity || 1,
+          usesInventory: false,
+          requiresNewCut: true,
+          bomId: matchingBom?.id,
+        });
+      }
+    } catch (err) {
+      console.log('P2 production queue query skipped:', err);
+    }
+
+    // Calculate totals reconciled with inventory
+    const cfTotal = queueItems.filter(i => i.materialType === 'carbon_fiber').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0);
+    const fgTotal = queueItems.filter(i => i.materialType === 'fiberglass').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0);
+    const cfFromInventory = Math.min(cfOnHand, queueItems.filter(i => i.materialType === 'carbon_fiber' && i.usesInventory).length);
+    const fgFromInventory = Math.min(fgOnHand, queueItems.filter(i => i.materialType === 'fiberglass' && i.usesInventory).length);
+
+    const summary = {
+      carbon_fiber: {
+        regular: queueItems.filter(i => i.materialType === 'carbon_fiber' && i.orderType === 'regular').length,
+        oem: queueItems.filter(i => i.materialType === 'carbon_fiber' && i.orderType === 'oem').length,
+        p2: queueItems.filter(i => i.materialType === 'carbon_fiber' && i.orderType === 'p2_po').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0),
+        total: cfTotal,
+        fromInventory: cfFromInventory,
+        needsCutting: cfTotal - cfFromInventory,
+        onHand: cfOnHand,
+      },
+      fiberglass: {
+        regular: queueItems.filter(i => i.materialType === 'fiberglass' && i.orderType === 'regular').length,
+        oem: queueItems.filter(i => i.materialType === 'fiberglass' && i.orderType === 'oem').length,
+        p2: queueItems.filter(i => i.materialType === 'fiberglass' && i.orderType === 'p2_po').reduce((sum, i) => sum + (i.packetsNeeded || 1), 0),
+        total: fgTotal,
+        fromInventory: fgFromInventory,
+        needsCutting: fgTotal - fgFromInventory,
+        onHand: fgOnHand,
+      },
+      weekStart: startDate.toISOString().split('T')[0],
+      weekEnd: endDate.toISOString().split('T')[0],
+      scheduledInQueue: Object.values(scheduledQuantities).reduce((a, b) => a + b, 0),
+    };
+
+    res.json({
+      items: queueItems.sort((a, b) => {
+        const customerA = (a.customer || '').toString().toLowerCase();
+        const customerB = (b.customer || '').toString().toLowerCase();
+        return customerA.localeCompare(customerB);
+      }),
+      summary,
+      totalItems: queueItems.length,
+    });
+  } catch (error) {
+    console.error('Error fetching weekly cutting queue:', error);
+    res.status(500).json({ error: 'Failed to fetch weekly cutting queue' });
+  }
+});
+
+// Schedule packet to cutting queue
+router.post('/schedule-to-cutting', async (req, res) => {
+  try {
+    const { orderId, bomId, quantity, priority, dueDate, source, materialType, notes } = req.body;
+    
+    if (!quantity) {
+      return res.status(400).json({ error: 'Quantity is required' });
+    }
+
+    // For P2 items, allow scheduling without a valid BOM
+    let validBomId = bomId;
+    if (bomId && bomId !== 'generic-p2-packet') {
+      const [bom] = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.id, bomId));
+      if (!bom) {
+        // If BOM not found and not P2 source, try to find by material type
+        if (source !== 'P2') {
+          validBomId = null; // Will try to find by material type below
+        } else {
+          validBomId = null; // Allow P2 without BOM
+        }
+      }
+    } else if (bomId === 'generic-p2-packet') {
+      validBomId = null; // P2 generic packet
+    }
+    
+    // If no BOM ID provided or not found, try to find one by material type/packet type
+    if (!validBomId && materialType) {
+      const packetTypeName = materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
+                             materialType === 'fiberglass' ? 'Fiberglass Packet' :
+                             materialType === 'mesa' ? 'Mesa Packet' : null;
+      
+      if (packetTypeName) {
+        const [matchingBom] = await db.select()
+          .from(cuttingPacketBOMs)
+          .where(and(
+            eq(cuttingPacketBOMs.packetType, packetTypeName),
+            eq(cuttingPacketBOMs.isActive, true)
+          ))
+          .limit(1);
+        
+        if (matchingBom) {
+          validBomId = matchingBom.id;
+          console.log(`Auto-matched BOM ${validBomId} for material type ${materialType}`);
+        }
+      }
+    }
+
+    // Find or create an inventory item for this packet type
+    const { manufacturingQueue, inventoryItems } = await import('../../schema');
+    const { pool } = await import('../../db');
+    
+    // Determine packet name based on material type
+    const packetName = materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
+                       materialType === 'fiberglass' ? 'Fiberglass Packet' :
+                       materialType === 'mesa' ? 'Mesa Packet' : 'Stock Packet';
+    
+    // Try to find existing packet inventory item
+    let inventoryItemId: number | null = null;
+    try {
+      const result = await pool.query(
+        `SELECT id FROM inventory_items WHERE name ILIKE $1 LIMIT 1`,
+        [`%${packetName}%`]
+      );
+      const rows = Array.isArray(result) ? result : (result as any).rows || [];
+      if (rows.length > 0) {
+        inventoryItemId = rows[0].id;
+      }
+    } catch (e) {
+      console.log('Could not find inventory item:', e);
+    }
+    
+    // If no inventory item found, use a default packet item
+    if (!inventoryItemId) {
+      try {
+        const result = await pool.query(
+          `SELECT id FROM inventory_items WHERE name ILIKE '%packet%' LIMIT 1`
+        );
+        const rows = Array.isArray(result) ? result : (result as any).rows || [];
+        if (rows.length > 0) {
+          inventoryItemId = rows[0].id;
+        }
+      } catch (e) {
+        console.log('Could not find any packet inventory item:', e);
+      }
+    }
+    
+    // If still no item found, create one
+    if (!inventoryItemId) {
+      const [newItem] = await db.insert(inventoryItems).values({
+        name: packetName,
+        agPartNumber: `PKT-${materialType?.toUpperCase() || 'STK'}`,
+        category: 'packet',
+        quantityInStock: 0,
+      }).returning();
+      inventoryItemId = newItem.id;
+    }
+
+    // Create manufacturing queue entry
+    const [queueItem] = await db.insert(manufacturingQueue).values({
+      inventoryItemId,
+      department: 'Cutting Table',
+      quantityRequested: quantity,
+      quantityCompleted: 0,
+      priority: priority || 50,
+      status: 'PENDING',
+      dueDate: dueDate ? new Date(dueDate) : null,
+      notes: JSON.stringify({ orderId, source, materialType, bomId: validBomId, userNotes: notes, isP2Packet: source === 'P2' }),
+      requestedBy: 'system',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
+
+    res.status(201).json({
+      ...queueItem,
+      bomId: validBomId,
+      orderId,
+      source,
+      materialType,
+    });
+  } catch (error) {
+    console.error('Error scheduling to cutting queue:', error);
+    res.status(500).json({ error: 'Failed to schedule to cutting queue' });
   }
 });
 

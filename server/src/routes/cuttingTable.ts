@@ -1830,14 +1830,37 @@ router.post('/schedule-to-cutting', async (req, res) => {
     if (bomId && bomId !== 'generic-p2-packet') {
       const [bom] = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.id, bomId));
       if (!bom) {
-        // If BOM not found and not P2 source, return error
+        // If BOM not found and not P2 source, try to find by material type
         if (source !== 'P2') {
-          return res.status(404).json({ error: 'Packet BOM not found' });
+          validBomId = null; // Will try to find by material type below
+        } else {
+          validBomId = null; // Allow P2 without BOM
         }
-        validBomId = null; // Allow P2 without BOM
       }
     } else if (bomId === 'generic-p2-packet') {
       validBomId = null; // P2 generic packet
+    }
+    
+    // If no BOM ID provided or not found, try to find one by material type/packet type
+    if (!validBomId && materialType) {
+      const packetTypeName = materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
+                             materialType === 'fiberglass' ? 'Fiberglass Packet' :
+                             materialType === 'mesa' ? 'Mesa Packet' : null;
+      
+      if (packetTypeName) {
+        const [matchingBom] = await db.select()
+          .from(cuttingPacketBOMs)
+          .where(and(
+            eq(cuttingPacketBOMs.packetType, packetTypeName),
+            eq(cuttingPacketBOMs.isActive, true)
+          ))
+          .limit(1);
+        
+        if (matchingBom) {
+          validBomId = matchingBom.id;
+          console.log(`Auto-matched BOM ${validBomId} for material type ${materialType}`);
+        }
+      }
     }
 
     // Find or create an inventory item for this packet type

@@ -143,6 +143,7 @@ import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
 import PDFTemplateManager from './pages/PDFTemplateManager';
 import CuttingTableControlCenter from './pages/CuttingTableControlCenter';
+import CuttingControlCenterLayout from './pages/cutting/CuttingControlCenterLayout';
 import FabricInventoryPage from './pages/FabricInventoryPage';
 import MetalAccessoriesTracker from './pages/MetalAccessoriesTracker';
 import DocumentIntelligence from './pages/DocumentIntelligence';
@@ -493,8 +494,10 @@ function App() {
                   {/* Watch Rules Management Route */}
                   <Route path="/watch-rules" component={WatchRulesPage} />
 
-                  {/* Cutting Table Routes */}
-                  <Route path="/cutting-control-center" component={CuttingTableControlCenter} />
+                  {/* Cutting Table Routes - 3-Page Structure */}
+                  <Route path="/cutting-control-center/:rest*" component={CuttingControlCenterLayout} />
+                  <Route path="/cutting-control-center" component={CuttingControlCenterLayout} />
+                  <Route path="/cutting-table-legacy" component={CuttingTableControlCenter} />
                   <Route path="/cutting-table">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
                   <Route path="/cutting-dashboard">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
                   <Route path="/fabric-inventory" component={FabricInventoryPage} />

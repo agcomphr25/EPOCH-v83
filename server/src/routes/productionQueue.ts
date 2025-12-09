@@ -5,6 +5,18 @@ import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 
 const router = Router();
 
+// VERSION CHECK: Simple endpoint to verify deployment version
+// No auth required - just returns version info
+router.get('/version', (req: Request, res: Response) => {
+  return res.json({
+    version: '2.0.1-agrace-fix',
+    deployedAt: '2024-12-09T05:00:00Z',
+    message: 'authorizeApiRoute middleware active - not requireAdminAccess',
+    hasUser: !!req.user,
+    username: req.user?.username || 'not-authenticated'
+  });
+});
+
 // DEBUG ENDPOINT: Show current user data (for debugging auth issues in production)
 // This endpoint does NOT use authorizeApiRoute to help debug auth issues
 router.get('/debug/current-user', (req: Request, res: Response) => {

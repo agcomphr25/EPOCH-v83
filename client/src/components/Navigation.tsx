@@ -572,12 +572,12 @@ export default function Navigation() {
       icon: Calculator,
       description: 'Manage chart of accounts, monthly entries, and cost allocations',
     },
-    // {
-    //   path: '/payment-management',
-    //   label: 'Payment Management',
-    //   icon: CreditCard,
-    //   description: 'Process credit card payments and view transaction history',
-    // },
+    {
+      path: '/payment-management',
+      label: 'Payment Management',
+      icon: CreditCard,
+      description: 'Process credit card payments and view transaction history',
+    },
     {
       path: '/finance/bulk-payment',
       label: 'Bulk Payment',

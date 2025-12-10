@@ -280,6 +280,53 @@ async function initializeBackgroundServices() {
     });
     
     console.log('📧 Daily follow-up order reminders scheduled (every day at 9:00 AM)');
+
+    // Set up dynamic health checks scheduler (checks every minute if it's time to run)
+    // This allows the scheduled time to be changed via the UI without restarting the server
+    cron.schedule('* * * * *', async () => {
+      try {
+        const { runAllEnabledChecks, getHealthCheckConfig } = await import('./utils/healthCheckService');
+        
+        // Get the configured schedule
+        const config = await getHealthCheckConfig();
+        if (!config?.isScheduleEnabled) {
+          return; // Schedule is disabled, skip silently
+        }
+        
+        // Parse the scheduled time (HH:MM format)
+        const scheduledTime = config.scheduledTime || '08:00';
+        const [scheduledHour, scheduledMinute] = scheduledTime.split(':').map(Number);
+        
+        // Get current time
+        const now = new Date();
+        const currentHour = now.getHours();
+        const currentMinute = now.getMinutes();
+        
+        // Only run if current time matches scheduled time (once per day at exact minute)
+        if (currentHour === scheduledHour && currentMinute === scheduledMinute) {
+          console.log(`🏥 Running scheduled daily health checks at configured time ${scheduledTime}...`);
+          
+          const results = await runAllEnabledChecks('scheduled');
+          const passed = results.filter(r => r.status === 'pass').length;
+          const failed = results.filter(r => r.status === 'fail').length;
+          const warnings = results.filter(r => r.status === 'warning').length;
+          
+          console.log(`✅ Health checks complete: ${passed} passed, ${failed} failed, ${warnings} warnings`);
+          
+          // Log any failures
+          results.filter(r => r.status === 'fail').forEach(r => {
+            console.error(`  ❌ ${r.checkName}: ${r.message}`);
+          });
+        }
+      } catch (error) {
+        // Only log errors if it's a real failure, not just skipped checks
+        if (error instanceof Error && !error.message.includes('skip')) {
+          console.error('❌ Failed to run scheduled health checks:', error);
+        }
+      }
+    });
+    
+    console.log('🏥 Daily system health checks scheduler active (runs at configured time from UI)');
   } catch (error) {
     console.error('Error initializing background services:', error);
   }

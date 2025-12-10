@@ -141,6 +141,7 @@ import ProductionQueuePage from './pages/ProductionQueuePage';
 import SimplifiedLayupScheduler from './components/SimplifiedLayupScheduler';
 import CustomerSatisfaction from './pages/CustomerSatisfaction';
 import AdminPanelPage from './pages/AdminPanelPage';
+import SystemHealthChecksPage from './pages/SystemHealthChecksPage';
 import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
 import PDFTemplateManager from './pages/PDFTemplateManager';
@@ -334,6 +335,7 @@ function App() {
 
                   {/* Admin Panel Routes */}
                   <Route path="/admin/orders" component={AdminPanelPage} />
+                  <Route path="/admin/health-checks" component={SystemHealthChecksPage} />
 
                   {/* Vendor Management Routes */}
                   <Route path="/vendor-management" component={VendorManagement} />

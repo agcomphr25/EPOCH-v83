@@ -24,6 +24,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/badge-configuration',
   '/badge-scanner',
   '/barcode-scanner',
+  '/bulk-barcode-reprint',
   '/calendar',
   '/credit-memo',
   '/customers',

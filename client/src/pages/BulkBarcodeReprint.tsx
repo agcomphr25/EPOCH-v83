@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import JsBarcode from 'jsbarcode';
+import { getBarcodeFormat } from '@/lib/barcodeFormat';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -153,10 +154,11 @@ export default function BulkBarcodeReprint() {
   const generateBarcodeDataUrl = (barcodeValue: string): string => {
     if (!barcodeValue) return '';
     const canvas = document.createElement('canvas');
+    const format = getBarcodeFormat(barcodeValue);
     try {
       JsBarcode(canvas, barcodeValue, {
-        format: 'CODE39',
-        width: 1.5,
+        format: format,
+        width: format === 'CODE128' ? 1.2 : 1.5,
         height: 30,
         displayValue: true,
         fontSize: 8,

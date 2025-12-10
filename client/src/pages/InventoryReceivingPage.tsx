@@ -49,6 +49,7 @@ import {
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import JsBarcode from 'jsbarcode';
+import { getBarcodeFormat } from '@/lib/barcodeFormat';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { apiRequest } from '@/lib/queryClient';
@@ -942,10 +943,11 @@ export default function InventoryReceivingPage() {
         const canvas = printWindow.document.getElementById(`barcode-${idx}`) as HTMLCanvasElement;
         if (canvas) {
           const barcodeValue = item.lotNumber || item.batchNumber || item.agPartNumber;
+          const format = getBarcodeFormat(barcodeValue);
           try {
             JsBarcode(canvas, barcodeValue, {
-              format: 'CODE39',
-              width: 1.5,
+              format: format,
+              width: format === 'CODE128' ? 1.2 : 1.5,
               height: 35,
               displayValue: true,
               fontSize: 10,

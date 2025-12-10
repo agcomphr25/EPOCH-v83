@@ -565,10 +565,12 @@ export default function ProductionQueueManager() {
               const canvases = document.querySelectorAll('.barcode-canvas');
               canvases.forEach(canvas => {
                 const barcode = canvas.getAttribute('data-barcode');
+                const format = barcode.startsWith('P1-') || barcode.startsWith('P2-') ? 'CODE128' : 'CODE39';
+                const width = format === 'CODE128' ? 1.5 : 2;
                 try {
                   JsBarcode(canvas, barcode, {
-                    format: 'CODE39',
-                    width: 2,
+                    format: format,
+                    width: width,
                     height: 40,
                     displayValue: false,
                     fontSize: 10,

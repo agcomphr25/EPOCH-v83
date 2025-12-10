@@ -1,0 +1,51 @@
+Your branch is behind 'origin/main' by 52 commits, and can be fast-forwarded.
+  (use "git pull" to update your local branch)
+Updating 1ade1148..64ee7db6
+Fast-forward
+ .replit                                            |  14 +
+ attached_assets/image_1765322919373.png            | Bin 0 -> 95248 bytes
+ attached_assets/image_1765324996982.png            | Bin 0 -> 103628 bytes
+ attached_assets/image_1765325340473.png            | Bin 0 -> 57230 bytes
+ .../orders_yesterday_(1)_1765310250888.csv         |  29 +
+ client/src/App.tsx                                 |   5 +
+ client/src/components/Navigation.tsx               |   6 +
+ client/src/components/WebsiteOrderImport.tsx       | 637 +++++++++++++++++
+ client/src/config/userPermissions.ts               |  17 +-
+ client/src/pages/DARLENEBTestDashboard.tsx         |  30 +
+ client/src/pages/FALEESHAHTestDashboard.tsx        |  15 +
+ client/src/pages/OrderManagement.tsx               |   5 +
+ client/src/pages/OrdersList.tsx                    |   6 +
+ client/src/pages/PaymentAnalytics.tsx              | 242 +++++++
+ push_log_20251209-145052.txt                       |   3 +
+ push_log_20251209-152430.txt                       |   7 +
+ push_log_20251209-182435.txt                       |   4 +
+ push_log_20251209-214127.txt                       |   3 +
+ push_log_20251209-224559.txt                       |   4 +
+ push_log_20251209-233017.txt                       |   3 +
+ push_log_20251210-030610.txt                       |   3 +
+ push_log_20251210-034754.txt                       |   8 +
+ push_log_20251210-041138.txt                       |  16 +
+ replit.md                                          |  16 +-
+ server/src/routes/discounts.ts                     |  22 +-
+ server/src/routes/followupOrders.ts                |  31 +-
+ server/src/routes/index.ts                         | 121 ++++
+ server/src/routes/websiteOrderImport.ts            | 751 +++++++++++++++++++++
+ server/utils/followupOrderReminder.ts              |  11 +-
+ server/utils/sendgrid.ts                           |  16 +-
+ 30 files changed, 1993 insertions(+), 32 deletions(-)
+ create mode 100644 attached_assets/image_1765322919373.png
+ create mode 100644 attached_assets/image_1765324996982.png
+ create mode 100644 attached_assets/image_1765325340473.png
+ create mode 100644 attached_assets/orders_yesterday_(1)_1765310250888.csv
+ create mode 100644 client/src/components/WebsiteOrderImport.tsx
+ create mode 100644 client/src/pages/PaymentAnalytics.tsx
+ create mode 100644 push_log_20251209-145052.txt
+ create mode 100644 push_log_20251209-152430.txt
+ create mode 100644 push_log_20251209-182435.txt
+ create mode 100644 push_log_20251209-214127.txt
+ create mode 100644 push_log_20251209-224559.txt
+ create mode 100644 push_log_20251209-233017.txt
+ create mode 100644 push_log_20251210-030610.txt
+ create mode 100644 push_log_20251210-034754.txt
+ create mode 100644 push_log_20251210-041138.txt
+ create mode 100644 server/src/routes/websiteOrderImport.ts

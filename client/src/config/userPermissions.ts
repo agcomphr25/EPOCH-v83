@@ -72,6 +72,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/orders-list',
   '/orders-management',
   '/p2-control-center',
+  '/payment-management',
   '/pdf-templates',
   '/po-products',
   '/production-tracking',

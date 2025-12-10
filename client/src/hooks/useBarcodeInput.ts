@@ -4,7 +4,7 @@ export interface BarcodeInputState {
   barcode: string;
   scannedBarcode: string | null;
   isValidBarcode: boolean;
-  barcodeType: 'P1_ORDER' | 'P2_ORDER' | 'P1_PO' | 'P2_PO' | 'INVENTORY' | 'UNKNOWN' | null;
+  barcodeType: 'P1_ORDER' | 'P2_ORDER' | 'P1_PO' | 'P2_PO' | 'AG_ORDER' | 'PO_ORDER' | 'INVENTORY' | 'UNKNOWN' | null;
 }
 
 export interface BarcodeInputActions {
@@ -15,12 +15,16 @@ export interface BarcodeInputActions {
 }
 
 // Barcode validation patterns
+// P1/P2 PO format: P1-{CustomerCode}{PONumber}-{ItemNumber}-{Sequence}
+// Examples: P1-SWS2502-147-4, P1-RH2501-1-1, P2-ABC1234-56-7
 const BARCODE_PATTERNS = {
-  P1_PO: /^P1-P\d+-\d+-\d+$/i,
-  P2_PO: /^P2-P\d+-\d+-\d+$/i,
-  P1_ORDER: /^P1-[A-Z]{2}\d+$/i,
-  P2_ORDER: /^P2-[A-Z]{2}\d+$/i,
-  INVENTORY: /^(PART|INV)-\w+$/i,
+  P1_PO: /^P1-[A-Z0-9]+-\d+-\d+$/i,  // P1-SWS2502-147-4 format
+  P2_PO: /^P2-[A-Z0-9]+-\d+-\d+$/i,  // P2-ABC1234-56-7 format
+  P1_ORDER: /^P1-[A-Z]{2}\d+$/i,      // P1-AG185 format
+  P2_ORDER: /^P2-[A-Z]{2}\d+$/i,      // P2-AG185 format
+  AG_ORDER: /^[A-Z]{2}\d+$/i,         // AG589, EL001 format (regular orders)
+  PO_ORDER: /^PO-P\d+-\d+-\d+$/i,     // PO-P18261-18-1 format
+  INVENTORY: /^(PART|INV)-\w+$/i,     // PART-xxx or INV-xxx format
 } as const;
 
 function validateBarcode(barcode: string): {

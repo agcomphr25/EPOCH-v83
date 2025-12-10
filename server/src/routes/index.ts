@@ -5919,9 +5919,9 @@ export function registerRoutes(app: Express): Server {
             order = await storage.getOrderDraft(orderId);
           }
           
-          // If not found in regular orders, check production_orders table (P1 orders)
-          if (!order && orderId.startsWith('P1-')) {
-            console.log(`🔍 P1 order detected: ${orderId}, querying production_orders table`);
+          // If not found in regular orders, check production_orders table (P1 orders and PO items)
+          if (!order && (orderId.startsWith('P1-') || orderId.startsWith('PO-'))) {
+            console.log(`🔍 Production order detected: ${orderId}, querying production_orders table`);
             const productionOrderResult = await pool.query`
               SELECT 
                 order_id,
@@ -5943,7 +5943,7 @@ export function registerRoutes(app: Express): Server {
             
             if (productionOrderResult && productionOrderResult.length > 0) {
               const po = productionOrderResult[0];
-              console.log(`✅ Found P1 production order:`, po);
+              console.log(`✅ Found production order:`, po);
               order = {
                 orderId: po.order_id,
                 customerId: po.customer_id,
@@ -5955,7 +5955,8 @@ export function registerRoutes(app: Express): Server {
                 stockModelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
                 modelId: po.specifications?.stockModel || po.specifications?.stock_model || 'unknown',
                 fbOrderNumber: po.po_number,
-                isP1Order: true,
+                isP1Order: orderId.startsWith('P1-'),
+                isPOItem: orderId.startsWith('PO-'),
                 features: po.specifications || {},
                 actionLength: po.specifications?.actionLength || po.specifications?.action_length,
               };

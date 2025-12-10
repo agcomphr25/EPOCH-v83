@@ -132,6 +132,7 @@ import ManufacturersCertificate from './pages/ManufacturersCertificate';
 import P2QuoteForm from './pages/P2QuoteForm';
 import P2QuotesList from './pages/P2QuotesList';
 import PaymentManagement from './pages/PaymentManagement';
+import PaymentAnalytics from './pages/PaymentAnalytics';
 import RefundRequest from './pages/RefundRequest';
 import RefundQueue from './pages/RefundQueue';
 import CreditMemoPage from './pages/CreditMemoPage';
@@ -558,6 +559,10 @@ function App() {
                   <Route
                     path="/payment-management"
                     component={PaymentManagement}
+                  />
+                  <Route
+                    path="/payment-analytics"
+                    component={PaymentAnalytics}
                   />
 
                   {/* Refund Management Routes */}

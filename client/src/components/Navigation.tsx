@@ -626,6 +626,12 @@ export default function Navigation() {
       icon: FileText,
       description: 'Monthly report of orders changed to FULFILLED status',
     },
+    {
+      path: '/payment-analytics',
+      label: 'Payment Analytics',
+      icon: TrendingUp,
+      description: 'Track payments by type (Phone/Online) with monthly breakdowns',
+    },
   ];
 
   const userDashboardsItems = [

@@ -108,6 +108,7 @@ import Calendar from './pages/Calendar';
 import EmailInbox from './pages/EmailInbox';
 import LayupPluggingQueuePage from './pages/LayupPluggingQueuePage';
 import BarcodeQueuePage from './pages/BarcodeQueuePage';
+import BulkBarcodeReprint from './pages/BulkBarcodeReprint';
 import CNCQueuePage from './pages/CNCQueuePage';
 import FinishQCQueuePage from './pages/FinishQCQueuePage';
 import FinishQueuePage from './pages/FinishQueuePage';
@@ -380,6 +381,10 @@ function App() {
                   <Route
                     path="/barcode-scanner"
                     component={BarcodeScannerPage}
+                  />
+                  <Route
+                    path="/bulk-barcode-reprint"
+                    component={BulkBarcodeReprint}
                   />
 
                   {/* Inventory Routes (Legacy) */}

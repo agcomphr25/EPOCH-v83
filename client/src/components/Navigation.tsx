@@ -52,6 +52,7 @@ import {
   Route,
   Megaphone,
   FileCheck,
+  Printer,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -263,10 +264,17 @@ export default function Navigation() {
     },
     {
       path: '/barcode-scanner',
-      label: 'Barcde Scanner',
+      label: 'Barcode Scanner',
       icon: Scan,
       description:
         'Scan order barcodes to view pricing summary and payment status',
+    },
+    {
+      path: '/bulk-barcode-reprint',
+      label: 'Bulk Barcode Reprint',
+      icon: Printer,
+      description:
+        'Select customer and reprint barcodes for multiple in-progress orders',
     },
     {
       path: '/admin/orders',

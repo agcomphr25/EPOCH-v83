@@ -184,3 +184,22 @@ Weekly report of orders completed in Finish QC department.
 - Week navigation (previous/next)
 - CSV export functionality
 - Order count and completion timestamps
+
+### Bulk Barcode Reprint (LOCKED IN - Dec 2025)
+Reprint barcodes for multiple in-progress orders by customer.
+
+**Files:**
+- Frontend: `client/src/pages/BulkBarcodeReprint.tsx`
+- Route: `/bulk-barcode-reprint`
+- Navigation: Main navbar (navItems array)
+- Permissions: `client/src/config/userPermissions.ts` (VALID_NAVBAR_ROUTES)
+
+**Features:**
+- Customer dropdown with search functionality
+- Displays all in-progress orders for selected customer
+- Multi-select orders with Select All/Deselect All
+- Bulk barcode printing using bundled JsBarcode (CODE39 format)
+- Avery 5160 label format (2.625" x 1")
+- Shows order ID, FB order number, model, department, due date, status
+
+**Access:** Admin users (glennj, tasham, staciw) via navbar

@@ -123,6 +123,7 @@ Some features are gated behind environment variables to allow controlled rollout
 ### Third-Party Services
 - SmartyStreets (Address Validation)
 - Authorize.Net (Payment Gateway)
+- Accept.Blue (Credit Card Processing - Production)
 - UPS API (Shipping)
 - SendGrid (Email, Magic Link delivery)
 - Twilio (SMS)
@@ -131,3 +132,55 @@ Some features are gated behind environment variables to allow controlled rollout
 - Google APIs (`googleapis` package)
 - Azure Document Intelligence (AI-powered document analysis)
 - Microsoft Azure AD / MSAL (`@azure/msal-node` - OAuth authentication)
+
+## Critical Feature Documentation
+
+### Payment Analytics System (LOCKED IN - Dec 2025)
+The Payment Analytics feature provides month-over-month payment tracking and comparison.
+
+**Files:**
+- Frontend: `client/src/pages/PaymentAnalytics.tsx`
+- Backend API: `server/src/routes/index.ts` (endpoint at `/api/finance/payment-analytics`)
+- Route: `/payment-analytics`
+- Navigation: Finance menu dropdown in `client/src/components/Navigation.tsx`
+- Permissions: `client/src/config/userPermissions.ts` (ADMIN, OWNER roles)
+
+**Features:**
+- Monthly payment summaries with transaction counts and averages
+- Phone vs Online payment breakdown (Phone = credit_card via Accept.Blue, Online = aaaa payment type)
+- Month-to-date toggle for current month viewing
+- Detailed payment table with order info, customer PO, FB order number, model ID
+- Year/month selectors for historical data
+
+**Access:** Admin users (glennj, tasham, staciw) via Finance menu
+
+### Payment Management System (LOCKED IN - Dec 2025)
+Credit card payment tracking and transaction history.
+
+**Files:**
+- Frontend: `client/src/pages/PaymentManagement.tsx`
+- Backend API: `server/src/routes/payments.ts`
+- Route: `/payment-management`
+- Navigation: Finance menu dropdown
+
+**Features:**
+- View all credit card transactions
+- Process new credit card payments via Accept.Blue
+- Void transactions (within 24 hours)
+- Transaction status tracking (approved, declined, voided, refunded)
+- Search payments by order ID
+
+### Finish QC Completed Report (LOCKED IN - Dec 2025)
+Weekly report of orders completed in Finish QC department.
+
+**Files:**
+- Frontend: `client/src/pages/FinishQCCompletedReport.tsx`
+- Backend API: `server/src/routes/reports.ts` (endpoint at `/api/reports/finish-qc-completed`)
+- Route: `/finish-qc-completed-report`
+- Navigation: Reports menu dropdown
+
+**Features:**
+- Weekly view of completed orders grouped by technician
+- Week navigation (previous/next)
+- CSV export functionality
+- Order count and completion timestamps

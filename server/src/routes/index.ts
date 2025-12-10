@@ -6891,6 +6891,123 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Payment Analytics API - Get payment data by month with order details
+  app.get('/api/finance/payment-analytics', async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+      
+      if (!pool) {
+        return res.status(500).json({ error: 'Database connection not available' });
+      }
+      
+      const now = new Date();
+      const month = parseInt(req.query.month as string) || (now.getMonth() + 1);
+      const year = parseInt(req.query.year as string) || now.getFullYear();
+      
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      
+      const isMTD = req.query.mtd === 'true';
+      const effectiveEndDate = isMTD ? new Date() : endDate;
+      
+      console.log(`💰 Payment Analytics: ${startDate.toISOString()} to ${effectiveEndDate.toISOString()}`);
+      
+      const paymentsQuery = `
+        SELECT 
+          p.id as payment_id,
+          p.order_id,
+          p.payment_type,
+          p.payment_amount,
+          p.payment_date,
+          p.notes,
+          o.customer_po,
+          o.fb_order_number,
+          o.model_id,
+          o.order_id as display_order_id,
+          c.name as customer_name
+        FROM payments p
+        LEFT JOIN all_orders o ON p.order_id = o.order_id
+        LEFT JOIN customers c ON CASE WHEN o.customer_id ~ '^[0-9]+$' THEN o.customer_id::integer ELSE NULL END = c.id
+        WHERE p.payment_date >= $1 AND p.payment_date <= $2
+          AND p.payment_type IN ('credit_card', 'aaaa')
+        ORDER BY p.payment_date DESC
+      `;
+      
+      const queryResult = await pool.query(paymentsQuery, [startDate, effectiveEndDate]);
+      const payments = Array.isArray(queryResult) ? queryResult : (queryResult.rows || []);
+      
+      console.log(`💰 Found ${payments.length} payments`);
+      
+      const totalAmount = payments.reduce((sum: number, p: any) => sum + (parseFloat(p.payment_amount) || 0), 0);
+      const transactionCount = payments.length;
+      const averagePerOrder = transactionCount > 0 ? totalAmount / transactionCount : 0;
+      
+      const phonePayments = payments.filter((p: any) => p.payment_type === 'credit_card');
+      const onlinePayments = payments.filter((p: any) => p.payment_type === 'aaaa');
+      
+      const phoneTotal = phonePayments.reduce((sum: number, p: any) => sum + (parseFloat(p.payment_amount) || 0), 0);
+      const onlineTotal = onlinePayments.reduce((sum: number, p: any) => sum + (parseFloat(p.payment_amount) || 0), 0);
+      
+      const byDay: Record<string, { date: string; amount: number; count: number }> = {};
+      for (const payment of payments) {
+        const dayKey = new Date(payment.payment_date).toISOString().split('T')[0];
+        if (!byDay[dayKey]) {
+          byDay[dayKey] = { date: dayKey, amount: 0, count: 0 };
+        }
+        byDay[dayKey].amount += parseFloat(payment.payment_amount) || 0;
+        byDay[dayKey].count += 1;
+      }
+      
+      const getPaymentLabel = (type: string) => {
+        if (type === 'credit_card') return 'Phone';
+        if (type === 'aaaa') return 'Online';
+        return type;
+      };
+      
+      res.json({
+        month,
+        year,
+        isMTD,
+        startDate: startDate.toISOString(),
+        endDate: effectiveEndDate.toISOString(),
+        summary: {
+          totalAmount: Math.round(totalAmount * 100) / 100,
+          transactionCount,
+          averagePerOrder: Math.round(averagePerOrder * 100) / 100,
+        },
+        breakdown: {
+          phone: {
+            amount: Math.round(phoneTotal * 100) / 100,
+            count: phonePayments.length,
+            average: phonePayments.length > 0 ? Math.round((phoneTotal / phonePayments.length) * 100) / 100 : 0,
+          },
+          online: {
+            amount: Math.round(onlineTotal * 100) / 100,
+            count: onlinePayments.length,
+            average: onlinePayments.length > 0 ? Math.round((onlineTotal / onlinePayments.length) * 100) / 100 : 0,
+          },
+        },
+        payments: payments.map((p: any) => ({
+          id: p.payment_id,
+          orderId: p.order_id,
+          paymentType: p.payment_type,
+          paymentLabel: getPaymentLabel(p.payment_type),
+          amount: parseFloat(p.payment_amount) || 0,
+          date: p.payment_date,
+          notes: p.notes,
+          customerPO: p.customer_po,
+          fbOrderNumber: p.fb_order_number,
+          modelId: p.model_id,
+          customerName: p.customer_name,
+        })),
+        dailyTotals: Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date)),
+      });
+    } catch (error) {
+      console.error('💰 Payment Analytics error:', error);
+      res.status(500).json({ error: 'Failed to fetch payment analytics' });
+    }
+  });
+
   // Migration endpoint: Sync existing production orders to main orders table for layup scheduler
   app.post('/api/migrate-production-orders-to-layup', async (req, res) => {
     try {

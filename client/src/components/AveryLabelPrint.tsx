@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
+import { getBarcodeFormat } from '@/lib/barcodeFormat';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Printer, Package, Calendar, User } from 'lucide-react';
@@ -95,12 +96,13 @@ export function AveryLabelPrint({
 
   useEffect(() => {
     if (canvasRef.current && barcode) {
+      const format = getBarcodeFormat(barcode);
       try {
         JsBarcode(canvasRef.current, barcode, {
-          format: 'CODE39',
-          width: 2,
+          format: format,
+          width: format === 'CODE128' ? 1.5 : 2,
           height: 40,
-          displayValue: false, // Hide text to save space on label
+          displayValue: false,
           fontSize: 10,
           textAlign: 'center',
           textPosition: 'bottom',
@@ -360,6 +362,7 @@ export function AveryLabelPrint({
 
         // After writing content, generate barcodes in the print window
         setTimeout(() => {
+          const format = getBarcodeFormat(barcode);
           for (let i = 0; i < copies; i++) {
             const canvas = printWindow.document.getElementById(
               `barcode-${i}`
@@ -367,8 +370,8 @@ export function AveryLabelPrint({
             if (canvas && barcode) {
               try {
                 JsBarcode(canvas, barcode, {
-                  format: 'CODE39',
-                  width: 1.5, // Adjusted for smaller canvas
+                  format: format,
+                  width: format === 'CODE128' ? 1.2 : 1.5,
                   height: 25,
                   displayValue: false,
                   margin: 2,

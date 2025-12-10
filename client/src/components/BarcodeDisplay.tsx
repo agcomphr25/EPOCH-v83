@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import JsBarcode from 'jsbarcode';
+import { getBarcodeFormat } from '@/lib/barcodeFormat';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -92,11 +93,12 @@ export function BarcodeDisplay({
   useEffect(() => {
     if (canvasRef.current && barcode) {
       const config = getSizeConfig();
+      const format = getBarcodeFormat(barcode);
 
       try {
         JsBarcode(canvasRef.current, barcode, {
-          format: 'CODE39',
-          width: config.width,
+          format: format,
+          width: format === 'CODE128' ? config.width * 0.8 : config.width,
           height: config.height,
           displayValue: true,
           fontSize: config.fontSize,

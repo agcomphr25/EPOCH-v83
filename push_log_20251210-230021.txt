@@ -1,0 +1,24 @@
+Your branch is behind 'origin/main' by 16 commits, and can be fast-forwarded.
+  (use "git pull" to update your local branch)
+Updating 64ee7db6..82781988
+Fast-forward
+ .replit                                          |   4 +
+ attached_assets/image_1765387636981.png          | Bin 0 -> 93261 bytes
+ client/src/App.tsx                               |   5 +
+ client/src/components/AveryLabelPrint.tsx        |  13 +-
+ client/src/components/BarcodeDisplay.tsx         |   6 +-
+ client/src/components/Navigation.tsx             |  22 +-
+ client/src/components/ProductionQueueManager.tsx |   6 +-
+ client/src/config/userPermissions.ts             |   2 +
+ client/src/hooks/useBarcodeInput.ts              |  16 +-
+ client/src/lib/barcodeFormat.ts                  |   6 +
+ client/src/pages/BulkBarcodeReprint.tsx          | 749 +++++++++++++++++++++++
+ client/src/pages/InventoryReceivingPage.tsx      |   6 +-
+ push_log_20251210-225556.txt                     |  51 ++
+ replit.md                                        |  70 +--
+ server/src/routes/index.ts                       |  11 +-
+ 15 files changed, 884 insertions(+), 83 deletions(-)
+ create mode 100644 attached_assets/image_1765387636981.png
+ create mode 100644 client/src/lib/barcodeFormat.ts
+ create mode 100644 client/src/pages/BulkBarcodeReprint.tsx
+ create mode 100644 push_log_20251210-225556.txt

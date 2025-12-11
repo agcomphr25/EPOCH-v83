@@ -7220,6 +7220,7 @@ export function registerRoutes(app: Express): Server {
           ao.features,
           ao.calculated_total,
           ao.price_override,
+          ao.shipping,
           sm.price as stock_model_price,
           sm.name as stock_model_name
         FROM all_orders ao
@@ -7242,6 +7243,7 @@ export function registerRoutes(app: Express): Server {
         'LOP': { total: 0, count: 0, orders: [] },
         'Paint': { total: 0, count: 0, orders: [] },
         'Swivels': { total: 0, count: 0, orders: [] },
+        'Shipping': { total: 0, count: 0, orders: [] },
         'Other': { total: 0, count: 0, orders: [] },
       };
       
@@ -7362,6 +7364,19 @@ export function registerRoutes(app: Express): Server {
               grandTotal += itemPrice;
             }
           }
+        }
+        
+        // Handle Shipping
+        const shippingCost = parseFloat(row.shipping) || 0;
+        if (shippingCost > 0) {
+          categories['Shipping'].total += shippingCost;
+          categories['Shipping'].count++;
+          categories['Shipping'].orders.push({
+            orderId,
+            amount: shippingCost,
+            detail: 'Shipping'
+          });
+          grandTotal += shippingCost;
         }
       }
       

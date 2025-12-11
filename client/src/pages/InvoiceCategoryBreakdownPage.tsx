@@ -48,6 +48,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   'LOP': 'bg-pink-100 text-pink-800',
   'Paint': 'bg-yellow-100 text-yellow-800',
   'Swivels': 'bg-indigo-100 text-indigo-800',
+  'Shipping': 'bg-teal-100 text-teal-800',
   'Other': 'bg-gray-100 text-gray-800',
 };
 
@@ -56,7 +57,7 @@ export default function InvoiceCategoryBreakdownPage() {
   const [selectedMonth, setSelectedMonth] = useState(String(currentDate.getMonth() + 1));
   const [selectedYear, setSelectedYear] = useState(String(currentDate.getFullYear()));
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set([
-    'Stock Model', 'Bottom Metal', 'QDs', 'Texture', 'Rails', 'LOP', 'Paint', 'Swivels', 'Other'
+    'Stock Model', 'Bottom Metal', 'QDs', 'Texture', 'Rails', 'LOP', 'Paint', 'Swivels', 'Shipping', 'Other'
   ]));
 
   const { data: breakdownData, isLoading } = useQuery<InvoiceBreakdownData>({
@@ -86,7 +87,7 @@ export default function InvoiceCategoryBreakdownPage() {
 
   const selectAll = () => {
     setSelectedCategories(new Set([
-      'Stock Model', 'Bottom Metal', 'QDs', 'Texture', 'Rails', 'LOP', 'Paint', 'Swivels', 'Other'
+      'Stock Model', 'Bottom Metal', 'QDs', 'Texture', 'Rails', 'LOP', 'Paint', 'Swivels', 'Shipping', 'Other'
     ]));
   };
 

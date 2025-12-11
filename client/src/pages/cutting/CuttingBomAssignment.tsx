@@ -128,6 +128,7 @@ type PlyEntry = {
     inventoryItemId: number;
     partNumber: string;
     name: string;
+    quantity: number;
   }[];
 };
 
@@ -488,6 +489,7 @@ export default function CuttingBomAssignment() {
         assignedParts: ply.assignedParts.map(ap => ({
           inventoryItemId: ap.inventoryItemId,
           partNumber: ap.partNumber,
+          quantity: ap.quantity,
         })),
       })),
     };
@@ -1181,14 +1183,39 @@ export default function CuttingBomAssignment() {
                             </Button>
                           </div>
 
-                          {/* Assigned Parts */}
+                          {/* Assigned Parts with Quantity */}
                           {ply.assignedParts.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
+                            <div className="space-y-2">
                               {ply.assignedParts.map((assignedPart) => (
-                                <Badge key={assignedPart.inventoryItemId} variant="outline" className="py-1 px-2">
-                                  {assignedPart.partNumber}
+                                <div key={assignedPart.inventoryItemId} className="flex items-center gap-3 bg-muted/30 rounded p-2">
+                                  <span className="flex-1 text-sm">{assignedPart.partNumber} - {assignedPart.name}</span>
+                                  <div className="flex items-center gap-2">
+                                    <Label className="text-xs text-muted-foreground">Qty:</Label>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      className="w-16 h-7 text-sm"
+                                      value={assignedPart.quantity}
+                                      onChange={(e) => {
+                                        const newQty = parseInt(e.target.value) || 1;
+                                        setPlyEntries(prev => prev.map(p =>
+                                          p.id === ply.id
+                                            ? {
+                                                ...p,
+                                                assignedParts: p.assignedParts.map(ap =>
+                                                  ap.inventoryItemId === assignedPart.inventoryItemId
+                                                    ? { ...ap, quantity: newQty }
+                                                    : ap
+                                                )
+                                              }
+                                            : p
+                                        ));
+                                      }}
+                                      data-testid={`input-ply-qty-${ply.id}-${assignedPart.inventoryItemId}`}
+                                    />
+                                  </div>
                                   <button
-                                    className="ml-2 hover:text-destructive"
+                                    className="text-muted-foreground hover:text-destructive"
                                     onClick={() => {
                                       setPlyEntries(prev => prev.map(p =>
                                         p.id === ply.id
@@ -1197,9 +1224,9 @@ export default function CuttingBomAssignment() {
                                       ));
                                     }}
                                   >
-                                    <X className="h-3 w-3" />
+                                    <X className="h-4 w-4" />
                                   </button>
-                                </Badge>
+                                </div>
                               ))}
                             </div>
                           )}
@@ -1220,6 +1247,7 @@ export default function CuttingBomAssignment() {
                                               inventoryItemId: part.inventoryItemId,
                                               partNumber: part.partNumber,
                                               name: part.name,
+                                              quantity: 1,
                                             }]
                                           }
                                         : p

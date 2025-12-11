@@ -54,6 +54,7 @@ import {
   FileCheck,
   Printer,
   Activity,
+  FolderKanban,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -460,6 +461,12 @@ export default function Navigation() {
       label: 'Preproduction Checklist',
       icon: FileCheck,
       description: 'Quality control checklists for preproduction validation',
+    },
+    {
+      path: '/projects',
+      label: 'P2 Projects',
+      icon: FolderKanban,
+      description: 'Track P2 project workflows through multi-step wizard',
     },
   ];
 

@@ -1715,69 +1715,70 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       console.log('P1 PO items query skipped:', err);
     }
 
-    // 3. Regular Production Queue - Orders from order entry (po_number starts with 'P') that need packets
+    // 3. Regular Production Queue - Orders from order entry (all_orders table) that need packets
     try {
       const regularQueueResult = await pool.query(`
         SELECT 
-          po.id,
-          po.order_id as "orderId",
-          po.item_id as "stockModel",
-          po.due_date as "dueDate",
-          po.customer_id as "customerId",
-          po.customer_name as "customerName",
-          po.po_number as "poNumber",
-          po.specifications
-        FROM production_orders po
-        WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
-          AND po.production_status IN ('PENDING', 'ACTIVE')
-          AND po.po_number LIKE 'P%'
-        ORDER BY po.due_date ASC
+          o.order_id as "orderId",
+          o.model_id as "stockModel",
+          o.due_date as "dueDate",
+          o.customer_id as "customerId",
+          c.name as "customerName",
+          o.features
+        FROM all_orders o
+        LEFT JOIN customers c ON CAST(o.customer_id AS INTEGER) = c.id
+        WHERE o.current_department = 'P1 Production Queue'
+          AND o.status IN ('FINALIZED', 'Active')
+          AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
+          AND o.model_id IS NOT NULL 
+          AND o.model_id != '' 
+          AND o.model_id != 'None'
+          AND LOWER(o.model_id) != 'no stock'
+          AND LOWER(o.model_id) != 'no_stock'
+        ORDER BY o.due_date ASC
         LIMIT 500
       `);
 
       const regularRows = Array.isArray(regularQueueResult) ? regularQueueResult : (regularQueueResult as any).rows || [];
       for (const item of regularRows) {
-        // Parse specifications JSON to get material type
-        let specs: any = {};
+        // Parse features JSON to get material type
+        let features: any = {};
         try {
-          specs = typeof item.specifications === 'string' 
-            ? JSON.parse(item.specifications) 
-            : (item.specifications || {});
+          features = typeof item.features === 'string' 
+            ? JSON.parse(item.features) 
+            : (item.features || {});
         } catch (e) {
-          specs = {};
+          features = {};
         }
         
-        const specMaterial = (specs.material || '').toLowerCase();
-        const stockModelName = specs.stockModel || item.stockModel || '';
+        const stockModelName = item.stockModel || '';
         
+        // Determine material type from stock model name prefix
         let materialType = 'unknown';
-        if (specMaterial === 'carbon_fiber' || specMaterial === 'carbon' || specMaterial === 'cf') {
-          materialType = 'carbon_fiber';
-        } else if (specMaterial === 'fiberglass' || specMaterial === 'fg') {
-          materialType = 'fiberglass';
-        } else if (specMaterial === 'mesa' || stockModelName.toLowerCase().includes('mesa')) {
+        const stockLower = stockModelName.toLowerCase();
+        if (stockLower.includes('mesa')) {
           materialType = 'mesa';
-        } else if (stockModelName.toLowerCase().includes('cf_') || stockModelName.toLowerCase().includes('cf ')) {
+        } else if (stockLower.startsWith('cf_') || stockLower.startsWith('cf-') || stockLower.includes('carbon')) {
           materialType = 'carbon_fiber';
-        } else if (stockModelName.toLowerCase().includes('fg_') || stockModelName.toLowerCase().includes('fg ')) {
+        } else if (stockLower.startsWith('fg_') || stockLower.startsWith('fg-') || stockLower.includes('fiberglass')) {
           materialType = 'fiberglass';
         }
         
         queueItems.push({
-          id: `p1reg-${item.id}`,
+          id: `p1reg-${item.orderId}`,
           orderId: item.orderId,
-          stockModel: stockModelName || `Item ${item.stockModel}`,
+          stockModel: stockModelName,
           source: 'P1',
           orderType: 'regular',
           materialType,
           scheduledDate: item.dueDate,
           dueDate: item.dueDate,
-          customer: item.customerName || specs.customerName || item.customerId,
+          customer: item.customerName || item.customerId,
           priority: 50,
           packetsNeeded: 1,
           usesInventory: false,
           requiresNewCut: true,
-          specifications: specs,
+          specifications: features,
         });
       }
     } catch (err) {

@@ -1715,7 +1715,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       console.log('P1 PO items query skipped:', err);
     }
 
-    // 3. Regular Production Queue - Orders from order entry (NO PO number) that need packets
+    // 3. Regular Production Queue - Orders from order entry (po_number starts with 'P') that need packets
     try {
       const regularQueueResult = await pool.query(`
         SELECT 
@@ -1730,7 +1730,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
         FROM production_orders po
         WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
           AND po.production_status IN ('PENDING', 'ACTIVE')
-          AND (po.po_number IS NULL OR po.po_number = '')
+          AND po.po_number LIKE 'P%'
         ORDER BY po.due_date ASC
         LIMIT 500
       `);

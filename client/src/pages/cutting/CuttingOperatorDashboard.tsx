@@ -1144,19 +1144,44 @@ export default function CuttingOperatorDashboard() {
                 <p className="text-sm text-muted-foreground mb-3">Retrieve fabric from these locations (FIFO - oldest expiration first):</p>
                 <div className="space-y-2">
                   {(() => {
+                    // Get specific fabric types from BOM if available
+                    const bomMaterialNames: string[] = [];
+                    if (matchingBOM?.cuts && matchingBOM.cuts.length > 0) {
+                      matchingBOM.cuts.forEach(cut => {
+                        if (cut.materialName && !bomMaterialNames.includes(cut.materialName.toLowerCase())) {
+                          bomMaterialNames.push(cut.materialName.toLowerCase());
+                        }
+                      });
+                    }
+                    
+                    // Fallback to generic material type if no BOM materials
                     const materialType = (() => {
                       try {
                         const notes = selectedMfgItem?.notes ? JSON.parse(selectedMfgItem.notes) : {};
                         return notes.materialType || 'carbon_fiber';
                       } catch { return 'carbon_fiber'; }
                     })();
+                    
                     const relevantFabrics = fabricInventory
                       .filter(f => f.squareMeters > 0 && f.status !== 'expired')
                       .filter(f => {
                         const ft = (f.fabricType || '').toLowerCase();
+                        const commonName = (f.commonName || '').toLowerCase();
+                        
+                        // If BOM specifies materials, match against those
+                        if (bomMaterialNames.length > 0) {
+                          return bomMaterialNames.some(bomMat => 
+                            ft.includes(bomMat) || commonName.includes(bomMat) || 
+                            bomMat.includes(ft) || bomMat.includes(commonName)
+                          );
+                        }
+                        
+                        // Fallback to generic material type matching
                         if (materialType === 'carbon_fiber') return ft.includes('carbon') || ft.includes('cf');
                         if (materialType === 'fiberglass') return ft.includes('fiber') || ft.includes('fg');
                         if (materialType === 'mesa') return ft.includes('mesa');
+                        if (materialType === 'p2_disruptor') return ft.includes('disruptor');
+                        if (materialType === 'p2_antenna') return ft.includes('antenna');
                         return true;
                       })
                       .sort((a, b) => {

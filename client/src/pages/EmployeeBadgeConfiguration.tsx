@@ -612,7 +612,6 @@ export default function EmployeeBadgeConfiguration() {
             {selectedReprintEmployee ? (
               <>
                 <div className="flex flex-col items-center justify-center p-6 bg-white rounded-lg border-2 border-dashed">
-                  <p className="text-xs text-gray-500 mb-2">EPOCH Manufacturing</p>
                   <p className="text-lg font-bold mb-4">{selectedReprintEmployee.name}</p>
                   <svg ref={barcodeRef} data-testid="reprint-barcode"></svg>
                 </div>

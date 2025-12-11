@@ -117,6 +117,32 @@ router.post('/', async (req: Request, res: Response) => {
     // Validate request data
     const validatedData = insertRefundRequestSchema.parse(req.body);
 
+    // Check that the order has actually been paid before allowing a refund request
+    const orderPayments = await db
+      .select({
+        totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
+      })
+      .from(payments)
+      .where(eq(payments.orderId, validatedData.orderId));
+
+    const totalPaid = orderPayments[0]?.totalPaid || 0;
+    
+    if (totalPaid <= 0) {
+      console.log(`❌ Refund request blocked: Order ${validatedData.orderId} has no payments (Total paid: $${totalPaid})`);
+      return res.status(400).json({ 
+        error: 'Cannot create refund request for an order with no payments. The order must have at least one payment before a refund can be requested.' 
+      });
+    }
+
+    // Validate that refund amount doesn't exceed total paid
+    const refundAmount = validatedData.refundAmount || 0;
+    if (refundAmount > totalPaid) {
+      console.log(`❌ Refund request blocked: Requested $${refundAmount} exceeds total paid $${totalPaid}`);
+      return res.status(400).json({ 
+        error: `Refund amount ($${refundAmount.toFixed(2)}) cannot exceed total paid ($${totalPaid.toFixed(2)}).` 
+      });
+    }
+
     // For now, we'll use a hardcoded user. In production, this would come from auth
     const requestedBy = 'CSR'; // TODO: Get from authentication context
 

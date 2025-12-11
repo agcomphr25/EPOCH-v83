@@ -156,10 +156,16 @@ export default function TANDYMTestDashboard() {
                     {activeProjects.map((project) => (
                       <AccordionItem key={project.id} value={project.id} data-testid={`accordion-project-${project.id}`}>
                         <AccordionTrigger className="text-sm hover:no-underline py-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{project.projectCode}</span>
-                            <span className="text-muted-foreground">-</span>
-                            <span>{project.projectName}</span>
+                          <div className="flex items-center justify-between w-full pr-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{project.projectCode}</span>
+                              <span className="text-muted-foreground">-</span>
+                              <span>{project.projectName}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Progress value={getProgress(project.steps)} className="h-2 w-16" />
+                              <span className="text-xs text-muted-foreground w-8">{getProgress(project.steps)}%</span>
+                            </div>
                           </div>
                         </AccordionTrigger>
                         <AccordionContent>

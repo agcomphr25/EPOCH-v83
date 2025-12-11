@@ -662,10 +662,15 @@ export default function CuttingBomAssignment() {
                         <div>
                           <Label className="text-muted-foreground mb-2 block">Parts (Step 2)</Label>
                           <div className="space-y-1">
-                            {bom.parts.map((part, idx) => (
+                            {bom.parts.map((part: any, idx) => (
                               <div key={idx} className="flex items-center gap-2 text-sm bg-muted/30 rounded px-2 py-1">
                                 <Badge variant="secondary">{part.partNumber}</Badge>
                                 <span>Qty: {part.quantity || 1}</span>
+                                {part.fabricName && (
+                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                    {part.fabricName}
+                                  </Badge>
+                                )}
                                 {part.partDescription && <span className="text-muted-foreground">- {part.partDescription}</span>}
                               </div>
                             ))}

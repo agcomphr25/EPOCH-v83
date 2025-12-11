@@ -94,6 +94,7 @@ export async function sendEmailViaSendGrid(options: {
   text: string;
   html?: string;
   replyTo?: string;
+  cc?: string | string[];
   attachments?: Array<{
     content: string;
     filename: string;
@@ -113,6 +114,11 @@ export async function sendEmailViaSendGrid(options: {
       html: options.html || options.text,
     };
 
+    // Add CC recipients if provided
+    if (options.cc) {
+      msg.cc = options.cc;
+    }
+
     // Add attachments if provided
     if (options.attachments && options.attachments.length > 0) {
       msg.attachments = options.attachments;
@@ -120,6 +126,7 @@ export async function sendEmailViaSendGrid(options: {
 
     console.log('📧 Sending email via SendGrid:', {
       to: options.to,
+      cc: options.cc,
       from: fromEmail,
       replyTo: msg.replyTo,
       subject: options.subject,

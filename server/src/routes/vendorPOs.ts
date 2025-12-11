@@ -8,6 +8,8 @@ import {
 } from '@shared/schema';
 import { z } from 'zod';
 import { storage } from '../../storage';
+import { generateMagicLink, getMagicLinkBaseUrl } from '../../utils/magicLink';
+import { sendEmailViaSendGrid } from '../../utils/sendgrid';
 
 const router = Router();
 
@@ -551,6 +553,247 @@ router.put('/:id/optional-settings', async (req: Request, res: Response) => {
         .json({ error: 'Invalid optional settings data', details: error.errors });
     }
     res.status(500).json({ error: 'Failed to update PO optional settings' });
+  }
+});
+
+// POST /api/vendor-pos/:id/issue - Issue a PO and send confirmation email with magic link
+router.post('/:id/issue', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    // Get the PO
+    const vendorPO = await storage.getVendorPO(id);
+    if (!vendorPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    // Check if PO is in Draft status
+    if (vendorPO.status !== 'Draft') {
+      return res.status(400).json({ 
+        error: 'PO cannot be issued', 
+        message: `PO is already in ${vendorPO.status} status` 
+      });
+    }
+
+    // Get the vendor details
+    const vendor = await storage.getVendor(vendorPO.vendorId);
+    if (!vendor) {
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+
+    // Check if vendor has an email
+    if (!vendor.email) {
+      return res.status(400).json({ 
+        error: 'Vendor email not configured',
+        message: 'Please add a contact email for this vendor before issuing the PO.'
+      });
+    }
+
+    // Generate magic link for PO confirmation (before email so we can include it)
+    const { link, expiresAt } = await generateMagicLink({
+      email: vendor.email,
+      purpose: 'vendor_po_confirmation',
+      metadata: {
+        vendorPoId: id,
+        poNumber: vendorPO.poNumber,
+        vendorId: vendor.id,
+        vendorName: vendor.name,
+      },
+      expiresInMinutes: 60 * 24 * 7, // 7 days expiration
+    });
+
+    // Create confirmation page URL (the magic link will redirect here after verification)
+    const baseUrl = getMagicLinkBaseUrl();
+    
+    // Generate email content
+    const subject = `PO ${vendorPO.poNumber} from AG Composites - Confirmation Requested`;
+    
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      background-color: #ffffff;
+      border-radius: 8px;
+      padding: 40px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #0066cc;
+      padding-bottom: 20px;
+    }
+    .header h1 {
+      color: #1a1a1a;
+      font-size: 24px;
+      margin: 0;
+    }
+    .content {
+      margin-bottom: 30px;
+    }
+    .po-details {
+      background-color: #f5f5f5;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .po-details p {
+      margin: 5px 0;
+    }
+    .button {
+      display: inline-block;
+      background-color: #0066cc;
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 6px;
+      font-weight: 600;
+      text-align: center;
+      margin: 20px 0;
+    }
+    .button:hover {
+      background-color: #0052a3;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 14px;
+      color: #666;
+    }
+    .warning {
+      background-color: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 12px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Purchase Order Confirmation Request</h1>
+    </div>
+    
+    <div class="content">
+      <p>Hello${vendor.contactPerson ? ` ${vendor.contactPerson}` : ''},</p>
+      
+      <p>AG Composites has issued a new Purchase Order to your company. Please confirm receipt of this order by clicking the button below.</p>
+      
+      <div class="po-details">
+        <p><strong>PO Number:</strong> ${vendorPO.poNumber}</p>
+        <p><strong>Vendor:</strong> ${vendor.name}</p>
+        ${vendorPO.expectedDeliveryDate ? `<p><strong>Requested Delivery Date:</strong> ${new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()}</p>` : ''}
+      </div>
+      
+      <div style="text-align: center;">
+        <a href="${link}" class="button">Confirm PO Receipt</a>
+      </div>
+      
+      <div class="warning">
+        <strong>Important:</strong> This confirmation link will expire in 7 days. Please confirm your receipt as soon as possible.
+      </div>
+      
+      <p>If the button doesn't work, copy and paste this link into your browser:</p>
+      <p style="word-break: break-all; color: #0066cc;">${link}</p>
+      
+      <p>If you have any questions about this order, please contact us at sales@agcomposites.com or call 256-723-8381.</p>
+    </div>
+    
+    <div class="footer">
+      <p>
+        <strong>AG Composites</strong><br>
+        230 Hamer Road<br>
+        Owens Cross Roads, AL 35763<br>
+        Phone: 256-723-8381<br>
+        Email: sales@agcomposites.com
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
+
+    const text = `
+Purchase Order Confirmation Request
+
+Hello${vendor.contactPerson ? ` ${vendor.contactPerson}` : ''},
+
+AG Composites has issued a new Purchase Order to your company. Please confirm receipt of this order by clicking the link below.
+
+PO Number: ${vendorPO.poNumber}
+Vendor: ${vendor.name}
+${vendorPO.expectedDeliveryDate ? `Requested Delivery Date: ${new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()}` : ''}
+
+Confirm your receipt: ${link}
+
+This confirmation link will expire in 7 days. Please confirm your receipt as soon as possible.
+
+If you have any questions about this order, please contact us at sales@agcomposites.com or call 256-723-8381.
+
+---
+AG Composites
+230 Hamer Road
+Owens Cross Roads, AL 35763
+Phone: 256-723-8381
+Email: sales@agcomposites.com
+    `.trim();
+
+    // Send email to vendor with CC to laurie@agcomposites.com
+    const emailResult = await sendEmailViaSendGrid({
+      to: vendor.email,
+      cc: 'laurie@agcomposites.com',
+      subject,
+      text,
+      html,
+    });
+
+    if (!emailResult.success) {
+      console.error('Failed to send PO confirmation email:', emailResult.error);
+      // Email failed - don't update PO status, return error
+      return res.status(500).json({
+        error: 'Failed to send confirmation email',
+        message: emailResult.error || 'Email service unavailable. Please try again.',
+        emailSent: false,
+      });
+    }
+
+    // Email sent successfully - now update PO status to Sent
+    const updatedPO = await storage.updateVendorPO(id, { status: 'Sent' });
+
+    console.log(`✅ PO ${vendorPO.poNumber} issued and confirmation email sent to ${vendor.email} (cc: laurie@agcomposites.com)`);
+
+    res.json({
+      ...updatedPO,
+      emailSent: true,
+      emailRecipient: vendor.email,
+      emailCc: 'laurie@agcomposites.com',
+      confirmationLinkExpires: expiresAt,
+      message: `PO issued successfully. Confirmation email sent to ${vendor.email}.`,
+    });
+  } catch (error) {
+    console.error('Issue vendor PO error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to issue vendor PO' });
   }
 });
 

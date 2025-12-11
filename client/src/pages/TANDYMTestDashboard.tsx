@@ -1,7 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, DollarSign, TrendingUp, CreditCard, Calendar } from 'lucide-react';
+import { Loader2, DollarSign, TrendingUp, CreditCard, Calendar, FolderKanban } from 'lucide-react';
 import { Link } from 'wouter';
+
+interface Project {
+  id: string;
+  status: string;
+}
 
 interface DashboardWidgetData {
   totalRevenue: number;
@@ -27,6 +32,12 @@ export default function TANDYMTestDashboard() {
   const { data, isLoading, error } = useQuery<DashboardWidgetData>({
     queryKey: ['/api/finance/dashboard-widgets'],
   });
+
+  const { data: projects } = useQuery<Project[]>({
+    queryKey: ['/api/projects'],
+  });
+
+  const activeProjectsCount = projects?.filter(p => p.status === 'active').length || 0;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
@@ -83,15 +94,20 @@ export default function TANDYMTestDashboard() {
         </div>
 
         <div className="lg:col-span-2 space-y-6">
-          <Card className="h-48" data-testid="widget-placeholder-3">
-            <CardHeader>
-              <CardTitle className="text-lg">Accounts Receivable Aging</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-gray-400">--</p>
-              <p className="text-sm text-muted-foreground mt-2">Coming soon</p>
-            </CardContent>
-          </Card>
+          <Link href="/projects" data-testid="link-active-projects">
+            <Card className="h-48 cursor-pointer hover:shadow-lg transition-shadow" data-testid="widget-active-projects">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <FolderKanban className="h-5 w-5 text-indigo-600" />
+                  Active Projects
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold text-indigo-600">{activeProjectsCount}</p>
+                <p className="text-sm text-muted-foreground mt-2">P2 projects in progress</p>
+              </CardContent>
+            </Card>
+          </Link>
 
           <Card className="h-48" data-testid="widget-placeholder-4">
             <CardHeader>

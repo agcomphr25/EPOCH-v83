@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { storage } from '../../storage';
 import { insertProjectSchema, insertProjectStepSchema, insertProjectActivityLogSchema, insertProjectNotificationSchema } from '../../schema';
 
@@ -11,6 +12,39 @@ const PROJECT_STEP_TYPES = [
   { type: 'preproduction_checklist', order: 4, label: 'Pre-production Checklist', route: '/preproduction-checklists' },
   { type: 'p2_order', order: 5, label: 'P2 Order', route: '/p2-control-center' },
 ];
+
+const createProjectRequestSchema = z.object({
+  projectName: z.string().min(1, 'Project name is required'),
+  customerId: z.string().min(1, 'Customer ID is required'),
+  description: z.string().optional(),
+  targetShipDate: z.string().optional(),
+  projectManagerId: z.number().optional().nullable(),
+  reminderDays: z.number().min(1).default(3),
+  createdBy: z.number().optional(),
+});
+
+const updateProjectRequestSchema = z.object({
+  projectName: z.string().optional(),
+  description: z.string().optional().nullable(),
+  targetShipDate: z.string().optional().nullable(),
+  projectManagerId: z.number().optional().nullable(),
+  reminderDays: z.number().min(1).optional(),
+  status: z.enum(['active', 'on_hold', 'completed', 'cancelled']).optional(),
+  notes: z.string().optional().nullable(),
+  updatedBy: z.number().optional(),
+});
+
+const updateStepRequestSchema = z.object({
+  status: z.enum(['pending', 'in_progress', 'completed', 'blocked']).optional(),
+  linkedRfqId: z.number().optional().nullable(),
+  linkedQuoteId: z.string().optional().nullable(),
+  linkedPurchaseReviewId: z.number().optional().nullable(),
+  linkedPreproductionChecklistId: z.string().optional().nullable(),
+  linkedP2OrderId: z.number().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  completedBy: z.number().optional(),
+  updatedBy: z.number().optional(),
+});
 
 router.get('/', async (req, res) => {
   try {
@@ -92,9 +126,18 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
+    const validationResult = createProjectRequestSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({ 
+        message: 'Invalid request data', 
+        errors: validationResult.error.errors 
+      });
+    }
+    
+    const validatedData = validationResult.data;
     const nextCode = await storage.getNextProjectCode();
     const projectData = {
-      ...req.body,
+      ...validatedData,
       projectCode: nextCode,
     };
     
@@ -129,14 +172,24 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const project = await storage.updateProject(id, req.body);
     
-    if (req.body.projectManagerId) {
+    const validationResult = updateProjectRequestSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({ 
+        message: 'Invalid request data', 
+        errors: validationResult.error.errors 
+      });
+    }
+    
+    const validatedData = validationResult.data;
+    const project = await storage.updateProject(id, validatedData);
+    
+    if (validatedData.projectManagerId) {
       await storage.createProjectActivityLog({
         projectId: id,
         activityType: 'project_updated',
         description: 'Project manager assigned',
-        performedBy: req.body.updatedBy,
+        performedBy: validatedData.updatedBy,
       });
     }
     
@@ -172,7 +225,43 @@ router.get('/:projectId/steps', async (req, res) => {
 router.patch('/:projectId/steps/:stepId', async (req, res) => {
   try {
     const { projectId, stepId } = req.params;
-    const { status, linkedRfqId, linkedQuoteId, linkedPurchaseReviewId, linkedPreproductionChecklistId, linkedP2OrderId, notes } = req.body;
+    
+    const validationResult = updateStepRequestSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({ 
+        message: 'Invalid request data', 
+        errors: validationResult.error.errors 
+      });
+    }
+    
+    const validatedData = validationResult.data;
+    const { status, linkedRfqId, linkedQuoteId, linkedPurchaseReviewId, linkedPreproductionChecklistId, linkedP2OrderId, notes } = validatedData;
+    
+    const allSteps = await storage.getProjectSteps(projectId);
+    const currentStep = allSteps.find(s => s.id === stepId);
+    
+    if (!currentStep) {
+      return res.status(404).json({ message: 'Step not found' });
+    }
+    
+    if (status === 'completed' || linkedRfqId !== undefined || linkedQuoteId !== undefined || 
+        linkedPurchaseReviewId !== undefined || linkedPreproductionChecklistId !== undefined || 
+        linkedP2OrderId !== undefined) {
+      if (currentStep.status !== 'in_progress') {
+        return res.status(400).json({ 
+          message: 'Cannot modify a step that is not in progress. Complete previous steps first.' 
+        });
+      }
+      
+      const previousSteps = allSteps.filter(s => s.stepOrder < currentStep.stepOrder);
+      const allPreviousCompleted = previousSteps.every(s => s.status === 'completed');
+      
+      if (!allPreviousCompleted) {
+        return res.status(400).json({ 
+          message: 'Cannot complete or link this step. All previous steps must be completed first.' 
+        });
+      }
+    }
     
     const updateData: any = {};
     
@@ -183,7 +272,7 @@ router.patch('/:projectId/steps/:stepId', async (req, res) => {
       }
       if (status === 'completed') {
         updateData.completedAt = new Date();
-        updateData.completedBy = req.body.completedBy;
+        updateData.completedBy = validatedData.completedBy;
       }
     }
     

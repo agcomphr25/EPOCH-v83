@@ -2030,21 +2030,36 @@ router.post('/schedule-to-cutting', async (req, res) => {
     const { manufacturingQueue, inventoryItems } = await import('../../schema');
     const { pool } = await import('../../db');
     
-    // Determine packet name based on material type
+    // Determine packet name based on material type - handle P2 material types
     const packetName = materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
                        materialType === 'fiberglass' ? 'Fiberglass Packet' :
-                       materialType === 'mesa' ? 'Mesa Packet' : 'Stock Packet';
+                       materialType === 'mesa' ? 'Mesa Packet' :
+                       materialType === 'p2_disruptor' ? 'Disruptor Packet' :
+                       materialType === 'p2_antenna' ? 'Antenna Cover Packet' : 'Stock Packet';
     
-    // Try to find existing packet inventory item
+    // Try to find existing packet inventory item - use exact match first
     let inventoryItemId: number | null = null;
     try {
-      const result = await pool.query(
-        `SELECT id FROM inventory_items WHERE name ILIKE $1 LIMIT 1`,
-        [`%${packetName}%`]
+      // First try exact name match
+      const exactResult = await pool.query(
+        `SELECT id FROM inventory_items WHERE LOWER(name) = LOWER($1) LIMIT 1`,
+        [packetName]
       );
-      const rows = Array.isArray(result) ? result : (result as any).rows || [];
-      if (rows.length > 0) {
-        inventoryItemId = rows[0].id;
+      const exactRows = Array.isArray(exactResult) ? exactResult : (exactResult as any).rows || [];
+      if (exactRows.length > 0) {
+        inventoryItemId = exactRows[0].id;
+      }
+      
+      // If no exact match, try pattern match
+      if (!inventoryItemId) {
+        const result = await pool.query(
+          `SELECT id FROM inventory_items WHERE name ILIKE $1 LIMIT 1`,
+          [`%${packetName}%`]
+        );
+        const rows = Array.isArray(result) ? result : (result as any).rows || [];
+        if (rows.length > 0) {
+          inventoryItemId = rows[0].id;
+        }
       }
     } catch (e) {
       console.log('Could not find inventory item:', e);

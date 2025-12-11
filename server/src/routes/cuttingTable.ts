@@ -1639,10 +1639,10 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       console.log('P1 layup schedule query skipped:', err);
     }
 
-    // 2. P1 PO Orders - OEM orders always require new cuts
+    // 2. P1 Production Orders from production_orders table - Regular orders that need packets
     try {
-      // If showAll, get all pending P1 PO items without date filter
-      const p1POResult = showAll === 'true'
+      // If showAll, get all pending P1 production items without date filter
+      const p1ProdResult = showAll === 'true'
         ? await pool.query(`
             SELECT 
               po.id,
@@ -1650,9 +1650,9 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               po.item_id as "stockModel",
               po.due_date as "dueDate",
               po.customer_id as "customerId",
-              po.specifications,
-              'P1_PO' as source,
-              'oem' as orderType
+              po.customer_name as "customerName",
+              po.po_number as "poNumber",
+              po.specifications
             FROM production_orders po
             WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
               AND po.production_status IN ('PENDING', 'ACTIVE')
@@ -1666,9 +1666,9 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               po.item_id as "stockModel",
               po.due_date as "dueDate",
               po.customer_id as "customerId",
-              po.specifications,
-              'P1_PO' as source,
-              'oem' as orderType
+              po.customer_name as "customerName",
+              po.po_number as "poNumber",
+              po.specifications
             FROM production_orders po
             WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
               AND po.production_status IN ('PENDING', 'ACTIVE')
@@ -1676,8 +1676,8 @@ router.get('/weekly-cutting-queue', async (req, res) => {
             ORDER BY po.due_date ASC
           `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
 
-      const p1PORows = Array.isArray(p1POResult) ? p1POResult : (p1POResult as any).rows || [];
-      for (const item of p1PORows) {
+      const p1ProdRows = Array.isArray(p1ProdResult) ? p1ProdResult : (p1ProdResult as any).rows || [];
+      for (const item of p1ProdRows) {
         // Parse specifications JSON to get material type
         let specs: any = {};
         try {
@@ -1704,17 +1704,18 @@ router.get('/weekly-cutting-queue', async (req, res) => {
           materialType = 'fiberglass';
         }
         
+        // All orders in P1 Production Queue are regular production orders that need packets
         queueItems.push({
-          id: `p1po-${item.id}`,
+          id: `p1prod-${item.id}`,
           orderId: item.orderId,
           stockModel: stockModelName || `Item ${item.stockModel}`,
-          source: 'P1_PO',
-          orderType: 'oem',
+          source: 'P1',
+          orderType: 'regular',
           materialType,
           scheduledDate: item.dueDate,
           dueDate: item.dueDate,
-          customer: specs.customerName || item.customerId,
-          priority: 80,
+          customer: item.customerName || specs.customerName || item.customerId,
+          priority: 50,
           packetsNeeded: 1,
           usesInventory: false,
           requiresNewCut: true,
@@ -1722,7 +1723,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
         });
       }
     } catch (err) {
-      console.log('P1 PO query skipped:', err);
+      console.log('P1 production orders query skipped:', err);
     }
 
     // 3. P2 PO Items - Purchase order items with BOMs requiring cutting

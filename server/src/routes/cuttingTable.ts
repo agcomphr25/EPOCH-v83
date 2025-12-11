@@ -2038,7 +2038,9 @@ router.post('/schedule-to-cutting', async (req, res) => {
                        materialType === 'fiberglass' ? 'Fiberglass Packet' :
                        materialType === 'mesa' ? 'Mesa Packet' :
                        materialType === 'p2_disruptor' ? 'Disruptor Packet' :
-                       materialType === 'p2_antenna' ? 'Antenna Cover Packet' : 'Stock Packet';
+                       materialType === 'p2_disruptor_packet' ? 'Disruptor Packet' :
+                       materialType === 'p2_antenna' ? 'Antenna Cover Packet' :
+                       materialType === 'p2_antenna_cover' ? 'Antenna Cover Packet' : 'Stock Packet';
     
     // Try to find existing packet inventory item - use exact match first
     let inventoryItemId: number | null = null;

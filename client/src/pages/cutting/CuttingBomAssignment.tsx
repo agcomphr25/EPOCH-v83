@@ -179,27 +179,47 @@ export default function CuttingBomAssignment() {
       bom.packetType?.toLowerCase().includes('mesa')
     );
     
-    const demandedPackets: Record<string, { name: string; demand: number; source: string }> = {};
+    const stockPacketDemand = { cf: 0, fg: 0, mesa: 0 };
+    const p2Packets: Record<string, { name: string; demand: number; source: string }> = {};
     
     weeklyQueueData.items.forEach(item => {
       if (!item.stockModel) return;
       
       const name = item.stockModel;
       const nameLower = name.toLowerCase();
+      const demand = item.packetsNeeded || 1;
       
-      if (existingBomTypes.has(nameLower)) return;
-      
-      if ((nameLower.startsWith('cf_') || nameLower.includes('carbon')) && hasCfBom) return;
-      if ((nameLower.startsWith('fg_') || nameLower.includes('fiberglass')) && hasFgBom) return;
-      if (nameLower.includes('mesa') && hasMesaBom) return;
-      
-      if (!demandedPackets[name]) {
-        demandedPackets[name] = { name, demand: 0, source: item.source };
+      if (nameLower.startsWith('cf_') || nameLower.includes('carbon')) {
+        stockPacketDemand.cf += demand;
+      } else if (nameLower.startsWith('fg_') || nameLower.includes('fiberglass')) {
+        stockPacketDemand.fg += demand;
+      } else if (nameLower.includes('mesa')) {
+        stockPacketDemand.mesa += demand;
+      } else {
+        if (!existingBomTypes.has(nameLower)) {
+          if (!p2Packets[name]) {
+            p2Packets[name] = { name, demand: 0, source: item.source };
+          }
+          p2Packets[name].demand += demand;
+        }
       }
-      demandedPackets[name].demand += item.packetsNeeded || 1;
     });
     
-    return Object.values(demandedPackets).sort((a, b) => b.demand - a.demand);
+    const result: { name: string; demand: number; source: string }[] = [];
+    
+    if (stockPacketDemand.cf > 0 && !hasCfBom) {
+      result.push({ name: 'CF Stock Packet', demand: stockPacketDemand.cf, source: 'P1' });
+    }
+    if (stockPacketDemand.fg > 0 && !hasFgBom) {
+      result.push({ name: 'FG Stock Packet', demand: stockPacketDemand.fg, source: 'P1' });
+    }
+    if (stockPacketDemand.mesa > 0 && !hasMesaBom) {
+      result.push({ name: 'Mesa Packet', demand: stockPacketDemand.mesa, source: 'P1' });
+    }
+    
+    result.push(...Object.values(p2Packets));
+    
+    return result.sort((a, b) => b.demand - a.demand);
   }, [weeklyQueueData?.items, packetBOMs]);
 
   const createPacketBomMutation = useMutation({

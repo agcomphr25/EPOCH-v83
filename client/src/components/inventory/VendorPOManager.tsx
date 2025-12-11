@@ -1011,6 +1011,29 @@ export default function VendorPOManager() {
     },
   });
 
+  // Issue PO mutation - sends confirmation email to vendor
+  const issuePOMutation = useMutation({
+    mutationFn: (id: number) =>
+      apiRequest(`/api/vendor-pos/${id}/issue`, {
+        method: 'POST',
+      }),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      if (data.emailSent) {
+        toast.success(`PO issued! Confirmation email sent to ${data.emailRecipient}`);
+      } else {
+        toast.error(data.message || 'PO issued but email failed to send');
+      }
+      // Update the selected PO if viewing details
+      if (selectedVendorPO) {
+        setSelectedVendorPO({ ...selectedVendorPO, status: 'Sent' });
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to issue PO');
+    },
+  });
+
   // Filter vendor POs
   const filteredVendorPOs = (vendorPOs || []).filter((vendorPo) => {
     const matchesSearch =
@@ -1050,9 +1073,9 @@ export default function VendorPOManager() {
 
   const handleIssuePO = (id: number) => {
     if (
-      confirm('Are you sure you want to issue this purchase order? This will change its status to "Sent".')
+      confirm('Are you sure you want to issue this purchase order? This will send a confirmation email to the vendor.')
     ) {
-      changeStatusMutation.mutate({ id, status: 'Sent' });
+      issuePOMutation.mutate(id);
     }
   };
 

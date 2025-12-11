@@ -119,6 +119,117 @@ router.get('/verify', async (req: Request, res: Response) => {
     );
 
     if (result.isValid && result.token) {
+      // Handle vendor PO confirmation - show a thank you page
+      if (result.token.purpose === 'vendor_po_confirmation') {
+        const metadata = result.token.metadata || {};
+        const poNumber = metadata.poNumber || 'Unknown';
+        const vendorName = metadata.vendorName || 'Vendor';
+        
+        // Return a styled confirmation page
+        return res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PO Confirmation - AG Composites</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 16px;
+      padding: 60px 40px;
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .checkmark {
+      width: 80px;
+      height: 80px;
+      background: #22c55e;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 30px;
+    }
+    .checkmark svg {
+      width: 40px;
+      height: 40px;
+      stroke: white;
+      stroke-width: 3;
+    }
+    h1 {
+      color: #1a1a2e;
+      font-size: 28px;
+      margin-bottom: 20px;
+    }
+    .po-number {
+      background: #f0f9ff;
+      border: 2px solid #0ea5e9;
+      border-radius: 8px;
+      padding: 15px 25px;
+      display: inline-block;
+      margin: 20px 0;
+    }
+    .po-number span {
+      color: #0369a1;
+      font-weight: 700;
+      font-size: 24px;
+    }
+    p {
+      color: #64748b;
+      line-height: 1.7;
+      margin-bottom: 15px;
+    }
+    .company-info {
+      margin-top: 40px;
+      padding-top: 30px;
+      border-top: 1px solid #e2e8f0;
+      color: #94a3b8;
+      font-size: 14px;
+    }
+    .company-info strong {
+      color: #475569;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="checkmark">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h1>Thank You!</h1>
+    <p>Your confirmation has been received.</p>
+    <div class="po-number">
+      <span>${poNumber}</span>
+    </div>
+    <p>We have recorded that <strong>${vendorName}</strong> has confirmed receipt of this purchase order.</p>
+    <p>If you have any questions about this order, please contact us at sales@agcomposites.com or call 256-723-8381.</p>
+    <div class="company-info">
+      <strong>AG Composites</strong><br>
+      230 Hamer Road, Owens Cross Roads, AL 35763<br>
+      Phone: 256-723-8381
+    </div>
+  </div>
+</body>
+</html>
+        `);
+      }
+
+      // Default JSON response for other purposes
       res.json({
         success: true,
         message: 'Token is valid',
@@ -127,6 +238,85 @@ router.get('/verify', async (req: Request, res: Response) => {
         metadata: result.token.metadata,
       });
     } else {
+      // Handle invalid/expired token with a user-friendly page for PO confirmations
+      if (purpose === 'vendor_po_confirmation') {
+        return res.status(400).send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Link Expired - AG Composites</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 16px;
+      padding: 60px 40px;
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .icon {
+      width: 80px;
+      height: 80px;
+      background: #fbbf24;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 30px;
+      font-size: 40px;
+    }
+    h1 {
+      color: #1a1a2e;
+      font-size: 28px;
+      margin-bottom: 20px;
+    }
+    p {
+      color: #64748b;
+      line-height: 1.7;
+      margin-bottom: 15px;
+    }
+    .company-info {
+      margin-top: 40px;
+      padding-top: 30px;
+      border-top: 1px solid #e2e8f0;
+      color: #94a3b8;
+      font-size: 14px;
+    }
+    .company-info strong {
+      color: #475569;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">⚠️</div>
+    <h1>Link Expired or Invalid</h1>
+    <p>${result.error || 'This confirmation link has expired or has already been used.'}</p>
+    <p>If you need to confirm a purchase order, please contact us and we'll send you a new confirmation link.</p>
+    <div class="company-info">
+      <strong>AG Composites</strong><br>
+      230 Hamer Road, Owens Cross Roads, AL 35763<br>
+      Phone: 256-723-8381 | Email: sales@agcomposites.com
+    </div>
+  </div>
+</body>
+</html>
+        `);
+      }
+
       res.status(400).json({
         success: false,
         error: result.error || 'Invalid token',

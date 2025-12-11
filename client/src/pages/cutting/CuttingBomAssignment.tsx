@@ -164,27 +164,23 @@ export default function CuttingBomAssignment() {
     if (!weeklyQueueData?.items) return [];
     
     const existingBomTypes = new Set(
-      packetBOMs.flatMap(bom => [bom.partNumber, bom.packetType].filter(Boolean))
+      packetBOMs.flatMap(bom => [bom.partNumber?.toLowerCase(), bom.packetType?.toLowerCase()].filter(Boolean))
     );
-    
-    const p1StockPackets = ['cf', 'fg', 'mesa', 'carbon fiber', 'fiberglass'];
     
     const demandedPackets: Record<string, { name: string; demand: number; source: string }> = {};
     
     weeklyQueueData.items.forEach(item => {
       if (!item.stockModel) return;
-      if (item.source === 'P1' || item.source === 'P1_PO') return;
       
       const name = item.stockModel;
       const nameLower = name.toLowerCase();
-      if (p1StockPackets.some(p => nameLower.includes(p))) return;
       
-      if (!existingBomTypes.has(name)) {
-        if (!demandedPackets[name]) {
-          demandedPackets[name] = { name, demand: 0, source: item.source };
-        }
-        demandedPackets[name].demand += item.packetsNeeded || 1;
+      if (existingBomTypes.has(nameLower)) return;
+      
+      if (!demandedPackets[name]) {
+        demandedPackets[name] = { name, demand: 0, source: item.source };
       }
+      demandedPackets[name].demand += item.packetsNeeded || 1;
     });
     
     return Object.values(demandedPackets).sort((a, b) => b.demand - a.demand);

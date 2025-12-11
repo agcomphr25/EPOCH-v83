@@ -38,7 +38,10 @@ import {
   Clock,
   AlertCircle,
   Route,
+  Printer,
 } from 'lucide-react';
+import JsBarcode from 'jsbarcode';
+import { getBarcodeFormat } from '@/lib/barcodeFormat';
 import PartRoutingWizard from '@/components/PartRoutingWizard';
 import DepartmentTransferSignatureDialog from '@/components/DepartmentTransferSignatureDialog';
 
@@ -503,6 +506,118 @@ export default function P2DepartmentManager() {
     );
   };
 
+  // Print Avery labels for all items in current queue
+  const handlePrintAveryLabels = () => {
+    if (queueItems.length === 0) {
+      toast({
+        title: 'No Items',
+        description: 'No items in queue to print labels for',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({
+        title: 'Error',
+        description: 'Could not open print window. Please allow popups.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const generateLabelContent = (item: P2SerializedItem, index: number) => {
+      return `
+        <div class="avery-label">
+          <div class="label-content">
+            <div class="line1">${item.serialNumber}</div>
+            <div class="line2">${item.partNumber}</div>
+            <div class="line3">${item.partName}</div>
+            <div class="line4">${item.poNumber} - ${item.customerName}</div>
+            <div class="line5">
+              <canvas id="barcode-${index}" width="180" height="25"></canvas>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>P2 Layup Queue Labels</title>
+          <style>
+            body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+            .avery-label {
+              width: 2.625in;
+              height: 1in;
+              border: 1px solid #ddd;
+              margin: 0;
+              padding: 0.03in;
+              display: inline-block;
+              vertical-align: top;
+              box-sizing: border-box;
+              page-break-inside: avoid;
+              background: white;
+            }
+            .label-content {
+              height: 100%;
+              display: flex;
+              flex-direction: column;
+              justify-content: space-between;
+              text-align: center;
+              padding: 2px;
+              box-sizing: border-box;
+            }
+            .line1 { font-size: 9pt; font-weight: bold; color: #000; }
+            .line2 { font-size: 7pt; font-weight: bold; color: #333; }
+            .line3 { font-size: 6pt; color: #000; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+            .line4 { font-size: 5pt; color: #666; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+            .line5 { display: flex; justify-content: center; align-items: center; min-height: 0.25in; }
+            @media print {
+              body { margin: 0; }
+              .avery-label { border: none; margin: 0; }
+              @page { size: 8.5in 11in; margin: 0.45in 0.1875in 0.5in 0.1875in; }
+            }
+            .labels-container { display: flex; flex-wrap: wrap; justify-content: flex-start; width: 8.5in; }
+          </style>
+        </head>
+        <body>
+          <div class="labels-container">
+            ${queueItems.map((item, i) => generateLabelContent(item, i)).join('')}
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+
+    // Generate barcodes after content is loaded
+    setTimeout(() => {
+      queueItems.forEach((item, i) => {
+        const canvas = printWindow.document.getElementById(`barcode-${i}`) as HTMLCanvasElement;
+        if (canvas && item.barcode) {
+          try {
+            const format = getBarcodeFormat(item.barcode);
+            JsBarcode(canvas, item.barcode, {
+              format: format,
+              width: format === 'CODE128' ? 1.2 : 1.5,
+              height: 22,
+              displayValue: false,
+              margin: 2,
+              lineColor: '#000000',
+            });
+          } catch (error) {
+            console.error(`Error generating barcode for item ${i}:`, error);
+          }
+        }
+      });
+      printWindow.print();
+      printWindow.close();
+    }, 500);
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-start justify-between">
@@ -636,13 +751,27 @@ export default function P2DepartmentManager() {
           <TabsContent key={dept} value={dept} className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  {dept} Queue ({queueItems.length} items)
-                </CardTitle>
-                <CardDescription>
-                  Items currently in the {dept} department
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Package className="h-5 w-5" />
+                      {dept} Queue ({queueItems.length} items)
+                    </CardTitle>
+                    <CardDescription>
+                      Items currently in the {dept} department
+                    </CardDescription>
+                  </div>
+                  {dept === 'Layup' && queueItems.length > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={handlePrintAveryLabels}
+                      data-testid="button-print-labels"
+                    >
+                      <Printer className="mr-2 h-4 w-4" />
+                      Print Avery Labels ({queueItems.length})
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {isLoading ? (

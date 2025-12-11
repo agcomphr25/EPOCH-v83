@@ -125,13 +125,13 @@ export default function P2ProductionScheduler() {
       }
 
       // Update items to move to Layup department (scheduled)
-      const response = await apiRequest('/api/p2/schedule-items', {
+      const result = await apiRequest('/api/p2/schedule-items', {
         method: 'POST',
         body: { 
           itemIds: itemsToSchedule.map(i => i.id),
         },
       });
-      return response.json();
+      return result;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });
@@ -174,11 +174,11 @@ export default function P2ProductionScheduler() {
         throw new Error('No items to schedule. Enter quantities first.');
       }
 
-      const response = await apiRequest('/api/p2/schedule-items', {
+      const result = await apiRequest('/api/p2/schedule-items', {
         method: 'POST',
         body: { itemIds: allItemsToSchedule },
       });
-      return response.json();
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });

@@ -781,11 +781,9 @@ export default function CuttingOperatorDashboard() {
                         <SelectValue placeholder="Select freezer..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="1">Freezer 1</SelectItem>
-                        <SelectItem value="2">Freezer 2</SelectItem>
-                        <SelectItem value="3">Freezer 3</SelectItem>
-                        <SelectItem value="4">Freezer 4</SelectItem>
-                        <SelectItem value="5">Freezer 5</SelectItem>
+                        {Array.from({ length: 20 }, (_, i) => (
+                          <SelectItem key={i + 1} value={String(i + 1)}>Freezer {i + 1}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1441,11 +1439,9 @@ export default function CuttingOperatorDashboard() {
                                 <SelectValue placeholder="Select freezer..." />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="1">Freezer 1</SelectItem>
-                                <SelectItem value="2">Freezer 2</SelectItem>
-                                <SelectItem value="3">Freezer 3</SelectItem>
-                                <SelectItem value="4">Freezer 4</SelectItem>
-                                <SelectItem value="5">Freezer 5</SelectItem>
+                                {Array.from({ length: 20 }, (_, i) => (
+                                  <SelectItem key={i + 1} value={String(i + 1)}>Freezer {i + 1}</SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>

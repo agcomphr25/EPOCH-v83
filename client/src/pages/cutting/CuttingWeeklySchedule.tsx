@@ -140,7 +140,7 @@ export default function CuttingWeeklySchedule() {
       };
       
       const stockModel = (item.stockModel || '').toLowerCase();
-      const isP1PO = item.orderType === 'p1_po' || item.source === 'P1_PO';
+      const isP1PO = item.source === 'P1_PO';
       
       if (stockModel.includes('mesa') || item.materialType === 'mesa') {
         mesa += item.packetsNeeded;

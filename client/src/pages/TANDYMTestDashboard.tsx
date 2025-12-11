@@ -1,11 +1,24 @@
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, DollarSign, TrendingUp, CreditCard, Calendar, FolderKanban } from 'lucide-react';
+import { Loader2, DollarSign, TrendingUp, CreditCard, Calendar, FolderKanban, ExternalLink } from 'lucide-react';
 import { Link } from 'wouter';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 
 interface Project {
   id: string;
+  projectCode: string;
+  projectName: string;
   status: string;
+  currentStepType: string;
+  customer?: {
+    customerName: string;
+  };
+  projectManager?: {
+    firstName: string;
+    lastName: string;
+  };
 }
 
 interface DashboardWidgetData {
@@ -37,7 +50,19 @@ export default function TANDYMTestDashboard() {
     queryKey: ['/api/projects'],
   });
 
-  const activeProjectsCount = projects?.filter(p => p.status === 'active').length || 0;
+  const activeProjects = projects?.filter(p => p.status === 'active') || [];
+  const activeProjectsCount = activeProjects.length;
+
+  const formatStepType = (stepType: string) => {
+    const stepLabels: Record<string, string> = {
+      rfq_risk_assessment: 'RFQ Risk Assessment',
+      quote: 'Quote',
+      purchase_review: 'Purchase Review',
+      preproduction_checklist: 'Pre-production Checklist',
+      p2_order: 'P2 Order',
+    };
+    return stepLabels[stepType] || stepType;
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
@@ -94,20 +119,66 @@ export default function TANDYMTestDashboard() {
         </div>
 
         <div className="lg:col-span-2 space-y-6">
-          <Link href="/projects" data-testid="link-active-projects">
-            <Card className="h-48 cursor-pointer hover:shadow-lg transition-shadow" data-testid="widget-active-projects">
-              <CardHeader>
+          <Card className="h-auto min-h-48" data-testid="widget-active-projects">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <FolderKanban className="h-5 w-5 text-indigo-600" />
                   Active Projects
+                  <Badge variant="secondary" className="ml-2">{activeProjectsCount}</Badge>
                 </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-indigo-600">{activeProjectsCount}</p>
-                <p className="text-sm text-muted-foreground mt-2">P2 projects in progress</p>
-              </CardContent>
-            </Card>
-          </Link>
+                <Link href="/projects" data-testid="link-view-all-projects">
+                  <span className="text-sm text-indigo-600 hover:underline flex items-center gap-1">
+                    View All <ExternalLink className="h-3 w-3" />
+                  </span>
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {activeProjectsCount === 0 ? (
+                <p className="text-sm text-muted-foreground">No active projects</p>
+              ) : (
+                <ScrollArea className="h-48">
+                  <Accordion type="single" collapsible className="w-full">
+                    {activeProjects.map((project) => (
+                      <AccordionItem key={project.id} value={project.id} data-testid={`accordion-project-${project.id}`}>
+                        <AccordionTrigger className="text-sm hover:no-underline py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{project.projectCode}</span>
+                            <span className="text-muted-foreground">-</span>
+                            <span>{project.projectName}</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="space-y-2 pl-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Customer:</span>
+                              <span>{project.customer?.customerName || 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Current Step:</span>
+                              <Badge variant="outline">{formatStepType(project.currentStepType)}</Badge>
+                            </div>
+                            {project.projectManager && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Project Manager:</span>
+                                <span>{project.projectManager.firstName} {project.projectManager.lastName}</span>
+                              </div>
+                            )}
+                            <Link href={`/projects/${project.id}`}>
+                              <span className="text-indigo-600 hover:underline text-xs flex items-center gap-1 mt-2">
+                                View Details <ExternalLink className="h-3 w-3" />
+                              </span>
+                            </Link>
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </ScrollArea>
+              )}
+            </CardContent>
+          </Card>
 
           <Card className="h-48" data-testid="widget-placeholder-4">
             <CardHeader>

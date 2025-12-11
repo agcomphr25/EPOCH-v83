@@ -94,6 +94,11 @@ export default function UserManagement() {
     queryFn: () => apiRequest('/api/users'),
   });
 
+  // Fetch employees for the dropdown
+  const { data: employees = [] } = useQuery<{ id: number; name: string; employeeCode: string }[]>({
+    queryKey: ['/api/employees'],
+  });
+
   // Filter to show only active users (with safety check for array)
   const users = Array.isArray(allUsers)
     ? allUsers.filter((user: User) => user.isActive)
@@ -711,21 +716,28 @@ export default function UserManagement() {
               </div>
 
               <div>
-                <Label htmlFor="employeeId">Employee ID (Optional)</Label>
-                <Input
-                  id="employeeId"
-                  type="number"
-                  value={formData.employeeId || ''}
-                  onChange={(e) =>
+                <Label htmlFor="employeeId">Link to Employee (Optional)</Label>
+                <Select
+                  value={formData.employeeId?.toString() || 'none'}
+                  onValueChange={(value) =>
                     setFormData({
                       ...formData,
-                      employeeId: e.target.value
-                        ? parseInt(e.target.value)
-                        : undefined,
+                      employeeId: value === 'none' ? undefined : parseInt(value),
                     })
                   }
-                  placeholder="Link to employee record"
-                />
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- No employee link --</SelectItem>
+                    {Array.isArray(employees) && employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id.toString()}>
+                        {emp.name} {emp.employeeCode ? `(${emp.employeeCode})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="flex items-center space-x-2">

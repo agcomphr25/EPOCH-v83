@@ -238,17 +238,20 @@ router.get('/employee-badge-actions/by-employee/:employeeCode', async (req, res)
 
 // Badge-specific execution endpoint with validation, execution, and audit logging
 router.post('/execute-badge-action', async (req, res) => {
-  const { employeeId, employeeCode, actionType, actionConfig, targetBarcode } = req.body;
+  const { employeeId, employeeCode, actionType, actionConfig, targetBarcode: rawTargetBarcode } = req.body;
+  
+  // Normalize barcode to uppercase for case-insensitive matching
+  const targetBarcode = rawTargetBarcode?.toUpperCase();
 
   try {
     // Step 1: Validate the target exists based on action type
     if (actionType === 'P1_DEPARTMENT_PROGRESS' || actionType === 'P2_DEPARTMENT_PROGRESS') {
       if (!targetBarcode) {
-        await logBadgeScan(employeeId, employeeCode, actionType, { targetBarcode }, 'validation_failed', 'No target barcode provided');
+        await logBadgeScan(employeeId, employeeCode, actionType, { targetBarcode: rawTargetBarcode }, 'validation_failed', 'No target barcode provided');
         return res.status(400).json({ error: 'Target barcode is required for department progression' });
       }
 
-      // Validate P1 order exists
+      // Validate P1 order exists (case-insensitive - barcodes normalized to uppercase)
       if (actionType === 'P1_DEPARTMENT_PROGRESS') {
         const { allOrders } = await import('../../schema');
         const order = await db

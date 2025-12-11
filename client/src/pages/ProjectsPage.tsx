@@ -43,7 +43,7 @@ interface Project {
 interface P2Customer {
   id: number;
   customerId: string;
-  name: string;
+  customerName: string;
   company?: string;
 }
 
@@ -189,7 +189,7 @@ export default function ProjectsPage() {
             <SelectItem value="all">All Customers</SelectItem>
             {p2Customers.map((customer) => (
               <SelectItem key={customer.customerId} value={customer.customerId}>
-                {customer.name}
+                {customer.customerName}
               </SelectItem>
             ))}
           </SelectContent>
@@ -344,7 +344,7 @@ export default function ProjectsPage() {
                 <SelectContent>
                   {p2Customers.map((customer) => (
                     <SelectItem key={customer.customerId} value={customer.customerId}>
-                      {customer.name}
+                      {customer.customerName}
                     </SelectItem>
                   ))}
                 </SelectContent>

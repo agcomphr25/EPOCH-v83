@@ -283,7 +283,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                       <SelectContent>
                         {p2Customers.map((customer: any) => (
                           <SelectItem key={customer.id} value={customer.id.toString()}>
-                            {customer.name} - {customer.company || 'No Company'}
+                            {customer.customerName}
                           </SelectItem>
                         ))}
                       </SelectContent>

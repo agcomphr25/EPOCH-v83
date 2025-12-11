@@ -442,34 +442,111 @@ export default function CuttingWeeklySchedule() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              {(() => {
+                let cfTotal = 0, fgTotal = 0, mesaTotal = 0;
+                p2Demand.forEach(po => {
+                  po.items.forEach(item => {
+                    if (item.materialType === 'carbon_fiber') cfTotal += item.qty;
+                    else if (item.materialType === 'fiberglass') fgTotal += item.qty;
+                    else if (item.materialType === 'mesa') mesaTotal += item.qty;
+                  });
+                });
+                return (
+                  <>
+                    <div className="p-4 bg-gray-900 text-white rounded-lg">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <p className="text-sm opacity-80">Carbon Fiber Packets</p>
+                          <p className="text-3xl font-bold">{cfTotal}</p>
+                          <p className="text-xs opacity-60">P2 demand</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.carbon_fiber}</span></p>
+                          <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.carbon_fiber}</span></p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-amber-500 text-white rounded-lg">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <p className="text-sm opacity-80">Fiberglass Packets</p>
+                          <p className="text-3xl font-bold">{fgTotal}</p>
+                          <p className="text-xs opacity-60">P2 demand</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.fiberglass}</span></p>
+                          <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.fiberglass}</span></p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-orange-600 text-white rounded-lg">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <p className="text-sm opacity-80">Mesa Packets</p>
+                          <p className="text-3xl font-bold">{mesaTotal}</p>
+                          <p className="text-xs opacity-60">P2 demand</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.mesa || 0}</span></p>
+                          <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.mesa}</span></p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
             <Collapsible open={expandedSections.p2} onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, p2: open }))}>
               <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
+                <Button variant="ghost" className="w-full justify-start gap-2 text-sm text-muted-foreground">
                   {expandedSections.p2 ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  {p2Demand.length} Purchase Orders with Packet Demand
+                  P2 Demand by PO ({p2Demand.length})
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <div className="space-y-3 mt-2">
-                  {p2Demand.map(po => (
-                    <div key={po.poId} className="p-3 border rounded-lg">
-                      <div className="flex justify-between items-center mb-2">
-                        <div>
-                          <span className="font-medium">PO-{po.poId}</span>
-                          <span className="text-muted-foreground ml-2">• {po.customer}</span>
-                        </div>
-                        <Badge>{po.total} packets</Badge>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {po.items.map((item, idx) => (
-                          <Badge key={idx} variant="outline" className="text-xs">
-                            {item.name}: {item.qty}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>PO / Customer</TableHead>
+                      <TableHead className="text-center">CF</TableHead>
+                      <TableHead className="text-center">FG</TableHead>
+                      <TableHead className="text-center">Mesa</TableHead>
+                      <TableHead className="text-center">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {p2Demand.map(po => {
+                      let cf = 0, fg = 0, mesa = 0;
+                      po.items.forEach(item => {
+                        if (item.materialType === 'carbon_fiber') cf += item.qty;
+                        else if (item.materialType === 'fiberglass') fg += item.qty;
+                        else if (item.materialType === 'mesa') mesa += item.qty;
+                      });
+                      return (
+                        <TableRow key={po.poId}>
+                          <TableCell className="font-medium">
+                            PO-{po.poId}
+                            <span className="text-muted-foreground ml-2">• {po.customer}</span>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {cf > 0 && <Badge variant="outline" className="bg-gray-900 text-white">{cf}</Badge>}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {fg > 0 && <Badge variant="outline" className="bg-amber-100 text-amber-800">{fg}</Badge>}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {mesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{mesa}</Badge>}
+                          </TableCell>
+                          <TableCell className="text-center font-bold">{po.total}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </CollapsibleContent>
             </Collapsible>
           </CardContent>

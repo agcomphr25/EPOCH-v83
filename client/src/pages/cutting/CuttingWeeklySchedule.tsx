@@ -114,11 +114,18 @@ export default function CuttingWeeklySchedule() {
   });
 
   const p1Demand = useMemo(() => {
-    if (!weeklyQueueData?.items) return { cf: 0, fg: 0, mesa: 0, total: 0, byCustomer: [] };
+    if (!weeklyQueueData?.items) return { 
+      cf: 0, fg: 0, mesa: 0, total: 0, byCustomer: [],
+      regularOrders: { cf: 0, fg: 0, mesa: 0, total: 0 },
+      oemOrders: { cf: 0, fg: 0, mesa: 0, total: 0 }
+    };
     
     const p1Items = weeklyQueueData.items.filter(i => i.source === 'P1' || i.source === 'P1_PO');
     
     let cf = 0, fg = 0, mesa = 0;
+    // Separate tracking for regular vs OEM orders
+    const regularOrders = { cf: 0, fg: 0, mesa: 0, total: 0 };
+    const oemOrders = { cf: 0, fg: 0, mesa: 0, total: 0 };
     const customerMap: Record<string, { cf: number; fg: number; mesa: number }> = {};
     
     p1Items.forEach(item => {
@@ -126,23 +133,43 @@ export default function CuttingWeeklySchedule() {
       if (!customerMap[customer]) customerMap[customer] = { cf: 0, fg: 0, mesa: 0 };
       
       const stockModel = (item.stockModel || '').toLowerCase();
+      const isOEM = item.orderType === 'oem' || item.source === 'P1_PO';
+      
       if (stockModel.includes('mesa') || item.materialType === 'mesa') {
         mesa += item.packetsNeeded;
         customerMap[customer].mesa += item.packetsNeeded;
+        if (isOEM) {
+          oemOrders.mesa += item.packetsNeeded;
+        } else {
+          regularOrders.mesa += item.packetsNeeded;
+        }
       } else if (item.materialType === 'carbon_fiber' || stockModel.includes('cf')) {
         cf += item.packetsNeeded;
         customerMap[customer].cf += item.packetsNeeded;
+        if (isOEM) {
+          oemOrders.cf += item.packetsNeeded;
+        } else {
+          regularOrders.cf += item.packetsNeeded;
+        }
       } else if (item.materialType === 'fiberglass' || stockModel.includes('fg')) {
         fg += item.packetsNeeded;
         customerMap[customer].fg += item.packetsNeeded;
+        if (isOEM) {
+          oemOrders.fg += item.packetsNeeded;
+        } else {
+          regularOrders.fg += item.packetsNeeded;
+        }
       }
     });
+    
+    regularOrders.total = regularOrders.cf + regularOrders.fg + regularOrders.mesa;
+    oemOrders.total = oemOrders.cf + oemOrders.fg + oemOrders.mesa;
     
     const byCustomer = Object.entries(customerMap)
       .map(([customer, counts]) => ({ customer, ...counts, total: counts.cf + counts.fg + counts.mesa }))
       .sort((a, b) => b.total - a.total);
     
-    return { cf, fg, mesa, total: cf + fg + mesa, byCustomer };
+    return { cf, fg, mesa, total: cf + fg + mesa, byCustomer, regularOrders, oemOrders };
   }, [weeklyQueueData?.items]);
 
   const p2Demand = useMemo(() => {
@@ -383,6 +410,64 @@ export default function CuttingWeeklySchedule() {
                   <Send className="h-3 w-3 mr-1" />
                   Schedule
                 </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* P1 Production Regular Orders vs OEM Orders Breakdown */}
+          <div className="mb-4 p-4 bg-muted/50 rounded-lg">
+            <h4 className="font-semibold mb-3 flex items-center gap-2">
+              <Factory className="h-4 w-4" />
+              P1 Production Demand Breakdown
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Regular Production Orders</span>
+                  <Badge variant="outline" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                    {p1Demand.regularOrders.total} total
+                  </Badge>
+                </div>
+                <div className="flex gap-3 text-sm">
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-gray-900"></span>
+                    CF: <strong>{p1Demand.regularOrders.cf}</strong>
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-amber-500"></span>
+                    FG: <strong>{p1Demand.regularOrders.fg}</strong>
+                  </span>
+                  {p1Demand.regularOrders.mesa > 0 && (
+                    <span className="flex items-center gap-1">
+                      <span className="w-3 h-3 rounded-full bg-orange-600"></span>
+                      Mesa: <strong>{p1Demand.regularOrders.mesa}</strong>
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-purple-800 dark:text-purple-200">OEM/PO Orders</span>
+                  <Badge variant="outline" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                    {p1Demand.oemOrders.total} total
+                  </Badge>
+                </div>
+                <div className="flex gap-3 text-sm">
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-gray-900"></span>
+                    CF: <strong>{p1Demand.oemOrders.cf}</strong>
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded-full bg-amber-500"></span>
+                    FG: <strong>{p1Demand.oemOrders.fg}</strong>
+                  </span>
+                  {p1Demand.oemOrders.mesa > 0 && (
+                    <span className="flex items-center gap-1">
+                      <span className="w-3 h-3 rounded-full bg-orange-600"></span>
+                      Mesa: <strong>{p1Demand.oemOrders.mesa}</strong>
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>

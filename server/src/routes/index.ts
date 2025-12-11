@@ -7197,6 +7197,211 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Invoice Category Breakdown API - Get invoice totals broken down by pricing categories
+  app.get('/api/finance/invoice-category-breakdown', async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+      
+      if (!pool) {
+        return res.status(500).json({ error: 'Database connection not available' });
+      }
+      
+      const month = parseInt(req.query.month as string) || new Date().getMonth() + 1;
+      const year = parseInt(req.query.year as string) || new Date().getFullYear();
+      
+      const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+      const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      
+      // Query orders with features and model info for the specified month
+      const query = `
+        SELECT 
+          ao.order_id,
+          ao.model_id,
+          ao.features,
+          ao.calculated_total,
+          ao.price_override,
+          ao.shipping,
+          sm.price as stock_model_price,
+          sm.name as stock_model_name
+        FROM all_orders ao
+        LEFT JOIN stock_models sm ON ao.model_id = sm.id
+        WHERE ao.order_date >= $1 
+          AND ao.order_date <= $2
+          AND ao.status NOT IN ('CANCELLED', 'SCRAPPED')
+      `;
+      
+      const result = await pool.query(query, [startDate, endDate]);
+      const rows = Array.isArray(result) ? result : (result.rows || []);
+      
+      // Initialize category totals
+      const categories: Record<string, { total: number; count: number; orders: { orderId: string; amount: number; detail: string }[] }> = {
+        'Stock Model': { total: 0, count: 0, orders: [] },
+        'Bottom Metal': { total: 0, count: 0, orders: [] },
+        'QDs': { total: 0, count: 0, orders: [] },
+        'Texture': { total: 0, count: 0, orders: [] },
+        'Rails': { total: 0, count: 0, orders: [] },
+        'LOP': { total: 0, count: 0, orders: [] },
+        'Paint': { total: 0, count: 0, orders: [] },
+        'Swivels': { total: 0, count: 0, orders: [] },
+        'Shipping': { total: 0, count: 0, orders: [] },
+        'Other': { total: 0, count: 0, orders: [] },
+      };
+      
+      // Get all features with their prices
+      const featuresQuery = `SELECT id, name, price, options FROM features`;
+      const featuresResult = await pool.query(featuresQuery);
+      const allFeatures = Array.isArray(featuresResult) ? featuresResult : (featuresResult.rows || []);
+      
+      // Build feature price lookup
+      const featurePriceLookup: Record<string, { basePrice: number; options: Record<string, number> }> = {};
+      for (const feature of allFeatures) {
+        const options: Record<string, number> = {};
+        // Handle options that might be a JSON string or already parsed array
+        let parsedOptions = feature.options;
+        if (typeof parsedOptions === 'string') {
+          try {
+            parsedOptions = JSON.parse(parsedOptions);
+          } catch {
+            parsedOptions = [];
+          }
+        }
+        if (parsedOptions && Array.isArray(parsedOptions)) {
+          for (const opt of parsedOptions) {
+            if (opt && opt.value !== undefined) {
+              const price = typeof opt.price === 'number' ? opt.price : parseFloat(String(opt.price || 0)) || 0;
+              options[opt.value] = price;
+            }
+          }
+        }
+        featurePriceLookup[feature.id] = {
+          basePrice: typeof feature.price === 'number' ? feature.price : parseFloat(String(feature.price || 0)) || 0,
+          options,
+        };
+      }
+      
+      let grandTotal = 0;
+      
+      for (const row of rows) {
+        const features = row.features || {};
+        const orderId = row.order_id;
+        
+        // Stock Model price
+        const stockModelPrice = row.price_override || row.stock_model_price || 0;
+        if (stockModelPrice > 0) {
+          categories['Stock Model'].total += stockModelPrice;
+          categories['Stock Model'].count++;
+          categories['Stock Model'].orders.push({
+            orderId,
+            amount: stockModelPrice,
+            detail: row.stock_model_name || row.model_id || 'Unknown Model'
+          });
+          grandTotal += stockModelPrice;
+        }
+        
+        // Process each feature category
+        const featureMapping: Record<string, string> = {
+          'bottom_metal': 'Bottom Metal',
+          'qd_accessory': 'QDs',
+          'texture_options': 'Texture',
+          'rail_accessory': 'Rails',
+          'length_of_pull': 'LOP',
+          'paint_options': 'Paint',
+          'paint_options_combined': 'Paint',
+          'swivel_studs': 'Swivels',
+        };
+        
+        for (const [featureKey, categoryName] of Object.entries(featureMapping)) {
+          const featureValue = features[featureKey];
+          if (!featureValue || featureValue === 'no_' + featureKey.split('_')[0]) continue;
+          
+          let featurePrice = 0;
+          let detail = '';
+          
+          // Handle array values (like rail_accessory)
+          if (Array.isArray(featureValue)) {
+            for (const val of featureValue) {
+              if (val && val !== 'no_rail') {
+                const lookup = featurePriceLookup[featureKey];
+                const optPrice = lookup?.options?.[val] || 0;
+                featurePrice += optPrice;
+                detail = detail ? `${detail}, ${val}` : val;
+              }
+            }
+          } else if (typeof featureValue === 'string') {
+            // Skip "no_xxx" values
+            if (featureValue.startsWith('no_')) continue;
+            
+            const lookup = featurePriceLookup[featureKey];
+            featurePrice = lookup?.options?.[featureValue] || lookup?.basePrice || 0;
+            detail = featureValue;
+          }
+          
+          if (featurePrice > 0) {
+            categories[categoryName].total += featurePrice;
+            categories[categoryName].count++;
+            categories[categoryName].orders.push({
+              orderId,
+              amount: featurePrice,
+              detail: detail.replace(/_/g, ' ')
+            });
+            grandTotal += featurePrice;
+          }
+        }
+        
+        // Handle miscItems as "Other"
+        const miscItems = features.miscItems || [];
+        if (Array.isArray(miscItems)) {
+          for (const item of miscItems) {
+            const itemPrice = parseFloat(item.price) || 0;
+            if (itemPrice > 0) {
+              categories['Other'].total += itemPrice;
+              categories['Other'].count++;
+              categories['Other'].orders.push({
+                orderId,
+                amount: itemPrice,
+                detail: item.name || 'Misc Item'
+              });
+              grandTotal += itemPrice;
+            }
+          }
+        }
+        
+        // Handle Shipping
+        const shippingCost = parseFloat(row.shipping) || 0;
+        if (shippingCost > 0) {
+          categories['Shipping'].total += shippingCost;
+          categories['Shipping'].count++;
+          categories['Shipping'].orders.push({
+            orderId,
+            amount: shippingCost,
+            detail: 'Shipping'
+          });
+          grandTotal += shippingCost;
+        }
+      }
+      
+      // Convert to array format
+      const categoryArray = Object.entries(categories).map(([category, data]) => ({
+        category,
+        total: Math.round(data.total * 100) / 100,
+        count: data.count,
+        orders: data.orders.slice(0, 100) // Limit to first 100 orders per category
+      }));
+      
+      res.json({
+        grandTotal: Math.round(grandTotal * 100) / 100,
+        totalOrders: rows.length,
+        month,
+        year,
+        monthName: new Date(year, month - 1, 1).toLocaleString('default', { month: 'long' }),
+        categories: categoryArray
+      });
+    } catch (error) {
+      console.error('💰 Invoice Category Breakdown error:', error);
+      res.status(500).json({ error: 'Failed to fetch invoice category breakdown' });
+    }
+  });
+
   // Migration endpoint: Sync existing production orders to main orders table for layup scheduler
   app.post('/api/migrate-production-orders-to-layup', async (req, res) => {
     try {

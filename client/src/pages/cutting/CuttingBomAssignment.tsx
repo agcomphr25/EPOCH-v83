@@ -48,6 +48,7 @@ import {
   ChevronRight,
   Settings,
   Scissors,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -147,6 +148,40 @@ export default function CuttingBomAssignment() {
   const { data: fabricItems = [] } = useQuery<{ id: number; agPartNumber: string; name: string; fabric: string }[]>({
     queryKey: ['/api/cutting-table/fabric-items'],
   });
+
+  const { data: weeklyQueueData } = useQuery<{
+    items: { stockModel: string; source: string; packetsNeeded: number }[];
+  }>({
+    queryKey: ['/api/cutting-table/weekly-cutting-queue', 'showAll'],
+    queryFn: async () => {
+      const res = await fetch('/api/cutting-table/weekly-cutting-queue?showAll=true');
+      if (!res.ok) return { items: [] };
+      return res.json();
+    },
+  });
+
+  const packetsNeedingBom = useMemo(() => {
+    if (!weeklyQueueData?.items) return [];
+    
+    const existingBomTypes = new Set(
+      packetBOMs.flatMap(bom => [bom.partNumber, bom.packetType].filter(Boolean))
+    );
+    
+    const demandedPackets: Record<string, { name: string; demand: number; source: string }> = {};
+    
+    weeklyQueueData.items.forEach(item => {
+      if (!item.stockModel) return;
+      const name = item.stockModel;
+      if (!existingBomTypes.has(name)) {
+        if (!demandedPackets[name]) {
+          demandedPackets[name] = { name, demand: 0, source: item.source };
+        }
+        demandedPackets[name].demand += item.packetsNeeded || 1;
+      }
+    });
+    
+    return Object.values(demandedPackets).sort((a, b) => b.demand - a.demand);
+  }, [weeklyQueueData?.items, packetBOMs]);
 
   const createPacketBomMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -334,6 +369,63 @@ export default function CuttingBomAssignment() {
           Create Packet BOM
         </Button>
       </div>
+
+      {packetsNeedingBom.length > 0 && (
+        <Card className="border-amber-500 bg-amber-50 dark:bg-amber-950/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-5 w-5" />
+              Action Needed: Create BOMs
+            </CardTitle>
+            <CardDescription className="text-amber-600 dark:text-amber-500">
+              The following packets have demand but no BOM configured
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Packet Name</TableHead>
+                  <TableHead className="text-center">Demand</TableHead>
+                  <TableHead className="text-center">Source</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {packetsNeedingBom.map((packet) => (
+                  <TableRow key={packet.name}>
+                    <TableCell className="font-medium">{packet.name}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="destructive">{packet.demand}</Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="outline">{packet.source}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          resetForm();
+                          setPacketBomForm(prev => ({
+                            ...prev,
+                            packetType: packet.name,
+                            partNumber: packet.name,
+                          }));
+                          setIsPacketBomDialogOpen(true);
+                        }}
+                        data-testid={`button-create-bom-for-${packet.name}`}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Create BOM
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

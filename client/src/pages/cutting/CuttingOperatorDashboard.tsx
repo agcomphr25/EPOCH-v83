@@ -164,6 +164,8 @@ export default function CuttingOperatorDashboard() {
     fabricName: '',
     currentFreezer: '',
     freezerNumber: '',
+    isP2: false,
+    generatedBarcode: '',
   });
 
   const { data: currentUser } = useQuery<{ username: string }>({
@@ -398,21 +400,32 @@ export default function CuttingOperatorDashboard() {
 
   const assignFreezerMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest(`/api/cutting-table/fabric-inventory/${receivingForm.fabricId}/assign-freezer`, {
+      return apiRequest(`/api/cutting-table/fabric-inventory/${receivingForm.fabricId}/receive`, {
         method: 'POST',
-        body: JSON.stringify({ freezerNumber: parseInt(receivingForm.freezerNumber) }),
+        body: JSON.stringify({ 
+          freezerNumber: parseInt(receivingForm.freezerNumber),
+          isP2: receivingForm.isP2,
+        }),
       });
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
-      toast({
-        title: 'Freezer Assigned',
-        description: `${receivingForm.fabricName} assigned to Freezer ${receivingForm.freezerNumber}`,
-      });
-      setReceivingForm({ barcode: '', fabricId: '', fabricName: '', currentFreezer: '', freezerNumber: '' });
+      if (data.generatedBarcode) {
+        setReceivingForm(prev => ({ ...prev, generatedBarcode: data.generatedBarcode }));
+        toast({
+          title: 'P2 Item Received',
+          description: `Barcode generated: ${data.generatedBarcode}`,
+        });
+      } else {
+        toast({
+          title: 'Freezer Assigned',
+          description: `${receivingForm.fabricName} assigned to Freezer ${receivingForm.freezerNumber}`,
+        });
+        setReceivingForm({ barcode: '', fabricId: '', fabricName: '', currentFreezer: '', freezerNumber: '', isP2: false, generatedBarcode: '' });
+      }
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to assign freezer location.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'Failed to receive fabric.', variant: 'destructive' });
     },
   });
 
@@ -629,7 +642,7 @@ export default function CuttingOperatorDashboard() {
                 />
               </div>
               
-              {receivingForm.fabricId && (
+              {receivingForm.fabricId && !receivingForm.generatedBarcode && (
                 <>
                   <div className="p-2 bg-muted rounded text-sm">
                     <p><strong>Fabric:</strong> {receivingForm.fabricName}</p>
@@ -653,15 +666,46 @@ export default function CuttingOperatorDashboard() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="is-p2"
+                      checked={receivingForm.isP2}
+                      onChange={(e) => setReceivingForm(prev => ({ ...prev, isP2: e.target.checked }))}
+                      className="h-4 w-4 rounded border-gray-300"
+                      data-testid="checkbox-p2"
+                    />
+                    <Label htmlFor="is-p2" className="text-sm font-medium cursor-pointer">
+                      P2 Item (Generate Tracking Barcode)
+                    </Label>
+                  </div>
                   <Button 
                     className="w-full" 
                     onClick={() => assignFreezerMutation.mutate()}
                     disabled={!receivingForm.freezerNumber || assignFreezerMutation.isPending}
                     data-testid="button-assign-freezer"
                   >
-                    {assignFreezerMutation.isPending ? 'Assigning...' : 'Assign Freezer Location'}
+                    {assignFreezerMutation.isPending ? 'Receiving...' : (receivingForm.isP2 ? 'Receive & Generate Barcode' : 'Assign Freezer Location')}
                   </Button>
                 </>
+              )}
+              
+              {receivingForm.generatedBarcode && (
+                <div className="space-y-3">
+                  <div className="p-3 bg-green-50 border border-green-200 rounded text-center">
+                    <p className="text-sm text-green-700 font-medium mb-2">P2 Barcode Generated</p>
+                    <p className="font-mono text-lg font-bold text-green-900">{receivingForm.generatedBarcode}</p>
+                    <p className="text-xs text-green-600 mt-1">Print this barcode for traceability</p>
+                  </div>
+                  <Button 
+                    variant="outline"
+                    className="w-full" 
+                    onClick={() => setReceivingForm({ barcode: '', fabricId: '', fabricName: '', currentFreezer: '', freezerNumber: '', isP2: false, generatedBarcode: '' })}
+                    data-testid="button-receive-another"
+                  >
+                    Receive Another Item
+                  </Button>
+                </div>
               )}
             </div>
           </CardContent>

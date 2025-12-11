@@ -832,6 +832,44 @@ router.post('/fabric-inventory/:id/assign-freezer', async (req, res) => {
   }
 });
 
+router.post('/fabric-inventory/:id/receive', async (req, res) => {
+  try {
+    const rollId = req.params.id;
+    const { freezerNumber, isP2 } = req.body;
+    
+    if (!freezerNumber || isNaN(parseInt(freezerNumber))) {
+      return res.status(400).json({ error: 'Valid freezer number is required' });
+    }
+    
+    const updateData: any = {
+      freezerNumber: parseInt(freezerNumber),
+      receivedDate: new Date().toISOString().split('T')[0],
+    };
+    
+    let generatedBarcode: string | null = null;
+    
+    if (isP2) {
+      const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+      generatedBarcode = `FI-P2-${date}-${random}`;
+      updateData.barcode = generatedBarcode;
+    }
+    
+    const inventory = await storage.updateCuttingFabricInventory(rollId, updateData);
+    
+    res.json({ 
+      success: true, 
+      message: isP2 ? `P2 item received with barcode: ${generatedBarcode}` : `Roll assigned to Freezer ${freezerNumber}`,
+      rollId,
+      freezerNumber: parseInt(freezerNumber),
+      generatedBarcode,
+    });
+  } catch (error) {
+    console.error('Error receiving fabric:', error);
+    res.status(500).json({ error: 'Failed to receive fabric' });
+  }
+});
+
 // Recommended Cuts endpoint - calculates cuts needed based on packet recipes and weekly goals
 router.get('/recommended-cuts/:weekDate', async (req, res) => {
   try {

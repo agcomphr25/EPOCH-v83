@@ -303,6 +303,34 @@ router.post('/:id/process', async (req: Request, res: Response) => {
       });
     }
 
+    // Record the refund in the payments table (negative amount) so order balance updates
+    // This is MANDATORY - the order's "total due" is calculated from the payments table
+    let refundPaymentId: number;
+    try {
+      const [refundPayment] = await db
+        .insert(payments)
+        .values({
+          orderId: refundRequest.orderId,
+          paymentType: 'refund',
+          paymentAmount: -refundAmount, // Negative amount reduces the total paid
+          paymentDate: new Date(),
+          notes: `Refund via Accept.Blue. Original ref# ${referenceNumber}. Refund ref# ${result.refundReferenceNumber || 'N/A'}`,
+        })
+        .returning();
+      refundPaymentId = refundPayment.id;
+      console.log(`📝 Recorded refund payment (ID: ${refundPaymentId}) for order ${refundRequest.orderId}`);
+    } catch (paymentInsertError) {
+      // This is critical - if we can't record the payment, the order balance won't update
+      // The Accept.Blue refund succeeded, so we need to alert the user to manually reconcile
+      console.error('❌ CRITICAL: Failed to record refund payment:', paymentInsertError);
+      return res.status(500).json({ 
+        error: `Refund was processed by Accept.Blue (Ref# ${result.refundReferenceNumber || 'N/A'}), but failed to update order balance. Please manually add a refund payment of -$${refundAmount} to order ${refundRequest.orderId}.`,
+        refundProcessed: true,
+        refundReferenceNumber: result.refundReferenceNumber,
+        requiresManualReconciliation: true,
+      });
+    }
+
     // Record the refund transaction in creditCardTransactions for audit/ledger purposes
     // Use the actual Accept.Blue reference number as the transactionId for proper reconciliation
     const refundTransactionIdForDb = result.refundReferenceNumber 
@@ -313,7 +341,7 @@ router.post('/:id/process', async (req: Request, res: Response) => {
       await db
         .insert(creditCardTransactions)
         .values({
-          paymentId: originalTransaction.paymentId,
+          paymentId: refundPaymentId, // Link to refund payment (now mandatory)
           orderId: refundRequest.orderId,
           transactionId: refundTransactionIdForDb, // Actual Accept.Blue reference number
           authCode: result.refundTransactionId || 'REFUND', // Store transaction ID in authCode

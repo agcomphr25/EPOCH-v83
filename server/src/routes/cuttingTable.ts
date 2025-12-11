@@ -1639,45 +1639,29 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       console.log('P1 layup schedule query skipped:', err);
     }
 
-    // 2. P1 Production Orders from production_orders table - Regular orders that need packets
+    // 2. P1 Purchase Order Items - Items that still need packets (remaining = quantity - order_count)
     try {
-      // If showAll, get all pending P1 production items without date filter
-      const p1ProdResult = showAll === 'true'
-        ? await pool.query(`
-            SELECT 
-              po.id,
-              po.order_id as "orderId",
-              po.item_id as "stockModel",
-              po.due_date as "dueDate",
-              po.customer_id as "customerId",
-              po.customer_name as "customerName",
-              po.po_number as "poNumber",
-              po.specifications
-            FROM production_orders po
-            WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
-              AND po.production_status IN ('PENDING', 'ACTIVE')
-            ORDER BY po.due_date ASC
-            LIMIT 500
-          `)
-        : await pool.query(`
-            SELECT 
-              po.id,
-              po.order_id as "orderId",
-              po.item_id as "stockModel",
-              po.due_date as "dueDate",
-              po.customer_id as "customerId",
-              po.customer_name as "customerName",
-              po.po_number as "poNumber",
-              po.specifications
-            FROM production_orders po
-            WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
-              AND po.production_status IN ('PENDING', 'ACTIVE')
-              AND po.due_date >= $1 AND po.due_date < $2
-            ORDER BY po.due_date ASC
-          `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
+      const p1PoItemsResult = await pool.query(`
+        SELECT 
+          poi.id,
+          po.po_number as "poNumber",
+          po.customer_name as "customerName",
+          poi.item_name as "itemName",
+          poi.quantity,
+          COALESCE(poi.order_count, 0) as "orderCount",
+          poi.quantity - COALESCE(poi.order_count, 0) as "remaining",
+          poi.due_date as "dueDate",
+          poi.specifications
+        FROM purchase_order_items poi
+        JOIN purchase_orders po ON poi.po_id = po.id
+        WHERE po.status NOT IN ('COMPLETED', 'CANCELLED', 'SHIPPED')
+          AND poi.quantity > COALESCE(poi.order_count, 0)
+        ORDER BY poi.due_date ASC NULLS LAST
+        LIMIT 500
+      `);
 
-      const p1ProdRows = Array.isArray(p1ProdResult) ? p1ProdResult : (p1ProdResult as any).rows || [];
-      for (const item of p1ProdRows) {
+      const p1PoRows = Array.isArray(p1PoItemsResult) ? p1PoItemsResult : (p1PoItemsResult as any).rows || [];
+      for (const item of p1PoRows) {
         // Parse specifications JSON to get material type
         let specs: any = {};
         try {
@@ -1690,7 +1674,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
         
         // Get material from specifications.material field (e.g., "carbon_fiber", "fiberglass")
         const specMaterial = (specs.material || '').toLowerCase();
-        const stockModelName = specs.stockModel || item.stockModel || '';
+        const stockModelName = specs.stockModel || specs.stock_model || '';
         
         // Determine material type from specs.material first, then fall back to stock model name
         let materialType = 'unknown';
@@ -1698,32 +1682,37 @@ router.get('/weekly-cutting-queue', async (req, res) => {
           materialType = 'carbon_fiber';
         } else if (specMaterial === 'fiberglass' || specMaterial === 'fg') {
           materialType = 'fiberglass';
+        } else if (specMaterial === 'mesa' || stockModelName.toLowerCase().includes('mesa')) {
+          materialType = 'mesa';
         } else if (stockModelName.toLowerCase().includes('cf_') || stockModelName.toLowerCase().includes('cf ')) {
           materialType = 'carbon_fiber';
         } else if (stockModelName.toLowerCase().includes('fg_') || stockModelName.toLowerCase().includes('fg ')) {
           materialType = 'fiberglass';
         }
         
-        // All orders in P1 Production Queue are regular production orders that need packets
-        queueItems.push({
-          id: `p1prod-${item.id}`,
-          orderId: item.orderId,
-          stockModel: stockModelName || `Item ${item.stockModel}`,
-          source: 'P1',
-          orderType: 'regular',
-          materialType,
-          scheduledDate: item.dueDate,
-          dueDate: item.dueDate,
-          customer: item.customerName || specs.customerName || item.customerId,
-          priority: 50,
-          packetsNeeded: 1,
-          usesInventory: false,
-          requiresNewCut: true,
-          specifications: specs,
-        });
+        // Add items based on remaining quantity (items that still need packets)
+        const remaining = item.remaining || 0;
+        if (remaining > 0) {
+          queueItems.push({
+            id: `p1po-${item.id}`,
+            orderId: item.poNumber,
+            stockModel: stockModelName || item.itemName || `PO Item ${item.id}`,
+            source: 'P1',
+            orderType: 'regular',
+            materialType,
+            scheduledDate: item.dueDate,
+            dueDate: item.dueDate,
+            customer: item.customerName,
+            priority: 50,
+            packetsNeeded: remaining,
+            usesInventory: false,
+            requiresNewCut: true,
+            specifications: specs,
+          });
+        }
       }
     } catch (err) {
-      console.log('P1 production orders query skipped:', err);
+      console.log('P1 PO items query skipped:', err);
     }
 
     // 3. P2 PO Items - Purchase order items with BOMs requiring cutting

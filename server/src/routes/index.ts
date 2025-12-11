@@ -6967,8 +6967,14 @@ export function registerRoutes(app: Express): Server {
         byDay[dayKey].count += 1;
       }
       
-      const getPaymentLabel = (type: string) => {
-        if (type === 'credit_card') return 'Phone';
+      const getPaymentLabel = (type: string, notes: string | null) => {
+        if (type === 'credit_card') {
+          // Check if this is a Live payment based on notes
+          if (notes && notes.toLowerCase().includes('live credit card')) {
+            return 'Live';
+          }
+          return 'Phone';
+        }
         if (type === 'aaaa') return 'Online';
         return type;
       };
@@ -7000,7 +7006,7 @@ export function registerRoutes(app: Express): Server {
           id: p.payment_id,
           orderId: p.order_id,
           paymentType: p.payment_type,
-          paymentLabel: getPaymentLabel(p.payment_type),
+          paymentLabel: getPaymentLabel(p.payment_type, p.notes),
           amount: parseFloat(p.payment_amount) || 0,
           date: p.payment_date,
           notes: p.notes,

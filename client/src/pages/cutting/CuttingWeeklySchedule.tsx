@@ -414,64 +414,6 @@ export default function CuttingWeeklySchedule() {
             </div>
           </div>
 
-          {/* P1 Production Regular Orders vs OEM Orders Breakdown */}
-          <div className="mb-4 p-4 bg-muted/50 rounded-lg">
-            <h4 className="font-semibold mb-3 flex items-center gap-2">
-              <Factory className="h-4 w-4" />
-              P1 Production Demand Breakdown
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Regular Production Orders</span>
-                  <Badge variant="outline" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                    {p1Demand.regularOrders.total} total
-                  </Badge>
-                </div>
-                <div className="flex gap-3 text-sm">
-                  <span className="flex items-center gap-1">
-                    <span className="w-3 h-3 rounded-full bg-gray-900"></span>
-                    CF: <strong>{p1Demand.regularOrders.cf}</strong>
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-3 h-3 rounded-full bg-amber-500"></span>
-                    FG: <strong>{p1Demand.regularOrders.fg}</strong>
-                  </span>
-                  {p1Demand.regularOrders.mesa > 0 && (
-                    <span className="flex items-center gap-1">
-                      <span className="w-3 h-3 rounded-full bg-orange-600"></span>
-                      Mesa: <strong>{p1Demand.regularOrders.mesa}</strong>
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-purple-800 dark:text-purple-200">OEM/PO Orders</span>
-                  <Badge variant="outline" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
-                    {p1Demand.oemOrders.total} total
-                  </Badge>
-                </div>
-                <div className="flex gap-3 text-sm">
-                  <span className="flex items-center gap-1">
-                    <span className="w-3 h-3 rounded-full bg-gray-900"></span>
-                    CF: <strong>{p1Demand.oemOrders.cf}</strong>
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-3 h-3 rounded-full bg-amber-500"></span>
-                    FG: <strong>{p1Demand.oemOrders.fg}</strong>
-                  </span>
-                  {p1Demand.oemOrders.mesa > 0 && (
-                    <span className="flex items-center gap-1">
-                      <span className="w-3 h-3 rounded-full bg-orange-600"></span>
-                      Mesa: <strong>{p1Demand.oemOrders.mesa}</strong>
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
           {p1Demand.byCustomer.length > 0 && (
             <Collapsible open={expandedSections.p1} onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, p1: open }))}>
               <CollapsibleTrigger asChild>

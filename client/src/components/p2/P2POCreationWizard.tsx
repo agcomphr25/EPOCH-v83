@@ -67,8 +67,8 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
   const [newItem, setNewItem] = useState<Partial<LineItem>>({});
   const { toast } = useToast();
 
-  const { data: customers = [] } = useQuery<any[]>({
-    queryKey: ['/api/customers'],
+  const { data: p2Customers = [] } = useQuery<any[]>({
+    queryKey: ['/api/p2/p2-customers-bypass'],
   });
 
   const { data: employees = [] } = useQuery<any[]>({
@@ -125,7 +125,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
   });
 
   const handleCustomerSubmit = (data: z.infer<typeof customerSchema>) => {
-    const customer = customers.find((c: any) => c.id.toString() === data.customerId);
+    const customer = p2Customers.find((c: any) => c.id.toString() === data.customerId);
     setSelectedCustomer(customer);
     setCurrentStep(1);
   };
@@ -281,7 +281,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {customers.map((customer: any) => (
+                        {p2Customers.map((customer: any) => (
                           <SelectItem key={customer.id} value={customer.id.toString()}>
                             {customer.name} - {customer.company || 'No Company'}
                           </SelectItem>

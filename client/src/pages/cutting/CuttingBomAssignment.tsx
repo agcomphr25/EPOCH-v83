@@ -482,12 +482,18 @@ export default function CuttingBomAssignment() {
       })),
     }));
 
+    // Calculate actual metrics from cut programs
+    const totalYield = cutPrograms.reduce((sum, prog) => 
+      sum + prog.assignedParts.reduce((partSum, ap) => partSum + (ap.yieldPerCut || 0), 0), 0);
+    const totalSqMeters = cutPrograms.reduce((sum, prog) => sum + (prog.squareMetersPerCut || 0), 0);
+    const numCutPrograms = cutPrograms.length;
+
     const data = {
       partNumber: packetBomForm.partNumber,
       packetType: packetBomForm.packetType,
       inventoryItemId: selectedPacketId,
-      yieldPerCut: parseInt(packetBomForm.yieldPerCut) || 4,
-      squareMetersPerCut: parseFloat(packetBomForm.squareMetersPerCut) || 0.5,
+      yieldPerCut: totalYield > 0 ? totalYield : (parseInt(packetBomForm.yieldPerCut) || 4),
+      squareMetersPerCut: totalSqMeters > 0 ? totalSqMeters : (parseFloat(packetBomForm.squareMetersPerCut) || 0.5),
       wasteFactor: parseFloat(packetBomForm.wasteFactor) || 0.05,
       materials: packetBomForm.materials,
       parts: partsData,
@@ -634,9 +640,9 @@ export default function CuttingBomAssignment() {
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span>{bom.parts?.length || 0} parts</span>
                         <span>•</span>
-                        <span>{bom.cuts?.length || 0} cuts</span>
+                        <span>{bom.cutPrograms?.length || bom.cuts?.length || 0} programs</span>
                         <span>•</span>
-                        <span>{bom.yieldPerCut || 4} yield/cut</span>
+                        <span>{bom.cutPrograms?.reduce((sum: number, p: any) => sum + (p.assignedParts?.reduce((ps: number, ap: any) => ps + (ap.yieldPerCut || 0), 0) || 0), 0) || bom.yieldPerCut || 0} total yield</span>
                       </div>
                     </div>
                   </AccordionTrigger>
@@ -644,16 +650,20 @@ export default function CuttingBomAssignment() {
                     <div className="space-y-4 pt-2">
                       <div className="grid grid-cols-3 gap-4 text-sm">
                         <div>
-                          <Label className="text-muted-foreground">Yield Per Cut</Label>
-                          <p className="font-medium">{bom.yieldPerCut || 4} pieces</p>
+                          <Label className="text-muted-foreground">Total Yield (all programs)</Label>
+                          <p className="font-medium">
+                            {bom.cutPrograms?.reduce((sum: number, p: any) => sum + (p.assignedParts?.reduce((ps: number, ap: any) => ps + (ap.yieldPerCut || 0), 0) || 0), 0) || bom.yieldPerCut || 0} pieces
+                          </p>
                         </div>
                         <div>
-                          <Label className="text-muted-foreground">Square Meters/Cut</Label>
-                          <p className="font-medium">{bom.squareMetersPerCut || 0.5} m²</p>
+                          <Label className="text-muted-foreground">Total Square Meters (all programs)</Label>
+                          <p className="font-medium">
+                            {bom.cutPrograms?.reduce((sum: number, p: any) => sum + (parseFloat(p.squareMetersPerCut) || 0), 0) || bom.squareMetersPerCut || 0} m²
+                          </p>
                         </div>
                         <div>
-                          <Label className="text-muted-foreground">Waste Factor</Label>
-                          <p className="font-medium">{((bom.wasteFactor || 0.05) * 100).toFixed(0)}%</p>
+                          <Label className="text-muted-foreground">Cut Programs</Label>
+                          <p className="font-medium">{bom.cutPrograms?.length || 0} programs</p>
                         </div>
                       </div>
 

@@ -135,6 +135,26 @@ export default function RefundRequest() {
       return;
     }
 
+    // Block refund requests on orders with no payments
+    if (!selectedOrder.paymentTotal || selectedOrder.paymentTotal <= 0) {
+      toast({
+        title: 'Cannot Request Refund',
+        description: 'This order has no payments to refund. A refund can only be requested for orders that have been paid.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Block if refund amount exceeds total paid
+    if (parseFloat(refundAmount) > selectedOrder.paymentTotal) {
+      toast({
+        title: 'Invalid Refund Amount',
+        description: `Refund amount ($${parseFloat(refundAmount).toFixed(2)}) cannot exceed total paid ($${selectedOrder.paymentTotal.toFixed(2)}).`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const requestData: RefundRequestData = {
       orderId: selectedOrder.orderId,
       customerId: selectedCustomer.id.toString(),
@@ -365,19 +385,29 @@ export default function RefundRequest() {
                     type="number"
                     step="0.01"
                     min="0.01"
-                    max={selectedOrder.orderTotal || 0}
+                    max={selectedOrder.paymentTotal || 0}
                     value={refundAmount}
                     onChange={(e) => setRefundAmount(e.target.value)}
                     placeholder="0.00"
+                    disabled={!selectedOrder.paymentTotal || selectedOrder.paymentTotal <= 0}
                     data-testid="refund-amount-input"
                   />
-                  <div
-                    className="text-xs text-gray-500"
-                    data-testid="max-refund-note"
-                  >
-                    Maximum refund:{' '}
-                    {formatCurrency(selectedOrder.orderTotal || 0)}
-                  </div>
+                  {selectedOrder.paymentTotal && selectedOrder.paymentTotal > 0 ? (
+                    <div
+                      className="text-xs text-gray-500"
+                      data-testid="max-refund-note"
+                    >
+                      Maximum refund:{' '}
+                      {formatCurrency(selectedOrder.paymentTotal)}
+                    </div>
+                  ) : (
+                    <div
+                      className="text-xs text-red-500 font-medium"
+                      data-testid="no-payments-warning"
+                    >
+                      No payments to refund - order has not been paid
+                    </div>
+                  )}
                 </div>
 
                 {/* Reason */}

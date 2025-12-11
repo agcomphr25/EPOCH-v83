@@ -807,6 +807,31 @@ router.post('/fabric-inventory/:id/deplete', async (req, res) => {
   }
 });
 
+router.post('/fabric-inventory/:id/assign-freezer', async (req, res) => {
+  try {
+    const rollId = req.params.id;
+    const { freezerNumber } = req.body;
+    
+    if (!freezerNumber || isNaN(parseInt(freezerNumber))) {
+      return res.status(400).json({ error: 'Valid freezer number is required' });
+    }
+    
+    const inventory = await storage.updateCuttingFabricInventory(rollId, {
+      freezerNumber: parseInt(freezerNumber),
+    });
+    
+    res.json({ 
+      success: true, 
+      message: `Roll assigned to Freezer ${freezerNumber}`,
+      rollId,
+      freezerNumber: parseInt(freezerNumber),
+    });
+  } catch (error) {
+    console.error('Error assigning freezer:', error);
+    res.status(500).json({ error: 'Failed to assign freezer location' });
+  }
+});
+
 // Recommended Cuts endpoint - calculates cuts needed based on packet recipes and weekly goals
 router.get('/recommended-cuts/:weekDate', async (req, res) => {
   try {

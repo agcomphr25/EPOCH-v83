@@ -157,6 +157,14 @@ export default function CuttingOperatorDashboard() {
   });
 
   const [scannedFabrics, setScannedFabrics] = useState<FabricInventoryItem[]>([]);
+  
+  const [receivingForm, setReceivingForm] = useState({
+    barcode: '',
+    fabricId: '',
+    fabricName: '',
+    currentFreezer: '',
+    freezerNumber: '',
+  });
 
   const { data: currentUser } = useQuery<{ username: string }>({
     queryKey: ['currentUser'],
@@ -388,6 +396,26 @@ export default function CuttingOperatorDashboard() {
     },
   });
 
+  const assignFreezerMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest(`/api/cutting-table/fabric-inventory/${receivingForm.fabricId}/assign-freezer`, {
+        method: 'POST',
+        body: JSON.stringify({ freezerNumber: parseInt(receivingForm.freezerNumber) }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
+      toast({
+        title: 'Freezer Assigned',
+        description: `${receivingForm.fabricName} assigned to Freezer ${receivingForm.freezerNumber}`,
+      });
+      setReceivingForm({ barcode: '', fabricId: '', fabricName: '', currentFreezer: '', freezerNumber: '' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to assign freezer location.', variant: 'destructive' });
+    },
+  });
+
   const handleBarcodeScan = (barcode: string) => {
     if (!barcode.trim()) return;
     
@@ -566,7 +594,79 @@ export default function CuttingOperatorDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Fabric Receiving
+            </CardTitle>
+            <CardDescription>Assign freezer location for received fabric</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="receive-barcode">Scan Fabric Barcode</Label>
+                <Input
+                  id="receive-barcode"
+                  placeholder="Scan or enter fabric barcode..."
+                  value={receivingForm.barcode}
+                  onChange={(e) => setReceivingForm(prev => ({ ...prev, barcode: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && receivingForm.barcode) {
+                      const match = fabricInventory.find(f => f.barcodeValue === receivingForm.barcode || f.rollNumber === receivingForm.barcode);
+                      if (match) {
+                        setReceivingForm(prev => ({ 
+                          ...prev, 
+                          fabricId: match.id,
+                          fabricName: match.commonName || match.fabricType,
+                          currentFreezer: match.freezerLocation || 'Not assigned'
+                        }));
+                      }
+                    }
+                  }}
+                  data-testid="input-receive-barcode"
+                />
+              </div>
+              
+              {receivingForm.fabricId && (
+                <>
+                  <div className="p-2 bg-muted rounded text-sm">
+                    <p><strong>Fabric:</strong> {receivingForm.fabricName}</p>
+                    <p><strong>Current Location:</strong> {receivingForm.currentFreezer}</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="freezer-number">Assign Freezer Number</Label>
+                    <Select 
+                      value={receivingForm.freezerNumber} 
+                      onValueChange={(val) => setReceivingForm(prev => ({ ...prev, freezerNumber: val }))}
+                    >
+                      <SelectTrigger id="freezer-number" data-testid="select-freezer">
+                        <SelectValue placeholder="Select freezer..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Freezer 1</SelectItem>
+                        <SelectItem value="2">Freezer 2</SelectItem>
+                        <SelectItem value="3">Freezer 3</SelectItem>
+                        <SelectItem value="4">Freezer 4</SelectItem>
+                        <SelectItem value="5">Freezer 5</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button 
+                    className="w-full" 
+                    onClick={() => assignFreezerMutation.mutate()}
+                    disabled={!receivingForm.freezerNumber || assignFreezerMutation.isPending}
+                    data-testid="button-assign-freezer"
+                  >
+                    {assignFreezerMutation.isPending ? 'Assigning...' : 'Assign Freezer Location'}
+                  </Button>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

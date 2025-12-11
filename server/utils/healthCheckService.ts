@@ -302,6 +302,70 @@ export async function getHealthCheckTypes(): Promise<HealthCheckType[]> {
   return db.select().from(healthCheckTypes).orderBy(healthCheckTypes.sortOrder);
 }
 
+export async function seedDefaultHealthCheckTypes(): Promise<void> {
+  const existing = await db.select().from(healthCheckTypes).limit(1);
+  
+  if (existing.length > 0) {
+    return;
+  }
+
+  const defaultChecks = [
+    {
+      name: 'database_connection',
+      displayName: 'Database Connection',
+      description: 'Verifies the database is accessible and responding',
+      category: 'system',
+      isBuiltIn: true,
+      isEnabled: true,
+      sortOrder: 1,
+    },
+    {
+      name: 'sendgrid_email',
+      displayName: 'SendGrid Email Service',
+      description: 'Sends a test email to verify email service is working',
+      category: 'email',
+      isBuiltIn: true,
+      isEnabled: true,
+      sortOrder: 2,
+    },
+    {
+      name: 'signature_email',
+      displayName: 'Digital Signature Email',
+      description: 'Tests the digital signature request email template',
+      category: 'email',
+      isBuiltIn: true,
+      isEnabled: true,
+      sortOrder: 3,
+    },
+    {
+      name: 'duplicate_orders',
+      displayName: 'Duplicate Order Numbers',
+      description: 'Checks for duplicate order IDs in the database',
+      category: 'database',
+      isBuiltIn: true,
+      isEnabled: true,
+      sortOrder: 4,
+    },
+  ];
+
+  await db.insert(healthCheckTypes).values(defaultChecks);
+  console.log('✅ Seeded default health check types');
+}
+
+export async function seedDefaultHealthCheckConfig(): Promise<void> {
+  const existing = await db.select().from(healthCheckConfig).limit(1);
+  
+  if (existing.length > 0) {
+    return;
+  }
+
+  await db.insert(healthCheckConfig).values({
+    scheduledTime: '08:00',
+    isScheduleEnabled: true,
+  });
+  console.log('✅ Seeded default health check config');
+}
+
 export async function getHealthCheckConfig() {
   const [config] = await db.select().from(healthCheckConfig).limit(1);
   return config;

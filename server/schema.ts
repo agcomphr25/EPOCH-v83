@@ -7771,4 +7771,151 @@ export const insertHealthCheckResultSchema = createInsertSchema(healthCheckResul
 export type HealthCheckResult = typeof healthCheckResults.$inferSelect;
 export type InsertHealthCheckResult = z.infer<typeof insertHealthCheckResultSchema>;
 
+// ============================================
+// P2 PROJECTS MODULE
+// ============================================
+
+// Project Step Status Enum
+export const projectStepStatusEnum = pgEnum('project_step_status', [
+  'pending',
+  'in_progress', 
+  'completed',
+  'blocked'
+]);
+
+// Project Status Enum
+export const projectStatusEnum = pgEnum('project_status', [
+  'active',
+  'on_hold',
+  'completed',
+  'cancelled'
+]);
+
+// Project Step Types (workflow order)
+export const projectStepTypeEnum = pgEnum('project_step_type', [
+  'rfq_risk_assessment',
+  'quote',
+  'purchase_review_checklist',
+  'preproduction_checklist',
+  'p2_order'
+]);
+
+// Projects - Main project tracking table
+export const projects = pgTable('projects', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  projectCode: text('project_code').notNull().unique(), // e.g., "PRJ-001"
+  projectName: text('project_name').notNull(),
+  customerId: text('customer_id').notNull(), // Reference to customer
+  description: text('description'),
+  status: projectStatusEnum('status').default('active'),
+  currentStepType: projectStepTypeEnum('current_step_type').default('rfq_risk_assessment'),
+  targetShipDate: date('target_ship_date'),
+  actualShipDate: date('actual_ship_date'),
+  projectManagerId: integer('project_manager_id').references(() => employees.id),
+  reminderDays: integer('reminder_days').default(3), // Days before reminder is sent for stuck steps
+  lastReminderSentAt: timestamp('last_reminder_sent_at'),
+  notes: text('notes'),
+  createdBy: integer('created_by').references(() => employees.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  customerIdIdx: index('projects_customer_id_idx').on(table.customerId),
+  statusIdx: index('projects_status_idx').on(table.status),
+  projectManagerIdIdx: index('projects_project_manager_id_idx').on(table.projectManagerId),
+}));
+
+export const insertProjectSchema = createInsertSchema(projects).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Project = typeof projects.$inferSelect;
+export type InsertProject = z.infer<typeof insertProjectSchema>;
+
+// Project Steps - Individual workflow steps for each project
+export const projectSteps = pgTable('project_steps', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  stepType: projectStepTypeEnum('step_type').notNull(),
+  stepOrder: integer('step_order').notNull(), // 1, 2, 3, 4, 5
+  status: projectStepStatusEnum('status').default('pending'),
+  // Linked record references (nullable - linked when step is started/completed)
+  linkedRfqId: integer('linked_rfq_id').references(() => rfqRiskAssessments.id),
+  linkedQuoteId: uuid('linked_quote_id').references(() => quotes.id),
+  linkedPurchaseReviewId: integer('linked_purchase_review_id').references(() => purchaseReviewChecklists.id),
+  linkedPreproductionChecklistId: uuid('linked_preproduction_checklist_id').references(() => preproductionChecklists.id),
+  linkedP2OrderId: integer('linked_p2_order_id').references(() => p2PurchaseOrders.id),
+  // Step tracking
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  completedBy: integer('completed_by').references(() => employees.id),
+  dueDate: date('due_date'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  projectIdIdx: index('project_steps_project_id_idx').on(table.projectId),
+  stepTypeIdx: index('project_steps_step_type_idx').on(table.stepType),
+  statusIdx: index('project_steps_status_idx').on(table.status),
+}));
+
+export const insertProjectStepSchema = createInsertSchema(projectSteps).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProjectStep = typeof projectSteps.$inferSelect;
+export type InsertProjectStep = z.infer<typeof insertProjectStepSchema>;
+
+// Project Activity Log - Track all project activity for audit/history
+export const projectActivityLog = pgTable('project_activity_log', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  activityType: text('activity_type').notNull(), // 'step_started', 'step_completed', 'note_added', 'reminder_sent', etc.
+  stepType: projectStepTypeEnum('step_type'),
+  description: text('description').notNull(),
+  performedBy: integer('performed_by').references(() => employees.id),
+  metadata: jsonb('metadata'), // Additional context data
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  projectIdIdx: index('project_activity_log_project_id_idx').on(table.projectId),
+  createdAtIdx: index('project_activity_log_created_at_idx').on(table.createdAt),
+}));
+
+export const insertProjectActivityLogSchema = createInsertSchema(projectActivityLog).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProjectActivityLog = typeof projectActivityLog.$inferSelect;
+export type InsertProjectActivityLog = z.infer<typeof insertProjectActivityLogSchema>;
+
+// Project Notifications - Notifications for project managers
+export const projectNotifications = pgTable('project_notifications', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  recipientId: integer('recipient_id').notNull().references(() => employees.id),
+  notificationType: text('notification_type').notNull(), // 'step_completed', 'reminder', 'blocked', etc.
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  isRead: boolean('is_read').default(false),
+  readAt: timestamp('read_at'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  recipientIdIdx: index('project_notifications_recipient_id_idx').on(table.recipientId),
+  isReadIdx: index('project_notifications_is_read_idx').on(table.isRead),
+  createdAtIdx: index('project_notifications_created_at_idx').on(table.createdAt),
+}));
+
+export const insertProjectNotificationSchema = createInsertSchema(projectNotifications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProjectNotification = typeof projectNotifications.$inferSelect;
+export type InsertProjectNotification = z.infer<typeof insertProjectNotificationSchema>;
+
 export * from './calendar.schema';

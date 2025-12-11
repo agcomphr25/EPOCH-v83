@@ -54,6 +54,7 @@ import {
   FileCheck,
   Printer,
   Activity,
+  FolderKanban,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -758,6 +759,12 @@ export default function Navigation() {
       label: 'PO Products',
       icon: Package,
       description: 'Product configuration for purchase orders',
+    },
+    {
+      path: '/projects',
+      label: 'P2 Projects',
+      icon: FolderKanban,
+      description: 'Track P2 project workflows through multi-step wizard',
     },
   ];
 

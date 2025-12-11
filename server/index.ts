@@ -239,6 +239,11 @@ async function initializeBackgroundServices() {
       console.error('Failed to connect to database. Server may not function properly.');
     } else {
       console.log('✅ Database connection successful');
+      
+      // Seed default health check types and config if not present
+      const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig } = await import('./utils/healthCheckService');
+      await seedDefaultHealthCheckTypes();
+      await seedDefaultHealthCheckConfig();
     }
 
     // Set up monthly vendor evaluation reset

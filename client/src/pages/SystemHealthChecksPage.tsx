@@ -523,28 +523,42 @@ export default function SystemHealthChecksPage() {
                   {lastRunResults.map((result) => (
                     <div
                       key={result.id}
-                      className="flex items-center justify-between p-3 rounded-lg border"
+                      className="p-3 rounded-lg border"
                       data-testid={`result-${result.id}`}
                     >
-                      <div className="flex items-center gap-3">
-                        {statusIcons[result.status]}
-                        <div>
-                          <div className="font-medium">{result.checkName}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {result.message}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {statusIcons[result.status]}
+                          <div>
+                            <div className="font-medium">{result.checkName}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {result.message}
+                            </div>
                           </div>
                         </div>
+                        <div className="flex items-center gap-3">
+                          <Badge className={statusColors[result.status]}>
+                            {result.status.toUpperCase()}
+                          </Badge>
+                          {result.executionTimeMs && (
+                            <span className="text-sm text-muted-foreground">
+                              {result.executionTimeMs}ms
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <Badge className={statusColors[result.status]}>
-                          {result.status.toUpperCase()}
-                        </Badge>
-                        {result.executionTimeMs && (
-                          <span className="text-sm text-muted-foreground">
-                            {result.executionTimeMs}ms
-                          </span>
-                        )}
-                      </div>
+                      {result.details?.duplicates && result.details.duplicates.length > 0 && (
+                        <div className="mt-3 pl-9">
+                          <div className="text-sm font-medium text-red-600 mb-1">Duplicate Order Numbers Found:</div>
+                          <div className="flex flex-wrap gap-2">
+                            {result.details.duplicates.map((dup: { orderId: string; count: number }, idx: number) => (
+                              <Badge key={idx} variant="destructive" className="text-xs">
+                                {dup.orderId} ({dup.count}x)
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -677,8 +691,22 @@ export default function SystemHealthChecksPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="font-medium">{result.checkName}</TableCell>
-                        <TableCell className="max-w-xs truncate">
-                          {result.message}
+                        <TableCell className="max-w-md">
+                          <div>{result.message}</div>
+                          {result.details?.duplicates && result.details.duplicates.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {result.details.duplicates.slice(0, 5).map((dup: { orderId: string; count: number }, idx: number) => (
+                                <Badge key={idx} variant="destructive" className="text-xs">
+                                  {dup.orderId} ({dup.count}x)
+                                </Badge>
+                              ))}
+                              {result.details.duplicates.length > 5 && (
+                                <Badge variant="outline" className="text-xs">
+                                  +{result.details.duplicates.length - 5} more
+                                </Badge>
+                              )}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="capitalize">

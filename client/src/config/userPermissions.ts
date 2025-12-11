@@ -95,6 +95,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/vendors',
   '/waste-management-form',
   '/preproduction-checklists',
+  '/projects',
 ];
 
 export const USER_PERMISSIONS: Record<string, UserPermissions> = {
@@ -280,15 +281,8 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
   },
 
   tandym: {
-    routes: [
-      '/tandym-dashboard',
-      '/payment-analytics',
-      '/department-queue/production-queue',
-      '/department-queue/layup-plugging',
-      '/orders-list',
-      '/orders-management',
-      '/inventory/enhanced-mrp',
-    ],
+    routes: [],
+    fullAccess: true,
   },
 
   tims: {

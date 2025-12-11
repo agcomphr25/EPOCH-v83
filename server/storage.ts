@@ -391,6 +391,19 @@ import {
   type InsertAllocationRule,
   type AllocationResult,
   type InsertAllocationResult,
+  // P2 Projects types
+  projects,
+  projectSteps,
+  projectActivityLog,
+  projectNotifications,
+  type Project,
+  type InsertProject,
+  type ProjectStep,
+  type InsertProjectStep,
+  type ProjectActivityLog,
+  type InsertProjectActivityLog,
+  type ProjectNotification,
+  type InsertProjectNotification,
 } from './schema';
 import { db, pool } from './db';
 import {
@@ -1823,6 +1836,33 @@ export interface IStorage {
   createAllocationResult(data: InsertAllocationResult): Promise<AllocationResult>;
   deleteAllocationResult(id: string): Promise<void>;
   calculateAllocations(year: number, month: number): Promise<void>;
+
+  // P2 Projects CRUD
+  getAllProjects(): Promise<Project[]>;
+  getProject(id: string): Promise<Project | undefined>;
+  getProjectByCode(code: string): Promise<Project | undefined>;
+  getProjectsByCustomer(customerId: string): Promise<Project[]>;
+  createProject(data: InsertProject): Promise<Project>;
+  updateProject(id: string, data: Partial<InsertProject>): Promise<Project>;
+  deleteProject(id: string): Promise<void>;
+  getNextProjectCode(): Promise<string>;
+
+  // Project Steps CRUD
+  getProjectSteps(projectId: string): Promise<ProjectStep[]>;
+  getProjectStep(id: string): Promise<ProjectStep | undefined>;
+  createProjectStep(data: InsertProjectStep): Promise<ProjectStep>;
+  updateProjectStep(id: string, data: Partial<InsertProjectStep>): Promise<ProjectStep>;
+  deleteProjectStep(id: string): Promise<void>;
+
+  // Project Activity Log
+  getProjectActivityLog(projectId: string): Promise<ProjectActivityLog[]>;
+  createProjectActivityLog(data: InsertProjectActivityLog): Promise<ProjectActivityLog>;
+
+  // Project Notifications
+  getProjectNotifications(recipientId: number, unreadOnly?: boolean): Promise<ProjectNotification[]>;
+  createProjectNotification(data: InsertProjectNotification): Promise<ProjectNotification>;
+  markProjectNotificationRead(id: number): Promise<void>;
+  markAllProjectNotificationsRead(recipientId: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -13204,10 +13244,16 @@ export class DatabaseStorage implements IStorage {
       // Generate unique signature token
       const signatureToken = nanoid(32);
 
-      // Generate signature link
-      const baseUrl = process.env.REPLIT_DOMAINS 
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-        : 'http://localhost:5000';
+      // Generate signature link using production-aware URL
+      const productionDomain = process.env.PRODUCTION_DOMAIN || 'agcompepoch.xyz';
+      let baseUrl: string;
+      if (process.env.NODE_ENV === 'production' || process.env.REPL_DEPLOYMENT) {
+        baseUrl = `https://${productionDomain}`;
+      } else if (process.env.REPLIT_DOMAINS) {
+        baseUrl = `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
+      } else {
+        baseUrl = 'http://localhost:5000';
+      }
       const signatureLink = `${baseUrl}/sign-order/${signatureToken}`;
 
       // Get customer address
@@ -15077,6 +15123,152 @@ export class DatabaseStorage implements IStorage {
         allocations,
       });
     }
+  }
+
+  // ============================================
+  // P2 PROJECTS CRUD
+  // ============================================
+
+  async getAllProjects(): Promise<Project[]> {
+    return await db
+      .select()
+      .from(projects)
+      .orderBy(desc(projects.createdAt));
+  }
+
+  async getProject(id: string): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects).where(eq(projects.id, id));
+    return project || undefined;
+  }
+
+  async getProjectByCode(code: string): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects).where(eq(projects.projectCode, code));
+    return project || undefined;
+  }
+
+  async getProjectsByCustomer(customerId: string): Promise<Project[]> {
+    return await db
+      .select()
+      .from(projects)
+      .where(eq(projects.customerId, customerId))
+      .orderBy(desc(projects.createdAt));
+  }
+
+  async createProject(data: InsertProject): Promise<Project> {
+    const [project] = await db.insert(projects).values(data).returning();
+    return project;
+  }
+
+  async updateProject(id: string, data: Partial<InsertProject>): Promise<Project> {
+    const [project] = await db
+      .update(projects)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(projects.id, id))
+      .returning();
+    return project;
+  }
+
+  async deleteProject(id: string): Promise<void> {
+    await db.delete(projects).where(eq(projects.id, id));
+  }
+
+  async getNextProjectCode(): Promise<string> {
+    const [result] = await db
+      .select({ maxCode: max(projects.projectCode) })
+      .from(projects);
+    
+    const currentMax = result?.maxCode;
+    if (!currentMax) {
+      return 'PRJ-001';
+    }
+    
+    // Extract numeric part and increment
+    const match = currentMax.match(/PRJ-(\d+)/);
+    if (match) {
+      const nextNumber = parseInt(match[1], 10) + 1;
+      return `PRJ-${nextNumber.toString().padStart(3, '0')}`;
+    }
+    
+    return 'PRJ-001';
+  }
+
+  // Project Steps CRUD
+  async getProjectSteps(projectId: string): Promise<ProjectStep[]> {
+    return await db
+      .select()
+      .from(projectSteps)
+      .where(eq(projectSteps.projectId, projectId))
+      .orderBy(asc(projectSteps.stepOrder));
+  }
+
+  async getProjectStep(id: string): Promise<ProjectStep | undefined> {
+    const [step] = await db.select().from(projectSteps).where(eq(projectSteps.id, id));
+    return step || undefined;
+  }
+
+  async createProjectStep(data: InsertProjectStep): Promise<ProjectStep> {
+    const [step] = await db.insert(projectSteps).values(data).returning();
+    return step;
+  }
+
+  async updateProjectStep(id: string, data: Partial<InsertProjectStep>): Promise<ProjectStep> {
+    const [step] = await db
+      .update(projectSteps)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(projectSteps.id, id))
+      .returning();
+    return step;
+  }
+
+  async deleteProjectStep(id: string): Promise<void> {
+    await db.delete(projectSteps).where(eq(projectSteps.id, id));
+  }
+
+  // Project Activity Log
+  async getProjectActivityLog(projectId: string): Promise<ProjectActivityLog[]> {
+    return await db
+      .select()
+      .from(projectActivityLog)
+      .where(eq(projectActivityLog.projectId, projectId))
+      .orderBy(desc(projectActivityLog.createdAt));
+  }
+
+  async createProjectActivityLog(data: InsertProjectActivityLog): Promise<ProjectActivityLog> {
+    const [log] = await db.insert(projectActivityLog).values(data).returning();
+    return log;
+  }
+
+  // Project Notifications
+  async getProjectNotifications(recipientId: number, unreadOnly: boolean = false): Promise<ProjectNotification[]> {
+    const conditions = [eq(projectNotifications.recipientId, recipientId)];
+    if (unreadOnly) {
+      conditions.push(eq(projectNotifications.isRead, false));
+    }
+    
+    return await db
+      .select()
+      .from(projectNotifications)
+      .where(and(...conditions))
+      .orderBy(desc(projectNotifications.createdAt));
+  }
+
+  async createProjectNotification(data: InsertProjectNotification): Promise<ProjectNotification> {
+    const [notification] = await db.insert(projectNotifications).values(data).returning();
+    return notification;
+  }
+
+  async markProjectNotificationRead(id: number): Promise<void> {
+    await db
+      .update(projectNotifications)
+      .set({ isRead: true, readAt: new Date() })
+      .where(eq(projectNotifications.id, id));
+  }
+
+  async markAllProjectNotificationsRead(recipientId: number): Promise<void> {
+    await db
+      .update(projectNotifications)
+      .set({ isRead: true, readAt: new Date() })
+      .where(eq(projectNotifications.recipientId, recipientId));
   }
 }
 

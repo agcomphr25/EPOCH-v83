@@ -158,6 +158,8 @@ import SignOrderPage from './pages/SignOrderPage';
 import PDFSettings from './pages/PDFSettings';
 import GatewayReports from './pages/GatewayReports';
 import PreproductionChecklistPage from './pages/PreproductionChecklistPage';
+import ProjectsPage from './pages/ProjectsPage';
+import ProjectDetailPage from './pages/ProjectDetailPage';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -658,6 +660,8 @@ function App() {
                   />
                   <Route path="/task-tracker" component={TaskTracker} />
                   <Route path="/preproduction-checklists" component={PreproductionChecklistPage} />
+                  <Route path="/projects" component={ProjectsPage} />
+                  <Route path="/projects/:id" component={ProjectDetailPage} />
                   <Route
                     path="/kickback-tracking"
                     component={KickbackTracking}

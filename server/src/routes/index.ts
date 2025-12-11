@@ -88,6 +88,7 @@ import pdfSettingsRoutes from './pdfSettings';
 import p2LayupSchedulesRoutes from './p2LayupSchedules';
 import preproductionChecklistsRoutes from './preproductionChecklists';
 import healthChecksRoutes from './healthChecks';
+import projectsRoutes from './projects';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -294,6 +295,9 @@ export function registerRoutes(app: Express): Server {
 
   // Pre-Production Checklists routes
   app.use('/api/preproduction-checklists', preproductionChecklistsRoutes);
+
+  // P2 Projects routes
+  app.use('/api/projects', projectsRoutes);
 
   // Health Checks routes
   app.use('/api/health-checks', healthChecksRoutes);

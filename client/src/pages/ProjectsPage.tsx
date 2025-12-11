@@ -40,10 +40,11 @@ interface Project {
   projectManager?: { id: number; name: string };
 }
 
-interface Customer {
+interface P2Customer {
   id: number;
   customerId: string;
   name: string;
+  company?: string;
 }
 
 interface Employee {
@@ -93,8 +94,8 @@ export default function ProjectsPage() {
     queryKey: ['/api/projects'],
   });
 
-  const { data: customers = [] } = useQuery<Customer[]>({
-    queryKey: ['/api/customers'],
+  const { data: p2Customers = [] } = useQuery<P2Customer[]>({
+    queryKey: ['/api/p2/p2-customers-bypass'],
   });
 
   const { data: employees = [] } = useQuery<Employee[]>({
@@ -186,7 +187,7 @@ export default function ProjectsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Customers</SelectItem>
-            {customers.map((customer) => (
+            {p2Customers.map((customer) => (
               <SelectItem key={customer.customerId} value={customer.customerId}>
                 {customer.name}
               </SelectItem>
@@ -341,7 +342,7 @@ export default function ProjectsPage() {
                   <SelectValue placeholder="Select customer" />
                 </SelectTrigger>
                 <SelectContent>
-                  {customers.map((customer) => (
+                  {p2Customers.map((customer) => (
                     <SelectItem key={customer.customerId} value={customer.customerId}>
                       {customer.name}
                     </SelectItem>

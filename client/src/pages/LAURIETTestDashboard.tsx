@@ -75,20 +75,6 @@ export default function LAURIETTestDashboard() {
           Quick Access
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Link href="/inventory/enhanced-mrp">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
-              <CardContent className="p-4 text-center">
-                <BarChart3 className="w-8 h-8 text-blue-600 mx-auto mb-3" />
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  Enhanced MRP
-                </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Material Requirements Planning
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
           <Link href="/p2-control-center">
             <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-200">
               <CardContent className="p-4 text-center">
@@ -98,20 +84,6 @@ export default function LAURIETTestDashboard() {
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   P2 Workflow Management
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/inventory/consolidated-needs">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-green-200">
-              <CardContent className="p-4 text-center">
-                <List className="w-8 h-8 text-green-600 mx-auto mb-3" />
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  Consolidated Parts Needs
-                </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  View all parts requirements
                 </p>
               </CardContent>
             </Card>
@@ -196,6 +168,47 @@ export default function LAURIETTestDashboard() {
                   <div>
                     <div className="font-medium text-gray-900 dark:text-gray-100">Receiving</div>
                     <div className="text-xs text-gray-500">Inventory receiving</div>
+                  </div>
+                </div>
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card className="h-fit">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center space-x-2 text-lg">
+              <div className="p-2 rounded-lg bg-blue-100">
+                <BarChart3 className="w-5 h-5 text-blue-600" />
+              </div>
+              <span>Inventory Planning</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            <Link href="/inventory/enhanced-mrp">
+              <Button
+                variant="ghost"
+                className="h-auto p-4 justify-start text-left w-full"
+              >
+                <div className="flex items-center space-x-3">
+                  <BarChart3 className="w-5 h-5 text-gray-600" />
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-gray-100">Enhanced MRP</div>
+                    <div className="text-xs text-gray-500">Material Requirements Planning</div>
+                  </div>
+                </div>
+              </Button>
+            </Link>
+            <Link href="/inventory/consolidated-needs">
+              <Button
+                variant="ghost"
+                className="h-auto p-4 justify-start text-left w-full"
+              >
+                <div className="flex items-center space-x-3">
+                  <List className="w-5 h-5 text-gray-600" />
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-gray-100">Consolidated Parts Needs</div>
+                    <div className="text-xs text-gray-500">View all parts requirements</div>
                   </div>
                 </div>
               </Button>

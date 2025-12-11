@@ -15,6 +15,8 @@ import {
   FileText,
   AlertCircle,
   ExternalLink,
+  CreditCard,
+  Loader2,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
@@ -50,7 +52,7 @@ interface RefundRequest {
   paymentTotal?: number;
 }
 
-type ActionType = 'approve' | 'reject';
+type ActionType = 'approve' | 'reject' | 'process';
 
 export default function RefundQueue() {
   const { toast } = useToast();
@@ -92,15 +94,19 @@ export default function RefundQueue() {
       });
     },
     onSuccess: (_, variables) => {
+      const titles: Record<ActionType, string> = {
+        approve: 'Request Approved',
+        reject: 'Request Rejected',
+        process: 'Refund Processed',
+      };
+      const descriptions: Record<ActionType, string> = {
+        approve: 'The refund request has been approved. You can now process it through Accept.Blue.',
+        reject: 'The refund request has been rejected.',
+        process: 'The refund has been successfully processed through Accept.Blue.',
+      };
       toast({
-        title:
-          variables.action === 'approve'
-            ? 'Request Approved'
-            : 'Request Rejected',
-        description:
-          variables.action === 'approve'
-            ? 'The refund request has been approved and processed.'
-            : 'The refund request has been rejected.',
+        title: titles[variables.action],
+        description: descriptions[variables.action],
       });
       queryClient.invalidateQueries({ queryKey: ['/api/refund-requests'] });
       setShowActionDialog(false);
@@ -197,8 +203,11 @@ export default function RefundQueue() {
   const pendingRequests = refundRequests.filter(
     (req) => req.status === 'PENDING'
   );
-  const processedRequests = refundRequests.filter(
-    (req) => req.status !== 'PENDING'
+  const approvedRequests = refundRequests.filter(
+    (req) => req.status === 'APPROVED'
+  );
+  const completedRequests = refundRequests.filter(
+    (req) => req.status === 'PROCESSED' || req.status === 'REJECTED'
   );
 
   if (isLoading) {
@@ -436,18 +445,107 @@ export default function RefundQueue() {
         </Card>
       )}
 
-      {/* Processed Requests */}
-      {processedRequests.length > 0 && (
+      {/* Approved Requests - Ready to Process */}
+      {approvedRequests.length > 0 && (
+        <Card className="mb-8" data-testid="approved-requests-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-green-600" />
+              Ready to Process ({approvedRequests.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4" data-testid="approved-requests-list">
+              {approvedRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="p-4 border border-green-200 rounded-lg bg-green-50"
+                  data-testid={`approved-request-${request.id}`}
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Link
+                          href={`/orders?search=${request.orderId}`}
+                          className="font-medium text-lg text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                          data-testid={`approved-order-${request.id}`}
+                        >
+                          {request.orderId}
+                          <ExternalLink className="h-3 w-3" />
+                        </Link>
+                        {getStatusBadge(request.status)}
+                      </div>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <div className="flex items-center gap-1">
+                          <User className="h-3 w-3" />
+                          Customer: {request.customerName || request.customerId}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          Approved: {request.approvedAt ? formatDate(request.approvedAt) : 'N/A'}
+                        </div>
+                        <div>
+                          Approved by: {request.approvedBy || 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div
+                        className="text-2xl font-bold text-green-600 mb-2"
+                        data-testid={`approved-amount-${request.id}`}
+                      >
+                        {formatCurrency(request.refundAmount)}
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => handleAction(request, 'process')}
+                        className="bg-blue-600 hover:bg-blue-700"
+                        data-testid={`process-button-${request.id}`}
+                      >
+                        <CreditCard className="h-4 w-4 mr-1" />
+                        Process Refund
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="border-t pt-3 space-y-2">
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">
+                        Reason:{' '}
+                      </span>
+                      <span className="text-sm text-gray-600">
+                        {request.reason}
+                      </span>
+                    </div>
+                    {request.notes && (
+                      <div>
+                        <span className="text-sm font-medium text-gray-700">
+                          Notes:{' '}
+                        </span>
+                        <span className="text-sm text-gray-600">
+                          {request.notes}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Completed Requests */}
+      {completedRequests.length > 0 && (
         <Card data-testid="processed-requests-card">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              Recent Activity ({processedRequests.length})
+              Recent Activity ({completedRequests.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3" data-testid="processed-requests-list">
-              {processedRequests.slice(0, 10).map((request) => (
+              {completedRequests.slice(0, 10).map((request) => (
                 <div
                   key={request.id}
                   className="p-3 border rounded-lg"
@@ -512,18 +610,34 @@ export default function RefundQueue() {
         <DialogContent data-testid="action-dialog">
           <DialogHeader>
             <DialogTitle data-testid="dialog-title">
-              {actionType === 'approve' ? 'Approve' : 'Reject'} Refund Request
+              {actionType === 'approve' ? 'Approve' : actionType === 'process' ? 'Process' : 'Reject'} Refund Request
             </DialogTitle>
             <DialogDescription data-testid="dialog-description">
               {selectedRequest && (
                 <>
-                  {actionType === 'approve'
-                    ? `Approve a ${formatCurrency(selectedRequest.refundAmount)} refund for order ${selectedRequest.orderId}?`
-                    : `Reject the refund request for order ${selectedRequest.orderId}?`}
+                  {actionType === 'approve' && (
+                    `Approve a ${formatCurrency(selectedRequest.refundAmount)} refund for order ${selectedRequest.orderId}?`
+                  )}
+                  {actionType === 'process' && (
+                    `Process the ${formatCurrency(selectedRequest.refundAmount)} refund for order ${selectedRequest.orderId} through Accept.Blue? This will charge the refund to the original credit card.`
+                  )}
+                  {actionType === 'reject' && (
+                    `Reject the refund request for order ${selectedRequest.orderId}?`
+                  )}
                 </>
               )}
             </DialogDescription>
           </DialogHeader>
+
+          {actionType === 'process' && (
+            <Alert className="border-blue-200 bg-blue-50">
+              <CreditCard className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                This will process the refund through Accept.Blue using the original credit card transaction. 
+                The customer will receive the refund within 3-5 business days.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {actionType === 'reject' && (
             <div className="space-y-2">
@@ -555,14 +669,25 @@ export default function RefundQueue() {
             <Button
               onClick={confirmAction}
               disabled={updateRefundRequestMutation.isPending}
-              variant={actionType === 'approve' ? 'default' : 'destructive'}
+              variant={actionType === 'reject' ? 'destructive' : 'default'}
+              className={actionType === 'process' ? 'bg-blue-600 hover:bg-blue-700' : ''}
               data-testid="confirm-action-button"
             >
-              {updateRefundRequestMutation.isPending
-                ? 'Processing...'
-                : actionType === 'approve'
-                  ? 'Approve Refund'
-                  : 'Reject Request'}
+              {updateRefundRequestMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : actionType === 'approve' ? (
+                'Approve Refund'
+              ) : actionType === 'process' ? (
+                <>
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Process via Accept.Blue
+                </>
+              ) : (
+                'Reject Request'
+              )}
             </Button>
           </div>
         </DialogContent>

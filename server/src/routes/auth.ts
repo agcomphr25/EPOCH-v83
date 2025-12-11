@@ -250,6 +250,33 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Employee account is inactive' });
     }
 
+    // Look up linked user account for this employee
+    const linkedUserResult = await pool.query`
+      SELECT id, username, role, first_name as "firstName", last_name as "lastName", is_active as "isActive"
+      FROM users
+      WHERE employee_id = ${employee.id} AND is_active = true
+    `;
+
+    // Use linked user account if available, otherwise create employee-based session
+    let sessionUser: { id: number; username: string; role: string };
+    
+    if (linkedUserResult && linkedUserResult.length > 0) {
+      const linkedUser = linkedUserResult[0];
+      sessionUser = {
+        id: linkedUser.id,
+        username: linkedUser.username,
+        role: linkedUser.role || 'EMPLOYEE',
+      };
+      console.log(`🔗 Badge login using linked user account: ${linkedUser.username} (user ID: ${linkedUser.id})`);
+    } else {
+      // No linked user - deny access or create temporary session
+      // For security, require a linked user account for badge login
+      console.log(`⚠️ Employee ${employee.name} (${employeeCode}) has no linked user account`);
+      return res.status(401).json({ 
+        error: 'No user account linked to this employee badge. Please contact an administrator.' 
+      });
+    }
+
     // Look up employee's badge action configuration to determine redirect
     const badgeActionResult = await pool.query`
       SELECT action_type as "actionType", action_config as "actionConfig"
@@ -290,26 +317,19 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
       }
     }
 
-    // Create a user session for the employee
-    const user = {
-      id: employee.id,
-      username: employee.employeeCode, // Use employee code as username
-      role: employee.userRole || 'EMPLOYEE',
-    };
-
     // Generate session token
     const sessionToken = generateSessionToken();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    // Store session in database
+    // Store session in database using the linked user's credentials
     await pool.query`
       INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active)
-      VALUES (${sessionToken}, ${user.id}, ${user.username}, ${expiresAt}, true)
+      VALUES (${sessionToken}, ${sessionUser.id}, ${sessionUser.username}, ${expiresAt}, true)
       ON CONFLICT (session_token) DO UPDATE
       SET expires_at = ${expiresAt}, is_active = true
     `;
 
-    console.log('✅ Badge login session created for employee:', employee.name);
+    console.log('✅ Badge login session created for employee:', employee.name, '(linked to user:', sessionUser.username + ')');
 
     // Set HTTP-only cookie
     const isProduction =
@@ -331,13 +351,14 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
       success: true,
       sessionToken,
       user: {
-        id: user.id,
-        username: user.username,
-        role: user.role,
+        id: sessionUser.id,
+        username: sessionUser.username,
+        role: sessionUser.role,
       },
       employee: {
         name: employee.name,
         email: employee.email,
+        id: employee.id,
       },
       redirectUrl, // Send redirect URL to frontend
     });

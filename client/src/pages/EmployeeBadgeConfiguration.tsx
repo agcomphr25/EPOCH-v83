@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import JsBarcode from 'jsbarcode';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import {
@@ -31,7 +33,7 @@ import {
   NAVIGATION_PAGES,
   type BadgeActionType,
 } from '@/lib/badgeActionTypes';
-import { Badge, UserCog, Settings, Scan } from 'lucide-react';
+import { Badge, UserCog, Settings, Scan, Printer, Download, CreditCard } from 'lucide-react';
 
 type Employee = {
   id: number;
@@ -61,10 +63,124 @@ export default function EmployeeBadgeConfiguration() {
   const { toast } = useToast();
   const [selectedEmployee, setSelectedEmployee] = useState<number | null>(null);
   const [selectedActionType, setSelectedActionType] = useState<BadgeActionType | null>(null);
+  const [reprintEmployeeId, setReprintEmployeeId] = useState<string>('');
+  const barcodeRef = useRef<SVGSVGElement>(null);
 
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ['/api/employees'],
   });
+
+  const selectedReprintEmployee = employees.find(e => e.id.toString() === reprintEmployeeId);
+
+  useEffect(() => {
+    if (barcodeRef.current && selectedReprintEmployee?.employeeCode) {
+      try {
+        JsBarcode(barcodeRef.current, selectedReprintEmployee.employeeCode, {
+          format: 'CODE128',
+          width: 2,
+          height: 80,
+          displayValue: true,
+          fontSize: 16,
+          margin: 10,
+        });
+      } catch (error) {
+        console.error('Error generating barcode:', error);
+      }
+    }
+  }, [selectedReprintEmployee]);
+
+  const handleDownloadBadge = () => {
+    if (!barcodeRef.current || !selectedReprintEmployee) return;
+
+    const svgData = new XMLSerializer().serializeToString(barcodeRef.current);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx?.drawImage(img, 0, 0);
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `badge-${selectedReprintEmployee.employeeCode}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+
+    img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+    toast({
+      title: 'Download Started',
+      description: `Badge for ${selectedReprintEmployee.name} is downloading`,
+    });
+  };
+
+  const handlePrintBadge = () => {
+    if (!barcodeRef.current || !selectedReprintEmployee) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Employee Badge - ${selectedReprintEmployee.name}</title>
+          <style>
+            @page {
+              size: 4in 2.5in;
+              margin: 0;
+            }
+            body {
+              margin: 0;
+              padding: 20px;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              font-family: Arial, sans-serif;
+            }
+            h1 {
+              font-size: 22px;
+              margin-bottom: 15px;
+              text-align: center;
+            }
+            .company {
+              font-size: 12px;
+              color: #666;
+              margin-bottom: 10px;
+            }
+            svg {
+              max-width: 100%;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="company">EPOCH Manufacturing</div>
+          <h1>${selectedReprintEmployee.name}</h1>
+          ${barcodeRef.current?.outerHTML || ''}
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
+
+    toast({
+      title: 'Print Dialog Opened',
+      description: `Printing badge for ${selectedReprintEmployee.name}`,
+    });
+  };
 
   const { data: badgeActions = [] } = useQuery<{ badgeAction: BadgeAction; employee: Employee }[]>({
     queryKey: ['/api/employee-badges/employee-badge-actions'],
@@ -258,13 +374,26 @@ export default function EmployeeBadgeConfiguration() {
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Badge className="h-8 w-8" />
-        <h1 className="text-3xl font-bold">Employee Badge Configuration</h1>
+        <CreditCard className="h-8 w-8" />
+        <h1 className="text-3xl font-bold">Employee Badge Management</h1>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Configuration Form */}
-        <Card>
+      <Tabs defaultValue="configure" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsTrigger value="configure" data-testid="tab-configure">
+            <Settings className="h-4 w-4 mr-2" />
+            Configure Actions
+          </TabsTrigger>
+          <TabsTrigger value="reprint" data-testid="tab-reprint">
+            <Printer className="h-4 w-4 mr-2" />
+            Reprint Badge
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="configure" className="mt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Configuration Form */}
+            <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
@@ -403,7 +532,7 @@ export default function EmployeeBadgeConfiguration() {
       </div>
 
       {/* Instructions Card */}
-      <Card>
+      <Card className="mt-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Scan className="h-5 w-5" />
@@ -431,6 +560,112 @@ export default function EmployeeBadgeConfiguration() {
           </p>
         </CardContent>
       </Card>
-    </div>
+    </TabsContent>
+
+    <TabsContent value="reprint" className="mt-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserCog className="h-5 w-5" />
+              Select Employee
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Employee</label>
+              <Select value={reprintEmployeeId} onValueChange={setReprintEmployeeId}>
+                <SelectTrigger data-testid="select-reprint-employee">
+                  <SelectValue placeholder="Select an employee to print badge" />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees
+                    .filter(emp => emp.employeeCode)
+                    .map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id.toString()}>
+                        {emp.name} ({emp.employeeCode})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {employees.filter(emp => !emp.employeeCode).length > 0 && (
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  <strong>Note:</strong> {employees.filter(emp => !emp.employeeCode).length} employee(s) 
+                  don't have an employee code yet and cannot have badges printed.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Badge Preview
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {selectedReprintEmployee ? (
+              <>
+                <div className="flex flex-col items-center justify-center p-6 bg-white rounded-lg border-2 border-dashed">
+                  <p className="text-lg font-bold mb-4">{selectedReprintEmployee.name}</p>
+                  <svg ref={barcodeRef} data-testid="reprint-barcode"></svg>
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={handleDownloadBadge}
+                    data-testid="button-download-reprint-badge"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={handlePrintBadge}
+                    data-testid="button-print-reprint-badge"
+                  >
+                    <Printer className="h-4 w-4 mr-2" />
+                    Print Badge
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
+                <CreditCard className="h-12 w-12 mb-4 opacity-30" />
+                <p>Select an employee to preview their badge</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Scan className="h-5 w-5" />
+            Badge Printing Tips
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p>
+            <strong>Lost or Damaged Badge?</strong> Simply select the employee above and print a new one.
+          </p>
+          <p>
+            <strong>Badge Not Scanning?</strong> Try reprinting at a higher quality or check that the barcode is not smudged.
+          </p>
+          <p>
+            <strong>Recommended Paper:</strong> Use cardstock or laminated paper for durability.
+          </p>
+        </CardContent>
+      </Card>
+    </TabsContent>
+  </Tabs>
+</div>
   );
 }

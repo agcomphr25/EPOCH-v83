@@ -61,6 +61,16 @@ type PacketBOM = {
   materials: PacketBOMMaterial[];
   parts?: PacketBOMPart[];
   cuts?: CutDefinition[];
+  cutPrograms?: {
+    programName: string;
+    squareMetersPerCut: number;
+    assignedParts: { partNumber: string; yieldPerCut: number }[];
+  }[];
+  noPlySchedule?: boolean;
+  plySchedule?: {
+    plyNumber: number;
+    assignedParts: { partNumber: string; quantity: number }[];
+  }[];
   squareMetersPerCut: number;
   yieldPerCut: number;
   wasteFactor?: number;
@@ -647,22 +657,93 @@ export default function CuttingBomAssignment() {
                         </div>
                       </div>
 
+                      {/* Parts from Step 2 */}
                       {bom.parts && bom.parts.length > 0 && (
                         <div>
-                          <Label className="text-muted-foreground mb-2 block">Parts</Label>
-                          <div className="flex flex-wrap gap-2">
+                          <Label className="text-muted-foreground mb-2 block">Parts (Step 2)</Label>
+                          <div className="space-y-1">
                             {bom.parts.map((part, idx) => (
-                              <Badge key={idx} variant="secondary">
-                                {part.partNumber} × {part.quantity || 1}
-                              </Badge>
+                              <div key={idx} className="flex items-center gap-2 text-sm bg-muted/30 rounded px-2 py-1">
+                                <Badge variant="secondary">{part.partNumber}</Badge>
+                                <span>Qty: {part.quantity || 1}</span>
+                                {part.partDescription && <span className="text-muted-foreground">- {part.partDescription}</span>}
+                              </div>
                             ))}
                           </div>
                         </div>
                       )}
 
+                      {/* Cut Programs from Step 3 */}
+                      {bom.cutPrograms && bom.cutPrograms.length > 0 && (
+                        <div>
+                          <Label className="text-muted-foreground mb-2 block">Cut Programs (Step 3)</Label>
+                          <div className="space-y-2">
+                            {bom.cutPrograms.map((program, idx) => (
+                              <div key={idx} className="bg-muted/50 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <Scissors className="h-4 w-4 text-primary" />
+                                    <span className="font-medium">{program.programName}</span>
+                                  </div>
+                                  <Badge variant="outline">{program.squareMetersPerCut} m²/cut</Badge>
+                                </div>
+                                {program.assignedParts && program.assignedParts.length > 0 && (
+                                  <div className="mt-2">
+                                    <p className="text-xs font-medium mb-1">Assigned Parts:</p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {program.assignedParts.map((ap, apIdx) => (
+                                        <Badge key={apIdx} variant="secondary" className="text-xs">
+                                          {ap.partNumber} - Yield: {ap.yieldPerCut}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Ply Schedule from Step 4 */}
+                      <div>
+                        <Label className="text-muted-foreground mb-2 block">Ply Schedule (Step 4)</Label>
+                        {bom.noPlySchedule ? (
+                          <div className="text-sm text-muted-foreground italic bg-muted/30 rounded px-3 py-2">
+                            No ply schedule needed for this BOM
+                          </div>
+                        ) : bom.plySchedule && bom.plySchedule.length > 0 ? (
+                          <div className="space-y-2">
+                            {bom.plySchedule.map((ply, idx) => (
+                              <div key={idx} className="bg-muted/50 rounded-lg p-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Layers className="h-4 w-4 text-primary" />
+                                  <span className="font-medium">Ply {ply.plyNumber}</span>
+                                  <Badge variant="outline">{ply.assignedParts?.length || 0} parts</Badge>
+                                </div>
+                                {ply.assignedParts && ply.assignedParts.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {ply.assignedParts.map((ap, apIdx) => (
+                                      <Badge key={apIdx} variant="secondary" className="text-xs">
+                                        {ap.partNumber} × {ap.quantity}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-muted-foreground italic bg-muted/30 rounded px-3 py-2">
+                            No ply schedule configured
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Legacy Cuts (if any) */}
                       {bom.cuts && bom.cuts.length > 0 && (
                         <div>
-                          <Label className="text-muted-foreground mb-2 block">Cuts & Ply Schedule</Label>
+                          <Label className="text-muted-foreground mb-2 block">Legacy Cuts</Label>
                           <div className="space-y-2">
                             {bom.cuts.map((cut, idx) => (
                               <div key={idx} className="bg-muted/50 rounded-lg p-3">

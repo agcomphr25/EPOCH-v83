@@ -582,11 +582,49 @@ export default function CuttingWeeklySchedule() {
               <TableBody>
                 {(mfgQueueData || []).slice(0, 15).map((item: any) => {
                   let notes: any = {};
-                  try { notes = JSON.parse(item.notes || '{}'); } catch {}
+                  let rawNotes = item.notes || '';
+                  try { notes = JSON.parse(item.notes || '{}'); } catch {
+                    // Not JSON - might be plain string notes
+                  }
+                  
+                  // Build display description with multiple fallbacks
+                  const getDescription = () => {
+                    // 1. Try JSON userNotes first
+                    if (notes.userNotes) return notes.userNotes;
+                    // 2. Try JSON orderId
+                    if (notes.orderId) return notes.orderId;
+                    // 3. Try part name from the item
+                    if (item.partName) return item.partName;
+                    // 4. Try material type from parsed notes
+                    if (notes.materialType) {
+                      const typeMap: Record<string, string> = {
+                        'carbon_fiber': 'Carbon Fiber Packets',
+                        'fiberglass': 'Fiberglass Packets',
+                        'mesa': 'Mesa Packets'
+                      };
+                      return typeMap[notes.materialType] || notes.materialType;
+                    }
+                    // 5. Try materialType from item (parsed in backend)
+                    if (item.materialType) {
+                      const typeMap: Record<string, string> = {
+                        'carbon_fiber': 'Carbon Fiber Packets',
+                        'fiberglass': 'Fiberglass Packets',
+                        'mesa': 'Mesa Packets'
+                      };
+                      return typeMap[item.materialType] || item.materialType;
+                    }
+                    // 6. If raw notes is a plain string (not empty object), use it
+                    if (rawNotes && rawNotes !== '{}' && !rawNotes.startsWith('{')) {
+                      return rawNotes;
+                    }
+                    // 7. Final fallback
+                    return `Queue #${item.id}`;
+                  };
+                  
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">
-                        {notes.userNotes || notes.orderId || `Queue #${item.id}`}
+                        {getDescription()}
                       </TableCell>
                       <TableCell className="text-center">{item.quantityRequested}</TableCell>
                       <TableCell className="text-center">{item.quantityCompleted || 0}</TableCell>

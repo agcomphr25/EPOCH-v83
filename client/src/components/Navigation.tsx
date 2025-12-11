@@ -659,6 +659,12 @@ export default function Navigation() {
       icon: PieChart,
       description: 'View invoice totals by category (Stock Model, Bottom Metal, etc.)',
     },
+    {
+      path: '/finance/scrap-report',
+      label: 'Scrap Report',
+      icon: TrendingDown,
+      description: 'Track orders that were scrapped by month',
+    },
   ];
 
   const userDashboardsItems = [

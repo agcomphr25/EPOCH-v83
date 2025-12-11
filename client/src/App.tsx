@@ -137,6 +137,7 @@ import PaymentManagement from './pages/PaymentManagement';
 import PaymentAnalytics from './pages/PaymentAnalytics';
 import ShippedOrderDiscountsPage from './pages/ShippedOrderDiscountsPage';
 import InvoiceCategoryBreakdownPage from './pages/InvoiceCategoryBreakdownPage';
+import ScrapReportPage from './pages/ScrapReportPage';
 import RefundRequest from './pages/RefundRequest';
 import RefundQueue from './pages/RefundQueue';
 import CreditMemoPage from './pages/CreditMemoPage';
@@ -585,6 +586,10 @@ function App() {
                   <Route
                     path="/finance/invoice-breakdown"
                     component={InvoiceCategoryBreakdownPage}
+                  />
+                  <Route
+                    path="/finance/scrap-report"
+                    component={ScrapReportPage}
                   />
 
                   {/* Refund Management Routes */}

@@ -7197,6 +7197,61 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Scrap Report API - Get orders that were scrapped in a specific month
+  app.get('/api/finance/scrap-report', async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+      
+      if (!pool) {
+        return res.status(500).json({ error: 'Database connection not available' });
+      }
+      
+      const month = parseInt(req.query.month as string) || new Date().getMonth() + 1;
+      const year = parseInt(req.query.year as string) || new Date().getFullYear();
+      
+      const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+      const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      
+      const query = `
+        SELECT 
+          order_id,
+          customer,
+          product,
+          scrap_date,
+          scrap_reason,
+          scrap_disposition
+        FROM orders 
+        WHERE scrap_date IS NOT NULL 
+          AND scrap_date >= $1 
+          AND scrap_date <= $2
+        ORDER BY scrap_date DESC
+      `;
+      
+      const result = await pool.query(query, [startDate, endDate]);
+      const rows = Array.isArray(result) ? result : (result.rows || []);
+      
+      const orders = rows.map((row: any) => ({
+        orderId: row.order_id,
+        customer: row.customer || 'Unknown',
+        product: row.product || 'Unknown',
+        scrapDate: row.scrap_date,
+        scrapReason: row.scrap_reason || '',
+        scrapDisposition: row.scrap_disposition || '',
+      }));
+      
+      res.json({
+        totalScrapped: orders.length,
+        month,
+        year,
+        monthName: new Date(year, month - 1, 1).toLocaleString('default', { month: 'long' }),
+        orders
+      });
+    } catch (error) {
+      console.error('🗑️ Scrap Report error:', error);
+      res.status(500).json({ error: 'Failed to fetch scrap report data' });
+    }
+  });
+
   // Invoice Category Breakdown API - Get invoice totals broken down by pricing categories
   app.get('/api/finance/invoice-category-breakdown', async (req, res) => {
     try {

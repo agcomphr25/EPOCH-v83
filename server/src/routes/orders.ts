@@ -25,6 +25,25 @@ import {
 
 const router = Router();
 
+// Helper function to get the correct base URL for signature links
+// In production, always use the production domain to ensure email links work
+function getSignatureLinkBaseUrl(): string {
+  // Check for explicit production domain first
+  const productionDomain = process.env.PRODUCTION_DOMAIN || 'agcompepoch.xyz';
+  
+  // In production mode or if REPL_DEPLOYMENT is set, use production domain
+  if (process.env.NODE_ENV === 'production' || process.env.REPL_DEPLOYMENT) {
+    return `https://${productionDomain}`;
+  }
+  
+  // In development, use REPLIT_DOMAINS if available, otherwise localhost
+  if (process.env.REPLIT_DOMAINS) {
+    return `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
+  }
+  
+  return 'http://localhost:5000';
+}
+
 // Get all orders for All Orders List (root endpoint)
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -653,10 +672,8 @@ router.post('/finalized', async (req: Request, res: Response) => {
         
         console.log(`✅ Follow-up order created for ${order.orderId}, sending signature email...`);
         
-        // Prepare email data
-        const baseUrl = process.env.REPLIT_DOMAINS 
-          ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-          : 'http://localhost:5000';
+        // Prepare email data using production-aware base URL
+        const baseUrl = getSignatureLinkBaseUrl();
         
         const emailData = {
           orderId: order.orderId,
@@ -671,15 +688,24 @@ router.post('/finalized', async (req: Request, res: Response) => {
         };
         
         // Send signature email
-        await sendFollowupOrderEmail(emailData, pdfPath);
+        const emailResult = await sendFollowupOrderEmail(emailData, pdfPath);
         
-        // Update followup order to mark email as sent
-        await storage.updateFollowupOrder(followupOrder.id, {
-          emailSent: true,
-          emailSentAt: new Date(),
-        });
-        
-        console.log(`📧 Signature email sent for order ${order.orderId}`);
+        if (emailResult.success) {
+          // Update followup order to mark email as sent
+          await storage.updateFollowupOrder(followupOrder.id, {
+            emailSent: true,
+            emailSentAt: new Date(),
+          });
+          
+          console.log(`📧 Signature email sent for order ${order.orderId}`);
+        } else {
+          // Update followup order with error
+          await storage.updateFollowupOrder(followupOrder.id, {
+            emailError: emailResult.error,
+          });
+          
+          console.error(`❌ Failed to send signature email for order ${order.orderId}: ${emailResult.error}`);
+        }
       } else {
         // Order without stock - send thank you email (no signature required)
         const emailData = {

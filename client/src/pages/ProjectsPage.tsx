@@ -152,9 +152,7 @@ export default function ProjectsPage() {
     return 'Completed';
   };
 
-  const adminsAndOwners = employees.filter(e => 
-    e.userRole === 'ADMIN' || e.userRole === 'OWNER'
-  );
+  const allEmployees = employees;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -360,7 +358,7 @@ export default function ProjectsPage() {
                   <SelectValue placeholder="Select project manager" />
                 </SelectTrigger>
                 <SelectContent>
-                  {adminsAndOwners.map((employee) => (
+                  {allEmployees.map((employee) => (
                     <SelectItem key={employee.id} value={employee.id.toString()}>
                       {employee.name}
                     </SelectItem>

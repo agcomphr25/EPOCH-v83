@@ -444,59 +444,32 @@ export default function CuttingWeeklySchedule() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               {(() => {
-                let cfTotal = 0, fgTotal = 0, mesaTotal = 0;
+                const packetTypeCounts: Record<string, number> = {};
+                let totalPackets = 0;
                 p2Demand.forEach(po => {
                   po.items.forEach(item => {
-                    if (item.materialType === 'carbon_fiber') cfTotal += item.qty;
-                    else if (item.materialType === 'fiberglass') fgTotal += item.qty;
-                    else if (item.materialType === 'mesa') mesaTotal += item.qty;
+                    packetTypeCounts[item.name] = (packetTypeCounts[item.name] || 0) + item.qty;
+                    totalPackets += item.qty;
                   });
                 });
-                return (
-                  <>
-                    <div className="p-4 bg-gray-900 text-white rounded-lg">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <p className="text-sm opacity-80">Carbon Fiber Packets</p>
-                          <p className="text-3xl font-bold">{cfTotal}</p>
-                          <p className="text-xs opacity-60">P2 demand</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.carbon_fiber}</span></p>
-                          <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.carbon_fiber}</span></p>
-                        </div>
+                const sortedTypes = Object.entries(packetTypeCounts)
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 3);
+                const colors = ['bg-purple-600', 'bg-indigo-500', 'bg-teal-500'];
+                return sortedTypes.map(([name, count], idx) => (
+                  <div key={name} className={`p-4 ${colors[idx]} text-white rounded-lg`}>
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <p className="text-sm opacity-80">{name}</p>
+                        <p className="text-3xl font-bold">{count}</p>
+                        <p className="text-xs opacity-60">P2 demand</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm">POs: <span className="font-bold">{p2Demand.filter(po => po.items.some(i => i.name === name)).length}</span></p>
                       </div>
                     </div>
-
-                    <div className="p-4 bg-amber-500 text-white rounded-lg">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <p className="text-sm opacity-80">Fiberglass Packets</p>
-                          <p className="text-3xl font-bold">{fgTotal}</p>
-                          <p className="text-xs opacity-60">P2 demand</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.fiberglass}</span></p>
-                          <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.fiberglass}</span></p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-4 bg-orange-600 text-white rounded-lg">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <p className="text-sm opacity-80">Mesa Packets</p>
-                          <p className="text-3xl font-bold">{mesaTotal}</p>
-                          <p className="text-xs opacity-60">P2 demand</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.mesa || 0}</span></p>
-                          <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.mesa}</span></p>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                );
+                  </div>
+                ));
               })()}
             </div>
 
@@ -512,39 +485,29 @@ export default function CuttingWeeklySchedule() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>PO / Customer</TableHead>
-                      <TableHead className="text-center">CF</TableHead>
-                      <TableHead className="text-center">FG</TableHead>
-                      <TableHead className="text-center">Mesa</TableHead>
+                      <TableHead>Packets</TableHead>
                       <TableHead className="text-center">Total</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {p2Demand.map(po => {
-                      let cf = 0, fg = 0, mesa = 0;
-                      po.items.forEach(item => {
-                        if (item.materialType === 'carbon_fiber') cf += item.qty;
-                        else if (item.materialType === 'fiberglass') fg += item.qty;
-                        else if (item.materialType === 'mesa') mesa += item.qty;
-                      });
-                      return (
-                        <TableRow key={po.poId}>
-                          <TableCell className="font-medium">
-                            PO-{po.poId}
-                            <span className="text-muted-foreground ml-2">• {po.customer}</span>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {cf > 0 && <Badge variant="outline" className="bg-gray-900 text-white">{cf}</Badge>}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {fg > 0 && <Badge variant="outline" className="bg-amber-100 text-amber-800">{fg}</Badge>}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {mesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{mesa}</Badge>}
-                          </TableCell>
-                          <TableCell className="text-center font-bold">{po.total}</TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {p2Demand.map(po => (
+                      <TableRow key={po.poId}>
+                        <TableCell className="font-medium">
+                          PO-{po.poId}
+                          <span className="text-muted-foreground ml-2">• {po.customer}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {po.items.map((item, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs">
+                                {item.name}: {item.qty}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center font-bold">{po.total}</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </CollapsibleContent>

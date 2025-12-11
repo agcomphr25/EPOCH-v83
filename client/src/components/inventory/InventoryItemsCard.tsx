@@ -82,6 +82,7 @@ interface InventoryFormData {
   utilizedInFacilities: boolean;
   utilizedInAdmin: boolean;
   utilizedInServices: boolean;
+  isPacket: boolean;
   isPacketPart: boolean;
   isFabric: boolean;
   hasSds: boolean;
@@ -616,6 +617,19 @@ const InventoryForm = ({
         </div>
         <div className="flex items-center space-x-2">
           <Checkbox
+            id="isPacket"
+            checked={formData.isPacket}
+            onCheckedChange={(checked) =>
+              onCheckboxChange('isPacket', checked as boolean)
+            }
+            data-testid="checkbox-isPacket"
+          />
+          <Label htmlFor="isPacket" className="cursor-pointer">
+            Packet
+          </Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Checkbox
             id="isPacketPart"
             checked={formData.isPacketPart}
             onCheckedChange={(checked) =>
@@ -624,7 +638,7 @@ const InventoryForm = ({
             data-testid="checkbox-isPacketPart"
           />
           <Label htmlFor="isPacketPart" className="cursor-pointer">
-            Packet (Cutting Table)
+            Packet Part
           </Label>
         </div>
         <div className="flex items-center space-x-2">
@@ -962,6 +976,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     utilizedInFacilities: false,
     utilizedInAdmin: false,
     utilizedInServices: false,
+    isPacket: false,
     isPacketPart: false,
     isFabric: false,
     hasSds: false,
@@ -1531,6 +1546,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         utilizedInFacilities: formData.utilizedInFacilities,
         utilizedInAdmin: formData.utilizedInAdmin,
         utilizedInServices: formData.utilizedInServices,
+        isPacket: formData.isPacket,
         isPacketPart: formData.isPacketPart,
         isFabric: formData.isFabric,
         hasSds: formData.hasSds,
@@ -1587,6 +1603,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       utilizedInFacilities: item.utilizedInFacilities || false,
       utilizedInAdmin: item.utilizedInAdmin || false,
       utilizedInServices: item.utilizedInServices || false,
+      isPacket: item.isPacket || false,
       isPacketPart: item.isPacketPart || false,
       isFabric: item.isFabric || false,
       hasSds: item.hasSds || false,

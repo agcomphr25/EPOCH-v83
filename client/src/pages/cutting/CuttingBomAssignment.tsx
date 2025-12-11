@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -120,6 +121,16 @@ type CutProgram = {
   }[];
 };
 
+type PlyEntry = {
+  id: string;
+  plyNumber: number;
+  assignedParts: {
+    inventoryItemId: number;
+    partNumber: string;
+    name: string;
+  }[];
+};
+
 export default function CuttingBomAssignment() {
   const { toast } = useToast();
   
@@ -186,6 +197,11 @@ export default function CuttingBomAssignment() {
   const [cutPrograms, setCutPrograms] = useState<CutProgram[]>([]);
   const [newProgramName, setNewProgramName] = useState("");
   const [newProgramSqMeters, setNewProgramSqMeters] = useState("0.5");
+  
+  // Ply schedule state (Step 4)
+  const [noPlyScheduleNeeded, setNoPlyScheduleNeeded] = useState(false);
+  const [plyEntries, setPlyEntries] = useState<PlyEntry[]>([]);
+  const [newPlyNumber, setNewPlyNumber] = useState("1");
 
   const { data: weeklyQueueData } = useQuery<{
     items: { stockModel: string; source: string; packetsNeeded: number }[];
@@ -337,6 +353,9 @@ export default function CuttingBomAssignment() {
     setCutPrograms([]);
     setNewProgramName("");
     setNewProgramSqMeters("0.5");
+    setNoPlyScheduleNeeded(false);
+    setPlyEntries([]);
+    setNewPlyNumber("1");
   };
 
   // Toggle part selection for wizard step 2
@@ -463,6 +482,14 @@ export default function CuttingBomAssignment() {
       parts: partsData,
       cutPrograms: programsData,
       cuts: packetBomForm.cuts,
+      noPlySchedule: noPlyScheduleNeeded,
+      plySchedule: noPlyScheduleNeeded ? [] : plyEntries.map(ply => ({
+        plyNumber: ply.plyNumber,
+        assignedParts: ply.assignedParts.map(ap => ({
+          inventoryItemId: ap.inventoryItemId,
+          partNumber: ap.partNumber,
+        })),
+      })),
     };
 
     if (editingPacketBom) {
@@ -696,18 +723,19 @@ export default function CuttingBomAssignment() {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingPacketBom ? "Edit Packet BOM" : "Create Packet BOM"} - Step {wizardStep} of 3
+              {editingPacketBom ? "Edit Packet BOM" : "Create Packet BOM"} - Step {wizardStep} of 4
             </DialogTitle>
             <DialogDescription>
               {wizardStep === 1 && "Select a packet from inventory"}
               {wizardStep === 2 && "Select packet parts, enter quantity and fabric for each"}
-              {wizardStep === 3 && "Enter cut program details for each part"}
+              {wizardStep === 3 && "Create cut programs and assign parts with yield"}
+              {wizardStep === 4 && "Set up ply schedule (optional)"}
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex justify-center mb-4">
             <div className="flex items-center gap-2">
-              {[1, 2, 3].map((step) => (
+              {[1, 2, 3, 4].map((step) => (
                 <div key={step} className="flex items-center">
                   <div
                     className={cn(
@@ -717,7 +745,7 @@ export default function CuttingBomAssignment() {
                   >
                     {wizardStep > step ? <Check className="h-4 w-4" /> : step}
                   </div>
-                  {step < 3 && <ChevronRight className="h-4 w-4 mx-2 text-muted-foreground" />}
+                  {step < 4 && <ChevronRight className="h-4 w-4 mx-2 text-muted-foreground" />}
                 </div>
               ))}
             </div>
@@ -1066,6 +1094,163 @@ export default function CuttingBomAssignment() {
             </div>
           )}
 
+          {wizardStep === 4 && (
+            <div className="space-y-4">
+              {/* No Ply Schedule Checkbox */}
+              <div className="flex items-center space-x-2 p-3 border rounded-lg bg-muted/30">
+                <Checkbox
+                  id="noPlySchedule"
+                  checked={noPlyScheduleNeeded}
+                  onCheckedChange={(checked) => setNoPlyScheduleNeeded(checked === true)}
+                  data-testid="checkbox-no-ply-schedule"
+                />
+                <Label htmlFor="noPlySchedule" className="text-sm font-medium cursor-pointer">
+                  No ply schedule needed for this BOM
+                </Label>
+              </div>
+
+              {!noPlyScheduleNeeded && (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-base font-medium">Ply Schedule</Label>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Add plies and assign one or more parts to each ply.
+                    </p>
+                  </div>
+
+                  {/* Add New Ply */}
+                  <div className="border rounded-lg p-4 bg-muted/30">
+                    <div className="flex items-end gap-3">
+                      <div className="w-32 space-y-2">
+                        <Label className="text-sm">Ply Number</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={newPlyNumber}
+                          onChange={(e) => setNewPlyNumber(e.target.value)}
+                          placeholder="1"
+                          data-testid="input-new-ply-number"
+                        />
+                      </div>
+                      <Button
+                        onClick={() => {
+                          const plyNum = parseInt(newPlyNumber) || 1;
+                          if (plyEntries.find(p => p.plyNumber === plyNum)) {
+                            toast({ title: `Ply ${plyNum} already exists`, variant: "destructive" });
+                            return;
+                          }
+                          const newPly: PlyEntry = {
+                            id: `ply-${Date.now()}`,
+                            plyNumber: plyNum,
+                            assignedParts: [],
+                          };
+                          setPlyEntries(prev => [...prev, newPly].sort((a, b) => a.plyNumber - b.plyNumber));
+                          setNewPlyNumber(String(plyNum + 1));
+                        }}
+                        data-testid="button-add-ply"
+                      >
+                        <Plus className="h-4 w-4 mr-1" /> Add Ply
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Plies List */}
+                  {plyEntries.length === 0 ? (
+                    <div className="border rounded-lg p-6 text-center text-muted-foreground">
+                      <Layers className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>No plies added yet.</p>
+                      <p className="text-sm">Add a ply above to get started.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {plyEntries.map((ply) => (
+                        <div key={ply.id} className="border rounded-lg p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Layers className="h-4 w-4 text-primary" />
+                              <span className="font-medium">Ply {ply.plyNumber}</span>
+                              <Badge variant="secondary">{ply.assignedParts.length} parts</Badge>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setPlyEntries(prev => prev.filter(p => p.id !== ply.id))}
+                              data-testid={`button-remove-ply-${ply.id}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+
+                          {/* Assigned Parts */}
+                          {ply.assignedParts.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {ply.assignedParts.map((assignedPart) => (
+                                <Badge key={assignedPart.inventoryItemId} variant="outline" className="py-1 px-2">
+                                  {assignedPart.partNumber}
+                                  <button
+                                    className="ml-2 hover:text-destructive"
+                                    onClick={() => {
+                                      setPlyEntries(prev => prev.map(p =>
+                                        p.id === ply.id
+                                          ? { ...p, assignedParts: p.assignedParts.filter(ap => ap.inventoryItemId !== assignedPart.inventoryItemId) }
+                                          : p
+                                      ));
+                                    }}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Add Part to Ply */}
+                          <div className="flex items-end gap-2 pt-2 border-t">
+                            <div className="flex-1">
+                              <Label className="text-sm">Add Part to Ply</Label>
+                              <Select
+                                onValueChange={(value) => {
+                                  const part = wizardParts.find(p => p.inventoryItemId.toString() === value);
+                                  if (part && !ply.assignedParts.find(ap => ap.inventoryItemId === part.inventoryItemId)) {
+                                    setPlyEntries(prev => prev.map(p =>
+                                      p.id === ply.id
+                                        ? {
+                                            ...p,
+                                            assignedParts: [...p.assignedParts, {
+                                              inventoryItemId: part.inventoryItemId,
+                                              partNumber: part.partNumber,
+                                              name: part.name,
+                                            }]
+                                          }
+                                        : p
+                                    ));
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-9" data-testid={`select-add-part-ply-${ply.id}`}>
+                                  <SelectValue placeholder="Select a part to add..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {wizardParts
+                                    .filter(part => !ply.assignedParts.find(ap => ap.inventoryItemId === part.inventoryItemId))
+                                    .map((part) => (
+                                      <SelectItem key={part.inventoryItemId} value={part.inventoryItemId.toString()}>
+                                        {part.partNumber} - {part.name}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           <DialogFooter>
             <div className="flex justify-between w-full">
               <div>
@@ -1079,7 +1264,7 @@ export default function CuttingBomAssignment() {
                 <Button variant="outline" onClick={() => setIsPacketBomDialogOpen(false)} data-testid="button-cancel">
                   Cancel
                 </Button>
-                {wizardStep < 3 ? (
+                {wizardStep < 4 ? (
                   <Button onClick={() => setWizardStep(s => s + 1)} data-testid="button-wizard-next">
                     Next
                   </Button>

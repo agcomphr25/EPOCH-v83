@@ -301,7 +301,11 @@ export default function CuttingWeeklySchedule() {
                 <div>
                   <p className="text-sm opacity-80">Carbon Fiber Packets</p>
                   <p className="text-3xl font-bold">{p1Demand.cf}</p>
-                  <p className="text-xs opacity-60">demand</p>
+                  <div className="text-xs opacity-70 mt-1">
+                    <span className="text-red-300">PO: {p1Demand.oemOrders.cf}</span>
+                    <span className="mx-1">|</span>
+                    <span className="text-blue-300">Reg: {p1Demand.regularOrders.cf}</span>
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.carbon_fiber}</span></p>
@@ -340,7 +344,11 @@ export default function CuttingWeeklySchedule() {
                 <div>
                   <p className="text-sm opacity-80">Fiberglass Packets</p>
                   <p className="text-3xl font-bold">{p1Demand.fg}</p>
-                  <p className="text-xs opacity-60">demand</p>
+                  <div className="text-xs opacity-70 mt-1">
+                    <span className="text-red-100">PO: {p1Demand.oemOrders.fg}</span>
+                    <span className="mx-1">|</span>
+                    <span className="text-blue-100">Reg: {p1Demand.regularOrders.fg}</span>
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.fiberglass}</span></p>
@@ -379,7 +387,11 @@ export default function CuttingWeeklySchedule() {
                 <div>
                   <p className="text-sm opacity-80">Mesa Packets</p>
                   <p className="text-3xl font-bold">{p1Demand.mesa}</p>
-                  <p className="text-xs opacity-60">demand</p>
+                  <div className="text-xs opacity-70 mt-1">
+                    <span className="text-red-100">PO: {p1Demand.oemOrders.mesa}</span>
+                    <span className="mx-1">|</span>
+                    <span className="text-blue-100">Reg: {p1Demand.regularOrders.mesa}</span>
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.mesa || 0}</span></p>

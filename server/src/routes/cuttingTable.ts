@@ -2039,7 +2039,35 @@ router.get('/packet-boms', async (req, res) => {
           } catch (e) { /* ignore */ }
         }
         
-        return { ...bom, materials, parts, cuts };
+        // Get cut programs from cutProgramsConfig field
+        let cutPrograms: any[] = [];
+        if (bom.cutProgramsConfig) {
+          if (Array.isArray(bom.cutProgramsConfig)) {
+            cutPrograms = bom.cutProgramsConfig;
+          } else if (typeof bom.cutProgramsConfig === 'string') {
+            try { cutPrograms = JSON.parse(bom.cutProgramsConfig); } catch (e) { cutPrograms = []; }
+          }
+        }
+        
+        // Get ply schedule from plyScheduleConfig field
+        let plySchedule: any[] = [];
+        if (bom.plyScheduleConfig) {
+          if (Array.isArray(bom.plyScheduleConfig)) {
+            plySchedule = bom.plyScheduleConfig;
+          } else if (typeof bom.plyScheduleConfig === 'string') {
+            try { plySchedule = JSON.parse(bom.plyScheduleConfig); } catch (e) { plySchedule = []; }
+          }
+        }
+        
+        return { 
+          ...bom, 
+          materials, 
+          parts, 
+          cuts, 
+          cutPrograms,
+          noPlySchedule: bom.noPlySchedule || false,
+          plySchedule,
+        };
       })
     );
     
@@ -2096,11 +2124,17 @@ router.post('/packet-boms', async (req, res) => {
   try {
     // Store cuts configuration in dedicated cutsConfig jsonb field
     const cutsConfigData = req.body.cuts || null;
+    const cutProgramsConfigData = req.body.cutPrograms || null;
+    const plyScheduleConfigData = req.body.plySchedule || null;
+    const noPlyScheduleValue = req.body.noPlySchedule || false;
     const baseData = insertCuttingPacketBOMSchema.parse(req.body);
     
     const [newBom] = await db.insert(cuttingPacketBOMs).values({
       ...baseData,
       cutsConfig: cutsConfigData, // Store cuts in dedicated jsonb column
+      cutProgramsConfig: cutProgramsConfigData, // Store cut programs from Step 3
+      noPlySchedule: noPlyScheduleValue, // Whether no ply schedule is needed
+      plyScheduleConfig: plyScheduleConfigData, // Store ply schedule from Step 4
     }).returning();
     
     // If materials are provided, add them
@@ -2153,7 +2187,15 @@ router.post('/packet-boms', async (req, res) => {
       }
     }
     
-    res.status(201).json({ ...newBom, materials, parts, cuts });
+    res.status(201).json({ 
+      ...newBom, 
+      materials, 
+      parts, 
+      cuts,
+      cutPrograms: cutProgramsConfigData || [],
+      noPlySchedule: noPlyScheduleValue,
+      plySchedule: plyScheduleConfigData || [],
+    });
   } catch (error) {
     console.error('Error creating packet BOM:', error);
     res.status(400).json({ error: 'Failed to create packet BOM' });
@@ -2165,11 +2207,23 @@ router.put('/packet-boms/:id', async (req, res) => {
   try {
     // Store cuts configuration in dedicated cutsConfig jsonb field
     const cutsConfigData = req.body.cuts !== undefined ? req.body.cuts : undefined;
+    const cutProgramsConfigData = req.body.cutPrograms !== undefined ? req.body.cutPrograms : undefined;
+    const plyScheduleConfigData = req.body.plySchedule !== undefined ? req.body.plySchedule : undefined;
+    const noPlyScheduleValue = req.body.noPlySchedule !== undefined ? req.body.noPlySchedule : undefined;
     const baseData = insertCuttingPacketBOMSchema.partial().parse(req.body);
     
     const updateData: any = { ...baseData, updatedAt: new Date() };
     if (cutsConfigData !== undefined) {
       updateData.cutsConfig = cutsConfigData;
+    }
+    if (cutProgramsConfigData !== undefined) {
+      updateData.cutProgramsConfig = cutProgramsConfigData;
+    }
+    if (plyScheduleConfigData !== undefined) {
+      updateData.plyScheduleConfig = plyScheduleConfigData;
+    }
+    if (noPlyScheduleValue !== undefined) {
+      updateData.noPlySchedule = noPlyScheduleValue;
     }
     
     const [updated] = await db.update(cuttingPacketBOMs)

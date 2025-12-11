@@ -6237,6 +6237,9 @@ export const cuttingPacketBOMs = pgTable('cutting_packet_boms', {
   partNumber: text('part_number').notNull(), // Part number for the packet
   description: text('description'), // Description of the packet
   cutsConfig: jsonb('cuts_config'), // JSON config for cuts with assigned parts: [{materialPartNumber, materialName, cutsNeeded, assignedParts: [{partNumber, partsPerCut}]}]
+  cutProgramsConfig: jsonb('cut_programs_config'), // Cut programs from Step 3: [{programName, squareMetersPerCut, assignedParts: [{partNumber, yieldPerCut}]}]
+  noPlySchedule: boolean('no_ply_schedule').default(false), // Whether this BOM has no ply schedule
+  plyScheduleConfig: jsonb('ply_schedule_config'), // Ply schedule from Step 4: [{plyNumber, assignedParts: [{partNumber, quantity}]}]
   productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
   inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id), // Link to inventory item that triggered this BOM
   squareMetersPerCut: real('square_meters_per_cut').notNull().default(0), // Square meters consumed per cut

@@ -7844,7 +7844,7 @@ export const projectSteps = pgTable('project_steps', {
   linkedQuoteId: uuid('linked_quote_id').references(() => quotes.id),
   linkedPurchaseReviewId: integer('linked_purchase_review_id').references(() => purchaseReviewChecklists.id),
   linkedPreproductionChecklistId: uuid('linked_preproduction_checklist_id').references(() => preproductionChecklists.id),
-  linkedP2OrderId: uuid('linked_p2_order_id').references(() => p2PurchaseOrders.id),
+  linkedP2OrderId: integer('linked_p2_order_id').references(() => p2PurchaseOrders.id),
   // Step tracking
   startedAt: timestamp('started_at'),
   completedAt: timestamp('completed_at'),

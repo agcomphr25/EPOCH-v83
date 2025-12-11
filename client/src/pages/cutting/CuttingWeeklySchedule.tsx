@@ -454,22 +454,49 @@ export default function CuttingWeeklySchedule() {
                 });
                 const sortedTypes = Object.entries(packetTypeCounts)
                   .sort((a, b) => b[1] - a[1])
-                  .slice(0, 3);
-                const colors = ['bg-purple-600', 'bg-indigo-500', 'bg-teal-500'];
-                return sortedTypes.map(([name, count], idx) => (
-                  <div key={name} className={`p-4 ${colors[idx]} text-white rounded-lg`}>
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <p className="text-sm opacity-80">{name}</p>
-                        <p className="text-3xl font-bold">{count}</p>
-                        <p className="text-xs opacity-60">P2 demand</p>
+                  .slice(0, 6);
+                const colors = ['bg-purple-600', 'bg-indigo-500', 'bg-teal-500', 'bg-pink-600', 'bg-cyan-600', 'bg-violet-600'];
+                return sortedTypes.map(([name, count], idx) => {
+                  const scheduleKey = `p2_${name.replace(/\s+/g, '_').toLowerCase()}`;
+                  return (
+                    <div key={name} className={`p-4 ${colors[idx % colors.length]} text-white rounded-lg`}>
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <p className="text-sm opacity-80">{name}</p>
+                          <p className="text-3xl font-bold">{count}</p>
+                          <p className="text-xs opacity-60">P2 demand</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm">POs: <span className="font-bold">{p2Demand.filter(po => po.items.some(i => i.name === name)).length}</span></p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm">POs: <span className="font-bold">{p2Demand.filter(po => po.items.some(i => i.name === name)).length}</span></p>
+                      <div className="flex items-center gap-2">
+                        <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity(scheduleKey, -10)}>
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <Input
+                          type="number"
+                          value={scheduleQuantities[scheduleKey] || 0}
+                          onChange={(e) => setQuantity(scheduleKey, e.target.value)}
+                          className="text-center font-bold w-20 h-8 bg-white text-black"
+                          data-testid={`input-qty-p2-${name.replace(/\s+/g, '-').toLowerCase()}`}
+                        />
+                        <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity(scheduleKey, 10)}>
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                        <Button 
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => handleSchedule(name, scheduleKey, `P2 ${name} packets`)}
+                          disabled={!scheduleQuantities[scheduleKey] || scheduleQuantities[scheduleKey] <= 0}
+                          data-testid={`button-schedule-p2-${name.replace(/\s+/g, '-').toLowerCase()}`}
+                        >
+                          Schedule
+                        </Button>
                       </div>
                     </div>
-                  </div>
-                ));
+                  );
+                });
               })()}
             </div>
 

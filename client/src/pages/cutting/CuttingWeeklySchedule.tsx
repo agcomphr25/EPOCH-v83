@@ -442,36 +442,117 @@ export default function CuttingWeeklySchedule() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Collapsible open={expandedSections.p2} onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, p2: open }))}>
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="w-full justify-start gap-2 text-sm">
-                  {expandedSections.p2 ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  {p2Demand.length} Purchase Orders with Packet Demand
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="space-y-3 mt-2">
-                  {p2Demand.map(po => (
-                    <div key={po.poId} className="p-3 border rounded-lg">
-                      <div className="flex justify-between items-center mb-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              {(() => {
+                const packetTypeCounts: Record<string, number> = {};
+                let totalPackets = 0;
+                p2Demand.forEach(po => {
+                  po.items.forEach(item => {
+                    packetTypeCounts[item.name] = (packetTypeCounts[item.name] || 0) + item.qty;
+                    totalPackets += item.qty;
+                  });
+                });
+                const sortedTypes = Object.entries(packetTypeCounts)
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 6);
+                const colors = ['bg-purple-600', 'bg-indigo-500', 'bg-teal-500', 'bg-pink-600', 'bg-cyan-600', 'bg-violet-600'];
+                return sortedTypes.map(([name, count], idx) => {
+                  const scheduleKey = `p2_${name.replace(/\s+/g, '_').toLowerCase()}`;
+                  return (
+                    <div key={name} className={`p-4 ${colors[idx % colors.length]} text-white rounded-lg`}>
+                      <div className="flex justify-between items-start mb-3">
                         <div>
-                          <span className="font-medium">PO-{po.poId}</span>
-                          <span className="text-muted-foreground ml-2">• {po.customer}</span>
+                          <p className="text-sm opacity-80">{name}</p>
+                          <p className="text-3xl font-bold">{count}</p>
+                          <p className="text-xs opacity-60">P2 demand</p>
                         </div>
-                        <Badge>{po.total} packets</Badge>
+                        <div className="text-right">
+                          <p className="text-sm">POs: <span className="font-bold">{p2Demand.filter(po => po.items.some(i => i.name === name)).length}</span></p>
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {po.items.map((item, idx) => (
-                          <Badge key={idx} variant="outline" className="text-xs">
-                            {item.name}: {item.qty}
-                          </Badge>
-                        ))}
+                      <div className="flex items-center gap-2">
+                        <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity(scheduleKey, -10)}>
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <Input
+                          type="number"
+                          value={scheduleQuantities[scheduleKey] || 0}
+                          onChange={(e) => setQuantity(scheduleKey, e.target.value)}
+                          className="text-center font-bold w-20 h-8 bg-white text-black"
+                          data-testid={`input-qty-p2-${name.replace(/\s+/g, '-').toLowerCase()}`}
+                        />
+                        <Button variant="secondary" size="icon" className="h-8 w-8" onClick={() => updateQuantity(scheduleKey, 10)}>
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                        <Button 
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => handleSchedule(name, scheduleKey, `P2 ${name} packets`)}
+                          disabled={!scheduleQuantities[scheduleKey] || scheduleQuantities[scheduleKey] <= 0}
+                          data-testid={`button-schedule-p2-${name.replace(/\s+/g, '-').toLowerCase()}`}
+                        >
+                          Schedule
+                        </Button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
+                  );
+                });
+              })()}
+            </div>
+
+            {(() => {
+              const allPacketTypes = new Set<string>();
+              p2Demand.forEach(po => po.items.forEach(item => allPacketTypes.add(item.name)));
+              const packetTypesList = Array.from(allPacketTypes).sort();
+              const badgeColors = ['bg-purple-100 text-purple-800', 'bg-indigo-100 text-indigo-800', 'bg-teal-100 text-teal-800', 'bg-pink-100 text-pink-800', 'bg-cyan-100 text-cyan-800'];
+              
+              return (
+                <Collapsible open={expandedSections.p2} onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, p2: open }))}>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" className="w-full justify-start gap-2 text-sm text-muted-foreground">
+                      {expandedSections.p2 ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      P2 Demand by PO ({p2Demand.length})
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Customer</TableHead>
+                          {packetTypesList.map(type => (
+                            <TableHead key={type} className="text-center">{type}</TableHead>
+                          ))}
+                          <TableHead className="text-center">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {p2Demand.map(po => {
+                          const itemsByType: Record<string, number> = {};
+                          po.items.forEach(item => {
+                            itemsByType[item.name] = (itemsByType[item.name] || 0) + item.qty;
+                          });
+                          return (
+                            <TableRow key={po.poId}>
+                              <TableCell className="font-medium">{po.customer}</TableCell>
+                              {packetTypesList.map((type, idx) => (
+                                <TableCell key={type} className="text-center">
+                                  {itemsByType[type] > 0 && (
+                                    <Badge variant="outline" className={badgeColors[idx % badgeColors.length]}>
+                                      {itemsByType[type]}
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                              ))}
+                              <TableCell className="text-center font-bold">{po.total}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })()}
           </CardContent>
         </Card>
       )}

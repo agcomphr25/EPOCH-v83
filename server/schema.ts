@@ -524,8 +524,8 @@ export const inventoryItems = pgTable('inventory_items', {
   utilizedInFacilities: boolean('utilized_in_facilities').default(false), // Used in Facilities
   utilizedInAdmin: boolean('utilized_in_admin').default(false), // Used in Admin
   utilizedInServices: boolean('utilized_in_services').default(false), // Used in Services
-  isPacket: boolean('is_packet').default(false), // Is a packet (bundle for cutting table)
-  isPacketPart: boolean('is_packet_part').default(false), // Part that goes into cutting table packets
+  isPacket: boolean('is_packet').default(false), // Packet item for cutting table BOM
+  isPacketPart: boolean('is_packet_part').default(false), // Part of cutting table packet
   isFabric: boolean('is_fabric').default(false), // Fabric for cutting table
   type: text('type'), // Type: Purchased or Manufactured
   manufacturingDepartment: text('manufacturing_department'), // Manufacturing department: CNC, Cutting Table, or Cores (required when type is Manufactured)
@@ -6237,6 +6237,9 @@ export const cuttingPacketBOMs = pgTable('cutting_packet_boms', {
   partNumber: text('part_number').notNull(), // Part number for the packet
   description: text('description'), // Description of the packet
   cutsConfig: jsonb('cuts_config'), // JSON config for cuts with assigned parts: [{materialPartNumber, materialName, cutsNeeded, assignedParts: [{partNumber, partsPerCut}]}]
+  cutProgramsConfig: jsonb('cut_programs_config'), // Cut programs from Step 3: [{programName, squareMetersPerCut, assignedParts: [{partNumber, yieldPerCut}]}]
+  noPlySchedule: boolean('no_ply_schedule').default(false), // Whether this BOM has no ply schedule
+  plyScheduleConfig: jsonb('ply_schedule_config'), // Ply schedule from Step 4: [{plyNumber, assignedParts: [{partNumber, quantity}]}]
   productCategoryId: uuid('product_category_id').references(() => cuttingProductCategories.id),
   inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id), // Link to inventory item that triggered this BOM
   squareMetersPerCut: real('square_meters_per_cut').notNull().default(0), // Square meters consumed per cut
@@ -6270,10 +6273,14 @@ export const cuttingPacketBOMMaterials = pgTable('cutting_packet_bom_materials',
 export const cuttingPacketBOMParts = pgTable('cutting_packet_bom_parts', {
   id: uuid('id').defaultRandom().primaryKey(),
   packetBomId: uuid('packet_bom_id').references(() => cuttingPacketBOMs.id, { onDelete: 'cascade' }).notNull(),
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id), // Link to inventory item (packet part)
   partNumber: text('part_number').notNull(), // Part number for this specific piece (e.g., T501, T502)
   partDescription: text('part_description'), // Description of this part
   fabricType: text('fabric_type').notNull(), // Type of fabric used for this part
   commonName: text('common_name'), // Common/nickname for the fabric
+  quantityNeeded: integer('quantity_needed').notNull().default(1), // Quantity of this part needed per packet
+  cutProgramName: text('cut_program_name'), // Name of the cut program for this part
+  squareMetersPerCut: real('square_meters_per_cut'), // Square meters consumed per cut
   yieldPerCut: integer('yield_per_cut').notNull().default(1), // How many of this part are produced per cut
   squareMetersPerPart: real('square_meters_per_part'), // Square meters consumed per part
   sortOrder: integer('sort_order').default(0), // Order within the packet

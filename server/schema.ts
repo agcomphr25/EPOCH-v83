@@ -6269,10 +6269,14 @@ export const cuttingPacketBOMMaterials = pgTable('cutting_packet_bom_materials',
 export const cuttingPacketBOMParts = pgTable('cutting_packet_bom_parts', {
   id: uuid('id').defaultRandom().primaryKey(),
   packetBomId: uuid('packet_bom_id').references(() => cuttingPacketBOMs.id, { onDelete: 'cascade' }).notNull(),
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id), // Link to inventory item (packet part)
   partNumber: text('part_number').notNull(), // Part number for this specific piece (e.g., T501, T502)
   partDescription: text('part_description'), // Description of this part
   fabricType: text('fabric_type').notNull(), // Type of fabric used for this part
   commonName: text('common_name'), // Common/nickname for the fabric
+  quantityNeeded: integer('quantity_needed').notNull().default(1), // Quantity of this part needed per packet
+  cutProgramName: text('cut_program_name'), // Name of the cut program for this part
+  squareMetersPerCut: real('square_meters_per_cut'), // Square meters consumed per cut
   yieldPerCut: integer('yield_per_cut').notNull().default(1), // How many of this part are produced per cut
   squareMetersPerPart: real('square_meters_per_part'), // Square meters consumed per part
   sortOrder: integer('sort_order').default(0), // Order within the packet

@@ -263,7 +263,7 @@ export default function P2ProductionQueue() {
             <div class="line3">${item.partName}</div>
             <div class="line4">${item.poNumber} - ${item.customerName}</div>
             <div class="line5">
-              <canvas id="barcode-${index}" width="180" height="25"></canvas>
+              <canvas id="barcode-${index}" width="160" height="18"></canvas>
             </div>
           </div>
         </div>
@@ -275,27 +275,41 @@ export default function P2ProductionQueue() {
         <head>
           <title>P2 ${dept.name} Queue Labels</title>
           <style>
-            body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; }
+            .labels-container {
+              width: 8.5in;
+              padding: 0.5in 0.1875in;
+            }
             .avery-label {
-              width: 2.625in; height: 1in; border: 1px solid #ddd; margin: 0; padding: 0.03in;
-              display: inline-block; vertical-align: top; box-sizing: border-box;
-              page-break-inside: avoid; background: white;
+              width: 2.625in;
+              height: 1in;
+              border: 1px solid #ddd;
+              display: inline-block;
+              vertical-align: top;
+              overflow: hidden;
+              page-break-inside: avoid;
+              background: white;
             }
             .label-content {
-              height: 100%; display: flex; flex-direction: column; justify-content: space-between;
-              text-align: center; padding: 2px; box-sizing: border-box;
+              width: 100%;
+              height: 100%;
+              padding: 3px 5px;
+              display: flex;
+              flex-direction: column;
+              justify-content: space-between;
+              text-align: center;
             }
-            .line1 { font-size: 9pt; font-weight: bold; color: #000; }
-            .line2 { font-size: 7pt; font-weight: bold; color: #333; }
-            .line3 { font-size: 6pt; color: #000; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-            .line4 { font-size: 5pt; color: #666; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-            .line5 { display: flex; justify-content: center; align-items: center; min-height: 0.25in; }
+            .line1 { font-size: 9pt; font-weight: bold; color: #000; line-height: 1.1; }
+            .line2 { font-size: 7pt; font-weight: bold; color: #333; line-height: 1.1; }
+            .line3 { font-size: 6pt; color: #000; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.1; }
+            .line4 { font-size: 5pt; color: #666; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.1; }
+            .line5 { height: 20px; display: flex; justify-content: center; align-items: center; }
+            .line5 canvas { max-width: 100%; height: 20px !important; }
             @media print {
-              body { margin: 0; }
-              .avery-label { border: none; margin: 0; }
-              @page { size: 8.5in 11in; margin: 0.45in 0.1875in 0.5in 0.1875in; }
+              .avery-label { border: none; }
+              @page { size: 8.5in 11in; margin: 0.5in 0.1875in; }
             }
-            .labels-container { display: flex; flex-wrap: wrap; justify-content: flex-start; width: 8.5in; }
           </style>
         </head>
         <body>
@@ -316,10 +330,10 @@ export default function P2ProductionQueue() {
             const format = getBarcodeFormat(item.barcode);
             JsBarcode(canvas, item.barcode, {
               format: format,
-              width: format === 'CODE128' ? 1.2 : 1.5,
-              height: 22,
+              width: 1,
+              height: 18,
               displayValue: false,
-              margin: 2,
+              margin: 0,
               lineColor: '#000000',
             });
           } catch (error) {

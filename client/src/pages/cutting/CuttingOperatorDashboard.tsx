@@ -142,6 +142,7 @@ export default function CuttingOperatorDashboard() {
   const [isCuttingWorkflowOpen, setIsCuttingWorkflowOpen] = useState(false);
   
   const [universalBarcode, setUniversalBarcode] = useState("");
+  const [fabricSearch, setFabricSearch] = useState("");
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const [productionForm, setProductionForm] = useState({
@@ -599,33 +600,109 @@ export default function CuttingOperatorDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Snowflake className="h-5 w-5" />
-              FIFO Fabric Suggestions
+              FIFO Fabric Lookup
             </CardTitle>
-            <CardDescription>Recommended rolls by expiration date</CardDescription>
+            <CardDescription>Search fabric to find next roll and on-hand quantity</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {Object.entries(fifoSuggestions).map(([type, rolls]) => (
-                <div key={type} className="space-y-1">
-                  <div className="text-sm font-medium">{type}</div>
-                  <div className="flex flex-wrap gap-1">
-                    {rolls.map(roll => (
-                      <Badge 
-                        key={roll.id} 
-                        variant={roll.status === 'expiring' ? 'destructive' : 'secondary'}
-                        className="cursor-pointer text-xs"
-                        onClick={() => handleBarcodeScan(roll.barcodeValue)}
-                        data-testid={`badge-fifo-roll-${roll.id}`}
-                      >
-                        {roll.rollNumber} - {roll.freezerLocation || 'N/A'}
-                        {roll.isFifoNext && <ArrowRight className="h-3 w-3 ml-1" />}
-                      </Badge>
-                    ))}
-                  </div>
+            <div className="space-y-4">
+              <Input
+                placeholder="Search fabric type (e.g., cf_, fg_, mesa)..."
+                value={fabricSearch}
+                onChange={(e) => setFabricSearch(e.target.value)}
+                className="w-full"
+                data-testid="input-fabric-search"
+              />
+              
+              {fabricSearch.trim() && (() => {
+                const searchLower = fabricSearch.toLowerCase();
+                const matchingTypes = Object.entries(fifoSuggestions).filter(([type]) => 
+                  type.toLowerCase().includes(searchLower)
+                );
+                
+                if (matchingTypes.length === 0) {
+                  const directMatches = fabricInventory.filter(f => 
+                    (f.fabricType || '').toLowerCase().includes(searchLower) ||
+                    (f.commonName || '').toLowerCase().includes(searchLower)
+                  );
+                  
+                  if (directMatches.length === 0) {
+                    return <div className="text-sm text-muted-foreground">No fabric found matching "{fabricSearch}"</div>;
+                  }
+                  
+                  const totalOnHand = directMatches.reduce((sum, f) => sum + (f.squareMeters || 0), 0);
+                  const nextFifo = directMatches.sort((a, b) => {
+                    const aExp = a.expirationDate ? new Date(a.expirationDate).getTime() : Infinity;
+                    const bExp = b.expirationDate ? new Date(b.expirationDate).getTime() : Infinity;
+                    return aExp - bExp;
+                  })[0];
+                  
+                  return (
+                    <div className="p-3 bg-muted rounded-lg space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">{nextFifo?.fabricType || fabricSearch}</span>
+                        <Badge variant="outline" className="bg-green-100 text-green-800">
+                          {totalOnHand.toFixed(1)} m² on hand
+                        </Badge>
+                      </div>
+                      {nextFifo && (
+                        <div className="flex items-center gap-2 p-2 bg-background rounded border">
+                          <Badge className="bg-green-600">FIFO Next</Badge>
+                          <div className="flex-1">
+                            <p className="font-medium">Roll {nextFifo.rollNumber}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Location: {nextFifo.freezerLocation || nextFifo.location || 'N/A'}
+                              {nextFifo.expirationDate && ` • Exp: ${new Date(nextFifo.expirationDate).toLocaleDateString()}`}
+                            </p>
+                          </div>
+                          <Badge variant="secondary">{nextFifo.squareMeters.toFixed(1)} m²</Badge>
+                          <Button size="sm" variant="outline" onClick={() => handleBarcodeScan(nextFifo.barcodeValue)}>
+                            Select
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                
+                return matchingTypes.map(([type, rolls]) => {
+                  const allOfType = fabricInventory.filter(f => (f.fabricType || '') === type);
+                  const totalOnHand = allOfType.reduce((sum, f) => sum + (f.squareMeters || 0), 0);
+                  const nextRoll = rolls[0];
+                  
+                  return (
+                    <div key={type} className="p-3 bg-muted rounded-lg space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">{type}</span>
+                        <Badge variant="outline" className="bg-green-100 text-green-800">
+                          {totalOnHand.toFixed(1)} m² on hand ({allOfType.length} rolls)
+                        </Badge>
+                      </div>
+                      {nextRoll && (
+                        <div className="flex items-center gap-2 p-2 bg-background rounded border">
+                          <Badge className="bg-green-600">FIFO Next</Badge>
+                          <div className="flex-1">
+                            <p className="font-medium">Roll {nextRoll.rollNumber}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Location: {nextRoll.freezerLocation || nextRoll.location || 'N/A'}
+                              {nextRoll.expirationDate && ` • Exp: ${new Date(nextRoll.expirationDate).toLocaleDateString()}`}
+                            </p>
+                          </div>
+                          <Badge variant="secondary">{nextRoll.squareMeters.toFixed(1)} m²</Badge>
+                          <Button size="sm" variant="outline" onClick={() => handleBarcodeScan(nextRoll.barcodeValue)}>
+                            Select
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
+              
+              {!fabricSearch.trim() && (
+                <div className="text-sm text-muted-foreground">
+                  Enter a fabric type above to see FIFO recommendation and stock levels
                 </div>
-              ))}
-              {Object.keys(fifoSuggestions).length === 0 && (
-                <div className="text-sm text-muted-foreground">No fabric inventory available</div>
               )}
             </div>
           </CardContent>

@@ -182,27 +182,33 @@ export default function CuttingBomAssignment() {
     const stockPacketDemand = { cf: 0, fg: 0, mesa: 0 };
     const p2Packets: Record<string, { name: string; demand: number; source: string }> = {};
     
-    weeklyQueueData.items.forEach(item => {
-      if (!item.stockModel) return;
-      
-      const name = item.stockModel;
-      const nameLower = name.toLowerCase();
+    weeklyQueueData.items.forEach((item: any) => {
       const demand = item.packetsNeeded || 1;
+      const name = item.stockModel || '';
+      const nameLower = name.toLowerCase();
+      const materialType = (item.materialType || '').toLowerCase();
+      const isP1 = item.source === 'P1' || item.source === 'P1_PO';
       
-      if (nameLower.startsWith('cf_') || nameLower.includes('carbon')) {
-        stockPacketDemand.cf += demand;
-      } else if (nameLower.startsWith('fg_') || nameLower.includes('fiberglass')) {
-        stockPacketDemand.fg += demand;
-      } else if (nameLower.includes('mesa')) {
-        stockPacketDemand.mesa += demand;
-      } else {
-        if (!existingBomTypes.has(nameLower)) {
-          if (!p2Packets[name]) {
-            p2Packets[name] = { name, demand: 0, source: item.source };
-          }
-          p2Packets[name].demand += demand;
+      // Group P1/P1_PO items by material type into stock packet categories
+      if (isP1) {
+        if (materialType === 'carbon_fiber' || nameLower.startsWith('cf_') || nameLower.includes('carbon')) {
+          stockPacketDemand.cf += demand;
+        } else if (materialType === 'fiberglass' || nameLower.startsWith('fg_') || nameLower.includes('fiberglass')) {
+          stockPacketDemand.fg += demand;
+        } else if (nameLower.includes('mesa')) {
+          stockPacketDemand.mesa += demand;
         }
+        // Skip P1/P1_PO items that don't match known patterns (like numeric IDs)
+        return;
       }
+      
+      // P2 items - group by specific packet name
+      if (!name || existingBomTypes.has(nameLower)) return;
+      
+      if (!p2Packets[name]) {
+        p2Packets[name] = { name, demand: 0, source: item.source };
+      }
+      p2Packets[name].demand += demand;
     });
     
     const result: { name: string; demand: number; source: string }[] = [];

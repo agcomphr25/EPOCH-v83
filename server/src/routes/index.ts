@@ -7013,6 +7013,87 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Tandym Dashboard Widgets API - Get summary data for dashboard widgets
+  app.get('/api/finance/dashboard-widgets', async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+      
+      if (!pool) {
+        return res.status(500).json({ error: 'Database connection not available' });
+      }
+      
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+      
+      // Previous month
+      const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+      const prevMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+      
+      // Same month last year
+      const lastYearMonth = currentMonth;
+      const lastYear = currentYear - 1;
+      
+      // Helper function to get CC revenue for a specific month/year
+      const getCCRevenue = async (month: number, year: number) => {
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+        
+        const query = `
+          SELECT COALESCE(SUM(payment_amount), 0) as total
+          FROM payments 
+          WHERE payment_date >= $1 AND payment_date <= $2
+            AND payment_type IN ('credit_card', 'aaaa')
+        `;
+        
+        const result = await pool.query(query, [startDate, endDate]);
+        const rows = Array.isArray(result) ? result : (result.rows || []);
+        return parseFloat(rows[0]?.total || 0);
+      };
+      
+      // Get current month data (MTD)
+      const currentStartDate = new Date(currentYear, currentMonth - 1, 1);
+      const currentQuery = `
+        SELECT 
+          COALESCE(SUM(payment_amount), 0) as total,
+          COUNT(*) as count
+        FROM payments 
+        WHERE payment_date >= $1 AND payment_date <= $2
+          AND payment_type IN ('credit_card', 'aaaa')
+      `;
+      
+      const currentResult = await pool.query(currentQuery, [currentStartDate, now]);
+      const currentRows = Array.isArray(currentResult) ? currentResult : (currentResult.rows || []);
+      const currentTotal = parseFloat(currentRows[0]?.total || 0);
+      const currentCount = parseInt(currentRows[0]?.count || 0);
+      const currentAverage = currentCount > 0 ? currentTotal / currentCount : 0;
+      
+      // Get previous month CC revenue
+      const prevMonthRevenue = await getCCRevenue(prevMonth, prevMonthYear);
+      
+      // Get same month last year CC revenue
+      const lastYearRevenue = await getCCRevenue(lastYearMonth, lastYear);
+      
+      res.json({
+        totalRevenue: Math.round(currentTotal * 100) / 100,
+        averagePayment: Math.round(currentAverage * 100) / 100,
+        prevMonthCCRevenue: Math.round(prevMonthRevenue * 100) / 100,
+        lastYearCCRevenue: Math.round(lastYearRevenue * 100) / 100,
+        metadata: {
+          currentMonth: currentMonth,
+          currentYear: currentYear,
+          prevMonth: prevMonth,
+          prevMonthYear: prevMonthYear,
+          lastYearMonth: lastYearMonth,
+          lastYear: lastYear,
+        }
+      });
+    } catch (error) {
+      console.error('💰 Dashboard Widgets error:', error);
+      res.status(500).json({ error: 'Failed to fetch dashboard widget data' });
+    }
+  });
+
   // Migration endpoint: Sync existing production orders to main orders table for layup scheduler
   app.post('/api/migrate-production-orders-to-layup', async (req, res) => {
     try {

@@ -82,6 +82,7 @@ import WatchRulesPage from './pages/WatchRulesPage';
 import BRADWTestDashboard from './pages/BRADWTestDashboard';
 import FALEESHAHTestDashboard from './pages/FALEESHAHTestDashboard';
 import JOEYBTestDashboard from './pages/JOEYBTestDashboard';
+import TANDYMTestDashboard from './pages/TANDYMTestDashboard';
 import OrderDepartmentTransfer from './pages/OrderDepartmentTransfer';
 import { BOMAdministration } from './pages/BOMAdministration';
 import RobustBOMAdministration from './pages/RobustBOMAdministration';
@@ -497,6 +498,10 @@ function App() {
                   <Route
                     path="/joeyb-dashboard"
                     component={JOEYBTestDashboard}
+                  />
+                  <Route
+                    path="/tandym-dashboard"
+                    component={TANDYMTestDashboard}
                   />
 
                   {/* Watch Rules Management Route */}

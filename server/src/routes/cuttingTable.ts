@@ -308,6 +308,46 @@ router.get('/fabric-items', async (req, res) => {
   }
 });
 
+// Packet Items - Get inventory items marked as packets (is_packet = true)
+router.get('/packet-items', async (req, res) => {
+  try {
+    const allItems = await storage.getAllInventoryItems();
+    const packetItems = allItems
+      .filter((item: any) => item.isPacket === true)
+      .map((item) => ({
+        id: item.id,
+        agPartNumber: item.agPartNumber,
+        name: item.name,
+        sku: item.sku,
+      }));
+    
+    res.json(packetItems);
+  } catch (error) {
+    console.error('Error fetching packet items:', error);
+    res.status(500).json({ error: 'Failed to fetch packet items' });
+  }
+});
+
+// Packet Part Items - Get inventory items marked as packet parts (is_packet_part = true)
+router.get('/packet-part-items', async (req, res) => {
+  try {
+    const allItems = await storage.getAllInventoryItems();
+    const packetPartItems = allItems
+      .filter((item) => item.isPacketPart === true)
+      .map((item) => ({
+        id: item.id,
+        agPartNumber: item.agPartNumber,
+        name: item.name,
+        sku: item.sku,
+      }));
+    
+    res.json(packetPartItems);
+  } catch (error) {
+    console.error('Error fetching packet part items:', error);
+    res.status(500).json({ error: 'Failed to fetch packet part items' });
+  }
+});
+
 // Packet Recipes - Get recipe (composition) for a specific category
 router.get('/packet-recipes/:categoryId', async (req, res) => {
   try {

@@ -87,6 +87,7 @@ import partRoutingsRoutes from './partRoutings';
 import pdfSettingsRoutes from './pdfSettings';
 import p2LayupSchedulesRoutes from './p2LayupSchedules';
 import preproductionChecklistsRoutes from './preproductionChecklists';
+import healthChecksRoutes from './healthChecks';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -293,6 +294,9 @@ export function registerRoutes(app: Express): Server {
 
   // Pre-Production Checklists routes
   app.use('/api/preproduction-checklists', preproductionChecklistsRoutes);
+
+  // Health Checks routes
+  app.use('/api/health-checks', healthChecksRoutes);
 
   // Reports routes
   app.use('/api/reports', reportsRoutes);
@@ -7006,6 +7010,190 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error('💰 Payment Analytics error:', error);
       res.status(500).json({ error: 'Failed to fetch payment analytics' });
+    }
+  });
+
+  // Tandym Dashboard Widgets API - Get summary data for dashboard widgets
+  app.get('/api/finance/dashboard-widgets', async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+      
+      if (!pool) {
+        return res.status(500).json({ error: 'Database connection not available' });
+      }
+      
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+      
+      // Previous month
+      const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+      const prevMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+      
+      // Same month last year
+      const lastYearMonth = currentMonth;
+      const lastYear = currentYear - 1;
+      
+      // Helper function to get CC revenue for a specific month/year
+      const getCCRevenue = async (month: number, year: number) => {
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+        
+        const query = `
+          SELECT COALESCE(SUM(payment_amount), 0) as total
+          FROM payments 
+          WHERE payment_date >= $1 AND payment_date <= $2
+            AND payment_type IN ('credit_card', 'aaaa')
+        `;
+        
+        const result = await pool.query(query, [startDate, endDate]);
+        const rows = Array.isArray(result) ? result : (result.rows || []);
+        return parseFloat(rows[0]?.total || 0);
+      };
+      
+      // Get current month data (MTD)
+      const currentStartDate = new Date(currentYear, currentMonth - 1, 1);
+      const currentQuery = `
+        SELECT 
+          COALESCE(SUM(payment_amount), 0) as total,
+          COUNT(*) as count
+        FROM payments 
+        WHERE payment_date >= $1 AND payment_date <= $2
+          AND payment_type IN ('credit_card', 'aaaa')
+      `;
+      
+      const currentResult = await pool.query(currentQuery, [currentStartDate, now]);
+      const currentRows = Array.isArray(currentResult) ? currentResult : (currentResult.rows || []);
+      const currentTotal = parseFloat(currentRows[0]?.total || 0);
+      const currentCount = parseInt(currentRows[0]?.count || 0);
+      const currentAverage = currentCount > 0 ? currentTotal / currentCount : 0;
+      
+      // Get previous month CC revenue
+      const prevMonthRevenue = await getCCRevenue(prevMonth, prevMonthYear);
+      
+      // Get same month last year CC revenue
+      const lastYearRevenue = await getCCRevenue(lastYearMonth, lastYear);
+      
+      res.json({
+        totalRevenue: Math.round(currentTotal * 100) / 100,
+        averagePayment: Math.round(currentAverage * 100) / 100,
+        prevMonthCCRevenue: Math.round(prevMonthRevenue * 100) / 100,
+        lastYearCCRevenue: Math.round(lastYearRevenue * 100) / 100,
+        metadata: {
+          currentMonth: currentMonth,
+          currentYear: currentYear,
+          prevMonth: prevMonth,
+          prevMonthYear: prevMonthYear,
+          lastYearMonth: lastYearMonth,
+          lastYear: lastYear,
+        }
+      });
+    } catch (error) {
+      console.error('💰 Dashboard Widgets error:', error);
+      res.status(500).json({ error: 'Failed to fetch dashboard widget data' });
+    }
+  });
+
+  // Shipped Order Discounts API - Get discount totals for orders shipped in a specific month
+  app.get('/api/finance/shipped-order-discounts', async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+      
+      if (!pool) {
+        return res.status(500).json({ error: 'Database connection not available' });
+      }
+      
+      // Default to November 2025 if no params provided
+      const month = parseInt(req.query.month as string) || 11;
+      const year = parseInt(req.query.year as string) || 2025;
+      
+      // Calculate date range for the specified month (month is 1-based from query)
+      // startDate: first day of the month at 00:00:00
+      const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+      // endDate: last day of the month at 23:59:59.999
+      // Using month (not month-1) gives first day of NEXT month, then day 0 gives last day of current month
+      const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      
+      // Query for orders shipped in the specified month that have discounts applied
+      // Use calculated_total for percentage-based discounts
+      const query = `
+        SELECT 
+          order_id,
+          custom_discount_type,
+          custom_discount_value,
+          show_custom_discount,
+          discount_type,
+          discount_value,
+          calculated_total
+        FROM all_orders 
+        WHERE shipped_date >= $1 
+          AND shipped_date <= $2
+          AND (
+            (show_custom_discount = true AND custom_discount_value IS NOT NULL AND custom_discount_value > 0)
+            OR (discount_value IS NOT NULL AND discount_value > 0)
+          )
+      `;
+      
+      const result = await pool.query(query, [startDate, endDate]);
+      const rows = Array.isArray(result) ? result : (result.rows || []);
+      
+      let totalDiscountAmount = 0;
+      let orderCount = 0;
+      const orderDetails: { orderId: string; discountAmount: number; discountType: string }[] = [];
+      
+      for (const row of rows) {
+        let discountAmount = 0;
+        let discountType = '';
+        
+        // Get the order total for percentage calculations
+        const orderTotal = parseFloat(row.calculated_total) || 0;
+        
+        // Calculate discount based on custom discount if enabled
+        if (row.show_custom_discount && row.custom_discount_value > 0) {
+          const customValue = parseFloat(row.custom_discount_value) || 0;
+          // Handle both 'percentage' and 'amount'/'fixed' types
+          if (row.custom_discount_type === 'percentage') {
+            // Percentage discount: calculate from order total
+            discountAmount = orderTotal * (customValue / 100);
+            discountType = `${customValue}%`;
+          } else {
+            // 'amount' or 'fixed' type: the value IS the discount amount
+            discountAmount = customValue;
+            discountType = 'fixed';
+          }
+        } else if (row.discount_value > 0) {
+          const discountVal = parseFloat(row.discount_value) || 0;
+          if (row.discount_type === 'percentage') {
+            discountAmount = orderTotal * (discountVal / 100);
+            discountType = `${discountVal}%`;
+          } else {
+            discountAmount = discountVal;
+            discountType = 'fixed';
+          }
+        }
+        
+        if (discountAmount > 0) {
+          totalDiscountAmount += discountAmount;
+          orderCount++;
+          orderDetails.push({
+            orderId: row.order_id,
+            discountAmount: Math.round(discountAmount * 100) / 100,
+            discountType
+          });
+        }
+      }
+      
+      res.json({
+        totalDiscountAmount: Math.round(totalDiscountAmount * 100) / 100,
+        orderCount,
+        month,
+        year,
+        monthName: new Date(year, month - 1, 1).toLocaleString('default', { month: 'long' }),
+        orders: orderDetails
+      });
+    } catch (error) {
+      console.error('💰 Shipped Order Discounts error:', error);
+      res.status(500).json({ error: 'Failed to fetch shipped order discounts' });
     }
   });
 

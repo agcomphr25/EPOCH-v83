@@ -278,6 +278,8 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
 
   tandym: {
     routes: [
+      '/tandym-dashboard',
+      '/payment-analytics',
       '/department-queue/production-queue',
       '/department-queue/layup-plugging',
       '/orders-list',

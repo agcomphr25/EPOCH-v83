@@ -53,6 +53,7 @@ import {
   Megaphone,
   FileCheck,
   Printer,
+  Activity,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -281,6 +282,12 @@ export default function Navigation() {
       label: 'Admin Panel',
       icon: Shield,
       description: 'Advanced order management and editing for administrators',
+    },
+    {
+      path: '/admin/health-checks',
+      label: 'System Health Checks',
+      icon: Activity,
+      description: 'Monitor and test critical system components daily',
     },
     {
       path: '/pdf-templates',

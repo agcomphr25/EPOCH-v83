@@ -1886,7 +1886,7 @@ router.post(
 
         // Create PDF document with the UPS label
         const pdfDoc = await PDFDocument.create();
-        const page = pdfDoc.addPage([432, 648]); // 6x9 inch shipping label
+        const page = pdfDoc.addPage([288, 432]); // 4x6 inch shipping label (standard thermal label size)
 
         // Embed the UPS label image
         const labelImageObj = await pdfDoc.embedPng(labelBuffer);
@@ -2564,11 +2564,11 @@ async function addAuthenticLabelPage(
   customerAddress?: any,
   labelData?: string
 ) {
-  const page = pdfDoc.addPage([432, 648]);
+  const page = pdfDoc.addPage([288, 432]); // 4x6 inch shipping label
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  let currentY = 600;
+  let currentY = 400;
 
   page.drawText('AUTHENTIC UPS SHIPPING LABEL', {
     x: 50,
@@ -2654,11 +2654,11 @@ async function addErrorLabelPage(
   order: any,
   errorMessage: string
 ) {
-  const page = pdfDoc.addPage([432, 648]);
+  const page = pdfDoc.addPage([288, 432]); // 4x6 inch shipping label
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  let currentY = 600;
+  let currentY = 400;
 
   page.drawText('UPS SHIPPING ERROR', {
     x: 50,
@@ -2701,11 +2701,11 @@ async function addFallbackLabelPage(
   customerInfo?: any,
   customerAddress?: any
 ) {
-  const page = pdfDoc.addPage([432, 648]);
+  const page = pdfDoc.addPage([288, 432]); // 4x6 inch shipping label
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  let currentY = 600;
+  let currentY = 400;
 
   page.drawText('UPS SHIPPING LABEL', {
     x: 50,
@@ -2815,7 +2815,7 @@ router.post('/ups-shipping-label/bulk', async (req: Request, res: Response) => {
 
     // Create a new PDF document
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([432, 648]); // 6x9 inch shipping label
+    const page = pdfDoc.addPage([288, 432]); // 4x6 inch shipping label (standard thermal label size)
     const { width, height } = page.getSize();
 
     // Load fonts
@@ -3212,11 +3212,11 @@ router.post('/debug-ups-auth', async (req: Request, res: Response) => {
 });
 
 async function addSummaryPage(pdfDoc: any, upsLabels: any[]) {
-  const page = pdfDoc.addPage([432, 648]);
+  const page = pdfDoc.addPage([288, 432]); // 4x6 inch shipping label
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  let currentY = 600;
+  let currentY = 400;
 
   page.drawText('SHIPPING LABELS SUMMARY', {
     x: 50,

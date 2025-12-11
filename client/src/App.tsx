@@ -82,6 +82,7 @@ import WatchRulesPage from './pages/WatchRulesPage';
 import BRADWTestDashboard from './pages/BRADWTestDashboard';
 import FALEESHAHTestDashboard from './pages/FALEESHAHTestDashboard';
 import JOEYBTestDashboard from './pages/JOEYBTestDashboard';
+import TANDYMTestDashboard from './pages/TANDYMTestDashboard';
 import OrderDepartmentTransfer from './pages/OrderDepartmentTransfer';
 import { BOMAdministration } from './pages/BOMAdministration';
 import RobustBOMAdministration from './pages/RobustBOMAdministration';
@@ -141,6 +142,7 @@ import ProductionQueuePage from './pages/ProductionQueuePage';
 import SimplifiedLayupScheduler from './components/SimplifiedLayupScheduler';
 import CustomerSatisfaction from './pages/CustomerSatisfaction';
 import AdminPanelPage from './pages/AdminPanelPage';
+import SystemHealthChecksPage from './pages/SystemHealthChecksPage';
 import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
 import PDFTemplateManager from './pages/PDFTemplateManager';
@@ -334,6 +336,7 @@ function App() {
 
                   {/* Admin Panel Routes */}
                   <Route path="/admin/orders" component={AdminPanelPage} />
+                  <Route path="/admin/health-checks" component={SystemHealthChecksPage} />
 
                   {/* Vendor Management Routes */}
                   <Route path="/vendor-management" component={VendorManagement} />
@@ -495,6 +498,10 @@ function App() {
                   <Route
                     path="/joeyb-dashboard"
                     component={JOEYBTestDashboard}
+                  />
+                  <Route
+                    path="/tandym-dashboard"
+                    component={TANDYMTestDashboard}
                   />
 
                   {/* Watch Rules Management Route */}

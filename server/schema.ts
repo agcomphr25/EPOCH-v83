@@ -7686,4 +7686,80 @@ export const insertPreproductionChecklistTaskSchema = createInsertSchema(preprod
 export type PreproductionChecklistTask = typeof preproductionChecklistTasks.$inferSelect;
 export type InsertPreproductionChecklistTask = z.infer<typeof insertPreproductionChecklistTaskSchema>;
 
+// ============================================
+// SYSTEM HEALTH CHECKS
+// ============================================
+
+// Health Check Types - built-in and custom check definitions
+export const healthCheckTypes = pgTable('health_check_types', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(), // e.g., 'sendgrid_email', 'database_connection', 'duplicate_orders'
+  displayName: text('display_name').notNull(),
+  description: text('description'),
+  category: text('category').default('system'), // 'system', 'email', 'database', 'custom'
+  isBuiltIn: boolean('is_built_in').default(true), // Built-in checks cannot be deleted
+  isEnabled: boolean('is_enabled').default(true), // Whether this check runs in automated daily checks
+  checkFunction: text('check_function'), // For custom checks: SQL query or function name
+  testEmailAddress: text('test_email_address'), // For email checks: where to send test emails
+  sortOrder: integer('sort_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertHealthCheckTypeSchema = createInsertSchema(healthCheckTypes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type HealthCheckType = typeof healthCheckTypes.$inferSelect;
+export type InsertHealthCheckType = z.infer<typeof insertHealthCheckTypeSchema>;
+
+// Health Check Configuration - global settings
+export const healthCheckConfig = pgTable('health_check_config', {
+  id: serial('id').primaryKey(),
+  scheduledTime: text('scheduled_time').default('08:00'), // HH:MM format for daily automated run
+  notificationEmail: text('notification_email'), // Where to send alerts if checks fail
+  isScheduleEnabled: boolean('is_schedule_enabled').default(true), // Whether automated daily checks are enabled
+  lastRunAt: timestamp('last_run_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertHealthCheckConfigSchema = createInsertSchema(healthCheckConfig).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type HealthCheckConfig = typeof healthCheckConfig.$inferSelect;
+export type InsertHealthCheckConfig = z.infer<typeof insertHealthCheckConfigSchema>;
+
+// Health Check Results - history of check runs
+export const healthCheckResults = pgTable('health_check_results', {
+  id: serial('id').primaryKey(),
+  checkTypeId: integer('check_type_id').references(() => healthCheckTypes.id),
+  checkName: text('check_name').notNull(), // Denormalized for history
+  status: text('status').notNull(), // 'pass', 'fail', 'warning', 'skipped'
+  message: text('message'), // Details about the result
+  details: jsonb('details'), // Additional structured data (e.g., duplicate order IDs found)
+  executionTimeMs: integer('execution_time_ms'), // How long the check took
+  runType: text('run_type').default('manual'), // 'manual', 'scheduled'
+  runBatchId: text('run_batch_id'), // Groups checks that ran together
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  checkTypeIdIdx: index('health_check_results_check_type_id_idx').on(table.checkTypeId),
+  statusIdx: index('health_check_results_status_idx').on(table.status),
+  createdAtIdx: index('health_check_results_created_at_idx').on(table.createdAt),
+  runBatchIdIdx: index('health_check_results_run_batch_id_idx').on(table.runBatchId),
+}));
+
+export const insertHealthCheckResultSchema = createInsertSchema(healthCheckResults).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type HealthCheckResult = typeof healthCheckResults.$inferSelect;
+export type InsertHealthCheckResult = z.infer<typeof insertHealthCheckResultSchema>;
+
 export * from './calendar.schema';

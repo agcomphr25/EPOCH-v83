@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { Link } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Plus,
   List,
@@ -27,17 +29,60 @@ import {
   User,
   Settings,
   Eye,
+  Percent,
+  Loader2,
 } from 'lucide-react';
 import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 import WatchRuleCards from '@/components/WatchRuleCards';
 import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 
+interface ShippedDiscountsData {
+  totalDiscountAmount: number;
+  orderCount: number;
+  month: number;
+  year: number;
+  monthName: string;
+  orders: { orderId: string; discountAmount: number; discountType: string }[];
+}
+
+const MONTHS = [
+  { value: '1', label: 'January' },
+  { value: '2', label: 'February' },
+  { value: '3', label: 'March' },
+  { value: '4', label: 'April' },
+  { value: '5', label: 'May' },
+  { value: '6', label: 'June' },
+  { value: '7', label: 'July' },
+  { value: '8', label: 'August' },
+  { value: '9', label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' },
+];
+
 export default function ADMINTestDashboard() {
+  // Default to November 2025 for the discount widget
+  const [discountMonth, setDiscountMonth] = useState('11');
+  const [discountYear, setDiscountYear] = useState('2025');
+
   const { data: currentUser, isLoading: isUserLoading } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
 
+  const { data: shippedDiscounts, isLoading: isDiscountsLoading } = useQuery<ShippedDiscountsData>({
+    queryKey: ['/api/finance/shipped-order-discounts', discountMonth, discountYear],
+    queryFn: async () => {
+      const response = await fetch(`/api/finance/shipped-order-discounts?month=${discountMonth}&year=${discountYear}`);
+      if (!response.ok) throw new Error('Failed to fetch discount data');
+      return response.json();
+    },
+  });
+
   const isStaciw = currentUser?.username === 'staciw';
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+  };
 
   const orderManagementItems = [
     {
@@ -321,6 +366,78 @@ export default function ADMINTestDashboard() {
           'text-red-600',
           DollarSign
         )}
+
+        {/* Shipped Order Discounts Widget */}
+        <Card className="h-fit" data-testid="widget-shipped-discounts">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center space-x-2 text-lg">
+              <div className="p-2 rounded-lg bg-amber-100">
+                <Percent className="w-5 h-5 text-amber-600" />
+              </div>
+              <span>Shipped Order Discounts</span>
+            </CardTitle>
+            <div className="flex gap-2 mt-2">
+              <Select value={discountMonth} onValueChange={setDiscountMonth}>
+                <SelectTrigger className="w-32" data-testid="select-discount-month">
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTHS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={discountYear} onValueChange={setDiscountYear}>
+                <SelectTrigger className="w-24" data-testid="select-discount-year">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2024">2024</SelectItem>
+                  <SelectItem value="2025">2025</SelectItem>
+                  <SelectItem value="2026">2026</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isDiscountsLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+              </div>
+            ) : shippedDiscounts ? (
+              <div className="space-y-4">
+                <div className="text-center">
+                  <p className="text-3xl font-bold text-amber-600" data-testid="text-discount-total">
+                    {formatCurrency(shippedDiscounts.totalDiscountAmount)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Income reduction for {shippedDiscounts.monthName} {shippedDiscounts.year}
+                  </p>
+                </div>
+                <div className="border-t pt-3">
+                  <p className="text-sm text-gray-600">
+                    <span className="font-medium">{shippedDiscounts.orderCount}</span> shipped orders with discounts
+                  </p>
+                </div>
+                {shippedDiscounts.orders.length > 0 && (
+                  <div className="border-t pt-3 max-h-40 overflow-y-auto">
+                    <p className="text-xs font-medium text-gray-500 mb-2">Order Details:</p>
+                    <div className="space-y-1">
+                      {shippedDiscounts.orders.map((order) => (
+                        <div key={order.orderId} className="flex justify-between text-xs">
+                          <span className="font-mono">{order.orderId}</span>
+                          <span className="text-amber-600">{formatCurrency(order.discountAmount)} ({order.discountType})</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No discount data available</p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Forms & Reports */}
         {renderSectionCard(

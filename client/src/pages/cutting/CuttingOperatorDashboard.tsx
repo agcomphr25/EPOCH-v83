@@ -760,102 +760,92 @@ export default function CuttingOperatorDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
+        <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
-              Fabric Receiving
+              Fabric Inventory - Freezer Assignments
             </CardTitle>
-            <CardDescription>Assign freezer location for received fabric</CardDescription>
+            <CardDescription>Assign or update freezer locations for fabric rolls</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              <div>
-                <Label htmlFor="receive-barcode">Scan Fabric Barcode</Label>
-                <Input
-                  id="receive-barcode"
-                  placeholder="Scan or enter fabric barcode..."
-                  value={receivingForm.barcode}
-                  onChange={(e) => setReceivingForm(prev => ({ ...prev, barcode: e.target.value }))}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && receivingForm.barcode) {
-                      const match = fabricInventory.find(f => f.barcodeValue === receivingForm.barcode || f.rollNumber === receivingForm.barcode);
-                      if (match) {
-                        setReceivingForm(prev => ({ 
-                          ...prev, 
-                          fabricId: match.id,
-                          fabricName: match.commonName || match.fabricType,
-                          currentFreezer: match.freezerLocation || 'Not assigned'
-                        }));
-                      }
-                    }
-                  }}
-                  data-testid="input-receive-barcode"
-                />
-              </div>
-              
-              {receivingForm.fabricId && !receivingForm.generatedBarcode && (
-                <>
-                  <div className="p-2 bg-muted rounded text-sm">
-                    <p><strong>Fabric:</strong> {receivingForm.fabricName}</p>
-                    <p><strong>Current Location:</strong> {receivingForm.currentFreezer}</p>
-                  </div>
-                  <div>
-                    <Label htmlFor="freezer-number">Assign Freezer Number</Label>
-                    <Select 
-                      value={receivingForm.freezerNumber} 
-                      onValueChange={(val) => setReceivingForm(prev => ({ ...prev, freezerNumber: val }))}
-                    >
-                      <SelectTrigger id="freezer-number" data-testid="select-freezer">
-                        <SelectValue placeholder="Select freezer..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 20 }, (_, i) => (
-                          <SelectItem key={i + 1} value={String(i + 1)}>Freezer {i + 1}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="is-p2"
-                      checked={receivingForm.isP2}
-                      onChange={(e) => setReceivingForm(prev => ({ ...prev, isP2: e.target.checked }))}
-                      className="h-4 w-4 rounded border-gray-300"
-                      data-testid="checkbox-p2"
-                    />
-                    <Label htmlFor="is-p2" className="text-sm font-medium cursor-pointer">
-                      P2 Item (Generate Tracking Barcode)
-                    </Label>
-                  </div>
-                  <Button 
-                    className="w-full" 
-                    onClick={() => assignFreezerMutation.mutate()}
-                    disabled={!receivingForm.freezerNumber || assignFreezerMutation.isPending}
-                    data-testid="button-assign-freezer"
-                  >
-                    {assignFreezerMutation.isPending ? 'Receiving...' : (receivingForm.isP2 ? 'Receive & Generate Barcode' : 'Assign Freezer Location')}
-                  </Button>
-                </>
-              )}
-              
-              {receivingForm.generatedBarcode && (
-                <div className="space-y-3">
-                  <div className="p-3 bg-green-50 border border-green-200 rounded text-center">
-                    <p className="text-sm text-green-700 font-medium mb-2">P2 Barcode Generated</p>
-                    <p className="font-mono text-lg font-bold text-green-900">{receivingForm.generatedBarcode}</p>
-                    <p className="text-xs text-green-600 mt-1">Print this barcode for traceability</p>
-                  </div>
-                  <Button 
-                    variant="outline"
-                    className="w-full" 
-                    onClick={() => setReceivingForm({ barcode: '', fabricId: '', fabricName: '', currentFreezer: '', freezerNumber: '', isP2: false, generatedBarcode: '' })}
-                    data-testid="button-receive-another"
-                  >
-                    Receive Another Item
-                  </Button>
-                </div>
+            <div className="max-h-[400px] overflow-y-auto">
+              {loadingFabric ? (
+                <p className="text-muted-foreground text-center py-4">Loading fabric...</p>
+              ) : fabricInventory.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">No fabric in inventory</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fabric Type</TableHead>
+                      <TableHead>Roll #</TableHead>
+                      <TableHead>Lot #</TableHead>
+                      <TableHead>Available</TableHead>
+                      <TableHead>Freezer</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {fabricInventory
+                      .filter(f => f.squareMeters > 0)
+                      .slice(0, 20)
+                      .map((fabric) => (
+                      <TableRow key={fabric.id} data-testid={`row-fabric-${fabric.id}`}>
+                        <TableCell className="font-medium">{fabric.fabricType || fabric.commonName}</TableCell>
+                        <TableCell>{fabric.rollNumber || '-'}</TableCell>
+                        <TableCell className="text-xs">{fabric.lotNumber || '-'}</TableCell>
+                        <TableCell>{fabric.squareMeters?.toFixed(1)} m²</TableCell>
+                        <TableCell>
+                          <Select 
+                            value={fabric.freezerLocation || ''} 
+                            onValueChange={(val) => {
+                              setReceivingForm({
+                                barcode: '',
+                                fabricId: fabric.id,
+                                fabricName: fabric.fabricType || fabric.commonName || '',
+                                currentFreezer: fabric.freezerLocation || '',
+                                freezerNumber: val,
+                                isP2: false,
+                                generatedBarcode: ''
+                              });
+                              // Auto-submit after selection
+                              apiRequest(`/api/cutting-table/fabric-inventory/${fabric.id}/assign-freezer`, {
+                                method: 'POST',
+                                body: JSON.stringify({ freezerNumber: val }),
+                              }).then(() => {
+                                queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
+                                toast({ title: 'Updated', description: `Assigned to Freezer ${val}` });
+                              }).catch(() => {
+                                toast({ title: 'Error', description: 'Failed to update freezer', variant: 'destructive' });
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="w-28" data-testid={`select-freezer-${fabric.id}`}>
+                              <SelectValue placeholder="Assign..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 20 }, (_, i) => (
+                                <SelectItem key={i + 1} value={String(i + 1)}>Freezer {i + 1}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          {fabric.expirationDate && (
+                            <span className={cn(
+                              "text-xs",
+                              fabric.status === 'expired' ? 'text-red-600' : 
+                              fabric.status === 'expiring' ? 'text-amber-600' : 'text-muted-foreground'
+                            )}>
+                              Exp: {new Date(fabric.expirationDate).toLocaleDateString()}
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
             </div>
           </CardContent>

@@ -473,45 +473,59 @@ export default function CuttingWeeklySchedule() {
               })()}
             </div>
 
-            <Collapsible open={expandedSections.p2} onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, p2: open }))}>
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="w-full justify-start gap-2 text-sm text-muted-foreground">
-                  {expandedSections.p2 ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  P2 Demand by PO ({p2Demand.length})
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>PO / Customer</TableHead>
-                      <TableHead>Packets</TableHead>
-                      <TableHead className="text-center">Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {p2Demand.map(po => (
-                      <TableRow key={po.poId}>
-                        <TableCell className="font-medium">
-                          PO-{po.poId}
-                          <span className="text-muted-foreground ml-2">• {po.customer}</span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {po.items.map((item, idx) => (
-                              <Badge key={idx} variant="outline" className="text-xs">
-                                {item.name}: {item.qty}
-                              </Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center font-bold">{po.total}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CollapsibleContent>
-            </Collapsible>
+            {(() => {
+              const allPacketTypes = new Set<string>();
+              p2Demand.forEach(po => po.items.forEach(item => allPacketTypes.add(item.name)));
+              const packetTypesList = Array.from(allPacketTypes).sort();
+              const badgeColors = ['bg-purple-100 text-purple-800', 'bg-indigo-100 text-indigo-800', 'bg-teal-100 text-teal-800', 'bg-pink-100 text-pink-800', 'bg-cyan-100 text-cyan-800'];
+              
+              return (
+                <Collapsible open={expandedSections.p2} onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, p2: open }))}>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" className="w-full justify-start gap-2 text-sm text-muted-foreground">
+                      {expandedSections.p2 ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      P2 Demand by PO ({p2Demand.length})
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Customer</TableHead>
+                          {packetTypesList.map(type => (
+                            <TableHead key={type} className="text-center">{type}</TableHead>
+                          ))}
+                          <TableHead className="text-center">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {p2Demand.map(po => {
+                          const itemsByType: Record<string, number> = {};
+                          po.items.forEach(item => {
+                            itemsByType[item.name] = (itemsByType[item.name] || 0) + item.qty;
+                          });
+                          return (
+                            <TableRow key={po.poId}>
+                              <TableCell className="font-medium">{po.customer}</TableCell>
+                              {packetTypesList.map((type, idx) => (
+                                <TableCell key={type} className="text-center">
+                                  {itemsByType[type] > 0 && (
+                                    <Badge variant="outline" className={badgeColors[idx % badgeColors.length]}>
+                                      {itemsByType[type]}
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                              ))}
+                              <TableCell className="text-center font-bold">{po.total}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })()}
           </CardContent>
         </Card>
       )}

@@ -319,16 +319,21 @@ export default function CuttingWeeklySchedule() {
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <p className="text-sm opacity-80">Carbon Fiber Packets</p>
-                  <p className="text-3xl font-bold">{p1Demand.cf}</p>
+                  <p className="text-3xl font-bold">{Math.max(0, p1Demand.cf - scheduledCounts.carbon_fiber)}</p>
+                  <p className="text-xs opacity-70">Still needed</p>
+                  <div className="text-xs opacity-70 mt-1">
+                    <span className="text-gray-400">Demand: {p1Demand.cf}</span>
+                    <span className="mx-1">|</span>
+                    <span className="text-green-300">Scheduled: {scheduledCounts.carbon_fiber}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.carbon_fiber}</span></p>
                   <div className="text-xs opacity-70 mt-1">
                     <span className="text-red-300">PO: {p1Demand.oemOrders.cf}</span>
                     <span className="mx-1">|</span>
                     <span className="text-blue-300">Reg: {p1Demand.regularOrders.cf}</span>
                   </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.carbon_fiber}</span></p>
-                  <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.carbon_fiber}</span></p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -362,16 +367,21 @@ export default function CuttingWeeklySchedule() {
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <p className="text-sm opacity-80">Fiberglass Packets</p>
-                  <p className="text-3xl font-bold">{p1Demand.fg}</p>
+                  <p className="text-3xl font-bold">{Math.max(0, p1Demand.fg - scheduledCounts.fiberglass)}</p>
+                  <p className="text-xs opacity-70">Still needed</p>
+                  <div className="text-xs opacity-70 mt-1">
+                    <span className="text-gray-200">Demand: {p1Demand.fg}</span>
+                    <span className="mx-1">|</span>
+                    <span className="text-green-200">Scheduled: {scheduledCounts.fiberglass}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.fiberglass}</span></p>
                   <div className="text-xs opacity-70 mt-1">
                     <span className="text-red-100">PO: {p1Demand.oemOrders.fg}</span>
                     <span className="mx-1">|</span>
                     <span className="text-blue-100">Reg: {p1Demand.regularOrders.fg}</span>
                   </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.fiberglass}</span></p>
-                  <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.fiberglass}</span></p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -405,16 +415,21 @@ export default function CuttingWeeklySchedule() {
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <p className="text-sm opacity-80">Mesa Packets</p>
-                  <p className="text-3xl font-bold">{p1Demand.mesa}</p>
+                  <p className="text-3xl font-bold">{Math.max(0, p1Demand.mesa - scheduledCounts.mesa)}</p>
+                  <p className="text-xs opacity-70">Still needed</p>
+                  <div className="text-xs opacity-70 mt-1">
+                    <span className="text-gray-200">Demand: {p1Demand.mesa}</span>
+                    <span className="mx-1">|</span>
+                    <span className="text-green-200">Scheduled: {scheduledCounts.mesa}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.mesa || 0}</span></p>
                   <div className="text-xs opacity-70 mt-1">
                     <span className="text-red-100">PO: {p1Demand.oemOrders.mesa}</span>
                     <span className="mx-1">|</span>
                     <span className="text-blue-100">Reg: {p1Demand.regularOrders.mesa}</span>
                   </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.mesa || 0}</span></p>
-                  <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.mesa}</span></p>
                 </div>
               </div>
               <div className="flex items-center gap-2">

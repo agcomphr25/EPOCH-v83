@@ -135,6 +135,8 @@ import P2QuoteForm from './pages/P2QuoteForm';
 import P2QuotesList from './pages/P2QuotesList';
 import PaymentManagement from './pages/PaymentManagement';
 import PaymentAnalytics from './pages/PaymentAnalytics';
+import ShippedOrderDiscountsPage from './pages/ShippedOrderDiscountsPage';
+import InvoiceCategoryBreakdownPage from './pages/InvoiceCategoryBreakdownPage';
 import RefundRequest from './pages/RefundRequest';
 import RefundQueue from './pages/RefundQueue';
 import CreditMemoPage from './pages/CreditMemoPage';
@@ -575,6 +577,14 @@ function App() {
                   <Route
                     path="/payment-analytics"
                     component={PaymentAnalytics}
+                  />
+                  <Route
+                    path="/finance/shipped-discounts"
+                    component={ShippedOrderDiscountsPage}
+                  />
+                  <Route
+                    path="/finance/invoice-breakdown"
+                    component={InvoiceCategoryBreakdownPage}
                   />
 
                   {/* Refund Management Routes */}

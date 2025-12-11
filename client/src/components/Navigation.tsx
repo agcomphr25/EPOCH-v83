@@ -647,6 +647,18 @@ export default function Navigation() {
       icon: TrendingUp,
       description: 'Track payments by type (Phone/Online) with monthly breakdowns',
     },
+    {
+      path: '/finance/shipped-discounts',
+      label: 'Shipped Discounts',
+      icon: TrendingDown,
+      description: 'Track income reduction from discounts on shipped orders',
+    },
+    {
+      path: '/finance/invoice-breakdown',
+      label: 'Invoice Breakdown',
+      icon: PieChart,
+      description: 'View invoice totals by category (Stock Model, Bottom Metal, etc.)',
+    },
   ];
 
   const userDashboardsItems = [

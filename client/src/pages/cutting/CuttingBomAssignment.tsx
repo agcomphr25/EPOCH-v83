@@ -167,6 +167,18 @@ export default function CuttingBomAssignment() {
       packetBOMs.flatMap(bom => [bom.partNumber?.toLowerCase(), bom.packetType?.toLowerCase()].filter(Boolean))
     );
     
+    const hasCfBom = packetBOMs.some(bom => 
+      bom.packetType?.toLowerCase().includes('cf') || 
+      bom.packetType?.toLowerCase().includes('carbon')
+    );
+    const hasFgBom = packetBOMs.some(bom => 
+      bom.packetType?.toLowerCase().includes('fg') || 
+      bom.packetType?.toLowerCase().includes('fiberglass')
+    );
+    const hasMesaBom = packetBOMs.some(bom => 
+      bom.packetType?.toLowerCase().includes('mesa')
+    );
+    
     const demandedPackets: Record<string, { name: string; demand: number; source: string }> = {};
     
     weeklyQueueData.items.forEach(item => {
@@ -176,6 +188,10 @@ export default function CuttingBomAssignment() {
       const nameLower = name.toLowerCase();
       
       if (existingBomTypes.has(nameLower)) return;
+      
+      if ((nameLower.startsWith('cf_') || nameLower.includes('carbon')) && hasCfBom) return;
+      if ((nameLower.startsWith('fg_') || nameLower.includes('fiberglass')) && hasFgBom) return;
+      if (nameLower.includes('mesa') && hasMesaBom) return;
       
       if (!demandedPackets[name]) {
         demandedPackets[name] = { name, demand: 0, source: item.source };

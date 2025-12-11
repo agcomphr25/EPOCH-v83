@@ -136,7 +136,10 @@ export default function RefundRequest() {
     }
 
     // Block refund requests on orders with no payments
-    if (!selectedOrder.paymentTotal || selectedOrder.paymentTotal <= 0) {
+    const totalPaid = Number(selectedOrder.paymentTotal) || 0;
+    const requestedAmount = parseFloat(refundAmount) || 0;
+    
+    if (totalPaid <= 0) {
       toast({
         title: 'Cannot Request Refund',
         description: 'This order has no payments to refund. A refund can only be requested for orders that have been paid.',
@@ -146,10 +149,10 @@ export default function RefundRequest() {
     }
 
     // Block if refund amount exceeds total paid
-    if (parseFloat(refundAmount) > selectedOrder.paymentTotal) {
+    if (requestedAmount > totalPaid) {
       toast({
         title: 'Invalid Refund Amount',
-        description: `Refund amount ($${parseFloat(refundAmount).toFixed(2)}) cannot exceed total paid ($${selectedOrder.paymentTotal.toFixed(2)}).`,
+        description: `Refund amount ($${requestedAmount.toFixed(2)}) cannot exceed total paid ($${totalPaid.toFixed(2)}).`,
         variant: 'destructive',
       });
       return;

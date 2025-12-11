@@ -11,7 +11,7 @@ import {
   cuttingPacketBOMCuts,
   cuttingFabricInventory,
 } from '../../schema';
-import { and, gte, lte, eq, desc } from 'drizzle-orm';
+import { and, gte, lte, eq, desc, ilike } from 'drizzle-orm';
 import {
   insertCuttingMaterialSchema,
   insertCuttingProductionLineSchema,
@@ -804,6 +804,69 @@ router.post('/fabric-inventory/:id/deplete', async (req, res) => {
   } catch (error) {
     console.error('Error depleting fabric roll:', error);
     res.status(500).json({ error: 'Failed to deplete fabric roll' });
+  }
+});
+
+router.post('/fabric-inventory/:id/assign-freezer', async (req, res) => {
+  try {
+    const rollId = req.params.id;
+    const { freezerNumber } = req.body;
+    
+    if (!freezerNumber || isNaN(parseInt(freezerNumber))) {
+      return res.status(400).json({ error: 'Valid freezer number is required' });
+    }
+    
+    const inventory = await storage.updateCuttingFabricInventory(rollId, {
+      freezerNumber: parseInt(freezerNumber),
+    });
+    
+    res.json({ 
+      success: true, 
+      message: `Roll assigned to Freezer ${freezerNumber}`,
+      rollId,
+      freezerNumber: parseInt(freezerNumber),
+    });
+  } catch (error) {
+    console.error('Error assigning freezer:', error);
+    res.status(500).json({ error: 'Failed to assign freezer location' });
+  }
+});
+
+router.post('/fabric-inventory/:id/receive', async (req, res) => {
+  try {
+    const rollId = req.params.id;
+    const { freezerNumber, isP2 } = req.body;
+    
+    if (!freezerNumber || isNaN(parseInt(freezerNumber))) {
+      return res.status(400).json({ error: 'Valid freezer number is required' });
+    }
+    
+    const updateData: any = {
+      freezerNumber: parseInt(freezerNumber),
+      receivedDate: new Date().toISOString().split('T')[0],
+    };
+    
+    let generatedBarcode: string | null = null;
+    
+    if (isP2) {
+      const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+      generatedBarcode = `FI-P2-${date}-${random}`;
+      updateData.barcode = generatedBarcode;
+    }
+    
+    const inventory = await storage.updateCuttingFabricInventory(rollId, updateData);
+    
+    res.json({ 
+      success: true, 
+      message: isP2 ? `P2 item received with barcode: ${generatedBarcode}` : `Roll assigned to Freezer ${freezerNumber}`,
+      rollId,
+      freezerNumber: parseInt(freezerNumber),
+      generatedBarcode,
+    });
+  } catch (error) {
+    console.error('Error receiving fabric:', error);
+    res.status(500).json({ error: 'Failed to receive fabric' });
   }
 });
 
@@ -1639,45 +1702,29 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       console.log('P1 layup schedule query skipped:', err);
     }
 
-    // 2. P1 PO Orders - OEM orders always require new cuts
+    // 2. P1 Purchase Order Items - Items that still need packets (remaining = quantity - order_count)
     try {
-      // If showAll, get all pending P1 PO items without date filter
-      const p1POResult = showAll === 'true'
-        ? await pool.query(`
-            SELECT 
-              po.id,
-              po.order_id as "orderId",
-              po.item_id as "stockModel",
-              po.due_date as "dueDate",
-              po.customer_id as "customerId",
-              po.specifications,
-              'P1_PO' as source,
-              'oem' as orderType
-            FROM production_orders po
-            WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
-              AND po.production_status IN ('PENDING', 'ACTIVE')
-            ORDER BY po.due_date ASC
-            LIMIT 500
-          `)
-        : await pool.query(`
-            SELECT 
-              po.id,
-              po.order_id as "orderId",
-              po.item_id as "stockModel",
-              po.due_date as "dueDate",
-              po.customer_id as "customerId",
-              po.specifications,
-              'P1_PO' as source,
-              'oem' as orderType
-            FROM production_orders po
-            WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
-              AND po.production_status IN ('PENDING', 'ACTIVE')
-              AND po.due_date >= $1 AND po.due_date < $2
-            ORDER BY po.due_date ASC
-          `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
+      const p1PoItemsResult = await pool.query(`
+        SELECT 
+          poi.id,
+          po.po_number as "poNumber",
+          po.customer_name as "customerName",
+          poi.item_name as "itemName",
+          poi.quantity,
+          COALESCE(poi.order_count, 0) as "orderCount",
+          poi.quantity - COALESCE(poi.order_count, 0) as "remaining",
+          poi.due_date as "dueDate",
+          poi.specifications
+        FROM purchase_order_items poi
+        JOIN purchase_orders po ON poi.po_id = po.id
+        WHERE po.status NOT IN ('COMPLETED', 'CANCELLED', 'SHIPPED')
+          AND poi.quantity > COALESCE(poi.order_count, 0)
+        ORDER BY poi.due_date ASC NULLS LAST
+        LIMIT 500
+      `);
 
-      const p1PORows = Array.isArray(p1POResult) ? p1POResult : (p1POResult as any).rows || [];
-      for (const item of p1PORows) {
+      const p1PoRows = Array.isArray(p1PoItemsResult) ? p1PoItemsResult : (p1PoItemsResult as any).rows || [];
+      for (const item of p1PoRows) {
         // Parse specifications JSON to get material type
         let specs: any = {};
         try {
@@ -1690,7 +1737,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
         
         // Get material from specifications.material field (e.g., "carbon_fiber", "fiberglass")
         const specMaterial = (specs.material || '').toLowerCase();
-        const stockModelName = specs.stockModel || item.stockModel || '';
+        const stockModelName = specs.stockModel || specs.stock_model || '';
         
         // Determine material type from specs.material first, then fall back to stock model name
         let materialType = 'unknown';
@@ -1698,34 +1745,110 @@ router.get('/weekly-cutting-queue', async (req, res) => {
           materialType = 'carbon_fiber';
         } else if (specMaterial === 'fiberglass' || specMaterial === 'fg') {
           materialType = 'fiberglass';
+        } else if (specMaterial === 'mesa' || stockModelName.toLowerCase().includes('mesa')) {
+          materialType = 'mesa';
         } else if (stockModelName.toLowerCase().includes('cf_') || stockModelName.toLowerCase().includes('cf ')) {
           materialType = 'carbon_fiber';
         } else if (stockModelName.toLowerCase().includes('fg_') || stockModelName.toLowerCase().includes('fg ')) {
           materialType = 'fiberglass';
         }
         
+        // Add items based on remaining quantity (items that still need packets)
+        const remaining = item.remaining || 0;
+        if (remaining > 0) {
+          queueItems.push({
+            id: `p1po-${item.id}`,
+            orderId: item.poNumber,
+            stockModel: stockModelName || item.itemName || `PO Item ${item.id}`,
+            source: 'P1_PO',
+            orderType: 'p1_po',
+            materialType,
+            scheduledDate: item.dueDate,
+            dueDate: item.dueDate,
+            customer: item.customerName,
+            priority: 50,
+            packetsNeeded: remaining,
+            usesInventory: false,
+            requiresNewCut: true,
+            specifications: specs,
+          });
+        }
+      }
+    } catch (err) {
+      console.log('P1 PO items query skipped:', err);
+    }
+
+    // 3. Regular Production Queue - Orders from order entry (all_orders table) that need packets
+    try {
+      const regularQueueResult = await pool.query(`
+        SELECT 
+          o.order_id as "orderId",
+          o.model_id as "stockModel",
+          o.due_date as "dueDate",
+          o.customer_id as "customerId",
+          c.name as "customerName",
+          o.features
+        FROM all_orders o
+        LEFT JOIN customers c ON CAST(o.customer_id AS INTEGER) = c.id
+        WHERE o.current_department = 'P1 Production Queue'
+          AND o.status IN ('FINALIZED', 'Active')
+          AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
+          AND o.model_id IS NOT NULL 
+          AND o.model_id != '' 
+          AND o.model_id != 'None'
+          AND LOWER(o.model_id) != 'no stock'
+          AND LOWER(o.model_id) != 'no_stock'
+        ORDER BY o.due_date ASC
+        LIMIT 500
+      `);
+
+      const regularRows = Array.isArray(regularQueueResult) ? regularQueueResult : (regularQueueResult as any).rows || [];
+      for (const item of regularRows) {
+        // Parse features JSON to get material type
+        let features: any = {};
+        try {
+          features = typeof item.features === 'string' 
+            ? JSON.parse(item.features) 
+            : (item.features || {});
+        } catch (e) {
+          features = {};
+        }
+        
+        const stockModelName = item.stockModel || '';
+        
+        // Determine material type from stock model name prefix
+        let materialType = 'unknown';
+        const stockLower = stockModelName.toLowerCase();
+        if (stockLower.includes('mesa')) {
+          materialType = 'mesa';
+        } else if (stockLower.startsWith('cf_') || stockLower.startsWith('cf-') || stockLower.includes('carbon')) {
+          materialType = 'carbon_fiber';
+        } else if (stockLower.startsWith('fg_') || stockLower.startsWith('fg-') || stockLower.includes('fiberglass')) {
+          materialType = 'fiberglass';
+        }
+        
         queueItems.push({
-          id: `p1po-${item.id}`,
+          id: `p1reg-${item.orderId}`,
           orderId: item.orderId,
-          stockModel: stockModelName || `Item ${item.stockModel}`,
-          source: 'P1_PO',
-          orderType: 'oem',
+          stockModel: stockModelName,
+          source: 'P1',
+          orderType: 'regular',
           materialType,
           scheduledDate: item.dueDate,
           dueDate: item.dueDate,
-          customer: specs.customerName || item.customerId,
-          priority: 80,
+          customer: item.customerName || item.customerId,
+          priority: 50,
           packetsNeeded: 1,
           usesInventory: false,
           requiresNewCut: true,
-          specifications: specs,
+          specifications: features,
         });
       }
     } catch (err) {
-      console.log('P1 PO query skipped:', err);
+      console.log('Regular production queue query skipped:', err);
     }
 
-    // 3. P2 PO Items - Purchase order items with BOMs requiring cutting
+    // 4. P2 PO Items - Purchase order items with BOMs requiring cutting
     try {
       // Query P2 production orders table - all pending items need cutting
       const p2Result = showAll === 'true'
@@ -1885,13 +2008,16 @@ router.post('/schedule-to-cutting', async (req, res) => {
     if (!validBomId && materialType) {
       const packetTypeName = materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
                              materialType === 'fiberglass' ? 'Fiberglass Packet' :
-                             materialType === 'mesa' ? 'Mesa Packet' : null;
+                             materialType === 'mesa' ? 'Mesa Packet' :
+                             materialType === 'p2_disruptor' ? 'Disruptor' :
+                             materialType === 'p2_disruptor_packet' ? 'Disruptor' :
+                             materialType === 'p2_antenna' ? 'Antenna Cover' : null;
       
       if (packetTypeName) {
         const [matchingBom] = await db.select()
           .from(cuttingPacketBOMs)
           .where(and(
-            eq(cuttingPacketBOMs.packetType, packetTypeName),
+            ilike(cuttingPacketBOMs.packetType, `%${packetTypeName}%`),
             eq(cuttingPacketBOMs.isActive, true)
           ))
           .limit(1);
@@ -1907,21 +2033,38 @@ router.post('/schedule-to-cutting', async (req, res) => {
     const { manufacturingQueue, inventoryItems } = await import('../../schema');
     const { pool } = await import('../../db');
     
-    // Determine packet name based on material type
+    // Determine packet name based on material type - handle P2 material types
     const packetName = materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
                        materialType === 'fiberglass' ? 'Fiberglass Packet' :
-                       materialType === 'mesa' ? 'Mesa Packet' : 'Stock Packet';
+                       materialType === 'mesa' ? 'Mesa Packet' :
+                       materialType === 'p2_disruptor' ? 'Disruptor Packet' :
+                       materialType === 'p2_disruptor_packet' ? 'Disruptor Packet' :
+                       materialType === 'p2_antenna' ? 'Antenna Cover Packet' :
+                       materialType === 'p2_antenna_cover' ? 'Antenna Cover Packet' : 'Stock Packet';
     
-    // Try to find existing packet inventory item
+    // Try to find existing packet inventory item - use exact match first
     let inventoryItemId: number | null = null;
     try {
-      const result = await pool.query(
-        `SELECT id FROM inventory_items WHERE name ILIKE $1 LIMIT 1`,
-        [`%${packetName}%`]
+      // First try exact name match
+      const exactResult = await pool.query(
+        `SELECT id FROM inventory_items WHERE LOWER(name) = LOWER($1) LIMIT 1`,
+        [packetName]
       );
-      const rows = Array.isArray(result) ? result : (result as any).rows || [];
-      if (rows.length > 0) {
-        inventoryItemId = rows[0].id;
+      const exactRows = Array.isArray(exactResult) ? exactResult : (exactResult as any).rows || [];
+      if (exactRows.length > 0) {
+        inventoryItemId = exactRows[0].id;
+      }
+      
+      // If no exact match, try pattern match
+      if (!inventoryItemId) {
+        const result = await pool.query(
+          `SELECT id FROM inventory_items WHERE name ILIKE $1 LIMIT 1`,
+          [`%${packetName}%`]
+        );
+        const rows = Array.isArray(result) ? result : (result as any).rows || [];
+        if (rows.length > 0) {
+          inventoryItemId = rows[0].id;
+        }
       }
     } catch (e) {
       console.log('Could not find inventory item:', e);

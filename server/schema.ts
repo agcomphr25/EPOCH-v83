@@ -6357,6 +6357,7 @@ export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
   receivedDate: date('received_date'),
   expirationDate: date('expiration_date'),
   location: text('location'), // Storage location/freezer #
+  freezerNumber: integer('freezer_number'), // Freezer assignment number (1-5)
   conformanceDocumentLink: text('conformance_document_link'), // Link to conformance/traceability paperwork
   quantityInStock: integer('quantity_in_stock').notNull().default(0),
   squareMeters: numeric('square_meters', { precision: 10, scale: 2 }), // Total square meters of fabric

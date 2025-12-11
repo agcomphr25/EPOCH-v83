@@ -140,8 +140,21 @@ export default function CuttingOperatorDashboard() {
   const [selectedMfgItem, setSelectedMfgItem] = useState<ManufacturingQueueItem | null>(null);
   const [isProductionDialogOpen, setIsProductionDialogOpen] = useState(false);
   const [isCuttingWorkflowOpen, setIsCuttingWorkflowOpen] = useState(false);
+  const [workflowStep, setWorkflowStep] = useState<'fabric' | 'cutting' | 'complete' | 'disposition'>('fabric');
+  const [retrievedFabrics, setRetrievedFabrics] = useState<FabricInventoryItem[]>([]);
+  const [completionData, setCompletionData] = useState({
+    packetQuantity: '',
+    labelQuantity: '',
+    printCompleted: false,
+  });
+  const [dispositionData, setDispositionData] = useState<{
+    fabricId: string;
+    action: 'depleted' | 'return' | '';
+    freezerNumber: string;
+  }[]>([]);
   
   const [universalBarcode, setUniversalBarcode] = useState("");
+  const [fabricSearch, setFabricSearch] = useState("");
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const [productionForm, setProductionForm] = useState({
@@ -156,6 +169,16 @@ export default function CuttingOperatorDashboard() {
   });
 
   const [scannedFabrics, setScannedFabrics] = useState<FabricInventoryItem[]>([]);
+  
+  const [receivingForm, setReceivingForm] = useState({
+    barcode: '',
+    fabricId: '',
+    fabricName: '',
+    currentFreezer: '',
+    freezerNumber: '',
+    isP2: false,
+    generatedBarcode: '',
+  });
 
   const { data: currentUser } = useQuery<{ username: string }>({
     queryKey: ['currentUser'],
@@ -224,9 +247,22 @@ export default function CuttingOperatorDashboard() {
       const quantityOrdered = item.quantityOrdered || item.quantityRequested || 0;
       const quantityCompleted = item.quantityCompleted || 0;
       const remaining = Math.max(0, quantityOrdered - quantityCompleted);
+      
+      // Parse bomId from notes if not at top level
+      let bomId = item.packetBomId;
+      if (!bomId && item.notes) {
+        try {
+          const parsedNotes = JSON.parse(item.notes);
+          bomId = parsedNotes.bomId;
+        } catch {}
+      }
+      
+      // Find matching BOM - use string comparison for ID matching
       const matchingBOM = (packetBOMs || []).find((bom: PacketBOM) => 
-        bom.partNumber === item.partNumber || bom.id === item.packetBomId
+        bom.partNumber === item.partNumber || 
+        (bomId && String(bom.id) === String(bomId))
       );
+      
       const yieldPerCut = matchingBOM?.yieldPerCut || 4;
       const estimatedCuts = remaining > 0 ? Math.ceil(remaining / yieldPerCut) : 0;
       return {
@@ -234,7 +270,7 @@ export default function CuttingOperatorDashboard() {
         quantityOrdered,
         quantityCompleted,
         estimatedCuts,
-        packetBomId: item.packetBomId || matchingBOM?.id,
+        packetBomId: bomId || matchingBOM?.id,
       };
     });
   }, [mfgQueueItemsRaw, packetBOMs]);
@@ -387,6 +423,37 @@ export default function CuttingOperatorDashboard() {
     },
   });
 
+  const assignFreezerMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest(`/api/cutting-table/fabric-inventory/${receivingForm.fabricId}/receive`, {
+        method: 'POST',
+        body: JSON.stringify({ 
+          freezerNumber: parseInt(receivingForm.freezerNumber),
+          isP2: receivingForm.isP2,
+        }),
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
+      if (data.generatedBarcode) {
+        setReceivingForm(prev => ({ ...prev, generatedBarcode: data.generatedBarcode }));
+        toast({
+          title: 'P2 Item Received',
+          description: `Barcode generated: ${data.generatedBarcode}`,
+        });
+      } else {
+        toast({
+          title: 'Freezer Assigned',
+          description: `${receivingForm.fabricName} assigned to Freezer ${receivingForm.freezerNumber}`,
+        });
+        setReceivingForm({ barcode: '', fabricId: '', fabricName: '', currentFreezer: '', freezerNumber: '', isP2: false, generatedBarcode: '' });
+      }
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to receive fabric.', variant: 'destructive' });
+    },
+  });
+
   const handleBarcodeScan = (barcode: string) => {
     if (!barcode.trim()) return;
     
@@ -424,8 +491,119 @@ export default function CuttingOperatorDashboard() {
 
   const handleStartCuttingWorkflow = (item: ManufacturingQueueItem) => {
     setSelectedMfgItem(item);
+    setWorkflowStep('fabric');
+    setRetrievedFabrics([]);
+    setCompletionData({ packetQuantity: '', labelQuantity: '', printCompleted: false });
+    setDispositionData([]);
+    setScannedFabrics([]);
     setIsCuttingWorkflowOpen(true);
     startItemMutation.mutate(item.id);
+  };
+  
+  const handleFabricRetrieved = (fabric: FabricInventoryItem) => {
+    if (!retrievedFabrics.find(f => f.id === fabric.id)) {
+      setRetrievedFabrics(prev => [...prev, fabric]);
+      setDispositionData(prev => [...prev, { fabricId: fabric.id, action: '', freezerNumber: '' }]);
+    }
+  };
+  
+  const handleProceedToCutting = () => {
+    if (retrievedFabrics.length === 0) {
+      toast({ title: 'Select Fabric', description: 'Please retrieve at least one fabric roll first.', variant: 'destructive' });
+      return;
+    }
+    setWorkflowStep('cutting');
+  };
+  
+  const handleFinishCutting = () => {
+    const remaining = (selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0);
+    setCompletionData(prev => ({ ...prev, packetQuantity: String(remaining), labelQuantity: String(remaining) }));
+    setWorkflowStep('complete');
+  };
+  
+  const handlePrintLabels = () => {
+    if (!selectedMfgItem) return;
+    const qty = parseInt(completionData.labelQuantity) || 0;
+    if (qty > 0) {
+      generateLabelsMutation.mutate({ id: selectedMfgItem.id, quantity: qty });
+    }
+    setCompletionData(prev => ({ ...prev, printCompleted: true }));
+  };
+  
+  const handleProceedToDisposition = () => {
+    setWorkflowStep('disposition');
+  };
+  
+  const handleCompleteWorkflow = async () => {
+    if (!selectedMfgItem) return;
+    
+    const qty = parseInt(completionData.packetQuantity) || 0;
+    if (qty <= 0) {
+      toast({ title: 'Invalid', description: 'Enter a valid packet quantity.', variant: 'destructive' });
+      return;
+    }
+    
+    // Process fabric dispositions
+    const depletedRollIds = dispositionData.filter(d => d.action === 'depleted').map(d => d.fabricId);
+    const returnRolls = dispositionData.filter(d => d.action === 'return' && d.freezerNumber);
+    
+    // Mark depleted rolls
+    if (depletedRollIds.length > 0) {
+      try {
+        await Promise.all(depletedRollIds.map(rollId => depleteRollMutation.mutateAsync(rollId)));
+      } catch (err) {
+        console.error('Error depleting rolls:', err);
+      }
+    }
+    
+    // Return rolls to freezer
+    if (returnRolls.length > 0) {
+      try {
+        await Promise.all(returnRolls.map(roll => 
+          apiRequest(`/api/cutting-table/fabric-inventory/${roll.fabricId}/assign-freezer`, {
+            method: 'POST',
+            body: JSON.stringify({ freezerNumber: parseInt(roll.freezerNumber) }),
+          })
+        ));
+      } catch (err) {
+        console.error('Error returning rolls to freezer:', err);
+      }
+    }
+    
+    // Complete with traceability using retrievedFabrics from guided workflow
+    if (retrievedFabrics.length > 0) {
+      const fabricSources = retrievedFabrics.map(f => ({
+        fabricInventoryId: f.id,
+        fabricType: f.fabricType,
+        lotNumber: f.lotNumber,
+        batchNumber: f.batchNumber,
+        rollNumber: f.rollNumber,
+        internalControlNumber: f.internalControlNumber,
+        expirationDate: f.expirationDate,
+        quantityUsed: 1,
+        isDepleted: depletedRollIds.includes(f.id),
+      }));
+      
+      completeWithTraceabilityMutation.mutate({
+        id: selectedMfgItem.id,
+        quantityCompleted: qty,
+        fabricSources,
+        completedBy: currentUser?.username || 'unknown',
+        completionNotes: `Workflow completed. Labels printed: ${completionData.labelQuantity || 0}`,
+      });
+    } else {
+      // Fallback to basic completion if no fabrics were retrieved
+      completeItemMutation.mutate({
+        id: selectedMfgItem.id,
+        quantityCompleted: qty,
+        fabricLot: '',
+        completionNotes: `Workflow completed. Labels printed: ${completionData.labelQuantity || 0}`,
+        completedBy: currentUser?.username || 'unknown',
+      });
+    }
+    
+    setIsCuttingWorkflowOpen(false);
+    resetProductionForm();
   };
 
   const completeWithTraceabilityMutation = useMutation({
@@ -534,9 +712,25 @@ export default function CuttingOperatorDashboard() {
     }
   };
 
-  const matchingBOM = selectedMfgItem?.packetBomId 
-    ? packetBOMs.find(b => b.id === selectedMfgItem.packetBomId) 
-    : null;
+  // Find matching BOM with string comparison and notes parsing
+  const matchingBOM = useMemo(() => {
+    if (!selectedMfgItem) return null;
+    
+    // Get bomId from packetBomId or from notes
+    let bomId = selectedMfgItem.packetBomId;
+    if (!bomId && selectedMfgItem.notes) {
+      try {
+        const parsedNotes = JSON.parse(selectedMfgItem.notes);
+        bomId = parsedNotes.bomId;
+      } catch {}
+    }
+    
+    // Find BOM by part number or ID (using string comparison)
+    return packetBOMs.find(b => 
+      b.partNumber === selectedMfgItem.partNumber ||
+      (bomId && String(b.id) === String(bomId))
+    ) || null;
+  }, [selectedMfgItem, packetBOMs]);
 
   return (
     <div className="space-y-6">
@@ -565,7 +759,98 @@ export default function CuttingOperatorDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Fabric Receiving - Assign Freezers
+            </CardTitle>
+            <CardDescription>Fabric rolls needing freezer assignment</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="max-h-[400px] overflow-y-auto">
+              {loadingFabric ? (
+                <p className="text-muted-foreground text-center py-4">Loading fabric...</p>
+              ) : fabricInventory.filter(f => f.squareMeters > 0 && !f.freezerLocation).length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">All fabric rolls have freezer assignments</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fabric Type</TableHead>
+                      <TableHead>Roll #</TableHead>
+                      <TableHead>Lot #</TableHead>
+                      <TableHead>Available</TableHead>
+                      <TableHead>Freezer</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {fabricInventory
+                      .filter(f => f.squareMeters > 0 && !f.freezerLocation)
+                      .slice(0, 20)
+                      .map((fabric) => (
+                      <TableRow key={fabric.id} data-testid={`row-fabric-${fabric.id}`}>
+                        <TableCell className="font-medium">{fabric.fabricType || fabric.commonName}</TableCell>
+                        <TableCell>{fabric.rollNumber || '-'}</TableCell>
+                        <TableCell className="text-xs">{fabric.lotNumber || '-'}</TableCell>
+                        <TableCell>{fabric.squareMeters?.toFixed(1)} m²</TableCell>
+                        <TableCell>
+                          <Select 
+                            value={fabric.freezerLocation || ''} 
+                            onValueChange={(val) => {
+                              setReceivingForm({
+                                barcode: '',
+                                fabricId: fabric.id,
+                                fabricName: fabric.fabricType || fabric.commonName || '',
+                                currentFreezer: fabric.freezerLocation || '',
+                                freezerNumber: val,
+                                isP2: false,
+                                generatedBarcode: ''
+                              });
+                              // Auto-submit after selection
+                              apiRequest(`/api/cutting-table/fabric-inventory/${fabric.id}/assign-freezer`, {
+                                method: 'POST',
+                                body: JSON.stringify({ freezerNumber: val }),
+                              }).then(() => {
+                                queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
+                                toast({ title: 'Updated', description: `Assigned to Freezer ${val}` });
+                              }).catch(() => {
+                                toast({ title: 'Error', description: 'Failed to update freezer', variant: 'destructive' });
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="w-28" data-testid={`select-freezer-${fabric.id}`}>
+                              <SelectValue placeholder="Assign..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 20 }, (_, i) => (
+                                <SelectItem key={i + 1} value={String(i + 1)}>Freezer {i + 1}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          {fabric.expirationDate && (
+                            <span className={cn(
+                              "text-xs",
+                              fabric.status === 'expired' ? 'text-red-600' : 
+                              fabric.status === 'expiring' ? 'text-amber-600' : 'text-muted-foreground'
+                            )}>
+                              Exp: {new Date(fabric.expirationDate).toLocaleDateString()}
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -599,33 +884,109 @@ export default function CuttingOperatorDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Snowflake className="h-5 w-5" />
-              FIFO Fabric Suggestions
+              FIFO Fabric Lookup
             </CardTitle>
-            <CardDescription>Recommended rolls by expiration date</CardDescription>
+            <CardDescription>Search fabric to find next roll and on-hand quantity</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {Object.entries(fifoSuggestions).map(([type, rolls]) => (
-                <div key={type} className="space-y-1">
-                  <div className="text-sm font-medium">{type}</div>
-                  <div className="flex flex-wrap gap-1">
-                    {rolls.map(roll => (
-                      <Badge 
-                        key={roll.id} 
-                        variant={roll.status === 'expiring' ? 'destructive' : 'secondary'}
-                        className="cursor-pointer text-xs"
-                        onClick={() => handleBarcodeScan(roll.barcodeValue)}
-                        data-testid={`badge-fifo-roll-${roll.id}`}
-                      >
-                        {roll.rollNumber} - {roll.freezerLocation || 'N/A'}
-                        {roll.isFifoNext && <ArrowRight className="h-3 w-3 ml-1" />}
-                      </Badge>
-                    ))}
-                  </div>
+            <div className="space-y-4">
+              <Input
+                placeholder="Search fabric type (e.g., cf_, fg_, mesa)..."
+                value={fabricSearch}
+                onChange={(e) => setFabricSearch(e.target.value)}
+                className="w-full"
+                data-testid="input-fabric-search"
+              />
+              
+              {fabricSearch.trim() && (() => {
+                const searchLower = fabricSearch.toLowerCase();
+                const matchingTypes = Object.entries(fifoSuggestions).filter(([type]) => 
+                  type.toLowerCase().includes(searchLower)
+                );
+                
+                if (matchingTypes.length === 0) {
+                  const directMatches = fabricInventory.filter(f => 
+                    (f.fabricType || '').toLowerCase().includes(searchLower) ||
+                    (f.commonName || '').toLowerCase().includes(searchLower)
+                  );
+                  
+                  if (directMatches.length === 0) {
+                    return <div className="text-sm text-muted-foreground">No fabric found matching "{fabricSearch}"</div>;
+                  }
+                  
+                  const totalOnHand = directMatches.reduce((sum, f) => sum + (f.squareMeters || 0), 0);
+                  const nextFifo = directMatches.sort((a, b) => {
+                    const aExp = a.expirationDate ? new Date(a.expirationDate).getTime() : Infinity;
+                    const bExp = b.expirationDate ? new Date(b.expirationDate).getTime() : Infinity;
+                    return aExp - bExp;
+                  })[0];
+                  
+                  return (
+                    <div className="p-3 bg-muted rounded-lg space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">{nextFifo?.fabricType || fabricSearch}</span>
+                        <Badge variant="outline" className="bg-green-100 text-green-800">
+                          {totalOnHand.toFixed(1)} m² on hand
+                        </Badge>
+                      </div>
+                      {nextFifo && (
+                        <div className="flex items-center gap-2 p-2 bg-background rounded border">
+                          <Badge className="bg-green-600">FIFO Next</Badge>
+                          <div className="flex-1">
+                            <p className="font-medium">Roll {nextFifo.rollNumber}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Location: {nextFifo.freezerLocation || nextFifo.location || 'N/A'}
+                              {nextFifo.expirationDate && ` • Exp: ${new Date(nextFifo.expirationDate).toLocaleDateString()}`}
+                            </p>
+                          </div>
+                          <Badge variant="secondary">{nextFifo.squareMeters.toFixed(1)} m²</Badge>
+                          <Button size="sm" variant="outline" onClick={() => handleBarcodeScan(nextFifo.barcodeValue)}>
+                            Select
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                
+                return matchingTypes.map(([type, rolls]) => {
+                  const allOfType = fabricInventory.filter(f => (f.fabricType || '') === type);
+                  const totalOnHand = allOfType.reduce((sum, f) => sum + (f.squareMeters || 0), 0);
+                  const nextRoll = rolls[0];
+                  
+                  return (
+                    <div key={type} className="p-3 bg-muted rounded-lg space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">{type}</span>
+                        <Badge variant="outline" className="bg-green-100 text-green-800">
+                          {totalOnHand.toFixed(1)} m² on hand ({allOfType.length} rolls)
+                        </Badge>
+                      </div>
+                      {nextRoll && (
+                        <div className="flex items-center gap-2 p-2 bg-background rounded border">
+                          <Badge className="bg-green-600">FIFO Next</Badge>
+                          <div className="flex-1">
+                            <p className="font-medium">Roll {nextRoll.rollNumber}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Location: {nextRoll.freezerLocation || nextRoll.location || 'N/A'}
+                              {nextRoll.expirationDate && ` • Exp: ${new Date(nextRoll.expirationDate).toLocaleDateString()}`}
+                            </p>
+                          </div>
+                          <Badge variant="secondary">{nextRoll.squareMeters.toFixed(1)} m²</Badge>
+                          <Button size="sm" variant="outline" onClick={() => handleBarcodeScan(nextRoll.barcodeValue)}>
+                            Select
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
+              
+              {!fabricSearch.trim() && (
+                <div className="text-sm text-muted-foreground">
+                  Enter a fabric type above to see FIFO recommendation and stock levels
                 </div>
-              ))}
-              {Object.keys(fifoSuggestions).length === 0 && (
-                <div className="text-sm text-muted-foreground">No fabric inventory available</div>
               )}
             </div>
           </CardContent>
@@ -750,186 +1111,436 @@ export default function CuttingOperatorDashboard() {
               Cutting Workflow: {selectedMfgItem?.partNumber || selectedMfgItem?.partName}
             </DialogTitle>
             <DialogDescription>
-              Follow the steps below to cut packets. Scan fabric from suggested locations.
+              Step {workflowStep === 'fabric' ? '1 of 4: Retrieve Fabric' : workflowStep === 'cutting' ? '2 of 4: Cutting Programs' : workflowStep === 'complete' ? '3 of 4: Complete & Print Labels' : '4 of 4: Fabric Disposition'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <h4 className="font-medium mb-2 flex items-center gap-2">
-                <Package className="h-4 w-4" />
-                Production Summary
-              </h4>
-              <div className="grid grid-cols-4 gap-4 text-sm">
-                <div>
-                  <Label className="text-muted-foreground text-xs">Packets Needed</Label>
-                  <p className="font-bold text-lg">{(selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)}</p>
+          {/* Step Indicator */}
+          <div className="flex items-center justify-center gap-2 py-2">
+            {['fabric', 'cutting', 'complete', 'disposition'].map((step, idx) => (
+              <div key={step} className="flex items-center">
+                <div className={cn(
+                  "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium",
+                  workflowStep === step ? "bg-primary text-primary-foreground" : 
+                  ['fabric', 'cutting', 'complete', 'disposition'].indexOf(workflowStep) > idx ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"
+                )}>
+                  {idx + 1}
                 </div>
-                <div>
-                  <Label className="text-muted-foreground text-xs">Yield Per Cut</Label>
-                  <p className="font-bold text-lg">{matchingBOM?.yieldPerCut || 4}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-xs">Cuts Needed</Label>
-                  <p className="font-bold text-lg">{selectedMfgItem?.estimatedCuts || Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / (matchingBOM?.yieldPerCut || 4))}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-xs">Sq Meters/Cut</Label>
-                  <p className="font-bold text-lg">{matchingBOM?.squareMetersPerCut || 0.5} m²</p>
+                {idx < 3 && <div className={cn("w-8 h-0.5", ['fabric', 'cutting', 'complete', 'disposition'].indexOf(workflowStep) > idx ? "bg-green-500" : "bg-muted")} />}
+              </div>
+            ))}
+          </div>
+
+          {/* STEP 1: Fabric Retrieval */}
+          {workflowStep === 'fabric' && (
+            <div className="space-y-4">
+              <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  Production Summary
+                </h4>
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Packets Needed</Label>
+                    <p className="font-bold text-lg">{(selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Cuts Needed</Label>
+                    <p className="font-bold text-lg">{selectedMfgItem?.estimatedCuts || Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / (matchingBOM?.yieldPerCut || 4))}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground text-xs">Sq Meters/Cut</Label>
+                    <p className="font-bold text-lg">{matchingBOM?.squareMetersPerCut || 0.5} m²</p>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-4">
-              <h4 className="font-medium mb-2 flex items-center gap-2">
-                <Snowflake className="h-4 w-4" />
-                Fabric Location (FIFO)
-              </h4>
-              <p className="text-sm text-muted-foreground mb-3">Get fabric from these locations - oldest expiration first:</p>
-              <div className="space-y-2">
-                {(() => {
-                  const materialType = (() => {
-                    try {
-                      const notes = selectedMfgItem?.notes ? JSON.parse(selectedMfgItem.notes) : {};
-                      return notes.materialType || 'carbon_fiber';
-                    } catch { return 'carbon_fiber'; }
-                  })();
-                  const relevantFabrics = fabricInventory
-                    .filter(f => f.squareMeters > 0 && f.status !== 'expired')
-                    .filter(f => {
-                      const ft = (f.fabricType || '').toLowerCase();
-                      if (materialType === 'carbon_fiber') return ft.includes('carbon') || ft.includes('cf');
-                      if (materialType === 'fiberglass') return ft.includes('fiber') || ft.includes('fg');
-                      if (materialType === 'mesa') return ft.includes('mesa');
-                      return true;
-                    })
-                    .sort((a, b) => {
-                      if (!a.expirationDate) return 1;
-                      if (!b.expirationDate) return -1;
-                      return new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime();
-                    })
-                    .slice(0, 3);
-                  
-                  if (relevantFabrics.length === 0) {
-                    return <p className="text-sm text-amber-600">No matching fabric in inventory. Check stock levels.</p>;
-                  }
-                  
-                  return relevantFabrics.map((fabric, idx) => (
-                    <div key={fabric.id} className="flex items-center justify-between p-2 bg-background rounded border">
-                      <div className="flex items-center gap-3">
-                        {idx === 0 && <Badge className="bg-green-600">FIFO</Badge>}
-                        <div>
-                          <p className="font-medium">{fabric.fabricType} - Roll {fabric.rollNumber}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Location: <span className="font-bold text-foreground">{fabric.freezerLocation || fabric.location || 'Not specified'}</span>
-                            {fabric.expirationDate && ` • Expires: ${new Date(fabric.expirationDate).toLocaleDateString()}`}
-                          </p>
+              <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  <Snowflake className="h-4 w-4" />
+                  Fabric Needed - Go to Freezer Location
+                </h4>
+                <p className="text-sm text-muted-foreground mb-3">Retrieve fabric from these locations (FIFO - oldest expiration first):</p>
+                <div className="space-y-2">
+                  {(() => {
+                    // Get specific fabric types from BOM if available
+                    const bomMaterialNames: string[] = [];
+                    if (matchingBOM?.cuts && matchingBOM.cuts.length > 0) {
+                      matchingBOM.cuts.forEach(cut => {
+                        if (cut.materialName && !bomMaterialNames.includes(cut.materialName.toLowerCase())) {
+                          bomMaterialNames.push(cut.materialName.toLowerCase());
+                        }
+                      });
+                    }
+                    
+                    // Fallback to generic material type if no BOM materials
+                    const materialType = (() => {
+                      try {
+                        const notes = selectedMfgItem?.notes ? JSON.parse(selectedMfgItem.notes) : {};
+                        return notes.materialType || 'carbon_fiber';
+                      } catch { return 'carbon_fiber'; }
+                    })();
+                    
+                    const relevantFabrics = fabricInventory
+                      .filter(f => f.squareMeters > 0 && f.status !== 'expired')
+                      .filter(f => {
+                        const ft = (f.fabricType || '').toLowerCase();
+                        const commonName = (f.commonName || '').toLowerCase();
+                        
+                        // If BOM specifies materials, match against those
+                        if (bomMaterialNames.length > 0) {
+                          return bomMaterialNames.some(bomMat => 
+                            ft.includes(bomMat) || commonName.includes(bomMat) || 
+                            bomMat.includes(ft) || bomMat.includes(commonName)
+                          );
+                        }
+                        
+                        // Fallback to generic material type matching
+                        if (materialType === 'carbon_fiber') return ft.includes('carbon') || ft.includes('cf');
+                        if (materialType === 'fiberglass') return ft.includes('fiber') || ft.includes('fg');
+                        if (materialType === 'mesa') return ft.includes('mesa');
+                        if (materialType === 'p2_disruptor') return ft.includes('disruptor');
+                        if (materialType === 'p2_antenna') return ft.includes('antenna');
+                        return true;
+                      })
+                      .sort((a, b) => {
+                        if (!a.expirationDate) return 1;
+                        if (!b.expirationDate) return -1;
+                        return new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime();
+                      })
+                      .slice(0, 3);
+                    
+                    if (relevantFabrics.length === 0) {
+                      return <p className="text-sm text-amber-600">No matching fabric in inventory. Check stock levels.</p>;
+                    }
+                    
+                    return relevantFabrics.map((fabric, idx) => (
+                      <div key={fabric.id} className={cn(
+                        "flex items-center justify-between p-3 rounded border",
+                        retrievedFabrics.find(f => f.id === fabric.id) ? "bg-green-100 border-green-300 dark:bg-green-900 dark:border-green-700" : "bg-background"
+                      )}>
+                        <div className="flex items-center gap-3">
+                          {idx === 0 && <Badge className="bg-green-600">FIFO</Badge>}
+                          <div>
+                            <p className="font-medium">{fabric.fabricType} - Roll {fabric.rollNumber}</p>
+                            <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                              Freezer {fabric.freezerLocation || fabric.location || 'Unknown'}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {fabric.squareMeters.toFixed(2)} m² available
+                              {fabric.expirationDate && ` • Expires: ${new Date(fabric.expirationDate).toLocaleDateString()}`}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">{fabric.squareMeters.toFixed(2)} m²</p>
                         <Button 
                           size="sm" 
-                          variant="outline"
-                          onClick={() => handleBarcodeScan(fabric.barcodeValue)}
-                          data-testid={`button-select-fabric-${fabric.id}`}
+                          variant={retrievedFabrics.find(f => f.id === fabric.id) ? "secondary" : "default"}
+                          onClick={() => handleFabricRetrieved(fabric)}
+                          disabled={!!retrievedFabrics.find(f => f.id === fabric.id)}
+                          data-testid={`button-retrieve-fabric-${fabric.id}`}
                         >
-                          <Scan className="h-3 w-3 mr-1" />
-                          Select
+                          {retrievedFabrics.find(f => f.id === fabric.id) ? (
+                            <>
+                              <CheckCircle2 className="h-4 w-4 mr-1" />
+                              Retrieved
+                            </>
+                          ) : (
+                            'Retrieved'
+                          )}
                         </Button>
                       </div>
-                    </div>
-                  ));
-                })()}
-              </div>
-            </div>
-
-            {matchingBOM && matchingBOM.cuts && matchingBOM.cuts.length > 0 ? (
-              <div className="space-y-3">
-                <h4 className="font-medium flex items-center gap-2">
-                  <Layers className="h-4 w-4" />
-                  Ply Schedule
-                </h4>
-                {matchingBOM.cuts.map((cut) => (
-                  <div key={cut.id} className="border rounded-lg p-3">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-medium">{cut.label}</span>
-                      <Badge>{cut.cutsNeeded} cut(s)</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Material: {cut.materialName || cut.materialPartNumber}
-                    </p>
-                    {cut.plySchedule && cut.plySchedule.length > 0 && (
-                      <div className="bg-background rounded p-2">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-16">Ply #</TableHead>
-                              <TableHead>Material</TableHead>
-                              <TableHead className="w-24">Orientation</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {cut.plySchedule.map((ply) => (
-                              <TableRow key={ply.plyNumber}>
-                                <TableCell className="font-medium">{ply.plyNumber}</TableCell>
-                                <TableCell>{ply.materialType}</TableCell>
-                                <TableCell>
-                                  <Badge variant="outline">{ply.orientation}</Badge>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="border rounded-lg p-4 bg-amber-50 dark:bg-amber-950">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
-                  <div>
-                    <p className="font-medium">No BOM Configured</p>
-                    <p className="text-sm text-muted-foreground">Standard cutting procedure applies. Create a BOM for custom ply schedules.</p>
-                  </div>
+                    ));
+                  })()}
                 </div>
               </div>
-            )}
 
-            {scannedFabrics.length > 0 && (
-              <div className="bg-muted/50 rounded-lg p-4">
-                <h4 className="font-medium mb-2">Selected Fabric Rolls</h4>
-                <div className="space-y-2">
-                  {scannedFabrics.map(fabric => (
-                    <div key={fabric.id} className="flex items-center justify-between p-2 bg-background rounded border">
-                      <div>
-                        <span className="font-medium">{fabric.fabricType}</span>
-                        <span className="text-muted-foreground ml-2">Roll {fabric.rollNumber}</span>
-                        <span className="text-xs text-muted-foreground ml-2">(Lot: {fabric.lotNumber || 'N/A'})</span>
+              {retrievedFabrics.length > 0 && (
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="text-sm font-medium text-green-600 dark:text-green-400">
+                    {retrievedFabrics.length} fabric roll(s) retrieved and ready for cutting
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* STEP 2: Cutting Programs & Ply Schedule */}
+          {workflowStep === 'cutting' && (
+            <div className="space-y-4">
+              <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <h4 className="font-medium mb-2 flex items-center gap-2">
+                  <Scissors className="h-4 w-4" />
+                  Cutting Programs
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Execute the following cutting program for {(selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)} packets
+                </p>
+                <div className="mt-3 p-3 bg-background rounded border">
+                  <p className="font-mono text-sm">Program: {selectedMfgItem?.partNumber || 'STANDARD'}</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Cuts Required: {selectedMfgItem?.estimatedCuts || Math.ceil(((selectedMfgItem?.quantityOrdered || 0) - (selectedMfgItem?.quantityCompleted || 0)) / (matchingBOM?.yieldPerCut || 4))}
+                  </p>
+                </div>
+              </div>
+
+              {matchingBOM && matchingBOM.cuts && matchingBOM.cuts.length > 0 ? (
+                <div className="space-y-3">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <Layers className="h-4 w-4" />
+                    Ply Schedule
+                  </h4>
+                  {matchingBOM.cuts.map((cut) => (
+                    <div key={cut.id} className="border rounded-lg p-3">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-medium">{cut.label}</span>
+                        <Badge>{cut.cutsNeeded} cut(s)</Badge>
                       </div>
-                      <Badge variant="secondary">{fabric.squareMeters.toFixed(2)} m²</Badge>
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Material: {cut.materialName || cut.materialPartNumber}
+                      </p>
+                      {cut.plySchedule && cut.plySchedule.length > 0 && (
+                        <div className="bg-background rounded p-2">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="w-16">Ply #</TableHead>
+                                <TableHead>Material</TableHead>
+                                <TableHead className="w-24">Orientation</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {cut.plySchedule.map((ply) => (
+                                <TableRow key={ply.plyNumber}>
+                                  <TableCell className="font-medium">{ply.plyNumber}</TableCell>
+                                  <TableCell>{ply.materialType}</TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline">{ply.orientation}</Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="border rounded-lg p-4 bg-amber-50 dark:bg-amber-950">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium">Standard Cutting Procedure</p>
+                      <p className="text-sm text-muted-foreground">No custom BOM configured. Follow standard cutting procedure for this part.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-muted/50 rounded-lg p-3">
+                <h4 className="font-medium mb-2">Retrieved Fabric Rolls</h4>
+                <div className="space-y-1">
+                  {retrievedFabrics.map(fabric => (
+                    <div key={fabric.id} className="flex items-center justify-between text-sm">
+                      <span>{fabric.fabricType} - Roll {fabric.rollNumber}</span>
+                      <span className="text-muted-foreground">{fabric.squareMeters.toFixed(2)} m²</span>
                     </div>
                   ))}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCuttingWorkflowOpen(false)} data-testid="button-close-workflow">
-              Close
-            </Button>
-            <Button 
-              onClick={() => { 
-                setIsCuttingWorkflowOpen(false); 
-                setIsProductionDialogOpen(true); 
-              }}
-              data-testid="button-proceed-complete"
-            >
-              Proceed to Complete
-            </Button>
+          {/* STEP 3: Completion & Labels */}
+          {workflowStep === 'complete' && (
+            <div className="space-y-4">
+              <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                <h4 className="font-medium mb-3 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Complete Cutting Task
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Packet Quantity Completed</Label>
+                    <Input
+                      type="number"
+                      value={completionData.packetQuantity}
+                      onChange={(e) => setCompletionData(prev => ({ ...prev, packetQuantity: e.target.value }))}
+                      placeholder="Enter quantity"
+                      data-testid="input-packet-quantity"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Labels to Print</Label>
+                    <Input
+                      type="number"
+                      value={completionData.labelQuantity}
+                      onChange={(e) => setCompletionData(prev => ({ ...prev, labelQuantity: e.target.value }))}
+                      placeholder="Enter label count"
+                      data-testid="input-label-count"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-muted/50 rounded-lg p-4">
+                <h4 className="font-medium mb-2">Fabric Used (Barcodes)</h4>
+                <div className="space-y-2">
+                  {retrievedFabrics.map(fabric => (
+                    <div key={fabric.id} className="flex items-center justify-between p-2 bg-background rounded border">
+                      <div>
+                        <span className="font-medium">{fabric.fabricType}</span>
+                        <span className="text-muted-foreground ml-2">Roll {fabric.rollNumber}</span>
+                      </div>
+                      <span className="font-mono text-sm bg-muted px-2 py-1 rounded">{fabric.barcodeValue || 'N/A'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-center">
+                <Button 
+                  size="lg"
+                  onClick={handlePrintLabels}
+                  disabled={generateLabelsMutation.isPending || completionData.printCompleted}
+                  className="w-full max-w-xs"
+                  data-testid="button-print-labels"
+                >
+                  <Printer className="h-5 w-5 mr-2" />
+                  {generateLabelsMutation.isPending ? 'Printing...' : completionData.printCompleted ? 'Labels Printed' : 'Print Labels'}
+                </Button>
+              </div>
+
+              {completionData.printCompleted && (
+                <div className="text-center text-sm text-green-600 dark:text-green-400 font-medium">
+                  Labels sent to printer. Click Next to continue.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* STEP 4: Fabric Disposition */}
+          {workflowStep === 'disposition' && (
+            <div className="space-y-4">
+              <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                <h4 className="font-medium mb-3 flex items-center gap-2">
+                  <Snowflake className="h-4 w-4" />
+                  Fabric Roll Disposition
+                </h4>
+                <p className="text-sm text-muted-foreground mb-4">
+                  For each fabric roll used, indicate if it was depleted or return it to a freezer.
+                </p>
+                <div className="space-y-4">
+                  {retrievedFabrics.map((fabric, idx) => {
+                    const disposition = dispositionData.find(d => d.fabricId === fabric.id);
+                    return (
+                      <div key={fabric.id} className="p-3 bg-background rounded border">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="font-medium">{fabric.fabricType}</span>
+                            <span className="text-muted-foreground ml-2">Roll {fabric.rollNumber}</span>
+                          </div>
+                          <span className="text-sm">{fabric.squareMeters.toFixed(2)} m² remaining</span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`disposition-${fabric.id}`}
+                              checked={disposition?.action === 'depleted'}
+                              onChange={() => setDispositionData(prev => 
+                                prev.map(d => d.fabricId === fabric.id ? { ...d, action: 'depleted', freezerNumber: '' } : d)
+                              )}
+                              className="h-4 w-4"
+                              data-testid={`radio-depleted-${fabric.id}`}
+                            />
+                            <span className="text-red-600 font-medium">Roll Depleted</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`disposition-${fabric.id}`}
+                              checked={disposition?.action === 'return'}
+                              onChange={() => setDispositionData(prev => 
+                                prev.map(d => d.fabricId === fabric.id ? { ...d, action: 'return' } : d)
+                              )}
+                              className="h-4 w-4"
+                              data-testid={`radio-return-${fabric.id}`}
+                            />
+                            <span>Return to Freezer</span>
+                          </label>
+                        </div>
+                        {disposition?.action === 'return' && (
+                          <div className="mt-3">
+                            <Label className="text-sm">Freezer Number</Label>
+                            <Select 
+                              value={disposition.freezerNumber} 
+                              onValueChange={(val) => setDispositionData(prev => 
+                                prev.map(d => d.fabricId === fabric.id ? { ...d, freezerNumber: val } : d)
+                              )}
+                            >
+                              <SelectTrigger className="w-40" data-testid={`select-freezer-${fabric.id}`}>
+                                <SelectValue placeholder="Select freezer..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Array.from({ length: 20 }, (_, i) => (
+                                  <SelectItem key={i + 1} value={String(i + 1)}>Freezer {i + 1}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex justify-between">
+            {workflowStep !== 'fabric' && (
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  if (workflowStep === 'cutting') setWorkflowStep('fabric');
+                  else if (workflowStep === 'complete') setWorkflowStep('cutting');
+                  else if (workflowStep === 'disposition') setWorkflowStep('complete');
+                }}
+                data-testid="button-back"
+              >
+                Back
+              </Button>
+            )}
+            <div className="flex gap-2 ml-auto">
+              <Button variant="outline" onClick={() => setIsCuttingWorkflowOpen(false)} data-testid="button-close-workflow">
+                Cancel
+              </Button>
+              {workflowStep === 'fabric' && (
+                <Button onClick={handleProceedToCutting} data-testid="button-proceed-cutting">
+                  Fabric Retrieved <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              )}
+              {workflowStep === 'cutting' && (
+                <Button onClick={handleFinishCutting} data-testid="button-finish-cutting">
+                  Finish Cutting <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              )}
+              {workflowStep === 'complete' && (
+                <Button onClick={handleProceedToDisposition} data-testid="button-proceed-disposition">
+                  Next <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              )}
+              {workflowStep === 'disposition' && (
+                <Button 
+                  onClick={handleCompleteWorkflow} 
+                  disabled={dispositionData.some(d => !d.action || (d.action === 'return' && !d.freezerNumber)) || completeWithTraceabilityMutation.isPending}
+                  data-testid="button-complete-workflow"
+                >
+                  {completeWithTraceabilityMutation.isPending ? 'Completing...' : 'Complete Task'}
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -114,35 +114,81 @@ export default function CuttingWeeklySchedule() {
   });
 
   const p1Demand = useMemo(() => {
-    if (!weeklyQueueData?.items) return { cf: 0, fg: 0, mesa: 0, total: 0, byCustomer: [] };
+    if (!weeklyQueueData?.items) return { 
+      cf: 0, fg: 0, mesa: 0, total: 0, byCustomer: [],
+      regularOrders: { cf: 0, fg: 0, mesa: 0, total: 0 },
+      oemOrders: { cf: 0, fg: 0, mesa: 0, total: 0 }
+    };
     
     const p1Items = weeklyQueueData.items.filter(i => i.source === 'P1' || i.source === 'P1_PO');
     
     let cf = 0, fg = 0, mesa = 0;
-    const customerMap: Record<string, { cf: number; fg: number; mesa: number }> = {};
+    const regularOrders = { cf: 0, fg: 0, mesa: 0, total: 0 };
+    const oemOrders = { cf: 0, fg: 0, mesa: 0, total: 0 };
+    const customerMap: Record<string, { 
+      cf: number; fg: number; mesa: number;
+      poCf: number; poFg: number; poMesa: number;
+      regCf: number; regFg: number; regMesa: number;
+    }> = {};
     
     p1Items.forEach(item => {
       const customer = item.customer || 'Unknown';
-      if (!customerMap[customer]) customerMap[customer] = { cf: 0, fg: 0, mesa: 0 };
+      if (!customerMap[customer]) customerMap[customer] = { 
+        cf: 0, fg: 0, mesa: 0,
+        poCf: 0, poFg: 0, poMesa: 0,
+        regCf: 0, regFg: 0, regMesa: 0
+      };
       
       const stockModel = (item.stockModel || '').toLowerCase();
+      const isP1PO = item.source === 'P1_PO';
+      
       if (stockModel.includes('mesa') || item.materialType === 'mesa') {
         mesa += item.packetsNeeded;
         customerMap[customer].mesa += item.packetsNeeded;
+        if (isP1PO) {
+          oemOrders.mesa += item.packetsNeeded;
+          customerMap[customer].poMesa += item.packetsNeeded;
+        } else {
+          regularOrders.mesa += item.packetsNeeded;
+          customerMap[customer].regMesa += item.packetsNeeded;
+        }
       } else if (item.materialType === 'carbon_fiber' || stockModel.includes('cf')) {
         cf += item.packetsNeeded;
         customerMap[customer].cf += item.packetsNeeded;
+        if (isP1PO) {
+          oemOrders.cf += item.packetsNeeded;
+          customerMap[customer].poCf += item.packetsNeeded;
+        } else {
+          regularOrders.cf += item.packetsNeeded;
+          customerMap[customer].regCf += item.packetsNeeded;
+        }
       } else if (item.materialType === 'fiberglass' || stockModel.includes('fg')) {
         fg += item.packetsNeeded;
         customerMap[customer].fg += item.packetsNeeded;
+        if (isP1PO) {
+          oemOrders.fg += item.packetsNeeded;
+          customerMap[customer].poFg += item.packetsNeeded;
+        } else {
+          regularOrders.fg += item.packetsNeeded;
+          customerMap[customer].regFg += item.packetsNeeded;
+        }
       }
     });
     
+    regularOrders.total = regularOrders.cf + regularOrders.fg + regularOrders.mesa;
+    oemOrders.total = oemOrders.cf + oemOrders.fg + oemOrders.mesa;
+    
     const byCustomer = Object.entries(customerMap)
-      .map(([customer, counts]) => ({ customer, ...counts, total: counts.cf + counts.fg + counts.mesa }))
+      .map(([customer, counts]) => ({ 
+        customer, 
+        ...counts, 
+        total: counts.cf + counts.fg + counts.mesa,
+        poTotal: counts.poCf + counts.poFg + counts.poMesa,
+        regTotal: counts.regCf + counts.regFg + counts.regMesa
+      }))
       .sort((a, b) => b.total - a.total);
     
-    return { cf, fg, mesa, total: cf + fg + mesa, byCustomer };
+    return { cf, fg, mesa, total: cf + fg + mesa, byCustomer, regularOrders, oemOrders };
   }, [weeklyQueueData?.items]);
 
   const p2Demand = useMemo(() => {
@@ -273,12 +319,21 @@ export default function CuttingWeeklySchedule() {
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <p className="text-sm opacity-80">Carbon Fiber Packets</p>
-                  <p className="text-3xl font-bold">{p1Demand.cf}</p>
-                  <p className="text-xs opacity-60">demand</p>
+                  <p className="text-3xl font-bold">{Math.max(0, p1Demand.cf - scheduledCounts.carbon_fiber)}</p>
+                  <p className="text-xs opacity-70">Still needed</p>
+                  <div className="text-xs opacity-70 mt-1">
+                    <span className="text-gray-400">Demand: {p1Demand.cf}</span>
+                    <span className="mx-1">|</span>
+                    <span className="text-green-300">Scheduled: {scheduledCounts.carbon_fiber}</span>
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.carbon_fiber}</span></p>
-                  <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.carbon_fiber}</span></p>
+                  <div className="text-xs opacity-70 mt-1">
+                    <span className="text-red-300">PO: {p1Demand.oemOrders.cf}</span>
+                    <span className="mx-1">|</span>
+                    <span className="text-blue-300">Reg: {p1Demand.regularOrders.cf}</span>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -312,12 +367,21 @@ export default function CuttingWeeklySchedule() {
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <p className="text-sm opacity-80">Fiberglass Packets</p>
-                  <p className="text-3xl font-bold">{p1Demand.fg}</p>
-                  <p className="text-xs opacity-60">demand</p>
+                  <p className="text-3xl font-bold">{Math.max(0, p1Demand.fg - scheduledCounts.fiberglass)}</p>
+                  <p className="text-xs opacity-70">Still needed</p>
+                  <div className="text-xs opacity-70 mt-1">
+                    <span className="text-gray-200">Demand: {p1Demand.fg}</span>
+                    <span className="mx-1">|</span>
+                    <span className="text-green-200">Scheduled: {scheduledCounts.fiberglass}</span>
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.fiberglass}</span></p>
-                  <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.fiberglass}</span></p>
+                  <div className="text-xs opacity-70 mt-1">
+                    <span className="text-red-100">PO: {p1Demand.oemOrders.fg}</span>
+                    <span className="mx-1">|</span>
+                    <span className="text-blue-100">Reg: {p1Demand.regularOrders.fg}</span>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -351,12 +415,21 @@ export default function CuttingWeeklySchedule() {
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <p className="text-sm opacity-80">Mesa Packets</p>
-                  <p className="text-3xl font-bold">{p1Demand.mesa}</p>
-                  <p className="text-xs opacity-60">demand</p>
+                  <p className="text-3xl font-bold">{Math.max(0, p1Demand.mesa - scheduledCounts.mesa)}</p>
+                  <p className="text-xs opacity-70">Still needed</p>
+                  <div className="text-xs opacity-70 mt-1">
+                    <span className="text-gray-200">Demand: {p1Demand.mesa}</span>
+                    <span className="mx-1">|</span>
+                    <span className="text-green-200">Scheduled: {scheduledCounts.mesa}</span>
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className="text-sm">On-hand: <span className="font-bold">{stockLevels.mesa || 0}</span></p>
-                  <p className="text-sm">Scheduled: <span className="font-bold">{scheduledCounts.mesa}</span></p>
+                  <div className="text-xs opacity-70 mt-1">
+                    <span className="text-red-100">PO: {p1Demand.oemOrders.mesa}</span>
+                    <span className="mx-1">|</span>
+                    <span className="text-blue-100">Reg: {p1Demand.regularOrders.mesa}</span>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -387,45 +460,56 @@ export default function CuttingWeeklySchedule() {
             </div>
           </div>
 
-          {p1Demand.byCustomer.length > 0 && (
-            <Collapsible open={expandedSections.p1} onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, p1: open }))}>
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="w-full justify-start gap-2 text-sm text-muted-foreground">
-                  {expandedSections.p1 ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  P1 Demand by Customer ({p1Demand.byCustomer.length})
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Customer</TableHead>
-                      <TableHead className="text-center">CF</TableHead>
-                      <TableHead className="text-center">FG</TableHead>
-                      <TableHead className="text-center">Mesa</TableHead>
-                      <TableHead className="text-center">Total</TableHead>
+          {(p1Demand.oemOrders.total > 0 || p1Demand.regularOrders.total > 0) && (
+            <div className="mt-4 border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead>Source</TableHead>
+                    <TableHead className="text-center">CF</TableHead>
+                    <TableHead className="text-center">FG</TableHead>
+                    <TableHead className="text-center">Mesa</TableHead>
+                    <TableHead className="text-center">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {p1Demand.oemOrders.total > 0 && (
+                    <TableRow className="bg-red-50">
+                      <TableCell className="font-medium">
+                        <Badge variant="outline" className="bg-red-100 text-red-700">PO Orders</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p1Demand.oemOrders.cf > 0 && <Badge variant="outline" className="bg-gray-900 text-white">{p1Demand.oemOrders.cf}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p1Demand.oemOrders.fg > 0 && <Badge variant="outline" className="bg-amber-100 text-amber-800">{p1Demand.oemOrders.fg}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p1Demand.oemOrders.mesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{p1Demand.oemOrders.mesa}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-center font-bold text-red-700">{p1Demand.oemOrders.total}</TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {p1Demand.byCustomer.map(row => (
-                      <TableRow key={row.customer}>
-                        <TableCell className="font-medium">{row.customer}</TableCell>
-                        <TableCell className="text-center">
-                          {row.cf > 0 && <Badge variant="outline" className="bg-gray-900 text-white">{row.cf}</Badge>}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {row.fg > 0 && <Badge variant="outline" className="bg-amber-100 text-amber-800">{row.fg}</Badge>}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {row.mesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{row.mesa}</Badge>}
-                        </TableCell>
-                        <TableCell className="text-center font-bold">{row.total}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CollapsibleContent>
-            </Collapsible>
+                  )}
+                  {p1Demand.regularOrders.total > 0 && (
+                    <TableRow className="bg-blue-50">
+                      <TableCell className="font-medium">
+                        <Badge variant="outline" className="bg-blue-100 text-blue-700">Reg Orders</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p1Demand.regularOrders.cf > 0 && <Badge variant="outline" className="bg-gray-900 text-white">{p1Demand.regularOrders.cf}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p1Demand.regularOrders.fg > 0 && <Badge variant="outline" className="bg-amber-100 text-amber-800">{p1Demand.regularOrders.fg}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p1Demand.regularOrders.mesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{p1Demand.regularOrders.mesa}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-center font-bold text-blue-700">{p1Demand.regularOrders.total}</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -582,11 +666,49 @@ export default function CuttingWeeklySchedule() {
               <TableBody>
                 {(mfgQueueData || []).slice(0, 15).map((item: any) => {
                   let notes: any = {};
-                  try { notes = JSON.parse(item.notes || '{}'); } catch {}
+                  let rawNotes = item.notes || '';
+                  try { notes = JSON.parse(item.notes || '{}'); } catch {
+                    // Not JSON - might be plain string notes
+                  }
+                  
+                  // Build display description with multiple fallbacks
+                  const getDescription = () => {
+                    // 1. Try JSON userNotes first
+                    if (notes.userNotes) return notes.userNotes;
+                    // 2. Try JSON orderId
+                    if (notes.orderId) return notes.orderId;
+                    // 3. Try part name from the item
+                    if (item.partName) return item.partName;
+                    // 4. Try material type from parsed notes
+                    if (notes.materialType) {
+                      const typeMap: Record<string, string> = {
+                        'carbon_fiber': 'Carbon Fiber Packets',
+                        'fiberglass': 'Fiberglass Packets',
+                        'mesa': 'Mesa Packets'
+                      };
+                      return typeMap[notes.materialType] || notes.materialType;
+                    }
+                    // 5. Try materialType from item (parsed in backend)
+                    if (item.materialType) {
+                      const typeMap: Record<string, string> = {
+                        'carbon_fiber': 'Carbon Fiber Packets',
+                        'fiberglass': 'Fiberglass Packets',
+                        'mesa': 'Mesa Packets'
+                      };
+                      return typeMap[item.materialType] || item.materialType;
+                    }
+                    // 6. If raw notes is a plain string (not empty object), use it
+                    if (rawNotes && rawNotes !== '{}' && !rawNotes.startsWith('{')) {
+                      return rawNotes;
+                    }
+                    // 7. Final fallback
+                    return `Queue #${item.id}`;
+                  };
+                  
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">
-                        {notes.userNotes || notes.orderId || `Queue #${item.id}`}
+                        {getDescription()}
                       </TableCell>
                       <TableCell className="text-center">{item.quantityRequested}</TableCell>
                       <TableCell className="text-center">{item.quantityCompleted || 0}</TableCell>

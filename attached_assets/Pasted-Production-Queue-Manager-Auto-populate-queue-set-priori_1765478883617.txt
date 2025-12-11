@@ -1,0 +1,840 @@
+Production Queue Manager
+Auto-populate queue, set priorities, and manage production flow
+
+Refresh
+View Schedule History
+Auto-Populate Queue
+Total Orders
+
+92
+
+Urgent Orders
+
+0
+
+Critical
+
+0
+
+High Priority
+
+0
+
+Normal
+
+92
+
+
+Orders That Need Attention
+11
+Orders missing critical information required for layup scheduling
+
+
+P1 Purchase Orders (162 items need layup)
+Open purchase orders with stock items that need to be laid up
+
+Filter by PO Number:
+
+All Purchase Orders
+Pure Precision
+154
+
+PO: 0046
+Due: 12/22/2025
+100 items
+Red Hawk Rifles LLC
+544
+
+PO: P18526
+Due: 11/28/2025
+18 items
+
+PO: P18664
+Due: 12/26/2025
+2 items
+
+PO: P18666
+Due: 1/28/2026
+4 items
+
+PO: P18683
+Due: 1/28/2026
+4 items
+
+PO: P18753
+Due: 2/24/2026
+9 items
+
+PO: P19206
+Due: 2/24/2026
+10 items
+
+PO: P18835
+Due: 2/25/2026
+12 items
+
+PO: P19035
+Due: 2/25/2026
+3 items
+
+Regular Production Queue (92)
+Inventory items ready to progress to Barcode
+
+Search by Order ID or Customer Name...
+Select All
+Select Next N Orders:
+Enter quantity (e.g., 30)
+Select Next N
+Automatically selects the next orders from the queue in order
+
+	Priority	Order ID	Customer	Model	Stock Model	Action Length	Bottom Metal	LOP / Fill	Due Date	Days to Due	Urgency	Score	Actions
+	#1	
+EI240
+RW Hart & Sons Inc
+cf_adj_armor	cf_adj_armor	long		
+LOP 14.5
+1/21/2026
+days	NORMAL	50	
+
+
+	#2	
+AO039
+EJ031
+Dury's Gun Shop
+cf_privateer	cf_privateer	long		
+1/21/2026
+days	NORMAL	50	
+
+
+	#3	
+EI250
+649
+cf_adj_chalk_branch	cf_adj_chalk_branch	short		
+1/21/2026
+days	NORMAL	50	
+
+
+	#4	
+AO185
+EJ075
+307 Accuracy, LLC
+cf_cat_rh	cf_cat_rh	short		
+1/22/2026
+days	NORMAL	50	
+
+
+	#5	
+EI253
+652
+cf_adj_armor	cf_adj_armor	long		
+1/22/2026
+days	NORMAL	50	
+
+
+	#6	
+EJ088
+752
+cf_alpine_hunter	cf_alpine_hunter	short		
+1/22/2026
+days	NORMAL	50	
+
+
+	#7	
+EI259
+655
+fg_adj_armor	fg_adj_armor	short		
+1/22/2026
+days	NORMAL	50	
+
+
+	#8	
+EI261
+656
+fg_adj_chalk_branch	fg_adj_chalk_branch	long		
+1/22/2026
+days	NORMAL	50	
+
+
+	#9	
+EJ089
+753
+cf_chalk_branch	cf_chalk_branch	long		
+1/23/2026
+days	NORMAL	50	
+
+
+	#10	
+EJ091
+753
+cf_chalk_branch	cf_chalk_branch	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#11	
+EJ094
+615
+fg_visigoth	fg_visigoth	long		
+1/23/2026
+days	NORMAL	50	
+
+
+	#12	
+EJ096
+615
+fg_visigoth	fg_visigoth	long		
+1/23/2026
+days	NORMAL	50	
+
+
+	#13	
+EJ098
+615
+fg_visigoth	fg_visigoth	long		
+1/23/2026
+days	NORMAL	50	
+
+
+	#14	
+EJ100
+615
+fg_visigoth	fg_visigoth	long		
+1/23/2026
+days	NORMAL	50	
+
+
+	#15	
+EJ104
+756
+m1a_fiberglass	m1a_fiberglass	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#16	
+AO181.002
+EJ114
+Collier Rifles
+cf_alpine_hunter	cf_alpine_hunter	long		
+1/23/2026
+days	NORMAL	50	
+
+
+	#17	
+EJ115
+Collier Rifles
+cf_sportsman	cf_sportsman	long		
+1/23/2026
+days	NORMAL	50	
+
+
+	#18	
+EJ118
+Collier Rifles
+cf_sportsman	cf_sportsman	long		
+1/23/2026
+days	NORMAL	50	
+
+
+	#19	
+EJ121
+Collier Rifles
+cf_sportsman	cf_sportsman	long		
+1/23/2026
+days	NORMAL	50	
+
+
+	#20	
+EJ123
+Collier Rifles
+cf_sportsman	cf_sportsman	long		
+1/23/2026
+days	NORMAL	50	
+
+
+	#21	
+EJ124
+Collier Rifles
+cf_sportsman	cf_sportsman	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#22	
+EJ126
+Collier Rifles
+cf_sportsman	cf_sportsman	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#23	
+EJ128
+Collier Rifles
+cf_sportsman	cf_sportsman	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#24	
+EJ130
+Collier Rifles
+cf_sportsman	cf_sportsman	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#25	
+EJ132
+758
+alpine_hunter_tikka	alpine_hunter_tikka	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#26	
+EJ134
+759
+privateer-tikka	privateer-tikka	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#27	
+EJ136
+760
+fg_chalk_branch	fg_chalk_branch	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#28	
+EJ138
+761
+m1a_carbon	m1a_carbon	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#29	
+EJ140
+762
+cf_privateer	cf_privateer	short	REM ADL	
+1/23/2026
+days	NORMAL	50	
+
+
+	#30	
+EJ142
+763
+cf_privateer	cf_privateer	long		
+1/23/2026
+days	NORMAL	50	
+
+
+	#31	
+EJ144
+764
+fg_privateer	fg_privateer	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#32	
+EJ147
+766
+cf_chalk_branch	cf_chalk_branch	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#33	
+EJ149
+767
+cf_k2	cf_k2	long		
+1/23/2026
+days	NORMAL	50	
+
+
+	#34	
+EJ151
+Smokey Mountain Guns
+cf_ferrata	cf_ferrata	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#35	
+EJ153
+Smokey Mountain Guns
+cf_privateer	cf_privateer	short		
+LOP 12.5
+1/23/2026
+days	NORMAL	50	
+
+
+	#36	
+EJ155
+768
+m1a_carbon	m1a_carbon	long		
+1/23/2026
+days	NORMAL	50	
+
+
+	#37	
+EJ157
+769
+cf_privateer	cf_privateer	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#38	
+EJ159
+770
+m1a_fiberglass	m1a_fiberglass	long		
+1/23/2026
+days	NORMAL	50	
+
+
+	#39	
+EJ162
+772
+alpine_hunter_tikka	alpine_hunter_tikka	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#40	
+EJ165
+773
+cf_k2	cf_k2	short		
+1/23/2026
+days	NORMAL	50	
+
+
+	#41	
+EI314
+673
+cf_adj_chalk_branch	cf_adj_chalk_branch	short		
+1/27/2026
+days	NORMAL	50	
+
+
+	#42	
+EJ182
+RW Hart & Sons Inc
+cf_privateer	cf_privateer	short		
+1/29/2026
+days	NORMAL	50	
+
+
+	#43	
+EJ183
+782
+fg_alpine_hunter	fg_alpine_hunter	short		
+1/29/2026
+days	NORMAL	50	
+
+
+	#44	
+EJ184
+783
+cf_sportsman	cf_sportsman	short		
+1/29/2026
+days	NORMAL	50	
+
+
+	#45	
+EI344
+690
+cf_adj_k2	cf_adj_k2	medium		
+1/29/2026
+days	NORMAL	50	
+
+
+	#46	
+EI353
+695
+cf_adj_alp_hunter_tikka	cf_adj_alp_hunter_tikka	short		
+1/29/2026
+days	NORMAL	50	
+
+
+	#47	
+EI357
+697
+cf_adj_alp_hunter_tikka	cf_adj_alp_hunter_tikka	short		
+1/29/2026
+days	NORMAL	50	
+
+
+	#48	
+EI360
+700
+cf_adj_armor	cf_adj_armor	short		
+1/30/2026
+days	NORMAL	50	
+
+
+	#49	
+EI364
+Little Crow Gunworks,LLC
+fg_adj_armor	fg_adj_armor	short		
+HEAVY FILL
+1/30/2026
+days	NORMAL	50	
+
+
+	#50	
+AP046
+EI374
+RW Hart & Sons Inc
+cf_adj_alp_hunter_tikka	cf_adj_alp_hunter_tikka	long		
+2/2/2026
+days	NORMAL	50	
+
+
+	#51	
+AP022
+EI406
+One Shot Rifle Systems
+cf_adj_alp_hunter	cf_adj_alp_hunter	long		
+2/2/2026
+days	NORMAL	50	
+
+
+	#52	
+AP016
+EI417
+Country Time Arms & Accessories LLC
+cf_adj_alp_hunter	cf_adj_alp_hunter	short		
+2/2/2026
+days	NORMAL	50	
+
+
+	#53	
+AP014
+EI421
+717
+fg_adj_alp_hunter_tikka	fg_adj_alp_hunter_tikka	long		
+2/2/2026
+days	NORMAL	50	
+
+
+	#54	
+AO135
+EI440
+720
+cf_adj_k2	cf_adj_k2	short		
+2/2/2026
+days	NORMAL	50	
+
+
+	#55	
+AO136
+EI441
+JUSTIN LANDIS
+cf_adj_alp_hunter	cf_adj_alp_hunter	short		
+2/2/2026
+days	NORMAL	50	
+
+
+	#56	
+AO133
+EI447
+Butch's Guns
+cf_adj_alp_hunter	cf_adj_alp_hunter	medium		
+2/2/2026
+days	NORMAL	50	
+
+
+	#57	
+EJ192
+789
+fg_alpine_hunter	fg_alpine_hunter	short		
+2/2/2026
+days	NORMAL	50	
+
+
+	#58	
+EJ194
+784
+alpine_hunter_tikka	alpine_hunter_tikka	short		
+2/2/2026
+days	NORMAL	50	
+
+
+	#59	
+EJ196
+Smith's Custom Guns
+cf_visigoth_tikka	cf_visigoth_tikka	short		
+2/2/2026
+days	NORMAL	50	
+
+
+	#60	
+EJ199
+790
+cf_privateer	cf_privateer	long		
+2/2/2026
+days	NORMAL	50	
+
+
+	#61	
+EJ161
+771
+cf_adj_alp_hunter	cf_adj_alp_hunter	short		
+2/3/2026
+days	NORMAL	50	
+
+
+	#62	
+EJ007
+734
+cf_adj_alp_hunter	cf_adj_alp_hunter	long		
+2/4/2026
+days	NORMAL	50	
+
+
+	#63	
+EJ205
+934
+cf_cat_rh	cf_cat_rh	short	REM ADL	
+2/5/2026
+days	NORMAL	50	
+
+
+	#64	
+EJ209
+Blackline Precision
+cf_alpine_hunter	cf_alpine_hunter	short		
+2/5/2026
+days	NORMAL	50	
+
+
+	#65	
+EJ211
+Blackline Precision
+cf_alpine_hunter	cf_alpine_hunter	short		
+2/5/2026
+days	NORMAL	50	
+
+
+	#66	
+EJ212
+937
+fg_sportsman	fg_sportsman	short		
+2/5/2026
+days	NORMAL	50	
+
+
+	#67	
+EJ084
+750
+cf_adj_chalk_branch	cf_adj_chalk_branch	short		
+2/5/2026
+days	NORMAL	50	
+
+
+	#68	
+EJ227
+Jim's Custom Rifles
+cf_alpine_hunter	cf_alpine_hunter	medium		
+2/6/2026
+days	NORMAL	50	
+
+
+	#69	
+EJ230
+Teton River Traders Gun Shop LLC
+cf_visigoth	cf_visigoth	long		
+2/6/2026
+days	NORMAL	50	
+
+
+	#70	
+EJ101
+755
+cf_adj_alp_hunter	cf_adj_alp_hunter	long		
+2/6/2026
+days	NORMAL	50	
+
+
+	#71	
+EJ106
+757
+cf_adj_alp_hunter_tikka	cf_adj_alp_hunter_tikka	short		
+2/6/2026
+days	NORMAL	50	
+
+
+	#72	
+EJ146
+765
+cf_adj_alp_hunter	cf_adj_alp_hunter	short		
+2/6/2026
+days	NORMAL	50	
+
+
+	#73	
+EJ228
+972
+fg_visigoth_tikka	fg_visigoth_tikka	short		
+2/9/2026
+days	NORMAL	50	
+
+
+	#74	
+EJ232
+Teton River Traders Gun Shop LLC
+cf_alpine_hunter	cf_alpine_hunter	long		
+2/9/2026
+days	NORMAL	50	
+
+
+	#75	
+EJ235
+Big River Outdoors LLC
+cf_visigoth	cf_visigoth	long		
+2/9/2026
+days	NORMAL	50	
+
+
+	#76	
+EJ236
+973
+cf_alpine_hunter	cf_alpine_hunter	long		
+2/9/2026
+days	NORMAL	50	
+
+
+	#77	
+EJ238
+JANE S
+cf_chalk_branch	cf_chalk_branch	medium		
+2/11/2026
+days	NORMAL	50	
+
+
+	#78	
+EJ239
+JANE S
+cf_privateer	cf_privateer	short		
+2/11/2026
+days	NORMAL	50	
+
+
+	#79	
+EJ241
+JANE S
+cf_cat_lh	cf_cat_lh	medium		
+2/11/2026
+days	NORMAL	50	
+
+
+	#80	
+EJ246
+Glenn Jones
+cf_cat_rh	cf_cat_rh	medium		
+2/12/2026
+days	NORMAL	50	
+
+
+	#81	
+EJ248
+JANE S
+cf_visigoth	cf_visigoth	short		
+2/12/2026
+days	NORMAL	50	
+
+
+	#82	
+EJ251
+JANE S
+cf_alpine_hunter	cf_alpine_hunter	short		
+2/12/2026
+days	NORMAL	50	
+
+
+	#83	
+EJ253
+JANE S
+cf_chalk_branch	cf_chalk_branch	short		
+2/12/2026
+days	NORMAL	50	
+
+
+	#84	
+EJ198
+Dominion Outdoors Inc.
+cf_adj_alp_hunter	cf_adj_alp_hunter	long		
+2/16/2026
+days	NORMAL	50	
+
+
+	#85	
+EJ201
+791
+cf_adj_chalk_branch	cf_adj_chalk_branch	long		
+2/16/2026
+days	NORMAL	50	
+
+
+	#86	
+EJ204
+933
+cf_adj_alp_hunter	cf_adj_alp_hunter	short		
+2/19/2026
+days	NORMAL	50	
+
+
+	#87	
+EJ206
+936
+cf_adj_alp_hunter	cf_adj_alp_hunter	long		
+2/19/2026
+days	NORMAL	50	
+
+
+	#88	
+EJ214
+938
+fg_adj_alp_hunter	fg_adj_alp_hunter	long		
+2/19/2026
+days	NORMAL	50	
+
+
+	#89	
+EJ234
+Teton River Traders Gun Shop LLC
+cf_adj_alp_hunter	cf_adj_alp_hunter	long		
+2/23/2026
+days	NORMAL	50	
+
+
+	#90	
+EJ237
+908
+fg_adj_alp_hunter	fg_adj_alp_hunter	short		
+2/24/2026
+days	NORMAL	50	
+
+
+	#91	
+AO110
+EJ070
+743
+cf_adj_chalk_branch	cf_adj_chalk_branch	short		
+11/11/2026
+days	NORMAL	50	
+
+
+	#92	
+EJ258
+JANE S
+cf_chalk_branch	cf_chalk_branch	short		
+2/12/2026
+days	NORMAL	9999	
+
+

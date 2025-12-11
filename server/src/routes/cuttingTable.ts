@@ -1697,8 +1697,8 @@ router.get('/weekly-cutting-queue', async (req, res) => {
             id: `p1po-${item.id}`,
             orderId: item.poNumber,
             stockModel: stockModelName || item.itemName || `PO Item ${item.id}`,
-            source: 'P1',
-            orderType: 'regular',
+            source: 'P1_PO',
+            orderType: 'p1_po',
             materialType,
             scheduledDate: item.dueDate,
             dueDate: item.dueDate,
@@ -1715,7 +1715,75 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       console.log('P1 PO items query skipped:', err);
     }
 
-    // 3. P2 PO Items - Purchase order items with BOMs requiring cutting
+    // 3. Regular Production Queue - Orders in production_orders that need packets
+    try {
+      const regularQueueResult = await pool.query(`
+        SELECT 
+          po.id,
+          po.order_id as "orderId",
+          po.item_id as "stockModel",
+          po.due_date as "dueDate",
+          po.customer_id as "customerId",
+          po.customer_name as "customerName",
+          po.po_number as "poNumber",
+          po.specifications
+        FROM production_orders po
+        WHERE po.current_department IN ('P1 Production Queue', 'Layup/Plugging')
+          AND po.production_status IN ('PENDING', 'ACTIVE')
+        ORDER BY po.due_date ASC
+        LIMIT 500
+      `);
+
+      const regularRows = Array.isArray(regularQueueResult) ? regularQueueResult : (regularQueueResult as any).rows || [];
+      for (const item of regularRows) {
+        // Parse specifications JSON to get material type
+        let specs: any = {};
+        try {
+          specs = typeof item.specifications === 'string' 
+            ? JSON.parse(item.specifications) 
+            : (item.specifications || {});
+        } catch (e) {
+          specs = {};
+        }
+        
+        const specMaterial = (specs.material || '').toLowerCase();
+        const stockModelName = specs.stockModel || item.stockModel || '';
+        
+        let materialType = 'unknown';
+        if (specMaterial === 'carbon_fiber' || specMaterial === 'carbon' || specMaterial === 'cf') {
+          materialType = 'carbon_fiber';
+        } else if (specMaterial === 'fiberglass' || specMaterial === 'fg') {
+          materialType = 'fiberglass';
+        } else if (specMaterial === 'mesa' || stockModelName.toLowerCase().includes('mesa')) {
+          materialType = 'mesa';
+        } else if (stockModelName.toLowerCase().includes('cf_') || stockModelName.toLowerCase().includes('cf ')) {
+          materialType = 'carbon_fiber';
+        } else if (stockModelName.toLowerCase().includes('fg_') || stockModelName.toLowerCase().includes('fg ')) {
+          materialType = 'fiberglass';
+        }
+        
+        queueItems.push({
+          id: `p1reg-${item.id}`,
+          orderId: item.orderId,
+          stockModel: stockModelName || `Item ${item.stockModel}`,
+          source: 'P1',
+          orderType: 'regular',
+          materialType,
+          scheduledDate: item.dueDate,
+          dueDate: item.dueDate,
+          customer: item.customerName || specs.customerName || item.customerId,
+          priority: 50,
+          packetsNeeded: 1,
+          usesInventory: false,
+          requiresNewCut: true,
+          specifications: specs,
+        });
+      }
+    } catch (err) {
+      console.log('Regular production queue query skipped:', err);
+    }
+
+    // 4. P2 PO Items - Purchase order items with BOMs requiring cutting
     try {
       // Query P2 production orders table - all pending items need cutting
       const p2Result = showAll === 'true'

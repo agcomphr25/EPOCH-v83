@@ -133,12 +133,12 @@ export default function CuttingWeeklySchedule() {
       if (!customerMap[customer]) customerMap[customer] = { cf: 0, fg: 0, mesa: 0 };
       
       const stockModel = (item.stockModel || '').toLowerCase();
-      const isOEM = item.orderType === 'oem' || item.source === 'P1_PO';
+      const isP1PO = item.orderType === 'p1_po' || item.source === 'P1_PO';
       
       if (stockModel.includes('mesa') || item.materialType === 'mesa') {
         mesa += item.packetsNeeded;
         customerMap[customer].mesa += item.packetsNeeded;
-        if (isOEM) {
+        if (isP1PO) {
           oemOrders.mesa += item.packetsNeeded;
         } else {
           regularOrders.mesa += item.packetsNeeded;
@@ -146,7 +146,7 @@ export default function CuttingWeeklySchedule() {
       } else if (item.materialType === 'carbon_fiber' || stockModel.includes('cf')) {
         cf += item.packetsNeeded;
         customerMap[customer].cf += item.packetsNeeded;
-        if (isOEM) {
+        if (isP1PO) {
           oemOrders.cf += item.packetsNeeded;
         } else {
           regularOrders.cf += item.packetsNeeded;
@@ -154,7 +154,7 @@ export default function CuttingWeeklySchedule() {
       } else if (item.materialType === 'fiberglass' || stockModel.includes('fg')) {
         fg += item.packetsNeeded;
         customerMap[customer].fg += item.packetsNeeded;
-        if (isOEM) {
+        if (isP1PO) {
           oemOrders.fg += item.packetsNeeded;
         } else {
           regularOrders.fg += item.packetsNeeded;

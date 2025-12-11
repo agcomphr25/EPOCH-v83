@@ -42,7 +42,8 @@ The application is built as a monorepo using a full-stack TypeScript approach, e
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.
 - **Backend**: Express.js, TypeScript, TanStack Query, Zod, Axios.
 - **Database**: PostgreSQL (Neon serverless), Drizzle ORM, Drizzle-kit.
-- **Key Features**: Order Management, Layup Scheduler, Production Queue Manager, Department Manager, Customer Management, Inventory Management, Barcode System, Employee Management, Quality Control, Reporting, Payment Tracking, Shipping Integration, Communications System, Personalized Dashboards, Training Management System, AI-Powered Smart Sorting, Calendar Integration, Magic Link Authentication, and Global Search.
+- **Key Features**: Order Management, Layup Scheduler, Production Queue Manager, Department Manager, Customer Management, Inventory Management, Barcode System, Employee Management, Quality Control, Reporting, Payment Tracking, Shipping Integration, Communications System, Personalized Dashboards, Training Management System, AI-Powered Smart Sorting, Calendar Integration, Magic Link Authentication, Global Search, and P2 Projects Module.
+- **P2 Projects Module**: Multi-step workflow tracking for P2 purchase orders with sequential step enforcement (RFQ Risk Assessment → Quote → Purchase Review → Pre-production Checklist → P2 Order). Features project manager assignments, customizable reminder days per project, activity logging, and automatic notifications to project managers when steps are completed. Steps can only be completed in order - all previous steps must be completed before advancing. Routes at `/projects` and `/projects/:id`.
 
 ### Database Schema Standards
 - **Primary Key Pattern**: All new tables must use UUID for primary keys; `serial` is forbidden for new tables.

@@ -764,16 +764,16 @@ export default function CuttingOperatorDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
-              Fabric Inventory - Freezer Assignments
+              Fabric Receiving - Assign Freezers
             </CardTitle>
-            <CardDescription>Assign or update freezer locations for fabric rolls</CardDescription>
+            <CardDescription>Fabric rolls needing freezer assignment</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="max-h-[400px] overflow-y-auto">
               {loadingFabric ? (
                 <p className="text-muted-foreground text-center py-4">Loading fabric...</p>
-              ) : fabricInventory.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">No fabric in inventory</p>
+              ) : fabricInventory.filter(f => f.squareMeters > 0 && !f.freezerLocation).length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">All fabric rolls have freezer assignments</p>
               ) : (
                 <Table>
                   <TableHeader>
@@ -788,7 +788,7 @@ export default function CuttingOperatorDashboard() {
                   </TableHeader>
                   <TableBody>
                     {fabricInventory
-                      .filter(f => f.squareMeters > 0)
+                      .filter(f => f.squareMeters > 0 && !f.freezerLocation)
                       .slice(0, 20)
                       .map((fabric) => (
                       <TableRow key={fabric.id} data-testid={`row-fabric-${fabric.id}`}>

@@ -4157,10 +4157,11 @@ export class DatabaseStorage implements IStorage {
 
   // Inventory Items CRUD
   async getAllInventoryItems(): Promise<InventoryItem[]> {
+    // Include items where isActive is true OR isActive is null (treat null as active)
     return await db
       .select()
       .from(inventoryItems)
-      .where(eq(inventoryItems.isActive, true))
+      .where(or(eq(inventoryItems.isActive, true), isNull(inventoryItems.isActive)))
       .orderBy(inventoryItems.name);
   }
 
@@ -4803,10 +4804,11 @@ export class DatabaseStorage implements IStorage {
 
   // Department-filtered Inventory
   async getInventoryItemsByDepartment(departmentName: string, isAdmin: boolean = false): Promise<InventoryItem[]> {
+    // Include items where isActive is true OR isActive is null (treat null as active)
     const items = await db
       .select()
       .from(inventoryItems)
-      .where(eq(inventoryItems.isActive, true));
+      .where(or(eq(inventoryItems.isActive, true), isNull(inventoryItems.isActive)));
     
     // Admin users can see all items when "all" is selected
     if (departmentName === 'all' && isAdmin) {

@@ -524,7 +524,8 @@ export const inventoryItems = pgTable('inventory_items', {
   utilizedInFacilities: boolean('utilized_in_facilities').default(false), // Used in Facilities
   utilizedInAdmin: boolean('utilized_in_admin').default(false), // Used in Admin
   utilizedInServices: boolean('utilized_in_services').default(false), // Used in Services
-  isPacketPart: boolean('is_packet_part').default(false), // Part of cutting table packet
+  isPacket: boolean('is_packet').default(false), // Is a packet (bundle for cutting table)
+  isPacketPart: boolean('is_packet_part').default(false), // Part that goes into cutting table packets
   isFabric: boolean('is_fabric').default(false), // Fabric for cutting table
   type: text('type'), // Type: Purchased or Manufactured
   manufacturingDepartment: text('manufacturing_department'), // Manufacturing department: CNC, Cutting Table, or Cores (required when type is Manufactured)

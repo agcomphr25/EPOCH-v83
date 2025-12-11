@@ -5,6 +5,12 @@ import { Link } from 'wouter';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+
+interface ProjectStep {
+  id: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'blocked';
+}
 
 interface Project {
   id: string;
@@ -12,6 +18,7 @@ interface Project {
   projectName: string;
   status: string;
   currentStepType: string;
+  steps?: ProjectStep[];
   customer?: {
     customerName: string;
   };
@@ -62,6 +69,12 @@ export default function TANDYMTestDashboard() {
       p2_order: 'P2 Order',
     };
     return stepLabels[stepType] || stepType;
+  };
+
+  const getProgress = (steps?: ProjectStep[]) => {
+    if (!steps?.length) return 0;
+    const completed = steps.filter(s => s.status === 'completed').length;
+    return Math.round((completed / steps.length) * 100);
   };
 
   const formatCurrency = (amount: number) => {
@@ -150,7 +163,14 @@ export default function TANDYMTestDashboard() {
                           </div>
                         </AccordionTrigger>
                         <AccordionContent>
-                          <div className="space-y-2 pl-2 text-sm">
+                          <div className="space-y-3 pl-2 text-sm">
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-xs">
+                                <span className="text-muted-foreground">Progress</span>
+                                <span className="font-medium">{getProgress(project.steps)}%</span>
+                              </div>
+                              <Progress value={getProgress(project.steps)} className="h-2" />
+                            </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Customer:</span>
                               <span>{project.customer?.customerName || 'N/A'}</span>

@@ -11,7 +11,7 @@ import {
   cuttingPacketBOMCuts,
   cuttingFabricInventory,
 } from '../../schema';
-import { and, gte, lte, eq, desc } from 'drizzle-orm';
+import { and, gte, lte, eq, desc, ilike } from 'drizzle-orm';
 import {
   insertCuttingMaterialSchema,
   insertCuttingProductionLineSchema,
@@ -2008,13 +2008,16 @@ router.post('/schedule-to-cutting', async (req, res) => {
     if (!validBomId && materialType) {
       const packetTypeName = materialType === 'carbon_fiber' ? 'Carbon Fiber Packet' :
                              materialType === 'fiberglass' ? 'Fiberglass Packet' :
-                             materialType === 'mesa' ? 'Mesa Packet' : null;
+                             materialType === 'mesa' ? 'Mesa Packet' :
+                             materialType === 'p2_disruptor' ? 'Disruptor' :
+                             materialType === 'p2_disruptor_packet' ? 'Disruptor' :
+                             materialType === 'p2_antenna' ? 'Antenna Cover' : null;
       
       if (packetTypeName) {
         const [matchingBom] = await db.select()
           .from(cuttingPacketBOMs)
           .where(and(
-            eq(cuttingPacketBOMs.packetType, packetTypeName),
+            ilike(cuttingPacketBOMs.packetType, `%${packetTypeName}%`),
             eq(cuttingPacketBOMs.isActive, true)
           ))
           .limit(1);

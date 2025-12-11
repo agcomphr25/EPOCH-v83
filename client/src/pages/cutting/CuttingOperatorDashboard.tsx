@@ -247,9 +247,22 @@ export default function CuttingOperatorDashboard() {
       const quantityOrdered = item.quantityOrdered || item.quantityRequested || 0;
       const quantityCompleted = item.quantityCompleted || 0;
       const remaining = Math.max(0, quantityOrdered - quantityCompleted);
+      
+      // Parse bomId from notes if not at top level
+      let bomId = item.packetBomId;
+      if (!bomId && item.notes) {
+        try {
+          const parsedNotes = JSON.parse(item.notes);
+          bomId = parsedNotes.bomId;
+        } catch {}
+      }
+      
+      // Find matching BOM - use string comparison for ID matching
       const matchingBOM = (packetBOMs || []).find((bom: PacketBOM) => 
-        bom.partNumber === item.partNumber || bom.id === item.packetBomId
+        bom.partNumber === item.partNumber || 
+        (bomId && String(bom.id) === String(bomId))
       );
+      
       const yieldPerCut = matchingBOM?.yieldPerCut || 4;
       const estimatedCuts = remaining > 0 ? Math.ceil(remaining / yieldPerCut) : 0;
       return {
@@ -257,7 +270,7 @@ export default function CuttingOperatorDashboard() {
         quantityOrdered,
         quantityCompleted,
         estimatedCuts,
-        packetBomId: item.packetBomId || matchingBOM?.id,
+        packetBomId: bomId || matchingBOM?.id,
       };
     });
   }, [mfgQueueItemsRaw, packetBOMs]);
@@ -699,9 +712,25 @@ export default function CuttingOperatorDashboard() {
     }
   };
 
-  const matchingBOM = selectedMfgItem?.packetBomId 
-    ? packetBOMs.find(b => b.id === selectedMfgItem.packetBomId) 
-    : null;
+  // Find matching BOM with string comparison and notes parsing
+  const matchingBOM = useMemo(() => {
+    if (!selectedMfgItem) return null;
+    
+    // Get bomId from packetBomId or from notes
+    let bomId = selectedMfgItem.packetBomId;
+    if (!bomId && selectedMfgItem.notes) {
+      try {
+        const parsedNotes = JSON.parse(selectedMfgItem.notes);
+        bomId = parsedNotes.bomId;
+      } catch {}
+    }
+    
+    // Find BOM by part number or ID (using string comparison)
+    return packetBOMs.find(b => 
+      b.partNumber === selectedMfgItem.partNumber ||
+      (bomId && String(b.id) === String(bomId))
+    ) || null;
+  }, [selectedMfgItem, packetBOMs]);
 
   return (
     <div className="space-y-6">

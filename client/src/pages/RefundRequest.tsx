@@ -388,11 +388,20 @@ export default function RefundRequest() {
                     type="number"
                     step="0.01"
                     min="0.01"
-                    max={selectedOrder.paymentTotal || 0}
+                    max={Number(selectedOrder.paymentTotal) || 0}
                     value={refundAmount}
-                    onChange={(e) => setRefundAmount(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const maxAllowed = Number(selectedOrder.paymentTotal) || 0;
+                      // Cap the value at the maximum allowed (total paid)
+                      if (parseFloat(value) > maxAllowed) {
+                        setRefundAmount(maxAllowed.toFixed(2));
+                      } else {
+                        setRefundAmount(value);
+                      }
+                    }}
                     placeholder="0.00"
-                    disabled={!selectedOrder.paymentTotal || selectedOrder.paymentTotal <= 0}
+                    disabled={!selectedOrder.paymentTotal || Number(selectedOrder.paymentTotal) <= 0}
                     data-testid="refund-amount-input"
                   />
                   {selectedOrder.paymentTotal && selectedOrder.paymentTotal > 0 ? (

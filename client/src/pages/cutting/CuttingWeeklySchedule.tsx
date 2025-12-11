@@ -123,14 +123,21 @@ export default function CuttingWeeklySchedule() {
     const p1Items = weeklyQueueData.items.filter(i => i.source === 'P1' || i.source === 'P1_PO');
     
     let cf = 0, fg = 0, mesa = 0;
-    // Separate tracking for regular vs OEM orders
     const regularOrders = { cf: 0, fg: 0, mesa: 0, total: 0 };
     const oemOrders = { cf: 0, fg: 0, mesa: 0, total: 0 };
-    const customerMap: Record<string, { cf: number; fg: number; mesa: number }> = {};
+    const customerMap: Record<string, { 
+      cf: number; fg: number; mesa: number;
+      poCf: number; poFg: number; poMesa: number;
+      regCf: number; regFg: number; regMesa: number;
+    }> = {};
     
     p1Items.forEach(item => {
       const customer = item.customer || 'Unknown';
-      if (!customerMap[customer]) customerMap[customer] = { cf: 0, fg: 0, mesa: 0 };
+      if (!customerMap[customer]) customerMap[customer] = { 
+        cf: 0, fg: 0, mesa: 0,
+        poCf: 0, poFg: 0, poMesa: 0,
+        regCf: 0, regFg: 0, regMesa: 0
+      };
       
       const stockModel = (item.stockModel || '').toLowerCase();
       const isP1PO = item.orderType === 'p1_po' || item.source === 'P1_PO';
@@ -140,24 +147,30 @@ export default function CuttingWeeklySchedule() {
         customerMap[customer].mesa += item.packetsNeeded;
         if (isP1PO) {
           oemOrders.mesa += item.packetsNeeded;
+          customerMap[customer].poMesa += item.packetsNeeded;
         } else {
           regularOrders.mesa += item.packetsNeeded;
+          customerMap[customer].regMesa += item.packetsNeeded;
         }
       } else if (item.materialType === 'carbon_fiber' || stockModel.includes('cf')) {
         cf += item.packetsNeeded;
         customerMap[customer].cf += item.packetsNeeded;
         if (isP1PO) {
           oemOrders.cf += item.packetsNeeded;
+          customerMap[customer].poCf += item.packetsNeeded;
         } else {
           regularOrders.cf += item.packetsNeeded;
+          customerMap[customer].regCf += item.packetsNeeded;
         }
       } else if (item.materialType === 'fiberglass' || stockModel.includes('fg')) {
         fg += item.packetsNeeded;
         customerMap[customer].fg += item.packetsNeeded;
         if (isP1PO) {
           oemOrders.fg += item.packetsNeeded;
+          customerMap[customer].poFg += item.packetsNeeded;
         } else {
           regularOrders.fg += item.packetsNeeded;
+          customerMap[customer].regFg += item.packetsNeeded;
         }
       }
     });
@@ -166,7 +179,13 @@ export default function CuttingWeeklySchedule() {
     oemOrders.total = oemOrders.cf + oemOrders.fg + oemOrders.mesa;
     
     const byCustomer = Object.entries(customerMap)
-      .map(([customer, counts]) => ({ customer, ...counts, total: counts.cf + counts.fg + counts.mesa }))
+      .map(([customer, counts]) => ({ 
+        customer, 
+        ...counts, 
+        total: counts.cf + counts.fg + counts.mesa,
+        poTotal: counts.poCf + counts.poFg + counts.poMesa,
+        regTotal: counts.regCf + counts.regFg + counts.regMesa
+      }))
       .sort((a, b) => b.total - a.total);
     
     return { cf, fg, mesa, total: cf + fg + mesa, byCustomer, regularOrders, oemOrders };
@@ -439,6 +458,7 @@ export default function CuttingWeeklySchedule() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Customer</TableHead>
+                      <TableHead className="text-center">Type</TableHead>
                       <TableHead className="text-center">CF</TableHead>
                       <TableHead className="text-center">FG</TableHead>
                       <TableHead className="text-center">Mesa</TableHead>
@@ -447,19 +467,44 @@ export default function CuttingWeeklySchedule() {
                   </TableHeader>
                   <TableBody>
                     {p1Demand.byCustomer.map(row => (
-                      <TableRow key={row.customer}>
-                        <TableCell className="font-medium">{row.customer}</TableCell>
-                        <TableCell className="text-center">
-                          {row.cf > 0 && <Badge variant="outline" className="bg-gray-900 text-white">{row.cf}</Badge>}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {row.fg > 0 && <Badge variant="outline" className="bg-amber-100 text-amber-800">{row.fg}</Badge>}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {row.mesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{row.mesa}</Badge>}
-                        </TableCell>
-                        <TableCell className="text-center font-bold">{row.total}</TableCell>
-                      </TableRow>
+                      <>
+                        {row.poTotal > 0 && (
+                          <TableRow key={`${row.customer}-po`} className="bg-red-50">
+                            <TableCell className="font-medium">{row.customer}</TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className="bg-red-100 text-red-700 text-xs">PO</Badge>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {row.poCf > 0 && <Badge variant="outline" className="bg-gray-900 text-white">{row.poCf}</Badge>}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {row.poFg > 0 && <Badge variant="outline" className="bg-amber-100 text-amber-800">{row.poFg}</Badge>}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {row.poMesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{row.poMesa}</Badge>}
+                            </TableCell>
+                            <TableCell className="text-center font-bold text-red-700">{row.poTotal}</TableCell>
+                          </TableRow>
+                        )}
+                        {row.regTotal > 0 && (
+                          <TableRow key={`${row.customer}-reg`} className="bg-blue-50">
+                            <TableCell className="font-medium">{row.poTotal > 0 ? '' : row.customer}</TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className="bg-blue-100 text-blue-700 text-xs">Reg</Badge>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {row.regCf > 0 && <Badge variant="outline" className="bg-gray-900 text-white">{row.regCf}</Badge>}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {row.regFg > 0 && <Badge variant="outline" className="bg-amber-100 text-amber-800">{row.regFg}</Badge>}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {row.regMesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{row.regMesa}</Badge>}
+                            </TableCell>
+                            <TableCell className="text-center font-bold text-blue-700">{row.regTotal}</TableCell>
+                          </TableRow>
+                        )}
+                      </>
                     ))}
                   </TableBody>
                 </Table>

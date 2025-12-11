@@ -445,71 +445,56 @@ export default function CuttingWeeklySchedule() {
             </div>
           </div>
 
-          {p1Demand.byCustomer.length > 0 && (
-            <Collapsible open={expandedSections.p1} onOpenChange={(open) => setExpandedSections(prev => ({ ...prev, p1: open }))}>
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="w-full justify-start gap-2 text-sm text-muted-foreground">
-                  {expandedSections.p1 ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  P1 Demand by Customer ({p1Demand.byCustomer.length})
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Customer</TableHead>
-                      <TableHead className="text-center">Type</TableHead>
-                      <TableHead className="text-center">CF</TableHead>
-                      <TableHead className="text-center">FG</TableHead>
-                      <TableHead className="text-center">Mesa</TableHead>
-                      <TableHead className="text-center">Total</TableHead>
+          {(p1Demand.oemOrders.total > 0 || p1Demand.regularOrders.total > 0) && (
+            <div className="mt-4 border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead>Source</TableHead>
+                    <TableHead className="text-center">CF</TableHead>
+                    <TableHead className="text-center">FG</TableHead>
+                    <TableHead className="text-center">Mesa</TableHead>
+                    <TableHead className="text-center">Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {p1Demand.oemOrders.total > 0 && (
+                    <TableRow className="bg-red-50">
+                      <TableCell className="font-medium">
+                        <Badge variant="outline" className="bg-red-100 text-red-700">PO Orders</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p1Demand.oemOrders.cf > 0 && <Badge variant="outline" className="bg-gray-900 text-white">{p1Demand.oemOrders.cf}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p1Demand.oemOrders.fg > 0 && <Badge variant="outline" className="bg-amber-100 text-amber-800">{p1Demand.oemOrders.fg}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p1Demand.oemOrders.mesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{p1Demand.oemOrders.mesa}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-center font-bold text-red-700">{p1Demand.oemOrders.total}</TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {p1Demand.byCustomer.map(row => (
-                      <>
-                        {row.poTotal > 0 && (
-                          <TableRow key={`${row.customer}-po`} className="bg-red-50">
-                            <TableCell className="font-medium">{row.customer}</TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant="outline" className="bg-red-100 text-red-700 text-xs">PO</Badge>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {row.poCf > 0 && <Badge variant="outline" className="bg-gray-900 text-white">{row.poCf}</Badge>}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {row.poFg > 0 && <Badge variant="outline" className="bg-amber-100 text-amber-800">{row.poFg}</Badge>}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {row.poMesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{row.poMesa}</Badge>}
-                            </TableCell>
-                            <TableCell className="text-center font-bold text-red-700">{row.poTotal}</TableCell>
-                          </TableRow>
-                        )}
-                        {row.regTotal > 0 && (
-                          <TableRow key={`${row.customer}-reg`} className="bg-blue-50">
-                            <TableCell className="font-medium">{row.poTotal > 0 ? '' : row.customer}</TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant="outline" className="bg-blue-100 text-blue-700 text-xs">Reg</Badge>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {row.regCf > 0 && <Badge variant="outline" className="bg-gray-900 text-white">{row.regCf}</Badge>}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {row.regFg > 0 && <Badge variant="outline" className="bg-amber-100 text-amber-800">{row.regFg}</Badge>}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {row.regMesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{row.regMesa}</Badge>}
-                            </TableCell>
-                            <TableCell className="text-center font-bold text-blue-700">{row.regTotal}</TableCell>
-                          </TableRow>
-                        )}
-                      </>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CollapsibleContent>
-            </Collapsible>
+                  )}
+                  {p1Demand.regularOrders.total > 0 && (
+                    <TableRow className="bg-blue-50">
+                      <TableCell className="font-medium">
+                        <Badge variant="outline" className="bg-blue-100 text-blue-700">Reg Orders</Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p1Demand.regularOrders.cf > 0 && <Badge variant="outline" className="bg-gray-900 text-white">{p1Demand.regularOrders.cf}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p1Demand.regularOrders.fg > 0 && <Badge variant="outline" className="bg-amber-100 text-amber-800">{p1Demand.regularOrders.fg}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {p1Demand.regularOrders.mesa > 0 && <Badge variant="outline" className="bg-orange-100 text-orange-800">{p1Demand.regularOrders.mesa}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-center font-bold text-blue-700">{p1Demand.regularOrders.total}</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

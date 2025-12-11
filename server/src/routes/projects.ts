@@ -60,7 +60,7 @@ router.get('/', async (req, res) => {
     const projectsWithSteps = await Promise.all(
       projectsList.map(async (project) => {
         const steps = await storage.getProjectSteps(project.id);
-        const customer = await storage.getCustomerById(project.customerId);
+        const customer = await storage.getP2CustomerByCustomerId(project.customerId);
         const projectManager = project.projectManagerId 
           ? await storage.getEmployee(project.projectManagerId)
           : null;
@@ -105,7 +105,7 @@ router.get('/:id', async (req, res) => {
     }
     
     const steps = await storage.getProjectSteps(project.id);
-    const customer = await storage.getCustomerById(project.customerId);
+    const customer = await storage.getP2CustomerByCustomerId(project.customerId);
     const projectManager = project.projectManagerId 
       ? await storage.getEmployee(project.projectManagerId)
       : null;

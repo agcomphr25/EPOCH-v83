@@ -1,11 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, DollarSign, TrendingUp, CreditCard, Calendar, FolderKanban, ExternalLink } from 'lucide-react';
+import { Loader2, DollarSign, TrendingUp, CreditCard, Calendar, FolderKanban, ExternalLink, FileBarChart, Percent } from 'lucide-react';
 import { Link } from 'wouter';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+
+interface ShippedOrderDiscount {
+  orderId: string;
+  discountType: string;
+  discountAmount: number;
+  orderTotal: number;
+}
 
 interface ProjectStep {
   id: string;
@@ -57,7 +65,12 @@ export default function TANDYMTestDashboard() {
     queryKey: ['/api/projects'],
   });
 
+  const { data: shippedDiscounts } = useQuery<ShippedOrderDiscount[]>({
+    queryKey: ['/api/reports/shipped-orders-discounts'],
+  });
+
   const activeProjects = projects?.filter(p => p.status === 'active') || [];
+  const recentDiscounts = shippedDiscounts?.slice(0, 5) || [];
   const activeProjectsCount = activeProjects.length;
 
   const formatStepType = (stepType: string) => {
@@ -110,15 +123,51 @@ export default function TANDYMTestDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
-          <Card className="h-48" data-testid="widget-placeholder-1">
-            <CardHeader>
-              <CardTitle className="text-lg">Gross Margin</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-gray-400">--</p>
-              <p className="text-sm text-muted-foreground mt-2">Coming soon</p>
-            </CardContent>
-          </Card>
+          <HoverCard>
+            <HoverCardTrigger asChild>
+              <Card className="h-48 cursor-pointer hover:shadow-lg transition-shadow" data-testid="widget-gross-margin">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Percent className="h-5 w-5 text-emerald-600" />
+                    Gross Margin
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-3xl font-bold text-gray-400">--</p>
+                  <p className="text-sm text-muted-foreground mt-2">Hover for discounts</p>
+                </CardContent>
+              </Card>
+            </HoverCardTrigger>
+            <HoverCardContent className="w-80" side="right">
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <Percent className="h-4 w-4" />
+                  Recent Shipped Order Discounts
+                </h4>
+                {recentDiscounts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No recent discounts</p>
+                ) : (
+                  <ScrollArea className="h-32">
+                    <div className="space-y-2">
+                      {recentDiscounts.map((discount, idx) => (
+                        <div key={idx} className="flex justify-between text-sm border-b pb-1">
+                          <span className="font-medium">{discount.orderId}</span>
+                          <span className="text-muted-foreground">
+                            {discount.discountType}: {formatCurrency(discount.discountAmount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+                <Link href="/shipped-orders-discounts">
+                  <span className="text-xs text-indigo-600 hover:underline flex items-center gap-1">
+                    View All Discounts <ExternalLink className="h-3 w-3" />
+                  </span>
+                </Link>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
 
           <Card className="h-48" data-testid="widget-placeholder-2">
             <CardHeader>
@@ -206,15 +255,22 @@ export default function TANDYMTestDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="h-48" data-testid="widget-placeholder-4">
-            <CardHeader>
-              <CardTitle className="text-lg">Working Capital Ratio</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-gray-400">--</p>
-              <p className="text-sm text-muted-foreground mt-2">Coming soon</p>
-            </CardContent>
-          </Card>
+          <Link href="/gateway-reports" data-testid="link-gateway-reports">
+            <Card className="h-48 cursor-pointer hover:shadow-lg transition-shadow" data-testid="widget-gateway-reports">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <FileBarChart className="h-5 w-5 text-blue-600" />
+                  Gateway Reports
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">View payment gateway transaction reports and analytics</p>
+                <span className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-4">
+                  View Reports <ExternalLink className="h-3 w-3" />
+                </span>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
       </div>
 

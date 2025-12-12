@@ -7940,4 +7940,127 @@ export const insertAqlSamplingChartSchema = createInsertSchema(aqlSamplingChart)
 export type AqlSamplingChart = typeof aqlSamplingChart.$inferSelect;
 export type InsertAqlSamplingChart = z.infer<typeof insertAqlSamplingChartSchema>;
 
+// ============================================
+// AUDIT SYSTEM TABLES
+// ============================================
+
+// Audit Settings - Configurable event toggles for what to track
+export const auditSettings = pgTable('audit_settings', {
+  id: serial('id').primaryKey(),
+  category: text('category').notNull(), // 'p1_orders', 'p2_items', 'production', 'finance', 'shipping', 'qc'
+  eventType: text('event_type').notNull().unique(), // e.g., 'ORDER_CREATED', 'DEPARTMENT_CHANGE', etc.
+  displayName: text('display_name').notNull(),
+  description: text('description'),
+  isEnabled: boolean('is_enabled').default(true),
+  isCritical: boolean('is_critical').default(false), // Critical events cannot be disabled
+  appliesTo: text('applies_to').default('both'), // 'p1', 'p2', 'both'
+  sortOrder: integer('sort_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertAuditSettingsSchema = createInsertSchema(auditSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AuditSettings = typeof auditSettings.$inferSelect;
+export type InsertAuditSettings = z.infer<typeof insertAuditSettingsSchema>;
+
+// Audit Events - Main event log for all tracked changes (matches existing table)
+export const auditEvents = pgTable('audit_events', {
+  id: serial('id').primaryKey(),
+  entityType: text('entity_type').notNull(), // 'p1_order', 'p2_order', 'p2_serialized_item', 'p2_project'
+  entityId: text('entity_id').notNull(), // The ID of the order/item being tracked
+  action: text('action').notNull(), // Event type: 'ORDER_CREATED', 'DEPARTMENT_CHANGE', etc.
+  actorId: integer('actor_id').references(() => employees.id), // Who made the change
+  actorName: text('actor_name'), // Denormalized actor name
+  actorRole: text('actor_role'), // Actor's role at time of action
+  reason: text('reason'), // Optional reason/description
+  fieldsChanged: jsonb('fields_changed'), // { fieldName: { before, after } }
+  meta: jsonb('meta'), // Additional context data
+  ipAddress: text('ip_address'), // Optional IP tracking
+  userAgent: text('user_agent'), // Optional browser/client info
+  timestamp: timestamp('timestamp').defaultNow(), // When the action occurred
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  entityTypeIdx: index('audit_events_entity_type_idx').on(table.entityType),
+  entityIdIdx: index('audit_events_entity_id_idx').on(table.entityId),
+  actionIdx: index('audit_events_action_idx').on(table.action),
+  actorIdIdx: index('audit_events_actor_id_idx').on(table.actorId),
+  createdAtIdx: index('audit_events_created_at_idx').on(table.createdAt),
+}));
+
+export const insertAuditEventSchema = createInsertSchema(auditEvents).omit({
+  id: true,
+  timestamp: true,
+  createdAt: true,
+});
+
+export type AuditEvent = typeof auditEvents.$inferSelect;
+export type InsertAuditEvent = z.infer<typeof insertAuditEventSchema>;
+
+// Order Department Transitions - Track time spent in each department
+export const orderDepartmentTransitions = pgTable('order_department_transitions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  entityType: text('entity_type').notNull(), // 'p1_order', 'p2_serialized_item'
+  entityId: text('entity_id').notNull(), // Order ID or serialized item ID
+  cycleNumber: integer('cycle_number').default(1), // Restart cycle (1 = original, 2+ = after scrap/restart)
+  department: text('department').notNull(),
+  enteredAt: timestamp('entered_at').notNull(),
+  exitedAt: timestamp('exited_at'), // Null if still in department
+  durationMinutes: integer('duration_minutes'), // Calculated on exit
+  enteredByUserId: integer('entered_by_user_id').references(() => employees.id),
+  exitedByUserId: integer('exited_by_user_id').references(() => employees.id),
+  exitReason: text('exit_reason'), // 'completed', 'scrap', 'hold', 'skip'
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  entityTypeIdx: index('dept_transitions_entity_type_idx').on(table.entityType),
+  entityIdIdx: index('dept_transitions_entity_id_idx').on(table.entityId),
+  departmentIdx: index('dept_transitions_department_idx').on(table.department),
+  cycleNumberIdx: index('dept_transitions_cycle_number_idx').on(table.cycleNumber),
+  enteredAtIdx: index('dept_transitions_entered_at_idx').on(table.enteredAt),
+}));
+
+export const insertOrderDepartmentTransitionSchema = createInsertSchema(orderDepartmentTransitions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type OrderDepartmentTransition = typeof orderDepartmentTransitions.$inferSelect;
+export type InsertOrderDepartmentTransition = z.infer<typeof insertOrderDepartmentTransitionSchema>;
+
+// Order Scrap Cycles - Track scrap events and link to restart orders
+export const orderScrapCycles = pgTable('order_scrap_cycles', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  entityType: text('entity_type').notNull(), // 'p1_order', 'p2_serialized_item'
+  originalEntityId: text('original_entity_id').notNull(), // Original order/item ID
+  cycleNumber: integer('cycle_number').notNull(), // Which cycle this scrap ended
+  scrapEventId: integer('scrap_event_id').references(() => auditEvents.id), // Link to the scrap audit event
+  scrapReason: text('scrap_reason').notNull(),
+  scrapDepartment: text('scrap_department'), // Department where scrap occurred
+  scrapAuthorizedBy: integer('scrap_authorized_by').references(() => employees.id),
+  restartEntityId: text('restart_entity_id'), // New order/item ID after restart (null if not restarted)
+  restartedAt: timestamp('restarted_at'),
+  restartedByUserId: integer('restarted_by_user_id').references(() => employees.id),
+  scrappedAt: timestamp('scrapped_at').notNull(),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  entityTypeIdx: index('scrap_cycles_entity_type_idx').on(table.entityType),
+  originalEntityIdIdx: index('scrap_cycles_original_entity_id_idx').on(table.originalEntityId),
+  cycleNumberIdx: index('scrap_cycles_cycle_number_idx').on(table.cycleNumber),
+  scrappedAtIdx: index('scrap_cycles_scrapped_at_idx').on(table.scrappedAt),
+}));
+
+export const insertOrderScrapCycleSchema = createInsertSchema(orderScrapCycles).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type OrderScrapCycle = typeof orderScrapCycles.$inferSelect;
+export type InsertOrderScrapCycle = z.infer<typeof insertOrderScrapCycleSchema>;
+
 export * from './calendar.schema';

@@ -91,6 +91,7 @@ import healthChecksRoutes from './healthChecks';
 import projectsRoutes from './projects';
 import modelAnalyticsRoutes from './modelAnalytics';
 import aqlSamplingRoutes from './aqlSampling';
+import auditRoutes from './audit';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -212,6 +213,9 @@ export function registerRoutes(app: Express): Server {
 
   // AQL Sampling Chart routes
   app.use('/api/aql-sampling', aqlSamplingRoutes);
+
+  // Audit System routes
+  app.use('/api/audit', auditRoutes);
 
   // Document management routes
   app.use('/api/documents', documentsRoutes);

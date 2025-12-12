@@ -90,6 +90,7 @@ import preproductionChecklistsRoutes from './preproductionChecklists';
 import healthChecksRoutes from './healthChecks';
 import projectsRoutes from './projects';
 import modelAnalyticsRoutes from './modelAnalytics';
+import aqlSamplingRoutes from './aqlSampling';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -208,6 +209,9 @@ export function registerRoutes(app: Express): Server {
 
   // Quality control and maintenance routes
   app.use('/api/quality', qualityRoutes);
+
+  // AQL Sampling Chart routes
+  app.use('/api/aql-sampling', aqlSamplingRoutes);
 
   // Document management routes
   app.use('/api/documents', documentsRoutes);

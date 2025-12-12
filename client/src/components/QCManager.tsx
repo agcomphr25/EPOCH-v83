@@ -50,6 +50,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { insertQcSubmissionSchema } from '@shared/schema';
 import { z } from 'zod';
 import type { QcDefinition, QcSubmission } from '@shared/schema';
+import AQLSamplingReference from './AQLSamplingReference';
 
 export default function QCManager() {
   const [activeTab, setActiveTab] = useState('submissions');
@@ -394,10 +395,11 @@ export default function QCManager() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="submissions">QC Submissions</TabsTrigger>
           <TabsTrigger value="definitions">QC Definitions</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="sampling">AQL Sampling</TabsTrigger>
         </TabsList>
 
         <TabsContent value="submissions" className="mt-6">
@@ -601,6 +603,10 @@ export default function QCManager() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="sampling" className="mt-6">
+          <AQLSamplingReference />
         </TabsContent>
       </Tabs>
     </div>

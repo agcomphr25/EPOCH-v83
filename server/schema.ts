@@ -7918,4 +7918,26 @@ export const insertProjectNotificationSchema = createInsertSchema(projectNotific
 export type ProjectNotification = typeof projectNotifications.$inferSelect;
 export type InsertProjectNotification = z.infer<typeof insertProjectNotificationSchema>;
 
+// AQL Sampling Chart - Standard quality sampling requirements based on lot size
+export const aqlSamplingChart = pgTable('aql_sampling_chart', {
+  id: serial('id').primaryKey(),
+  lotSizeMin: integer('lot_size_min').notNull(),
+  lotSizeMax: integer('lot_size_max').notNull(),
+  sampleSize: integer('sample_size').notNull(),
+  inspectionLevel: text('inspection_level').default('normal'), // 'normal', 'tightened', 'reduced'
+  description: text('description'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertAqlSamplingChartSchema = createInsertSchema(aqlSamplingChart).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type AqlSamplingChart = typeof aqlSamplingChart.$inferSelect;
+export type InsertAqlSamplingChart = z.infer<typeof insertAqlSamplingChartSchema>;
+
 export * from './calendar.schema';

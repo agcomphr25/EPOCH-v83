@@ -203,6 +203,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/shipping-tracker',
       '/discounts',
       '/marketing-communications',
+      '/finance/bulk-payment',
     ],
   },
 

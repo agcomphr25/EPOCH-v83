@@ -344,7 +344,7 @@ function App() {
                   {/* Admin Panel Routes */}
                   <Route path="/admin/orders" component={AdminPanelPage} />
                   <Route path="/admin/health-checks" component={SystemHealthChecksPage} />
-                  <Route path="/admin/audit-settings" component={AuditSettings} />
+                  <Route path="/audit-settings" component={AuditSettings} />
 
                   {/* Vendor Management Routes */}
                   <Route path="/vendor-management" component={VendorManagement} />

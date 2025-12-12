@@ -103,8 +103,9 @@ export default function RefundRequest() {
 
   const handleOrderSelect = (order: Order) => {
     setSelectedOrder(order);
-    // Set max refund amount to the order total (matches what's shown in Order Summary)
-    setRefundAmount((order.orderTotal || 0).toString());
+    // Set refund amount to total paid (not order total) - can only refund what's been paid
+    const totalPaid = Number(order.paymentTotal) || 0;
+    setRefundAmount(totalPaid > 0 ? totalPaid.toFixed(2) : '');
   };
 
   const handleSubmitRefund = () => {
@@ -130,6 +131,29 @@ export default function RefundRequest() {
       toast({
         title: 'Error',
         description: 'Please provide a reason for the refund',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Block refund requests on orders with no payments
+    const totalPaid = Number(selectedOrder.paymentTotal) || 0;
+    const requestedAmount = parseFloat(refundAmount) || 0;
+    
+    if (totalPaid <= 0) {
+      toast({
+        title: 'Cannot Request Refund',
+        description: 'This order has no payments to refund. A refund can only be requested for orders that have been paid.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Block if refund amount exceeds total paid
+    if (requestedAmount > totalPaid) {
+      toast({
+        title: 'Invalid Refund Amount',
+        description: `Refund amount ($${requestedAmount.toFixed(2)}) cannot exceed total paid ($${totalPaid.toFixed(2)}).`,
         variant: 'destructive',
       });
       return;
@@ -365,19 +389,38 @@ export default function RefundRequest() {
                     type="number"
                     step="0.01"
                     min="0.01"
-                    max={selectedOrder.orderTotal || 0}
+                    max={Number(selectedOrder.paymentTotal) || 0}
                     value={refundAmount}
-                    onChange={(e) => setRefundAmount(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      const maxAllowed = Number(selectedOrder.paymentTotal) || 0;
+                      // Cap the value at the maximum allowed (total paid)
+                      if (parseFloat(value) > maxAllowed) {
+                        setRefundAmount(maxAllowed.toFixed(2));
+                      } else {
+                        setRefundAmount(value);
+                      }
+                    }}
                     placeholder="0.00"
+                    disabled={!selectedOrder.paymentTotal || Number(selectedOrder.paymentTotal) <= 0}
                     data-testid="refund-amount-input"
                   />
-                  <div
-                    className="text-xs text-gray-500"
-                    data-testid="max-refund-note"
-                  >
-                    Maximum refund:{' '}
-                    {formatCurrency(selectedOrder.orderTotal || 0)}
-                  </div>
+                  {selectedOrder.paymentTotal && selectedOrder.paymentTotal > 0 ? (
+                    <div
+                      className="text-xs text-gray-500"
+                      data-testid="max-refund-note"
+                    >
+                      Maximum refund:{' '}
+                      {formatCurrency(selectedOrder.paymentTotal)}
+                    </div>
+                  ) : (
+                    <div
+                      className="text-xs text-red-500 font-medium"
+                      data-testid="no-payments-warning"
+                    >
+                      No payments to refund - order has not been paid
+                    </div>
+                  )}
                 </div>
 
                 {/* Reason */}

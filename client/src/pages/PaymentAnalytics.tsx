@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Phone, Globe, DollarSign, TrendingUp, Calendar } from 'lucide-react';
+import { Loader2, Phone, Globe, DollarSign, TrendingUp, Calendar, CreditCard } from 'lucide-react';
 
 interface PaymentData {
   id: number;
@@ -216,9 +216,14 @@ export default function PaymentAnalytics() {
                         </TableCell>
                         <TableCell>{payment.customerName || 'N/A'}</TableCell>
                         <TableCell>
-                          <Badge variant={payment.paymentLabel === 'Phone' ? 'default' : 'secondary'}>
+                          <Badge 
+                            variant={payment.paymentLabel === 'Phone' ? 'default' : payment.paymentLabel === 'Live' ? 'outline' : 'secondary'}
+                            className={payment.paymentLabel === 'Live' ? 'border-purple-500 text-purple-600' : ''}
+                          >
                             {payment.paymentLabel === 'Phone' ? (
                               <Phone className="h-3 w-3 mr-1" />
+                            ) : payment.paymentLabel === 'Live' ? (
+                              <CreditCard className="h-3 w-3 mr-1" />
                             ) : (
                               <Globe className="h-3 w-3 mr-1" />
                             )}

@@ -1115,7 +1115,14 @@ export default function VendorPOManager() {
 
   const confirmStatusChange = () => {
     if (selectedVendorPO) {
-      changeStatusMutation.mutate({ id: selectedVendorPO.id, status: pendingStatus });
+      // If changing to 'Sent' status, use the issue endpoint which sends the email
+      if (pendingStatus === 'Sent') {
+        issuePOMutation.mutate(selectedVendorPO.id);
+        setShowStatusChangeDialog(false);
+        setPendingStatus('');
+      } else {
+        changeStatusMutation.mutate({ id: selectedVendorPO.id, status: pendingStatus });
+      }
     }
   };
 

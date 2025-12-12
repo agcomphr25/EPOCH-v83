@@ -21,6 +21,7 @@ async function processAcceptBlueRefund(
   success: boolean;
   message: string;
   refundTransactionId?: string;
+  refundReferenceNumber?: number;
 }> {
   try {
     if (!isAcceptBlueConfigured()) {
@@ -36,10 +37,12 @@ async function processAcceptBlueRefund(
     if (result.success) {
       console.log('✅ Refund processed successfully');
       console.log('New Transaction ID:', result.transactionId);
+      console.log('New Reference Number:', result.referenceNumber);
       return {
         success: true,
         message: 'Refund processed successfully',
         refundTransactionId: result.transactionId,
+        refundReferenceNumber: result.referenceNumber,
       };
     } else {
       console.error('❌ Refund failed:', result.message);
@@ -113,6 +116,32 @@ router.post('/', async (req: Request, res: Response) => {
 
     // Validate request data
     const validatedData = insertRefundRequestSchema.parse(req.body);
+
+    // Check that the order has actually been paid before allowing a refund request
+    const orderPayments = await db
+      .select({
+        totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
+      })
+      .from(payments)
+      .where(eq(payments.orderId, validatedData.orderId));
+
+    const totalPaid = orderPayments[0]?.totalPaid || 0;
+    
+    if (totalPaid <= 0) {
+      console.log(`❌ Refund request blocked: Order ${validatedData.orderId} has no payments (Total paid: $${totalPaid})`);
+      return res.status(400).json({ 
+        error: 'Cannot create refund request for an order with no payments. The order must have at least one payment before a refund can be requested.' 
+      });
+    }
+
+    // Validate that refund amount doesn't exceed total paid
+    const refundAmount = validatedData.refundAmount || 0;
+    if (refundAmount > totalPaid) {
+      console.log(`❌ Refund request blocked: Requested $${refundAmount} exceeds total paid $${totalPaid}`);
+      return res.status(400).json({ 
+        error: `Refund amount ($${refundAmount.toFixed(2)}) cannot exceed total paid ($${totalPaid.toFixed(2)}).` 
+      });
+    }
 
     // For now, we'll use a hardcoded user. In production, this would come from auth
     const requestedBy = 'CSR'; // TODO: Get from authentication context
@@ -227,6 +256,217 @@ router.post('/:id/reject', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('❌ Error rejecting refund request:', error);
     res.status(500).json({ error: 'Failed to reject refund request' });
+  }
+});
+
+// POST /api/refund-requests/:id/process - Process an approved refund through Accept.Blue
+router.post('/:id/process', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    console.log(`💳 Processing refund request ${id} through Accept.Blue`);
+
+    // Get the refund request details
+    const [refundRequest] = await db
+      .select()
+      .from(refundRequests)
+      .where(eq(refundRequests.id, parseInt(id)));
+
+    if (!refundRequest) {
+      return res.status(404).json({ error: 'Refund request not found' });
+    }
+
+    if (refundRequest.status !== 'APPROVED') {
+      return res.status(400).json({ 
+        error: `Cannot process refund - status is ${refundRequest.status}. Refund must be APPROVED first.` 
+      });
+    }
+
+    // Check if Accept.Blue is configured
+    if (!isAcceptBlueConfigured()) {
+      return res.status(500).json({ 
+        error: 'Accept.Blue payment gateway is not configured. Please contact support.' 
+      });
+    }
+
+    // Find the original credit card transaction for this order
+    const ccTransactions = await db
+      .select()
+      .from(creditCardTransactions)
+      .where(eq(creditCardTransactions.orderId, refundRequest.orderId))
+      .orderBy(desc(creditCardTransactions.createdAt));
+
+    if (ccTransactions.length === 0) {
+      return res.status(400).json({ 
+        error: 'No credit card transaction found for this order. This order may have been paid by a different method.' 
+      });
+    }
+
+    // Use the most recent successful transaction
+    const originalTransaction = ccTransactions.find(t => t.responseCode === '1') || ccTransactions[0];
+    
+    // Extract the reference number from the transaction ID
+    // Accept.Blue uses reference_number for refunds, not transaction_id
+    // The transactionId field may contain the reference number or a formatted ID
+    let referenceNumber = originalTransaction.transactionId;
+    
+    // If it's a bulk payment format like "12345678-ORD001", extract just the reference number
+    if (referenceNumber.includes('-')) {
+      referenceNumber = referenceNumber.split('-')[0];
+    }
+
+    console.log(`📝 Found original transaction: ${referenceNumber} for order ${refundRequest.orderId}`);
+
+    // Determine refund amount (use refundAmount or amount field)
+    const refundAmount = refundRequest.refundAmount || refundRequest.amount || originalTransaction.amount;
+
+    // Process the refund through Accept.Blue
+    const result = await processAcceptBlueRefund(referenceNumber, refundAmount);
+
+    if (!result.success) {
+      console.error(`❌ Accept.Blue refund failed: ${result.message}`);
+      return res.status(400).json({ 
+        error: `Refund processing failed: ${result.message}` 
+      });
+    }
+
+    // Record the refund in the payments table (negative amount) so order balance updates
+    // This is MANDATORY - the order's "total due" is calculated from the payments table
+    let refundPaymentId: number;
+    try {
+      const [refundPayment] = await db
+        .insert(payments)
+        .values({
+          orderId: refundRequest.orderId,
+          paymentType: 'refund',
+          paymentAmount: -refundAmount, // Negative amount reduces the total paid
+          paymentDate: new Date(),
+          notes: `Refund via Accept.Blue. Original ref# ${referenceNumber}. Refund ref# ${result.refundReferenceNumber || 'N/A'}`,
+        })
+        .returning();
+      refundPaymentId = refundPayment.id;
+      console.log(`📝 Recorded refund payment (ID: ${refundPaymentId}) for order ${refundRequest.orderId}`);
+    } catch (paymentInsertError) {
+      // This is critical - if we can't record the payment, the order balance won't update
+      // The Accept.Blue refund succeeded, so we need to alert the user to manually reconcile
+      console.error('❌ CRITICAL: Failed to record refund payment:', paymentInsertError);
+      return res.status(500).json({ 
+        error: `Refund was processed by Accept.Blue (Ref# ${result.refundReferenceNumber || 'N/A'}), but failed to update order balance. Please manually add a refund payment of -$${refundAmount} to order ${refundRequest.orderId}.`,
+        refundProcessed: true,
+        refundReferenceNumber: result.refundReferenceNumber,
+        requiresManualReconciliation: true,
+      });
+    }
+
+    // Record the refund transaction in creditCardTransactions for audit/ledger purposes
+    // Use the actual Accept.Blue reference number as the transactionId for proper reconciliation
+    const refundTransactionIdForDb = result.refundReferenceNumber 
+      ? String(result.refundReferenceNumber)
+      : (result.refundTransactionId || `REFUND-${Date.now()}`);
+    
+    try {
+      await db
+        .insert(creditCardTransactions)
+        .values({
+          paymentId: refundPaymentId, // Link to refund payment (now mandatory)
+          orderId: refundRequest.orderId,
+          transactionId: refundTransactionIdForDb, // Actual Accept.Blue reference number
+          authCode: result.refundTransactionId || 'REFUND', // Store transaction ID in authCode
+          responseCode: 'R', // Use 'R' to indicate refund (not '1' which is for charges)
+          responseReasonCode: 'REFUND',
+          responseReasonText: `Refund for original ref# ${referenceNumber}. Amount: $${refundAmount}`,
+          cardType: originalTransaction.cardType,
+          lastFourDigits: originalTransaction.lastFourDigits,
+          amount: -refundAmount, // Negative amount to indicate refund
+          customerEmail: originalTransaction.customerEmail,
+          billingFirstName: originalTransaction.billingFirstName,
+          billingLastName: originalTransaction.billingLastName,
+          billingAddress: originalTransaction.billingAddress,
+          billingCity: originalTransaction.billingCity,
+          billingState: originalTransaction.billingState,
+          billingZip: originalTransaction.billingZip,
+        });
+      console.log(`📝 Recorded refund transaction: ${refundTransactionIdForDb} (Accept.Blue ref#)`);
+    } catch (insertError) {
+      console.error('⚠️ Failed to record refund transaction (continuing):', insertError);
+      // Continue even if insert fails - the refund was already processed
+    }
+
+    // Update the refund request with processing details
+    const processedBy = 'PROCESSOR'; // TODO: Get from authentication context
+    
+    const [updatedRequest] = await db
+      .update(refundRequests)
+      .set({
+        status: 'PROCESSED',
+        processedBy,
+        processedAt: new Date(),
+        authNetTransactionId: result.refundTransactionId, // Store the Accept.Blue transaction ID
+        authNetRefundId: result.refundReferenceNumber ? String(result.refundReferenceNumber) : undefined, // Store the Accept.Blue reference number
+        originalTransactionId: referenceNumber,
+        notes: `Refund processed via Accept.Blue. Refund Ref#: ${result.refundReferenceNumber || 'N/A'}. Trans ID: ${result.refundTransactionId || 'N/A'}. Amount: $${refundAmount}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(refundRequests.id, parseInt(id)))
+      .returning();
+
+    console.log(`✅ Refund request ${id} processed successfully`);
+    
+    res.json({
+      ...updatedRequest,
+      message: 'Refund processed successfully through Accept.Blue',
+      refundTransactionId: result.refundTransactionId,
+      refundReferenceNumber: result.refundReferenceNumber,
+      refundAmount,
+    });
+
+  } catch (error) {
+    console.error('❌ Error processing refund:', error);
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Failed to process refund' 
+    });
+  }
+});
+
+// GET /api/refund-requests/eligible/:orderId - Get eligible transactions for refund
+router.get('/eligible/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    console.log(`🔍 Getting eligible transactions for refund on order ${orderId}`);
+
+    // Get all credit card transactions for this order (only charges, not refunds)
+    // responseCode '1' = approved charge, 'R' = refund (exclude refunds from eligible list)
+    const transactions = await db
+      .select({
+        id: creditCardTransactions.id,
+        transactionId: creditCardTransactions.transactionId,
+        amount: creditCardTransactions.amount,
+        cardType: creditCardTransactions.cardType,
+        lastFourDigits: creditCardTransactions.lastFourDigits,
+        responseCode: creditCardTransactions.responseCode,
+        createdAt: creditCardTransactions.createdAt,
+      })
+      .from(creditCardTransactions)
+      .where(
+        and(
+          eq(creditCardTransactions.orderId, orderId),
+          eq(creditCardTransactions.responseCode, '1') // Only approved charges (not 'R' refunds)
+        )
+      )
+      .orderBy(desc(creditCardTransactions.createdAt));
+
+    // Get payment details for each transaction
+    const eligibleTransactions = transactions.map(t => ({
+      ...t,
+      referenceNumber: t.transactionId.includes('-') ? t.transactionId.split('-')[0] : t.transactionId,
+      displayInfo: `${t.cardType || 'Card'} ending in ${t.lastFourDigits || '****'} - $${t.amount}`,
+    }));
+
+    console.log(`✅ Found ${eligibleTransactions.length} eligible transactions for order ${orderId}`);
+    res.json(eligibleTransactions);
+
+  } catch (error) {
+    console.error('❌ Error fetching eligible transactions:', error);
+    res.status(500).json({ error: 'Failed to fetch eligible transactions' });
   }
 });
 

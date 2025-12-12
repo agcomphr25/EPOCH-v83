@@ -95,7 +95,7 @@ export default function ProjectsPage() {
   });
 
   const { data: p2Customers = [] } = useQuery<P2Customer[]>({
-    queryKey: ['/api/p2/p2-customers-bypass'],
+    queryKey: ['/api/p2-customers-bypass'],
   });
 
   const { data: employees = [] } = useQuery<Employee[]>({

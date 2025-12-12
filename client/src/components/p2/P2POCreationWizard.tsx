@@ -68,7 +68,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
   const { toast } = useToast();
 
   const { data: p2Customers = [] } = useQuery<any[]>({
-    queryKey: ['/api/p2/p2-customers-bypass'],
+    queryKey: ['/api/p2-customers-bypass'],
   });
 
   const { data: employees = [] } = useQuery<any[]>({

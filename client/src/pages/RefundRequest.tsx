@@ -103,8 +103,9 @@ export default function RefundRequest() {
 
   const handleOrderSelect = (order: Order) => {
     setSelectedOrder(order);
-    // Set max refund amount to the order total (matches what's shown in Order Summary)
-    setRefundAmount((order.orderTotal || 0).toString());
+    // Set refund amount to total paid (not order total) - can only refund what's been paid
+    const totalPaid = Number(order.paymentTotal) || 0;
+    setRefundAmount(totalPaid > 0 ? totalPaid.toFixed(2) : '');
   };
 
   const handleSubmitRefund = () => {

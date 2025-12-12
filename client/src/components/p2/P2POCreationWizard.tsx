@@ -349,7 +349,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
                         {employees
                           .filter((emp: any) => emp.role === 'ADMIN' || emp.role === 'OWNER')
                           .map((emp: any) => (

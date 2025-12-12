@@ -11,6 +11,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Separator } from '@/components/ui/separator';
 import {
   Upload,
   X,
@@ -20,9 +21,12 @@ import {
   Download,
   Trash2,
   Eye,
+  Camera,
+  Paperclip,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import MediaAttachmentPicker from '@/components/MediaAttachmentPicker';
 
 interface OrderAttachment {
   id: number;
@@ -296,6 +300,23 @@ export function OrderAttachments({
             onChange={handleFileInputChange}
             accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.txt"
           />
+
+          {/* Media Library Attachments */}
+          {!readonly && (
+            <div className="mt-4">
+              <Separator className="my-4" />
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Camera className="h-4 w-4" />
+                  Media Library
+                </p>
+              </div>
+              <MediaAttachmentPicker
+                entityType="order"
+                entityId={orderId}
+              />
+            </div>
+          )}
 
           {attachments.length > 0 ? (
             <div className="mt-4 space-y-2">

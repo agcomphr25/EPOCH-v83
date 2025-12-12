@@ -109,6 +109,16 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Serve media files - MUST be before /:id route to avoid conflict
+router.get('/file/:filename', (req, res) => {
+  const filePath = path.join(process.cwd(), 'uploads', 'media-library', req.params.filename);
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    res.status(404).json({ error: 'File not found' });
+  }
+});
+
 // Get a single media item
 router.get('/:id', async (req, res) => {
   try {
@@ -179,16 +189,6 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting media:', error);
     res.status(500).json({ error: 'Failed to delete media' });
-  }
-});
-
-// Serve media files
-router.get('/file/:filename', (req, res) => {
-  const filePath = path.join(process.cwd(), 'uploads', 'media-library', req.params.filename);
-  if (fs.existsSync(filePath)) {
-    res.sendFile(filePath);
-  } else {
-    res.status(404).json({ error: 'File not found' });
   }
 });
 

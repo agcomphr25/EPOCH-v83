@@ -38,6 +38,7 @@ import {
   Cog,
   ArrowRight,
   LogOut,
+  HelpCircle,
   Scissors,
   MapPin,
   Snowflake,
@@ -1837,6 +1838,20 @@ export default function Navigation() {
                 {currentUser.firstName || currentUser.username}
               </span>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                closeAllDropdowns();
+                setLocation('/help');
+              }}
+              className="gap-2"
+              data-testid="button-help"
+              title="Help Center"
+            >
+              <HelpCircle className="h-4 w-4" />
+              <span className="hidden lg:inline">Help</span>
+            </Button>
             <Button
               variant="ghost"
               size="sm"

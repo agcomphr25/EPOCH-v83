@@ -89,6 +89,7 @@ import p2LayupSchedulesRoutes from './p2LayupSchedules';
 import preproductionChecklistsRoutes from './preproductionChecklists';
 import healthChecksRoutes from './healthChecks';
 import projectsRoutes from './projects';
+import modelAnalyticsRoutes from './modelAnalytics';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -222,6 +223,9 @@ export function registerRoutes(app: Express): Server {
 
   // Mold management routes
   app.use('/api/molds', moldsRoutes);
+
+  // Model analytics routes
+  app.use('/api/model-analytics', modelAnalyticsRoutes);
 
   // Mold synchronization routes
   app.use('/api', moldSyncRoutes);

@@ -33,7 +33,8 @@ The application is built as a monorepo using a full-stack TypeScript approach, e
 - **Cutting Table Operations**: Features FIFO-based packet building with two-phase allocation, AS9100 traceability via barcode scanning, dynamic inventory status thresholds, and a packet scheduling system.
 - **Barcode Strategy**: Uses CODE128 for serialized items (P1-SWS2502-147-1) and CODE39 for regular order barcodes (EJ234), with an automatic helper function at `client/src/lib/barcodeFormat.ts`.
 - **P2 Serialized Item Tracking**: Complete P2 purchase order serialized item tracking with customizable department workflows, barcode scanning, fail-closed traceability gating, and an AS9100-compliant Traveler Viewer System and Electronic Signature System.
-- **Financial & Reporting**: Incorporates a Cost Center Management System, dynamic discount system, Credit Memo Management with immediate balance updates, and Payment Analytics with month-over-month comparison.
+- **Financial & Reporting**: Incorporates a Cost Center Management System, dynamic discount system, Credit Memo Management with immediate balance updates, Payment Analytics with month-over-month comparison, and Refund Request/Queue system with Accept.Blue integration for automated refund processing.
+- **Help Center**: FAQ-based help system accessible to all users via navbar Help button. Covers Order Entry, Production Queue, BOM, and other key workflow areas with searchable Q&A format.
 - **PDF Management**: Centralized PDF configuration and a flexible PDF Template Library System.
 - **Smart Data Entry**: Streamlined traceability data entry with recent lot number recall, autocomplete, and barcode quick-fill lookup.
 - **Control Centers**: Unified interfaces for P2 Purchase Orders and Cutting Table operations, offering dashboards, guided wizards, scheduling, and progress tracking.

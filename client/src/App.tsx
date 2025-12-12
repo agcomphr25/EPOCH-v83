@@ -160,6 +160,7 @@ import GatewayReports from './pages/GatewayReports';
 import PreproductionChecklistPage from './pages/PreproductionChecklistPage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
+import HelpCenter from './pages/HelpCenter';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -596,6 +597,7 @@ function App() {
 
                   {/* Refund Management Routes */}
                   <Route path="/refund-request" component={RefundRequest} />
+                  <Route path="/help" component={HelpCenter} />
                   <Route path="/refund-queue" component={RefundQueue} />
 
                   {/* Credit Memo Management */}

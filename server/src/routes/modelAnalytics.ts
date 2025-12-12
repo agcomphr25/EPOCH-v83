@@ -133,18 +133,26 @@ router.get('/', async (req: Request, res: Response) => {
 
     const modelDataMap: Record<string, ModelAnalytics> = {};
 
+    const getCanonicalModelId = (rawModelId: string): { canonicalId: string; stockModel: any } => {
+      const stockModel = stockModelMap[rawModelId] || stockModelMap[normalizeModelName(rawModelId)];
+      if (stockModel) {
+        return { canonicalId: stockModel.id, stockModel };
+      }
+      return { canonicalId: normalizeModelName(rawModelId), stockModel: null };
+    };
+
     Object.entries(pipelineDetails).forEach(([department, orders]) => {
       orders.forEach((order: any) => {
-        const modelId = order.modelId || 'unknown';
+        const rawModelId = order.modelId || 'unknown';
+        const { canonicalId, stockModel } = getCanonicalModelId(rawModelId);
         
-        if (!modelDataMap[modelId]) {
-          const stockModel = stockModelMap[modelId] || stockModelMap[normalizeModelName(modelId)];
-          const displayName = stockModel?.displayName || stockModel?.name || modelId;
-          const moldCapacity = getMoldCapacity(modelId, displayName);
+        if (!modelDataMap[canonicalId]) {
+          const displayName = stockModel?.displayName || stockModel?.name || rawModelId;
+          const moldCapacity = getMoldCapacity(canonicalId, displayName);
           
-          modelDataMap[modelId] = {
-            modelId,
-            modelName: stockModel?.name || modelId,
+          modelDataMap[canonicalId] = {
+            modelId: canonicalId,
+            modelName: stockModel?.name || rawModelId,
             displayName,
             isAdjustable: isAdjustableModel(displayName),
             totalInPipeline: 0,
@@ -157,7 +165,7 @@ router.get('/', async (req: Request, res: Response) => {
           };
         }
 
-        const model = modelDataMap[modelId];
+        const model = modelDataMap[canonicalId];
         model.totalInPipeline++;
 
         if (!model.departmentBreakdown[department]) {
@@ -239,7 +247,14 @@ router.get('/department-breakdown', async (req: Request, res: Response) => {
     stockModelsList.forEach((sm: any) => {
       stockModelMap[sm.id] = sm;
       stockModelMap[normalizeModelName(sm.id)] = sm;
+      if (sm.name) stockModelMap[normalizeModelName(sm.name)] = sm;
+      if (sm.displayName) stockModelMap[normalizeModelName(sm.displayName)] = sm;
     });
+
+    const getCanonicalDisplay = (rawModelId: string): string => {
+      const stockModel = stockModelMap[rawModelId] || stockModelMap[normalizeModelName(rawModelId)];
+      return stockModel?.displayName || stockModel?.name || rawModelId;
+    };
 
     const departments = [
       'P1 Production Queue',
@@ -261,9 +276,8 @@ router.get('/department-breakdown', async (req: Request, res: Response) => {
       const orders = pipelineDetails[dept] || [];
       
       orders.forEach((order: any) => {
-        const modelId = order.modelId || 'unknown';
-        const stockModel = stockModelMap[modelId] || stockModelMap[normalizeModelName(modelId)];
-        const displayName = stockModel?.displayName || modelId;
+        const rawModelId = order.modelId || 'unknown';
+        const displayName = getCanonicalDisplay(rawModelId);
         
         breakdown[dept][displayName] = (breakdown[dept][displayName] || 0) + 1;
       });

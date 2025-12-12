@@ -20,6 +20,7 @@ export const UNIVERSAL_ACCESS_ROUTES: string[] = ['/communications/inbox', '/emp
 // This helps ensure permissions use correct paths
 export const VALID_NAVBAR_ROUTES = [
   '/admin/orders',
+  '/admin/audit-settings',
   '/analytics',
   '/badge-configuration',
   '/badge-scanner',

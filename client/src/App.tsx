@@ -32,6 +32,8 @@ import EnhancedInventoryMRPPage from './pages/EnhancedInventoryMRPPage';
 import DepartmentPartsRequestPage from './pages/DepartmentPartsRequestPage';
 import ConsolidatedNeedsListPage from './pages/ConsolidatedNeedsListPage';
 import QCPage from './pages/QCPage';
+import AuditSettings from './pages/AuditSettings';
+import MediaLibrary from './pages/MediaLibrary';
 import MaintenancePage from './pages/MaintenancePage';
 import EmployeePortalPage from './pages/EmployeePortalPage';
 import TimeClockAdminPage from './pages/TimeClockAdminPage';
@@ -343,6 +345,8 @@ function App() {
                   {/* Admin Panel Routes */}
                   <Route path="/admin/orders" component={AdminPanelPage} />
                   <Route path="/admin/health-checks" component={SystemHealthChecksPage} />
+                  <Route path="/audit-settings" component={AuditSettings} />
+                  <Route path="/media-library" component={MediaLibrary} />
 
                   {/* Vendor Management Routes */}
                   <Route path="/vendor-management" component={VendorManagement} />

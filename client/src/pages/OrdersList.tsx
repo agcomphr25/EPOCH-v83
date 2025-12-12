@@ -95,6 +95,8 @@ import { insertKickbackSchema } from '@shared/schema';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { getDisplayOrderId } from '@/lib/orderUtils';
+import AuditDrawer from '@/components/AuditDrawer';
+import { History } from 'lucide-react';
 import toast from 'react-hot-toast';
 import CommunicationCompose from '@/components/CommunicationCompose';
 import LinkOrdersDialog from '@/components/LinkOrdersDialog';
@@ -1658,6 +1660,19 @@ export default function OrdersList() {
                                   Cancel Order
                                 </DropdownMenuItem>
                               )}
+                              <AuditDrawer
+                                entityType="p1_order"
+                                entityId={order.orderId}
+                                trigger={
+                                  <DropdownMenuItem
+                                    onSelect={(e) => e.preventDefault()}
+                                    data-testid={`button-audit-trail-${order.orderId}`}
+                                  >
+                                    <History className="mr-2 h-4 w-4" />
+                                    View Audit Trail
+                                  </DropdownMenuItem>
+                                }
+                              />
                             </DropdownMenuContent>
                           </DropdownMenu>
                           

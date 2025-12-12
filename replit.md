@@ -38,6 +38,8 @@ The application is built as a monorepo using a full-stack TypeScript approach, e
 - **PDF Management**: Centralized PDF configuration and a flexible PDF Template Library System.
 - **Smart Data Entry**: Streamlined traceability data entry with recent lot number recall, autocomplete, and barcode quick-fill lookup.
 - **Control Centers**: Unified interfaces for P2 Purchase Orders and Cutting Table operations, offering dashboards, guided wizards, scheduling, and progress tracking.
+- **Order Audit System**: Comprehensive audit tracking for both P1 orders and P2 serialized items. Features include: configurable audit event categories (production, finance, QC, shipping, P2 operations), automatic field change detection with before/after diffs, department transition timing with duration tracking, scrap/restart cycle linkage, and a unified Audit Drawer component with timeline views. Access via Orders List dropdown menu "View Audit Trail" option. Settings managed at /audit-settings (admin only).
+- **Media Library System**: Centralized image storage with camera capture and file upload capabilities. Features include: device camera access with file upload fallback, browse/search/filter media by category (packing slip, invoice, receipt, photo, document), reference-based attachments linking images to orders and other entities. Media can be attached to multiple documents. Access via /media-library page. Integration available in Order Entry via the Order Attachments section.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.

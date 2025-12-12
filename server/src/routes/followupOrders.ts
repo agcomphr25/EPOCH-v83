@@ -353,9 +353,12 @@ router.post('/', async (req, res) => {
     // Extract miscellaneous items from features object
     const miscItems = (order.features as any)?.miscItems || [];
 
-    // Get discount display name and appliesTo if a discount is set
+    // Get discount details for PDF - extract display name, type, value, and appliesTo
     let discountDisplayName: string | undefined;
     let discountAppliesTo: 'stock_model' | 'total_order' | undefined;
+    let calculatedDiscountType: string | undefined;
+    let calculatedDiscountValue: number | undefined;
+    let shouldShowDiscount = false;
     
     if (order.discountCode && order.discountCode !== 'none') {
       try {
@@ -369,15 +372,39 @@ router.post('/', async (req, res) => {
         } else if (order.discountCode.startsWith('short_term_')) {
           const discountId = parseInt(order.discountCode.replace('short_term_', ''));
           discount = seasonalDiscounts.find((d) => d.id === discountId);
+        } else {
+          discount = persistentDiscounts.find((d) => d.name === order.discountCode) ||
+                     seasonalDiscounts.find((d) => d.name === order.discountCode);
         }
         
         if (discount) {
+          shouldShowDiscount = true;
           discountDisplayName = discount.name || discount.description;
           discountAppliesTo = discount.appliesTo || 'total_order';
+          
+          if (discount.percent !== null && discount.percent > 0) {
+            calculatedDiscountType = 'percent';
+            calculatedDiscountValue = discount.percent;
+          } else if (discount.fixedAmount) {
+            calculatedDiscountType = 'fixed';
+            calculatedDiscountValue = Number(discount.fixedAmount) / 100;
+          }
+          console.log(`📄 [Followup Create] Discount found: ${order.discountCode} -> ${calculatedDiscountType} ${calculatedDiscountValue}`);
+        } else if (order.customDiscountValue) {
+          shouldShowDiscount = true;
+          calculatedDiscountType = order.customDiscountType || 'percent';
+          calculatedDiscountValue = order.customDiscountValue;
+          discountAppliesTo = (order.discountAppliesTo as 'stock_model' | 'total_order') || 'total_order';
         }
       } catch (error) {
         console.error('Error fetching discount details:', error);
       }
+    }
+    
+    if (order.showCustomDiscount && order.customDiscountValue) {
+      shouldShowDiscount = true;
+      calculatedDiscountType = order.customDiscountType || 'percent';
+      calculatedDiscountValue = order.customDiscountValue;
     }
 
     // Prepare order data for PDF
@@ -417,9 +444,9 @@ router.post('/', async (req, res) => {
       discountCode: order.discountCode || undefined,
       discountDisplayName: discountDisplayName || undefined,
       discountAppliesTo: discountAppliesTo || undefined,
-      customDiscountType: order.customDiscountType || undefined,
-      customDiscountValue: order.customDiscountValue || undefined,
-      showCustomDiscount: order.showCustomDiscount || undefined,
+      customDiscountType: calculatedDiscountType || order.customDiscountType || undefined,
+      customDiscountValue: calculatedDiscountValue || order.customDiscountValue || undefined,
+      showCustomDiscount: shouldShowDiscount || order.showCustomDiscount || undefined,
     };
 
     console.log('📄 PDF Order Data Debug:', {
@@ -1008,9 +1035,12 @@ router.post('/:orderId/resend-email', async (req, res) => {
     // Extract miscellaneous items from features object
     const miscItems = (order.features as any)?.miscItems || [];
 
-    // Get discount display name and appliesTo if a discount is set
+    // Get discount details for PDF - extract display name, type, value, and appliesTo
     let discountDisplayName: string | undefined;
     let discountAppliesTo: 'stock_model' | 'total_order' | undefined;
+    let calculatedDiscountType: string | undefined;
+    let calculatedDiscountValue: number | undefined;
+    let shouldShowDiscount = false;
     
     if (order.discountCode && order.discountCode !== 'none') {
       try {
@@ -1024,15 +1054,39 @@ router.post('/:orderId/resend-email', async (req, res) => {
         } else if (order.discountCode.startsWith('short_term_')) {
           const discountId = parseInt(order.discountCode.replace('short_term_', ''));
           discount = seasonalDiscounts.find((d) => d.id === discountId);
+        } else {
+          discount = persistentDiscounts.find((d) => d.name === order.discountCode) ||
+                     seasonalDiscounts.find((d) => d.name === order.discountCode);
         }
         
         if (discount) {
+          shouldShowDiscount = true;
           discountDisplayName = discount.name || discount.description;
           discountAppliesTo = discount.appliesTo || 'total_order';
+          
+          if (discount.percent !== null && discount.percent > 0) {
+            calculatedDiscountType = 'percent';
+            calculatedDiscountValue = discount.percent;
+          } else if (discount.fixedAmount) {
+            calculatedDiscountType = 'fixed';
+            calculatedDiscountValue = Number(discount.fixedAmount) / 100;
+          }
+          console.log(`📄 [Followup Resend] Discount found: ${order.discountCode} -> ${calculatedDiscountType} ${calculatedDiscountValue}`);
+        } else if (order.customDiscountValue) {
+          shouldShowDiscount = true;
+          calculatedDiscountType = order.customDiscountType || 'percent';
+          calculatedDiscountValue = order.customDiscountValue;
+          discountAppliesTo = (order.discountAppliesTo as 'stock_model' | 'total_order') || 'total_order';
         }
       } catch (error) {
         console.error('Error fetching discount details:', error);
       }
+    }
+    
+    if (order.showCustomDiscount && order.customDiscountValue) {
+      shouldShowDiscount = true;
+      calculatedDiscountType = order.customDiscountType || 'percent';
+      calculatedDiscountValue = order.customDiscountValue;
     }
 
     // Prepare order data for PDF with LATEST discount information
@@ -1072,9 +1126,9 @@ router.post('/:orderId/resend-email', async (req, res) => {
       discountCode: order.discountCode || undefined,
       discountDisplayName: discountDisplayName || undefined,
       discountAppliesTo: discountAppliesTo || undefined,
-      customDiscountType: order.customDiscountType || undefined,
-      customDiscountValue: order.customDiscountValue || undefined,
-      showCustomDiscount: order.showCustomDiscount || undefined,
+      customDiscountType: calculatedDiscountType || order.customDiscountType || undefined,
+      customDiscountValue: calculatedDiscountValue || order.customDiscountValue || undefined,
+      showCustomDiscount: shouldShowDiscount || order.showCustomDiscount || undefined,
     };
 
     console.log('🔄 Regenerating PDF with latest order data including discounts:', {

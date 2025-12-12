@@ -32,12 +32,11 @@ app.get('/healthz', (req, res) => {
   res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-// CRITICAL: Trust proxy for production deployments behind Replit's infrastructure
+// CRITICAL: Trust proxy for deployments behind Replit's infrastructure
 // This is required for express-rate-limit to work correctly with X-Forwarded-For headers
-if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
-  console.log('🔒 Trust proxy enabled for production');
-}
+// Enabled in both development and production since Replit uses a proxy
+app.set('trust proxy', 1);
+console.log('🔒 Trust proxy enabled');
 
 // CORS configuration - critical for production authentication
 // Check if we're on Replit deployment (agcompepoch.xyz) or development

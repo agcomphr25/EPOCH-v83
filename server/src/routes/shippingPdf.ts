@@ -1087,7 +1087,9 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
                    seasonalDiscounts.find((d) => d.name === order.discountCode);
       }
 
-      if (discount && discount.isActive) {
+      if (discount) {
+        // Show discount on PDF regardless of whether it's currently active
+        // The discount was applied when the order was created
         shouldShowDiscount = true;
         
         // Get the display name from the discount
@@ -1105,18 +1107,29 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
         }
         
         const discountType = order.discountCode.startsWith('short_term_') ? 'Seasonal' : 'Persistent';
-        console.log(`📄 [Discount Fix] ${discountType} discount found: ${order.discountCode} -> ${calculatedDiscountType} ${calculatedDiscountValue}, appliesTo: ${calculatedDiscountAppliesTo}, displayName: ${calculatedDiscountDisplayName}`);
+        const activeStatus = discount.isActive ? 'active' : 'inactive';
+        console.log(`📄 [Discount] ${discountType} discount found (${activeStatus}): ${order.discountCode} -> ${calculatedDiscountType} ${calculatedDiscountValue}, appliesTo: ${calculatedDiscountAppliesTo}, displayName: ${calculatedDiscountDisplayName}`);
+      } else {
+        // Discount code exists but discount not found in database - use stored order values
+        console.log(`📄 [Discount] Discount code ${order.discountCode} not found in database, checking order stored values`);
+        if (order.customDiscountValue) {
+          shouldShowDiscount = true;
+          calculatedDiscountType = order.customDiscountType || 'percent';
+          calculatedDiscountValue = order.customDiscountValue;
+          calculatedDiscountAppliesTo = (order.discountAppliesTo as 'stock_model' | 'total_order') || 'total_order';
+          console.log(`📄 [Discount] Using order stored discount: ${calculatedDiscountType} ${calculatedDiscountValue}`);
+        }
       }
     }
     
-    // If custom discount is already set, use that instead
+    // If custom discount is set on the order directly (manual discount), use that
     if (order.showCustomDiscount && order.customDiscountValue) {
       shouldShowDiscount = true;
       calculatedDiscountType = order.customDiscountType || 'percent';
       calculatedDiscountValue = order.customDiscountValue;
       calculatedDiscountCode = order.discountCode || undefined;
       // Keep the display name and appliesTo from above if they were set
-      console.log(`📄 [Discount Fix] Using existing custom discount: ${calculatedDiscountType} ${calculatedDiscountValue}`);
+      console.log(`📄 [Discount] Using order custom discount: ${calculatedDiscountType} ${calculatedDiscountValue}`);
     }
     
     const basePriceForPayment = stockModel?.price || 0;

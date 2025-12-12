@@ -455,7 +455,7 @@ export default function POOrderEntry({
                 />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No selection</SelectItem>
+                <SelectItem value="none">No selection</SelectItem>
                 {filteredOptions?.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}

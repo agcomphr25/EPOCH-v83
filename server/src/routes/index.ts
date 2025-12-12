@@ -92,6 +92,7 @@ import projectsRoutes from './projects';
 import modelAnalyticsRoutes from './modelAnalytics';
 import aqlSamplingRoutes from './aqlSampling';
 import auditRoutes from './audit';
+import mediaRoutes from './media';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -216,6 +217,9 @@ export function registerRoutes(app: Express): Server {
 
   // Audit System routes
   app.use('/api/audit', auditRoutes);
+
+  // Media Library routes
+  app.use('/api/media', mediaRoutes);
 
   // Document management routes
   app.use('/api/documents', documentsRoutes);

@@ -8063,4 +8063,63 @@ export const insertOrderScrapCycleSchema = createInsertSchema(orderScrapCycles).
 export type OrderScrapCycle = typeof orderScrapCycles.$inferSelect;
 export type InsertOrderScrapCycle = z.infer<typeof insertOrderScrapCycleSchema>;
 
+// Media Library - Central storage for captured images/documents
+export const mediaLibrary = pgTable('media_library', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  filename: text('filename').notNull(), // Original filename
+  storagePath: text('storage_path').notNull(), // Path in storage folder
+  mimeType: text('mime_type').notNull(), // image/jpeg, image/png, application/pdf
+  fileSize: integer('file_size'), // Size in bytes
+  capturedById: integer('captured_by_id').references(() => employees.id),
+  capturedByName: text('captured_by_name'), // Denormalized for display
+  captureDate: timestamp('capture_date').defaultNow(),
+  title: text('title'), // Optional user-friendly title
+  notes: text('notes'), // Description or notes
+  tags: text('tags').array(), // Array of tags for filtering
+  category: text('category'), // 'packing_slip', 'invoice', 'receipt', 'photo', 'document', 'other'
+  thumbnailPath: text('thumbnail_path'), // Path to generated thumbnail
+  isArchived: boolean('is_archived').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  capturedByIdIdx: index('media_library_captured_by_id_idx').on(table.capturedById),
+  captureDateIdx: index('media_library_capture_date_idx').on(table.captureDate),
+  categoryIdx: index('media_library_category_idx').on(table.category),
+  isArchivedIdx: index('media_library_is_archived_idx').on(table.isArchived),
+}));
+
+export const insertMediaLibrarySchema = createInsertSchema(mediaLibrary).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MediaLibrary = typeof mediaLibrary.$inferSelect;
+export type InsertMediaLibrary = z.infer<typeof insertMediaLibrarySchema>;
+
+// Media Attachments - Links media items to entities (orders, invoices, POs, etc.)
+export const mediaAttachments = pgTable('media_attachments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  mediaId: uuid('media_id').references(() => mediaLibrary.id, { onDelete: 'cascade' }).notNull(),
+  entityType: text('entity_type').notNull(), // 'order', 'invoice', 'purchase_order', 'customer', 'vendor', 'p2_order'
+  entityId: text('entity_id').notNull(), // The ID of the entity
+  attachedById: integer('attached_by_id').references(() => employees.id),
+  attachedByName: text('attached_by_name'),
+  attachedAt: timestamp('attached_at').defaultNow(),
+  notes: text('notes'), // Optional note about this specific attachment
+}, (table) => ({
+  mediaIdIdx: index('media_attachments_media_id_idx').on(table.mediaId),
+  entityTypeIdx: index('media_attachments_entity_type_idx').on(table.entityType),
+  entityIdIdx: index('media_attachments_entity_id_idx').on(table.entityId),
+  entityCompositeIdx: index('media_attachments_entity_composite_idx').on(table.entityType, table.entityId),
+}));
+
+export const insertMediaAttachmentSchema = createInsertSchema(mediaAttachments).omit({
+  id: true,
+  attachedAt: true,
+});
+
+export type MediaAttachment = typeof mediaAttachments.$inferSelect;
+export type InsertMediaAttachment = z.infer<typeof insertMediaAttachmentSchema>;
+
 export * from './calendar.schema';

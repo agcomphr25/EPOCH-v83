@@ -4,7 +4,7 @@ import {
   voiceNotes, 
   voiceNoteQuestions, 
   voiceNoteResponses,
-  orders,
+  allOrders,
   employees,
   insertVoiceNoteSchema,
   insertVoiceNoteQuestionSchema,
@@ -201,9 +201,9 @@ router.post('/', checkVoiceNoteAccess, async (req: Request, res: Response) => {
     let verifiedOrderId = null;
     if (extractedOrderId) {
       const existingOrder = await db
-        .select({ orderId: orders.orderId })
-        .from(orders)
-        .where(eq(orders.orderId, extractedOrderId))
+        .select({ orderId: allOrders.orderId })
+        .from(allOrders)
+        .where(eq(allOrders.orderId, extractedOrderId))
         .limit(1);
       
       if (existingOrder.length > 0) {

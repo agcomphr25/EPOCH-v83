@@ -19,9 +19,13 @@ const router = Router();
 const ALLOWED_USERS = ['agrace', 'glennj', 'tasham'];
 
 function checkVoiceNoteAccess(req: Request, res: Response, next: Function) {
-  const user = (req as any).user;
+  // Check session first (for logged-in users), then fall back to bypass user
+  const sessionUser = (req as any).session?.user;
+  const bypassUser = (req as any).user;
+  const user = sessionUser || bypassUser;
+  (req as any).user = user; // Ensure user is set for downstream handlers
   const username = user?.username?.toLowerCase();
-  console.log('Voice notes access check:', { user: user?.username, hasAccess: username && ALLOWED_USERS.includes(username) });
+  console.log('Voice notes access check:', { sessionUser: sessionUser?.username, bypassUser: bypassUser?.username, username });
   if (!username || !ALLOWED_USERS.includes(username)) {
     return res.status(403).json({ error: 'Access denied. Voice notes feature is restricted.' });
   }
@@ -391,10 +395,13 @@ router.post('/:id/responses', checkVoiceNoteAccess, async (req: Request, res: Re
 });
 
 router.get('/access/check', async (req: Request, res: Response) => {
-  const user = (req as any).user;
+  // Check session first (for logged-in users), then fall back to bypass user
+  const sessionUser = (req as any).session?.user;
+  const bypassUser = (req as any).user;
+  const user = sessionUser || bypassUser;
   const username = user?.username?.toLowerCase();
   const hasAccess = !!username && ALLOWED_USERS.includes(username);
-  console.log('Voice notes access check endpoint:', { user: user?.username, username, hasAccess, allowedUsers: ALLOWED_USERS });
+  console.log('Voice notes access check endpoint:', { sessionUser: sessionUser?.username, bypassUser: bypassUser?.username, username, hasAccess });
   res.json({ hasAccess, username: user?.username });
 });
 

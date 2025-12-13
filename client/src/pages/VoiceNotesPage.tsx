@@ -96,6 +96,7 @@ export default function VoiceNotesPage() {
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   
   const recognitionRef = useRef<any>(null);
+  const isRecordingRef = useRef(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -109,7 +110,7 @@ export default function VoiceNotesPage() {
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
-    if (SpeechRecognition) {
+    if (SpeechRecognition && !recognitionRef.current) {
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
@@ -136,17 +137,24 @@ export default function VoiceNotesPage() {
       
       recognition.onerror = (event: any) => {
         console.error('Speech recognition error:', event.error);
-        setIsRecording(false);
-        toast({
-          title: 'Recording Error',
-          description: `Error: ${event.error}. Please try again.`,
-          variant: 'destructive',
-        });
+        if (event.error !== 'aborted') {
+          setIsRecording(false);
+          isRecordingRef.current = false;
+          toast({
+            title: 'Recording Error',
+            description: `Error: ${event.error}. Please try again.`,
+            variant: 'destructive',
+          });
+        }
       };
       
       recognition.onend = () => {
-        if (isRecording) {
-          recognition.start();
+        if (isRecordingRef.current) {
+          try {
+            recognition.start();
+          } catch (e) {
+            console.log('Recognition restart prevented');
+          }
         }
       };
       
@@ -154,11 +162,15 @@ export default function VoiceNotesPage() {
     }
     
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
+      if (recognitionRef.current && !isRecordingRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          // Ignore stop errors
+        }
       }
     };
-  }, [isRecording, toast]);
+  }, [toast]);
 
   const { data: notes = [], isLoading: notesLoading } = useQuery<VoiceNote[]>({
     queryKey: ['/api/voice-notes', { category: filterCategory, isResolved: filterResolved }],
@@ -240,8 +252,13 @@ export default function VoiceNotesPage() {
     if (recognitionRef.current) {
       setTranscription('');
       setInterimTranscription('');
-      recognitionRef.current.start();
+      isRecordingRef.current = true;
       setIsRecording(true);
+      try {
+        recognitionRef.current.start();
+      } catch (e) {
+        console.log('Recognition already started');
+      }
     } else {
       toast({
         title: 'Not Supported',
@@ -252,9 +269,14 @@ export default function VoiceNotesPage() {
   };
 
   const stopRecording = () => {
+    isRecordingRef.current = false;
+    setIsRecording(false);
     if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsRecording(false);
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.log('Recognition already stopped');
+      }
     }
   };
 

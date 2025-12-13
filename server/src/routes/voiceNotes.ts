@@ -236,6 +236,29 @@ router.post('/', checkVoiceNoteAccess, async (req: Request, res: Response) => {
       })
       .returning();
     
+    // If linked to an order, append the transcription to the order's notes field
+    if (verifiedOrderId) {
+      const [existingOrder] = await db
+        .select({ notes: allOrders.notes })
+        .from(allOrders)
+        .where(eq(allOrders.orderId, verifiedOrderId))
+        .limit(1);
+      
+      const timestamp = new Date().toLocaleString('en-US', { 
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' 
+      });
+      const voiceNoteEntry = `[Voice Note ${timestamp} - ${user?.username || 'unknown'}]: ${transcription.trim()}`;
+      
+      const updatedNotes = existingOrder?.notes 
+        ? `${existingOrder.notes}\n\n${voiceNoteEntry}`
+        : voiceNoteEntry;
+      
+      await db
+        .update(allOrders)
+        .set({ notes: updatedNotes })
+        .where(eq(allOrders.orderId, verifiedOrderId));
+    }
+    
     res.status(201).json({
       ...newNote,
       extractedOrderId,

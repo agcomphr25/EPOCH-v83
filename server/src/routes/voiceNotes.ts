@@ -20,7 +20,9 @@ const ALLOWED_USERS = ['agrace', 'glennj', 'tasham'];
 
 function checkVoiceNoteAccess(req: Request, res: Response, next: Function) {
   const user = (req as any).user;
-  if (!user || !ALLOWED_USERS.includes(user.username)) {
+  const username = user?.username?.toLowerCase();
+  console.log('Voice notes access check:', { user: user?.username, hasAccess: username && ALLOWED_USERS.includes(username) });
+  if (!username || !ALLOWED_USERS.includes(username)) {
     return res.status(403).json({ error: 'Access denied. Voice notes feature is restricted.' });
   }
   next();
@@ -390,7 +392,9 @@ router.post('/:id/responses', checkVoiceNoteAccess, async (req: Request, res: Re
 
 router.get('/access/check', async (req: Request, res: Response) => {
   const user = (req as any).user;
-  const hasAccess = user && ALLOWED_USERS.includes(user.username);
+  const username = user?.username?.toLowerCase();
+  const hasAccess = !!username && ALLOWED_USERS.includes(username);
+  console.log('Voice notes access check endpoint:', { user: user?.username, username, hasAccess, allowedUsers: ALLOWED_USERS });
   res.json({ hasAccess, username: user?.username });
 });
 

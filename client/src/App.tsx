@@ -34,6 +34,7 @@ import ConsolidatedNeedsListPage from './pages/ConsolidatedNeedsListPage';
 import QCPage from './pages/QCPage';
 import AuditSettings from './pages/AuditSettings';
 import MediaLibrary from './pages/MediaLibrary';
+import VoiceNotesPage from './pages/VoiceNotesPage';
 import MaintenancePage from './pages/MaintenancePage';
 import EmployeePortalPage from './pages/EmployeePortalPage';
 import TimeClockAdminPage from './pages/TimeClockAdminPage';
@@ -347,6 +348,7 @@ function App() {
                   <Route path="/admin/health-checks" component={SystemHealthChecksPage} />
                   <Route path="/audit-settings" component={AuditSettings} />
                   <Route path="/media-library" component={MediaLibrary} />
+                  <Route path="/voice-notes" component={VoiceNotesPage} />
 
                   {/* Vendor Management Routes */}
                   <Route path="/vendor-management" component={VendorManagement} />

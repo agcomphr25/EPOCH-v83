@@ -8122,4 +8122,87 @@ export const insertMediaAttachmentSchema = createInsertSchema(mediaAttachments).
 export type MediaAttachment = typeof mediaAttachments.$inferSelect;
 export type InsertMediaAttachment = z.infer<typeof insertMediaAttachmentSchema>;
 
+// ============================================
+// VOICE NOTES - Voice-recorded notes for orders and general issues
+// ============================================
+
+// Voice Notes - Store transcribed voice recordings linked to orders
+export const voiceNotes = pgTable('voice_notes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  transcription: text('transcription').notNull(), // The transcribed text from voice
+  linkedOrderId: text('linked_order_id'), // Order ID extracted from speech (e.g., "EL069")
+  noteType: text('note_type').notNull().default('order'), // 'order' or 'general'
+  category: text('category'), // User-defined category (e.g., "metal insert", "duratec", "thickness")
+  tags: text('tags').array(), // Extracted keywords/tags for searching
+  recordedById: integer('recorded_by_id').references(() => employees.id),
+  recordedByUsername: text('recorded_by_username').notNull(), // Username for quick reference
+  recordedAt: timestamp('recorded_at').defaultNow(),
+  isResolved: boolean('is_resolved').default(false),
+  resolvedAt: timestamp('resolved_at'),
+  resolvedById: integer('resolved_by_id').references(() => employees.id),
+  resolvedNotes: text('resolved_notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  linkedOrderIdIdx: index('voice_notes_linked_order_id_idx').on(table.linkedOrderId),
+  noteTypeIdx: index('voice_notes_note_type_idx').on(table.noteType),
+  recordedByIdIdx: index('voice_notes_recorded_by_id_idx').on(table.recordedById),
+  recordedAtIdx: index('voice_notes_recorded_at_idx').on(table.recordedAt),
+  categoryIdx: index('voice_notes_category_idx').on(table.category),
+  isResolvedIdx: index('voice_notes_is_resolved_idx').on(table.isResolved),
+}));
+
+export const insertVoiceNoteSchema = createInsertSchema(voiceNotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type VoiceNote = typeof voiceNotes.$inferSelect;
+export type InsertVoiceNote = z.infer<typeof insertVoiceNoteSchema>;
+
+// Voice Note Follow-up Questions - Configurable questions for general notes
+export const voiceNoteQuestions = pgTable('voice_note_questions', {
+  id: serial('id').primaryKey(),
+  questionText: text('question_text').notNull(),
+  questionType: text('question_type').notNull().default('text'), // 'text', 'select', 'employee_select', 'number'
+  options: jsonb('options').$type<string[]>(), // For 'select' type questions
+  isRequired: boolean('is_required').default(false),
+  category: text('category'), // Which note categories trigger this question
+  sortOrder: integer('sort_order').default(0),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const insertVoiceNoteQuestionSchema = createInsertSchema(voiceNoteQuestions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type VoiceNoteQuestion = typeof voiceNoteQuestions.$inferSelect;
+export type InsertVoiceNoteQuestion = z.infer<typeof insertVoiceNoteQuestionSchema>;
+
+// Voice Note Responses - Answers to follow-up questions
+export const voiceNoteResponses = pgTable('voice_note_responses', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  voiceNoteId: uuid('voice_note_id').references(() => voiceNotes.id, { onDelete: 'cascade' }).notNull(),
+  questionId: integer('question_id').references(() => voiceNoteQuestions.id).notNull(),
+  responseValue: text('response_value'), // The answer
+  employeeId: integer('employee_id').references(() => employees.id), // If response is an employee selection
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  voiceNoteIdIdx: index('voice_note_responses_voice_note_id_idx').on(table.voiceNoteId),
+  questionIdIdx: index('voice_note_responses_question_id_idx').on(table.questionId),
+}));
+
+export const insertVoiceNoteResponseSchema = createInsertSchema(voiceNoteResponses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type VoiceNoteResponse = typeof voiceNoteResponses.$inferSelect;
+export type InsertVoiceNoteResponse = z.infer<typeof insertVoiceNoteResponseSchema>;
+
 export * from './calendar.schema';

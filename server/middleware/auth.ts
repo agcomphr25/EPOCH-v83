@@ -273,3 +273,80 @@ export const requireAdminOrOwner = [
   authenticateToken,
   requireRole('ADMIN', 'OWNER'),
 ];
+
+/**
+ * Session-aware authentication middleware that prioritizes real session users
+ * over DEV_AUTH_BYPASS. Use this for routes where the actual logged-in user
+ * identity matters (e.g., user-specific access control).
+ * 
+ * This middleware:
+ * 1. First checks for req.session.user (Express session) and uses it if present
+ * 2. Then checks for token-based auth (JWT/cookie)
+ * 3. Only falls back to bypass user if no real session exists AND bypass is enabled
+ * 4. In production, always requires real authentication
+ */
+export async function sessionAwareAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    // PRIORITY 1: Check Express session first (this is where logged-in users are stored)
+    const sessionUser = (req as any).session?.user;
+    if (sessionUser && sessionUser.username) {
+      req.user = sessionUser;
+      return next();
+    }
+
+    // PRIORITY 2: Check token-based authentication
+    const authHeader = req.headers['authorization'];
+    const bearerToken = authHeader && authHeader.split(' ')[1];
+    const cookieToken = req.cookies?.sessionToken;
+    const token = bearerToken || cookieToken;
+
+    let user = null;
+
+    if (token) {
+      // Try JWT authentication first (for Bearer tokens)
+      if (bearerToken) {
+        const jwtPayload = AuthService.verifyJWT(bearerToken);
+        if (jwtPayload) {
+          const dbUser = await AuthService.getUserById(jwtPayload.userId);
+          if (dbUser && dbUser.isActive) {
+            user = dbUser;
+          }
+        }
+      }
+
+      // Fallback to session-based authentication (for cookies)
+      if (!user && cookieToken) {
+        user = await AuthService.getUserBySession(cookieToken);
+      }
+    }
+
+    // If we found a real user from token, use them (regardless of bypass setting)
+    if (user) {
+      req.user = user;
+      return next();
+    }
+
+    // PRIORITY 3: No real user found - check if bypass is enabled for dev
+    if (isAuthBypassEnabled()) {
+      req.user = {
+        id: 2,
+        username: 'admin',
+        role: 'ADMIN',
+        employeeId: null,
+        canOverridePrices: true,
+        isActive: true,
+      };
+      return next();
+    }
+
+    // No token and no bypass
+    return res.status(401).json({ error: 'No session token' });
+  } catch (error) {
+    console.error('Session-aware auth error:', error);
+    return res.status(500).json({ error: 'Authentication failed' });
+  }
+}

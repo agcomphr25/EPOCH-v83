@@ -4,7 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { softAuth } from '../../middleware/auth';
+import { softAuth, authenticateToken, sessionAwareAuth } from '../../middleware/auth';
 import employeesRoutes from './employees';
 import ordersRoutes from './orders';
 import formsRoutes from './forms';
@@ -222,8 +222,8 @@ export function registerRoutes(app: Express): Server {
   // Media Library routes
   app.use('/api/media', mediaRoutes);
 
-  // Voice notes routes
-  app.use('/api/voice-notes', softAuth, voiceNotesRoutes);
+  // Voice notes routes (uses sessionAwareAuth to preserve real user sessions over bypass)
+  app.use('/api/voice-notes', sessionAwareAuth, voiceNotesRoutes);
 
   // Document management routes
   app.use('/api/documents', documentsRoutes);

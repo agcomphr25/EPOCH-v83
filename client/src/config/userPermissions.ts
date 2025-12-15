@@ -137,6 +137,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/order-department-transfer',
       '/metal-accessories',
       '/training',
+      '/voice-notes',
     ],
   },
 
@@ -296,6 +297,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-management',
       '/maintenance',
       '/inventory/parts-request',
+      '/metal-accessories',
     ],
   },
 };

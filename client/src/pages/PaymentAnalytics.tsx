@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Loader2, Phone, Globe, DollarSign, TrendingUp, Calendar, CreditCard } from 'lucide-react';
 
 interface PaymentData {
@@ -182,62 +183,71 @@ export default function PaymentAnalytics() {
           </div>
 
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
-                Transaction Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {data.payments.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">No payments found for this period.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Order ID</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.payments.map((payment) => (
-                      <TableRow key={payment.id} data-testid={`row-payment-${payment.id}`}>
-                        <TableCell className="text-sm">{formatDate(payment.date)}</TableCell>
-                        <TableCell>
-                          <span className="font-mono">{payment.orderId}</span>
-                          {payment.fbOrderNumber && (
-                            <span className="text-xs text-muted-foreground ml-2">
-                              (FB: {payment.fbOrderNumber})
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>{payment.customerName || 'N/A'}</TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={payment.paymentLabel === 'Phone' ? 'default' : payment.paymentLabel === 'Live' ? 'outline' : 'secondary'}
-                            className={payment.paymentLabel === 'Live' ? 'border-purple-500 text-purple-600' : ''}
-                          >
-                            {payment.paymentLabel === 'Phone' ? (
-                              <Phone className="h-3 w-3 mr-1" />
-                            ) : payment.paymentLabel === 'Live' ? (
-                              <CreditCard className="h-3 w-3 mr-1" />
-                            ) : (
-                              <Globe className="h-3 w-3 mr-1" />
-                            )}
-                            {payment.paymentLabel}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatCurrency(payment.amount)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+            <CardContent className="pt-6">
+              <Accordion type="single" collapsible defaultValue="transactions">
+                <AccordionItem value="transactions" className="border-none">
+                  <AccordionTrigger className="hover:no-underline py-0" data-testid="accordion-transactions">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5" />
+                      <span className="font-semibold">Transaction Details</span>
+                      <span className="text-sm text-muted-foreground ml-2">
+                        ({data.payments.length} transactions)
+                      </span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4">
+                    {data.payments.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-8">No payments found for this period.</p>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Order ID</TableHead>
+                            <TableHead>Customer</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {data.payments.map((payment) => (
+                            <TableRow key={payment.id} data-testid={`row-payment-${payment.id}`}>
+                              <TableCell className="text-sm">{formatDate(payment.date)}</TableCell>
+                              <TableCell>
+                                <span className="font-mono">{payment.orderId}</span>
+                                {payment.fbOrderNumber && (
+                                  <span className="text-xs text-muted-foreground ml-2">
+                                    (FB: {payment.fbOrderNumber})
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell>{payment.customerName || 'N/A'}</TableCell>
+                              <TableCell>
+                                <Badge 
+                                  variant={payment.paymentLabel === 'Phone' ? 'default' : payment.paymentLabel === 'Live' ? 'outline' : 'secondary'}
+                                  className={payment.paymentLabel === 'Live' ? 'border-purple-500 text-purple-600' : ''}
+                                >
+                                  {payment.paymentLabel === 'Phone' ? (
+                                    <Phone className="h-3 w-3 mr-1" />
+                                  ) : payment.paymentLabel === 'Live' ? (
+                                    <CreditCard className="h-3 w-3 mr-1" />
+                                  ) : (
+                                    <Globe className="h-3 w-3 mr-1" />
+                                  )}
+                                  {payment.paymentLabel}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {formatCurrency(payment.amount)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </CardContent>
           </Card>
         </>

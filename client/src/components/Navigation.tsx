@@ -1076,31 +1076,9 @@ export default function Navigation() {
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center py-4 gap-4">
-          <div className="flex items-center gap-3">
-            <Factory className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-semibold text-gray-900">EPOCH v8</h1>
-
-            {/* Home button - navigates to user's personalized dashboard */}
-            <Link
-              href={
-                currentUser?.username
-                  ? getDashboardRoute(currentUser.username)
-                  : '/'
-              }
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-2"
-                data-testid="button-home"
-              >
-                <Home className="h-4 w-4" />
-                <span className="hidden sm:inline">Home</span>
-              </Button>
-            </Link>
-
-            {/* Live Date/Time Display */}
-            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-gray-100 px-3 py-1.5 rounded-md" data-testid="system-datetime">
+          <div className="flex flex-col gap-2">
+            {/* Live Date/Time Display - Above Home */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-gray-100 px-3 py-1.5 rounded-md w-fit" data-testid="system-datetime">
               <Clock className="h-4 w-4" />
               <span className="font-medium">
                 {currentTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -1109,6 +1087,30 @@ export default function Navigation() {
               <span className="font-mono">
                 {currentTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })}
               </span>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <Factory className="h-6 w-6 text-primary" />
+              <h1 className="text-xl font-semibold text-gray-900">EPOCH v8</h1>
+
+              {/* Home button - navigates to user's personalized dashboard */}
+              <Link
+                href={
+                  currentUser?.username
+                    ? getDashboardRoute(currentUser.username)
+                    : '/'
+                }
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex items-center gap-2"
+                  data-testid="button-home"
+                >
+                  <Home className="h-4 w-4" />
+                  <span className="hidden sm:inline">Home</span>
+                </Button>
+              </Link>
             </div>
           </div>
 

@@ -56,6 +56,7 @@ import {
   Printer,
   Activity,
   FolderKanban,
+  Clock,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -87,6 +88,14 @@ import {
 export default function Navigation() {
   const [location, setLocation] = useLocation();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Check if we're in deployment environment to show logout button
   const isDeploymentEnvironment = () => {
@@ -1089,6 +1098,18 @@ export default function Navigation() {
                 <span className="hidden sm:inline">Home</span>
               </Button>
             </Link>
+
+            {/* Live Date/Time Display */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-gray-100 px-3 py-1.5 rounded-md" data-testid="system-datetime">
+              <Clock className="h-4 w-4" />
+              <span className="font-medium">
+                {currentTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+              <span className="text-gray-400">|</span>
+              <span className="font-mono">
+                {currentTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })}
+              </span>
+            </div>
           </div>
 
           {/* Navigation Links */}

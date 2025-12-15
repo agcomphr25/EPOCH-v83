@@ -548,7 +548,7 @@ export default function VoiceNotesPage() {
                               </span>
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3" />
-                                {format(new Date(note.recordedAt), 'MMM d, yyyy h:mm a')}
+                                {new Date(note.recordedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
                               </span>
                             </div>
                             {note.resolvedNotes && (

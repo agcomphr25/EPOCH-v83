@@ -27,6 +27,7 @@ import {
   User,
   Settings,
   Eye,
+  Mic,
 } from 'lucide-react';
 import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 import WatchRuleCards from '@/components/WatchRuleCards';
@@ -213,6 +214,12 @@ export default function ADMINTestDashboard() {
       label: 'AG Dashboard',
       icon: BarChart,
       description: 'Unified production dashboard',
+    },
+    {
+      path: '/voice-notes',
+      label: 'Voice Notes',
+      icon: Mic,
+      description: 'Voice-activated issue tracking and notes',
     },
   ];
 

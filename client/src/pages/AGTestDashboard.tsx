@@ -23,6 +23,7 @@ import {
   GraduationCap,
   ClipboardList,
   MessageSquare,
+  Mic,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -330,6 +331,25 @@ export default function AGTestDashboard() {
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
               Internal messages and notifications
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card
+          className="hover:shadow-md transition-all duration-200 cursor-pointer hover:bg-rose-50 dark:hover:bg-rose-900/20"
+          onClick={() => navigateTo('/voice-notes')}
+          data-testid="card-voice-notes"
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Mic className="w-5 h-5 text-rose-600" />
+                <span className="text-sm font-medium">Voice Notes</span>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-400" />
+            </div>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Voice-activated issue tracking and notes
             </p>
           </CardContent>
         </Card>

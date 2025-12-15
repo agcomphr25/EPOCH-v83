@@ -28,6 +28,7 @@ import {
   Settings,
   Eye,
   Mic,
+  Image,
 } from 'lucide-react';
 import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 import WatchRuleCards from '@/components/WatchRuleCards';
@@ -220,6 +221,12 @@ export default function ADMINTestDashboard() {
       label: 'Voice Notes',
       icon: Mic,
       description: 'Voice-activated issue tracking and notes',
+    },
+    {
+      path: '/media-library',
+      label: 'Media Library',
+      icon: Image,
+      description: 'Browse and manage uploaded images and documents',
     },
   ];
 

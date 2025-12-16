@@ -147,7 +147,12 @@ async function generateRmaNumber(): Promise<string> {
 // POST /api/nonconformance - Create new record
 router.post('/', async (req, res) => {
   try {
-    const validatedData = insertNonconformanceRecordSchema.parse(req.body);
+    // Convert empty date strings to null before validation
+    const sanitizedBody = { ...req.body };
+    if (sanitizedBody.dateReceived === '') sanitizedBody.dateReceived = null;
+    if (sanitizedBody.dispositionDate === '') sanitizedBody.dispositionDate = null;
+    
+    const validatedData = insertNonconformanceRecordSchema.parse(sanitizedBody);
 
     // Auto-generate RMA number if not provided
     const rmaNumber = validatedData.rmaNumber || await generateRmaNumber();
@@ -237,7 +242,13 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const validatedData = insertNonconformanceRecordSchema.parse(req.body);
+    
+    // Convert empty date strings to null before validation
+    const sanitizedBody = { ...req.body };
+    if (sanitizedBody.dateReceived === '') sanitizedBody.dateReceived = null;
+    if (sanitizedBody.dispositionDate === '') sanitizedBody.dispositionDate = null;
+    
+    const validatedData = insertNonconformanceRecordSchema.parse(sanitizedBody);
 
     // Set resolvedAt timestamp if status is changing to Resolved
     const updateData: any = {

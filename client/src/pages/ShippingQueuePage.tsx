@@ -88,6 +88,11 @@ export default function ShippingQueuePage() {
     queryKey: ['/api/rts-inventory/in-shipping'],
   });
 
+  // Fetch RMAs ready for shipping (resolved Repair/Rework NCRs)
+  const { data: rmasReadyToShip = [] } = useQuery({
+    queryKey: ['/api/nonconformance/ready-to-ship'],
+  });
+
   // Helper function to check if an order has kickbacks
   const hasKickbacks = (orderId: string) => {
     return (allKickbacks as any[]).some(
@@ -274,13 +279,17 @@ export default function ShippingQueuePage() {
         (order.department === 'Shipping' && order.status === 'IN_PROGRESS')
     );
 
-    // Sort by due date - most urgent first
-    return filteredOrders.sort((a: any, b: any) => {
-      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
-      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+    // Merge RMAs ready to ship into the shipping queue
+    const rmas = rmasReadyToShip as any[];
+    const allShippingItems = [...filteredOrders, ...rmas];
+
+    // Sort by due date - most urgent first (RMAs without due date go to end)
+    return allShippingItems.sort((a: any, b: any) => {
+      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : (a.isRma ? Date.now() : 0);
+      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : (b.isRma ? Date.now() : 0);
       return dateA - dateB; // Earliest due date first (most urgent)
     });
-  }, [allOrders]);
+  }, [allOrders, rmasReadyToShip]);
 
   // Categorize orders by due date
   const categorizedOrders = useMemo(() => {

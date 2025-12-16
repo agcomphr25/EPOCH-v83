@@ -228,8 +228,18 @@ export function BulkShippingActions({
 
     setIsProcessing(true);
     try {
+      // Build items array with RMA info for each selected order
+      // Include shippingAddress for RMAs (enriched from ready-to-ship endpoint)
+      const items = selectedOrdersData.map(order => ({
+        orderId: order.orderId,
+        isRma: order.isRma || false,
+        rmaId: order.rmaId,
+        originalOrderId: order.originalOrderId,
+        shippingAddress: order.isRma ? order.shippingAddress : undefined,
+      }));
+
       const response = await axios.post('/api/shipping/bulk/create-consolidated-label', {
-        orderIds: selectedOrders,
+        items,
         packageDetails: {
           weight: packageDetails.weight,
           length: packageDetails.length,

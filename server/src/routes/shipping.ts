@@ -4,7 +4,7 @@ import axios from 'axios';
 
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { allOrders, linkedOrders, linkedOrderGroups } from '../../schema';
+import { allOrders, linkedOrders, linkedOrderGroups, nonconformanceRecords } from '../../schema';
 
 const router = Router();
 
@@ -1402,6 +1402,7 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
   try {
     const {
       orderIds,
+      items, // New: array of {orderId, isRma, rmaId, originalOrderId}
       packageDetails,
       serviceCode,
       billingOption,
@@ -1409,8 +1410,11 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
       declaredValue,
     } = req.body;
 
-    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
-      return res.status(400).json({ error: 'orderIds array is required' });
+    // Support both old format (orderIds) and new format (items with RMA info)
+    const shipmentItems = items || orderIds?.map((id: string) => ({ orderId: id })) || [];
+
+    if (shipmentItems.length === 0) {
+      return res.status(400).json({ error: 'orderIds or items array is required' });
     }
 
     // Validate service code
@@ -1418,7 +1422,7 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
       return res.status(400).json({ error: 'Missing or invalid shipping service code. Please select a shipping service.' });
     }
 
-    console.log(`⚡ Creating consolidated label for ${orderIds.length} orders:`, orderIds.join(', '));
+    console.log(`⚡ Creating consolidated label for ${shipmentItems.length} items:`, shipmentItems.map((i: any) => i.orderId).join(', '));
 
     // Validate UPS credentials
     const upsClientId = process.env.UPS_CLIENT_ID?.trim();
@@ -1431,15 +1435,113 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
       });
     }
 
-    // Fetch all orders and validate same shipping address
-    const orders = [];
-    for (const orderId of orderIds) {
-      let order = await storage.getFinalizedOrderById(orderId) as any;
-      if (!order) {
-        order = await storage.getOrderDraft(orderId);
+    // Fetch all items and resolve their shipping addresses
+    // For RMAs: frontend shippingAddress > original order address > NCR repairAddress
+    const orders: any[] = [];
+    const rmaItems: any[] = []; // Track RMAs to update later
+    const addresses: any[] = [];
+
+    // Helper to resolve address for an order
+    async function resolveOrderAddress(order: any): Promise<any> {
+      if (!order.customerId) return null;
+      
+      const customerAddresses = await storage.getCustomerAddresses(order.customerId);
+      if (order.hasAltShipTo && order.altShipToAddress) {
+        const altAddr = order.altShipToAddress as any;
+        return {
+          name: order.altShipToName || '',
+          company: order.altShipToCompany || '',
+          street: altAddr?.street || '',
+          city: altAddr?.city || '',
+          state: altAddr?.state || '',
+          zipCode: altAddr?.zip || altAddr?.zipCode || '',
+          country: altAddr?.country || 'US',
+          phone: altAddr?.phone || '',
+        };
+      } else if (customerAddresses.length > 0) {
+        const customer = await storage.getCustomerById(order.customerId);
+        return {
+          name: customer?.name || '',
+          company: customer?.company || '',
+          street: customerAddresses[0].street || '',
+          city: customerAddresses[0].city || '',
+          state: customerAddresses[0].state || '',
+          zipCode: customerAddresses[0].zipCode || '',
+          country: customerAddresses[0].country || 'US',
+          phone: customer?.phone || '',
+        };
       }
-      if (order) {
-        orders.push(order);
+      return null;
+    }
+
+    for (const item of shipmentItems) {
+      if (item.isRma) {
+        // Handle RMA shipment
+        rmaItems.push(item);
+        let resolvedAddress = null;
+        
+        // Priority 1: Use shippingAddress passed from frontend (enriched from ready-to-ship)
+        if (item.shippingAddress && item.shippingAddress.zipCode) {
+          resolvedAddress = item.shippingAddress;
+        }
+        
+        // Priority 2: Get from original order if available
+        if (!resolvedAddress && item.originalOrderId) {
+          let order = await storage.getFinalizedOrderById(item.originalOrderId) as any;
+          if (!order) {
+            order = await storage.getOrderDraft(item.originalOrderId);
+          }
+          if (order) {
+            resolvedAddress = await resolveOrderAddress(order);
+          }
+        }
+        
+        // Priority 3: Fetch NCR directly and use repairAddress
+        if (!resolvedAddress && item.rmaId) {
+          try {
+            const [ncr] = await db
+              .select()
+              .from(nonconformanceRecords)
+              .where(eq(nonconformanceRecords.id, parseInt(item.rmaId)))
+              .limit(1);
+            
+            if (ncr && ncr.repairAddress) {
+              const repairAddr = ncr.repairAddress as any;
+              resolvedAddress = {
+                name: repairAddr.name || ncr.customerName || '',
+                company: '',
+                street: repairAddr.street || '',
+                city: repairAddr.city || '',
+                state: repairAddr.state || '',
+                zipCode: repairAddr.zip || repairAddr.zipCode || '',
+                country: repairAddr.country || 'US',
+                phone: repairAddr.phone || '',
+              };
+            }
+          } catch (err) {
+            console.error(`Failed to fetch NCR ${item.rmaId} for repair address:`, err);
+          }
+        }
+        
+        if (resolvedAddress && resolvedAddress.zipCode) {
+          addresses.push(resolvedAddress);
+          orders.push({ id: item.rmaId, orderId: item.orderId, isRma: true, rmaId: item.rmaId });
+        } else {
+          console.error(`No address found for RMA ${item.orderId}`);
+        }
+      } else {
+        // Regular order
+        let order = await storage.getFinalizedOrderById(item.orderId) as any;
+        if (!order) {
+          order = await storage.getOrderDraft(item.orderId);
+        }
+        if (order) {
+          const resolvedAddress = await resolveOrderAddress(order);
+          if (resolvedAddress && resolvedAddress.zipCode) {
+            addresses.push(resolvedAddress);
+            orders.push(order);
+          }
+        }
       }
     }
 
@@ -1447,41 +1549,8 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
       return res.status(400).json({ error: 'No valid orders found' });
     }
 
-    // Get shipping addresses and validate they match
-    const addresses = [];
-    for (const order of orders) {
-      let shippingAddress = null;
-      if (order.customerId) {
-        const customerAddresses = await storage.getCustomerAddresses(order.customerId);
-        if (order.hasAltShipTo && order.altShipToAddress) {
-          const altAddr = order.altShipToAddress as any;
-          shippingAddress = {
-            name: order.altShipToName || '',
-            company: order.altShipToCompany || '',
-            street: altAddr?.street || '',
-            city: altAddr?.city || '',
-            state: altAddr?.state || '',
-            zipCode: altAddr?.zip || altAddr?.zipCode || '',
-            country: altAddr?.country || 'US',
-            phone: altAddr?.phone || '',
-          };
-        } else if (customerAddresses.length > 0) {
-          const customer = await storage.getCustomerById(order.customerId);
-          shippingAddress = {
-            name: customer?.name || '',
-            company: customer?.company || '',
-            street: customerAddresses[0].street || '',
-            city: customerAddresses[0].city || '',
-            state: customerAddresses[0].state || '',
-            zipCode: customerAddresses[0].zipCode || '',
-            country: customerAddresses[0].country || 'US',
-            phone: customer?.phone || '',
-          };
-        }
-      }
-      if (shippingAddress) {
-        addresses.push(shippingAddress);
-      }
+    if (addresses.length === 0) {
+      return res.status(400).json({ error: 'No shipping addresses found for orders' });
     }
 
     // Validate all addresses are the same
@@ -1573,7 +1642,7 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
 
     if (labelBase64 && trackingNumber) {
       console.log(`✅ Consolidated label created with tracking: ${trackingNumber}`);
-      console.log(`📦 Updating ${orderIds.length} orders with tracking number...`);
+      console.log(`📦 Updating ${shipmentItems.length} items with tracking number...`);
 
       // Update ALL orders with the same tracking number
       const updateData = {
@@ -1586,17 +1655,38 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
         labelGeneratedAt: new Date(),
       };
 
-      for (const orderId of orderIds) {
+      // Update regular orders
+      for (const item of shipmentItems) {
+        if (item.isRma) continue; // Skip RMAs, handle separately
         try {
           try {
-            await storage.updateFinalizedOrder(orderId, updateData);
-            console.log(`  ✓ Updated finalized order ${orderId}`);
+            await storage.updateFinalizedOrder(item.orderId, updateData);
+            console.log(`  ✓ Updated finalized order ${item.orderId}`);
           } catch {
-            await storage.updateOrderDraft(orderId, updateData);
-            console.log(`  ✓ Updated draft order ${orderId}`);
+            await storage.updateOrderDraft(item.orderId, updateData);
+            console.log(`  ✓ Updated draft order ${item.orderId}`);
           }
         } catch (updateError) {
-          console.error(`  ✗ Failed to update order ${orderId}:`, updateError);
+          console.error(`  ✗ Failed to update order ${item.orderId}:`, updateError);
+        }
+      }
+
+      // Update RMAs with tracking info
+      for (const rma of rmaItems) {
+        try {
+          await db
+            .update(nonconformanceRecords)
+            .set({
+              trackingNumber,
+              shippingCarrier: 'UPS',
+              shippedDate: new Date().toISOString().split('T')[0],
+              shippingStatus: 'Shipped',
+              updatedAt: new Date(),
+            })
+            .where(eq(nonconformanceRecords.id, parseInt(rma.rmaId)));
+          console.log(`  ✓ Updated RMA ${rma.orderId} (NCR #${rma.rmaId})`);
+        } catch (updateError) {
+          console.error(`  ✗ Failed to update RMA ${rma.rmaId}:`, updateError);
         }
       }
 
@@ -1604,8 +1694,8 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
         success: true,
         trackingNumber,
         labelImage: labelBase64,
-        orderIds,
-        message: `Consolidated label created for ${orderIds.length} orders`,
+        orderIds: shipmentItems.map((i: any) => i.orderId),
+        message: `Consolidated label created for ${shipmentItems.length} items`,
       });
     } else {
       res.status(500).json({
@@ -1831,8 +1921,183 @@ router.post('/bulk/create-labels', async (req: Request, res: Response) => {
 
     for (const shipment of shipments) {
       try {
-        const { orderId, serviceCode, billingOption, receiverAccount, declaredValue } = shipment;
+        const { orderId, serviceCode, billingOption, receiverAccount, declaredValue, isRma, rmaId, originalOrderId } = shipment;
 
+        // Handle RMA shipments differently
+        if (isRma && rmaId) {
+          // RMA shipment - get address from original order or NCR repair address
+          let order = await storage.getFinalizedOrderById(originalOrderId) as any;
+          if (!order) {
+            order = await storage.getOrderDraft(originalOrderId);
+          }
+
+          if (!order) {
+            results.push({
+              orderId,
+              success: false,
+              error: 'Original order not found for RMA',
+              isRma: true,
+              rmaId,
+            });
+            continue;
+          }
+
+          // Get shipping address for RMA (same logic as regular orders)
+          let shippingAddress: any = null;
+          let customer: any = null;
+          if (order.customerId) {
+            customer = await storage.getCustomer(parseInt(order.customerId));
+            const addresses = await storage.getCustomerAddresses(order.customerId);
+            
+            if (order.hasAltShipTo && order.altShipToAddress) {
+              const altAddr = order.altShipToAddress as any;
+              shippingAddress = {
+                name: order.altShipToName || customer?.name || '',
+                company: order.altShipToCompany || '',
+                street: altAddr?.street || '',
+                city: altAddr?.city || '',
+                state: altAddr?.state || '',
+                zipCode: altAddr?.zip || altAddr?.zipCode || '',
+                country: altAddr?.country || 'US',
+              };
+            } else if (addresses.length > 0) {
+              shippingAddress = {
+                name: customer?.name || '',
+                company: customer?.company || '',
+                street: addresses[0].street || '',
+                city: addresses[0].city || '',
+                state: addresses[0].state || '',
+                zipCode: addresses[0].zipCode || '',
+                country: addresses[0].country || 'US',
+              };
+            }
+          }
+
+          if (!shippingAddress || !shippingAddress.zipCode) {
+            results.push({
+              orderId,
+              success: false,
+              error: 'No shipping address found for RMA',
+              isRma: true,
+              rmaId,
+            });
+            continue;
+          }
+
+          // Get UPS credentials and create label (same as regular orders)
+          const upsClientId = process.env.UPS_CLIENT_ID?.trim();
+          const upsClientSecret = process.env.UPS_CLIENT_SECRET?.trim();
+          const upsShipperNumber = process.env.UPS_SHIPPER_NUMBER?.trim();
+
+          if (!upsClientId || !upsClientSecret || !upsShipperNumber) {
+            results.push({
+              orderId,
+              success: false,
+              error: 'UPS credentials not configured',
+              isRma: true,
+              rmaId,
+            });
+            continue;
+          }
+
+          let accessToken;
+          try {
+            accessToken = await getUPSOAuthToken(upsClientId, upsClientSecret);
+          } catch (tokenError: any) {
+            results.push({
+              orderId,
+              success: false,
+              error: 'Failed to authenticate with UPS',
+              isRma: true,
+              rmaId,
+            });
+            continue;
+          }
+
+          const shipFromAddress = {
+            name: 'AG Composites',
+            company: 'AG Composites',
+            contact: 'Shipping',
+            street: '230 Hamer Rd.',
+            city: 'Owens Crossroads',
+            state: 'AL',
+            zipCode: '35763',
+            country: 'US',
+            phone: '256-723-8381',
+          };
+
+          const shipmentPayload = buildUPSShipmentPayloadOAuth(
+            {
+              orderId,
+              shipToAddress: shippingAddress,
+              shipFromAddress,
+              packageWeight: packageDefaults.weight || 5,
+              packageDimensions: {
+                length: packageDefaults.length || 12,
+                width: packageDefaults.width || 12,
+                height: packageDefaults.height || 12,
+              },
+              billingOption: billingOption || 'sender',
+              receiverAccount: billingOption === 'receiver' ? receiverAccount : undefined,
+              serviceType: serviceCode || '03',
+            },
+            upsShipperNumber
+          );
+
+          const upsEndpoint = 'https://onlinetools.ups.com/api/shipments/v1/ship';
+          const shipResponse = await axios.post(upsEndpoint, shipmentPayload, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            timeout: 30000,
+          });
+
+          const shipmentResults = shipResponse.data?.ShipmentResponse?.ShipmentResults;
+          const labelBase64 = shipmentResults?.PackageResults?.[0]?.ShippingLabel?.GraphicImage;
+          const trackingNumber = shipmentResults?.ShipmentIdentificationNumber;
+
+          if (labelBase64 && trackingNumber) {
+            // Update NCR with tracking number (instead of order)
+            try {
+              await db
+                .update(nonconformanceRecords)
+                .set({
+                  trackingNumber,
+                  shippingCarrier: 'UPS',
+                  shippedDate: new Date().toISOString().split('T')[0],
+                  shippingStatus: 'Shipped',
+                  updatedAt: new Date(),
+                })
+                .where(eq(nonconformanceRecords.id, parseInt(rmaId)));
+              
+              console.log(`✅ Updated RMA ${orderId} with tracking ${trackingNumber}`);
+            } catch (updateError) {
+              console.error(`Failed to update RMA ${rmaId}:`, updateError);
+            }
+
+            results.push({
+              orderId,
+              success: true,
+              labelBase64,
+              trackingNumber,
+              isRma: true,
+              rmaId,
+            });
+          } else {
+            results.push({
+              orderId,
+              success: false,
+              error: 'No label or tracking returned',
+              isRma: true,
+              rmaId,
+            });
+          }
+          continue; // Skip regular order processing
+        }
+
+        // Regular order processing (existing code)
         // Get order data
         let order = await storage.getFinalizedOrderById(orderId) as any;
         if (!order) {

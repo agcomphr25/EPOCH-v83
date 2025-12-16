@@ -8,6 +8,7 @@ import {
   insertNonconformanceRecordSchema,
   orders,
   allOrders,
+  customerAddresses,
 } from '../schema';
 
 const router = Router();
@@ -87,6 +88,122 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Error fetching nonconformance records:', error);
     res.status(500).json({ error: 'Failed to fetch records' });
+  }
+});
+
+// GET /api/nonconformance/ready-to-ship - Get RMAs ready for shipping
+router.get('/ready-to-ship', async (req, res) => {
+  try {
+    const records = await db
+      .select()
+      .from(nonconformanceRecords)
+      .where(eq(nonconformanceRecords.shippingStatus, 'Ready to Ship'))
+      .orderBy(desc(nonconformanceRecords.resolvedAt));
+
+    // Transform RMA records to match order format for shipping queue
+    // Enrich with shipping address from original order or repairAddress
+    const rmaShipments = await Promise.all(records.map(async (record) => {
+      let shippingAddress = null;
+      let customerId = null;
+
+      // If useOrderAddress is false and repairAddress exists, use it directly
+      if (!record.useOrderAddress && record.repairAddress) {
+        const repairAddr = record.repairAddress as any;
+        shippingAddress = {
+          name: repairAddr.name || record.customerName || '',
+          street: repairAddr.street || '',
+          city: repairAddr.city || '',
+          state: repairAddr.state || '',
+          zipCode: repairAddr.zip || repairAddr.zipCode || '',
+          country: repairAddr.country || 'US',
+        };
+      }
+      // Otherwise, try to get shipping address from original order
+      else if (record.orderId) {
+        try {
+          const [originalOrder] = await db
+            .select()
+            .from(allOrders)
+            .where(eq(allOrders.orderId, record.orderId))
+            .limit(1);
+          
+          if (originalOrder && originalOrder.customerId) {
+            customerId = originalOrder.customerId;
+            // Get customer addresses from the customerAddresses table
+            const custAddressList = await db
+              .select()
+              .from(customerAddresses)
+              .where(eq(customerAddresses.customerId, originalOrder.customerId));
+            
+            if (originalOrder.hasAltShipTo && originalOrder.altShipToAddress) {
+              const altAddr = originalOrder.altShipToAddress as any;
+              shippingAddress = {
+                name: originalOrder.altShipToName || record.customerName || '',
+                street: altAddr?.street || '',
+                city: altAddr?.city || '',
+                state: altAddr?.state || '',
+                zipCode: altAddr?.zip || altAddr?.zipCode || '',
+                country: altAddr?.country || 'US',
+              };
+            } else if (custAddressList.length > 0) {
+              shippingAddress = {
+                name: record.customerName || '',
+                street: custAddressList[0].street || '',
+                city: custAddressList[0].city || '',
+                state: custAddressList[0].state || '',
+                zipCode: custAddressList[0].zipCode || '',
+                country: custAddressList[0].country || 'US',
+              };
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to get shipping address for RMA ${record.id}:`, err);
+        }
+      }
+
+      // Final fallback to repairAddress if no address found and repairAddress exists
+      if (!shippingAddress && record.repairAddress) {
+        const repairAddr = record.repairAddress as any;
+        shippingAddress = {
+          name: repairAddr.name || record.customerName || '',
+          street: repairAddr.street || '',
+          city: repairAddr.city || '',
+          state: repairAddr.state || '',
+          zipCode: repairAddr.zip || repairAddr.zipCode || '',
+          country: repairAddr.country || 'US',
+        };
+      }
+
+      return {
+        id: `rma-${record.id}`,
+        orderId: record.rmaNumber || `RMA-${record.id}`,
+        originalOrderId: record.orderId,
+        isRma: true,
+        rmaId: record.id,
+        customerId,
+        customerName: record.customerName,
+        stockModel: record.stockModel,
+        currentDepartment: 'Shipping',
+        status: 'IN_PROGRESS',
+        disposition: record.disposition,
+        notes: record.notes,
+        repairNotes: record.repairNotes,
+        trackingNumber: record.trackingNumber,
+        shippingCarrier: record.shippingCarrier,
+        shippedDate: record.shippedDate,
+        customerNotified: record.customerNotified,
+        useOrderAddress: record.useOrderAddress,
+        repairAddress: record.repairAddress,
+        shippingAddress, // Include enriched shipping address
+        resolvedAt: record.resolvedAt,
+        createdAt: record.createdAt,
+      };
+    }));
+
+    res.json(rmaShipments);
+  } catch (error) {
+    console.error('Error fetching RMAs ready to ship:', error);
+    res.status(500).json({ error: 'Failed to fetch RMAs' });
   }
 });
 
@@ -256,8 +373,23 @@ router.put('/:id', async (req, res) => {
       updatedAt: new Date(),
     };
 
-    if (validatedData.status === 'Resolved' && req.body.status !== 'Resolved') {
+    if (validatedData.status === 'Resolved') {
       updateData.resolvedAt = new Date();
+      
+      // For Repair or Rework dispositions, set shippingStatus to "Ready to Ship"
+      // so the RMA appears in the shipping queue
+      const disposition = validatedData.disposition?.toLowerCase();
+      if (disposition === 'repair' || disposition === 'rework') {
+        updateData.shippingStatus = 'Ready to Ship';
+        console.log(`✅ NCR marked as Resolved with ${validatedData.disposition} disposition - setting shipping status to "Ready to Ship"`);
+      } else {
+        // Non-shippable dispositions - clear shipping status
+        updateData.shippingStatus = null;
+      }
+    } else {
+      // Not Resolved status - clear shipping status to remove from shipping queue
+      updateData.shippingStatus = null;
+      updateData.resolvedAt = null;
     }
 
     const [updatedRecord] = await db
@@ -319,6 +451,40 @@ router.put('/:id', async (req, res) => {
     }
 
     res.status(500).json({ error: 'Failed to update record' });
+  }
+});
+
+// PATCH /api/nonconformance/:id/shipping - Update RMA shipping info
+router.patch('/:id/shipping', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { trackingNumber, shippingCarrier, shippedDate, shippingStatus, customerNotified } = req.body;
+
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
+
+    if (trackingNumber !== undefined) updateData.trackingNumber = trackingNumber;
+    if (shippingCarrier !== undefined) updateData.shippingCarrier = shippingCarrier;
+    if (shippedDate !== undefined) updateData.shippedDate = shippedDate || null;
+    if (shippingStatus !== undefined) updateData.shippingStatus = shippingStatus;
+    if (customerNotified !== undefined) updateData.customerNotified = customerNotified;
+
+    const [updatedRecord] = await db
+      .update(nonconformanceRecords)
+      .set(updateData)
+      .where(eq(nonconformanceRecords.id, parseInt(id)))
+      .returning();
+
+    if (!updatedRecord) {
+      return res.status(404).json({ error: 'Record not found' });
+    }
+
+    console.log(`✅ Updated RMA #${updatedRecord.rmaNumber} shipping info: tracking=${trackingNumber}, status=${shippingStatus}`);
+    res.json(updatedRecord);
+  } catch (error) {
+    console.error('Error updating RMA shipping info:', error);
+    res.status(500).json({ error: 'Failed to update shipping info' });
   }
 });
 

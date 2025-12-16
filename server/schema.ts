@@ -3412,6 +3412,12 @@ export const nonconformanceRecords = pgTable('nonconformance_records', {
   rtsAddedAt: timestamp('rts_added_at'),
   useOrderAddress: boolean('use_order_address').default(false),
   repairAddress: jsonb('repair_address'),
+  // Shipping fields for RMA shipments
+  shippingStatus: text('shipping_status'), // null, 'Ready to Ship', 'Shipped'
+  trackingNumber: text('tracking_number'),
+  shippingCarrier: text('shipping_carrier'),
+  shippedDate: date('shipped_date'),
+  customerNotified: boolean('customer_notified').default(false),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -3451,6 +3457,12 @@ export const insertNonconformanceRecordSchema = createInsertSchema(
       zipCode: z.string().optional().nullable(),
       country: z.string().optional().nullable(),
     }).optional().nullable(),
+    // Shipping fields
+    shippingStatus: z.string().optional().nullable(),
+    trackingNumber: z.string().optional().nullable(),
+    shippingCarrier: z.string().optional().nullable(),
+    shippedDate: z.string().optional().nullable(),
+    customerNotified: z.boolean().optional().default(false),
   });
 
 // Types for Module 8

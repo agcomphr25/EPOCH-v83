@@ -30,6 +30,7 @@ import { apiRequest } from '../lib/queryClient';
 interface StockModel {
   id: string;
   name: string;
+  displayName?: string;
   isActive?: boolean;
 }
 
@@ -108,17 +109,21 @@ export default function NonconformanceFormModal({
   const lastSelectedOrderIdRef = useRef<string | null>(null);
 
   const [form, setForm] = useState({
+    rmaNumber: '',
     orderId: '',
     serialNumber: '',
     customerName: '',
     poNumber: '',
     stockModel: '',
     quantity: 1,
+    additionalOrderIds: [] as string[],
+    additionalSerialNumbers: [] as string[],
     issueCause: issueOptions[0],
     manufacturerDefect: false,
     disposition: dispositionOptions[0],
     authorization: authorizationOptions[0],
     dispositionDate: new Date().toISOString().split('T')[0],
+    dateReceived: '',
     notes: '',
     status: 'Open',
     repairDepartment: '',
@@ -191,12 +196,15 @@ export default function NonconformanceFormModal({
       lastSelectedOrderIdRef.current = recordToEdit.orderId || null;
       
       setForm({
+        rmaNumber: recordToEdit.rmaNumber || '',
         orderId: recordToEdit.orderId || '',
         serialNumber: recordToEdit.serialNumber || '',
         customerName: recordToEdit.customerName || '',
         poNumber: recordToEdit.poNumber || '',
         stockModel: recordToEdit.stockModel || '',
         quantity: recordToEdit.quantity || 1,
+        additionalOrderIds: recordToEdit.additionalOrderIds || [],
+        additionalSerialNumbers: recordToEdit.additionalSerialNumbers || [],
         issueCause: recordToEdit.issueCause || issueOptions[0],
         manufacturerDefect: recordToEdit.manufacturerDefect || false,
         disposition: recordToEdit.disposition || dispositionOptions[0],
@@ -204,6 +212,7 @@ export default function NonconformanceFormModal({
         dispositionDate:
           recordToEdit.dispositionDate?.split('T')[0] ||
           new Date().toISOString().split('T')[0],
+        dateReceived: recordToEdit.dateReceived?.split('T')[0] || '',
         notes: recordToEdit.notes || '',
         status: recordToEdit.status || 'Open',
         repairDepartment: recordToEdit.repairDepartment || '',
@@ -427,6 +436,24 @@ export default function NonconformanceFormModal({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {/* RMA Number Display */}
+          {isEdit && form.rmaNumber && (
+            <div className="p-3 bg-purple-50 dark:bg-purple-950 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center gap-2">
+                <Label className="text-purple-700 dark:text-purple-300 font-medium">RMA #:</Label>
+                <span className="text-purple-900 dark:text-purple-100 font-bold text-lg">{form.rmaNumber}</span>
+              </div>
+            </div>
+          )}
+          {!isEdit && (
+            <div className="p-3 bg-purple-50 dark:bg-purple-950 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center gap-2">
+                <Label className="text-purple-700 dark:text-purple-300 font-medium">RMA #:</Label>
+                <span className="text-purple-600 dark:text-purple-400 text-sm italic">Will be auto-generated on save</span>
+              </div>
+            </div>
+          )}
+
           {/* Order Search Dropdown */}
           <div className="space-y-2">
             <Label>Search Order</Label>
@@ -549,7 +576,7 @@ export default function NonconformanceFormModal({
                     .filter((model) => model.isActive !== false)
                     .map((model) => (
                       <SelectItem key={model.id} value={model.id}>
-                        {model.name}
+                        {model.displayName || model.name}
                       </SelectItem>
                     ))}
                 </SelectContent>
@@ -567,6 +594,51 @@ export default function NonconformanceFormModal({
               />
             </div>
           </div>
+
+          {/* Additional Order IDs / Serial Numbers when Qty > 1 */}
+          {form.quantity > 1 && (
+            <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg space-y-4 border border-gray-200 dark:border-gray-700">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+                Additional Items (Qty: {form.quantity})
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Enter additional Order IDs and/or Serial Numbers for the other items in this batch.
+              </p>
+              
+              <div className="space-y-3">
+                {Array.from({ length: form.quantity - 1 }, (_, idx) => (
+                  <div key={idx} className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Order ID #{idx + 2}</Label>
+                      <Input
+                        value={form.additionalOrderIds[idx] || ''}
+                        onChange={(e) => {
+                          const newIds = [...form.additionalOrderIds];
+                          newIds[idx] = e.target.value;
+                          setForm({ ...form, additionalOrderIds: newIds });
+                        }}
+                        placeholder={`Additional Order ID #${idx + 2}`}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Serial # #{idx + 2}</Label>
+                      <Input
+                        value={form.additionalSerialNumbers[idx] || ''}
+                        onChange={(e) => {
+                          const newSerials = [...form.additionalSerialNumbers];
+                          newSerials[idx] = e.target.value;
+                          setForm({ ...form, additionalSerialNumbers: newSerials });
+                        }}
+                        placeholder={`Additional Serial # #${idx + 2}`}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Issue Details */}
           <div className="space-y-2">
@@ -871,15 +943,27 @@ export default function NonconformanceFormModal({
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label>Disposition Date</Label>
-            <Input
-              type="date"
-              value={form.dispositionDate}
-              onChange={(e) =>
-                setForm({ ...form, dispositionDate: e.target.value })
-              }
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Estimated Disposition Date</Label>
+              <Input
+                type="date"
+                value={form.dispositionDate}
+                onChange={(e) =>
+                  setForm({ ...form, dispositionDate: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Date Received</Label>
+              <Input
+                type="date"
+                value={form.dateReceived}
+                onChange={(e) =>
+                  setForm({ ...form, dateReceived: e.target.value })
+                }
+              />
+            </div>
           </div>
 
           {/* Status (edit only) */}

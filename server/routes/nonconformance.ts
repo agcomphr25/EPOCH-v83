@@ -111,15 +111,52 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Helper function to generate RMA number in format RMAYYMMDD-X
+async function generateRmaNumber(): Promise<string> {
+  const now = new Date();
+  const year = now.getFullYear().toString().slice(-2);
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  const day = now.getDate().toString().padStart(2, '0');
+  const datePrefix = `RMA${year}${month}${day}`;
+  
+  // Count existing RMAs for today and find the highest number
+  const todayPattern = `${datePrefix}-%`;
+  const existingRmas = await db
+    .select({ rmaNumber: nonconformanceRecords.rmaNumber })
+    .from(nonconformanceRecords)
+    .where(ilike(nonconformanceRecords.rmaNumber, todayPattern));
+  
+  // Extract the highest number used today
+  let maxNumber = 0;
+  for (const rma of existingRmas) {
+    if (rma.rmaNumber) {
+      const match = rma.rmaNumber.match(/-(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    }
+  }
+  
+  const nextNumber = maxNumber + 1;
+  return `${datePrefix}-${nextNumber}`;
+}
+
 // POST /api/nonconformance - Create new record
 router.post('/', async (req, res) => {
   try {
     const validatedData = insertNonconformanceRecordSchema.parse(req.body);
 
+    // Auto-generate RMA number if not provided
+    const rmaNumber = validatedData.rmaNumber || await generateRmaNumber();
+
     const [newRecord] = await db
       .insert(nonconformanceRecords)
       .values({
         ...validatedData,
+        rmaNumber,
         createdAt: new Date(),
         updatedAt: new Date(),
       })

@@ -4414,6 +4414,32 @@ export default function OrderEntry() {
                     placeholder="Add special instructions or notes..."
                     rows={3}
                   />
+                  {/* Render NCR links as clickable */}
+                  {notes && notes.includes('Nonconformance Record #') && (
+                    <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-md">
+                      <p className="text-xs text-amber-700 font-medium mb-1">Linked Records:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {notes.match(/\[Nonconformance Record #(\d+)\]\(([^)]+)\)/g)?.map((match, idx) => {
+                          const ncrMatch = match.match(/\[Nonconformance Record #(\d+)\]\(([^)]+)\)/);
+                          if (ncrMatch) {
+                            const [, ncrId, ncrPath] = ncrMatch;
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setLocation(ncrPath)}
+                                className="text-xs text-blue-600 hover:text-blue-800 hover:underline cursor-pointer bg-white px-2 py-1 rounded border border-blue-200"
+                                data-testid={`link-ncr-${ncrId}`}
+                              >
+                                Nonconformance Record #{ncrId}
+                              </button>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Miscellaneous Items */}

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus, Search, RefreshCw, FileText, Edit } from 'lucide-react';
 import { format, addDays, parseISO } from 'date-fns';
+import { useLocation } from 'wouter';
 
 import useNonconformance from '../hooks/useNonconformance';
 import NonconformanceFormModal from './NonconformanceFormModal';
@@ -18,6 +19,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 
 export default function NonconformanceDashboard() {
+  const [, setLocation] = useLocation();
   const [filters, setFilters] = useState({
     dateFrom: '',
     dateTo: '',
@@ -299,8 +301,14 @@ export default function NonconformanceDashboard() {
                     const statusBadge = getStatusBadge(record);
                     return (
                       <tr key={record.id} className="border-b hover:bg-gray-50">
-                        <td className="p-2 font-medium text-blue-600">
-                          {record.orderId}
+                        <td className="p-2">
+                          <button
+                            onClick={() => setLocation(`/order-entry?orderId=${record.orderId}`)}
+                            className="font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                            data-testid={`link-order-${record.orderId}`}
+                          >
+                            {record.orderId}
+                          </button>
                         </td>
                         <td className="p-2">{record.serialNumber}</td>
                         <td className="p-2">{record.customerName}</td>

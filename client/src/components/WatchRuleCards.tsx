@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Link } from 'wouter';
-import { Eye, Settings } from 'lucide-react';
+import { Eye, Settings, Users, User, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface WatchRule {
   id: number;
@@ -12,6 +13,9 @@ interface WatchRule {
   departmentId: number | null;
   departmentName: string;
   label: string | null;
+  trackedOrderIds: string[] | null;
+  visibilityScope: string;
+  visibilityEmployeeId: number | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -91,13 +95,34 @@ function WatchRuleCard({ rule }: { rule: WatchRule }) {
 
   const displayLabel = rule.label || `${rule.customerName} - ${rule.departmentName}`;
 
+  const getVisibilityInfo = () => {
+    switch (rule.visibilityScope) {
+      case 'EVERYONE':
+        return { icon: Users, label: 'Everyone', color: 'bg-green-100 text-green-700' };
+      case 'SPECIFIC_EMPLOYEE':
+        return { icon: User, label: 'Shared', color: 'bg-blue-100 text-blue-700' };
+      case 'USER_ONLY':
+      default:
+        return { icon: Lock, label: 'Private', color: 'bg-gray-100 text-gray-700' };
+    }
+  };
+
+  const visibility = getVisibilityInfo();
+  const VisibilityIcon = visibility.icon;
+
   return (
     <Link href={`/orders-list?customerId=${rule.customerId}&department=${rule.departmentName}`}>
       <Card
         className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-200"
         data-testid={`card-watch-rule-${rule.id}`}
       >
-        <CardContent className="p-4 text-center">
+        <CardContent className="p-4 text-center relative">
+          <div className="absolute top-2 right-2">
+            <Badge className={`${visibility.color} text-xs flex items-center gap-1`}>
+              <VisibilityIcon className="w-3 h-3" />
+              {visibility.label}
+            </Badge>
+          </div>
           <Eye className="w-8 h-8 text-purple-600 mx-auto mb-3" />
           <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
             {displayLabel}
@@ -105,6 +130,11 @@ function WatchRuleCard({ rule }: { rule: WatchRule }) {
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
             {rule.customerName} → {rule.departmentName}
           </p>
+          {rule.trackedOrderIds && rule.trackedOrderIds.length > 0 && (
+            <Badge variant="outline" className="text-xs mb-2">
+              Tracking {rule.trackedOrderIds.length} specific order{rule.trackedOrderIds.length !== 1 ? 's' : ''}
+            </Badge>
+          )}
           <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
             {isLoading ? (
               <div className="text-sm text-gray-400">Loading...</div>

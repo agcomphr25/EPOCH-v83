@@ -1307,8 +1307,8 @@ router.post(
         }
       }
 
-      // Use SmartyStreets US Autocomplete API for partial searches
-      const smartyStreetsUrl = `https://us-autocomplete.api.smartystreets.com/suggest?auth-id=${authId}&auth-token=${authToken}&prefix=${encodeURIComponent(search)}&max_suggestions=10`;
+      // Use SmartyStreets US Autocomplete Pro API for partial searches
+      const smartyStreetsUrl = `https://us-autocomplete-pro.api.smarty.com/lookup?auth-id=${authId}&auth-token=${authToken}&search=${encodeURIComponent(search)}&max_results=10`;
 
       console.log('🔧 Making SmartyStreets Autocomplete API call');
 

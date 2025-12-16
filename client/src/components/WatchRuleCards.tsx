@@ -16,6 +16,7 @@ interface WatchRule {
   trackedOrderIds: string[] | null;
   visibilityScope: string;
   visibilityEmployeeId: number | null;
+  visibilityEmployeeIds: number[] | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -23,12 +24,19 @@ interface WatchRule {
 
 interface WatchRuleCardsProps {
   userId: string;
+  employeeId?: number;
   showManageButton?: boolean;
 }
 
-export default function WatchRuleCards({ userId, showManageButton = true }: WatchRuleCardsProps) {
+export default function WatchRuleCards({ userId, employeeId, showManageButton = true }: WatchRuleCardsProps) {
+  const queryParams = new URLSearchParams({ userId });
+  if (employeeId) {
+    queryParams.set('includeShared', 'true');
+    queryParams.set('viewerEmployeeId', employeeId.toString());
+  }
+  
   const { data: watchRules = [], isLoading, isError } = useQuery<WatchRule[]>({
-    queryKey: [`/api/watch-rules?userId=${userId}`],
+    queryKey: [`/api/watch-rules?${queryParams.toString()}`],
     enabled: !!userId,
   });
 
@@ -99,8 +107,10 @@ function WatchRuleCard({ rule }: { rule: WatchRule }) {
     switch (rule.visibilityScope) {
       case 'EVERYONE':
         return { icon: Users, label: 'Everyone', color: 'bg-green-100 text-green-700' };
+      case 'SPECIFIC_EMPLOYEES':
       case 'SPECIFIC_EMPLOYEE':
-        return { icon: User, label: 'Shared', color: 'bg-blue-100 text-blue-700' };
+        const count = rule.visibilityEmployeeIds?.length || (rule.visibilityEmployeeId ? 1 : 0);
+        return { icon: User, label: count > 0 ? `Shared (${count})` : 'Shared', color: 'bg-blue-100 text-blue-700' };
       case 'USER_ONLY':
       default:
         return { icon: Lock, label: 'Private', color: 'bg-gray-100 text-gray-700' };

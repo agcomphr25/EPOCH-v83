@@ -57,6 +57,7 @@ interface WatchRule {
   trackedOrderIds: string[] | null;
   visibilityScope: string;
   visibilityEmployeeId: number | null;
+  visibilityEmployeeIds: number[] | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -103,7 +104,9 @@ export default function WatchRulesPage() {
   const [trackedOrderIds, setTrackedOrderIds] = useState<string[]>([]);
   const [visibilityScope, setVisibilityScope] = useState<string>('USER_ONLY');
   const [visibilityEmployeeId, setVisibilityEmployeeId] = useState<number | null>(null);
+  const [visibilityEmployeeIds, setVisibilityEmployeeIds] = useState<number[]>([]);
   const [orderSearch, setOrderSearch] = useState('');
+  const [employeeSearch, setEmployeeSearch] = useState('');
 
   const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
     queryKey: ['currentUser'],
@@ -126,7 +129,7 @@ export default function WatchRulesPage() {
 
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ['/api/watch-rules/employees/list'],
-    enabled: (isCreateDialogOpen || !!editingRule) && visibilityScope === 'SPECIFIC_EMPLOYEE',
+    enabled: (isCreateDialogOpen || !!editingRule) && (visibilityScope === 'SPECIFIC_EMPLOYEE' || visibilityScope === 'SPECIFIC_EMPLOYEES'),
   });
 
   const { data: customerOrders = [] } = useQuery<CustomerOrder[]>({
@@ -248,7 +251,9 @@ export default function WatchRulesPage() {
     setTrackedOrderIds([]);
     setVisibilityScope('USER_ONLY');
     setVisibilityEmployeeId(null);
+    setVisibilityEmployeeIds([]);
     setOrderSearch('');
+    setEmployeeSearch('');
   };
 
   const handleCreate = () => {
@@ -270,7 +275,8 @@ export default function WatchRulesPage() {
       label: label || null,
       trackedOrderIds: trackedOrderIds.length > 0 ? trackedOrderIds : [],
       visibilityScope,
-      visibilityEmployeeId: visibilityScope === 'SPECIFIC_EMPLOYEE' ? visibilityEmployeeId : null,
+      visibilityEmployeeId: null,
+      visibilityEmployeeIds: visibilityScope === 'SPECIFIC_EMPLOYEES' ? visibilityEmployeeIds : [],
       isActive: true,
     });
   };
@@ -285,6 +291,7 @@ export default function WatchRulesPage() {
     setTrackedOrderIds(rule.trackedOrderIds || []);
     setVisibilityScope(rule.visibilityScope || 'USER_ONLY');
     setVisibilityEmployeeId(rule.visibilityEmployeeId);
+    setVisibilityEmployeeIds(rule.visibilityEmployeeIds || []);
   };
 
   const handleUpdate = () => {
@@ -300,7 +307,8 @@ export default function WatchRulesPage() {
         label: label || null,
         trackedOrderIds: trackedOrderIds.length > 0 ? trackedOrderIds : [],
         visibilityScope,
-        visibilityEmployeeId: visibilityScope === 'SPECIFIC_EMPLOYEE' ? visibilityEmployeeId : null,
+        visibilityEmployeeId: null,
+        visibilityEmployeeIds: visibilityScope === 'SPECIFIC_EMPLOYEES' ? visibilityEmployeeIds : [],
       },
     });
   };
@@ -353,15 +361,16 @@ export default function WatchRulesPage() {
     o.currentDepartment.toLowerCase().includes(orderSearch.toLowerCase())
   );
 
-  const getVisibilityLabel = (scope: string, employeeId: number | null) => {
+  const getVisibilityLabel = (scope: string, employeeIds: number[] | null) => {
     switch (scope) {
       case 'EVERYONE':
         return { icon: Users, label: 'Everyone', color: 'bg-green-100 text-green-800' };
+      case 'SPECIFIC_EMPLOYEES':
       case 'SPECIFIC_EMPLOYEE':
-        const emp = employees.find(e => e.id === employeeId);
+        const count = employeeIds?.length || 0;
         return { 
           icon: User, 
-          label: emp ? `${emp.firstName} ${emp.lastName}` : 'Specific Employee', 
+          label: count > 0 ? `${count} ${count === 1 ? 'Person' : 'People'}` : 'Specific People', 
           color: 'bg-blue-100 text-blue-800' 
         };
       case 'USER_ONLY':
@@ -369,6 +378,23 @@ export default function WatchRulesPage() {
         return { icon: Lock, label: 'Only Me', color: 'bg-gray-100 text-gray-800' };
     }
   };
+
+  const handleEmployeeToggle = (empId: number) => {
+    setVisibilityEmployeeIds(prev => 
+      prev.includes(empId)
+        ? prev.filter(id => id !== empId)
+        : [...prev, empId]
+    );
+  };
+
+  const removeEmployee = (empId: number) => {
+    setVisibilityEmployeeIds(prev => prev.filter(id => id !== empId));
+  };
+
+  const filteredEmployees = employees.filter(e => {
+    const fullName = `${e.firstName} ${e.lastName}`.toLowerCase();
+    return fullName.includes(employeeSearch.toLowerCase());
+  });
 
   if (!currentUser) {
     return (
@@ -433,7 +459,7 @@ export default function WatchRulesPage() {
               </TableHeader>
               <TableBody>
                 {watchRules.map((rule) => {
-                  const visibility = getVisibilityLabel(rule.visibilityScope, rule.visibilityEmployeeId);
+                  const visibility = getVisibilityLabel(rule.visibilityScope, rule.visibilityEmployeeIds);
                   const VisibilityIcon = visibility.icon;
                   return (
                     <TableRow key={rule.id}>
@@ -664,7 +690,7 @@ export default function WatchRulesPage() {
             <div className="space-y-3">
               <Label>Visibility</Label>
               <p className="text-xs text-gray-500">
-                Control who can see this watch rule's results
+                Control who can see this watch rule on their dashboard
               </p>
               <RadioGroup
                 value={visibilityScope}
@@ -686,31 +712,79 @@ export default function WatchRulesPage() {
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="SPECIFIC_EMPLOYEE" id="visibility-specific" data-testid="radio-visibility-specific" />
+                  <RadioGroupItem value="SPECIFIC_EMPLOYEES" id="visibility-specific" data-testid="radio-visibility-specific" />
                   <Label htmlFor="visibility-specific" className="flex items-center gap-2 cursor-pointer">
                     <User className="w-4 h-4 text-blue-600" />
-                    Specific Employee
+                    Specific People
                   </Label>
                 </div>
               </RadioGroup>
 
-              {visibilityScope === 'SPECIFIC_EMPLOYEE' && (
-                <div className="mt-2 ml-6">
-                  <Select
-                    value={visibilityEmployeeId?.toString() || ''}
-                    onValueChange={(value) => setVisibilityEmployeeId(parseInt(value))}
-                  >
-                    <SelectTrigger data-testid="select-visibility-employee">
-                      <SelectValue placeholder="Select an employee" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {employees.map((emp) => (
-                        <SelectItem key={emp.id} value={emp.id.toString()}>
-                          {emp.firstName} {emp.lastName} ({emp.employeeCode})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {visibilityScope === 'SPECIFIC_EMPLOYEES' && (
+                <div className="mt-2 ml-6 space-y-2">
+                  {visibilityEmployeeIds.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {visibilityEmployeeIds.map(empId => {
+                        const emp = employees.find(e => e.id === empId);
+                        return (
+                          <Badge 
+                            key={empId} 
+                            variant="secondary"
+                            className="flex items-center gap-1"
+                          >
+                            {emp ? `${emp.firstName} ${emp.lastName}` : `Employee ${empId}`}
+                            <button
+                              type="button"
+                              onClick={() => removeEmployee(empId)}
+                              className="ml-1 hover:bg-gray-200 rounded-full p-0.5"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="border rounded-md">
+                    <div className="p-2 border-b">
+                      <Input
+                        placeholder="Search employees..."
+                        value={employeeSearch}
+                        onChange={(e) => setEmployeeSearch(e.target.value)}
+                        className="h-8"
+                        data-testid="input-employee-search"
+                      />
+                    </div>
+                    <ScrollArea className="h-40">
+                      <div className="p-2 space-y-1">
+                        {filteredEmployees.length === 0 ? (
+                          <div className="text-center py-4 text-sm text-gray-500">
+                            No employees found
+                          </div>
+                        ) : (
+                          filteredEmployees.map((emp) => (
+                            <label
+                              key={emp.id}
+                              className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                            >
+                              <Checkbox
+                                checked={visibilityEmployeeIds.includes(emp.id)}
+                                onCheckedChange={() => handleEmployeeToggle(emp.id)}
+                                data-testid={`checkbox-employee-${emp.id}`}
+                              />
+                              <div className="flex-1 text-sm">
+                                <span className="font-medium">{emp.firstName} {emp.lastName}</span>
+                                {emp.employeeCode && (
+                                  <span className="text-gray-500 ml-2">({emp.employeeCode})</span>
+                                )}
+                              </div>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
                 </div>
               )}
             </div>

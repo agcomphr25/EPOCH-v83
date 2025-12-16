@@ -91,39 +91,54 @@ router.get('/customer-orders/:customerId', async (req, res) => {
 
 router.get('/', async (req, res) => {
   try {
-    const { userId, viewerId, viewerEmployeeId } = req.query;
+    const { userId, viewerEmployeeId, includeShared } = req.query;
 
     if (!userId || typeof userId !== 'string') {
       return res.status(400).json({ message: 'User ID is required' });
     }
 
-    const rules = await db
+    // Fetch rules owned by the user
+    const ownedRules = await db
       .select()
       .from(customerWatchRules)
       .where(eq(customerWatchRules.userId, userId))
       .orderBy(desc(customerWatchRules.createdAt));
 
-    // Default viewerId to userId if not provided (owner viewing their own rules)
-    const effectiveViewerId = viewerId || userId;
-
-    // Filter rules based on visibility settings if viewer is different from owner
-    const filteredRules = rules.filter(rule => {
-      // Owner can always see their own rules
-      if (rule.userId === effectiveViewerId) return true;
+    // If includeShared is true and viewerEmployeeId is provided, also fetch shared rules
+    let sharedRules: typeof ownedRules = [];
+    if (includeShared === 'true' && viewerEmployeeId) {
+      const empId = parseInt(viewerEmployeeId as string);
       
-      // Apply visibility filtering for non-owners
-      switch (rule.visibilityScope) {
-        case 'EVERYONE':
-          return true;
-        case 'SPECIFIC_EMPLOYEE':
-          return viewerEmployeeId && rule.visibilityEmployeeId === parseInt(viewerEmployeeId as string);
-        case 'USER_ONLY':
-        default:
-          return false;
-      }
-    });
+      // Fetch all rules that are shared with this employee or visible to everyone
+      const allRules = await db
+        .select()
+        .from(customerWatchRules)
+        .where(
+          or(
+            eq(customerWatchRules.visibilityScope, 'EVERYONE'),
+            and(
+              eq(customerWatchRules.visibilityScope, 'SPECIFIC_EMPLOYEES'),
+              sql`${empId} = ANY(${customerWatchRules.visibilityEmployeeIds})`
+            ),
+            // Also support legacy single employee field
+            and(
+              eq(customerWatchRules.visibilityScope, 'SPECIFIC_EMPLOYEE'),
+              eq(customerWatchRules.visibilityEmployeeId, empId)
+            )
+          )
+        )
+        .orderBy(desc(customerWatchRules.createdAt));
+      
+      // Filter out rules already owned by user
+      sharedRules = allRules.filter(r => r.userId !== userId);
+    }
 
-    res.json(filteredRules);
+    // Combine owned and shared rules, with owned first, removing duplicates
+    const seenIds = new Set(ownedRules.map(r => r.id));
+    const uniqueSharedRules = sharedRules.filter(r => !seenIds.has(r.id));
+    const combinedRules = [...ownedRules, ...uniqueSharedRules];
+
+    res.json(combinedRules);
   } catch (error) {
     console.error('Error fetching watch rules:', error);
     res.status(500).json({ message: 'Failed to fetch watch rules' });
@@ -185,7 +200,8 @@ router.patch('/:id', async (req, res) => {
       userId,
       trackedOrderIds,
       visibilityScope,
-      visibilityEmployeeId
+      visibilityEmployeeId,
+      visibilityEmployeeIds
     } = req.body;
 
     const [existingRule] = await db
@@ -212,6 +228,7 @@ router.patch('/:id', async (req, res) => {
     if (trackedOrderIds !== undefined) updates.trackedOrderIds = trackedOrderIds;
     if (visibilityScope !== undefined) updates.visibilityScope = visibilityScope;
     if (visibilityEmployeeId !== undefined) updates.visibilityEmployeeId = visibilityEmployeeId;
+    if (visibilityEmployeeIds !== undefined) updates.visibilityEmployeeIds = visibilityEmployeeIds;
 
     const [updatedRule] = await db
       .update(customerWatchRules)

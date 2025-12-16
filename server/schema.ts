@@ -7027,8 +7027,9 @@ export const customerWatchRules = pgTable('customer_watch_rules', {
   departmentName: text('department_name').notNull(), // Department name for display
   label: text('label'), // Optional custom label for the rule
   trackedOrderIds: text('tracked_order_ids').array().default([]), // Specific order IDs to track (empty = all orders)
-  visibilityScope: text('visibility_scope').default('USER_ONLY').notNull(), // 'USER_ONLY', 'EVERYONE', 'SPECIFIC_EMPLOYEE'
-  visibilityEmployeeId: integer('visibility_employee_id').references(() => employees.id), // Employee who can see (if SPECIFIC_EMPLOYEE)
+  visibilityScope: text('visibility_scope').default('USER_ONLY').notNull(), // 'USER_ONLY', 'EVERYONE', 'SPECIFIC_EMPLOYEES'
+  visibilityEmployeeId: integer('visibility_employee_id').references(() => employees.id), // DEPRECATED - kept for backward compatibility
+  visibilityEmployeeIds: integer('visibility_employee_ids').array().default([]), // Employees who can see (if SPECIFIC_EMPLOYEES)
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

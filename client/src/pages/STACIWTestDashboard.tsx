@@ -234,7 +234,7 @@ export default function STACIWTestDashboard() {
             </Button>
           </Link>
         </div>
-        <WatchRuleCards userId="staciw" showManageButton={false} />
+        <WatchRuleCards userId="staciw" employeeId={22} showManageButton={false} />
       </div>
 
       {/* My Tasks Control Center */}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,12 @@ import {
 } from '../utils/nonconformanceUtils';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '../lib/queryClient';
+
+interface StockModel {
+  id: string;
+  name: string;
+  isActive?: boolean;
+}
 
 const issueOptions = [
   'Customer Requested Additional Work',
@@ -129,6 +136,15 @@ export default function NonconformanceFormModal({
   });
 
   const [orderAddress, setOrderAddress] = useState<any>(null);
+
+  // Fetch stock models for dropdown
+  const { data: stockModels = [] } = useQuery<StockModel[]>({
+    queryKey: ['/api/stock-models'],
+    queryFn: async () => {
+      const result = await apiRequest('/api/stock-models');
+      return Array.isArray(result) ? result : [];
+    },
+  });
 
   // Wrapper for onClose that resets the ref
   const handleClose = () => {
@@ -486,7 +502,7 @@ export default function NonconformanceFormModal({
               />
             </div>
             <div className="space-y-2">
-              <Label>Serial Number</Label>
+              <Label>Serial Number (if applicable)</Label>
               <Input
                 value={form.serialNumber}
                 onChange={(e) =>
@@ -509,7 +525,7 @@ export default function NonconformanceFormModal({
               />
             </div>
             <div className="space-y-2">
-              <Label>PO Number</Label>
+              <Label>PO Number (if applicable)</Label>
               <Input
                 value={form.poNumber}
                 onChange={(e) => setForm({ ...form, poNumber: e.target.value })}
@@ -521,13 +537,23 @@ export default function NonconformanceFormModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Stock Model</Label>
-              <Input
+              <Select
                 value={form.stockModel}
-                onChange={(e) =>
-                  setForm({ ...form, stockModel: e.target.value })
-                }
-                placeholder="Stock Model"
-              />
+                onValueChange={(value) => setForm({ ...form, stockModel: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a stock model..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {stockModels
+                    .filter((model) => model.isActive !== false)
+                    .map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Quantity</Label>

@@ -144,6 +144,43 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // Add NCR link to order notes if orderId is provided
+    if (newRecord.orderId) {
+      try {
+        // Get the current order notes
+        const [currentOrder] = await db
+          .select({ notes: allOrders.notes })
+          .from(allOrders)
+          .where(eq(allOrders.orderId, newRecord.orderId))
+          .limit(1);
+
+        if (currentOrder) {
+          const ncrLink = `[Nonconformance Record #${newRecord.id}](/nonconformance?search=${newRecord.orderId})`;
+          const existingNotes = currentOrder.notes || '';
+          
+          // Check if NCR link already exists (to avoid duplicates on updates)
+          if (!existingNotes.includes(`Nonconformance Record #${newRecord.id}`)) {
+            const updatedNotes = existingNotes 
+              ? `${existingNotes}\n\n${ncrLink}`
+              : ncrLink;
+
+            await db
+              .update(allOrders)
+              .set({
+                notes: updatedNotes,
+                updatedAt: new Date(),
+              })
+              .where(eq(allOrders.orderId, newRecord.orderId));
+
+            console.log(`✅ Added NCR #${newRecord.id} link to order ${newRecord.orderId} notes`);
+          }
+        }
+      } catch (error) {
+        console.error(`⚠️ Failed to add NCR link to order ${newRecord.orderId} notes:`, error);
+        // Don't fail the whole request if notes update fails
+      }
+    }
+
     res.status(201).json(newRecord);
   } catch (error) {
     console.error('Error creating nonconformance record:', error);
@@ -183,6 +220,43 @@ router.put('/:id', async (req, res) => {
 
     if (!updatedRecord) {
       return res.status(404).json({ error: 'Record not found' });
+    }
+
+    // Add NCR link to order notes if orderId is provided (in case it wasn't added during create)
+    if (updatedRecord.orderId) {
+      try {
+        // Get the current order notes
+        const [currentOrder] = await db
+          .select({ notes: allOrders.notes })
+          .from(allOrders)
+          .where(eq(allOrders.orderId, updatedRecord.orderId))
+          .limit(1);
+
+        if (currentOrder) {
+          const ncrLink = `[Nonconformance Record #${updatedRecord.id}](/nonconformance?search=${updatedRecord.orderId})`;
+          const existingNotes = currentOrder.notes || '';
+          
+          // Check if NCR link already exists (to avoid duplicates)
+          if (!existingNotes.includes(`Nonconformance Record #${updatedRecord.id}`)) {
+            const updatedNotes = existingNotes 
+              ? `${existingNotes}\n\n${ncrLink}`
+              : ncrLink;
+
+            await db
+              .update(allOrders)
+              .set({
+                notes: updatedNotes,
+                updatedAt: new Date(),
+              })
+              .where(eq(allOrders.orderId, updatedRecord.orderId));
+
+            console.log(`✅ Added NCR #${updatedRecord.id} link to order ${updatedRecord.orderId} notes`);
+          }
+        }
+      } catch (error) {
+        console.error(`⚠️ Failed to add NCR link to order ${updatedRecord.orderId} notes:`, error);
+        // Don't fail the whole request if notes update fails
+      }
     }
 
     res.json(updatedRecord);

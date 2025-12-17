@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../../db';
-import { mediaLibrary } from '../../schema';
+import { mediaLibrary, orderSignedDocuments } from '../../schema';
+import { eq, desc } from 'drizzle-orm';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -61,7 +62,7 @@ router.post('/upload-for-signing', upload.single('file'), async (req, res) => {
 
 router.post('/apply-signature', async (req, res) => {
   try {
-    const { tempId, signatureData, signerName, title, notes, category, position } = req.body;
+    const { tempId, signatureData, signerName, title, notes, category, position, orderId, approvalType } = req.body;
 
     if (!tempId) {
       return res.status(400).json({ error: 'tempId is required (from upload-for-signing endpoint)' });
@@ -168,6 +169,11 @@ router.post('/apply-signature', async (req, res) => {
 
     const user = (req as any).user;
 
+    const tags = ['signed', 'signature'];
+    if (orderId) {
+      tags.push(`order:${orderId}`);
+    }
+
     const [newMedia] = await db.insert(mediaLibrary).values({
       filename: `${originalName}-signed.pdf`,
       storagePath: `uploads/media-library/${filename}`,
@@ -177,9 +183,24 @@ router.post('/apply-signature', async (req, res) => {
       capturedByName: user?.username || signerName,
       title: title || `${originalName} (Signed)`,
       notes: notes || `Signed by ${signerName} on ${signedDate}`,
-      tags: ['signed', 'signature'],
+      tags,
       category: category || 'signed-documents',
     }).returning();
+
+    let orderSignedDocId: string | null = null;
+    if (orderId) {
+      const [orderSignedDoc] = await db.insert(orderSignedDocuments).values({
+        orderId,
+        mediaId: newMedia.id,
+        approvalType: approvalType || 'customer_approval',
+        signedBy: signerName,
+        signedAt: new Date(),
+        notes: notes || null,
+        createdById: user?.id || null,
+        createdByName: user?.username || signerName,
+      }).returning();
+      orderSignedDocId = orderSignedDoc.id;
+    }
 
     res.json({
       success: true,
@@ -189,10 +210,94 @@ router.post('/apply-signature', async (req, res) => {
       title: newMedia.title,
       signedBy: signerName,
       signedAt: signedDate,
+      orderId: orderId || null,
+      orderSignedDocId,
     });
   } catch (error: any) {
     console.error('Error applying signature to PDF:', error);
     res.status(500).json({ error: error.message || 'Failed to sign PDF document' });
+  }
+});
+
+router.get('/by-order/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    const signedDocs = await db
+      .select({
+        id: orderSignedDocuments.id,
+        orderId: orderSignedDocuments.orderId,
+        approvalType: orderSignedDocuments.approvalType,
+        signedBy: orderSignedDocuments.signedBy,
+        signedAt: orderSignedDocuments.signedAt,
+        notes: orderSignedDocuments.notes,
+        createdByName: orderSignedDocuments.createdByName,
+        media: {
+          id: mediaLibrary.id,
+          filename: mediaLibrary.filename,
+          storagePath: mediaLibrary.storagePath,
+          title: mediaLibrary.title,
+          fileSize: mediaLibrary.fileSize,
+        }
+      })
+      .from(orderSignedDocuments)
+      .innerJoin(mediaLibrary, eq(orderSignedDocuments.mediaId, mediaLibrary.id))
+      .where(eq(orderSignedDocuments.orderId, orderId))
+      .orderBy(desc(orderSignedDocuments.signedAt));
+
+    res.json(signedDocs);
+  } catch (error: any) {
+    console.error('Error fetching signed documents for order:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch signed documents' });
+  }
+});
+
+router.get('/all', async (req, res) => {
+  try {
+    const { search, approvalType, startDate, endDate } = req.query;
+    
+    let query = db
+      .select({
+        id: orderSignedDocuments.id,
+        orderId: orderSignedDocuments.orderId,
+        approvalType: orderSignedDocuments.approvalType,
+        signedBy: orderSignedDocuments.signedBy,
+        signedAt: orderSignedDocuments.signedAt,
+        notes: orderSignedDocuments.notes,
+        createdByName: orderSignedDocuments.createdByName,
+        media: {
+          id: mediaLibrary.id,
+          filename: mediaLibrary.filename,
+          storagePath: mediaLibrary.storagePath,
+          title: mediaLibrary.title,
+          fileSize: mediaLibrary.fileSize,
+        }
+      })
+      .from(orderSignedDocuments)
+      .innerJoin(mediaLibrary, eq(orderSignedDocuments.mediaId, mediaLibrary.id))
+      .orderBy(desc(orderSignedDocuments.signedAt));
+
+    const results = await query;
+
+    let filteredResults = results;
+    
+    if (search) {
+      const searchLower = (search as string).toLowerCase();
+      filteredResults = filteredResults.filter(doc => 
+        doc.orderId.toLowerCase().includes(searchLower) ||
+        doc.signedBy.toLowerCase().includes(searchLower) ||
+        (doc.media.title && doc.media.title.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    if (approvalType && approvalType !== 'all') {
+      filteredResults = filteredResults.filter(doc => doc.approvalType === approvalType);
+    }
+
+    res.json(filteredResults);
+  } catch (error: any) {
+    console.error('Error fetching all signed documents:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch signed documents' });
   }
 });
 

@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -17,9 +19,21 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
-import { FileBadge, FileText, Search, Download, Eye, ExternalLink, Loader2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { FileBadge, FileText, Search, Download, Eye, ExternalLink, Loader2, Edit, Trash2 } from 'lucide-react';
 import { Link } from 'wouter';
+import { useToast } from '@/hooks/use-toast';
 
 interface SignedDocument {
   id: string;
@@ -49,10 +63,64 @@ export default function SignedDocumentsLibrary() {
   const [searchTerm, setSearchTerm] = useState('');
   const [approvalTypeFilter, setApprovalTypeFilter] = useState('all');
   const [previewDocument, setPreviewDocument] = useState<SignedDocument | null>(null);
+  const [editDocument, setEditDocument] = useState<SignedDocument | null>(null);
+  const [deleteDocument, setDeleteDocument] = useState<SignedDocument | null>(null);
+  const [editNotes, setEditNotes] = useState('');
+  const [editSignedBy, setEditSignedBy] = useState('');
+  const [editApprovalType, setEditApprovalType] = useState('');
+  
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data: signedDocuments, isLoading } = useQuery<SignedDocument[]>({
     queryKey: ['/api/documents/all'],
   });
+  
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/documents/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/documents/all'] });
+      toast({ title: 'Success', description: 'Document deleted successfully' });
+      setDeleteDocument(null);
+      setPreviewDocument(null);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to delete document', variant: 'destructive' });
+    },
+  });
+  
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; notes?: string; signedBy?: string; approvalType?: string }) => {
+      return apiRequest(`/api/documents/${id}`, { method: 'PATCH', body: data });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/documents/all'] });
+      toast({ title: 'Success', description: 'Document updated successfully' });
+      setEditDocument(null);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error', description: error.message || 'Failed to update document', variant: 'destructive' });
+    },
+  });
+  
+  const handleEdit = (doc: SignedDocument) => {
+    setEditNotes(doc.notes || '');
+    setEditSignedBy(doc.signedBy || '');
+    setEditApprovalType(doc.approvalType || '');
+    setEditDocument(doc);
+  };
+  
+  const handleSaveEdit = () => {
+    if (!editDocument) return;
+    updateMutation.mutate({
+      id: editDocument.id,
+      notes: editNotes,
+      signedBy: editSignedBy,
+      approvalType: editApprovalType,
+    });
+  };
 
   const filteredDocuments = signedDocuments?.filter(doc => {
     const matchesSearch = !searchTerm || 
@@ -210,7 +278,7 @@ export default function SignedDocumentsLibrary() {
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-2 ml-14 md:ml-0">
+                  <div className="flex flex-wrap gap-2 ml-14 md:ml-0">
                     <Button
                       variant="outline"
                       size="sm"
@@ -232,13 +300,21 @@ export default function SignedDocumentsLibrary() {
                     <Button
                       variant="outline"
                       size="sm"
-                      asChild
-                      data-testid={`button-open-${doc.id}`}
+                      onClick={() => handleEdit(doc)}
+                      data-testid={`button-edit-${doc.id}`}
                     >
-                      <a href={`/${doc.media.storagePath}`} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-4 w-4 mr-1" />
-                        Open
-                      </a>
+                      <Edit className="h-4 w-4 mr-1" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDeleteDocument(doc)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      data-testid={`button-delete-${doc.id}`}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Delete
                     </Button>
                   </div>
                 </div>
@@ -281,11 +357,106 @@ export default function SignedDocumentsLibrary() {
                     Open in New Tab
                   </a>
                 </Button>
+                <Button variant="outline" onClick={() => handleEdit(previewDocument)}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setDeleteDocument(previewDocument)}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
               </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editDocument} onOpenChange={() => setEditDocument(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Signed Document</DialogTitle>
+            <DialogDescription>
+              Update document details
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-signed-by">Signed By</Label>
+              <Input
+                id="edit-signed-by"
+                value={editSignedBy}
+                onChange={(e) => setEditSignedBy(e.target.value)}
+                data-testid="input-edit-signed-by"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-approval-type">Approval Type</Label>
+              <Select value={editApprovalType} onValueChange={setEditApprovalType}>
+                <SelectTrigger data-testid="select-edit-approval-type">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="customer_approval">Customer Approval</SelectItem>
+                  <SelectItem value="production_approval">Production Approval</SelectItem>
+                  <SelectItem value="quality_approval">Quality Approval</SelectItem>
+                  <SelectItem value="shipping_approval">Shipping Approval</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="edit-notes">Notes</Label>
+              <Textarea
+                id="edit-notes"
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                rows={3}
+                data-testid="input-edit-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDocument(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>
+              {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteDocument} onOpenChange={() => setDeleteDocument(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Signed Document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete "{deleteDocument?.media.title || deleteDocument?.media.filename}" 
+              and its associated file. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteDocument && deleteMutation.mutate(deleteDocument.id)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4" />
+              )}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

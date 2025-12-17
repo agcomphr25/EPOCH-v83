@@ -230,9 +230,9 @@ export function registerRoutes(app: Express): Server {
   // Pattern awareness signals routes
   app.use('/api/pattern-signals', patternSignalsRoutes);
 
-  // Document management routes
-  app.use('/api/documents', documentsRoutes);
+  // Document management routes - signPdfRoutes first so /all doesn't conflict with /:id
   app.use('/api/documents', signPdfRoutes);
+  app.use('/api/documents', documentsRoutes);
 
   // Controlled Documents (Master Document Register) routes
   app.use('/api/controlled-documents', controlledDocumentsRoutes);

@@ -187,20 +187,17 @@ router.post('/apply-signature', async (req, res) => {
       category: category || 'signed-documents',
     }).returning();
 
-    let orderSignedDocId: string | null = null;
-    if (orderId) {
-      const [orderSignedDoc] = await db.insert(orderSignedDocuments).values({
-        orderId,
-        mediaId: newMedia.id,
-        approvalType: approvalType || 'customer_approval',
-        signedBy: signerName,
-        signedAt: new Date(),
-        notes: notes || null,
-        createdById: user?.id || null,
-        createdByName: user?.username || signerName,
-      }).returning();
-      orderSignedDocId = orderSignedDoc.id;
-    }
+    const [orderSignedDoc] = await db.insert(orderSignedDocuments).values({
+      orderId: orderId || null,
+      mediaId: newMedia.id,
+      approvalType: approvalType || null,
+      signedBy: signerName,
+      signedAt: new Date(),
+      notes: notes || null,
+      createdById: user?.id || null,
+      createdByName: user?.username || signerName,
+    }).returning();
+    const orderSignedDocId = orderSignedDoc.id;
 
     res.json({
       success: true,

@@ -1,0 +1,75 @@
+You're now at Step 3 — Add Pattern Metadata (Still Console Only). So let's implement exactly that — no UI, no surface, no API changes yet, but we'll enhance the internal logs with meaningful metadata.
+
+🎯 Goal
+
+Augment current drift logs with:
+
+✅ Baseline Summary:
+
+Rolling window size
+
+Average (ms + sec)
+
+✅ Current window:
+
+Recent step durations
+
+of steps above threshold
+
+✅ Drift Signal Confidence:
+
+LOW → exactly 3 of 5 above threshold
+
+MEDIUM → 4 of 5
+
+HIGH → 5 of 5
+
+Let’s enhance driftLogic.js accordingly 🔨🤖🔧
+
+✅ Updated driftLogic.js
+export function detectDrift(stepId, instances) {
+  if (instances.length < 15) return null;
+
+  const durations = instances
+    .map(d => new Date(d.completedAt) - new Date(d.startedAt))
+    .filter(d => d > 0);
+
+  if (durations.length < 15) return null;
+
+  const recent = durations.slice(-5);
+  const baselineSet = durations.slice(-15, -5);
+  const baselineAvg = baselineSet.reduce((sum, val) => sum + val, 0) / baselineSet.length;
+
+  const threshold = baselineAvg * 1.25;
+  let driftCount = recent.filter(d => d > threshold).length;
+
+  if (driftCount >= 3) {
+    // Determine confidence
+    let confidence = "LOW";
+    if (driftCount === 4) confidence = "MEDIUM";
+    if (driftCount === 5) confidence = "HIGH";
+
+    // Log with metadata
+    console.log(`\n[Drift Detected] Step: ${stepId}`);
+    console.log(`  🔍 Baseline Avg: ${(baselineAvg / 1000).toFixed(2)} sec (window: 10)`);
+    console.log(`  🔍 Threshold (+25%): ${(threshold / 1000).toFixed(2)} sec`);
+    console.log(`  🕒 Recent Durations (sec): [${recent.map(d => (d / 1000).toFixed(2)).join(', ')}]`);
+    console.log(`  📊 Steps above threshold: ${driftCount} of 5`);
+    console.log(`  🎯 Confidence: ${confidence}\n`);
+
+    return {
+      stepId,
+      driftCount,
+      recentDurations: recent,
+      baselineAvg,
+      confidence,
+      message: 'This step has been taking longer recently.'
+    };
+  }
+
+  return null;
+}
+
+📌 Still Silent to the Client
+
+Your index.js remains untouched — still always returns "No drift detected." ✔️

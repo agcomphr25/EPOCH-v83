@@ -1,3 +1,5 @@
+import { isSuppressed, suppress } from './suppressionStore';
+
 export interface StepInstance {
   startedAt: string | Date;
   completedAt: string | Date;
@@ -28,11 +30,15 @@ export function detectDrift(stepId: string, instances: StepInstance[]): DriftRes
   const recent = durations.slice(-5);
   const baselineSet = durations.slice(-15, -5);
   const baselineAvg = baselineSet.reduce((sum, val) => sum + val, 0) / baselineSet.length;
-
   const threshold = baselineAvg * 1.25;
+
   const driftCount = recent.filter(d => d > threshold).length;
 
   if (driftCount >= 3) {
+    if (isSuppressed(stepId)) {
+      return null;
+    }
+
     let confidence: DriftConfidence = 'LOW';
     if (driftCount === 4) confidence = 'MEDIUM';
     if (driftCount === 5) confidence = 'HIGH';
@@ -42,7 +48,10 @@ export function detectDrift(stepId: string, instances: StepInstance[]): DriftRes
     console.log(`  🔍 Threshold (+25%): ${(threshold / 1000).toFixed(2)} sec`);
     console.log(`  🕒 Recent Durations (sec): [${recent.map(d => (d / 1000).toFixed(2)).join(', ')}]`);
     console.log(`  📊 Steps above threshold: ${driftCount} of 5`);
-    console.log(`  🎯 Confidence: ${confidence}\n`);
+    console.log(`  🎯 Confidence: ${confidence}`);
+    console.log(`  📎 Insight suppressed for next 7 days unless resolved.\n`);
+
+    suppress(stepId);
 
     return {
       isDrifting: true,

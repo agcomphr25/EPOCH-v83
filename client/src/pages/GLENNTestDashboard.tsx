@@ -29,6 +29,8 @@ import {
   Eye,
   Mic,
   Image,
+  FileSignature,
+  FileBadge,
 } from 'lucide-react';
 import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 import WatchRuleCards from '@/components/WatchRuleCards';
@@ -227,6 +229,18 @@ export default function ADMINTestDashboard() {
       label: 'Media Library',
       icon: Image,
       description: 'Browse and manage uploaded images and documents',
+    },
+    {
+      path: '/sign-pdf',
+      label: 'Sign PDF',
+      icon: FileSignature,
+      description: 'Sign PDF documents with digital signature',
+    },
+    {
+      path: '/signed-documents',
+      label: 'Signed Documents',
+      icon: FileBadge,
+      description: 'View all signed approval documents',
     },
   ];
 

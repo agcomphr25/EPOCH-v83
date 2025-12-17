@@ -458,6 +458,7 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/vendor-pos': ['ADMIN', 'OWNER'],
   '/media-library': ['ADMIN', 'OWNER'],
   '/sign-pdf': ['ADMIN', 'OWNER'],
+  '/signed-documents': ['ADMIN', 'OWNER'],
 };
 
 /**

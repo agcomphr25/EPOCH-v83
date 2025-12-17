@@ -32,6 +32,8 @@ interface PDFSignatureCaptureProps {
   category?: string;
   title?: string;
   notes?: string;
+  orderId?: string;
+  approvalType?: 'customer_approval' | 'production_approval' | 'quality_approval' | 'shipping_approval';
 }
 
 export interface SignedPDFResult {
@@ -47,7 +49,9 @@ export function PDFSignatureCapture({
   onSignComplete, 
   category = 'signed-documents',
   title: initialTitle,
-  notes: initialNotes 
+  notes: initialNotes,
+  orderId,
+  approvalType = 'customer_approval'
 }: PDFSignatureCaptureProps) {
   const { toast } = useToast();
   const signatureRef = useRef<SignatureCanvas>(null);
@@ -208,6 +212,8 @@ export function PDFSignatureCapture({
           title: documentTitle || (selectedFile?.name || selectedMediaItem?.filename || 'Document'),
           notes: documentNotes,
           category,
+          orderId,
+          approvalType,
         }),
       });
 

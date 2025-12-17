@@ -9,12 +9,22 @@ export interface AddressData {
   international?: boolean;
 }
 
+export interface AddressSuggestion {
+  text: string;
+  streetLine: string;
+  secondary: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  entries: number;
+}
+
 /**
  * Fetch autocomplete suggestions for an address query.
  * @param query - Address search query
- * @returns Array of suggestion strings
+ * @returns Array of structured suggestion objects
  */
-export async function autocompleteAddress(query: string): Promise<string[]> {
+export async function autocompleteAddress(query: string): Promise<AddressSuggestion[]> {
   try {
     const response = await apiRequest(
       '/api/customers/address-autocomplete-bypass',
@@ -26,11 +36,9 @@ export async function autocompleteAddress(query: string): Promise<string[]> {
 
     console.log('SmartyStreets autocomplete response:', response);
 
-    // Transform the response to extract the text property from each suggestion
+    // Return the full structured suggestions
     if (response.suggestions && Array.isArray(response.suggestions)) {
-      return response.suggestions.map(
-        (suggestion: any) => suggestion.text || suggestion
-      );
+      return response.suggestions;
     }
 
     return [];

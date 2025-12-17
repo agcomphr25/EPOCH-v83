@@ -22,6 +22,7 @@ import {
   autocompleteAddress,
   validateAddress,
   type AddressData,
+  type AddressSuggestion,
 } from '@/utils/addressUtils';
 import { useToast } from '@/hooks/use-toast';
 import debounce from 'lodash.debounce';
@@ -40,7 +41,7 @@ export default function AddressInput({
   required = false,
 }: AddressInputProps) {
   const [query, setQuery] = useState(value.street || '');
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
@@ -78,55 +79,23 @@ export default function AddressInput({
     setQuery(value.street || '');
   }, [value.street]);
 
-  const parseAddressFromSuggestion = (suggestion: string): AddressData => {
-    // SmartyStreets returns suggestions in format: "123 Main St, City ST" or "123 Main St, City ST 12345"
-    const parts = suggestion.split(', ');
-
-    if (parts.length >= 2) {
-      const street = parts[0];
-      const cityStateZip = parts[1];
-
-      // Parse city, state, and zip from "City ST" or "City ST 12345" format
-      const cityStateZipMatch = cityStateZip.match(
-        /^(.+?)\s+([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/
-      );
-
-      if (cityStateZipMatch) {
-        const city = cityStateZipMatch[1];
-        const state = cityStateZipMatch[2];
-        const zipCode = cityStateZipMatch[3] || '';
-
-        return {
-          street,
-          city,
-          state,
-          zipCode,
-          country: 'United States',
-        };
-      }
-    }
-
-    // Fallback: treat the entire suggestion as street address
-    return {
-      street: suggestion,
-      city: value.city,
-      state: value.state,
-      zipCode: value.zipCode,
-      country: value.country || 'United States',
-    };
-  };
-
-  const handleSelect = async (suggestion: string) => {
-    setQuery(suggestion);
+  const handleSelect = async (suggestion: AddressSuggestion) => {
+    setQuery(suggestion.text);
     setOpen(false);
     setSuggestions([]);
 
-    try {
-      // First parse the suggestion to extract address components
-      const parsedAddress = parseAddressFromSuggestion(suggestion);
+    // Use the structured fields directly from the suggestion
+    const addressData: AddressData = {
+      street: suggestion.streetLine,
+      city: suggestion.city,
+      state: suggestion.state,
+      zipCode: suggestion.zipCode,
+      country: 'United States',
+    };
 
-      // Then validate the parsed address with SmartyStreets
-      const validated = await validateAddress(parsedAddress);
+    try {
+      // Validate the address with SmartyStreets
+      const validated = await validateAddress(addressData);
       onChange(validated);
       toast({
         title: 'Address validated',
@@ -134,8 +103,7 @@ export default function AddressInput({
       });
     } catch (error) {
       // If validation fails, still use the parsed address
-      const parsedAddress = parseAddressFromSuggestion(suggestion);
-      onChange(parsedAddress);
+      onChange(addressData);
       toast({
         title: 'Address selected',
         description:
@@ -221,16 +189,16 @@ export default function AddressInput({
                   {suggestions.map((suggestion, index) => (
                     <CommandItem
                       key={index}
-                      value={suggestion}
+                      value={suggestion.text}
                       onSelect={() => handleSelect(suggestion)}
                     >
                       <Check
                         className={cn(
                           'mr-2 h-4 w-4',
-                          query === suggestion ? 'opacity-100' : 'opacity-0'
+                          query === suggestion.text ? 'opacity-100' : 'opacity-0'
                         )}
                       />
-                      {suggestion}
+                      {suggestion.text}
                     </CommandItem>
                   ))}
                 </CommandGroup>

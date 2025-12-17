@@ -95,6 +95,7 @@ import auditRoutes from './audit';
 import mediaRoutes from './media';
 import voiceNotesRoutes from './voiceNotes';
 import patternSignalsRoutes from './patternSignals';
+import signPdfRoutes from './signPdf';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -231,6 +232,7 @@ export function registerRoutes(app: Express): Server {
 
   // Document management routes
   app.use('/api/documents', documentsRoutes);
+  app.use('/api/documents', signPdfRoutes);
 
   // Controlled Documents (Master Document Register) routes
   app.use('/api/controlled-documents', controlledDocumentsRoutes);

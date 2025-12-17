@@ -456,6 +456,8 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/qc': ['ADMIN', 'OWNER'],
   '/vendors': ['ADMIN', 'OWNER'],
   '/vendor-pos': ['ADMIN', 'OWNER'],
+  '/media-library': ['ADMIN', 'OWNER'],
+  '/sign-pdf': ['ADMIN', 'OWNER'],
 };
 
 /**

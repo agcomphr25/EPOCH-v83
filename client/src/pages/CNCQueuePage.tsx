@@ -1049,7 +1049,9 @@ export default function CNCQueuePage() {
                                     qdVal !== 'none' &&
                                     qdVal !== ''
                                   ) {
-                                    activeFeatures.push('QDS');
+                                    // Add confirmation indicator if QD same-side was confirmed by CSR
+                                    const qdLabel = order.qdSameSideConfirmed ? 'QDS ✓' : 'QDS';
+                                    activeFeatures.push(qdLabel);
                                   }
 
                                   gunsimthFeatures.forEach((feature) => {

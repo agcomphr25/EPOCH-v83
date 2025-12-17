@@ -30,6 +30,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
@@ -187,6 +197,13 @@ export default function OrderEntry() {
   const [isManualDueDate, setIsManualDueDate] = useState(false);
   // Track whether user has manually set the order date
   const [isManualOrderDate, setIsManualOrderDate] = useState(false);
+
+  // QD Same-Side Confirmation Modal state
+  const [showQdSameSideModal, setShowQdSameSideModal] = useState(false);
+  const [qdSameSideConfirmed, setQdSameSideConfirmed] = useState(false);
+  const [qdSameSideConfirmedBy, setQdSameSideConfirmedBy] = useState<string | null>(null);
+  const [qdSameSideConfirmedAt, setQdSameSideConfirmedAt] = useState<Date | null>(null);
+  const [pendingOrderSubmit, setPendingOrderSubmit] = useState<{ saveAsDraft: boolean } | null>(null);
 
   // Alt Ship To Address state
   const [hasAltShipTo, setHasAltShipTo] = useState(false);
@@ -1391,6 +1408,11 @@ export default function OrderEntry() {
 
         // Payment data will be loaded by PaymentManager component
 
+        // Load QD same-side confirmation state (for preserving across edits)
+        setQdSameSideConfirmed(order.qdSameSideConfirmed || false);
+        setQdSameSideConfirmedBy(order.qdSameSideConfirmedBy || null);
+        setQdSameSideConfirmedAt(order.qdSameSideConfirmedAt ? new Date(order.qdSameSideConfirmedAt) : null);
+
         console.log('All order fields loaded:', {
           orderId: order.orderId,
           modelId: order.modelId,
@@ -1814,6 +1836,62 @@ export default function OrderEntry() {
 
   // Use unified pricing calculation (calculated above with discount already included)
 
+  // Check if QD accessory is on the same side as handedness (unusual configuration)
+  const checkQdSameSideWarning = useCallback(() => {
+    const handedness = features.handedness;
+    const qdAccessory = features.qd_accessory;
+
+    // If no handedness or no QD selected, no warning needed
+    if (!handedness || !qdAccessory) return false;
+
+    // Normalize values for comparison
+    const handednessLower = handedness.toLowerCase();
+    const qdLower = qdAccessory.toLowerCase();
+
+    // Check for same-side configuration (unusual)
+    // Left-handed stock with Left QD = unusual (normally QD would be on right)
+    // Right-handed stock with Right QD = unusual (normally QD would be on left)
+    const isLeftHanded = handednessLower === 'left' || handednessLower === 'lh';
+    const isRightHanded = handednessLower === 'right' || handednessLower === 'rh';
+    const hasLeftQd = qdLower.includes('left');
+    const hasRightQd = qdLower.includes('right');
+
+    // Same side = warning needed
+    if (isLeftHanded && hasLeftQd) return true;
+    if (isRightHanded && hasRightQd) return true;
+
+    return false;
+  }, [features.handedness, features.qd_accessory]);
+
+  // Handle QD same-side confirmation and proceed with order submission
+  const handleQdConfirmAndSubmit = async () => {
+    setShowQdSameSideModal(false);
+    
+    // Set the confirmation data
+    const confirmedBy = customer?.name || 'CSR';
+    const confirmedAt = new Date();
+    setQdSameSideConfirmed(true);
+    setQdSameSideConfirmedBy(confirmedBy);
+    setQdSameSideConfirmedAt(confirmedAt);
+
+    // Proceed with the pending submission
+    if (pendingOrderSubmit) {
+      await executeOrderSubmit(pendingOrderSubmit.saveAsDraft, {
+        qdSameSideConfirmed: true,
+        qdSameSideConfirmedBy: confirmedBy,
+        qdSameSideConfirmedAt: confirmedAt,
+      });
+    }
+    setPendingOrderSubmit(null);
+  };
+
+  // Cancel the QD confirmation modal
+  const handleQdConfirmCancel = () => {
+    setShowQdSameSideModal(false);
+    setPendingOrderSubmit(null);
+    setIsSubmitting(false);
+  };
+
   const handleSubmit = async (
     e?: React.FormEvent<HTMLFormElement>,
     saveAsDraft: boolean = false
@@ -1887,6 +1965,49 @@ export default function OrderEntry() {
         }
       }
 
+      // QD Same-Side Guardrail Check
+      // Check if QD is on the same side as handedness (unusual configuration)
+      const needsQdConfirmation = checkQdSameSideWarning();
+      if (needsQdConfirmation && !qdSameSideConfirmed) {
+        // Show confirmation modal and pause submission
+        setPendingOrderSubmit({ saveAsDraft });
+        setShowQdSameSideModal(true);
+        return; // Wait for modal confirmation
+      }
+
+      // Proceed with order submission
+      await executeOrderSubmit(saveAsDraft, {
+        qdSameSideConfirmed: qdSameSideConfirmed,
+        qdSameSideConfirmedBy: qdSameSideConfirmedBy,
+        qdSameSideConfirmedAt: qdSameSideConfirmedAt,
+      });
+    } catch (error: any) {
+      console.error('Submit error:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to save order',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Core order submission logic (extracted for reuse after modal confirmation)
+  const executeOrderSubmit = async (
+    saveAsDraft: boolean,
+    qdConfirmation: {
+      qdSameSideConfirmed: boolean;
+      qdSameSideConfirmedBy: string | null;
+      qdSameSideConfirmedAt: Date | null;
+    }
+  ) => {
+    // Ensure customer is selected (validation already done in handleSubmit)
+    if (!customer) {
+      throw new Error('Customer is required');
+    }
+    
+    try {
       // All features are now stored directly in the features object by form controls
       // No need to merge separate state variables since handedness, action_inlet, etc.
       // are directly updated in features by their respective form controls
@@ -1996,6 +2117,10 @@ export default function OrderEntry() {
         specialShippingBillToReceiver: specialShipping.billToReceiver,
         // Stock BOM auto-linking (for MRP integration)
         bomDefinitionId,
+        // QD Same-Side Confirmation (for unusual configurations)
+        qdSameSideConfirmed: qdConfirmation.qdSameSideConfirmed,
+        qdSameSideConfirmedBy: qdConfirmation.qdSameSideConfirmedBy,
+        qdSameSideConfirmedAt: qdConfirmation.qdSameSideConfirmedAt?.toISOString() || null,
         // Payment fields removed - now handled by PaymentManager
       };
 
@@ -2112,6 +2237,10 @@ export default function OrderEntry() {
       billToReceiver: false,
     });
     setIsManualDueDate(false); // Reset manual due date flag
+    // Reset QD same-side confirmation state
+    setQdSameSideConfirmed(false);
+    setQdSameSideConfirmedBy(null);
+    setQdSameSideConfirmedAt(null);
     generateOrderId();
   };
 
@@ -5616,6 +5745,59 @@ export default function OrderEntry() {
           </Card>
         </div>
       </div>
+
+      {/* QD Same-Side Confirmation Modal */}
+      <AlertDialog open={showQdSameSideModal} onOpenChange={setShowQdSameSideModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
+              <span className="text-2xl">⚠️</span>
+              QD Same-Side Configuration Warning
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-4">
+              <p className="font-medium text-gray-900 dark:text-gray-100">
+                The QD accessory is on the <span className="font-bold">same side</span> as the stock handedness.
+              </p>
+              <p className="text-gray-700 dark:text-gray-300">
+                Normally, QDs are placed on the <span className="font-bold">opposite side</span> of the stock compared to the handedness. 
+                For example, a Left-Handed stock would typically have QDs on the Right side.
+              </p>
+              <p className="text-gray-700 dark:text-gray-300">
+                This configuration is <span className="font-bold">unusual</span> and may be intentional if the customer specifically requested it.
+              </p>
+              <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="qd-confirmation-checkbox"
+                    checked={qdSameSideConfirmed}
+                    onCheckedChange={(checked) => setQdSameSideConfirmed(checked === true)}
+                    data-testid="checkbox-qd-confirmation"
+                  />
+                  <label
+                    htmlFor="qd-confirmation-checkbox"
+                    className="text-sm font-medium text-amber-800 dark:text-amber-200 cursor-pointer"
+                  >
+                    I have confirmed with the customer that they want the QD on the same side as the handedness.
+                  </label>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleQdConfirmCancel} data-testid="button-qd-cancel">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleQdConfirmAndSubmit}
+              disabled={!qdSameSideConfirmed}
+              className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              data-testid="button-qd-confirm-proceed"
+            >
+              Confirm & Proceed
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

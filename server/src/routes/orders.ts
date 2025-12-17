@@ -22,6 +22,7 @@ import {
   adminBulkUpdateSchema,
   ADMIN_FIELD_CONFIG 
 } from '../../../shared/adminConfig';
+import { auditService } from '../services/auditService';
 
 const router = Router();
 
@@ -726,6 +727,39 @@ router.post('/finalized', async (req: Request, res: Response) => {
     } catch (emailError) {
       console.error('Error sending email:', emailError);
       // Don't fail the order creation if email fails
+    }
+    
+    // Log audit event for order creation
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: order.orderId,
+        action: 'order_created',
+        actor: {
+          id: (req as any).user?.id,
+          username: (req as any).user?.username || 'System',
+          role: (req as any).user?.role || 'system',
+        },
+        meta: { 
+          source: 'order_creation',
+          status: orderStatus,
+          department: orderDepartment,
+          customerId: orderData.customerId,
+          modelId: orderData.modelId,
+        },
+      });
+      
+      // Record initial department entry
+      await auditService.recordDepartmentEntry({
+        entityType: 'p1_order',
+        entityId: order.orderId,
+        department: orderDepartment,
+        enteredByUserId: (req as any).user?.id,
+        metadata: { source: 'order_creation' },
+      });
+    } catch (auditError) {
+      console.error('Error logging audit event:', auditError);
+      // Don't fail the order creation if audit logging fails
     }
     
     res.status(201).json(order);
@@ -1780,6 +1814,23 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       console.log(
         `✅ Successfully marked order ${orderId} as FULFILLED (status: ${updatedOrder?.status})`
       );
+      
+      // Log audit event for order fulfillment
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: orderId,
+        action: 'order_fulfilled',
+        actor: {
+          id: (req as any).user?.id,
+          username: (req as any).user?.username || 'System',
+          role: (req as any).user?.role || 'system',
+        },
+        fieldsChanged: {
+          status: { before: existingOrder.status, after: 'FULFILLED' },
+          currentDepartment: { before: existingOrder.currentDepartment, after: null },
+        },
+        meta: { source: 'department_progression' },
+      });
     } else {
       console.log(
         `✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${targetDepartment}`
@@ -1795,6 +1846,38 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
         );
         return res.status(500).json({ error: `Department update failed` });
       }
+      
+      // Log audit event for department progression
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: orderId,
+        action: 'department_progress',
+        actor: {
+          id: (req as any).user?.id,
+          username: (req as any).user?.username || 'System',
+          role: (req as any).user?.role || 'system',
+        },
+        fieldsChanged: {
+          currentDepartment: { before: existingOrder.currentDepartment, after: targetDepartment },
+        },
+        meta: { 
+          source: 'department_progression',
+          fromDepartment: existingOrder.currentDepartment,
+          toDepartment: targetDepartment,
+        },
+      });
+      
+      // Also record department transition for timing tracking
+      await auditService.recordDepartmentEntry({
+        entityType: 'p1_order',
+        entityId: orderId,
+        department: targetDepartment,
+        enteredByUserId: (req as any).user?.id,
+        metadata: {
+          fromDepartment: existingOrder.currentDepartment,
+          progressedBy: progressedBy,
+        },
+      });
     }
 
     res.json({ success: true, order: updatedOrder });

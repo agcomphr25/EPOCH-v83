@@ -23,8 +23,8 @@ import { Link } from 'wouter';
 
 interface SignedDocument {
   id: string;
-  orderId: string;
-  approvalType: string;
+  orderId: string | null;
+  approvalType: string | null;
   signedBy: string;
   signedAt: string;
   notes: string | null;
@@ -56,7 +56,7 @@ export default function SignedDocumentsLibrary() {
 
   const filteredDocuments = signedDocuments?.filter(doc => {
     const matchesSearch = !searchTerm || 
-      doc.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (doc.orderId && doc.orderId.toLowerCase().includes(searchTerm.toLowerCase())) ||
       doc.signedBy.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (doc.media.title && doc.media.title.toLowerCase().includes(searchTerm.toLowerCase()));
     
@@ -182,14 +182,23 @@ export default function SignedDocumentsLibrary() {
                         {doc.media.title || doc.media.filename}
                       </p>
                       <div className="flex flex-wrap gap-2 mt-1">
-                        <Link href={`/orders/${doc.orderId}`}>
-                          <span className="text-sm text-blue-600 hover:underline cursor-pointer">
-                            Order: {doc.orderId}
+                        {doc.orderId && (
+                          <Link href={`/orders/${doc.orderId}`}>
+                            <span className="text-sm text-blue-600 hover:underline cursor-pointer">
+                              Order: {doc.orderId}
+                            </span>
+                          </Link>
+                        )}
+                        {doc.approvalType && (
+                          <span className="text-sm bg-gray-100 px-2 py-0.5 rounded">
+                            {approvalTypeLabels[doc.approvalType] || doc.approvalType}
                           </span>
-                        </Link>
-                        <span className="text-sm bg-gray-100 px-2 py-0.5 rounded">
-                          {approvalTypeLabels[doc.approvalType] || doc.approvalType}
-                        </span>
+                        )}
+                        {!doc.orderId && !doc.approvalType && (
+                          <span className="text-sm text-muted-foreground">
+                            Standalone document
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-muted-foreground mt-1">
                         Signed by <span className="font-medium">{doc.signedBy}</span> on {formatDate(doc.signedAt)}
@@ -247,7 +256,8 @@ export default function SignedDocumentsLibrary() {
               {previewDocument?.media.title || previewDocument?.media.filename}
             </DialogTitle>
             <DialogDescription>
-              Order: {previewDocument?.orderId} | Signed by {previewDocument?.signedBy}
+              {previewDocument?.orderId && `Order: ${previewDocument.orderId} | `}
+              Signed by {previewDocument?.signedBy}
             </DialogDescription>
           </DialogHeader>
           {previewDocument && (

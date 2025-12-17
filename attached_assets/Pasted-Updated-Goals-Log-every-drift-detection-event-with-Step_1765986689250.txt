@@ -1,0 +1,99 @@
+Updated Goals
+
+Log every drift detection event with:
+
+Step ID
+
+Baseline average
+
+Recent durations
+
+Count of recent durations above threshold
+
+But still respond to client with "No drift detected."
+
+🔄 Update driftLogic.js
+
+Modify the function to accept stepId and return detection details, not just true/false.
+
+export function detectDrift(stepId, instances) {
+  if (instances.length < 15) return null;
+
+  const durations = instances
+    .map(d => new Date(d.completedAt) - new Date(d.startedAt))
+    .filter(d => d > 0);
+
+  if (durations.length < 15) return null;
+
+  const recent = durations.slice(-5);
+  const baselineSet = durations.slice(-15, -5);
+
+  const baselineAvg =
+    baselineSet.reduce((sum, val) => sum + val, 0) / baselineSet.length;
+
+  let driftCount = 0;
+  for (let dur of recent) {
+    if (dur > baselineAvg * 1.25) driftCount++;
+  }
+
+  if (driftCount >= 3) {
+    // Log to console
+    console.log(`[Drift Detected] Step: ${stepId}`);
+    console.log(`  Baseline Avg: ${(baselineAvg / 1000).toFixed(2)} sec`);
+    console.log(`  Recent Durations: [${recent.map(d => (d / 1000).toFixed(2)).join(', ')}] sec`);
+    console.log(`  Above threshold: ${driftCount} of 5\n`);
+
+    return {
+      stepId,
+      driftCount,
+      recent,
+      baselineAvg,
+      message: 'This step has been taking longer recently.'
+    };
+  }
+
+  return null;
+}
+
+🔄 Update index.js
+
+Update the call and response to always return “No drift detected”, but still log if there’s a match:
+
+import express from 'express';
+import bodyParser from 'body-parser';
+import { detectDrift } from './driftLogic.js';
+
+const app = express();
+const PORT = 3000;
+
+app.use(bodyParser.json());
+
+app.post('/check-drift', (req, res) => {
+  const { stepId, instances } = req.body;
+
+  if (!stepId || !instances || !Array.isArray(instances)) {
+    return res.status(400).json({ error: 'Invalid input' });
+  }
+
+  const result = detectDrift(stepId, instances);
+
+  // Don't expose signal to client yet
+  return res.json({ message: 'No drift detected.' });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
+
+
+Now every time drift is detected, you’ll see a clear console log like:
+
+[Drift Detected] Step: paint-123
+  Baseline Avg: 600.00 sec
+  Recent Durations: [650.00, 780.00, 900.00, 620.00, 870.00] sec
+  Above threshold: 4 of 5
+
+
+But the client always gets:
+
+{ "message": "No drift detected." }

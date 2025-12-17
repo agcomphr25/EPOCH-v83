@@ -15,23 +15,9 @@ router.post('/check-drift', (req: Request<{}, {}, CheckDriftBody>, res: Response
     return res.status(400).json({ error: 'Invalid input. Required: stepId (string), instances (array)' });
   }
 
-  const result = detectDrift(instances);
+  detectDrift(stepId, instances);
 
-  if (result.isDrifting) {
-    return res.json({
-      detected: true,
-      message: result.message,
-      subtext: result.subtext,
-      stepId,
-      stats: result.stats
-    });
-  } else {
-    return res.json({ 
-      detected: false,
-      message: 'No drift detected.',
-      stepId
-    });
-  }
+  return res.json({ message: 'No drift detected.' });
 });
 
 router.get('/health', (_req: Request, res: Response) => {

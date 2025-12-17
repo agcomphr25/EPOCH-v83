@@ -5,28 +5,22 @@ export interface StepInstance {
 
 export interface DriftResult {
   isDrifting: boolean;
+  stepId: string;
+  driftCount: number;
+  recent: number[];
+  baselineAvg: number;
+  recentAvg: number;
   message: string | null;
-  subtext: string | null;
-  stats?: {
-    baselineAvg: number;
-    recentAvg: number;
-    driftCount: number;
-    threshold: number;
-  };
 }
 
-export function detectDrift(instances: StepInstance[]): DriftResult {
-  if (instances.length < 15) {
-    return { isDrifting: false, message: null, subtext: null };
-  }
+export function detectDrift(stepId: string, instances: StepInstance[]): DriftResult | null {
+  if (instances.length < 15) return null;
 
   const durations = instances
     .map(d => new Date(d.completedAt).getTime() - new Date(d.startedAt).getTime())
     .filter(d => d > 0);
 
-  if (durations.length < 15) {
-    return { isDrifting: false, message: null, subtext: null };
-  }
+  if (durations.length < 15) return null;
 
   const recent = durations.slice(-5);
   const baselineSet = durations.slice(-15, -5);
@@ -39,17 +33,22 @@ export function detectDrift(instances: StepInstance[]): DriftResult {
     if (dur > baselineAvg * 1.25) driftCount++;
   }
 
-  const isDrifting = driftCount >= 3;
+  if (driftCount >= 3) {
+    console.log(`[Drift Detected] Step: ${stepId}`);
+    console.log(`  Baseline Avg: ${(baselineAvg / 1000).toFixed(2)} sec`);
+    console.log(`  Recent Durations: [${recent.map(d => (d / 1000).toFixed(2)).join(', ')}] sec`);
+    console.log(`  Above threshold: ${driftCount} of 5\n`);
 
-  return {
-    isDrifting,
-    message: isDrifting ? 'This step has been taking longer recently.' : null,
-    subtext: isDrifting ? 'Compared to its recent baseline.' : null,
-    stats: {
+    return {
+      isDrifting: true,
+      stepId,
+      driftCount,
+      recent,
       baselineAvg,
       recentAvg,
-      driftCount,
-      threshold: 3
-    }
-  };
+      message: 'This step has been taking longer recently.'
+    };
+  }
+
+  return null;
 }

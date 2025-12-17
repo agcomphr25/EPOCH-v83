@@ -1335,21 +1335,16 @@ router.post(
       // Transform SmartyStreets autocomplete response
       const suggestions =
         data.suggestions?.map((item: any) => {
-          // Extract ZIP code from text if zipcode field is empty but text contains it
-          let zipCode = item.zipcode;
-          if (!zipCode && item.text) {
-            const zipMatch = item.text.match(/\b(\d{5}(?:-\d{4})?)\b/);
-            if (zipMatch) {
-              zipCode = zipMatch[1];
-            }
-          }
-
+          // Construct display text from individual fields
+          const displayText = `${item.street_line}, ${item.city} ${item.state} ${item.zipcode}`;
+          
           return {
-            text: item.text,
+            text: displayText,
             streetLine: item.street_line,
+            secondary: item.secondary || '',
             city: item.city,
             state: item.state,
-            zipCode: zipCode,
+            zipCode: item.zipcode,
             entries: item.entries,
           };
         }) || [];

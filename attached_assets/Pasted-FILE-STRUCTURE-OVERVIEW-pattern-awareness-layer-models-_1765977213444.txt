@@ -1,0 +1,215 @@
+FILE STRUCTURE OVERVIEW
+pattern-awareness-layer/
+├── models/
+│   └── PatternInsight.js
+├── core/
+│   ├── baselineEngine.js
+│   ├── deltaDetector.js
+│   ├── stabilityGate.js
+│   └── insightSuppressor.js
+├── hooks/
+│   └── contextTranslation.js
+├── index.js
+└── exampleUsage.js
+
+1️⃣ models/PatternInsight.js
+// models/PatternInsight.js
+
+export class PatternInsight {
+  constructor({
+    entityId,
+    patternType,
+    detectedAt,
+    baselineSummary,
+    currentSummary,
+    confidenceLevel = 'low',
+    dismissedAt = null
+  }) {
+    this.entityId = entityId;
+    this.patternType = patternType;
+    this.detectedAt = detectedAt;
+    this.baselineSummary = baselineSummary;
+    this.currentSummary = currentSummary;
+    this.confidenceLevel = confidenceLevel; // 'low' | 'medium' | 'high'
+    this.dismissedAt = dismissedAt; // nullable
+  }
+}
+
+2️⃣ core/baselineEngine.js
+// core/baselineEngine.js
+
+const defaultWindowSize = 10;
+
+export class BaselineEngine {
+  constructor(windowSize = defaultWindowSize) {
+    this.windowSize = windowSize;
+    this.history = new Map(); // entityId => [{ timestamp, value }]
+  }
+
+  addEvent(entityId, value, timestamp = Date.now()) {
+    if (!this.history.has(entityId)) {
+      this.history.set(entityId, []);
+    }
+
+    const data = this.history.get(entityId);
+    data.push({ timestamp, value });
+
+    // Trim to the last N events
+    if (data.length > this.windowSize) {
+      data.shift();
+    }
+  }
+
+  getBaseline(entityId) {
+    const data = this.history.get(entityId) || [];
+    const values = data.map(d => d.value);
+    const mean = values.reduce((sum, v) => sum + v, 0) / (values.length || 1);
+    const variance =
+      values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (values.length || 1);
+
+    return { mean, variance, count: values.length };
+  }
+}
+
+3️⃣ core/deltaDetector.js
+// core/deltaDetector.js
+
+export function detectDelta(baseline, currentValues, threshold = 2) {
+  const currentMean =
+    currentValues.reduce((sum, v) => sum + v, 0) / (currentValues.length || 1);
+
+  const deviation = Math.abs(currentMean - baseline.mean);
+  const stdDev = Math.sqrt(baseline.variance);
+
+  // Compare deviation to threshold * standard deviation
+  const isDeviated = stdDev > 0 && deviation > threshold * stdDev;
+
+  return {
+    isDeviated,
+    currentSummary: {
+      mean: currentMean,
+      count: currentValues.length,
+    },
+  };
+}
+
+4️⃣ core/stabilityGate.js
+// core/stabilityGate.js
+
+export class StabilityGate {
+  constructor(requiredMatches = 3, windowSize = 5) {
+    this.windowSize = windowSize;
+    this.requiredMatches = requiredMatches;
+    this.matchHistory = new Map(); // entityId => [true | false]
+  }
+
+  record(entityId, match) {
+    if (!this.matchHistory.has(entityId)) {
+      this.matchHistory.set(entityId, []);
+    }
+
+    const history = this.matchHistory.get(entityId);
+    history.push(match);
+    if (history.length > this.windowSize) {
+      history.shift();
+    }
+
+    const count = history.filter(Boolean).length;
+    return count >= this.requiredMatches;
+  }
+}
+
+5️⃣ core/insightSuppressor.js
+// core/insightSuppressor.js
+
+export class InsightSuppressor {
+  constructor(cooldownMs = 86400000) {
+    this.lastSeen = new Map(); // entityId + patternType => timestamp
+    this.dismissed = new Set(); // entityId + patternType
+    this.cooldownMs = cooldownMs;
+  }
+
+  _key(entityId, patternType) {
+    return `${entityId}::${patternType}`;
+  }
+
+  shouldSuppress(entityId, patternType) {
+    const key = this._key(entityId, patternType);
+    const last = this.lastSeen.get(key);
+    const now = Date.now();
+
+    if (this.dismissed.has(key)) return true;
+    if (last && now - last < this.cooldownMs) return true;
+
+    this.lastSeen.set(key, now);
+    return false;
+  }
+
+  dismiss(entityId, patternType) {
+    this.dismissed.add(this._key(entityId, patternType));
+  }
+}
+
+6️⃣ hooks/contextTranslation.js
+// hooks/contextTranslation.js
+
+// Placeholder for per-app implementation
+export function translateInsight(patternInsight, appContext) {
+  // Not implemented — interface only
+  throw new Error("translateInsight must be implemented per app.");
+}
+
+7️⃣ exampleUsage.js
+// exampleUsage.js
+
+import { BaselineEngine } from './core/baselineEngine.js';
+import { detectDelta } from './core/deltaDetector.js';
+import { StabilityGate } from './core/stabilityGate.js';
+import { InsightSuppressor } from './core/insightSuppressor.js';
+import { PatternInsight } from './models/PatternInsight.js';
+
+// Setup
+const baselineEngine = new BaselineEngine();
+const stabilityGate = new StabilityGate();
+const suppressor = new InsightSuppressor();
+
+// Simulated event stream
+const entityId = 'task_group_42';
+const patternType = 'LOAD_IMBALANCE';
+
+const incomingEvents = [10, 11, 9, 15, 18, 20, 21];
+
+incomingEvents.forEach(value => {
+  baselineEngine.addEvent(entityId, value);
+
+  const baseline = baselineEngine.getBaseline(entityId);
+
+  const recentValues = [value]; // Simplified; usually use sliding window
+
+  const { isDeviated, currentSummary } = detectDelta(baseline, recentValues);
+
+  const isStable = stabilityGate.record(entityId, isDeviated);
+
+  if (isDeviated && isStable && !suppressor.shouldSuppress(entityId, patternType)) {
+    const insight = new PatternInsight({
+      entityId,
+      patternType,
+      detectedAt: new Date(),
+      baselineSummary: baseline,
+      currentSummary,
+      confidenceLevel: 'medium',
+    });
+
+    console.log('Pattern Insight:', insight);
+  }
+});
+
+🧠 NOTES: How This Remains App-Agnostic
+
+No UX logic: This layer doesn't generate messages, visuals, or prompts.
+
+No identity coupling: No user IDs, names, emails — just generic entityId.
+
+No rankings, no gamification: Purely statistical, never comparative.
+
+Context translation is deferred to app teams, keeping insight neutral.

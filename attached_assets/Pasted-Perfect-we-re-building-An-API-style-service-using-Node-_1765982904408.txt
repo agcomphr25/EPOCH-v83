@@ -1,0 +1,106 @@
+Perfect ⚙️ — we're building:
+
+✅ An API-style service using Node.js + Express
+✅ Data will be hardcoded initially for testing
+✅ Signal logic: Step-Level Cycle Time Drift
+
+🔧 What You’ll Get
+
+A full Express.js server that:
+
+Accepts POSTs to /check-drift
+
+Analyzes cycle time drift per routing step
+
+Uses:
+
+Rolling average baseline of last 10 steps
+
+Detects +25% drift in 3 of last 5
+
+Requires at least 10 historical entries
+
+Returns signal text only if criteria met:
+
+“This step has been taking longer recently.”
+(optional subtext: “Compared to its recent baseline.”)
+
+Let’s build! 🔨🤖🔧
+
+📁 File Structure
+📁 project
+ ┣ 📄 index.js         ← main Express server
+ ┣ 📄 driftLogic.js    ← handles the drift detection logic
+ ┣ 📦 package.json     ← for dependencies
+
+📄 package.json
+{
+  "name": "cycle-time-drift-signal",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
+
+📄 index.js
+import express from 'express';
+import bodyParser from 'body-parser';
+import { detectDrift } from './driftLogic.js';
+
+const app = express();
+const PORT = 3000;
+
+app.use(bodyParser.json());
+
+app.post('/check-drift', (req, res) => {
+  const { stepId, instances } = req.body;
+
+  if (!stepId || !instances || !Array.isArray(instances)) {
+    return res.status(400).json({ error: 'Invalid input' });
+  }
+
+  const signal = detectDrift(instances);
+
+  if (signal) {
+    return res.json({
+      message: 'This step has been taking longer recently.',
+      subtext: 'Compared to its recent baseline.'
+    });
+  } else {
+    return res.json({ message: 'No drift detected.' });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
+
+📄 driftLogic.js
+export function detectDrift(instances) {
+  if (instances.length < 15) return false;
+
+  // Step durations in ms
+  const durations = instances
+    .map(d => new Date(d.completedAt) - new Date(d.startedAt))
+    .filter(d => d > 0);
+
+  if (durations.length < 15) return false;
+
+  const recent = durations.slice(-5);
+  const baselineSet = durations.slice(-15, -5); // Last 10 before recent 5
+
+  const baselineAvg =
+    baselineSet.reduce((sum, val) => sum + val, 0) / baselineSet.length;
+
+  let driftCount = 0;
+  for (let dur of recent) {
+    if (dur > baselineAvg * 1.25) driftCount++;
+  }
+
+  return driftCount >= 3;
+}

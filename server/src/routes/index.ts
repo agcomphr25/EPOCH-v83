@@ -94,6 +94,8 @@ import aqlSamplingRoutes from './aqlSampling';
 import auditRoutes from './audit';
 import mediaRoutes from './media';
 import voiceNotesRoutes from './voiceNotes';
+import patternSignalsRoutes from './patternSignals';
+import signPdfRoutes from './signPdf';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -225,7 +227,11 @@ export function registerRoutes(app: Express): Server {
   // Voice notes routes (uses sessionAwareAuth to preserve real user sessions over bypass)
   app.use('/api/voice-notes', sessionAwareAuth, voiceNotesRoutes);
 
-  // Document management routes
+  // Pattern awareness signals routes
+  app.use('/api/pattern-signals', patternSignalsRoutes);
+
+  // Document management routes - signPdfRoutes first so /all doesn't conflict with /:id
+  app.use('/api/documents', signPdfRoutes);
   app.use('/api/documents', documentsRoutes);
 
   // Controlled Documents (Master Document Register) routes

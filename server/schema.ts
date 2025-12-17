@@ -8229,4 +8229,34 @@ export const insertVoiceNoteResponseSchema = createInsertSchema(voiceNoteRespons
 export type VoiceNoteResponse = typeof voiceNoteResponses.$inferSelect;
 export type InsertVoiceNoteResponse = z.infer<typeof insertVoiceNoteResponseSchema>;
 
+// ============================================
+// ORDER SIGNED DOCUMENTS - Link signed approval documents to orders
+// ============================================
+
+export const orderSignedDocuments = pgTable('order_signed_documents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  orderId: text('order_id').notNull(), // Reference to order
+  mediaId: uuid('media_id').references(() => mediaLibrary.id, { onDelete: 'cascade' }).notNull(),
+  approvalType: text('approval_type').notNull().default('customer_approval'), // 'customer_approval', 'production_approval', 'quality_approval', 'shipping_approval'
+  signedBy: text('signed_by').notNull(), // Name of the person who signed
+  signedAt: timestamp('signed_at').defaultNow().notNull(),
+  notes: text('notes'), // Additional notes about this signature
+  createdById: integer('created_by_id').references(() => employees.id),
+  createdByName: text('created_by_name'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  orderIdIdx: index('order_signed_documents_order_id_idx').on(table.orderId),
+  mediaIdIdx: index('order_signed_documents_media_id_idx').on(table.mediaId),
+  approvalTypeIdx: index('order_signed_documents_approval_type_idx').on(table.approvalType),
+  signedAtIdx: index('order_signed_documents_signed_at_idx').on(table.signedAt),
+}));
+
+export const insertOrderSignedDocumentSchema = createInsertSchema(orderSignedDocuments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type OrderSignedDocument = typeof orderSignedDocuments.$inferSelect;
+export type InsertOrderSignedDocument = z.infer<typeof insertOrderSignedDocumentSchema>;
+
 export * from './calendar.schema';

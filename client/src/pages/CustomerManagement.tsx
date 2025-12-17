@@ -919,61 +919,22 @@ export default function CustomerManagement() {
   const handleCustomerFormSuggestionSelect = async (suggestion: any) => {
     console.log('🔧 Customer form suggestion selected:', suggestion);
 
-    // Parse the address from suggestion
-    const parsedAddress = parseAddressString(
-      suggestion.text || suggestion.streetLine || ''
-    );
+    // Use the structured fields directly from the suggestion
+    // The API now returns: { text, streetLine, city, state, zipCode, secondary, entries }
+    setFormData((prev) => ({
+      ...prev,
+      street: suggestion.streetLine || '',
+      city: suggestion.city || '',
+      state: suggestion.state || '',
+      zipCode: suggestion.zipCode || '',
+    }));
 
-    // Try to get full address details using SmartyStreets Street API for ZIP code
-    try {
-      const response = await fetch(
-        '/api/customers/address-autocomplete-bypass',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            search: suggestion.text || suggestion.streetLine || '',
-            getZipCode: true,
-          }),
-        }
-      );
-
-      const data = await response.json();
-      console.log('🔧 Full address details:', data);
-
-      if (data.fullAddress) {
-        // Use full address details if available
-        setFormData((prev) => ({
-          ...prev,
-          street: data.fullAddress.delivery_line_1 || parsedAddress.street,
-          city: data.fullAddress.components?.city_name || parsedAddress.city,
-          state:
-            data.fullAddress.components?.state_abbreviation ||
-            parsedAddress.state,
-          zipCode:
-            data.fullAddress.components?.zipcode || parsedAddress.zipCode,
-        }));
-      } else {
-        // Fall back to parsed address
-        setFormData((prev) => ({
-          ...prev,
-          street: parsedAddress.street,
-          city: parsedAddress.city,
-          state: parsedAddress.state,
-          zipCode: parsedAddress.zipCode,
-        }));
-      }
-    } catch (error) {
-      console.error('Error getting full address details:', error);
-      // Fall back to parsed address
-      setFormData((prev) => ({
-        ...prev,
-        street: parsedAddress.street,
-        city: parsedAddress.city,
-        state: parsedAddress.state,
-        zipCode: parsedAddress.zipCode,
-      }));
-    }
+    console.log('🔧 Setting address fields:', {
+      street: suggestion.streetLine,
+      city: suggestion.city,
+      state: suggestion.state,
+      zipCode: suggestion.zipCode,
+    });
 
     setShowCustomerFormSuggestions(false);
     setCustomerFormSuggestions([]);

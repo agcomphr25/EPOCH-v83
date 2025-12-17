@@ -206,6 +206,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/discounts',
       '/marketing-communications',
       '/finance/bulk-payment',
+      '/watch-rules',
     ],
   },
 

@@ -374,7 +374,7 @@ export default function ADMINTestDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <WatchRuleCards userId="staciw" showManageButton={false} />
+            <WatchRuleCards userId="staciw" employeeId={22} showManageButton={false} />
           </CardContent>
         </Card>
       )}

@@ -168,7 +168,7 @@ export default function DARLENEBTestDashboard() {
             </Button>
           </Link>
         </div>
-        <WatchRuleCards userId="darleneb" showManageButton={false} />
+        <WatchRuleCards userId="darleneb" employeeId={20} showManageButton={false} />
       </div>
 
       {/* Other Functions */}

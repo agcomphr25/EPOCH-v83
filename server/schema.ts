@@ -3387,17 +3387,21 @@ export const insertPdfDocumentSchema = createInsertSchema(pdfDocuments)
 // Nonconformance Tracking - Module 17
 export const nonconformanceRecords = pgTable('nonconformance_records', {
   id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+  rmaNumber: text('rma_number'),
   orderId: text('order_id'),
   serialNumber: text('serial_number'),
   customerName: text('customer_name'),
   poNumber: text('po_number'),
   stockModel: text('stock_model'),
   quantity: integer('quantity').default(1),
+  additionalOrderIds: text('additional_order_ids').array().default(sql`ARRAY[]::text[]`),
+  additionalSerialNumbers: text('additional_serial_numbers').array().default(sql`ARRAY[]::text[]`),
   issueCause: text('issue_cause').notNull(),
   manufacturerDefect: boolean('manufacturer_defect').default(false),
   disposition: text('disposition').notNull(),
   authorization: text('auth_person').notNull(),
   dispositionDate: date('disposition_date').notNull(),
+  dateReceived: date('date_received'),
   notes: text('notes'),
   status: text('status').default('Open'), // Open, Resolved
   resolvedAt: timestamp('resolved_at'),
@@ -3408,6 +3412,12 @@ export const nonconformanceRecords = pgTable('nonconformance_records', {
   rtsAddedAt: timestamp('rts_added_at'),
   useOrderAddress: boolean('use_order_address').default(false),
   repairAddress: jsonb('repair_address'),
+  // Shipping fields for RMA shipments
+  shippingStatus: text('shipping_status'), // null, 'Ready to Ship', 'Shipped'
+  trackingNumber: text('tracking_number'),
+  shippingCarrier: text('shipping_carrier'),
+  shippedDate: date('shipped_date'),
+  customerNotified: boolean('customer_notified').default(false),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -3421,17 +3431,21 @@ export const insertNonconformanceRecordSchema = createInsertSchema(
     updatedAt: true,
   })
   .extend({
+    rmaNumber: z.string().optional(),
     orderId: z.string().optional(),
     serialNumber: z.string().optional(),
     customerName: z.string().optional(),
     poNumber: z.string().optional(),
     stockModel: z.string().optional(),
     quantity: z.number().min(1).default(1),
+    additionalOrderIds: z.array(z.string()).optional().nullable(),
+    additionalSerialNumbers: z.array(z.string()).optional().nullable(),
     issueCause: z.string().min(1, 'Issue cause is required'),
     manufacturerDefect: z.boolean().default(false),
     disposition: z.string().min(1, 'Disposition is required'),
     authorization: z.string().min(1, 'Authorization is required'),
     dispositionDate: z.string().min(1, 'Disposition date is required'),
+    dateReceived: z.string().optional().nullable(),
     notes: z.string().optional(),
     status: z.enum(['Open', 'Resolved']).default('Open'),
     useOrderAddress: z.boolean().optional().default(false),
@@ -3443,6 +3457,12 @@ export const insertNonconformanceRecordSchema = createInsertSchema(
       zipCode: z.string().optional().nullable(),
       country: z.string().optional().nullable(),
     }).optional().nullable(),
+    // Shipping fields
+    shippingStatus: z.string().optional().nullable(),
+    trackingNumber: z.string().optional().nullable(),
+    shippingCarrier: z.string().optional().nullable(),
+    shippedDate: z.string().optional().nullable(),
+    customerNotified: z.boolean().optional().default(false),
   });
 
 // Types for Module 8
@@ -7026,6 +7046,10 @@ export const customerWatchRules = pgTable('customer_watch_rules', {
   departmentId: integer('department_id').references(() => orderDepartmentTypes.id), // Department to watch
   departmentName: text('department_name').notNull(), // Department name for display
   label: text('label'), // Optional custom label for the rule
+  trackedOrderIds: text('tracked_order_ids').array().default([]), // Specific order IDs to track (empty = all orders)
+  visibilityScope: text('visibility_scope').default('USER_ONLY').notNull(), // 'USER_ONLY', 'EVERYONE', 'SPECIFIC_EMPLOYEES'
+  visibilityEmployeeId: integer('visibility_employee_id').references(() => employees.id), // DEPRECATED - kept for backward compatibility
+  visibilityEmployeeIds: integer('visibility_employee_ids').array().default([]), // Employees who can see (if SPECIFIC_EMPLOYEES)
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

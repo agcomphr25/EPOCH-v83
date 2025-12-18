@@ -58,6 +58,8 @@ import {
   FolderKanban,
   Clock,
   FileSignature,
+  Archive,
+  Image,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -207,6 +209,7 @@ export default function Navigation() {
   const [productionSchedulingExpanded, setProductionSchedulingExpanded] =
     useState(false);
   const [departmentQueueExpanded, setDepartmentQueueExpanded] = useState(false);
+  const [centralStorageExpanded, setCentralStorageExpanded] = useState(false);
 
   // Helper function to close all dropdowns
   const closeAllDropdowns = useCallback(() => {
@@ -222,6 +225,7 @@ export default function Navigation() {
     setProductionSchedulingExpanded(false);
     setDepartmentQueueExpanded(false);
     setVerifiedModulesExpanded(false);
+    setCentralStorageExpanded(false);
   }, []);
 
   // Helper function to toggle dropdown
@@ -250,6 +254,8 @@ export default function Navigation() {
           setDepartmentQueueExpanded(false);
         if (dropdownName !== 'verifiedModules')
           setVerifiedModulesExpanded(false);
+        if (dropdownName !== 'centralStorage')
+          setCentralStorageExpanded(false);
       }
     },
     []
@@ -863,6 +869,21 @@ export default function Navigation() {
     },
   ];
 
+  const centralStorageItems = [
+    {
+      path: '/signature-workflow',
+      label: 'Signed Documents',
+      icon: FileSignature,
+      description: 'View and manage signed documents',
+    },
+    {
+      path: '/media-library',
+      label: 'Media Library',
+      icon: Image,
+      description: 'Manage uploaded images and documents',
+    },
+  ];
+
   const departmentQueueItems = [
     {
       path: '/department-queue/production-queue',
@@ -1042,6 +1063,10 @@ export default function Navigation() {
     () => filterByPermissions(productionSchedulingItems, currentUser?.username, userRole),
     [productionSchedulingItems, currentUser?.username, userRole]
   );
+  const filteredCentralStorageItems = useMemo(
+    () => filterByPermissions(centralStorageItems, currentUser?.username, userRole),
+    [centralStorageItems, currentUser?.username, userRole]
+  );
   const filteredDepartmentQueueItems = useMemo(
     () => filterByPermissions(departmentQueueItems, currentUser?.username, userRole),
     [departmentQueueItems, currentUser?.username, userRole]
@@ -1074,6 +1099,9 @@ export default function Navigation() {
     (item) => location === item.path
   );
   const isProductionSchedulingActive = productionSchedulingItems.some(
+    (item) => location === item.path
+  );
+  const isCentralStorageActive = centralStorageItems.some(
     (item) => location === item.path
   );
   const isDepartmentQueueActive = departmentQueueItems.some(
@@ -1714,6 +1742,60 @@ export default function Navigation() {
                 {productionSchedulingExpanded && (
                   <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
                     {filteredProductionSchedulingItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
+
+                      return (
+                        <button
+                          key={item.path}
+                          className={cn(
+                            'w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100',
+                            isActive && 'bg-primary text-white hover:bg-primary'
+                          )}
+                          onClick={() => {
+                            closeAllDropdowns();
+                            setLocation(item.path);
+                          }}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Central Storage Dropdown */}
+            {filteredCentralStorageItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isCentralStorageActive ? 'default' : 'ghost'}
+                  className={cn(
+                    'flex items-center gap-2 text-sm',
+                    isCentralStorageActive && 'bg-primary text-white'
+                  )}
+                  onClick={() =>
+                    toggleDropdown(
+                      'centralStorage',
+                      centralStorageExpanded,
+                      setCentralStorageExpanded
+                    )
+                  }
+                >
+                  <Archive className="h-4 w-4" />
+                  Central Storage
+                  {centralStorageExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
+
+                {centralStorageExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px]">
+                    {filteredCentralStorageItems.map((item) => {
                       const Icon = item.icon;
                       const isActive = location === item.path;
 

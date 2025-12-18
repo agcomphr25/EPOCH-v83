@@ -264,6 +264,11 @@ export default function GunsimthQueuePage() {
       else if (qdValue.includes('right')) qdDetail = 'QDs (Right)';
       else if (qdValue.includes('both')) qdDetail = 'QDs (Both Sides)';
 
+      // Add confirmation indicator if QD same-side was confirmed by CSR
+      if (order.qdSameSideConfirmed) {
+        qdDetail += ' ✓ CSR Confirmed';
+      }
+
       tasks.push(qdDetail);
     }
 

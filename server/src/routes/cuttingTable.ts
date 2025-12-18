@@ -818,6 +818,7 @@ router.post('/fabric-inventory/:id/assign-freezer', async (req, res) => {
     
     const inventory = await storage.updateCuttingFabricInventory(rollId, {
       freezerNumber: parseInt(freezerNumber),
+      location: `Freezer ${freezerNumber}`,
     });
     
     res.json({ 
@@ -843,6 +844,7 @@ router.post('/fabric-inventory/:id/receive', async (req, res) => {
     
     const updateData: any = {
       freezerNumber: parseInt(freezerNumber),
+      location: `Freezer ${freezerNumber}`,
       receivedDate: new Date().toISOString().split('T')[0],
     };
     

@@ -319,7 +319,9 @@ export default function PaintQueuePage() {
       qdValue !== 'none' &&
       qdValue !== ''
     ) {
-      displayFeatures.push({ label: 'QDs', value: features.qd_accessory });
+      // Add confirmation indicator if QD same-side was confirmed by CSR
+      const qdLabel = order.qdSameSideConfirmed ? 'QDs ✓ CSR Confirmed' : 'QDs';
+      displayFeatures.push({ label: qdLabel, value: features.qd_accessory });
     }
 
     // Swivels

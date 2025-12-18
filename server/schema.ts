@@ -153,6 +153,10 @@ export const allOrders = pgTable('all_orders', {
   // Customer Signature Data
   signatureData: text('signature_data'), // Base64 signature image from customer
   signedAt: timestamp('signed_at'), // When customer signed the order
+  // QD Same-Side Confirmation (when QD side matches handedness, which is unusual)
+  qdSameSideConfirmed: boolean('qd_same_side_confirmed').default(false), // CSR confirmed with customer
+  qdSameSideConfirmedBy: text('qd_same_side_confirmed_by'), // Who confirmed it (user ID or name)
+  qdSameSideConfirmedAt: timestamp('qd_same_side_confirmed_at'), // When it was confirmed
   // RTS Order Tracking
   isRtsOrder: boolean('is_rts_order').default(false), // True if this order was created from RTS inventory sale
   rtsSaleId: uuid('rts_sale_id'), // Reference to RTS sale if applicable
@@ -1479,6 +1483,10 @@ export const insertAllOrderSchema = createInsertSchema(allOrders)
     isVerified: z.boolean().default(false),
     // BOM Reference
     bomDefinitionId: z.string().optional().nullable(),
+    // QD Same-Side Confirmation
+    qdSameSideConfirmed: z.boolean().default(false),
+    qdSameSideConfirmedBy: z.string().optional().nullable(),
+    qdSameSideConfirmedAt: z.coerce.date().optional().nullable(),
   });
 
 export const insertLinkedOrderGroupSchema = createInsertSchema(linkedOrderGroups)

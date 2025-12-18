@@ -56,59 +56,77 @@ export default function PendingSignatureTasks({
 
   if (compact) {
     return (
-      <Card data-testid="signature-tasks-compact">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <FileSignature className="h-5 w-5" />
-            Pending Signatures
-            {tasks.length > 0 && (
-              <Badge variant="secondary" className="ml-auto">
-                {tasks.length}
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center py-4">
-              <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : tasks.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-2">
-              No documents awaiting your signature
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {tasks.slice(0, 3).map((task) => (
-                <div
-                  key={task.id}
-                  className={`flex items-center justify-between p-2 rounded border cursor-pointer hover:bg-muted/50 ${
-                    isOverdue(task.dueDate) ? 'border-red-300 bg-red-50' : ''
-                  }`}
-                  onClick={() => setSigningTask(task)}
-                  data-testid={`signature-task-compact-${task.id}`}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{task.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      From: {task.initiatedBy}
-                    </p>
-                  </div>
-                  {isOverdue(task.dueDate) && (
-                    <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />
-                  )}
-                  <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                </div>
-              ))}
-              {tasks.length > 3 && (
-                <p className="text-xs text-muted-foreground text-center">
-                  +{tasks.length - 3} more signatures pending
-                </p>
+      <>
+        <Card data-testid="signature-tasks-compact">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FileSignature className="h-5 w-5" />
+              Pending Signatures
+              {tasks.length > 0 && (
+                <Badge variant="secondary" className="ml-auto">
+                  {tasks.length}
+                </Badge>
               )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="flex justify-center py-4">
+                <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : tasks.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-2">
+                No documents awaiting your signature
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {tasks.slice(0, 3).map((task) => (
+                  <div
+                    key={task.id}
+                    className={`flex items-center justify-between p-2 rounded border cursor-pointer hover:bg-muted/50 ${
+                      isOverdue(task.dueDate) ? 'border-red-300 bg-red-50' : ''
+                    }`}
+                    onClick={() => setSigningTask(task)}
+                    data-testid={`signature-task-compact-${task.id}`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{task.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        From: {task.initiatedBy}
+                      </p>
+                    </div>
+                    {isOverdue(task.dueDate) && (
+                      <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />
+                    )}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  </div>
+                ))}
+                {tasks.length > 3 && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    +{tasks.length - 3} more signatures pending
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {signingTask && (
+          <SignatureSigningInterface
+            open={!!signingTask}
+            onClose={() => setSigningTask(null)}
+            requestId={signingTask.requestId}
+            signerId={signingTask.id}
+            employeeId={employeeId}
+            employeeName={employeeName}
+            documentTitle={signingTask.title}
+            onSuccess={() => {
+              setSigningTask(null);
+              queryClient.invalidateQueries({ queryKey: ['/api/signature-workflow/pending', employeeId] });
+            }}
+          />
+        )}
+      </>
     );
   }
 

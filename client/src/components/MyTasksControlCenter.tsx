@@ -107,6 +107,12 @@ export default function MyTasksControlCenter({
     enabled: !!employeeId && activeTab === 'history',
   });
 
+  const { data: signatureStats } = useQuery<{ pending: number; completed: number; initiated: number }>({
+    queryKey: ['/api/signature-workflow/stats', employeeId],
+    queryFn: () => apiRequest(`/api/signature-workflow/stats/${employeeId}`),
+    enabled: !!employeeId,
+  });
+
   const updateTaskMutation = useMutation({
     mutationFn: ({ taskId, data }: { taskId: string; data: any }) =>
       apiRequest(`/api/preproduction-checklists/tasks/${taskId}`, {
@@ -128,7 +134,14 @@ export default function MyTasksControlCenter({
   });
 
   const tasks = tasksData?.tasks || [];
-  const stats = tasksData?.stats || { total: 0, completed: 0, pending: 0, overdue: 0 };
+  const baseStats = tasksData?.stats || { total: 0, completed: 0, pending: 0, overdue: 0 };
+  const sigPending = signatureStats?.pending || 0;
+  const stats = {
+    total: baseStats.total + sigPending,
+    completed: baseStats.completed,
+    pending: baseStats.pending + sigPending,
+    overdue: baseStats.overdue,
+  };
 
   const filteredTasks = tasks.filter((task) => {
     const matchesSearch =

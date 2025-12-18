@@ -412,9 +412,9 @@ function CreateSignatureDialog({
                   <SelectValue placeholder="Select an employee..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {employees.filter(e => e.id !== employeeId).map((emp) => (
+                  {employees.map((emp) => (
                     <SelectItem key={emp.id} value={emp.id.toString()}>
-                      {emp.name}
+                      {emp.name} {emp.id === employeeId ? '(You)' : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>

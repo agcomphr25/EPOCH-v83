@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { format, isAfter, isBefore, startOfDay } from 'date-fns';
 import { Link } from 'wouter';
+import PendingSignatureTasks from './PendingSignatureTasks';
 
 interface AssignedTask {
   id: string;
@@ -219,6 +220,12 @@ export default function MyTasksControlCenter({
                 </div>
               </div>
 
+              <PendingSignatureTasks
+                employeeId={employeeId}
+                employeeName={userName || ''}
+                compact={true}
+              />
+
               {stats.pending > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground font-medium">Next Tasks:</p>
@@ -314,6 +321,12 @@ export default function MyTasksControlCenter({
           </div>
           <Progress value={completionPercentage} className="h-3" />
         </div>
+
+        <PendingSignatureTasks
+          employeeId={employeeId}
+          employeeName={userName || ''}
+          compact={true}
+        />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>

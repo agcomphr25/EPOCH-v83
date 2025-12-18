@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import SignatureCanvas from 'react-signature-canvas';
 import {
   FileSignature,
@@ -15,7 +16,21 @@ import {
   Trash2,
   RefreshCw,
   AlertTriangle,
+  FileText,
+  Download,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
+
+interface SignatureRequest {
+  id: string;
+  title: string;
+  description?: string;
+  currentDocumentPath?: string;
+  originalDocumentPath?: string;
+  mediaId?: string;
+  status: string;
+}
 
 interface SigningInterfaceProps {
   open: boolean;
@@ -36,7 +51,6 @@ export default function SignatureSigningInterface({
   employeeId,
   employeeName,
   documentTitle,
-  onSuccess,
 }: SigningInterfaceProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -44,6 +58,16 @@ export default function SignatureSigningInterface({
   const [notes, setNotes] = useState('');
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [activeTab, setActiveTab] = useState('document');
+  const [pdfScale, setPdfScale] = useState(1);
+
+  const { data: request, isLoading: requestLoading } = useQuery<SignatureRequest>({
+    queryKey: ['/api/signature-workflow', requestId],
+    queryFn: () => apiRequest(`/api/signature-workflow/${requestId}`),
+    enabled: open && !!requestId,
+  });
+
+  const documentUrl = request?.currentDocumentPath || request?.originalDocumentPath;
 
   const signMutation = useMutation({
     mutationFn: (data: { signatureData: string; notes: string }) =>
@@ -61,7 +85,6 @@ export default function SignatureSigningInterface({
       queryClient.invalidateQueries({ queryKey: ['/api/signature-workflow'] });
       queryClient.invalidateQueries({ queryKey: ['/api/signature-workflow/pending', employeeId] });
       toast({ title: 'Document signed successfully' });
-      onSuccess?.();
       onClose();
     },
     onError: (error: any) => {
@@ -122,62 +145,137 @@ export default function SignatureSigningInterface({
   return (
     <>
       <Dialog open={open} onOpenChange={() => onClose()}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileSignature className="h-5 w-5" />
-              Sign Document
+              Sign Document: {documentTitle}
             </DialogTitle>
+            <DialogDescription>
+              Signing as: {employeeName}
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="font-medium">{documentTitle}</p>
-              <p className="text-sm text-muted-foreground">
-                Signing as: {employeeName}
-              </p>
-            </div>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="document" data-testid="tab-document">
+                <FileText className="h-4 w-4 mr-2" />
+                View Document
+              </TabsTrigger>
+              <TabsTrigger value="sign" data-testid="tab-sign">
+                <FileSignature className="h-4 w-4 mr-2" />
+                Sign Document
+              </TabsTrigger>
+            </TabsList>
 
-            <div>
-              <Label>Your Signature</Label>
-              <div className="border-2 border-dashed rounded-lg mt-1 bg-white">
-                <SignatureCanvas
-                  ref={sigCanvasRef}
-                  canvasProps={{
-                    width: 450,
-                    height: 150,
-                    className: 'signature-canvas',
-                    style: { width: '100%', height: '150px', backgroundColor: 'white' },
-                  }}
-                  penColor="black"
+            <TabsContent value="document" className="flex-1 overflow-hidden">
+              {requestLoading ? (
+                <div className="flex items-center justify-center h-96">
+                  <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+                  Loading document...
+                </div>
+              ) : documentUrl ? (
+                <div className="flex flex-col h-full">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPdfScale(s => Math.max(0.5, s - 0.25))}
+                      >
+                        <ZoomOut className="h-4 w-4" />
+                      </Button>
+                      <span className="text-sm">{Math.round(pdfScale * 100)}%</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPdfScale(s => Math.min(2, s + 0.25))}
+                      >
+                        <ZoomIn className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(`/${documentUrl}`, '_blank')}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Open Full Screen
+                    </Button>
+                  </div>
+                  <div className="flex-1 border rounded-lg overflow-auto bg-gray-100">
+                    <iframe
+                      src={`/${documentUrl}#toolbar=0&navpanes=0`}
+                      className="w-full h-full min-h-[400px]"
+                      style={{ transform: `scale(${pdfScale})`, transformOrigin: 'top left' }}
+                      title="Document to sign"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-96 text-muted-foreground">
+                  <FileText className="h-12 w-12 mb-4 opacity-50" />
+                  <p>No document attached to this signature request</p>
+                  <p className="text-sm mt-2">You can still provide your signature on the Sign tab</p>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="sign" className="space-y-4 overflow-auto">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Your Signature</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="border-2 border-dashed rounded-lg bg-white">
+                    <SignatureCanvas
+                      ref={sigCanvasRef}
+                      canvasProps={{
+                        width: 600,
+                        height: 150,
+                        className: 'signature-canvas',
+                        style: { width: '100%', height: '150px', backgroundColor: 'white' },
+                      }}
+                      penColor="black"
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2"
+                    onClick={clearSignature}
+                    data-testid="clear-signature"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Clear Signature
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <div>
+                <Label htmlFor="notes">Notes (optional)</Label>
+                <Textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Add any comments or notes..."
+                  className="mt-1"
+                  data-testid="input-signing-notes"
                 />
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-1"
-                onClick={clearSignature}
-                data-testid="clear-signature"
-              >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Clear
-              </Button>
-            </div>
 
-            <div>
-              <Label htmlFor="notes">Notes (optional)</Label>
-              <Textarea
-                id="notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add any comments or notes..."
-                className="mt-1"
-                data-testid="input-signing-notes"
-              />
-            </div>
-          </div>
+              {documentUrl && (
+                <div className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
+                  <p className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    By signing, you acknowledge that you have reviewed the document on the "View Document" tab.
+                  </p>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
 
-          <DialogFooter className="flex justify-between">
+          <DialogFooter className="flex justify-between border-t pt-4 mt-4">
             <Button
               variant="destructive"
               onClick={() => setShowRejectDialog(true)}

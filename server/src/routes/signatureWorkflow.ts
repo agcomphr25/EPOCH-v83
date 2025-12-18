@@ -25,7 +25,7 @@ const createSignatureRequestSchema = z.object({
   documentType: z.enum(['media', 'form_instance', 'generated_pdf']),
   mediaId: z.string().uuid().optional(),
   formInstanceId: z.string().optional(),
-  originalDocumentPath: z.string().optional(),
+  originalDocumentPath: z.string().min(1, 'Document is required'),
   orderId: z.string().optional(),
   dueDate: z.string().datetime().optional(),
   reminderEnabled: z.boolean().default(true),

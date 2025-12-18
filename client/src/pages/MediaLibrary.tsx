@@ -46,6 +46,8 @@ import {
   User,
   Loader2,
   X,
+  Download,
+  ExternalLink,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -315,13 +317,16 @@ export default function MediaLibrary() {
 
       {/* View Dialog */}
       <Dialog open={!!selectedMedia} onOpenChange={() => setSelectedMedia(null)}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className={selectedMedia?.mimeType === 'application/pdf' ? "max-w-4xl h-[85vh]" : "max-w-3xl"}>
           {selectedMedia && (
             <>
               <DialogHeader>
                 <DialogTitle>{selectedMedia.title || selectedMedia.filename}</DialogTitle>
+                <DialogDescription>
+                  {getCategoryLabel(selectedMedia.category)} | {formatFileSize(selectedMedia.fileSize)}
+                </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
+              <div className="space-y-4 flex-1">
                 <div className="relative bg-muted rounded-lg overflow-hidden">
                   {selectedMedia.mimeType.startsWith('image/') ? (
                     <img
@@ -329,21 +334,21 @@ export default function MediaLibrary() {
                       alt={selectedMedia.title || selectedMedia.filename}
                       className="w-full max-h-[60vh] object-contain"
                     />
+                  ) : selectedMedia.mimeType === 'application/pdf' ? (
+                    <iframe
+                      src={`/api/media/file/${selectedMedia.storagePath.split('/').pop()}`}
+                      className="w-full h-[calc(85vh-220px)] border-0"
+                      title="PDF Preview"
+                    />
                   ) : (
-                    <div className="h-48 flex items-center justify-center">
+                    <div className="h-48 flex flex-col items-center justify-center gap-2">
                       <FileText className="h-16 w-16 text-muted-foreground" />
+                      <p className="text-muted-foreground text-sm">Preview not available</p>
+                      <p className="text-muted-foreground text-xs">Download or open to view this file</p>
                     </div>
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Category</p>
-                    <Badge>{getCategoryLabel(selectedMedia.category)}</Badge>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">File Size</p>
-                    <p>{formatFileSize(selectedMedia.fileSize)}</p>
-                  </div>
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 text-muted-foreground" />
                     <span>{selectedMedia.capturedByName || 'Unknown'}</span>
@@ -360,7 +365,34 @@ export default function MediaLibrary() {
                   </div>
                 )}
               </div>
-              <DialogFooter>
+              <DialogFooter className="flex-wrap gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    const url = `/api/media/file/${selectedMedia.storagePath.split('/').pop()}`;
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = selectedMedia.filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
+                  data-testid="button-download-media"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Download
+                </Button>
+                <Button variant="outline" asChild>
+                  <a 
+                    href={`/api/media/file/${selectedMedia.storagePath.split('/').pop()}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    data-testid="button-open-new-tab"
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Open
+                  </a>
+                </Button>
                 <Button variant="outline" onClick={() => handleEdit(selectedMedia)}>
                   <Edit className="mr-2 h-4 w-4" />
                   Edit

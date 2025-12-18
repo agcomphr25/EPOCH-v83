@@ -47,6 +47,7 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
   const [notes, setNotes] = useState('');
   const [category, setCategory] = useState('other');
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraLoading, setCameraLoading] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -89,6 +90,13 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
   const startCamera = useCallback(async () => {
     try {
       setCameraError(null);
+      setCameraLoading(true);
+      setMode('camera');
+      
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera not supported in this browser. Please use the upload option.');
+      }
+      
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' },
         audio: false,
@@ -96,11 +104,21 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        await videoRef.current.play();
       }
-      setMode('camera');
+      setCameraLoading(false);
     } catch (error: any) {
       console.error('Camera access error:', error);
-      setCameraError(error.message || 'Could not access camera. Try uploading a file instead.');
+      let errorMessage = 'Could not access camera. Try uploading a file instead.';
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Camera access denied. Please allow camera permissions or use the upload option.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'No camera found on this device. Please use the upload option.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      setCameraError(errorMessage);
+      setCameraLoading(false);
       setMode('select');
     }
   }, []);
@@ -172,6 +190,7 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
     setNotes('');
     setCategory('other');
     setCameraError(null);
+    setCameraLoading(false);
     setMode('select');
     setOpen(false);
   }, [stopCamera]);
@@ -241,18 +260,32 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
           {/* Camera View */}
           {mode === 'camera' && (
             <div className="relative">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                className="w-full rounded-lg"
-              />
+              <div className="relative bg-gray-900 rounded-lg min-h-[300px] flex items-center justify-center">
+                {cameraLoading && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-white z-10">
+                    <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                    <span className="text-sm">Starting camera...</span>
+                  </div>
+                )}
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full rounded-lg"
+                  style={{ display: cameraLoading ? 'none' : 'block' }}
+                />
+              </div>
               <canvas ref={canvasRef} className="hidden" />
               <div className="flex justify-center gap-2 mt-4">
                 <Button variant="outline" onClick={handleClose}>
                   Cancel
                 </Button>
-                <Button onClick={capturePhoto} data-testid="button-take-photo">
+                <Button 
+                  onClick={capturePhoto} 
+                  disabled={cameraLoading}
+                  data-testid="button-take-photo"
+                >
                   <Camera className="mr-2 h-4 w-4" />
                   Take Photo
                 </Button>

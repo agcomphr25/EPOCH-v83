@@ -298,6 +298,117 @@ router.get('/all', async (req, res) => {
   }
 });
 
+// DELETE /api/documents/:id - Delete a signed document
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get the document first to find the associated media
+    const [doc] = await db
+      .select({
+        id: orderSignedDocuments.id,
+        mediaId: orderSignedDocuments.mediaId,
+      })
+      .from(orderSignedDocuments)
+      .where(eq(orderSignedDocuments.id, id));
+    
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    // Delete the signed document record
+    await db.delete(orderSignedDocuments).where(eq(orderSignedDocuments.id, id));
+    
+    // Only delete the media if no other signed documents reference it
+    if (doc.mediaId) {
+      const otherReferences = await db
+        .select({ id: orderSignedDocuments.id })
+        .from(orderSignedDocuments)
+        .where(eq(orderSignedDocuments.mediaId, doc.mediaId));
+      
+      // Only delete media if no other documents reference it
+      if (otherReferences.length === 0) {
+        const [media] = await db
+          .select({ storagePath: mediaLibrary.storagePath })
+          .from(mediaLibrary)
+          .where(eq(mediaLibrary.id, doc.mediaId));
+        
+        if (media?.storagePath) {
+          const filePath = path.join(process.cwd(), media.storagePath);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        }
+        
+        await db.delete(mediaLibrary).where(eq(mediaLibrary.id, doc.mediaId));
+      }
+    }
+    
+    res.json({ success: true, message: 'Document deleted successfully' });
+  } catch (error: any) {
+    console.error('Error deleting signed document:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete document' });
+  }
+});
+
+// PATCH /api/documents/:id - Update a signed document
+router.patch('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { notes, signedBy, approvalType } = req.body;
+    
+    // Get the document first
+    const [doc] = await db
+      .select()
+      .from(orderSignedDocuments)
+      .where(eq(orderSignedDocuments.id, id));
+    
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    // Update the document
+    const updateData: Record<string, any> = {};
+    if (notes !== undefined) updateData.notes = notes;
+    if (signedBy !== undefined) updateData.signedBy = signedBy;
+    if (approvalType !== undefined) updateData.approvalType = approvalType;
+    
+    if (Object.keys(updateData).length > 0) {
+      await db
+        .update(orderSignedDocuments)
+        .set(updateData)
+        .where(eq(orderSignedDocuments.id, id));
+    }
+    
+    // Return updated document
+    const [updated] = await db
+      .select({
+        id: orderSignedDocuments.id,
+        orderId: orderSignedDocuments.orderId,
+        approvalType: orderSignedDocuments.approvalType,
+        signedBy: orderSignedDocuments.signedBy,
+        signedAt: orderSignedDocuments.signedAt,
+        notes: orderSignedDocuments.notes,
+        createdByName: orderSignedDocuments.createdByName,
+        media: {
+          id: mediaLibrary.id,
+          filename: mediaLibrary.filename,
+          storagePath: mediaLibrary.storagePath,
+          title: mediaLibrary.title,
+          fileSize: mediaLibrary.fileSize,
+        }
+      })
+      .from(orderSignedDocuments)
+      .innerJoin(mediaLibrary, eq(orderSignedDocuments.mediaId, mediaLibrary.id))
+      .where(eq(orderSignedDocuments.id, id));
+    
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating signed document:', error);
+    res.status(500).json({ error: error.message || 'Failed to update document' });
+  }
+});
+
 router.post('/sign-pdf', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {

@@ -6,10 +6,12 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
+import { ObjectStorageService, ObjectNotFoundError } from '../../replit_integrations/object_storage';
 
 const router = Router();
+const objectStorageService = new ObjectStorageService();
 
-// Configure multer for file uploads
+// Configure multer for temporary file uploads (will be moved to cloud storage)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadDir = path.join(process.cwd(), 'uploads', 'media-library');
@@ -38,7 +40,73 @@ const upload = multer({
   }
 });
 
-// Upload a new media item
+// Request a presigned URL for cloud storage upload
+router.post('/request-upload-url', async (req, res) => {
+  try {
+    const { name, size, contentType } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Missing required field: name' });
+    }
+
+    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+
+    res.json({
+      uploadURL,
+      objectPath,
+      metadata: { name, size, contentType },
+    });
+  } catch (error) {
+    console.error('Error generating upload URL:', error);
+    res.status(500).json({ error: 'Failed to generate upload URL' });
+  }
+});
+
+// Complete upload - save metadata to database after cloud upload
+router.post('/complete-upload', async (req, res) => {
+  try {
+    const { objectPath, filename, mimeType, fileSize, title, notes, tags, category } = req.body;
+    const user = (req as any).user;
+
+    if (!objectPath || !filename) {
+      return res.status(400).json({ error: 'Missing required fields: objectPath, filename' });
+    }
+
+    const parsedTags = tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : null;
+
+    // Set ACL policy for the uploaded object (make it publicly readable)
+    try {
+      await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
+        owner: user?.id?.toString() || 'system',
+        visibility: 'public',
+      });
+    } catch (aclError) {
+      console.warn('Failed to set ACL policy:', aclError);
+      // Continue even if ACL fails - file is still accessible
+    }
+
+    const [newMedia] = await db.insert(mediaLibrary).values({
+      filename: filename,
+      storagePath: objectPath, // Store the cloud object path
+      mimeType: mimeType || 'application/octet-stream',
+      fileSize: fileSize || 0,
+      capturedById: user?.id || null,
+      capturedByName: user?.username || 'Unknown',
+      title: title || filename,
+      notes: notes || null,
+      tags: parsedTags,
+      category: category || 'other',
+    }).returning();
+
+    res.json(newMedia);
+  } catch (error) {
+    console.error('Error completing upload:', error);
+    res.status(500).json({ error: 'Failed to complete upload' });
+  }
+});
+
+// Legacy upload endpoint (for backward compatibility - uses local storage)
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -109,13 +177,30 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Serve media files - MUST be before /:id route to avoid conflict
-router.get('/file/:filename', (req, res) => {
-  const filePath = path.join(process.cwd(), 'uploads', 'media-library', req.params.filename);
-  if (fs.existsSync(filePath)) {
-    res.sendFile(filePath);
-  } else {
-    res.status(404).json({ error: 'File not found' });
+// Serve media files - supports both cloud storage and local files
+router.get('/file/:filename', async (req, res) => {
+  // First try local file
+  const localFilePath = path.join(process.cwd(), 'uploads', 'media-library', req.params.filename);
+  if (fs.existsSync(localFilePath)) {
+    return res.sendFile(localFilePath);
+  }
+  
+  // If not found locally, return 404 (cloud files are served via /objects/ route)
+  res.status(404).json({ error: 'File not found' });
+});
+
+// Serve cloud storage files by object path
+router.get('/cloud/:path(*)', async (req, res) => {
+  try {
+    const objectPath = `/objects/${req.params.path}`;
+    const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+    await objectStorageService.downloadObject(objectFile, res);
+  } catch (error) {
+    console.error('Error serving cloud file:', error);
+    if (error instanceof ObjectNotFoundError) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    return res.status(500).json({ error: 'Failed to serve file' });
   }
 });
 
@@ -176,11 +261,16 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Media not found' });
     }
 
-    // Delete file from disk
-    const filePath = path.join(process.cwd(), media.storagePath);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    // Delete local file if it exists (for legacy uploads)
+    if (media.storagePath && media.storagePath.startsWith('uploads/')) {
+      const filePath = path.join(process.cwd(), media.storagePath);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
     }
+    
+    // Note: Cloud storage files could also be deleted here if needed
+    // For now, we'll leave orphaned cloud files (they can be cleaned up later)
 
     // Delete from database (attachments will cascade)
     await db.delete(mediaLibrary).where(eq(mediaLibrary.id, req.params.id));

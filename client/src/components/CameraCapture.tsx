@@ -58,16 +58,57 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
   const { toast } = useToast();
 
   const uploadMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
-      const response = await fetch('/api/media/upload', {
+    mutationFn: async ({ file, title, notes, category }: { file: File; title: string; notes: string; category: string }) => {
+      // Step 1: Request presigned URL for cloud storage
+      const urlResponse = await fetch('/api/media/request-upload-url', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          contentType: file.type,
+        }),
       });
-      if (!response.ok) {
-        throw new Error('Failed to upload');
+      
+      if (!urlResponse.ok) {
+        throw new Error('Failed to get upload URL');
       }
-      return response.json();
+      
+      const { uploadURL, objectPath } = await urlResponse.json();
+      
+      // Step 2: Upload file directly to cloud storage
+      const uploadResponse = await fetch(uploadURL, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+      
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload to cloud storage');
+      }
+      
+      // Step 3: Complete upload - save metadata to database
+      const completeResponse = await fetch('/api/media/complete-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          objectPath,
+          filename: file.name,
+          mimeType: file.type,
+          fileSize: file.size,
+          title: title || file.name,
+          notes,
+          category,
+        }),
+      });
+      
+      if (!completeResponse.ok) {
+        throw new Error('Failed to complete upload');
+      }
+      
+      return completeResponse.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/media'] });
@@ -172,14 +213,12 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
   const handleSave = useCallback(() => {
     if (!capturedFile) return;
     
-    const formData = new FormData();
-    formData.append('file', capturedFile);
-    formData.append('title', title || capturedFile.name);
-    formData.append('notes', notes);
-    formData.append('category', category);
-    formData.append('tags', JSON.stringify([]));
-    
-    uploadMutation.mutate(formData);
+    uploadMutation.mutate({
+      file: capturedFile,
+      title: title || capturedFile.name,
+      notes,
+      category,
+    });
   }, [capturedFile, title, notes, category, uploadMutation]);
 
   const handleClose = useCallback(() => {

@@ -97,6 +97,7 @@ import voiceNotesRoutes from './voiceNotes';
 import patternSignalsRoutes from './patternSignals';
 import signPdfRoutes from './signPdf';
 import signatureWorkflowRoutes from './signatureWorkflow';
+import { registerObjectStorageRoutes } from '../../replit_integrations/object_storage';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -237,6 +238,9 @@ export function registerRoutes(app: Express): Server {
   
   // Signature workflow routes - multi-signer document routing
   app.use('/api/signature-workflow', signatureWorkflowRoutes);
+  
+  // Object storage routes - cloud file uploads
+  registerObjectStorageRoutes(app);
 
   // Controlled Documents (Master Document Register) routes
   app.use('/api/controlled-documents', controlledDocumentsRoutes);

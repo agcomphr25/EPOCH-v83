@@ -882,6 +882,12 @@ export default function Navigation() {
       icon: Image,
       description: 'Manage uploaded images and documents',
     },
+    {
+      path: '/reference-docs',
+      label: 'Reference Docs',
+      icon: BookOpen,
+      description: 'Reference documents and resources',
+    },
   ];
 
   const departmentQueueItems = [

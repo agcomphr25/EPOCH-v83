@@ -37,6 +37,7 @@ import MediaLibrary from './pages/MediaLibrary';
 import SignPDFPage from './pages/SignPDFPage';
 import SignedDocumentsLibrary from './pages/SignedDocumentsLibrary';
 import SignatureWorkflowPage from './pages/SignatureWorkflowPage';
+import ReferenceDocsPage from './pages/ReferenceDocsPage';
 import VoiceNotesPage from './pages/VoiceNotesPage';
 import MaintenancePage from './pages/MaintenancePage';
 import EmployeePortalPage from './pages/EmployeePortalPage';
@@ -354,6 +355,7 @@ function App() {
                   <Route path="/sign-pdf" component={SignPDFPage} />
                   <Route path="/signed-documents" component={SignedDocumentsLibrary} />
                   <Route path="/signature-workflow" component={SignatureWorkflowPage} />
+                  <Route path="/reference-docs" component={ReferenceDocsPage} />
                   <Route path="/voice-notes" component={VoiceNotesPage} />
 
                   {/* Vendor Management Routes */}

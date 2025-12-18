@@ -98,6 +98,10 @@ export const VALID_NAVBAR_ROUTES = [
   '/preproduction-checklists',
   '/projects',
   '/help',
+  '/signature-workflow',
+  '/media-library',
+  '/signed-documents',
+  '/reference-docs',
 ];
 
 export const USER_PERMISSIONS: Record<string, UserPermissions> = {
@@ -459,6 +463,7 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/media-library': ['ADMIN', 'OWNER'],
   '/sign-pdf': ['ADMIN', 'OWNER'],
   '/signed-documents': ['ADMIN', 'OWNER'],
+  '/reference-docs': ['ADMIN', 'OWNER'],
 };
 
 /**

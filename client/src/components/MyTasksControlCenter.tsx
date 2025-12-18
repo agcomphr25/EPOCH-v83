@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { format, isAfter, isBefore, startOfDay } from 'date-fns';
 import { Link } from 'wouter';
+import PendingSignatureTasks from './PendingSignatureTasks';
 
 interface AssignedTask {
   id: string;
@@ -106,6 +107,12 @@ export default function MyTasksControlCenter({
     enabled: !!employeeId && activeTab === 'history',
   });
 
+  const { data: signatureStats } = useQuery<{ pending: number; completed: number; initiated: number }>({
+    queryKey: ['/api/signature-workflow/stats', employeeId],
+    queryFn: () => apiRequest(`/api/signature-workflow/stats/${employeeId}`),
+    enabled: !!employeeId,
+  });
+
   const updateTaskMutation = useMutation({
     mutationFn: ({ taskId, data }: { taskId: string; data: any }) =>
       apiRequest(`/api/preproduction-checklists/tasks/${taskId}`, {
@@ -127,7 +134,14 @@ export default function MyTasksControlCenter({
   });
 
   const tasks = tasksData?.tasks || [];
-  const stats = tasksData?.stats || { total: 0, completed: 0, pending: 0, overdue: 0 };
+  const baseStats = tasksData?.stats || { total: 0, completed: 0, pending: 0, overdue: 0 };
+  const sigPending = signatureStats?.pending || 0;
+  const stats = {
+    total: baseStats.total + sigPending,
+    completed: baseStats.completed,
+    pending: baseStats.pending + sigPending,
+    overdue: baseStats.overdue,
+  };
 
   const filteredTasks = tasks.filter((task) => {
     const matchesSearch =
@@ -218,6 +232,12 @@ export default function MyTasksControlCenter({
                   <div className="text-xs text-red-700">Overdue</div>
                 </div>
               </div>
+
+              <PendingSignatureTasks
+                employeeId={employeeId}
+                employeeName={userName || ''}
+                compact={true}
+              />
 
               {stats.pending > 0 && (
                 <div className="space-y-2">
@@ -314,6 +334,12 @@ export default function MyTasksControlCenter({
           </div>
           <Progress value={completionPercentage} className="h-3" />
         </div>
+
+        <PendingSignatureTasks
+          employeeId={employeeId}
+          employeeName={userName || ''}
+          compact={true}
+        />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>

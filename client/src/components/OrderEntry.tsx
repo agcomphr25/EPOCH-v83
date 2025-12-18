@@ -1848,6 +1848,11 @@ export default function OrderEntry() {
     const handednessLower = handedness.toLowerCase();
     const qdLower = qdAccessory.toLowerCase();
 
+    // Skip warning for "no_qds" or options without side specified
+    if (qdLower === 'no_qds' || qdLower === 'qd_2_butt' || qdLower === 'qd_4') {
+      return false;
+    }
+
     // Check for same-side configuration (unusual)
     // Left-handed stock with Left QD = unusual (normally QD would be on right)
     // Right-handed stock with Right QD = unusual (normally QD would be on left)
@@ -1855,6 +1860,17 @@ export default function OrderEntry() {
     const isRightHanded = handednessLower === 'right' || handednessLower === 'rh';
     const hasLeftQd = qdLower.includes('left');
     const hasRightQd = qdLower.includes('right');
+
+    // Debug logging to trace the actual values
+    console.log('🔍 QD Guardrail Check:', {
+      handedness,
+      qdAccessory,
+      isLeftHanded,
+      isRightHanded,
+      hasLeftQd,
+      hasRightQd,
+      wouldWarn: (isLeftHanded && hasLeftQd) || (isRightHanded && hasRightQd)
+    });
 
     // Same side = warning needed
     if (isLeftHanded && hasLeftQd) return true;

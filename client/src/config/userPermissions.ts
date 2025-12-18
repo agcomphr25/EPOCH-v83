@@ -98,6 +98,9 @@ export const VALID_NAVBAR_ROUTES = [
   '/preproduction-checklists',
   '/projects',
   '/help',
+  '/signature-workflow',
+  '/media-library',
+  '/signed-documents',
 ];
 
 export const USER_PERMISSIONS: Record<string, UserPermissions> = {

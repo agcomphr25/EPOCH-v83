@@ -57,6 +57,7 @@ import {
   Activity,
   FolderKanban,
   Clock,
+  FileSignature,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -441,6 +442,12 @@ export default function Navigation() {
       icon: FileText,
       description:
         'Unified document repository with advanced tagging and organization',
+    },
+    {
+      path: '/signature-workflow',
+      label: 'Signature Routing',
+      icon: FileSignature,
+      description: 'Create and manage digital signature routing workflows',
     },
     {
       path: '/calendar',

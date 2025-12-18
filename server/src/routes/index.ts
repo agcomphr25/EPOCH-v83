@@ -96,6 +96,7 @@ import mediaRoutes from './media';
 import voiceNotesRoutes from './voiceNotes';
 import patternSignalsRoutes from './patternSignals';
 import signPdfRoutes from './signPdf';
+import signatureWorkflowRoutes from './signatureWorkflow';
 import { getAccessToken } from '../utils/upsShipping';
 
 export function registerRoutes(app: Express): Server {
@@ -233,6 +234,9 @@ export function registerRoutes(app: Express): Server {
   // Document management routes - signPdfRoutes first so /all doesn't conflict with /:id
   app.use('/api/documents', signPdfRoutes);
   app.use('/api/documents', documentsRoutes);
+  
+  // Signature workflow routes - multi-signer document routing
+  app.use('/api/signature-workflow', signatureWorkflowRoutes);
 
   // Controlled Documents (Master Document Register) routes
   app.use('/api/controlled-documents', controlledDocumentsRoutes);

@@ -8259,4 +8259,137 @@ export const insertOrderSignedDocumentSchema = createInsertSchema(orderSignedDoc
 export type OrderSignedDocument = typeof orderSignedDocuments.$inferSelect;
 export type InsertOrderSignedDocument = z.infer<typeof insertOrderSignedDocumentSchema>;
 
+// ============================================
+// SIGNATURE WORKFLOW - Multi-signer document routing
+// ============================================
+
+// Main signature request - represents a document that needs signatures
+export const signatureRequests = pgTable('signature_requests', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  title: text('title').notNull(),
+  description: text('description'),
+  
+  // Document source - either a media file or a form instance
+  documentType: text('document_type').notNull(), // 'media', 'form_instance', 'generated_pdf'
+  mediaId: uuid('media_id').references(() => mediaLibrary.id, { onDelete: 'set null' }),
+  formInstanceId: text('form_instance_id'), // Reference to a form submission if applicable
+  
+  // Original document path (before any signatures)
+  originalDocumentPath: text('original_document_path'),
+  // Current document path (with signatures applied so far)
+  currentDocumentPath: text('current_document_path'),
+  
+  // Workflow status
+  status: text('status').notNull().default('pending'), // 'pending', 'in_progress', 'completed', 'cancelled', 'rejected'
+  currentSignerOrder: integer('current_signer_order').default(1), // Which signer is currently active
+  
+  // Initiator info
+  initiatedById: integer('initiated_by_id').references(() => employees.id),
+  initiatedByName: text('initiated_by_name').notNull(),
+  
+  // Optional: link to an order
+  orderId: text('order_id'),
+  
+  // Deadlines and reminders
+  dueDate: timestamp('due_date'),
+  reminderEnabled: boolean('reminder_enabled').default(true),
+  lastReminderSentAt: timestamp('last_reminder_sent_at'),
+  
+  // Completion tracking
+  completedAt: timestamp('completed_at'),
+  cancelledAt: timestamp('cancelled_at'),
+  cancelReason: text('cancel_reason'),
+  
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  statusIdx: index('signature_requests_status_idx').on(table.status),
+  initiatedByIdIdx: index('signature_requests_initiated_by_id_idx').on(table.initiatedById),
+  orderIdIdx: index('signature_requests_order_id_idx').on(table.orderId),
+  dueDateIdx: index('signature_requests_due_date_idx').on(table.dueDate),
+}));
+
+export const insertSignatureRequestSchema = createInsertSchema(signatureRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SignatureRequest = typeof signatureRequests.$inferSelect;
+export type InsertSignatureRequest = z.infer<typeof insertSignatureRequestSchema>;
+
+// Individual signers for each request - ordered sequence
+export const signatureSigners = pgTable('signature_signers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  signatureRequestId: uuid('signature_request_id').references(() => signatureRequests.id, { onDelete: 'cascade' }).notNull(),
+  
+  // Signer info - can be an employee or external
+  employeeId: integer('employee_id').references(() => employees.id),
+  signerName: text('signer_name').notNull(),
+  signerEmail: text('signer_email'),
+  
+  // Signing order (1 = first, 2 = second, etc.)
+  signOrder: integer('sign_order').notNull().default(1),
+  
+  // Status tracking
+  status: text('status').notNull().default('pending'), // 'pending', 'current', 'completed', 'skipped', 'rejected'
+  
+  // Signature data when completed
+  signatureData: text('signature_data'), // Base64 signature image
+  signedAt: timestamp('signed_at'),
+  signatureNotes: text('signature_notes'), // Notes from signer
+  
+  // Rejection info
+  rejectedAt: timestamp('rejected_at'),
+  rejectionReason: text('rejection_reason'),
+  
+  // Notification tracking
+  notifiedAt: timestamp('notified_at'),
+  reminderCount: integer('reminder_count').default(0),
+  lastReminderAt: timestamp('last_reminder_at'),
+  
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  signatureRequestIdIdx: index('signature_signers_request_id_idx').on(table.signatureRequestId),
+  employeeIdIdx: index('signature_signers_employee_id_idx').on(table.employeeId),
+  statusIdx: index('signature_signers_status_idx').on(table.status),
+  signOrderIdx: index('signature_signers_sign_order_idx').on(table.signOrder),
+}));
+
+export const insertSignatureSignerSchema = createInsertSchema(signatureSigners).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SignatureSigner = typeof signatureSigners.$inferSelect;
+export type InsertSignatureSigner = z.infer<typeof insertSignatureSignerSchema>;
+
+// Signature activity log - tracks all actions on a signature request
+export const signatureActivityLog = pgTable('signature_activity_log', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  signatureRequestId: uuid('signature_request_id').references(() => signatureRequests.id, { onDelete: 'cascade' }).notNull(),
+  signerId: uuid('signer_id').references(() => signatureSigners.id, { onDelete: 'set null' }),
+  
+  action: text('action').notNull(), // 'created', 'sent', 'viewed', 'signed', 'rejected', 'reminder_sent', 'completed', 'cancelled'
+  performedById: integer('performed_by_id').references(() => employees.id),
+  performedByName: text('performed_by_name'),
+  
+  details: jsonb('details'), // Additional action details
+  
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  signatureRequestIdIdx: index('signature_activity_log_request_id_idx').on(table.signatureRequestId),
+  actionIdx: index('signature_activity_log_action_idx').on(table.action),
+}));
+
+export const insertSignatureActivityLogSchema = createInsertSchema(signatureActivityLog).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SignatureActivityLog = typeof signatureActivityLog.$inferSelect;
+export type InsertSignatureActivityLog = z.infer<typeof insertSignatureActivityLogSchema>;
+
 export * from './calendar.schema';

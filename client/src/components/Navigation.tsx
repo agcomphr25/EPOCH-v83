@@ -855,6 +855,12 @@ export default function Navigation() {
       icon: TrendingUp,
       description: 'Track production orders from POs',
     },
+    {
+      path: '/projects',
+      label: 'Projects',
+      icon: FolderKanban,
+      description: 'Multi-step project workflow tracking',
+    },
   ];
 
   const departmentQueueItems = [

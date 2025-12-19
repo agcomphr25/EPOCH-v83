@@ -2459,6 +2459,26 @@ router.patch('/:orderId/department', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid department name' });
     }
 
+    // First, get the existing order to capture previous department
+    let existingOrder: any = null;
+    let previousDepartment: string | null = null;
+    
+    try {
+      existingOrder = await storage.getFinalizedOrderById(orderId);
+      previousDepartment = existingOrder?.currentDepartment || null;
+    } catch {
+      try {
+        existingOrder = await storage.getOrderDraft(orderId);
+        previousDepartment = existingOrder?.currentDepartment || null;
+      } catch {
+        const productionOrder = await storage.getProductionOrderByOrderId(orderId);
+        if (productionOrder) {
+          existingOrder = productionOrder;
+          previousDepartment = (productionOrder as any).currentDepartment || null;
+        }
+      }
+    }
+
     // Try to find and update the order
     let updatedOrder;
     let orderType = '';
@@ -2503,6 +2523,38 @@ router.patch('/:orderId/department', async (req: Request, res: Response) => {
     console.log(
       `📋 MANUAL TRANSFER: ${orderId} (${orderType}) moved to ${department} via Department Transfer Tool`
     );
+
+    // Log audit event for department transfer
+    await auditService.logEvent({
+      entityType: 'p1_order',
+      entityId: orderId,
+      action: 'DEPARTMENT_CHANGE',
+      actor: {
+        id: (req as any).user?.id,
+        username: (req as any).user?.username || 'System',
+        role: (req as any).user?.role || 'system',
+      },
+      fieldsChanged: {
+        currentDepartment: { before: previousDepartment, after: department },
+      },
+      meta: { 
+        source: 'department_transfer_tool',
+        transferType: 'manual',
+        orderType,
+      },
+    });
+
+    // Record department transition for timing tracking
+    await auditService.recordDepartmentEntry({
+      entityType: 'p1_order',
+      entityId: orderId,
+      department: department,
+      enteredByUserId: (req as any).user?.id,
+      metadata: {
+        fromDepartment: previousDepartment,
+        transferType: 'manual',
+      },
+    });
 
     res.json({
       success: true,

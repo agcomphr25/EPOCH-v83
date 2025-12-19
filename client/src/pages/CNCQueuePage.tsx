@@ -18,6 +18,7 @@ import {
   TrendingDown,
   Zap,
   FileWarning,
+  Printer,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, isAfter } from 'date-fns';
@@ -495,6 +496,40 @@ export default function CNCQueuePage() {
     progressToFinish.mutate(Array.from(selectedFinishOrders));
   };
 
+  // Print sales order summaries for selected orders
+  const handlePrintSalesOrders = () => {
+    // Combine all selected orders from both queues
+    const allSelectedOrders = [
+      ...Array.from(selectedGunsimthOrders),
+      ...Array.from(selectedFinishOrders),
+    ];
+
+    if (allSelectedOrders.length === 0) {
+      toast({
+        title: 'No Orders Selected',
+        description: 'Please select at least one order to print',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Open each sales order PDF in a new tab
+    allSelectedOrders.forEach((orderId, index) => {
+      // Stagger the window opens slightly to prevent popup blocking
+      setTimeout(() => {
+        window.open(`/api/shipping-pdf/sales-order/${orderId}`, '_blank');
+      }, index * 200);
+    });
+
+    toast({
+      title: 'Opening Sales Orders',
+      description: `Opening ${allSelectedOrders.length} sales order PDF${allSelectedOrders.length > 1 ? 's' : ''} for printing`,
+    });
+  };
+
+  // Get total selected count across both queues
+  const totalSelectedCount = selectedGunsimthOrders.size + selectedFinishOrders.size;
+
   // Auto-select order when scanned - Select the order card
   const handleOrderScanned = useCallback(
     (orderId: string) => {
@@ -715,6 +750,16 @@ export default function CNCQueuePage() {
               </Badge>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                onClick={handlePrintSalesOrders}
+                disabled={totalSelectedCount === 0}
+                variant="outline"
+                size="sm"
+                data-testid="button-print-sales-orders"
+              >
+                <Printer className="h-4 w-4 mr-1" />
+                Print Sales Orders ({totalSelectedCount})
+              </Button>
               <Button
                 onClick={handleProgressToGunsmith}
                 disabled={

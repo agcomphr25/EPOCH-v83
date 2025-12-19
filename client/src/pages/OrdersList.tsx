@@ -96,7 +96,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import AuditDrawer from '@/components/AuditDrawer';
-import { History } from 'lucide-react';
+import { History, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import CommunicationCompose from '@/components/CommunicationCompose';
 import LinkOrdersDialog from '@/components/LinkOrdersDialog';
@@ -1749,6 +1749,13 @@ export default function OrdersList() {
                                   </DropdownMenuItem>
                                 }
                               />
+                              <DropdownMenuItem
+                                onClick={() => window.location.href = `/order-timeline/p1_order/${order.orderId}`}
+                                data-testid={`button-view-timeline-${order.orderId}`}
+                              >
+                                <Clock className="mr-2 h-4 w-4" />
+                                View Timeline
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                           

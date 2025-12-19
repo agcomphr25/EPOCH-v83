@@ -126,6 +126,232 @@ router.get('/full/:entityType/:entityId', async (req: Request, res: Response) =>
   }
 });
 
+// Get unified timeline for an entity (combines all event types into chronological list)
+router.get('/timeline/:entityType/:entityId', async (req: Request, res: Response) => {
+  try {
+    const { entityType, entityId } = req.params;
+    
+    // Validate entityType
+    const validEntityTypes = ['p1_order', 'p2_order', 'p2_serialized_item', 'p2_project'];
+    if (!validEntityTypes.includes(entityType)) {
+      return res.status(400).json({ error: 'Invalid entity type' });
+    }
+    
+    // Validate entityId
+    if (!entityId || entityId.trim() === '') {
+      return res.status(400).json({ error: 'Entity ID is required' });
+    }
+    
+    const { category, startDate, endDate, actor, limit: limitParam } = req.query;
+    const limit = Math.min(parseInt(limitParam as string) || 200, 500); // Cap at 500
+
+    const [events, transitions, scrapCycles] = await Promise.all([
+      auditService.getAuditHistory(entityType, entityId, limit),
+      auditService.getDepartmentTransitions(entityId),
+      auditService.getScrapCycles(entityId),
+    ]);
+
+    // Transform all into unified timeline items
+    const timelineItems: Array<{
+      id: string;
+      type: 'audit' | 'transition' | 'scrap';
+      timestamp: Date;
+      category: string;
+      action: string;
+      description: string;
+      actor: string | null;
+      details: Record<string, any>;
+    }> = [];
+
+    // Add audit events
+    for (const event of events) {
+      timelineItems.push({
+        id: `audit-${event.id}`,
+        type: 'audit',
+        timestamp: new Date(event.timestamp || event.createdAt),
+        category: getCategoryForAction(event.action),
+        action: event.action,
+        description: formatAuditAction(event.action, event.fieldsChanged),
+        actor: event.actorName || null,
+        details: {
+          fieldsChanged: event.fieldsChanged,
+          reason: event.reason,
+          meta: event.meta,
+        },
+      });
+    }
+
+    // Add department transitions
+    for (const transition of transitions) {
+      timelineItems.push({
+        id: `transition-entry-${transition.id}`,
+        type: 'transition',
+        timestamp: new Date(transition.enteredAt),
+        category: 'production',
+        action: 'DEPARTMENT_ENTRY',
+        description: `Entered ${transition.department}`,
+        actor: null, // Could look up enteredByUserId if needed
+        details: {
+          department: transition.department,
+          cycleNumber: transition.cycleNumber,
+          durationMinutes: transition.durationMinutes,
+        },
+      });
+
+      if (transition.exitedAt) {
+        timelineItems.push({
+          id: `transition-exit-${transition.id}`,
+          type: 'transition',
+          timestamp: new Date(transition.exitedAt),
+          category: 'production',
+          action: 'DEPARTMENT_EXIT',
+          description: `Exited ${transition.department}${transition.exitReason ? ` (${transition.exitReason})` : ''}`,
+          actor: null,
+          details: {
+            department: transition.department,
+            exitReason: transition.exitReason,
+            durationMinutes: transition.durationMinutes,
+          },
+        });
+      }
+    }
+
+    // Add scrap cycles
+    for (const scrap of scrapCycles) {
+      timelineItems.push({
+        id: `scrap-${scrap.id}`,
+        type: 'scrap',
+        timestamp: new Date(scrap.scrappedAt),
+        category: 'qc',
+        action: 'SCRAP_CYCLE',
+        description: `Scrapped in ${scrap.scrapDepartment || 'unknown department'}: ${scrap.scrapReason}`,
+        actor: null,
+        details: {
+          cycleNumber: scrap.cycleNumber,
+          scrapReason: scrap.scrapReason,
+          scrapDepartment: scrap.scrapDepartment,
+          restartEntityId: scrap.restartEntityId,
+        },
+      });
+
+      if (scrap.restartedAt) {
+        timelineItems.push({
+          id: `restart-${scrap.id}`,
+          type: 'scrap',
+          timestamp: new Date(scrap.restartedAt),
+          category: 'production',
+          action: 'ORDER_RESTARTED',
+          description: `Order restarted as ${scrap.restartEntityId || 'new order'}`,
+          actor: null,
+          details: {
+            restartEntityId: scrap.restartEntityId,
+            originalCycle: scrap.cycleNumber,
+          },
+        });
+      }
+    }
+
+    // Sort by timestamp descending (newest first)
+    timelineItems.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+    // Apply filters
+    let filtered = timelineItems;
+
+    if (category && category !== 'all') {
+      filtered = filtered.filter(item => item.category === category);
+    }
+
+    if (startDate) {
+      const start = new Date(startDate as string);
+      if (!isNaN(start.getTime())) {
+        filtered = filtered.filter(item => item.timestamp >= start);
+      }
+    }
+
+    if (endDate) {
+      const end = new Date(endDate as string);
+      if (!isNaN(end.getTime())) {
+        end.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(item => item.timestamp <= end);
+      }
+    }
+
+    if (actor && typeof actor === 'string' && actor.trim() !== '') {
+      const actorLower = actor.toLowerCase().trim();
+      filtered = filtered.filter(item => 
+        item.actor?.toLowerCase().includes(actorLower)
+      );
+    }
+
+    res.json(filtered.slice(0, limit));
+  } catch (error) {
+    console.error('Error fetching unified timeline:', error);
+    res.status(500).json({ error: 'Failed to fetch timeline' });
+  }
+});
+
+// Helper functions for timeline
+function getCategoryForAction(action: string): string {
+  const categoryMap: Record<string, string> = {
+    'DEPARTMENT_CHANGE': 'production',
+    'STATUS_CHANGE': 'production',
+    'TECHNICIAN_ASSIGNED': 'production',
+    'PRIORITY_CHANGE': 'production',
+    'SCRAP_DECLARED': 'qc',
+    'ORDER_CANCELLED': 'production',
+    'PAYMENT_RECEIVED': 'finance',
+    'REFUND_ISSUED': 'finance',
+    'DISCOUNT_APPLIED': 'finance',
+    'PRICE_CHANGE': 'finance',
+    'SHIPPING_UPDATE': 'shipping',
+    'ADDRESS_CHANGED': 'shipping',
+    'TRACKING_ADDED': 'shipping',
+    'QC_PASSED': 'qc',
+    'QC_FAILED': 'qc',
+    'NCR_CREATED': 'qc',
+    'ORDER_CREATED': 'production',
+  };
+  return categoryMap[action] || 'production';
+}
+
+function formatAuditAction(action: string, fieldsChanged: any): string {
+  const actionLabels: Record<string, string> = {
+    'DEPARTMENT_CHANGE': 'Department changed',
+    'STATUS_CHANGE': 'Status updated',
+    'TECHNICIAN_ASSIGNED': 'Technician assigned',
+    'PRIORITY_CHANGE': 'Priority updated',
+    'SCRAP_DECLARED': 'Scrap declared',
+    'ORDER_CANCELLED': 'Order cancelled',
+    'PAYMENT_RECEIVED': 'Payment received',
+    'REFUND_ISSUED': 'Refund issued',
+    'DISCOUNT_APPLIED': 'Discount applied',
+    'PRICE_CHANGE': 'Price changed',
+    'SHIPPING_UPDATE': 'Shipping updated',
+    'ADDRESS_CHANGED': 'Address changed',
+    'TRACKING_ADDED': 'Tracking number added',
+    'QC_PASSED': 'QC passed',
+    'QC_FAILED': 'QC failed',
+    'NCR_CREATED': 'NCR created',
+    'ORDER_CREATED': 'Order created',
+  };
+
+  let label = actionLabels[action] || action.replace(/_/g, ' ').toLowerCase();
+
+  // Add field change details if available
+  if (fieldsChanged && typeof fieldsChanged === 'object') {
+    const fields = Object.keys(fieldsChanged);
+    if (fields.length === 1) {
+      const field = fields[0];
+      const change = fieldsChanged[field];
+      if (change?.before !== undefined && change?.after !== undefined) {
+        label += `: ${change.before} → ${change.after}`;
+      }
+    }
+  }
+
+  return label;
+}
+
 // Manually log an audit event (for special cases)
 router.post('/log', async (req: Request, res: Response) => {
   try {

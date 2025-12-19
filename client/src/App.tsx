@@ -33,6 +33,7 @@ import DepartmentPartsRequestPage from './pages/DepartmentPartsRequestPage';
 import ConsolidatedNeedsListPage from './pages/ConsolidatedNeedsListPage';
 import QCPage from './pages/QCPage';
 import AuditSettings from './pages/AuditSettings';
+import OrderTimeline from './pages/OrderTimeline';
 import MediaLibrary from './pages/MediaLibrary';
 import SignPDFPage from './pages/SignPDFPage';
 import SignedDocumentsLibrary from './pages/SignedDocumentsLibrary';
@@ -351,6 +352,7 @@ function App() {
                   <Route path="/admin/orders" component={AdminPanelPage} />
                   <Route path="/admin/health-checks" component={SystemHealthChecksPage} />
                   <Route path="/audit-settings" component={AuditSettings} />
+                  <Route path="/order-timeline/:entityType/:entityId" component={OrderTimeline} />
                   <Route path="/media-library" component={MediaLibrary} />
                   <Route path="/sign-pdf" component={SignPDFPage} />
                   <Route path="/signed-documents" component={SignedDocumentsLibrary} />

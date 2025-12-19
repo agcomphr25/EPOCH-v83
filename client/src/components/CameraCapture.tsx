@@ -272,6 +272,8 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
+      // Block closing while upload is in progress
+      if (!isOpen && uploadMutation.isPending) return;
       if (!isOpen) handleClose();
       else setOpen(true);
     }}>
@@ -283,7 +285,17 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent 
+        className="sm:max-w-lg"
+        onPointerDownOutside={(e) => {
+          // Prevent closing by clicking outside while saving
+          if (uploadMutation.isPending) e.preventDefault();
+        }}
+        onEscapeKeyDown={(e) => {
+          // Prevent closing with Escape while saving
+          if (uploadMutation.isPending) e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Capture Image</DialogTitle>
           <DialogDescription>

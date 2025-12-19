@@ -65,20 +65,65 @@ export function OrderAttachments({
     enabled: !!orderId,
   });
 
-  // Upload mutation
+  // Upload mutation using presigned URLs for cloud storage
   const uploadMutation = useMutation({
     mutationFn: async ({ files, notes }: { files: File[]; notes: string }) => {
-      const formData = new FormData();
-      files.forEach((file) => formData.append('files', file));
-      if (notes) formData.append('notes', notes);
-
-      return fetch(`/api/order-attachments/${orderId}`, {
-        method: 'POST',
-        body: formData,
-      }).then((res) => {
-        if (!res.ok) throw new Error('Upload failed');
-        return res.json();
-      });
+      const uploadedAttachments = [];
+      
+      for (const file of files) {
+        // Step 1: Request presigned URL from backend
+        const urlResponse = await fetch('/api/order-attachments/request-upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: file.name,
+            size: file.size,
+            contentType: file.type || 'application/octet-stream',
+            orderId,
+          }),
+        });
+        
+        if (!urlResponse.ok) {
+          const error = await urlResponse.json().catch(() => ({}));
+          throw new Error(error.error || 'Failed to get upload URL');
+        }
+        
+        const { uploadURL, objectPath } = await urlResponse.json();
+        
+        // Step 2: Upload file directly to cloud storage
+        const uploadResponse = await fetch(uploadURL, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        });
+        
+        if (!uploadResponse.ok) {
+          throw new Error(`Failed to upload ${file.name} to cloud storage`);
+        }
+        
+        // Step 3: Complete upload - save metadata to database
+        const completeResponse = await fetch('/api/order-attachments/complete-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            objectPath,
+            orderId,
+            originalFileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type || 'application/octet-stream',
+            notes: notes || null,
+          }),
+        });
+        
+        if (!completeResponse.ok) {
+          throw new Error(`Failed to save ${file.name} metadata`);
+        }
+        
+        const attachment = await completeResponse.json();
+        uploadedAttachments.push(attachment);
+      }
+      
+      return uploadedAttachments;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

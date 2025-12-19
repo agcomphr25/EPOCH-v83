@@ -1,24 +1,15 @@
 import express from 'express';
 import { storage } from '../../storage';
-import { uploadMiddleware } from '../../utils/fileUpload';
 import {
   insertOrderAttachmentSchema,
   type OrderAttachment,
 } from '@shared/schema';
-import path from 'path';
+import { ObjectStorageService } from '../../replit_integrations/object_storage';
 import fs from 'fs';
+import path from 'path';
 
 const router = express.Router();
-
-// Create uploads directory for order attachments if it doesn't exist
-const orderAttachmentsDir = path.join(
-  process.cwd(),
-  'uploads',
-  'order-attachments'
-);
-if (!fs.existsSync(orderAttachmentsDir)) {
-  fs.mkdirSync(orderAttachmentsDir, { recursive: true });
-}
+const objectStorageService = new ObjectStorageService();
 
 // GET /api/order-attachments/:orderId - Get all attachments for an order
 router.get('/:orderId', async (req, res) => {
@@ -32,134 +23,111 @@ router.get('/:orderId', async (req, res) => {
   }
 });
 
-// POST /api/order-attachments/:orderId - Upload files for an order
-router.post(
-  '/:orderId',
-  uploadMiddleware.array('files', 10),
-  async (req, res) => {
-    try {
-      console.log('📁 File upload debug - Starting upload process');
-      console.log('📁 Order ID:', req.params.orderId);
-      console.log('📁 Request body:', req.body);
-      console.log(
-        '📁 Files received:',
-        req.files ? (req.files as any[]).length : 0
-      );
+// POST /api/order-attachments/request-upload-url - Request presigned URL for cloud upload
+router.post('/request-upload-url', async (req, res) => {
+  try {
+    const { name, size, contentType, orderId } = req.body;
 
-      const { orderId } = req.params;
-      const files = req.files as Express.Multer.File[];
+    if (!name || !orderId) {
+      return res.status(400).json({ error: 'Missing required fields: name, orderId' });
+    }
 
-      if (!files || files.length === 0) {
-        console.log('📁 No files in request');
-        return res.status(400).json({ error: 'No files uploaded' });
-      }
+    console.log(`📁 Requesting upload URL for order ${orderId}: ${name}`);
 
-      console.log(
-        '📁 Files details:',
-        files.map((f) => ({
-          originalname: f.originalname,
-          filename: f.filename,
-          size: f.size,
-          mimetype: f.mimetype,
-          path: f.path,
-        }))
-      );
+    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
 
-      const attachments: OrderAttachment[] = [];
+    console.log(`📁 Generated upload URL for ${name}, objectPath: ${objectPath}`);
 
-      for (const file of files) {
-        console.log('📁 Processing file:', file.originalname);
+    res.json({
+      uploadURL,
+      objectPath,
+      metadata: { name, size, contentType, orderId },
+    });
+  } catch (error) {
+    console.error('Error generating upload URL for order attachment:', error);
+    res.status(500).json({ error: 'Failed to generate upload URL' });
+  }
+});
 
-        // Check if temp file exists
-        if (!fs.existsSync(file.path)) {
-          console.log('📁 ERROR: Temp file not found at:', file.path);
-          throw new Error(`Temporary file not found: ${file.path}`);
-        }
+// POST /api/order-attachments/complete-upload - Complete upload and save to database
+router.post('/complete-upload', async (req, res) => {
+  try {
+    const { objectPath, orderId, originalFileName, fileSize, mimeType, notes } = req.body;
+    const user = (req as any).user;
 
-        // Check if destination directory exists
-        console.log('📁 Checking destination directory:', orderAttachmentsDir);
-        console.log('📁 Directory exists:', fs.existsSync(orderAttachmentsDir));
-
-        // Try to create directory if it doesn't exist
-        if (!fs.existsSync(orderAttachmentsDir)) {
-          console.log('📁 Creating directory:', orderAttachmentsDir);
-          fs.mkdirSync(orderAttachmentsDir, { recursive: true });
-        }
-
-        // Move file to order attachments directory
-        const newFileName = `${Date.now()}_${file.filename}`;
-        const newFilePath = path.join(orderAttachmentsDir, newFileName);
-
-        console.log('📁 Moving file from:', file.path);
-        console.log('📁 Moving file to:', newFilePath);
-
-        try {
-          fs.renameSync(file.path, newFilePath);
-          console.log('📁 File moved successfully');
-        } catch (moveError) {
-          console.error('📁 ERROR moving file:', moveError);
-          throw new Error(`Failed to move file: ${moveError.message}`);
-        }
-
-        // Verify file was moved
-        if (!fs.existsSync(newFilePath)) {
-          console.log('📁 ERROR: File not found after move:', newFilePath);
-          throw new Error(`File not found after move: ${newFilePath}`);
-        }
-
-        const attachmentData = {
-          orderId,
-          fileName: newFileName,
-          originalFileName: file.originalname,
-          fileSize: file.size,
-          mimeType: file.mimetype,
-          filePath: newFilePath,
-          uploadedBy: null, // Can be set when user authentication is implemented
-          notes: req.body.notes || null,
-        };
-
-        console.log('📁 Creating database record:', attachmentData);
-        const validatedData = insertOrderAttachmentSchema.parse(attachmentData);
-        const attachment = await storage.createOrderAttachment(validatedData);
-        attachments.push(attachment);
-        console.log('📁 Database record created successfully');
-      }
-
-      console.log(
-        '📁 Upload completed successfully, returning:',
-        attachments.length,
-        'attachments'
-      );
-      res.json(attachments);
-    } catch (error) {
-      console.error('📁 ERROR uploading order attachments:', error);
-      console.error('📁 Error stack:', error.stack);
-
-      // Return more detailed error information
-      const errorMessage = error.message || 'Failed to upload attachments';
-      res.status(500).json({
-        error: errorMessage,
-        details:
-          process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    if (!objectPath || !orderId || !originalFileName) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: objectPath, orderId, originalFileName' 
       });
     }
+
+    console.log(`📁 Completing upload for order ${orderId}: ${originalFileName}`);
+
+    // Set ACL policy to make file accessible
+    try {
+      await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
+        owner: user?.id?.toString() || 'system',
+        visibility: 'public',
+      });
+    } catch (aclError) {
+      console.warn('Failed to set ACL policy for order attachment:', aclError);
+    }
+
+    const attachmentData = {
+      orderId,
+      fileName: objectPath.split('/').pop() || originalFileName,
+      originalFileName,
+      fileSize: fileSize || 0,
+      mimeType: mimeType || 'application/octet-stream',
+      filePath: objectPath, // Store cloud object path
+      uploadedBy: user?.username || null,
+      notes: notes || null,
+    };
+
+    console.log('📁 Creating database record:', attachmentData);
+    const validatedData = insertOrderAttachmentSchema.parse(attachmentData);
+    const attachment = await storage.createOrderAttachment(validatedData);
+    
+    console.log('📁 Order attachment saved successfully:', attachment.id);
+    res.json(attachment);
+  } catch (error) {
+    console.error('Error completing order attachment upload:', error);
+    res.status(500).json({ error: 'Failed to complete upload' });
   }
-);
+});
 
 // DELETE /api/order-attachments/:attachmentId - Delete an attachment
 router.delete('/:attachmentId', async (req, res) => {
   try {
     const attachmentId = parseInt(req.params.attachmentId);
 
-    // Get attachment info before deleting to remove file
+    // Get attachment info before deleting
     const attachment = await storage.getOrderAttachment(attachmentId);
     if (!attachment) {
       return res.status(404).json({ error: 'Attachment not found' });
     }
 
-    // Delete file from filesystem
-    if (fs.existsSync(attachment.filePath)) {
-      fs.unlinkSync(attachment.filePath);
+    // Try to delete from cloud storage if it's a cloud path (starts with /objects/)
+    if (attachment.filePath && attachment.filePath.startsWith('/objects/')) {
+      try {
+        const objectFile = await objectStorageService.getObjectEntityFile(attachment.filePath);
+        await objectFile.delete();
+        console.log(`📁 Deleted cloud file: ${attachment.filePath}`);
+      } catch (deleteError) {
+        console.warn('Failed to delete file from cloud storage:', deleteError);
+        // Continue with database deletion even if cloud deletion fails
+      }
+    } else if (attachment.filePath) {
+      // Legacy local file - try to delete if it exists
+      try {
+        if (fs.existsSync(attachment.filePath)) {
+          fs.unlinkSync(attachment.filePath);
+          console.log(`📁 Deleted local file: ${attachment.filePath}`);
+        }
+      } catch (localDeleteError) {
+        console.warn('Failed to delete local file:', localDeleteError);
+      }
     }
 
     // Delete from database
@@ -172,7 +140,7 @@ router.delete('/:attachmentId', async (req, res) => {
   }
 });
 
-// GET /api/order-attachments/download/:attachmentId - Download an attachment
+// GET /api/order-attachments/download/:attachmentId - Download/view an attachment
 router.get('/download/:attachmentId', async (req, res) => {
   try {
     const attachmentId = parseInt(req.params.attachmentId);
@@ -183,21 +151,50 @@ router.get('/download/:attachmentId', async (req, res) => {
       return res.status(404).json({ error: 'Attachment not found' });
     }
 
-    if (!fs.existsSync(attachment.filePath)) {
-      return res.status(404).json({ error: 'File not found on disk' });
-    }
-
-    if (forceDownload) {
-      // Force download with attachment disposition
-      res.download(attachment.filePath, attachment.originalFileName);
+    // Check if this is a cloud storage path (starts with /objects/)
+    if (attachment.filePath && attachment.filePath.startsWith('/objects/')) {
+      try {
+        const objectFile = await objectStorageService.getObjectEntityFile(attachment.filePath);
+        
+        if (forceDownload) {
+          // Set download disposition header
+          res.setHeader(
+            'Content-Disposition',
+            `attachment; filename="${attachment.originalFileName}"`
+          );
+        } else {
+          res.setHeader(
+            'Content-Disposition',
+            `inline; filename="${attachment.originalFileName}"`
+          );
+        }
+        
+        // Stream the file using the built-in download method
+        await objectStorageService.downloadObject(objectFile, res);
+      } catch (cloudError) {
+        console.error('Error fetching from cloud storage:', cloudError);
+        res.status(404).json({ error: 'File not found in cloud storage' });
+      }
+    } else if (attachment.filePath && fs.existsSync(attachment.filePath)) {
+      // Legacy local file - serve if it exists (dev environment only)
+      console.log(`📁 Serving legacy local file: ${attachment.filePath}`);
+      
+      if (forceDownload) {
+        res.download(attachment.filePath, attachment.originalFileName);
+      } else {
+        res.setHeader('Content-Type', attachment.mimeType);
+        res.setHeader(
+          'Content-Disposition',
+          `inline; filename="${attachment.originalFileName}"`
+        );
+        res.sendFile(path.resolve(attachment.filePath));
+      }
     } else {
-      // Set headers for inline viewing (especially for PDFs)
-      res.setHeader('Content-Type', attachment.mimeType);
-      res.setHeader(
-        'Content-Disposition',
-        `inline; filename="${attachment.originalFileName}"`
-      );
-      res.sendFile(path.resolve(attachment.filePath));
+      // File not found in either location
+      console.warn('File not found:', attachment.filePath);
+      res.status(404).json({ 
+        error: 'File not available. It may have been stored locally and is not accessible in this environment.' 
+      });
     }
   } catch (error) {
     console.error('Error downloading attachment:', error);

@@ -47,6 +47,7 @@ import {
   BarChart3,
   DollarSign,
   Eye,
+  CreditCard,
 } from 'lucide-react';
 import {
   Table,
@@ -2814,23 +2815,55 @@ export default function CustomerManagement() {
             </div>
           ) : balanceDueData ? (
             <div className="space-y-6">
-              {/* Summary Card */}
-              <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-orange-900">Total Outstanding Balance</p>
-                      <p className="text-3xl font-bold text-orange-700 mt-1">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Orders Balance */}
+                <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-orange-900">Orders Balance</p>
+                      <p className="text-2xl font-bold text-orange-700 mt-1">
                         ${balanceDueData.totalBalanceDue?.toFixed(2) || '0.00'}
                       </p>
-                      <p className="text-sm text-orange-600 mt-1">
+                      <p className="text-xs text-orange-600 mt-1">
                         {balanceDueData.orderCount || 0} unpaid order{balanceDueData.orderCount !== 1 ? 's' : ''}
                       </p>
                     </div>
-                    <DollarSign className="h-16 w-16 text-orange-300" />
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+
+                {/* Credits Available */}
+                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-green-900">Credits Available</p>
+                      <p className="text-2xl font-bold text-green-700 mt-1">
+                        -${balanceDueData.totalCreditsAvailable?.toFixed(2) || '0.00'}
+                      </p>
+                      <p className="text-xs text-green-600 mt-1">
+                        {balanceDueData.creditMemos?.length || 0} credit memo{balanceDueData.creditMemos?.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Net Balance Due */}
+                <Card className={`bg-gradient-to-br ${balanceDueData.netBalanceDue > 0 ? 'from-red-50 to-red-100 border-red-200' : 'from-blue-50 to-blue-100 border-blue-200'}`}>
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className={`text-sm font-medium ${balanceDueData.netBalanceDue > 0 ? 'text-red-900' : 'text-blue-900'}`}>
+                        Net Balance Due
+                      </p>
+                      <p className={`text-2xl font-bold mt-1 ${balanceDueData.netBalanceDue > 0 ? 'text-red-700' : 'text-blue-700'}`}>
+                        ${balanceDueData.netBalanceDue?.toFixed(2) || '0.00'}
+                      </p>
+                      <p className={`text-xs mt-1 ${balanceDueData.netBalanceDue > 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                        After applying credits
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
               {/* Orders List */}
               {balanceDueData.orders && balanceDueData.orders.length > 0 ? (
@@ -2889,11 +2922,66 @@ export default function CustomerManagement() {
                   </Table>
                 </div>
               ) : (
+                <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-gray-600">No unpaid orders.</p>
+                </div>
+              )}
+
+              {/* Credit Memos List */}
+              {balanceDueData.creditMemos && balanceDueData.creditMemos.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <CreditCard className="h-5 w-5 text-green-600" />
+                    Available Credit Memos
+                  </h3>
+                  
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Memo Number</TableHead>
+                        <TableHead>Reason</TableHead>
+                        <TableHead>Issued Date</TableHead>
+                        <TableHead className="text-right">Original Amount</TableHead>
+                        <TableHead className="text-right">Applied</TableHead>
+                        <TableHead className="text-right">Available</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {balanceDueData.creditMemos.map((memo: any) => (
+                        <TableRow key={memo.id} data-testid={`row-credit-memo-${memo.id}`}>
+                          <TableCell className="font-medium text-green-700" data-testid={`text-memo-number-${memo.id}`}>
+                            {memo.memoNumber}
+                          </TableCell>
+                          <TableCell data-testid={`text-memo-reason-${memo.id}`}>
+                            {memo.reason || '-'}
+                          </TableCell>
+                          <TableCell data-testid={`text-memo-date-${memo.id}`}>
+                            {memo.issuedDate ? new Date(memo.issuedDate).toLocaleDateString() : '-'}
+                          </TableCell>
+                          <TableCell className="text-right" data-testid={`text-memo-amount-${memo.id}`}>
+                            ${memo.amount?.toFixed(2) || '0.00'}
+                          </TableCell>
+                          <TableCell className="text-right text-gray-500" data-testid={`text-memo-applied-${memo.id}`}>
+                            ${memo.appliedAmount?.toFixed(2) || '0.00'}
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-green-600" data-testid={`text-memo-available-${memo.id}`}>
+                            ${memo.unappliedAmount?.toFixed(2) || '0.00'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {/* No balance message */}
+              {(!balanceDueData.orders || balanceDueData.orders.length === 0) && 
+               (!balanceDueData.creditMemos || balanceDueData.creditMemos.length === 0) && (
                 <div className="text-center py-12 bg-green-50 rounded-lg border border-green-200">
                   <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-3" />
                   <p className="text-lg font-semibold text-green-800">No Outstanding Balance</p>
                   <p className="text-sm text-green-600 mt-1">
-                    This customer has no unpaid orders.
+                    This customer has no unpaid orders or available credits.
                   </p>
                 </div>
               )}

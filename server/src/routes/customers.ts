@@ -1459,17 +1459,15 @@ router.get('/:id/balance-due', async (req: Request, res: Response) => {
     const unpaidOrders = await storage.getUnpaidOrdersByCustomer(customerId);
 
     // Get refund data for these orders
-    const { refundRequests } = await import('@shared/schema');
+    const { refundRequests, creditMemos } = await import('@shared/schema');
     const { db } = await import('../../db');
-    const { eq, inArray, sql: drizzleSql } = await import('drizzle-orm');
+    const { eq, inArray, sql: drizzleSql, and, gt } = await import('drizzle-orm');
 
     // Get all processed refunds for this customer's orders
     const orderIds = unpaidOrders.map((o) => o.orderId);
     let refundsData: Array<{ orderId: string; totalRefunded: number }> = [];
 
     if (orderIds.length > 0) {
-      const { and } = await import('drizzle-orm');
-      
       const refunds = await db
         .select({
           orderId: refundRequests.orderId,
@@ -1521,14 +1519,52 @@ router.get('/:id/balance-due', async (req: Request, res: Response) => {
     // Filter out orders with $0 balance after refunds
     const ordersWithBalance = ordersWithRefunds.filter((o) => o.balanceDue > 0);
 
-    // Calculate total balance due
+    // Calculate total balance due from orders
     const totalBalanceDue = ordersWithBalance.reduce((sum, order) => sum + order.balanceDue, 0);
+
+    // Get credit memos with unapplied amounts for this customer
+    const customerCreditMemos = await db
+      .select({
+        id: creditMemos.id,
+        memoNumber: creditMemos.memoNumber,
+        amount: creditMemos.amount,
+        appliedAmount: creditMemos.appliedAmount,
+        unappliedAmount: creditMemos.unappliedAmount,
+        reason: creditMemos.reason,
+        status: creditMemos.status,
+        issuedDate: creditMemos.issuedDate,
+      })
+      .from(creditMemos)
+      .where(
+        and(
+          eq(creditMemos.customerId, customerId),
+          eq(creditMemos.status, 'active'),
+          gt(creditMemos.unappliedAmount, 0)
+        )
+      );
+
+    // Calculate total available credits
+    const totalCreditsAvailable = customerCreditMemos.reduce(
+      (sum, memo) => sum + (memo.unappliedAmount || 0),
+      0
+    );
+
+    // Calculate net balance due (orders balance minus available credits)
+    const netBalanceDue = Math.max(0, totalBalanceDue - totalCreditsAvailable);
 
     res.json({
       customerId,
       orders: ordersWithBalance,
       totalBalanceDue: Math.round(totalBalanceDue * 100) / 100,
       orderCount: ordersWithBalance.length,
+      creditMemos: customerCreditMemos.map((memo) => ({
+        ...memo,
+        amount: Math.round((memo.amount || 0) * 100) / 100,
+        appliedAmount: Math.round((memo.appliedAmount || 0) * 100) / 100,
+        unappliedAmount: Math.round((memo.unappliedAmount || 0) * 100) / 100,
+      })),
+      totalCreditsAvailable: Math.round(totalCreditsAvailable * 100) / 100,
+      netBalanceDue: Math.round(netBalanceDue * 100) / 100,
     });
   } catch (error) {
     console.error('Error calculating balance due:', error);

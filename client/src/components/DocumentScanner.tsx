@@ -394,7 +394,17 @@ export default function DocumentScanner({ imageData, onProcessed, onCancel }: Do
 
     switch (enhancementMode) {
       case 'enhanced':
+        // Apply contrast and brightness
         mat.convertTo(mat, -1, contrast, brightness);
+        // Apply unsharp masking for better sharpness
+        try {
+          const blurred = new cv.Mat();
+          cv.GaussianBlur(mat, blurred, new cv.Size(0, 0), 2);
+          cv.addWeighted(mat, 1.5, blurred, -0.5, 0, mat);
+          blurred.delete();
+        } catch (e) {
+          console.warn('Sharpening failed, continuing without:', e);
+        }
         break;
       case 'grayscale':
         cv.cvtColor(mat, mat, cv.COLOR_RGBA2GRAY);
@@ -402,7 +412,8 @@ export default function DocumentScanner({ imageData, onProcessed, onCancel }: Do
         break;
       case 'bw':
         cv.cvtColor(mat, mat, cv.COLOR_RGBA2GRAY);
-        cv.adaptiveThreshold(mat, mat, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 21, 10);
+        // Use larger block size for better detail preservation
+        cv.adaptiveThreshold(mat, mat, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 31, 8);
         cv.cvtColor(mat, mat, cv.COLOR_GRAY2RGBA);
         break;
     }
@@ -476,11 +487,12 @@ export default function DocumentScanner({ imageData, onProcessed, onCancel }: Do
 
         const pdfBytes = await pdfDoc.save();
         file = new File([pdfBytes], `scanned-${Date.now()}.pdf`, { type: 'application/pdf' });
-        preview = resultCanvas.toDataURL('image/jpeg', 0.8);
+        preview = resultCanvas.toDataURL('image/jpeg', 0.85);
       } else {
-        const blob = await canvasToBlob(resultCanvas, 'image/jpeg', 0.9);
-        file = new File([blob], `scanned-${Date.now()}.jpg`, { type: 'image/jpeg' });
-        preview = resultCanvas.toDataURL('image/jpeg', 0.8);
+        // Use PNG for lossless quality, especially for documents with text
+        const blob = await canvasToBlob(resultCanvas, 'image/png', 1);
+        file = new File([blob], `scanned-${Date.now()}.png`, { type: 'image/png' });
+        preview = resultCanvas.toDataURL('image/jpeg', 0.85);
       }
 
       onProcessed(file, preview);

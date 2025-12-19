@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Link, useLocation } from 'wouter';
+import { Link, useLocation, useSearch } from 'wouter';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -179,22 +179,26 @@ interface StockModel {
 export default function OrdersList() {
   console.log('OrdersList component rendering - with CSV export');
 
+  const [, setLocation] = useLocation();
+  const searchString = useSearch();
+  
   // Read search parameters from URL
-  const searchParams = new URLSearchParams(window.location.search);
-  const initialSearchTerm = searchParams.get('search') || '';
-  const initialDepartmentFilter = searchParams.get('department') || 'all';
+  const searchParams = new URLSearchParams(searchString);
+  const urlSearchTerm = searchParams.get('search') || '';
+  const urlDepartmentFilter = searchParams.get('department') || 'all';
+  const urlStatusFilter = searchParams.get('status') || 'all';
   const urlCustomerId = searchParams.get('customerId') || '';
 
   const [selectedOrderBarcode, setSelectedOrderBarcode] = useState<{
     orderId: string;
     barcode: string;
   } | null>(null);
-  const [searchTerm, setSearchTerm] = useState<string>(initialSearchTerm);
+  const [searchTerm, setSearchTerm] = useState<string>(urlSearchTerm);
   const [selectedOrderForKickback, setSelectedOrderForKickback] =
     useState<Order | null>(null);
   const [isKickbackDialogOpen, setIsKickbackDialogOpen] = useState(false);
-  const [departmentFilter, setDepartmentFilter] = useState<string>(initialDepartmentFilter);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [departmentFilter, setDepartmentFilter] = useState<string>(urlDepartmentFilter);
+  const [statusFilter, setStatusFilter] = useState<string>(urlStatusFilter);
   const [customerIdFilter, setCustomerIdFilter] = useState<string>(urlCustomerId);
   const [sortBy, setSortBy] = useState<string>('orderDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -204,7 +208,82 @@ export default function OrdersList() {
     orderId?: string;
   } | null>(null);
   const { toast: showToast } = useToast();
-  const [, setLocation] = useLocation();
+  
+  // Track whether the state change was user-initiated (vs from URL sync)
+  const isUserInitiatedRef = React.useRef(false);
+  
+  // Sync state FROM URL when URL changes (e.g., browser back/forward)
+  // This runs when searchString (from useSearch) changes
+  useEffect(() => {
+    // Only sync if values actually differ to prevent loops
+    if (urlSearchTerm !== searchTerm) {
+      setSearchTerm(urlSearchTerm);
+    }
+    if (urlDepartmentFilter !== departmentFilter) {
+      setDepartmentFilter(urlDepartmentFilter);
+    }
+    if (urlStatusFilter !== statusFilter) {
+      setStatusFilter(urlStatusFilter);
+    }
+    if (urlCustomerId !== customerIdFilter) {
+      setCustomerIdFilter(urlCustomerId);
+    }
+    // After syncing from URL, mark as not user-initiated
+    isUserInitiatedRef.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchString]); // Only trigger when the URL search string changes
+  
+  // Update URL when filters change (with debounce)
+  useEffect(() => {
+    // Don't update URL if the change came from URL sync (prevents loops)
+    if (!isUserInitiatedRef.current) {
+      return;
+    }
+    
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (searchTerm) params.set('search', searchTerm);
+      if (departmentFilter && departmentFilter !== 'all') params.set('department', departmentFilter);
+      if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
+      if (customerIdFilter) params.set('customerId', customerIdFilter);
+      
+      const queryString = params.toString();
+      const newUrl = queryString ? `/orders-list?${queryString}` : '/orders-list';
+      
+      // Only update if URL actually differs
+      const currentUrl = window.location.pathname + window.location.search;
+      if (currentUrl !== newUrl) {
+        window.history.replaceState(null, '', newUrl);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm, departmentFilter, statusFilter, customerIdFilter]);
+  
+  // Wrapper functions that mark changes as user-initiated
+  const handleSearchChange = useCallback((value: string) => {
+    isUserInitiatedRef.current = true;
+    setSearchTerm(value);
+  }, []);
+  
+  const handleDepartmentChange = useCallback((value: string) => {
+    isUserInitiatedRef.current = true;
+    setDepartmentFilter(value);
+  }, []);
+  
+  const handleStatusChange = useCallback((value: string) => {
+    isUserInitiatedRef.current = true;
+    setStatusFilter(value);
+  }, []);
+  
+  const handleResetAll = useCallback(() => {
+    isUserInitiatedRef.current = true;
+    setSearchTerm('');
+    setDepartmentFilter('all');
+    setStatusFilter('all');
+    setCustomerIdFilter('');
+    setSortBy('orderDate');
+    setSortOrder('desc');
+  }, []);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -1039,7 +1118,7 @@ export default function OrdersList() {
                   type="text"
                   placeholder="Search by Order ID, FB Order #, Customer PO, or Customer Name..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   className="pl-10 pr-4"
                   data-testid="input-search-orders"
                 />
@@ -1087,7 +1166,7 @@ export default function OrdersList() {
                 </Label>
                 <Select
                   value={departmentFilter}
-                  onValueChange={setDepartmentFilter}
+                  onValueChange={handleDepartmentChange}
                 >
                   <SelectTrigger className="w-40" id="department-filter">
                     <SelectValue />
@@ -1111,7 +1190,7 @@ export default function OrdersList() {
                 >
                   Status:
                 </Label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <Select value={statusFilter} onValueChange={handleStatusChange}>
                   <SelectTrigger className="w-40" id="status-filter">
                     <SelectValue />
                   </SelectTrigger>
@@ -1173,22 +1252,19 @@ export default function OrdersList() {
               </div>
 
               {/* Clear Filters Button */}
-              {(departmentFilter !== 'all' ||
+              {(searchTerm ||
+                departmentFilter !== 'all' ||
                 statusFilter !== 'all' ||
                 sortBy !== 'orderDate' ||
                 sortOrder !== 'desc') && (
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    setDepartmentFilter('all');
-                    setStatusFilter('all');
-                    setSortBy('orderDate');
-                    setSortOrder('desc');
-                  }}
+                  onClick={handleResetAll}
                   className="px-3"
+                  data-testid="btn-reset-filters"
                 >
-                  Reset Filters
+                  Reset All
                 </Button>
               )}
             </div>
@@ -1214,7 +1290,7 @@ export default function OrdersList() {
                       No orders found for "{searchTerm}". Try a different search
                       term.
                     </p>
-                    <Button variant="outline" onClick={() => setSearchTerm('')}>
+                    <Button variant="outline" onClick={() => handleSearchChange('')}>
                       Clear Search
                     </Button>
                   </>

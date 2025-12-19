@@ -281,14 +281,21 @@ export default function DocumentScanner({ imageData, onProcessed, onCancel }: Do
     if (!overlayCanvasRef.current) return;
     
     const rect = overlayCanvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    // Scale from displayed size to canvas internal size
+    const scaleX = overlayCanvasRef.current.width / rect.width;
+    const scaleY = overlayCanvasRef.current.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    // Use scaled hit radius based on canvas size
+    const hitRadius = 20 * Math.max(scaleX, scaleY);
     
     for (let i = 0; i < corners.length; i++) {
       const dx = corners[i].x - x;
       const dy = corners[i].y - y;
-      if (Math.sqrt(dx * dx + dy * dy) < 20) {
+      if (Math.sqrt(dx * dx + dy * dy) < hitRadius) {
         setSelectedCorner(i);
+        e.preventDefault();
         return;
       }
     }
@@ -298,8 +305,11 @@ export default function DocumentScanner({ imageData, onProcessed, onCancel }: Do
     if (selectedCorner === null || !overlayCanvasRef.current) return;
     
     const rect = overlayCanvasRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(overlayCanvasRef.current.width, e.clientX - rect.left));
-    const y = Math.max(0, Math.min(overlayCanvasRef.current.height, e.clientY - rect.top));
+    // Scale from displayed size to canvas internal size
+    const scaleX = overlayCanvasRef.current.width / rect.width;
+    const scaleY = overlayCanvasRef.current.height / rect.height;
+    const x = Math.max(0, Math.min(overlayCanvasRef.current.width, (e.clientX - rect.left) * scaleX));
+    const y = Math.max(0, Math.min(overlayCanvasRef.current.height, (e.clientY - rect.top) * scaleY));
     
     const newCorners = [...corners];
     newCorners[selectedCorner] = { x, y };

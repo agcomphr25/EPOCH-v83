@@ -286,7 +286,7 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
         )}
       </DialogTrigger>
       <DialogContent 
-        className="sm:max-w-lg"
+        className="sm:max-w-lg max-h-[90vh] flex flex-col"
         onPointerDownOutside={(e) => {
           // Prevent closing by clicking outside while saving
           if (uploadMutation.isPending) e.preventDefault();
@@ -296,14 +296,14 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
           if (uploadMutation.isPending) e.preventDefault();
         }}
       >
-        <DialogHeader>
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Capture Image</DialogTitle>
           <DialogDescription>
             Take a photo with your camera or upload an image file.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto flex-1 pr-2">
           {/* Mode Selection */}
           {mode === 'select' && (
             <div className="flex flex-col gap-3">
@@ -467,7 +467,7 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
         </div>
 
         {mode === 'preview' && (
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0">
             <Button variant="outline" onClick={handleRetake}>
               Retake
             </Button>

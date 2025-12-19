@@ -45,9 +45,26 @@ export default function DocumentScanner({ imageData, onProcessed, onCancel }: Do
   }, []);
 
   const loadOpenCV = async () => {
+    // Already loaded and ready
     if (window.cv && window.cv.Mat) {
       setCvReady(true);
       setIsLoading(false);
+      return;
+    }
+
+    // Check if script is already in the document (loading or loaded)
+    const existingScript = document.querySelector('script[src*="opencv.js"]');
+    if (existingScript) {
+      // Script exists, wait for it to be ready
+      const checkReady = () => {
+        if (window.cv && window.cv.Mat) {
+          setCvReady(true);
+          setIsLoading(false);
+        } else {
+          setTimeout(checkReady, 100);
+        }
+      };
+      checkReady();
       return;
     }
 

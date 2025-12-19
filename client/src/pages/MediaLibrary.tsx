@@ -91,6 +91,19 @@ function formatFileSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function getMediaUrl(storagePath: string | null): string {
+  if (!storagePath) return '';
+  
+  // Cloud storage paths start with /objects/
+  if (storagePath.startsWith('/objects/')) {
+    return storagePath;
+  }
+  
+  // Legacy local storage paths
+  const filename = storagePath.split('/').pop();
+  return `/api/media/file/${filename}`;
+}
+
 export default function MediaLibrary() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
@@ -253,7 +266,7 @@ export default function MediaLibrary() {
                 <div className="relative aspect-square">
                   {media.mimeType.startsWith('image/') ? (
                     <img
-                      src={`/api/media/file/${media.storagePath.split('/').pop()}`}
+                      src={getMediaUrl(media.storagePath)}
                       alt={media.title || media.filename}
                       className="w-full h-full object-cover rounded-t-lg"
                     />
@@ -330,13 +343,13 @@ export default function MediaLibrary() {
                 <div className="relative bg-muted rounded-lg overflow-hidden">
                   {selectedMedia.mimeType.startsWith('image/') ? (
                     <img
-                      src={`/api/media/file/${selectedMedia.storagePath.split('/').pop()}`}
+                      src={getMediaUrl(selectedMedia.storagePath)}
                       alt={selectedMedia.title || selectedMedia.filename}
                       className="w-full max-h-[60vh] object-contain"
                     />
                   ) : selectedMedia.mimeType === 'application/pdf' ? (
                     <iframe
-                      src={`/api/media/file/${selectedMedia.storagePath.split('/').pop()}`}
+                      src={getMediaUrl(selectedMedia.storagePath)}
                       className="w-full h-[calc(85vh-220px)] border-0"
                       title="PDF Preview"
                     />
@@ -369,7 +382,7 @@ export default function MediaLibrary() {
                 <Button 
                   variant="outline" 
                   onClick={() => {
-                    const url = `/api/media/file/${selectedMedia.storagePath.split('/').pop()}`;
+                    const url = getMediaUrl(selectedMedia.storagePath);
                     const a = document.createElement('a');
                     a.href = url;
                     a.download = selectedMedia.filename;
@@ -384,7 +397,7 @@ export default function MediaLibrary() {
                 </Button>
                 <Button variant="outline" asChild>
                   <a 
-                    href={`/api/media/file/${selectedMedia.storagePath.split('/').pop()}`} 
+                    href={getMediaUrl(selectedMedia.storagePath)} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     data-testid="button-open-new-tab"

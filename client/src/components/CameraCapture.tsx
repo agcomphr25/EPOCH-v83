@@ -22,7 +22,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Camera, Upload, X, Image, Loader2 } from 'lucide-react';
+import { Camera, Upload, X, Image, Loader2, ScanLine } from 'lucide-react';
+import DocumentScanner from './DocumentScanner';
 
 interface CameraCaptureProps {
   onCaptureComplete?: (media: any) => void;
@@ -40,7 +41,7 @@ const CATEGORIES = [
 
 export default function CameraCapture({ onCaptureComplete, trigger }: CameraCaptureProps) {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<'select' | 'camera' | 'upload' | 'preview'>('select');
+  const [mode, setMode] = useState<'select' | 'camera' | 'upload' | 'preview' | 'scan'>('select');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
@@ -48,6 +49,8 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
   const [category, setCategory] = useState('other');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraLoading, setCameraLoading] = useState(false);
+  const [scanMode, setScanMode] = useState(false);
+  const [imageToScan, setImageToScan] = useState<string | null>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -58,16 +61,57 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
   const { toast } = useToast();
 
   const uploadMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
-      const response = await fetch('/api/media/upload', {
+    mutationFn: async ({ file, title, notes, category }: { file: File; title: string; notes: string; category: string }) => {
+      // Step 1: Request presigned URL for cloud storage
+      const urlResponse = await fetch('/api/media/request-upload-url', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          contentType: file.type,
+        }),
       });
-      if (!response.ok) {
-        throw new Error('Failed to upload');
+      
+      if (!urlResponse.ok) {
+        throw new Error('Failed to get upload URL');
       }
-      return response.json();
+      
+      const { uploadURL, objectPath } = await urlResponse.json();
+      
+      // Step 2: Upload file directly to cloud storage
+      const uploadResponse = await fetch(uploadURL, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+      
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload to cloud storage');
+      }
+      
+      // Step 3: Complete upload - save metadata to database
+      const completeResponse = await fetch('/api/media/complete-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          objectPath,
+          filename: file.name,
+          mimeType: file.type,
+          fileSize: file.size,
+          title: title || file.name,
+          notes,
+          category,
+        }),
+      });
+      
+      if (!completeResponse.ok) {
+        throw new Error('Failed to complete upload');
+      }
+      
+      return completeResponse.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/media'] });
@@ -139,47 +183,70 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(video, 0, 0);
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        setCapturedImage(imageDataUrl);
-        
-        // Convert to File
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
-            setCapturedFile(file);
-          }
-        }, 'image/jpeg', 0.8);
+        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
         
         stopCamera();
-        setMode('preview');
+        
+        if (scanMode) {
+          setImageToScan(imageDataUrl);
+          setMode('scan');
+        } else {
+          setCapturedImage(imageDataUrl);
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+              setCapturedFile(file);
+            }
+          }, 'image/jpeg', 0.8);
+          setMode('preview');
+        }
       }
     }
-  }, [stopCamera]);
+  }, [stopCamera, scanMode]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setCapturedFile(file);
       const reader = new FileReader();
       reader.onload = (event) => {
-        setCapturedImage(event.target?.result as string);
-        setMode('preview');
+        const imageDataUrl = event.target?.result as string;
+        if (scanMode) {
+          setImageToScan(imageDataUrl);
+          setMode('scan');
+        } else {
+          setCapturedFile(file);
+          setCapturedImage(imageDataUrl);
+          setMode('preview');
+        }
       };
       reader.readAsDataURL(file);
     }
+  }, [scanMode]);
+
+  const handleScanComplete = useCallback((processedFile: File, preview: string) => {
+    setCapturedFile(processedFile);
+    setCapturedImage(preview);
+    setImageToScan(null);
+    setMode('preview');
+    if (processedFile.type === 'application/pdf') {
+      setCategory('document');
+    }
+  }, []);
+
+  const handleScanCancel = useCallback(() => {
+    setImageToScan(null);
+    setMode('select');
   }, []);
 
   const handleSave = useCallback(() => {
     if (!capturedFile) return;
     
-    const formData = new FormData();
-    formData.append('file', capturedFile);
-    formData.append('title', title || capturedFile.name);
-    formData.append('notes', notes);
-    formData.append('category', category);
-    formData.append('tags', JSON.stringify([]));
-    
-    uploadMutation.mutate(formData);
+    uploadMutation.mutate({
+      file: capturedFile,
+      title: title || capturedFile.name,
+      notes,
+      category,
+    });
   }, [capturedFile, title, notes, category, uploadMutation]);
 
   const handleClose = useCallback(() => {
@@ -191,6 +258,8 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
     setCategory('other');
     setCameraError(null);
     setCameraLoading(false);
+    setScanMode(false);
+    setImageToScan(null);
     setMode('select');
     setOpen(false);
   }, [stopCamera]);
@@ -226,14 +295,33 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
           {/* Mode Selection */}
           {mode === 'select' && (
             <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-center gap-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+                <ScanLine className="h-5 w-5 text-blue-600" />
+                <span className="text-sm font-medium">Document Scanner Mode</span>
+                <label className="relative inline-flex items-center cursor-pointer ml-auto">
+                  <input
+                    type="checkbox"
+                    checked={scanMode}
+                    onChange={(e) => setScanMode(e.target.checked)}
+                    className="sr-only peer"
+                    data-testid="toggle-scan-mode"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+              {scanMode && (
+                <p className="text-xs text-muted-foreground text-center">
+                  Auto-detects document edges, straightens, and enhances scanned images
+                </p>
+              )}
               <Button
                 onClick={startCamera}
                 className="h-24 flex flex-col gap-2"
                 variant="outline"
                 data-testid="button-use-camera"
               >
-                <Camera className="h-8 w-8" />
-                <span>Use Camera</span>
+                {scanMode ? <ScanLine className="h-8 w-8" /> : <Camera className="h-8 w-8" />}
+                <span>{scanMode ? 'Scan with Camera' : 'Use Camera'}</span>
               </Button>
               <Button
                 onClick={() => fileInputRef.current?.click()}
@@ -242,12 +330,12 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
                 data-testid="button-upload-file"
               >
                 <Upload className="h-8 w-8" />
-                <span>Upload File</span>
+                <span>{scanMode ? 'Scan from File' : 'Upload File'}</span>
               </Button>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*,application/pdf"
+                accept="image/*"
                 className="hidden"
                 onChange={handleFileSelect}
               />
@@ -255,6 +343,15 @@ export default function CameraCapture({ onCaptureComplete, trigger }: CameraCapt
                 <p className="text-sm text-red-500 text-center">{cameraError}</p>
               )}
             </div>
+          )}
+
+          {/* Document Scanning View */}
+          {mode === 'scan' && imageToScan && (
+            <DocumentScanner
+              imageData={imageToScan}
+              onProcessed={handleScanComplete}
+              onCancel={handleScanCancel}
+            />
           )}
 
           {/* Camera View */}

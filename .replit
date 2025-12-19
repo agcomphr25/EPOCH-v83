@@ -68,3 +68,4 @@ VITE_FEATURE_WEBSITE_IMPORT = "true"
 
 [agent]
 expertMode = true
+integrations = ["javascript_object_storage:2.0.0"]

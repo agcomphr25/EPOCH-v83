@@ -127,6 +127,8 @@ router.get('/customer/:customerId/unapplied', async (req: Request, res: Response
         notes: creditMemos.notes,
         status: creditMemos.status,
         issuedDate: creditMemos.issuedDate,
+        sourceType: creditMemos.sourceType,
+        sourceReference: creditMemos.sourceReference,
       })
       .from(creditMemos)
       .where(
@@ -142,6 +144,64 @@ router.get('/customer/:customerId/unapplied', async (req: Request, res: Response
   } catch (error) {
     console.error('Error fetching unapplied credit memos:', error);
     res.status(500).json({ error: 'Failed to fetch unapplied credit memos' });
+  }
+});
+
+// GET /api/credit-memos/customer/:customerId/summary - Get total available credits summary for a customer
+router.get('/customer/:customerId/summary', async (req: Request, res: Response) => {
+  try {
+    const { customerId } = req.params;
+    
+    // Get total unapplied credits
+    const [creditsResult] = await db
+      .select({
+        totalAvailable: sql<number>`COALESCE(SUM(${creditMemos.unappliedAmount}), 0)`,
+        memoCount: sql<number>`COUNT(*)`,
+      })
+      .from(creditMemos)
+      .where(
+        and(
+          eq(creditMemos.customerId, customerId),
+          eq(creditMemos.status, 'active'),
+          sql`${creditMemos.unappliedAmount} > 0`
+        )
+      );
+    
+    res.json({
+      customerId,
+      totalAvailableCredits: creditsResult?.totalAvailable || 0,
+      activeMemoCount: creditsResult?.memoCount || 0,
+    });
+  } catch (error) {
+    console.error('Error fetching credit summary:', error);
+    res.status(500).json({ error: 'Failed to fetch credit summary' });
+  }
+});
+
+// GET /api/credit-memos/order/:orderId/applications - Get credit applications for a specific order
+router.get('/order/:orderId/applications', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    
+    const applications = await db
+      .select({
+        id: creditMemoApplications.id,
+        creditMemoId: creditMemoApplications.creditMemoId,
+        memoNumber: creditMemos.memoNumber,
+        amountApplied: creditMemoApplications.amountApplied,
+        appliedDate: creditMemoApplications.appliedDate,
+        appliedBy: creditMemoApplications.appliedBy,
+        notes: creditMemoApplications.notes,
+      })
+      .from(creditMemoApplications)
+      .leftJoin(creditMemos, eq(creditMemoApplications.creditMemoId, creditMemos.id))
+      .where(eq(creditMemoApplications.orderId, orderId))
+      .orderBy(desc(creditMemoApplications.appliedDate));
+    
+    res.json(applications);
+  } catch (error) {
+    console.error('Error fetching order credit applications:', error);
+    res.status(500).json({ error: 'Failed to fetch order credit applications' });
   }
 });
 

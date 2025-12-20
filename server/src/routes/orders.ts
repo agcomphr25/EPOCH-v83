@@ -734,7 +734,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
       await auditService.logEvent({
         entityType: 'p1_order',
         entityId: order.orderId,
-        action: 'order_created',
+        action: 'ORDER_CREATED',
         actor: {
           id: (req as any).user?.id,
           username: (req as any).user?.username || 'System',
@@ -1819,7 +1819,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       await auditService.logEvent({
         entityType: 'p1_order',
         entityId: orderId,
-        action: 'order_fulfilled',
+        action: 'ORDER_FULFILLED',
         actor: {
           id: (req as any).user?.id,
           username: (req as any).user?.username || 'System',
@@ -1847,11 +1847,11 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
         return res.status(500).json({ error: `Department update failed` });
       }
       
-      // Log audit event for department progression
+      // Log audit event for department progression using standard event type
       await auditService.logEvent({
         entityType: 'p1_order',
         entityId: orderId,
-        action: 'department_progress',
+        action: 'DEPARTMENT_CHANGE',
         actor: {
           id: (req as any).user?.id,
           username: (req as any).user?.username || 'System',

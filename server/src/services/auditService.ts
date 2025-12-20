@@ -107,7 +107,6 @@ class AuditService {
     actor?: AuditActor,
     meta?: Record<string, any>
   ): Promise<number[]> {
-    throw new Error("AUDIT SERVICE HIT");
     console.log(
       "[AUDIT] logFieldChanges called",
       entityType,

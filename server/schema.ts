@@ -7508,6 +7508,7 @@ export type P2DepartmentTransferSignature = typeof p2DepartmentTransferSignature
 export type InsertP2DepartmentTransferSignature = z.infer<typeof insertP2DepartmentTransferSignatureSchema>;
 
 // Credit Memos - Customer credit management
+// sourceType: 'manual' = manual adjustment, 'overpayment' = order overpayment, 'return' = returned item/refund not sent to payment method
 export const creditMemos = pgTable('credit_memos', {
   id: serial('id').primaryKey(),
   memoNumber: text('memo_number').notNull().unique(),
@@ -7518,6 +7519,8 @@ export const creditMemos = pgTable('credit_memos', {
   reason: text('reason').notNull(),
   notes: text('notes'),
   status: text('status').default('active').notNull(),
+  sourceType: text('source_type').default('manual').notNull(), // 'manual', 'overpayment', 'return'
+  sourceReference: text('source_reference'), // Reference to source (e.g., order_id for overpayment, refund_request_id for return)
   issuedDate: timestamp('issued_date').defaultNow().notNull(),
   createdBy: text('created_by'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -7525,6 +7528,7 @@ export const creditMemos = pgTable('credit_memos', {
 }, (table) => ({
   customerIdIdx: index('credit_memos_customer_id_idx').on(table.customerId),
   statusIdx: index('credit_memos_status_idx').on(table.status),
+  sourceTypeIdx: index('credit_memos_source_type_idx').on(table.sourceType),
 }));
 
 export const insertCreditMemoSchema = createInsertSchema(creditMemos).omit({

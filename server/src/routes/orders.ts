@@ -1810,62 +1810,56 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       );
     }
 
+    // Reload the order after update to get the complete "after" state
+    const afterOrder = updatedOrder;
+    
+    // Build actor from authenticated user
+    const actor = {
+      id: (req as any).user?.id,
+      username: (req as any).user?.username || 'System',
+      role: (req as any).user?.role || 'system',
+    };
+
     if (shouldMarkFulfilled) {
       console.log(
-        `✅ Successfully marked order ${orderId} as FULFILLED (status: ${updatedOrder?.status})`
+        `✅ Successfully marked order ${orderId} as FULFILLED (status: ${afterOrder?.status})`
       );
       
-      // Log audit event for order fulfillment
-      await auditService.logEvent({
-        entityType: 'p1_order',
-        entityId: orderId,
-        action: 'ORDER_FULFILLED',
-        actor: {
-          id: (req as any).user?.id,
-          username: (req as any).user?.username || 'System',
-          role: (req as any).user?.role || 'system',
-        },
-        fieldsChanged: {
-          status: { before: existingOrder.status, after: 'FULFILLED' },
-          currentDepartment: { before: existingOrder.currentDepartment, after: null },
-        },
-        meta: { source: 'department_progression' },
-      });
+      // Log field-level audit event using automatic change detection
+      await auditService.logFieldChanges(
+        'p1_order',
+        orderId,
+        existingOrder,
+        afterOrder,
+        actor,
+        { source: 'department-transition', action: 'fulfillment' }
+      );
     } else {
       console.log(
         `✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${targetDepartment}`
       );
       console.log(
-        `✅ Final order department: ${updatedOrder?.currentDepartment}`
+        `✅ Final order department: ${afterOrder?.currentDepartment}`
       );
 
       // Verify the update succeeded
-      if (updatedOrder?.currentDepartment !== targetDepartment) {
+      if (afterOrder?.currentDepartment !== targetDepartment) {
         console.error(
-          `❌ Update failed: Expected ${targetDepartment}, got ${updatedOrder?.currentDepartment}`
+          `❌ Update failed: Expected ${targetDepartment}, got ${afterOrder?.currentDepartment}`
         );
         return res.status(500).json({ error: `Department update failed` });
       }
       
-      // Log audit event for department progression using standard event type
-      await auditService.logEvent({
-        entityType: 'p1_order',
-        entityId: orderId,
-        action: 'DEPARTMENT_CHANGE',
-        actor: {
-          id: (req as any).user?.id,
-          username: (req as any).user?.username || 'System',
-          role: (req as any).user?.role || 'system',
-        },
-        fieldsChanged: {
-          currentDepartment: { before: existingOrder.currentDepartment, after: targetDepartment },
-        },
-        meta: { 
-          source: 'department_progression',
-          fromDepartment: existingOrder.currentDepartment,
-          toDepartment: targetDepartment,
-        },
-      });
+      // Log field-level audit event using automatic change detection
+      // This automatically detects currentDepartment change and logs as DEPARTMENT_CHANGE
+      await auditService.logFieldChanges(
+        'p1_order',
+        orderId,
+        existingOrder,
+        afterOrder,
+        actor,
+        { source: 'department-transition' }
+      );
       
       // Also record department transition for timing tracking
       await auditService.recordDepartmentEntry({
@@ -1898,6 +1892,12 @@ router.post('/complete-qc/:orderId', async (req: Request, res: Response) => {
     const { orderId } = req.params;
     const { qcNotes, qcPassedAll } = req.body;
 
+    // Load BEFORE state
+    const beforeOrder = await storage.getOrderById(orderId);
+    if (!beforeOrder) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
     const updateData = {
       currentDepartment: qcPassedAll ? 'Shipping' : 'QC',
       qcCompletedAt: qcPassedAll ? new Date() : null,
@@ -1913,6 +1913,36 @@ router.post('/complete-qc/:orderId', async (req: Request, res: Response) => {
     } catch (error) {
       // If not found in finalized orders, try draft orders
       updatedOrder = await storage.updateOrderDraft(orderId, updateData);
+    }
+
+    // Log field-level audit event using automatic change detection
+    const actor = {
+      id: (req as any).user?.id,
+      username: (req as any).user?.username || 'System',
+      role: (req as any).user?.role || 'system',
+    };
+    
+    await auditService.logFieldChanges(
+      'p1_order',
+      orderId,
+      beforeOrder,
+      updatedOrder,
+      actor,
+      { source: 'qc-completion', qcPassed: qcPassedAll }
+    );
+    
+    // Record department transition if moving to shipping
+    if (qcPassedAll && beforeOrder.currentDepartment !== 'Shipping') {
+      await auditService.recordDepartmentEntry({
+        entityType: 'p1_order',
+        entityId: orderId,
+        department: 'Shipping',
+        enteredByUserId: (req as any).user?.id,
+        metadata: {
+          fromDepartment: beforeOrder.currentDepartment,
+          qcPassed: true,
+        },
+      });
     }
 
     res.json({
@@ -1934,19 +1964,19 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
     console.log('🔄 UNDO CANCEL ORDER ROUTE CALLED');
     console.log('🔄 Order ID:', orderId);
 
-    // Check if the order exists and is cancelled
-    const order = await storage.getOrderById(orderId);
-    if (!order) {
+    // Check if the order exists and is cancelled (this is our BEFORE state)
+    const beforeOrder = await storage.getOrderById(orderId);
+    if (!beforeOrder) {
       console.log('🔄 Order not found:', orderId);
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    if (!(order as any).isCancelled) {
+    if (!(beforeOrder as any).isCancelled) {
       console.log('🔄 Order is not cancelled:', orderId);
       return res.status(400).json({ error: 'Order is not cancelled' });
     }
 
-    console.log('🔄 Found cancelled order:', order.id, order.status);
+    console.log('🔄 Found cancelled order:', beforeOrder.id, beforeOrder.status);
 
     // Restore the order by removing cancellation information
     const updateData = {
@@ -1971,6 +2001,34 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
     }
 
     console.log('🔄 Order restored successfully:', updatedOrder.orderId);
+
+    // Log field-level audit event using automatic change detection
+    const actor = {
+      id: (req as any).user?.id,
+      username: (req as any).user?.username || 'System',
+      role: (req as any).user?.role || 'system',
+    };
+    
+    await auditService.logFieldChanges(
+      'p1_order',
+      orderId,
+      beforeOrder,
+      updatedOrder,
+      actor,
+      { source: 'undo-cancellation' }
+    );
+    
+    // Record department transition back to production queue
+    await auditService.recordDepartmentEntry({
+      entityType: 'p1_order',
+      entityId: orderId,
+      department: 'P1 Production Queue',
+      enteredByUserId: (req as any).user?.id,
+      metadata: {
+        restoredFromCancellation: true,
+        previousCancelReason: (beforeOrder as any).cancelReason,
+      },
+    });
 
     res.json({
       success: true,
@@ -2162,6 +2220,27 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
     }
 
     console.log('🔧 Order cancelled successfully:', updatedOrder.orderId);
+
+    // Log field-level audit event using automatic change detection
+    const actor = {
+      id: (req as any).user?.id,
+      username: (req as any).user?.username || 'System',
+      role: (req as any).user?.role || 'system',
+    };
+    
+    await auditService.logFieldChanges(
+      'p1_order',
+      orderId,
+      order,
+      updatedOrder,
+      actor,
+      { 
+        source: 'order-cancellation',
+        cancelReason: reason,
+        rtsInventoryCreated,
+        wasInProduction: isInProduction,
+      }
+    );
 
     const responseMessage = rtsInventoryCreated
       ? 'Order cancelled successfully. The item was in production and has been moved to RTS inventory.'

@@ -66,6 +66,8 @@ import { useLocation, useRoute } from 'wouter';
 import CustomerSearchInput from '@/components/CustomerSearchInput';
 import PaymentManager from '@/components/PaymentManager';
 import { OrderAttachments } from '@/components/OrderAttachments';
+import CustomerCreditIndicator from '@/components/CustomerCreditIndicator';
+import OrderRefundsSection from '@/components/OrderRefundsSection';
 import type { Customer } from '@shared/schema';
 import {
   useFeatureValidation,
@@ -5701,6 +5703,21 @@ export default function OrderEntry() {
                   </span>
                 </div>
               </div>
+
+              {/* Customer Credits Indicator */}
+              {customer && (
+                <CustomerCreditIndicator
+                  customerId={customer.id}
+                  orderId={orderId}
+                  orderTotal={totalPrice + shipping}
+                  onCreditApplied={() => {
+                    queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+                  }}
+                />
+              )}
+
+              {/* Refunds & Credits Applied Section */}
+              <OrderRefundsSection orderId={orderId} />
 
               {/* Payment Management Section */}
               {orderId && orderId !== 'Loading...' && (

@@ -296,7 +296,10 @@ router.post('/', async (req: Request, res: Response) => {
 router.post('/:id/apply', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { applications, appliedBy } = req.body;
+    const { applications } = req.body;
+    
+    // Derive appliedBy from authenticated user - never accept from client
+    const appliedBy = req.user?.username || 'System';
     
     if (!applications || !Array.isArray(applications) || applications.length === 0) {
       return res.status(400).json({ error: 'Applications array is required' });

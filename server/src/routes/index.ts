@@ -5831,6 +5831,11 @@ export function registerRoutes(app: Express): Server {
           
           console.log(`📝 Update-department processing ${orderId} as ${isProductionOrder ? 'PRODUCTION' : isFinalized ? 'FINALIZED' : 'DRAFT'} order`);
 
+          // Skip no-op moves (prevents empty audit events, zero-duration transitions, timeline noise)
+          if (currentOrder.currentDepartment === department) {
+            console.log(`⏭️ Skipping ${orderId}: already in ${department}`);
+            continue;
+          }
 
           // Prepare completion timestamp update based on current department
           const completionUpdates: any = {};
@@ -6743,6 +6748,12 @@ export function registerRoutes(app: Express): Server {
           console.log(`📝 Processing ${orderId} as ${isProductionOrder ? 'PRODUCTION' : 'REGULAR'} order`);
 
           const currentDept = (order as any).currentDepartment;
+
+          // Skip no-op moves (prevents empty audit events, zero-duration transitions, timeline noise)
+          if (currentDept === toDepartment) {
+            console.log(`⏭️ Skipping ${orderId}: already in ${toDepartment}`);
+            continue;
+          }
 
           // Validate order is in expected department if fromDepartment is specified
           if (fromDepartment && currentDept !== fromDepartment) {

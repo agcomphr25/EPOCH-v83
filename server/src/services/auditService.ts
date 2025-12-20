@@ -113,6 +113,13 @@ class AuditService {
       entityId
     );
     const changes = getChangedFields(before, after, entityType);
+    
+    // Guard: nothing to log if no changes detected
+    if (Object.keys(changes).length === 0) {
+      console.log("[AUDIT] logFieldChanges: no changes detected, skipping");
+      return [];
+    }
+    
     const eventIds: number[] = [];
 
     // Group changes by event type
@@ -120,6 +127,12 @@ class AuditService {
     
     for (const [fieldName, change] of Object.entries(changes)) {
       const eventType = change.eventType;
+      
+      // Guard: eventType must be defined
+      if (!eventType) {
+        throw new Error(`AUDIT ERROR: getEventTypeForField returned undefined for field "${fieldName}"`);
+      }
+      
       if (!changesByEventType[eventType]) {
         changesByEventType[eventType] = {};
       }

@@ -56,7 +56,10 @@ router.post('/complete-upload', async (req, res) => {
     const { objectPath, orderId, originalFileName, fileSize, mimeType, notes } = req.body;
     const user = (req as any).user;
 
+    console.log(`📁 Complete upload request received:`, { objectPath, orderId, originalFileName, hasUser: !!user });
+
     if (!objectPath || !orderId || !originalFileName) {
+      console.error('📁 Missing required fields:', { objectPath: !!objectPath, orderId: !!orderId, originalFileName: !!originalFileName });
       return res.status(400).json({ 
         error: 'Missing required fields: objectPath, orderId, originalFileName' 
       });
@@ -70,8 +73,10 @@ router.post('/complete-upload', async (req, res) => {
         owner: user?.id?.toString() || 'system',
         visibility: 'public',
       });
+      console.log('📁 ACL policy set successfully for:', objectPath);
     } catch (aclError) {
-      console.warn('Failed to set ACL policy for order attachment:', aclError);
+      console.warn('📁 Failed to set ACL policy for order attachment:', aclError);
+      // Continue anyway - ACL errors shouldn't block the upload
     }
 
     const attachmentData = {
@@ -86,14 +91,24 @@ router.post('/complete-upload', async (req, res) => {
     };
 
     console.log('📁 Creating database record:', attachmentData);
-    const validatedData = insertOrderAttachmentSchema.parse(attachmentData);
-    const attachment = await storage.createOrderAttachment(validatedData);
     
-    console.log('📁 Order attachment saved successfully:', attachment.id);
-    res.json(attachment);
-  } catch (error) {
-    console.error('Error completing order attachment upload:', error);
-    res.status(500).json({ error: 'Failed to complete upload' });
+    try {
+      const validatedData = insertOrderAttachmentSchema.parse(attachmentData);
+      const attachment = await storage.createOrderAttachment(validatedData);
+      
+      console.log('📁 Order attachment saved successfully:', attachment.id);
+      res.json(attachment);
+    } catch (dbError: any) {
+      console.error('📁 Database error creating attachment:', dbError);
+      res.status(500).json({ 
+        error: `Database error: ${dbError.message || 'Failed to save attachment record'}` 
+      });
+    }
+  } catch (error: any) {
+    console.error('📁 Error completing order attachment upload:', error);
+    res.status(500).json({ 
+      error: error.message || 'Failed to complete upload' 
+    });
   }
 });
 

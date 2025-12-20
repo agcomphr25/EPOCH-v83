@@ -75,6 +75,7 @@ export function OrderAttachments({
         const urlResponse = await fetch('/api/order-attachments/request-upload-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             name: file.name,
             size: file.size,
@@ -85,6 +86,7 @@ export function OrderAttachments({
         
         if (!urlResponse.ok) {
           const error = await urlResponse.json().catch(() => ({}));
+          console.error('Request upload URL failed:', urlResponse.status, error);
           throw new Error(error.error || 'Failed to get upload URL');
         }
         
@@ -105,6 +107,7 @@ export function OrderAttachments({
         const completeResponse = await fetch('/api/order-attachments/complete-upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             objectPath,
             orderId,
@@ -116,7 +119,9 @@ export function OrderAttachments({
         });
         
         if (!completeResponse.ok) {
-          throw new Error(`Failed to save ${file.name} metadata`);
+          const errorData = await completeResponse.json().catch(() => ({}));
+          console.error('Complete upload failed:', completeResponse.status, errorData);
+          throw new Error(errorData.error || `Failed to save ${file.name} metadata`);
         }
         
         const attachment = await completeResponse.json();

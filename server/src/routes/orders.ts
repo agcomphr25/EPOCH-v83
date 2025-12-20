@@ -1834,6 +1834,13 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
         actor,
         { source: 'department-transition', action: 'fulfillment' }
       );
+      
+      // Close the final department transition (no new department to open)
+      await auditService.closeDepartmentTransition(
+        orderId,
+        (req as any).user?.id,
+        'fulfilled'
+      );
     } else {
       console.log(
         `✅ Successfully progressed order ${orderId} from ${existingOrder.currentDepartment} to ${targetDepartment}`
@@ -2240,6 +2247,13 @@ router.post('/cancel/:orderId', async (req: Request, res: Response) => {
         rtsInventoryCreated,
         wasInProduction: isInProduction,
       }
+    );
+    
+    // Close the current department transition (cancelled, no new department)
+    await auditService.closeDepartmentTransition(
+      orderId,
+      (req as any).user?.id,
+      'cancelled'
     );
 
     const responseMessage = rtsInventoryCreated

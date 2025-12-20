@@ -102,7 +102,7 @@ export default function OrderTimeline() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [actorFilter, setActorFilter] = useState('');
+  const [actorFilter, setActorFilter] = useState('all');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   const { data: timelineData = [], isLoading } = useQuery<TimelineItem[]>({
@@ -112,7 +112,7 @@ export default function OrderTimeline() {
       if (categoryFilter !== 'all') params.set('category', categoryFilter);
       if (startDate) params.set('startDate', startDate);
       if (endDate) params.set('endDate', endDate);
-      if (actorFilter) params.set('actor', actorFilter);
+      if (actorFilter && actorFilter !== 'all') params.set('actor', actorFilter);
       
       const res = await fetch(`/api/audit/timeline/${entityType}/${entityId}?${params}`, {
         credentials: 'include',
@@ -449,7 +449,7 @@ export default function OrderTimeline() {
                   <SelectValue placeholder="All users" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All users</SelectItem>
+                  <SelectItem value="all">All users</SelectItem>
                   {uniqueActors.map(actor => (
                     <SelectItem key={actor} value={actor}>{actor}</SelectItem>
                   ))}

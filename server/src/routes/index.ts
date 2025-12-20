@@ -5904,6 +5904,42 @@ export function registerRoutes(app: Express): Server {
             console.log(`✅ Updated draft order ${orderId} from ${currentOrder.currentDepartment} to ${department}`);
           }
 
+          // AUDIT: Reload AFTER state and log changes
+          let afterState: any = null;
+          if (isProductionOrder) {
+            afterState = await storage.getProductionOrderByOrderId(orderId);
+          } else if (isFinalized) {
+            afterState = await storage.getFinalizedOrderById(orderId);
+          } else {
+            afterState = await storage.getOrderDraft(orderId);
+          }
+
+          // Build actor from authenticated user
+          const actor = {
+            id: req.user?.id,
+            username: req.user?.username || 'System',
+            role: req.user?.role || 'system',
+          };
+
+          // Audit field changes (BEFORE → AFTER comparison)
+          await auditService.logFieldChanges(
+            'p1_order',
+            orderId,
+            currentOrder,
+            afterState || updatedOrder,
+            actor,
+            { source: 'update-department' }
+          );
+
+          // Department timing: close previous, open new
+          await auditService.closeDepartmentTransition(orderId, req.user?.id, 'completed');
+          await auditService.recordDepartmentEntry({
+            entityType: 'p1_order',
+            entityId: orderId,
+            department: department,
+            enteredByUserId: req.user?.id,
+          });
+
           updatedOrders.push(updatedOrder);
         } catch (orderError) {
           console.error(`Error updating order ${orderId}:`, orderError);

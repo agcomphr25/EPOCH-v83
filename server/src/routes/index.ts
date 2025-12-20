@@ -92,6 +92,7 @@ import projectsRoutes from './projects';
 import modelAnalyticsRoutes from './modelAnalytics';
 import aqlSamplingRoutes from './aqlSampling';
 import auditRoutes from './audit';
+import { auditService } from '../services/auditService';
 import mediaRoutes from './media';
 import voiceNotesRoutes from './voiceNotes';
 import patternSignalsRoutes from './patternSignals';
@@ -6758,6 +6759,9 @@ export function registerRoutes(app: Express): Server {
             updateData.shippingCompletedAt = currentTimestamp;
           }
 
+          // Capture BEFORE state for audit
+          const beforeState = { ...order };
+
           // Update the correct table based on order type
           if (isProductionOrder) {
             // Update production order
@@ -6770,6 +6774,40 @@ export function registerRoutes(app: Express): Server {
               await storage.updateOrderDraft(orderId, updateData);
             }
           }
+
+          // Reload AFTER state for audit
+          let afterState: any = null;
+          if (isProductionOrder) {
+            afterState = await storage.getProductionOrderByOrderId(orderId);
+          } else {
+            afterState = await storage.getOrderById(orderId);
+          }
+
+          // Build actor from authenticated user
+          const actor = {
+            id: req.user?.id,
+            username: req.user?.username || 'System',
+            role: req.user?.role || 'system',
+          };
+
+          // Audit field changes (BEFORE → AFTER comparison)
+          await auditService.logFieldChanges(
+            'p1_order',
+            orderId,
+            beforeState,
+            afterState || updateData,
+            actor,
+            { source: 'progress-department' }
+          );
+
+          // Department timing: close previous, open new
+          await auditService.closeDepartmentTransition(orderId, req.user?.id, 'completed');
+          await auditService.recordDepartmentEntry({
+            entityType: 'p1_order',
+            entityId: orderId,
+            department: toDepartment,
+            enteredByUserId: req.user?.id,
+          });
           
           results.success.push(orderId);
           console.log(

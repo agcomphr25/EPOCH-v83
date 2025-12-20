@@ -2617,25 +2617,26 @@ router.patch('/:orderId/department', async (req: Request, res: Response) => {
       `📋 MANUAL TRANSFER: ${orderId} (${orderType}) moved to ${department} via Department Transfer Tool`
     );
 
-    // Log audit event for department transfer
-    await auditService.logEvent({
-      entityType: 'p1_order',
-      entityId: orderId,
-      action: 'DEPARTMENT_CHANGE',
-      actor: {
-        id: (req as any).user?.id,
-        username: (req as any).user?.username || 'System',
-        role: (req as any).user?.role || 'system',
-      },
-      fieldsChanged: {
-        currentDepartment: { before: previousDepartment, after: department },
-      },
-      meta: { 
+    // Build actor from authenticated user
+    const actor = {
+      id: (req as any).user?.id,
+      username: (req as any).user?.username || 'System',
+      role: (req as any).user?.role || 'system',
+    };
+
+    // Log field-level audit using automatic change detection (NOT logEvent)
+    await auditService.logFieldChanges(
+      'p1_order',
+      orderId,
+      existingOrder || { currentDepartment: previousDepartment },
+      updatedOrder,
+      actor,
+      { 
         source: 'department_transfer_tool',
         transferType: 'manual',
         orderType,
-      },
-    });
+      }
+    );
 
     // Record department transition for timing tracking
     await auditService.recordDepartmentEntry({

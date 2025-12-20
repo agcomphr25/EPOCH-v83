@@ -53,36 +53,47 @@ export interface ScrapCycleInput {
 
 class AuditService {
   /**
-   * Log an audit event
+   * Log an audit event - HARDENED: throws on failure, no silent inserts
    */
-  async logEvent(input: AuditEventInput): Promise<number | null> {
-    try {
-      // Check if this event type is enabled
-      const setting = await this.getEventSetting(input.action);
-      if (setting && !setting.isEnabled && !setting.isCritical) {
-        // Event type is disabled and not critical - skip logging
-        return null;
-      }
-
-      const result = await db.insert(auditEvents).values({
-        entityType: input.entityType,
-        entityId: input.entityId,
-        action: input.action,
-        actorId: input.actor?.id || null,
-        actorName: input.actor?.username || null,
-        actorRole: input.actor?.role || null,
-        reason: input.reason || null,
-        fieldsChanged: input.fieldsChanged || null,
-        meta: input.meta || null,
-        ipAddress: input.ipAddress || null,
-        userAgent: input.userAgent || null,
-      }).returning({ id: auditEvents.id });
-
-      return result[0]?.id || null;
-    } catch (error) {
-      console.error('Failed to log audit event:', error);
-      return null;
+  async logEvent(input: AuditEventInput): Promise<number> {
+    if (!input.action) {
+      throw new Error("AUDIT ERROR: action is required");
     }
+    if (!input.entityType) {
+      throw new Error("AUDIT ERROR: entityType is required");
+    }
+    if (!input.entityId) {
+      throw new Error("AUDIT ERROR: entityId is required");
+    }
+
+    // Check if this event type is enabled (still respect settings for non-critical)
+    const setting = await this.getEventSetting(input.action);
+    if (setting && !setting.isEnabled && !setting.isCritical) {
+      // Event type is disabled and not critical - skip logging but don't throw
+      return 0;
+    }
+
+    const now = new Date();
+    const result = await db.insert(auditEvents).values({
+      entityType: input.entityType,
+      entityId: input.entityId,
+      action: input.action,
+      actorId: input.actor?.id ?? null,
+      actorName: input.actor?.username ?? null,
+      actorRole: input.actor?.role ?? null,
+      reason: input.reason ?? null,
+      fieldsChanged: input.fieldsChanged ?? null,
+      meta: input.meta ?? {},
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
+      createdAt: now,
+    }).returning({ id: auditEvents.id });
+
+    if (!result[0]?.id) {
+      throw new Error("AUDIT ERROR: insert returned no ID");
+    }
+
+    return result[0].id;
   }
 
   /**

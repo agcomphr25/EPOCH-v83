@@ -96,6 +96,11 @@ class AuditService {
     actor?: AuditActor,
     meta?: Record<string, any>
   ): Promise<number[]> {
+    console.log(
+      "[AUDIT] logFieldChanges called",
+      entityType,
+      entityId
+    );
     const changes = getChangedFields(before, after, entityType);
     const eventIds: number[] = [];
 
@@ -130,6 +135,12 @@ class AuditService {
    * Record a department transition (entry)
    */
   async recordDepartmentEntry(input: DepartmentTransitionInput): Promise<string | null> {
+    console.log(
+      "[AUDIT] recordDepartmentEntry",
+      input.entityType,
+      input.entityId,
+      input.department
+    );
     try {
       // First, close any open transition for this entity
       await this.closeDepartmentTransition(input.entityId, input.enteredByUserId, 'completed');

@@ -8580,4 +8580,30 @@ export const epochLaborFacts = pgTable('epoch_labor_facts', {
 export type EpochLaborFact = typeof epochLaborFacts.$inferSelect;
 export type InsertEpochLaborFact = typeof epochLaborFacts.$inferInsert;
 
+// EPOCH Connector Health - Quiet observability for connector delivery status
+// Append-only snapshots per connector per time window
+// No alerts, no dashboards - just calm awareness
+export const epochConnectorHealth = pgTable('epoch_connector_health', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: text('tenant_id').notNull(),
+  sourceSystem: text('source_system').notNull(), // 'time_clock', 'process_runner', etc.
+  windowStart: timestamp('window_start').notNull(),
+  windowEnd: timestamp('window_end').notNull(),
+  receivedCount: integer('received_count').default(0).notNull(),
+  deliveredCount: integer('delivered_count').default(0).notNull(),
+  failedCount: integer('failed_count').default(0).notNull(),
+  lastEventAt: timestamp('last_event_at'),
+  lastFailureAt: timestamp('last_failure_at'),
+  status: text('status').notNull(), // 'healthy' | 'degraded' | 'offline'
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  tenantSourceIdx: index('epoch_connector_health_tenant_source_idx').on(table.tenantId, table.sourceSystem),
+  windowIdx: index('epoch_connector_health_window_idx').on(table.windowStart, table.windowEnd),
+  statusIdx: index('epoch_connector_health_status_idx').on(table.status),
+}));
+
+export type EpochConnectorHealth = typeof epochConnectorHealth.$inferSelect;
+export type InsertEpochConnectorHealth = typeof epochConnectorHealth.$inferInsert;
+
 export * from './calendar.schema';

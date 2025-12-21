@@ -3,6 +3,12 @@ import { db } from '../../db';
 import { apiIntegrationKeys, epochExternalEvents, epochLaborFacts } from '../../schema';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import crypto from 'crypto';
+import { 
+  getConnectorHealth, 
+  listConnectorHealthByTenant, 
+  getConnectorHealthHistory,
+  startConnectorHealthEvaluator 
+} from '../services/connectorHealthService';
 
 const VALID_EVENT_TYPES = [
   'TIME_PUNCH_IN',
@@ -537,4 +543,74 @@ export function registerTimeClockRoutes(app: Express) {
       return res.status(500).json({ error: 'Failed to generate summary' });
     }
   });
+
+  // ============================================================
+  // CONNECTOR HEALTH (QUIET OBSERVABILITY)
+  // Read-only health status - no alerts, no dashboards
+  // ============================================================
+
+  // Get health for a specific connector
+  app.get('/api/connector-health/:tenantId/:sourceSystem', async (req: Request, res: Response) => {
+    try {
+      const { tenantId, sourceSystem } = req.params;
+      const health = await getConnectorHealth(tenantId, sourceSystem);
+      
+      if (!health) {
+        return res.status(404).json({ 
+          error: 'No health data found',
+          tenantId,
+          sourceSystem,
+        });
+      }
+      
+      return res.json(health);
+    } catch (error) {
+      console.error('[ConnectorHealth] Error fetching health:', error);
+      return res.status(500).json({ error: 'Failed to fetch connector health' });
+    }
+  });
+
+  // List all connector health for a tenant
+  app.get('/api/connector-health/:tenantId', async (req: Request, res: Response) => {
+    try {
+      const { tenantId } = req.params;
+      const connectors = await listConnectorHealthByTenant(tenantId);
+      
+      return res.json({
+        tenantId,
+        count: connectors.length,
+        connectors,
+      });
+    } catch (error) {
+      console.error('[ConnectorHealth] Error listing health:', error);
+      return res.status(500).json({ error: 'Failed to list connector health' });
+    }
+  });
+
+  // Get health history for a connector
+  app.get('/api/connector-health/:tenantId/:sourceSystem/history', async (req: Request, res: Response) => {
+    try {
+      const { tenantId, sourceSystem } = req.params;
+      const { limit = '50' } = req.query;
+      
+      const history = await getConnectorHealthHistory(
+        tenantId, 
+        sourceSystem, 
+        parseInt(String(limit), 10)
+      );
+      
+      return res.json({
+        tenantId,
+        sourceSystem,
+        count: history.length,
+        history,
+      });
+    } catch (error) {
+      console.error('[ConnectorHealth] Error fetching history:', error);
+      return res.status(500).json({ error: 'Failed to fetch health history' });
+    }
+  });
+
+  // Start the quiet health evaluator
+  startConnectorHealthEvaluator();
 }

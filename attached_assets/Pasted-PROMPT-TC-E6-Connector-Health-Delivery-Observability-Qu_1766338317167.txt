@@ -1,0 +1,100 @@
+PROMPT TC-E6 — Connector Health & Delivery Observability (Quiet Signals)
+
+📍 PASTE INTO: EPOCH Repl → Replit Agent
+
+Add quiet, trust-preserving observability for connector health and event delivery.
+
+GOAL
+Give EPOCH calm awareness of connector health (Time Clock, Timer, future connectors)
+without dashboards, alerts, or noise. Silence is the default.
+
+---
+
+SCOPE
+Observe delivery outcomes for events ingested via:
+- /api/connectors/* endpoints
+- epoch_external_events
+- epoch_labor_facts (downstream projection)
+
+---
+
+DATA MODEL
+
+Create table: epoch_connector_health
+
+Fields:
+- id (uuid, primary key)
+- tenantId
+- sourceSystem              -- e.g. "time_clock"
+- windowStart               -- rolling window (e.g. 15 min)
+- windowEnd
+- receivedCount
+- deliveredCount
+- failedCount
+- lastEventAt
+- lastFailureAt (nullable)
+- status ("healthy" | "degraded" | "offline")
+- notes (text, nullable)
+- createdAt
+
+Rules:
+- Append-only snapshots
+- One row per connector per window
+
+---
+
+HEALTH CALCULATION (DETERMINISTIC)
+
+For each connector + tenant, per rolling window:
+- healthy:
+  - receivedCount > 0
+  - failedCount == 0
+- degraded:
+  - failedCount > 0
+  - deliveredCount > 0
+- offline:
+  - receivedCount == 0
+  - lastEventAt older than threshold (e.g. 30 min)
+
+No alerts. No emails.
+
+---
+
+PROCESSING
+
+- Run a lightweight evaluator every 5 minutes
+- Read from epoch_external_events
+- Write/update a new epoch_connector_health snapshot
+- Do NOT mutate past snapshots
+
+---
+
+USAGE (INTERNAL ONLY)
+
+Expose read-only query helpers:
+- getConnectorHealth(tenantId, sourceSystem)
+- listConnectorHealthByTenant(tenantId)
+
+No UI yet.
+No notifications yet.
+No admin settings yet.
+
+---
+
+INBOX SIGNAL (OPTIONAL, SINGLE)
+
+If status transitions to "offline":
+- Create ONE internal awareness item
+- Dismissible
+- Do NOT repeat unless status changes again
+
+---
+
+NON-GOALS
+- No dashboards
+- No charts
+- No real-time monitoring
+- No alerting systems
+- No retries here (handled by source system)
+
+This is awareness, not operations.

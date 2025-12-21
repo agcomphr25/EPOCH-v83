@@ -100,6 +100,7 @@ import signPdfRoutes from './signPdf';
 import signatureWorkflowRoutes from './signatureWorkflow';
 import { registerProcessRunnerRoutes } from './processRunner';
 import { registerTimeClockRoutes } from './timeClock';
+import { registerOutreachEngineRoutes } from './outreachEngine';
 import { registerObjectStorageRoutes } from '../../replit_integrations/object_storage';
 import { getAccessToken } from '../utils/upsShipping';
 
@@ -250,6 +251,9 @@ export function registerRoutes(app: Express): Server {
 
   // Time Clock integration routes - labor/time event ingestion
   registerTimeClockRoutes(app);
+
+  // Customer Outreach Engine routes - deterministic coverage-based outreach
+  registerOutreachEngineRoutes(app);
 
   // Controlled Documents (Master Document Register) routes
   app.use('/api/controlled-documents', controlledDocumentsRoutes);

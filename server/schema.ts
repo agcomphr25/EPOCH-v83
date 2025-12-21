@@ -8606,4 +8606,71 @@ export const epochConnectorHealth = pgTable('epoch_connector_health', {
 export type EpochConnectorHealth = typeof epochConnectorHealth.$inferSelect;
 export type InsertEpochConnectorHealth = typeof epochConnectorHealth.$inferInsert;
 
+// ============================================================
+// EPOCH OUTREACH ENGINE - Deterministic Customer Outreach
+// Coverage-style engine: minimum contacts, explicit escalation
+// ============================================================
+
+// Outreach Needs - Defined reasons to contact customers
+export const epochOutreachNeeds = pgTable('epoch_outreach_needs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: text('tenant_id').notNull(),
+  entityType: text('entity_type').notNull(), // 'order' | 'job' | 'invoice'
+  entityId: text('entity_id').notNull(),
+  reasonCode: text('reason_code').notNull(), // 'order_delayed', 'action_required', 'missing_info', etc.
+  requiredResponses: integer('required_responses').default(1).notNull(),
+  status: text('status').default('open').notNull(), // 'open' | 'fulfilled' | 'exhausted'
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  fulfilledAt: timestamp('fulfilled_at'),
+}, (table) => ({
+  tenantIdx: index('epoch_outreach_needs_tenant_idx').on(table.tenantId),
+  entityIdx: index('epoch_outreach_needs_entity_idx').on(table.entityType, table.entityId),
+  statusIdx: index('epoch_outreach_needs_status_idx').on(table.status),
+  reasonIdx: index('epoch_outreach_needs_reason_idx').on(table.reasonCode),
+}));
+
+export type EpochOutreachNeed = typeof epochOutreachNeeds.$inferSelect;
+export type InsertEpochOutreachNeed = typeof epochOutreachNeeds.$inferInsert;
+
+// Outreach Candidates - Potential contacts for each need
+export const epochOutreachCandidates = pgTable('epoch_outreach_candidates', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  outreachNeedId: uuid('outreach_need_id').notNull().references(() => epochOutreachNeeds.id),
+  contactId: text('contact_id').notNull(), // Reference to customer/contact
+  contactName: text('contact_name'), // Display name for reference
+  contactEmail: text('contact_email'),
+  contactPhone: text('contact_phone'),
+  channelPreference: text('channel_preference').default('email').notNull(), // 'email' | 'sms'
+  priority: integer('priority').default(0).notNull(), // Lower = higher priority
+  status: text('status').default('pending').notNull(), // 'pending' | 'contacted' | 'responded' | 'declined' | 'skipped'
+  attemptCount: integer('attempt_count').default(0).notNull(),
+  lastAttemptAt: timestamp('last_attempt_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  needIdx: index('epoch_outreach_candidates_need_idx').on(table.outreachNeedId),
+  statusIdx: index('epoch_outreach_candidates_status_idx').on(table.status),
+  priorityIdx: index('epoch_outreach_candidates_priority_idx').on(table.priority),
+}));
+
+export type EpochOutreachCandidate = typeof epochOutreachCandidates.$inferSelect;
+export type InsertEpochOutreachCandidate = typeof epochOutreachCandidates.$inferInsert;
+
+// Outreach Attempts - Record of each contact attempt
+export const epochOutreachAttempts = pgTable('epoch_outreach_attempts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  outreachCandidateId: uuid('outreach_candidate_id').notNull().references(() => epochOutreachCandidates.id),
+  channelUsed: text('channel_used').notNull(), // 'email' | 'sms'
+  sentAt: timestamp('sent_at').defaultNow().notNull(),
+  outcome: text('outcome').notNull(), // 'sent' | 'failed' | 'responded'
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  candidateIdx: index('epoch_outreach_attempts_candidate_idx').on(table.outreachCandidateId),
+  outcomeIdx: index('epoch_outreach_attempts_outcome_idx').on(table.outcome),
+  sentAtIdx: index('epoch_outreach_attempts_sent_at_idx').on(table.sentAt),
+}));
+
+export type EpochOutreachAttempt = typeof epochOutreachAttempts.$inferSelect;
+export type InsertEpochOutreachAttempt = typeof epochOutreachAttempts.$inferInsert;
+
 export * from './calendar.schema';

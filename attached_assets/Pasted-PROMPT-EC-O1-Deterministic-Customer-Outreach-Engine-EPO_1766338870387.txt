@@ -1,0 +1,124 @@
+PROMPT EC-O1 — Deterministic Customer Outreach Engine (EPOCH)
+
+📍 PASTE INTO: EPOCH Repl → Replit Agent
+
+Add a deterministic, trust-preserving Customer Outreach Engine to EPOCH.
+
+GOAL
+Replace ad-hoc, time-based emails with a Coverage-style engine that:
+- Knows exactly who needs to be contacted
+- Contacts the minimum necessary recipients
+- Escalates calmly when exhausted
+- Never spams
+- Preserves customer trust
+
+This mirrors the Kentro Coverage Engine pattern.
+
+---
+
+CONCEPTS
+
+1) Outreach Need
+A defined reason to contact customers, e.g.:
+- Order delayed
+- Action required
+- Missing information
+- Status update requested
+
+Each outreach need is explicit and owned.
+
+---
+
+DATA MODEL
+
+Create table: epoch_outreach_needs
+Fields:
+- id (uuid)
+- tenantId
+- entityType ("order" | "job" | "invoice")
+- entityId
+- reasonCode
+- requiredResponses (int, usually 1)
+- status ("open" | "fulfilled" | "exhausted")
+- createdAt
+- fulfilledAt (nullable)
+
+Create table: epoch_outreach_candidates
+Fields:
+- id (uuid)
+- outreachNeedId
+- contactId
+- channelPreference ("email" | "sms")
+- status ("pending" | "contacted" | "responded" | "declined" | "skipped")
+- attemptCount
+- lastAttemptAt
+
+Create table: epoch_outreach_attempts
+Fields:
+- id (uuid)
+- outreachCandidateId
+- channelUsed
+- sentAt
+- outcome ("sent" | "failed" | "responded")
+
+---
+
+ENGINE LOGIC (DETERMINISTIC)
+
+Create function:
+getOutreachCoverageStatus(outreachNeedId) -> {
+  requiredResponses
+  responsesReceived
+  remainingSlots
+  exhausted
+}
+
+Rules:
+- remainingSlots = requiredResponses - responsesReceived
+- exhausted if no eligible candidates remain
+
+---
+
+OUTREACH EXECUTION
+
+When triggered:
+1) Compute coverage status
+2) If remainingSlots == 0 → stop
+3) Select EXACTLY one eligible candidate
+4) Send message
+5) Record attempt
+6) Repeat until remainingSlots == 0 OR exhausted
+
+No batching guesses.
+No cron dependency for logic.
+
+---
+
+ESCALATION
+
+If exhausted:
+- Mark outreachNeed.status = "exhausted"
+- Create ONE internal awareness item
+- Do NOT continue outreach
+
+---
+
+NON-GOALS
+- No templates yet
+- No UI yet
+- No scheduling preferences
+- No AI message generation
+- No marketing workflows
+
+This is operational outreach only.
+
+---
+
+ACCEPTANCE CRITERIA
+- Outreach volume is deterministic
+- Exactly N contacts occur when N responses are required
+- Declines trigger replacement outreach
+- Exhaustion escalates once
+- Silence is default when healthy
+
+Implement minimal, explicit coverage-based outreach.

@@ -1,0 +1,166 @@
+PROMPT T1 — Timer / Process Runner Rebuild (Concurrent Programs)
+
+Purpose:
+Rebuild the Timer app as a process runner that supports multiple concurrent programs (e.g., oven jobs), step-based alerts, continuous duration tracking, and shared visibility — suitable for both EPOCH integration and standalone app use.
+
+🔷 COPY EVERYTHING BELOW INTO REPLIT AGENT (TIMER APP REPL)
+You are modifying or rebuilding an existing app.
+
+GOAL
+Rebuild the Timer app as a deterministic Process Runner that supports:
+- Multiple concurrent timed programs
+- Step-based alerts (timer behavior)
+- Continuous total-time tracking (stopwatch behavior)
+- Shared visibility for multiple users
+- Clean data output suitable for EPOCH ingestion
+
+This is NOT a productivity timer.
+This is NOT a coaching or analytics app.
+This is a deterministic execution tool.
+
+---
+
+CORE CONCEPTS (LOCK THESE IN)
+
+1) Program
+A Program is a fixed recipe with ordered steps.
+
+Program fields:
+- id
+- name
+- steps[] (ordered)
+  - stepName
+  - durationMinutes
+  - alertType (sound / visual / both)
+- totalExpectedDuration (derived)
+
+Programs are predefined (no dynamic AI generation).
+
+---
+
+2) Program Run
+A Program Run represents one real-world execution of a Program.
+
+ProgramRun fields:
+- id
+- programId
+- startedAt
+- currentStepIndex
+- stepStartedAt
+- completedAt (nullable)
+- status ("running" | "paused" | "completed")
+- actualTotalDuration (computed)
+
+Multiple ProgramRuns may exist simultaneously.
+
+---
+
+3) Runner Behavior (CRITICAL)
+
+- User can start multiple ProgramRuns concurrently
+- Each run advances independently
+- When a step completes:
+  - Trigger alert
+  - Advance to next step
+- Runner tracks:
+  - Time in current step
+  - Total elapsed time since start
+
+NO automatic optimization.
+NO adaptive behavior.
+NO AI decisions.
+
+---
+
+REQUIREMENTS
+
+1) BACKEND — State & Events
+- Persist ProgramRuns in DB (not memory-only)
+- Server is source of truth for timing state
+- Emit events for:
+  - program_started
+  - step_advanced
+  - program_completed
+
+Events must include:
+- programRunId
+- programId
+- timestamp
+- step index
+
+Do NOT:
+- Introduce background job schedulers unless required
+- Depend on client-side timers as source of truth
+
+---
+
+2) FRONTEND — Operator UI
+Build a clean, utilitarian UI that shows:
+
+A) Active Runs Dashboard
+- Program name
+- Current step
+- Time in step
+- Total elapsed time
+- Visual countdown/progress
+
+B) Alerts
+- Clear indication when a step completes
+- No modal spam
+- Acknowledge + continue
+
+C) Controls
+- Start Program
+- Pause / Resume
+- Complete / Stop
+
+UX RULES:
+- Glanceable
+- No clutter
+- Designed for someone multitasking
+
+---
+
+3) SHARED VISIBILITY
+- Multiple users can see active ProgramRuns
+- UI updates in near-real-time (polling or simple subscription is fine)
+- No permissions complexity in this phase
+
+---
+
+4) EPOCH-READY DATA
+Design ProgramRun events so they can later be consumed by EPOCH without refactor.
+
+Assume EPOCH will want:
+- Total oven time
+- Step timestamps
+- Deviations from expected duration (later)
+
+But DO NOT implement analysis here.
+
+---
+
+5) STANDALONE SAFE
+- App must function fully without EPOCH
+- No hard dependency on other systems
+- Configurable naming (don’t hardcode “oven” everywhere)
+
+---
+
+6) NON-GOALS (DO NOT DO THESE)
+- No thermocouple integration
+- No analytics dashboards
+- No optimization logic
+- No mobile-native build steps
+- No AI recommendations
+
+---
+
+7) ACCEPTANCE CRITERIA
+- Multiple concurrent ProgramRuns work reliably
+- Step alerts trigger correctly
+- Total time tracking is accurate
+- Shared visibility works
+- Data is persisted and restart-safe
+
+Proceed with a clean, boring, reliable implementation that prioritizes correctness and operator trust.

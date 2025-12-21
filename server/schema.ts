@@ -8404,4 +8404,31 @@ export const insertSignatureActivityLogSchema = createInsertSchema(signatureActi
 export type SignatureActivityLog = typeof signatureActivityLog.$inferSelect;
 export type InsertSignatureActivityLog = z.infer<typeof insertSignatureActivityLogSchema>;
 
+// Process Runner Events - ingestion from external Timer app
+export const processRunnerEvents = pgTable('process_runner_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  source: text('source').notNull().default('process_runner'),
+  programRunId: text('program_run_id').notNull(),
+  programName: text('program_name').notNull(),
+  eventType: text('event_type').notNull(), // 'program_started', 'step_advanced', 'program_completed'
+  stepIndex: integer('step_index'),
+  totalElapsedMinutes: real('total_elapsed_minutes'),
+  eventTimestamp: timestamp('event_timestamp').notNull(),
+  metadata: jsonb('metadata'),
+  rawPayload: jsonb('raw_payload'), // Store full original payload
+  receivedAt: timestamp('received_at').defaultNow(),
+}, (table) => ({
+  programRunIdIdx: index('process_runner_events_program_run_id_idx').on(table.programRunId),
+  eventTypeIdx: index('process_runner_events_event_type_idx').on(table.eventType),
+  receivedAtIdx: index('process_runner_events_received_at_idx').on(table.receivedAt),
+}));
+
+export const insertProcessRunnerEventSchema = createInsertSchema(processRunnerEvents).omit({
+  id: true,
+  receivedAt: true,
+});
+
+export type ProcessRunnerEvent = typeof processRunnerEvents.$inferSelect;
+export type InsertProcessRunnerEvent = z.infer<typeof insertProcessRunnerEventSchema>;
+
 export * from './calendar.schema';

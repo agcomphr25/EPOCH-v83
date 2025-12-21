@@ -99,6 +99,7 @@ import patternSignalsRoutes from './patternSignals';
 import signPdfRoutes from './signPdf';
 import signatureWorkflowRoutes from './signatureWorkflow';
 import { registerProcessRunnerRoutes } from './processRunner';
+import { registerTimeClockRoutes } from './timeClock';
 import { registerObjectStorageRoutes } from '../../replit_integrations/object_storage';
 import { getAccessToken } from '../utils/upsShipping';
 
@@ -246,6 +247,9 @@ export function registerRoutes(app: Express): Server {
 
   // Process Runner integration routes - external timer app events
   registerProcessRunnerRoutes(app);
+
+  // Time Clock integration routes - labor/time event ingestion
+  registerTimeClockRoutes(app);
 
   // Controlled Documents (Master Document Register) routes
   app.use('/api/controlled-documents', controlledDocumentsRoutes);

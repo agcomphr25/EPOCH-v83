@@ -8506,4 +8506,46 @@ export const donnaObservationDismissals = pgTable('donna_observation_dismissals'
 
 export type DonnaObservationDismissal = typeof donnaObservationDismissals.$inferSelect;
 
+// API Integration Keys - Machine-to-machine authentication for external systems
+export const apiIntegrationKeys = pgTable('api_integration_keys', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: text('tenant_id').notNull(),
+  sourceSystem: text('source_system').notNull(), // 'time_clock', 'process_runner', etc.
+  keyHash: text('key_hash').notNull(), // SHA-256 hashed API key
+  keyPrefix: text('key_prefix').notNull(), // First 8 chars for identification
+  permissions: text('permissions').array().notNull(), // ['emit:labor_events', 'emit:process_events']
+  label: text('label'), // Human-readable label
+  active: boolean('active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  createdBy: text('created_by'),
+  lastUsedAt: timestamp('last_used_at'),
+  revokedAt: timestamp('revoked_at'),
+}, (table) => ({
+  tenantSourceIdx: index('api_integration_keys_tenant_source_idx').on(table.tenantId, table.sourceSystem),
+  keyPrefixIdx: index('api_integration_keys_prefix_idx').on(table.keyPrefix),
+}));
+
+export type ApiIntegrationKey = typeof apiIntegrationKeys.$inferSelect;
+
+// EPOCH External Events - Universal ingestion table for external system events
+export const epochExternalEvents = pgTable('epoch_external_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: text('tenant_id').notNull(),
+  sourceSystem: text('source_system').notNull(), // 'time_clock', 'process_runner', etc.
+  eventType: text('event_type').notNull(), // 'TIME_PUNCH_IN', 'TIME_PUNCH_OUT', etc.
+  eventId: text('event_id'), // Original event ID from source system
+  occurredAt: timestamp('occurred_at').notNull(), // When the event happened
+  payload: jsonb('payload').notNull(), // Full event payload as authoritative fact
+  receivedAt: timestamp('received_at').defaultNow().notNull(),
+  schemaVersion: integer('schema_version').default(1).notNull(),
+  deduplicationKey: text('deduplication_key'), // Optional unique key for idempotency
+}, (table) => ({
+  tenantSourceIdx: index('epoch_external_events_tenant_source_idx').on(table.tenantId, table.sourceSystem),
+  eventTypeIdx: index('epoch_external_events_type_idx').on(table.eventType),
+  occurredAtIdx: index('epoch_external_events_occurred_at_idx').on(table.occurredAt),
+  deduplicationKeyIdx: index('epoch_external_events_dedup_key_idx').on(table.deduplicationKey),
+}));
+
+export type EpochExternalEvent = typeof epochExternalEvents.$inferSelect;
+
 export * from './calendar.schema';

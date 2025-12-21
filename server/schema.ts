@@ -8474,4 +8474,36 @@ export const insertTrustedTimerIntegrationSchema = createInsertSchema(trustedTim
 export type TrustedTimerIntegration = typeof trustedTimerIntegrations.$inferSelect;
 export type InsertTrustedTimerIntegration = z.infer<typeof insertTrustedTimerIntegrationSchema>;
 
+// Donna Process Runner Observations - Quiet pattern detection
+export const donnaProcessObservations = pgTable('donna_process_observations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  observationType: text('observation_type').notNull(), // 'duration_deviation', 'pattern_change', 'sequence_impact'
+  programName: text('program_name').notNull(), // The program being observed
+  observationKey: text('observation_key').notNull(), // Unique key to prevent duplicates
+  message: text('message').notNull(), // Human-readable observation
+  details: jsonb('details'), // Additional context data
+  baselineMinutes: real('baseline_minutes'), // Expected typical duration
+  recentAvgMinutes: real('recent_avg_minutes'), // Recent average duration
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  expiresAt: timestamp('expires_at'), // Auto-expire stale observations
+}, (table) => ({
+  programNameIdx: index('donna_process_observations_program_name_idx').on(table.programName),
+  observationKeyIdx: index('donna_process_observations_key_idx').on(table.observationKey),
+}));
+
+export type DonnaProcessObservation = typeof donnaProcessObservations.$inferSelect;
+
+// Donna Observation Dismissals - Track user dismissals
+export const donnaObservationDismissals = pgTable('donna_observation_dismissals', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  observationKey: text('observation_key').notNull(), // Matches observation's key
+  dismissedBy: text('dismissed_by'), // Username who dismissed
+  dismissedAt: timestamp('dismissed_at').defaultNow().notNull(),
+  cooldownUntil: timestamp('cooldown_until').notNull(), // Don't show again until this time
+}, (table) => ({
+  observationKeyIdx: index('donna_observation_dismissals_key_idx').on(table.observationKey),
+}));
+
+export type DonnaObservationDismissal = typeof donnaObservationDismissals.$inferSelect;
+
 export * from './calendar.schema';

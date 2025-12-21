@@ -1,0 +1,104 @@
+PROMPT E2 — Link Process Runs to Jobs / Orders (Read-Only)
+
+Purpose:
+Allow Process Runner (Timer) runs to be optionally associated with EPOCH jobs/orders/work centers for traceability — without changing scheduling, costing, or execution behavior.
+
+🔷 COPY EVERYTHING BELOW INTO REPLIT AGENT (EPOCH REPL)
+You are modifying an existing production app (EPOCH).
+
+GOAL
+Add a READ-ONLY association between Process Runner runs and EPOCH jobs/orders so operators can see “which process run belonged to which job” for traceability.
+
+This is OPTIONAL linkage.
+Nothing should break if no association exists.
+
+---
+
+PREREQUISITES
+- Process Runner events are already ingested and stored
+- E1 read-only visibility of process runs exists
+
+---
+
+REQUIREMENTS
+
+1) DATA MODEL — Lightweight Association
+Add an OPTIONAL association field that links a process run to EPOCH entities.
+
+Allowed approaches (choose the smallest):
+- Add nullable fields on the process run read model:
+  - orderId (optional)
+  - jobId (optional)
+  - workCenterId (optional)
+OR
+- Create a minimal linking table:
+  process_run_links (
+    processRunId,
+    entityType,
+    entityId
+  )
+
+Rules:
+- Association is OPTIONAL
+- No foreign key enforcement required
+- No cascading effects
+
+---
+
+2) ASSOCIATION MECHANISM (MANUAL, SAFE)
+Provide ONE simple way to associate a process run:
+
+Examples (pick ONE):
+- Dropdown selector on a process-run detail view
+- “Link to Job/Order” action with search
+- Simple edit field (ID-based) for admins
+
+Rules:
+- Manual only (no auto-linking)
+- No validation beyond existence check
+- Can be changed or removed later
+
+---
+
+3) READ-ONLY DISPLAY
+Once linked:
+- Show associated Job / Order / Work Center on:
+  - Process run detail view
+  - Job/Order detail view (if applicable)
+
+Display only:
+- ID
+- Name / number
+- Link to existing EPOCH pages
+
+No actions, no edits, no side effects.
+
+---
+
+4) SAFETY & NON-INTRUSION
+- Linking must NOT:
+  - Update schedules
+  - Affect labor
+  - Affect costing
+  - Trigger workflows
+- If process run data is missing or incomplete:
+  - UI should degrade gracefully
+
+---
+
+5) NON-GOALS (DO NOT DO THESE)
+- No automatic matching
+- No scheduling adjustments
+- No cost calculations
+- No Donna integration
+- No background jobs
+
+---
+
+6) ACCEPTANCE CRITERIA
+- Process runs can optionally be linked to jobs/orders
+- Links are visible in both directions
+- No existing EPOCH workflows change
+- System behaves identically if no links are created
+
+Proceed with the smallest, safest implementation that enables traceability without operational impact.

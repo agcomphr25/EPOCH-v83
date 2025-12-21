@@ -1,12 +1,17 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Clock, Play, CheckCircle, Eye, Timer, Activity } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Clock, Play, CheckCircle, Eye, Timer, Activity, Link2, Unlink, ExternalLink, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { useState } from 'react';
+import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface ProcessRun {
   programRunId: string;
@@ -18,6 +23,16 @@ interface ProcessRun {
   lastStepIndex: number | null;
   totalElapsedMinutes: number | null;
   lastEventAt: string;
+}
+
+interface ProcessRunLink {
+  id: string;
+  programRunId: string;
+  entityType: 'order' | 'job' | 'work_center';
+  entityId: string;
+  entityLabel: string | null;
+  linkedBy: string | null;
+  linkedAt: string;
 }
 
 interface ProcessRunDetail {
@@ -37,6 +52,7 @@ interface ProcessRunDetail {
     eventTimestamp: string;
     metadata: Record<string, any> | null;
   }>;
+  links: ProcessRunLink[];
 }
 
 function formatDuration(minutes: number | null): string {
@@ -54,9 +70,125 @@ function RunStatusBadge({ run }: { run: ProcessRun }) {
   return <Badge variant="secondary" className="bg-blue-600 text-white"><Play className="w-3 h-3 mr-1" /> In Progress</Badge>;
 }
 
+function getEntityTypeLabel(type: string): string {
+  switch (type) {
+    case 'order': return 'Order';
+    case 'job': return 'Job';
+    case 'work_center': return 'Work Center';
+    default: return type;
+  }
+}
+
+function getEntityLink(entityType: string, entityId: string): string | null {
+  switch (entityType) {
+    case 'order': return `/orders/${entityId}`;
+    default: return null;
+  }
+}
+
+function LinkToEntityDialog({ programRunId, onSuccess }: { programRunId: string; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const [entityType, setEntityType] = useState<'order' | 'job' | 'work_center'>('order');
+  const [entityId, setEntityId] = useState('');
+  const [entityLabel, setEntityLabel] = useState('');
+
+  const createLink = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/integrations/process-runner/links', {
+        method: 'POST',
+        body: JSON.stringify({
+          programRunId,
+          entityType,
+          entityId,
+          entityLabel: entityLabel || undefined,
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Link created', description: `Linked to ${getEntityTypeLabel(entityType)} ${entityId}` });
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations/process-runner/runs', programRunId] });
+      setEntityId('');
+      setEntityLabel('');
+      onSuccess();
+    },
+    onError: (error: any) => {
+      toast({ title: 'Failed to create link', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  return (
+    <div className="space-y-4 p-4 border rounded-md bg-muted/30">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Plus className="w-4 h-4" />
+        Link to EPOCH Entity
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <Label className="text-xs">Type</Label>
+          <Select value={entityType} onValueChange={(v) => setEntityType(v as any)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="order">Order</SelectItem>
+              <SelectItem value="job">Job</SelectItem>
+              <SelectItem value="work_center">Work Center</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs">ID</Label>
+          <Input 
+            placeholder="e.g., EL069" 
+            value={entityId} 
+            onChange={(e) => setEntityId(e.target.value)}
+            data-testid="input-link-entity-id"
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Label (optional)</Label>
+          <Input 
+            placeholder="Display name" 
+            value={entityLabel} 
+            onChange={(e) => setEntityLabel(e.target.value)}
+            data-testid="input-link-entity-label"
+          />
+        </div>
+      </div>
+      <Button 
+        size="sm" 
+        onClick={() => createLink.mutate()}
+        disabled={!entityId || createLink.isPending}
+        data-testid="button-create-link"
+      >
+        <Link2 className="w-4 h-4 mr-1" />
+        {createLink.isPending ? 'Linking...' : 'Create Link'}
+      </Button>
+    </div>
+  );
+}
+
 function RunDetailDialog({ programRunId }: { programRunId: string }) {
+  const { toast } = useToast();
+  const [showLinkForm, setShowLinkForm] = useState(false);
+
   const { data: runDetail, isLoading } = useQuery<ProcessRunDetail>({
     queryKey: ['/api/integrations/process-runner/runs', programRunId],
+  });
+
+  const deleteLink = useMutation({
+    mutationFn: async (linkId: string) => {
+      return apiRequest(`/api/integrations/process-runner/links/${linkId}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Link removed' });
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations/process-runner/runs', programRunId] });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Failed to remove link', description: error.message, variant: 'destructive' });
+    },
   });
 
   return (
@@ -97,6 +229,72 @@ function RunDetailDialog({ programRunId }: { programRunId: string }) {
               <span className="text-muted-foreground">Steps Completed:</span>
               <p>{runDetail.stepCount}</p>
             </div>
+          </div>
+
+          {/* Linked Entities Section */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-medium flex items-center gap-2">
+                <Link2 className="w-4 h-4" />
+                Linked Entities
+              </h4>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowLinkForm(!showLinkForm)}
+                data-testid="button-toggle-link-form"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Link
+              </Button>
+            </div>
+
+            {showLinkForm && (
+              <LinkToEntityDialog 
+                programRunId={programRunId} 
+                onSuccess={() => setShowLinkForm(false)} 
+              />
+            )}
+
+            {runDetail.links && runDetail.links.length > 0 ? (
+              <div className="space-y-2 mt-2">
+                {runDetail.links.map((link) => {
+                  const entityLink = getEntityLink(link.entityType, link.entityId);
+                  return (
+                    <div 
+                      key={link.id} 
+                      className="flex items-center justify-between p-2 border rounded-md bg-background"
+                      data-testid={`link-${link.id}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-xs">
+                          {getEntityTypeLabel(link.entityType)}
+                        </Badge>
+                        <span className="font-mono text-sm">{link.entityLabel || link.entityId}</span>
+                        {entityLink && (
+                          <a href={entityLink} className="text-primary hover:underline">
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteLink.mutate(link.id)}
+                        disabled={deleteLink.isPending}
+                        data-testid={`button-unlink-${link.id}`}
+                      >
+                        <Unlink className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : !showLinkForm ? (
+              <p className="text-sm text-muted-foreground py-2">
+                No linked entities. Click "Link" to associate this run with an order or job.
+              </p>
+            ) : null}
           </div>
 
           <div>

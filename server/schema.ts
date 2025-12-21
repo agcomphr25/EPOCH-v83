@@ -8431,4 +8431,27 @@ export const insertProcessRunnerEventSchema = createInsertSchema(processRunnerEv
 export type ProcessRunnerEvent = typeof processRunnerEvents.$inferSelect;
 export type InsertProcessRunnerEvent = z.infer<typeof insertProcessRunnerEventSchema>;
 
+// Process Run Links - Optional associations to EPOCH entities for traceability
+export const processRunLinks = pgTable('process_run_links', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  programRunId: text('program_run_id').notNull(), // References process run by run ID
+  entityType: text('entity_type').notNull(), // 'order', 'job', 'work_center'
+  entityId: text('entity_id').notNull(), // The ID of the linked entity
+  entityLabel: text('entity_label'), // Optional display label (e.g., order number)
+  linkedBy: text('linked_by'), // Username who created the link
+  linkedAt: timestamp('linked_at').defaultNow(),
+}, (table) => ({
+  programRunIdIdx: index('process_run_links_program_run_id_idx').on(table.programRunId),
+  entityTypeIdx: index('process_run_links_entity_type_idx').on(table.entityType),
+  entityIdIdx: index('process_run_links_entity_id_idx').on(table.entityId),
+}));
+
+export const insertProcessRunLinkSchema = createInsertSchema(processRunLinks).omit({
+  id: true,
+  linkedAt: true,
+});
+
+export type ProcessRunLink = typeof processRunLinks.$inferSelect;
+export type InsertProcessRunLink = z.infer<typeof insertProcessRunLinkSchema>;
+
 export * from './calendar.schema';

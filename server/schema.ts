@@ -8454,4 +8454,24 @@ export const insertProcessRunLinkSchema = createInsertSchema(processRunLinks).om
 export type ProcessRunLink = typeof processRunLinks.$inferSelect;
 export type InsertProcessRunLink = z.infer<typeof insertProcessRunLinkSchema>;
 
+// Trusted Timer Integrations - Machine authentication for Process Runner events
+export const trustedTimerIntegrations = pgTable('trusted_timer_integrations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: text('tenant_id').notNull().unique(), // Unique tenant identifier
+  integrationKeyHash: text('integration_key_hash').notNull(), // SHA-256 hash, never plaintext
+  description: text('description'), // Optional description for admin reference
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  revokedAt: timestamp('revoked_at'), // Null = active, set = revoked
+}, (table) => ({
+  tenantIdIdx: index('trusted_timer_integrations_tenant_id_idx').on(table.tenantId),
+}));
+
+export const insertTrustedTimerIntegrationSchema = createInsertSchema(trustedTimerIntegrations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TrustedTimerIntegration = typeof trustedTimerIntegrations.$inferSelect;
+export type InsertTrustedTimerIntegration = z.infer<typeof insertTrustedTimerIntegrationSchema>;
+
 export * from './calendar.schema';

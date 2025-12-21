@@ -1,10 +1,12 @@
 import { Express, Request, Response } from 'express';
 import { db } from '../../db';
-import { processRunnerEvents, processRunLinks } from '../../schema';
+import { processRunnerEvents, processRunLinks, trustedTimerIntegrations } from '../../schema';
 import { z } from 'zod';
-import { desc, eq, sql, and } from 'drizzle-orm';
+import { desc, eq, sql, and, isNull } from 'drizzle-orm';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { createHash, timingSafeEqual } from 'crypto';
 
+// Legacy token support (can be removed once tenant-based auth is fully deployed)
 const PROCESS_RUNNER_TOKEN = process.env.PROCESS_RUNNER_TOKEN;
 
 const eventPayloadSchema = z.object({
@@ -18,14 +20,82 @@ const eventPayloadSchema = z.object({
   metadata: z.record(z.any()).optional(),
 }).passthrough();
 
+// Hash an integration key for storage/comparison
+function hashIntegrationKey(key: string): string {
+  return createHash('sha256').update(key).digest('hex');
+}
+
+// Constant-time comparison of hashed keys
+function safeCompareHashes(hash1: string, hash2: string): boolean {
+  try {
+    const buf1 = Buffer.from(hash1, 'hex');
+    const buf2 = Buffer.from(hash2, 'hex');
+    if (buf1.length !== buf2.length) return false;
+    return timingSafeEqual(buf1, buf2);
+  } catch {
+    return false;
+  }
+}
+
+// Validate tenant integration key
+async function validateTenantAuth(authHeader: string | undefined, tenantId: string | undefined): Promise<{ valid: boolean; tenantId?: string }> {
+  // Extract bearer token
+  const token = authHeader?.replace('Bearer ', '');
+  if (!token) {
+    return { valid: false };
+  }
+
+  // If no tenantId provided, can't validate tenant-scoped auth
+  if (!tenantId) {
+    return { valid: false };
+  }
+
+  try {
+    // Look up the tenant's integration
+    const [integration] = await db
+      .select()
+      .from(trustedTimerIntegrations)
+      .where(and(
+        eq(trustedTimerIntegrations.tenantId, tenantId),
+        isNull(trustedTimerIntegrations.revokedAt)
+      ))
+      .limit(1);
+
+    if (!integration) {
+      return { valid: false };
+    }
+
+    // Hash the provided token and compare
+    const providedHash = hashIntegrationKey(token);
+    if (!safeCompareHashes(providedHash, integration.integrationKeyHash)) {
+      return { valid: false };
+    }
+
+    return { valid: true, tenantId };
+  } catch (error) {
+    console.error('[ProcessRunner] Auth validation error:', error);
+    return { valid: false };
+  }
+}
+
 export function registerProcessRunnerRoutes(app: Express) {
   app.post('/api/integrations/process-runner/events', async (req: Request, res: Response) => {
     try {
       const authHeader = req.headers.authorization;
-      const providedToken = authHeader?.replace('Bearer ', '');
+      const tenantId = req.headers['x-tenant-id'] as string | undefined;
       
-      if (PROCESS_RUNNER_TOKEN && providedToken !== PROCESS_RUNNER_TOKEN) {
-        console.warn('[ProcessRunner] Unauthorized event submission attempt');
+      // Try tenant-scoped authentication first
+      const tenantAuth = await validateTenantAuth(authHeader, tenantId);
+      
+      // Fall back to legacy token if tenant auth fails and legacy token is configured
+      const legacyToken = authHeader?.replace('Bearer ', '');
+      const legacyValid = PROCESS_RUNNER_TOKEN && legacyToken === PROCESS_RUNNER_TOKEN;
+      
+      if (!tenantAuth.valid && !legacyValid) {
+        console.warn('[ProcessRunner] Unauthorized event submission attempt', { 
+          hasTenantId: !!tenantId,
+          hasAuthHeader: !!authHeader 
+        });
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
@@ -486,6 +556,105 @@ export function registerProcessRunnerRoutes(app: Express) {
     } catch (error) {
       console.error('[ProcessRunner] Error exporting PDF:', error);
       return res.status(500).json({ error: 'Failed to export PDF' });
+    }
+  });
+
+  // === TRUSTED INTEGRATIONS MANAGEMENT (Admin only) ===
+
+  // POST - Create a new trusted integration (returns the plaintext key ONCE)
+  app.post('/api/integrations/process-runner/trusted-integrations', async (req: Request, res: Response) => {
+    try {
+      const { tenantId, description } = req.body;
+
+      if (!tenantId || typeof tenantId !== 'string') {
+        return res.status(400).json({ error: 'tenantId is required' });
+      }
+
+      // Check if tenant already has an active integration
+      const [existing] = await db
+        .select()
+        .from(trustedTimerIntegrations)
+        .where(and(
+          eq(trustedTimerIntegrations.tenantId, tenantId),
+          isNull(trustedTimerIntegrations.revokedAt)
+        ))
+        .limit(1);
+
+      if (existing) {
+        return res.status(409).json({ error: 'Tenant already has an active integration. Revoke it first.' });
+      }
+
+      // Generate a secure random key
+      const { randomBytes } = await import('crypto');
+      const plaintextKey = randomBytes(32).toString('hex'); // 64 character hex string
+      const keyHash = hashIntegrationKey(plaintextKey);
+
+      const [integration] = await db.insert(trustedTimerIntegrations).values({
+        tenantId,
+        integrationKeyHash: keyHash,
+        description: description || null,
+      }).returning();
+
+      console.log(`[ProcessRunner] Created trusted integration for tenant: ${tenantId}`);
+
+      // Return the plaintext key ONCE - it cannot be recovered
+      return res.status(201).json({
+        id: integration.id,
+        tenantId: integration.tenantId,
+        integrationKey: plaintextKey, // Only returned on creation
+        description: integration.description,
+        createdAt: integration.createdAt,
+        warning: 'Save this integration key securely. It cannot be recovered.',
+      });
+    } catch (error) {
+      console.error('[ProcessRunner] Error creating trusted integration:', error);
+      return res.status(500).json({ error: 'Failed to create trusted integration' });
+    }
+  });
+
+  // GET - List all trusted integrations (without keys)
+  app.get('/api/integrations/process-runner/trusted-integrations', async (_req: Request, res: Response) => {
+    try {
+      const integrations = await db
+        .select({
+          id: trustedTimerIntegrations.id,
+          tenantId: trustedTimerIntegrations.tenantId,
+          description: trustedTimerIntegrations.description,
+          createdAt: trustedTimerIntegrations.createdAt,
+          revokedAt: trustedTimerIntegrations.revokedAt,
+          isActive: sql<boolean>`${trustedTimerIntegrations.revokedAt} IS NULL`,
+        })
+        .from(trustedTimerIntegrations)
+        .orderBy(desc(trustedTimerIntegrations.createdAt));
+
+      return res.json(integrations);
+    } catch (error) {
+      console.error('[ProcessRunner] Error fetching trusted integrations:', error);
+      return res.status(500).json({ error: 'Failed to fetch trusted integrations' });
+    }
+  });
+
+  // DELETE - Revoke a trusted integration
+  app.delete('/api/integrations/process-runner/trusted-integrations/:id', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const [updated] = await db
+        .update(trustedTimerIntegrations)
+        .set({ revokedAt: new Date() })
+        .where(eq(trustedTimerIntegrations.id, id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: 'Integration not found' });
+      }
+
+      console.log(`[ProcessRunner] Revoked trusted integration: ${id} (tenant: ${updated.tenantId})`);
+
+      return res.json({ success: true, revokedAt: updated.revokedAt });
+    } catch (error) {
+      console.error('[ProcessRunner] Error revoking trusted integration:', error);
+      return res.status(500).json({ error: 'Failed to revoke trusted integration' });
     }
   });
 }

@@ -1,0 +1,97 @@
+PROMPT E1 — Use Timer Data Inside EPOCH (Reporting / Traceability)
+
+Purpose:
+Surface process-runner (Timer) events inside EPOCH for visibility and traceability only.
+No automation. No schedule changes. No cost math.
+
+🔷 COPY EVERYTHING BELOW INTO REPLIT AGENT
+You are modifying an existing production app (EPOCH).
+
+GOAL
+Use ingested Process Runner (Timer) events to provide basic reporting and traceability in EPOCH, without affecting any existing workflows.
+
+This is READ-ONLY usage of the data.
+
+---
+
+PREREQUISITE
+- EPOCH already accepts events via:
+  POST /api/integrations/process-runner/events
+- Events are persisted with raw payload + timestamps
+
+---
+
+REQUIREMENTS
+
+1) DATA ACCESS — Normalize for Reading (LIGHT)
+Create a minimal read model or query helpers that can:
+- Group events by programRunId
+- Order events by timestamp
+- Derive:
+  - start time
+  - end time (if completed)
+  - total elapsed minutes (if present)
+  - step timeline (if present)
+
+Do NOT:
+- Backfill data
+- Enforce completeness
+- Modify stored events
+
+---
+
+2) TRACEABILITY VIEW (MINIMAL UI OR REPORT)
+Add ONE minimal way to view process runs, such as:
+- A simple table/list under an existing admin/reporting area
+OR
+- A read-only detail panel linked from an order/work-center (if available)
+
+Display (best-effort):
+- Program name
+- ProgramRunId
+- Started at
+- Completed at (if any)
+- Total elapsed time
+- Step count / last step index
+
+Rules:
+- If data is missing, show placeholders
+- No editing
+- No actions
+
+---
+
+3) ASSOCIATION (OPTIONAL, NON-BLOCKING)
+If EPOCH has a natural place to associate runs (e.g., work center, oven, order):
+- Allow OPTIONAL association via a reference field
+- Do NOT require it
+- Do NOT auto-link
+
+This can be deferred if unclear.
+
+---
+
+4) SAFETY & PERFORMANCE
+- If no Timer data exists, nothing new appears
+- Queries must be lightweight
+- No background jobs
+- No recalculation loops
+
+---
+
+5) NON-GOALS (DO NOT DO THESE)
+- No schedule adjustments
+- No labor or cost calculations
+- No alerts
+- No Donna integration
+- No analytics dashboards
+
+---
+
+6) ACCEPTANCE CRITERIA
+- Timer data is visible inside EPOCH
+- Data is clearly read-only
+- EPOCH behaves exactly the same if Timer is unused
+- No regressions in existing reports or performance
+
+Proceed with the smallest implementation that makes Timer activity observable and traceable.

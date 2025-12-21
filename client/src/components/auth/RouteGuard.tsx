@@ -20,6 +20,7 @@ const PUBLIC_ROUTES = [
   '/',
   '/login',
   '/access-denied',
+  '/process-runs',  // Timer app integration - read-only reporting
 ];
 
 const PUBLIC_ROUTE_PREFIXES = [

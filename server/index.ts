@@ -128,6 +128,7 @@ const publicRoutes = [
   '/api/magic-link',     // Magic link authentication
   '/api/oauth',          // OAuth callbacks
   '/api/calendar/webhook', // Google Calendar webhooks
+  '/api/integrations/process-runner', // External timer app integration (uses own token auth)
 ];
 
 app.use('/api', (req, res, next) => {

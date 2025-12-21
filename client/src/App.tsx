@@ -40,6 +40,7 @@ import SignedDocumentsLibrary from './pages/SignedDocumentsLibrary';
 import SignatureWorkflowPage from './pages/SignatureWorkflowPage';
 import ReferenceDocsPage from './pages/ReferenceDocsPage';
 import VoiceNotesPage from './pages/VoiceNotesPage';
+import ProcessRuns from './pages/ProcessRuns';
 import MaintenancePage from './pages/MaintenancePage';
 import EmployeePortalPage from './pages/EmployeePortalPage';
 import TimeClockAdminPage from './pages/TimeClockAdminPage';
@@ -359,6 +360,7 @@ function App() {
                   <Route path="/signature-workflow" component={SignatureWorkflowPage} />
                   <Route path="/reference-docs" component={ReferenceDocsPage} />
                   <Route path="/voice-notes" component={VoiceNotesPage} />
+                  <Route path="/process-runs" component={ProcessRuns} />
 
                   {/* Vendor Management Routes */}
                   <Route path="/vendor-management" component={VendorManagement} />

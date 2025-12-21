@@ -2,6 +2,7 @@ import { Express, Request, Response } from 'express';
 import { db } from '../../db';
 import { processRunnerEvents } from '../../schema';
 import { z } from 'zod';
+import { desc, eq, sql } from 'drizzle-orm';
 
 const PROCESS_RUNNER_TOKEN = process.env.PROCESS_RUNNER_TOKEN;
 
@@ -66,5 +67,67 @@ export function registerProcessRunnerRoutes(app: Express) {
       timestamp: new Date().toISOString(),
       tokenConfigured: !!PROCESS_RUNNER_TOKEN 
     });
+  });
+
+  // GET - List all process runs (grouped by programRunId)
+  app.get('/api/integrations/process-runner/runs', async (_req: Request, res: Response) => {
+    try {
+      const runs = await db
+        .select({
+          programRunId: processRunnerEvents.programRunId,
+          programName: processRunnerEvents.programName,
+          source: processRunnerEvents.source,
+          eventCount: sql<number>`count(*)::int`,
+          startedAt: sql<Date>`min(${processRunnerEvents.eventTimestamp})`,
+          completedAt: sql<Date>`max(case when ${processRunnerEvents.eventType} = 'program_completed' then ${processRunnerEvents.eventTimestamp} end)`,
+          lastStepIndex: sql<number>`max(${processRunnerEvents.stepIndex})`,
+          totalElapsedMinutes: sql<number>`max(${processRunnerEvents.totalElapsedMinutes})`,
+          lastEventAt: sql<Date>`max(${processRunnerEvents.eventTimestamp})`,
+        })
+        .from(processRunnerEvents)
+        .groupBy(processRunnerEvents.programRunId, processRunnerEvents.programName, processRunnerEvents.source)
+        .orderBy(desc(sql`max(${processRunnerEvents.eventTimestamp})`));
+
+      return res.json(runs);
+    } catch (error) {
+      console.error('[ProcessRunner] Error fetching runs:', error);
+      return res.status(500).json({ error: 'Failed to fetch process runs' });
+    }
+  });
+
+  // GET - Get events for a specific run
+  app.get('/api/integrations/process-runner/runs/:programRunId', async (req: Request, res: Response) => {
+    try {
+      const { programRunId } = req.params;
+
+      const events = await db
+        .select()
+        .from(processRunnerEvents)
+        .where(eq(processRunnerEvents.programRunId, programRunId))
+        .orderBy(processRunnerEvents.eventTimestamp);
+
+      if (events.length === 0) {
+        return res.status(404).json({ error: 'Run not found' });
+      }
+
+      const startEvent = events.find(e => e.eventType === 'program_started');
+      const endEvent = events.find(e => e.eventType === 'program_completed');
+      const stepEvents = events.filter(e => e.eventType === 'step_advanced');
+
+      return res.json({
+        programRunId,
+        programName: events[0].programName,
+        source: events[0].source,
+        startedAt: startEvent?.eventTimestamp || events[0].eventTimestamp,
+        completedAt: endEvent?.eventTimestamp || null,
+        totalElapsedMinutes: endEvent?.totalElapsedMinutes || events[events.length - 1].totalElapsedMinutes,
+        stepCount: stepEvents.length,
+        lastStepIndex: Math.max(...events.map(e => e.stepIndex || 0)),
+        events,
+      });
+    } catch (error) {
+      console.error('[ProcessRunner] Error fetching run details:', error);
+      return res.status(500).json({ error: 'Failed to fetch run details' });
+    }
   });
 }

@@ -98,7 +98,6 @@ import voiceNotesRoutes from './voiceNotes';
 import patternSignalsRoutes from './patternSignals';
 import signPdfRoutes from './signPdf';
 import signatureWorkflowRoutes from './signatureWorkflow';
-import processRunnerRoutes from './processRunner';
 import { registerObjectStorageRoutes } from '../../replit_integrations/object_storage';
 import { getAccessToken } from '../utils/upsShipping';
 
@@ -120,9 +119,6 @@ export function registerRoutes(app: Express): Server {
 
   // User integrations routes
   app.use('/api/user-integrations', userIntegrationsRoutes);
-
-  // Process Runner integration (external Timer app)
-  app.use('/api/integrations/process-runner', processRunnerRoutes);
   
   // Google OAuth routes
   app.use('/api/oauth/google', googleOAuthRoutes);

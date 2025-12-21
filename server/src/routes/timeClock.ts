@@ -1,7 +1,7 @@
 import { Express, Request, Response } from 'express';
 import { db } from '../../db';
-import { apiIntegrationKeys, epochExternalEvents } from '../../schema';
-import { eq, and } from 'drizzle-orm';
+import { apiIntegrationKeys, epochExternalEvents, epochLaborFacts } from '../../schema';
+import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 
 const VALID_EVENT_TYPES = [
@@ -12,6 +12,56 @@ const VALID_EVENT_TYPES = [
   'TIME_BREAK_START',
   'TIME_BREAK_END',
 ];
+
+// Project Time Clock event into labor fact (read-only traceability)
+// This is append-only - never updates or deletes existing facts
+async function projectToLaborFact(
+  sourceEventId: string,
+  tenantId: string,
+  eventType: string,
+  occurredAt: Date,
+  payload: Record<string, any>
+): Promise<void> {
+  try {
+    // Extract labor-relevant fields from payload
+    const employeeId = payload.employeeId || payload.employee_id || payload.userId || payload.user_id;
+    const employeeDisplayName = payload.employeeDisplayName || payload.employee_display_name || 
+                                 payload.employeeName || payload.employee_name || payload.name;
+    const role = payload.role || payload.position || payload.jobTitle || payload.job_title;
+    const siteId = payload.siteId || payload.site_id || payload.locationId || payload.location_id;
+    const jobId = payload.jobId || payload.job_id || payload.orderId || payload.order_id;
+    const shiftDurationMinutes = payload.shiftDurationMinutes || payload.shift_duration_minutes ||
+                                  payload.durationMinutes || payload.duration_minutes;
+    const dayTotalMinutes = payload.dayTotalMinutes || payload.day_total_minutes ||
+                             payload.totalMinutes || payload.total_minutes;
+
+    if (!employeeId) {
+      console.log(`[LaborFacts] Skipping projection - no employeeId in payload for event ${sourceEventId}`);
+      return;
+    }
+
+    await db.insert(epochLaborFacts).values({
+      tenantId,
+      sourceEventId,
+      sourceSystem: 'time_clock',
+      eventType,
+      occurredAt,
+      employeeId: String(employeeId),
+      employeeDisplayName: employeeDisplayName ? String(employeeDisplayName) : null,
+      role: role ? String(role) : null,
+      siteId: siteId ? String(siteId) : null,
+      jobId: jobId ? String(jobId) : null,
+      shiftDurationMinutes: shiftDurationMinutes ? parseInt(String(shiftDurationMinutes), 10) : null,
+      dayTotalMinutes: dayTotalMinutes ? parseInt(String(dayTotalMinutes), 10) : null,
+      payload,
+    });
+
+    console.log(`[LaborFacts] Projected event ${sourceEventId} -> labor fact (employee: ${employeeId})`);
+  } catch (error) {
+    // Log but don't fail - projection failures shouldn't block ingestion
+    console.error(`[LaborFacts] Failed to project event ${sourceEventId}:`, error);
+  }
+}
 
 function timingSafeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) {
@@ -179,6 +229,9 @@ export function registerTimeClockRoutes(app: Express) {
 
       console.log(`[TimeClock] Event recorded: ${eventType} (id: ${inserted.id}, tenant: ${tenantId})`);
 
+      // Project to labor facts (async, non-blocking)
+      projectToLaborFact(inserted.id, tenantId, eventType, occurredAtDate, payload);
+
       return res.status(202).json({
         status: 'accepted',
         message: 'Event recorded successfully',
@@ -278,6 +331,210 @@ export function registerTimeClockRoutes(app: Express) {
     } catch (error) {
       console.error('[TimeClock] Error revoking API key:', error);
       return res.status(500).json({ error: 'Failed to revoke API key' });
+    }
+  });
+
+  // ============================================================
+  // READ-ONLY LABOR FACTS QUERIES
+  // These endpoints are for observability only - no mutations
+  // ============================================================
+
+  // Query labor facts by employee
+  app.get('/api/labor-facts/by-employee/:employeeId', async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const { startDate, endDate, limit = '100' } = req.query;
+
+      let query = db
+        .select()
+        .from(epochLaborFacts)
+        .where(eq(epochLaborFacts.employeeId, employeeId))
+        .orderBy(desc(epochLaborFacts.occurredAt))
+        .limit(parseInt(String(limit), 10));
+
+      const facts = await query;
+
+      // Filter by date range in application if provided
+      let filtered = facts;
+      if (startDate) {
+        const start = new Date(String(startDate));
+        filtered = filtered.filter(f => f.occurredAt >= start);
+      }
+      if (endDate) {
+        const end = new Date(String(endDate));
+        filtered = filtered.filter(f => f.occurredAt <= end);
+      }
+
+      return res.json({
+        employeeId,
+        count: filtered.length,
+        facts: filtered,
+      });
+    } catch (error) {
+      console.error('[LaborFacts] Error querying by employee:', error);
+      return res.status(500).json({ error: 'Failed to query labor facts' });
+    }
+  });
+
+  // Query labor facts by date range
+  app.get('/api/labor-facts/by-date', async (req: Request, res: Response) => {
+    try {
+      const { startDate, endDate, limit = '500' } = req.query;
+
+      if (!startDate || !endDate) {
+        return res.status(400).json({ error: 'startDate and endDate are required' });
+      }
+
+      const start = new Date(String(startDate));
+      const end = new Date(String(endDate));
+
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return res.status(400).json({ error: 'Invalid date format' });
+      }
+
+      const facts = await db
+        .select()
+        .from(epochLaborFacts)
+        .where(and(
+          gte(epochLaborFacts.occurredAt, start),
+          lte(epochLaborFacts.occurredAt, end)
+        ))
+        .orderBy(desc(epochLaborFacts.occurredAt))
+        .limit(parseInt(String(limit), 10));
+
+      return res.json({
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        count: facts.length,
+        facts,
+      });
+    } catch (error) {
+      console.error('[LaborFacts] Error querying by date:', error);
+      return res.status(500).json({ error: 'Failed to query labor facts' });
+    }
+  });
+
+  // Query labor facts by job/order ID
+  app.get('/api/labor-facts/by-job/:jobId', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const { limit = '100' } = req.query;
+
+      const facts = await db
+        .select()
+        .from(epochLaborFacts)
+        .where(eq(epochLaborFacts.jobId, jobId))
+        .orderBy(desc(epochLaborFacts.occurredAt))
+        .limit(parseInt(String(limit), 10));
+
+      return res.json({
+        jobId,
+        count: facts.length,
+        facts,
+      });
+    } catch (error) {
+      console.error('[LaborFacts] Error querying by job:', error);
+      return res.status(500).json({ error: 'Failed to query labor facts' });
+    }
+  });
+
+  // Query labor facts by site
+  app.get('/api/labor-facts/by-site/:siteId', async (req: Request, res: Response) => {
+    try {
+      const { siteId } = req.params;
+      const { startDate, endDate, limit = '500' } = req.query;
+
+      let facts = await db
+        .select()
+        .from(epochLaborFacts)
+        .where(eq(epochLaborFacts.siteId, siteId))
+        .orderBy(desc(epochLaborFacts.occurredAt))
+        .limit(parseInt(String(limit), 10));
+
+      // Filter by date range in application if provided
+      if (startDate) {
+        const start = new Date(String(startDate));
+        facts = facts.filter(f => f.occurredAt >= start);
+      }
+      if (endDate) {
+        const end = new Date(String(endDate));
+        facts = facts.filter(f => f.occurredAt <= end);
+      }
+
+      return res.json({
+        siteId,
+        count: facts.length,
+        facts,
+      });
+    } catch (error) {
+      console.error('[LaborFacts] Error querying by site:', error);
+      return res.status(500).json({ error: 'Failed to query labor facts' });
+    }
+  });
+
+  // Get labor fact summary (who worked, when, for how long)
+  app.get('/api/labor-facts/summary', async (req: Request, res: Response) => {
+    try {
+      const { startDate, endDate } = req.query;
+
+      if (!startDate || !endDate) {
+        return res.status(400).json({ error: 'startDate and endDate are required' });
+      }
+
+      const start = new Date(String(startDate));
+      const end = new Date(String(endDate));
+
+      // Get all facts in date range
+      const facts = await db
+        .select()
+        .from(epochLaborFacts)
+        .where(and(
+          gte(epochLaborFacts.occurredAt, start),
+          lte(epochLaborFacts.occurredAt, end)
+        ))
+        .orderBy(epochLaborFacts.employeeId, epochLaborFacts.occurredAt);
+
+      // Group by employee - read-only observation, no calculations
+      const byEmployee = new Map<string, {
+        employeeId: string;
+        displayName: string | null;
+        eventCount: number;
+        firstEvent: Date;
+        lastEvent: Date;
+        eventTypes: string[];
+      }>();
+
+      for (const fact of facts) {
+        const existing = byEmployee.get(fact.employeeId);
+        if (!existing) {
+          byEmployee.set(fact.employeeId, {
+            employeeId: fact.employeeId,
+            displayName: fact.employeeDisplayName,
+            eventCount: 1,
+            firstEvent: fact.occurredAt,
+            lastEvent: fact.occurredAt,
+            eventTypes: [fact.eventType],
+          });
+        } else {
+          existing.eventCount++;
+          if (fact.occurredAt < existing.firstEvent) existing.firstEvent = fact.occurredAt;
+          if (fact.occurredAt > existing.lastEvent) existing.lastEvent = fact.occurredAt;
+          if (!existing.eventTypes.includes(fact.eventType)) {
+            existing.eventTypes.push(fact.eventType);
+          }
+        }
+      }
+
+      return res.json({
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        totalEvents: facts.length,
+        uniqueEmployees: byEmployee.size,
+        employees: Array.from(byEmployee.values()),
+      });
+    } catch (error) {
+      console.error('[LaborFacts] Error generating summary:', error);
+      return res.status(500).json({ error: 'Failed to generate summary' });
     }
   });
 }

@@ -8548,4 +8548,36 @@ export const epochExternalEvents = pgTable('epoch_external_events', {
 
 export type EpochExternalEvent = typeof epochExternalEvents.$inferSelect;
 
+// EPOCH Labor Facts - Read-only projection of Time Clock events for traceability
+// This table is APPEND-ONLY: no updates, no deletes
+// TIME_PUNCH_EDITED creates a new row (correction fact)
+// Time Clock remains the sole authority on time - EPOCH only observes
+export const epochLaborFacts = pgTable('epoch_labor_facts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: text('tenant_id').notNull(),
+  sourceEventId: uuid('source_event_id').notNull(), // References epoch_external_events.id
+  sourceSystem: text('source_system').default('time_clock').notNull(),
+  eventType: text('event_type').notNull(), // TIME_PUNCH_IN, TIME_PUNCH_OUT, TIME_JOB_SWITCH, TIME_PUNCH_EDITED
+  occurredAt: timestamp('occurred_at').notNull(), // When the labor event happened
+  employeeId: text('employee_id').notNull(), // External reference only - not linked to EPOCH employees
+  employeeDisplayName: text('employee_display_name'), // Human-readable name for display
+  role: text('role'), // Optional role/position
+  siteId: text('site_id'), // Location/site identifier
+  jobId: text('job_id'), // Optional job/order reference
+  shiftDurationMinutes: integer('shift_duration_minutes'), // Duration if applicable
+  dayTotalMinutes: integer('day_total_minutes'), // Running total if provided
+  payload: jsonb('payload').notNull(), // Raw authoritative payload from Time Clock
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  tenantIdx: index('epoch_labor_facts_tenant_idx').on(table.tenantId),
+  employeeIdx: index('epoch_labor_facts_employee_idx').on(table.tenantId, table.employeeId),
+  occurredAtIdx: index('epoch_labor_facts_occurred_at_idx').on(table.occurredAt),
+  jobIdIdx: index('epoch_labor_facts_job_id_idx').on(table.jobId),
+  siteIdIdx: index('epoch_labor_facts_site_id_idx').on(table.siteId),
+  sourceEventIdx: index('epoch_labor_facts_source_event_idx').on(table.sourceEventId),
+}));
+
+export type EpochLaborFact = typeof epochLaborFacts.$inferSelect;
+export type InsertEpochLaborFact = typeof epochLaborFacts.$inferInsert;
+
 export * from './calendar.schema';

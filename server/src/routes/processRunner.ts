@@ -3,6 +3,7 @@ import { db } from '../../db';
 import { processRunnerEvents, processRunLinks } from '../../schema';
 import { z } from 'zod';
 import { desc, eq, sql, and } from 'drizzle-orm';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 const PROCESS_RUNNER_TOKEN = process.env.PROCESS_RUNNER_TOKEN;
 
@@ -250,6 +251,241 @@ export function registerProcessRunnerRoutes(app: Express) {
     } catch (error) {
       console.error('[ProcessRunner] Error fetching entity links:', error);
       return res.status(500).json({ error: 'Failed to fetch entity links' });
+    }
+  });
+
+  // === EXPORT ENDPOINTS ===
+
+  // Helper to get enriched runs data for export
+  async function getRunsForExport(limit: number = 500) {
+    const runs = await db
+      .select({
+        programRunId: processRunnerEvents.programRunId,
+        programName: processRunnerEvents.programName,
+        source: processRunnerEvents.source,
+        eventCount: sql<number>`count(*)::int`,
+        startedAt: sql<Date>`min(${processRunnerEvents.eventTimestamp})`,
+        completedAt: sql<Date>`max(case when ${processRunnerEvents.eventType} = 'program_completed' then ${processRunnerEvents.eventTimestamp} end)`,
+        lastStepIndex: sql<number>`max(${processRunnerEvents.stepIndex})`,
+        totalElapsedMinutes: sql<number>`max(${processRunnerEvents.totalElapsedMinutes})`,
+        numberOfSteps: sql<number>`count(case when ${processRunnerEvents.eventType} = 'step_advanced' then 1 end)::int`,
+      })
+      .from(processRunnerEvents)
+      .groupBy(processRunnerEvents.programRunId, processRunnerEvents.programName, processRunnerEvents.source)
+      .orderBy(desc(sql`max(${processRunnerEvents.eventTimestamp})`))
+      .limit(limit);
+
+    // Fetch links for all runs
+    const allLinks = await db.select().from(processRunLinks);
+    const linksByRunId = new Map<string, typeof allLinks>();
+    for (const link of allLinks) {
+      if (!linksByRunId.has(link.programRunId)) {
+        linksByRunId.set(link.programRunId, []);
+      }
+      linksByRunId.get(link.programRunId)!.push(link);
+    }
+
+    return runs.map(run => {
+      const links = linksByRunId.get(run.programRunId) || [];
+      const orderLinks = links.filter(l => l.entityType === 'order');
+      const jobLinks = links.filter(l => l.entityType === 'job');
+      const workCenterLinks = links.filter(l => l.entityType === 'work_center');
+
+      return {
+        ...run,
+        linkedOrderIds: orderLinks.map(l => l.entityLabel || l.entityId).join('; '),
+        linkedJobIds: jobLinks.map(l => l.entityLabel || l.entityId).join('; '),
+        linkedWorkCenters: workCenterLinks.map(l => l.entityLabel || l.entityId).join('; '),
+      };
+    });
+  }
+
+  // CSV Export
+  app.get('/api/integrations/process-runner/export/csv', async (_req: Request, res: Response) => {
+    try {
+      const runs = await getRunsForExport();
+
+      const headers = [
+        'Program Run ID',
+        'Program Name',
+        'Source',
+        'Started At',
+        'Completed At',
+        'Total Elapsed (min)',
+        'Number of Steps',
+        'Linked Orders',
+        'Linked Jobs',
+        'Linked Work Centers',
+      ];
+
+      const formatDate = (d: Date | null) => d ? new Date(d).toISOString() : '';
+      const escapeCSV = (val: any) => {
+        if (val === null || val === undefined) return '';
+        const str = String(val);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      const rows = runs.map(run => [
+        escapeCSV(run.programRunId),
+        escapeCSV(run.programName),
+        escapeCSV(run.source),
+        escapeCSV(formatDate(run.startedAt)),
+        escapeCSV(formatDate(run.completedAt)),
+        escapeCSV(run.totalElapsedMinutes ?? ''),
+        escapeCSV(run.numberOfSteps ?? 0),
+        escapeCSV(run.linkedOrderIds),
+        escapeCSV(run.linkedJobIds),
+        escapeCSV(run.linkedWorkCenters),
+      ].join(','));
+
+      const csvContent = [headers.join(','), ...rows].join('\n');
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="process-runs-${new Date().toISOString().split('T')[0]}.csv"`);
+      return res.send(csvContent);
+    } catch (error) {
+      console.error('[ProcessRunner] Error exporting CSV:', error);
+      return res.status(500).json({ error: 'Failed to export CSV' });
+    }
+  });
+
+  // PDF Export
+  app.get('/api/integrations/process-runner/export/pdf', async (_req: Request, res: Response) => {
+    try {
+      const runs = await getRunsForExport();
+
+      const pdfDoc = await PDFDocument.create();
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+      const formatDate = (d: Date | null) => {
+        if (!d) return '-';
+        return new Date(d).toLocaleString('en-US', { 
+          dateStyle: 'short', 
+          timeStyle: 'short' 
+        });
+      };
+
+      const formatDuration = (min: number | null) => {
+        if (min === null || min === undefined) return '-';
+        const hrs = Math.floor(min / 60);
+        const mins = Math.round(min % 60);
+        if (hrs > 0) return `${hrs}h ${mins}m`;
+        return `${mins}m`;
+      };
+
+      // Title page
+      let page = pdfDoc.addPage([612, 792]); // Letter size
+      let y = 750;
+      const margin = 50;
+      const lineHeight = 14;
+
+      page.drawText('Process Runs Export', {
+        x: margin,
+        y,
+        size: 20,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+      });
+      y -= 25;
+
+      page.drawText(`Generated: ${new Date().toLocaleString()}`, {
+        x: margin,
+        y,
+        size: 10,
+        font,
+        color: rgb(0.4, 0.4, 0.4),
+      });
+      y -= 10;
+
+      page.drawText(`Total Runs: ${runs.length}`, {
+        x: margin,
+        y,
+        size: 10,
+        font,
+        color: rgb(0.4, 0.4, 0.4),
+      });
+      y -= 30;
+
+      // Draw each run
+      for (const run of runs) {
+        // Check if we need a new page
+        if (y < 120) {
+          page = pdfDoc.addPage([612, 792]);
+          y = 750;
+        }
+
+        // Run header
+        page.drawText(run.programName, {
+          x: margin,
+          y,
+          size: 12,
+          font: boldFont,
+          color: rgb(0, 0, 0),
+        });
+        y -= lineHeight;
+
+        page.drawText(`Run ID: ${run.programRunId}`, {
+          x: margin,
+          y,
+          size: 9,
+          font,
+          color: rgb(0.3, 0.3, 0.3),
+        });
+        y -= lineHeight;
+
+        // Run details in two columns
+        const col1 = margin;
+        const col2 = 300;
+
+        page.drawText(`Started: ${formatDate(run.startedAt)}`, { x: col1, y, size: 9, font });
+        page.drawText(`Completed: ${formatDate(run.completedAt)}`, { x: col2, y, size: 9, font });
+        y -= lineHeight;
+
+        page.drawText(`Duration: ${formatDuration(run.totalElapsedMinutes)}`, { x: col1, y, size: 9, font });
+        page.drawText(`Steps: ${run.numberOfSteps ?? 0}`, { x: col2, y, size: 9, font });
+        y -= lineHeight;
+
+        // Linked entities
+        if (run.linkedOrderIds || run.linkedJobIds || run.linkedWorkCenters) {
+          const linkedText = [
+            run.linkedOrderIds ? `Orders: ${run.linkedOrderIds}` : '',
+            run.linkedJobIds ? `Jobs: ${run.linkedJobIds}` : '',
+            run.linkedWorkCenters ? `Work Centers: ${run.linkedWorkCenters}` : '',
+          ].filter(Boolean).join(' | ');
+
+          page.drawText(linkedText, {
+            x: margin,
+            y,
+            size: 8,
+            font,
+            color: rgb(0.2, 0.4, 0.6),
+          });
+          y -= lineHeight;
+        }
+
+        // Separator line
+        y -= 5;
+        page.drawLine({
+          start: { x: margin, y },
+          end: { x: 562, y },
+          thickness: 0.5,
+          color: rgb(0.8, 0.8, 0.8),
+        });
+        y -= 15;
+      }
+
+      const pdfBytes = await pdfDoc.save();
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="process-runs-${new Date().toISOString().split('T')[0]}.pdf"`);
+      return res.send(Buffer.from(pdfBytes));
+    } catch (error) {
+      console.error('[ProcessRunner] Error exporting PDF:', error);
+      return res.status(500).json({ error: 'Failed to export PDF' });
     }
   });
 }

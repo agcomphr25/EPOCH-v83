@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Clock, Play, CheckCircle, Eye, Timer, Activity, Link2, Unlink, ExternalLink, Plus } from 'lucide-react';
+import { Clock, Play, CheckCircle, Eye, Timer, Activity, Link2, Unlink, ExternalLink, Plus, Download, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { useState } from 'react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -344,6 +344,14 @@ export default function ProcessRuns() {
     refetchInterval: 30000,
   });
 
+  const handleExportCSV = () => {
+    window.open('/api/integrations/process-runner/export/csv', '_blank');
+  };
+
+  const handleExportPDF = () => {
+    window.open('/api/integrations/process-runner/export/pdf', '_blank');
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -355,6 +363,28 @@ export default function ProcessRuns() {
           <p className="text-muted-foreground text-sm">
             View timed process runs from external timer applications (read-only)
           </p>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleExportCSV}
+            disabled={runs.length === 0}
+            data-testid="button-export-csv"
+          >
+            <Download className="w-4 h-4 mr-1" />
+            Export CSV
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleExportPDF}
+            disabled={runs.length === 0}
+            data-testid="button-export-pdf"
+          >
+            <FileText className="w-4 h-4 mr-1" />
+            Export PDF
+          </Button>
         </div>
       </div>
 

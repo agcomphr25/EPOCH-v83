@@ -1,0 +1,108 @@
+PROMPT E3 — Export Process Runs (CSV / PDF)
+
+📍 PASTE THIS INTO: EPOCH Repl (not the Timer app)
+This builds on T2 → E1 → E2, all of which live in EPOCH.
+
+🔷 COPY EVERYTHING BELOW INTO REPLIT AGENT (EPOCH REPL)
+You are modifying an existing production app (EPOCH).
+
+GOAL
+Add the ability to export Process Runner (Timer) runs from EPOCH as CSV and PDF for reporting, audit, and external sharing.
+
+This is READ-ONLY export functionality.
+No operational behavior should change.
+
+---
+
+PREREQUISITES
+- Process Runner events are ingested into EPOCH (T2)
+- Process runs are visible in EPOCH (E1)
+- Process runs may optionally be linked to jobs/orders (E2)
+
+---
+
+REQUIREMENTS
+
+1) EXPORT SCOPE
+Allow exporting Process Runs with the following data (best-effort):
+
+Per Process Run:
+- programRunId
+- programName
+- startedAt
+- completedAt (if present)
+- totalElapsedMinutes (if present)
+- numberOfSteps
+- linkedJobId / linkedOrderId (if present)
+- workCenter / resource (if present)
+
+Per Step (if available):
+- stepIndex
+- stepStartedAt
+- stepCompletedAt (or derived duration)
+
+Missing data should export as empty values.
+
+---
+
+2) CSV EXPORT
+Add an endpoint or UI action to export process runs as CSV.
+
+Requirements:
+- One row per process run (steps may be summarized or flattened)
+- UTF-8 encoded
+- Column headers included
+- No styling or formatting complexity
+
+---
+
+3) PDF EXPORT (SIMPLE)
+Add a basic PDF export option.
+
+Requirements:
+- One process run per section
+- Plain layout (text + simple tables)
+- No charts or graphics required
+- Suitable for printing or sharing
+
+Use existing PDF tooling if present.
+If none exists, add the simplest viable PDF generation.
+
+---
+
+4) ACCESS & LOCATION
+Expose export functionality in ONE place only:
+- Admin / reporting area
+OR
+- Process run list / detail view
+
+Do NOT:
+- Add exports in multiple places
+- Add new navigation sections
+
+---
+
+5) SAFETY & PERFORMANCE
+- Exports should be generated on-demand
+- No background jobs required
+- Limit export size if necessary (reasonable defaults)
+- If no process runs exist, export should be empty but valid
+
+---
+
+6) NON-GOALS (DO NOT DO THESE)
+- No scheduling changes
+- No cost or labor calculations
+- No analytics
+- No Donna integration
+- No automatic emailing
+
+---
+
+7) ACCEPTANCE CRITERIA
+- CSV export downloads correctly
+- PDF export downloads correctly
+- Exported data matches visible process run data
+- EPOCH behavior is unchanged if exports are never used
+
+Proceed with the smallest, safest implementation that enables external reporting and audit.

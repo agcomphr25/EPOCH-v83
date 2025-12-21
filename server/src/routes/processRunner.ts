@@ -657,4 +657,254 @@ export function registerProcessRunnerRoutes(app: Express) {
       return res.status(500).json({ error: 'Failed to revoke trusted integration' });
     }
   });
+
+  // === DONNA PROCESS OBSERVATIONS ===
+  // Quiet, optional pattern detection - Donna only notices and suggests
+
+  const BASELINE_RUN_COUNT = 7; // Number of runs for baseline
+  const DEVIATION_THRESHOLD = 1.25; // 25% deviation triggers observation
+  const COOLDOWN_HOURS = 48; // Hours before dismissed observation can reappear
+
+  // Analyze process runs and generate observations
+  async function analyzeProcessPatterns(programName?: string): Promise<void> {
+    try {
+      // Get completed runs grouped by program
+      const completedRuns = await db
+        .select({
+          programName: processRunnerEvents.programName,
+          programRunId: processRunnerEvents.programRunId,
+          totalElapsedMinutes: sql<number>`max(${processRunnerEvents.totalElapsedMinutes})`,
+          completedAt: sql<Date>`max(case when ${processRunnerEvents.eventType} = 'program_completed' then ${processRunnerEvents.eventTimestamp} end)`,
+        })
+        .from(processRunnerEvents)
+        .where(programName ? eq(processRunnerEvents.programName, programName) : sql`1=1`)
+        .groupBy(processRunnerEvents.programName, processRunnerEvents.programRunId)
+        .having(sql`max(case when ${processRunnerEvents.eventType} = 'program_completed' then 1 else 0 end) = 1`)
+        .orderBy(desc(sql`max(${processRunnerEvents.eventTimestamp})`));
+
+      // Group runs by program
+      type RunRecord = { programName: string; programRunId: string; totalElapsedMinutes: number; completedAt: Date };
+      const runsByProgram = new Map<string, RunRecord[]>();
+      for (const run of completedRuns) {
+        if (!runsByProgram.has(run.programName)) {
+          runsByProgram.set(run.programName, []);
+        }
+        runsByProgram.get(run.programName)!.push(run);
+      }
+
+      // Analyze each program
+      const entries = Array.from(runsByProgram.entries());
+      for (const [program, runs] of entries) {
+        if (runs.length < BASELINE_RUN_COUNT + 2) continue; // Need enough data
+
+        // Split into baseline (older) and recent (newer)
+        const recentRuns = runs.slice(0, 3);
+        const baselineRuns = runs.slice(3, 3 + BASELINE_RUN_COUNT);
+
+        // Calculate baseline stats
+        const baselineDurations = baselineRuns
+          .map((r: RunRecord) => r.totalElapsedMinutes)
+          .filter((d: number | null): d is number => d !== null && d > 0);
+        
+        if (baselineDurations.length < 3) continue;
+
+        const baselineAvg = baselineDurations.reduce((a: number, b: number) => a + b, 0) / baselineDurations.length;
+        const baselineMin = Math.min(...baselineDurations);
+        const baselineMax = Math.max(...baselineDurations);
+
+        // Calculate recent stats
+        const recentDurations = recentRuns
+          .map((r: RunRecord) => r.totalElapsedMinutes)
+          .filter((d: number | null): d is number => d !== null && d > 0);
+        
+        if (recentDurations.length === 0) continue;
+
+        const recentAvg = recentDurations.reduce((a: number, b: number) => a + b, 0) / recentDurations.length;
+
+        // Check for duration deviation
+        const observationKey = `duration_deviation:${program}`;
+        
+        if (recentAvg > baselineAvg * DEVIATION_THRESHOLD) {
+          // Recent runs are significantly longer
+          const message = `This program usually completes in ~${Math.round(baselineMin)}-${Math.round(baselineMax)} minutes, but the last ${recentDurations.length} runs averaged ${Math.round(recentAvg)} minutes.`;
+          
+          await upsertObservation({
+            observationType: 'duration_deviation',
+            programName: program,
+            observationKey,
+            message,
+            baselineMinutes: baselineAvg,
+            recentAvgMinutes: recentAvg,
+            details: { baselineMin, baselineMax, recentCount: recentDurations.length },
+          });
+        } else if (recentAvg < baselineAvg * (1 / DEVIATION_THRESHOLD)) {
+          // Recent runs are significantly shorter (could indicate skip or issue)
+          const message = `This program has recently been completing faster than usual (~${Math.round(recentAvg)} min vs typical ${Math.round(baselineMin)}-${Math.round(baselineMax)} min).`;
+          
+          await upsertObservation({
+            observationType: 'duration_deviation',
+            programName: program,
+            observationKey,
+            message,
+            baselineMinutes: baselineAvg,
+            recentAvgMinutes: recentAvg,
+            details: { baselineMin, baselineMax, recentCount: recentDurations.length },
+          });
+        } else {
+          // Remove stale observation if pattern normalized
+          await db.delete(donnaProcessObservations)
+            .where(eq(donnaProcessObservations.observationKey, observationKey));
+        }
+      }
+    } catch (error) {
+      console.error('[Donna] Error analyzing process patterns:', error);
+    }
+  }
+
+  // Upsert an observation (update if exists, insert if not)
+  async function upsertObservation(obs: {
+    observationType: string;
+    programName: string;
+    observationKey: string;
+    message: string;
+    baselineMinutes?: number;
+    recentAvgMinutes?: number;
+    details?: any;
+  }): Promise<void> {
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    const [existing] = await db
+      .select()
+      .from(donnaProcessObservations)
+      .where(eq(donnaProcessObservations.observationKey, obs.observationKey))
+      .limit(1);
+
+    if (existing) {
+      await db.update(donnaProcessObservations)
+        .set({
+          message: obs.message,
+          baselineMinutes: obs.baselineMinutes ?? null,
+          recentAvgMinutes: obs.recentAvgMinutes ?? null,
+          details: obs.details ?? null,
+          expiresAt,
+        })
+        .where(eq(donnaProcessObservations.id, existing.id));
+    } else {
+      await db.insert(donnaProcessObservations).values({
+        observationType: obs.observationType,
+        programName: obs.programName,
+        observationKey: obs.observationKey,
+        message: obs.message,
+        baselineMinutes: obs.baselineMinutes ?? null,
+        recentAvgMinutes: obs.recentAvgMinutes ?? null,
+        details: obs.details ?? null,
+        expiresAt,
+      });
+    }
+  }
+
+  // GET - Donna observations for a specific program or all
+  app.get('/api/donna/process-observations', async (req: Request, res: Response) => {
+    try {
+      const { programName } = req.query;
+      const now = new Date();
+
+      // Trigger analysis (lightweight, runs inline)
+      await analyzeProcessPatterns(programName as string | undefined);
+
+      // Get active dismissals
+      const activeDismissals = await db
+        .select({ observationKey: donnaObservationDismissals.observationKey })
+        .from(donnaObservationDismissals)
+        .where(gt(donnaObservationDismissals.cooldownUntil, now));
+
+      const dismissedKeys = new Set(activeDismissals.map(d => d.observationKey));
+
+      // Get observations
+      let query = db
+        .select()
+        .from(donnaProcessObservations)
+        .where(sql`(${donnaProcessObservations.expiresAt} IS NULL OR ${donnaProcessObservations.expiresAt} > ${now})`);
+
+      const observations = await query.orderBy(desc(donnaProcessObservations.createdAt));
+
+      // Filter by program if specified, and exclude dismissed
+      const filtered = observations
+        .filter(obs => !dismissedKeys.has(obs.observationKey))
+        .filter(obs => !programName || obs.programName === programName);
+
+      return res.json(filtered);
+    } catch (error) {
+      console.error('[Donna] Error fetching observations:', error);
+      return res.status(500).json({ error: 'Failed to fetch observations' });
+    }
+  });
+
+  // POST - Dismiss an observation
+  app.post('/api/donna/process-observations/:id/dismiss', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const username = (req as any).user?.username || 'unknown';
+
+      // Find the observation
+      const [observation] = await db
+        .select()
+        .from(donnaProcessObservations)
+        .where(eq(donnaProcessObservations.id, id))
+        .limit(1);
+
+      if (!observation) {
+        return res.status(404).json({ error: 'Observation not found' });
+      }
+
+      // Create dismissal with cooldown
+      const cooldownUntil = new Date(Date.now() + COOLDOWN_HOURS * 60 * 60 * 1000);
+
+      await db.insert(donnaObservationDismissals).values({
+        observationKey: observation.observationKey,
+        dismissedBy: username,
+        cooldownUntil,
+      });
+
+      console.log(`[Donna] Observation dismissed: ${observation.observationKey} by ${username}`);
+
+      return res.json({ success: true, cooldownUntil });
+    } catch (error) {
+      console.error('[Donna] Error dismissing observation:', error);
+      return res.status(500).json({ error: 'Failed to dismiss observation' });
+    }
+  });
+
+  // GET - Donna observations for Process Runs page (contextual)
+  app.get('/api/donna/process-observations/summary', async (_req: Request, res: Response) => {
+    try {
+      const now = new Date();
+
+      // Get active dismissals
+      const activeDismissals = await db
+        .select({ observationKey: donnaObservationDismissals.observationKey })
+        .from(donnaObservationDismissals)
+        .where(gt(donnaObservationDismissals.cooldownUntil, now));
+
+      const dismissedKeys = new Set(activeDismissals.map(d => d.observationKey));
+
+      // Get active, non-dismissed observations
+      const observations = await db
+        .select()
+        .from(donnaProcessObservations)
+        .where(sql`(${donnaProcessObservations.expiresAt} IS NULL OR ${donnaProcessObservations.expiresAt} > ${now})`)
+        .orderBy(desc(donnaProcessObservations.createdAt))
+        .limit(5);
+
+      const filtered = observations.filter(obs => !dismissedKeys.has(obs.observationKey));
+
+      return res.json({
+        count: filtered.length,
+        observations: filtered,
+      });
+    } catch (error) {
+      console.error('[Donna] Error fetching observation summary:', error);
+      return res.status(500).json({ error: 'Failed to fetch observation summary' });
+    }
+  });
 }

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Clock, Play, CheckCircle, Eye, Timer, Activity, Link2, Unlink, ExternalLink, Plus, Download, FileText } from 'lucide-react';
+import { Clock, Play, CheckCircle, Eye, Timer, Activity, Link2, Unlink, ExternalLink, Plus, Download, FileText, Lightbulb, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { useState } from 'react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -53,6 +53,17 @@ interface ProcessRunDetail {
     metadata: Record<string, any> | null;
   }>;
   links: ProcessRunLink[];
+}
+
+interface DonnaObservation {
+  id: string;
+  observationType: string;
+  programName: string;
+  observationKey: string;
+  message: string;
+  baselineMinutes: number | null;
+  recentAvgMinutes: number | null;
+  createdAt: string;
 }
 
 function formatDuration(minutes: number | null): string {
@@ -336,6 +347,66 @@ function RunDetailDialog({ programRunId }: { programRunId: string }) {
   );
 }
 
+function DonnaObservationsPanel() {
+  const { toast } = useToast();
+  
+  const { data: observationsData } = useQuery<{ count: number; observations: DonnaObservation[] }>({
+    queryKey: ['/api/donna/process-observations/summary'],
+    refetchInterval: 60000,
+  });
+
+  const dismissMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/donna/process-observations/${id}/dismiss`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/donna/process-observations/summary'] });
+      toast({ title: 'Observation dismissed', description: 'This observation will be hidden for 48 hours' });
+    },
+  });
+
+  if (!observationsData?.observations?.length) {
+    return null;
+  }
+
+  return (
+    <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2 text-amber-700 dark:text-amber-400">
+          <Lightbulb className="w-4 h-4" />
+          Donna noticed something
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {observationsData.observations.map((obs) => (
+          <div 
+            key={obs.id} 
+            className="flex items-start justify-between gap-2 text-sm p-2 rounded bg-white dark:bg-gray-900 border"
+            data-testid={`donna-observation-${obs.id}`}
+          >
+            <div className="flex-1">
+              <span className="font-medium text-amber-800 dark:text-amber-300">{obs.programName}:</span>{' '}
+              <span className="text-muted-foreground">{obs.message}</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+              onClick={() => dismissMutation.mutate(obs.id)}
+              disabled={dismissMutation.isPending}
+              data-testid={`button-dismiss-observation-${obs.id}`}
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ProcessRuns() {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
@@ -387,6 +458,8 @@ export default function ProcessRuns() {
           </Button>
         </div>
       </div>
+
+      <DonnaObservationsPanel />
 
       <Card>
         <CardHeader>

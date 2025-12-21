@@ -1,0 +1,119 @@
+COPY EVERYTHING BELOW INTO REPLIT AGENT (EPOCH REPL)
+You are modifying the EPOCH application.
+
+GOAL
+Allow Donna to observe Process Runner (Timer) data ingested into EPOCH
+and surface QUIET, OPTIONAL observations about repeated patterns or deviations.
+
+Donna must NOT:
+- Trigger actions
+- Change schedules
+- Start/stop processes
+- Notify automatically
+- Judge performance
+
+Donna ONLY notices and suggests.
+
+---
+
+PREREQUISITES
+- Process Runner events are ingested (T2)
+- Process runs are visible (E1)
+- Process runs may be linked to jobs/orders/routing steps (E2)
+
+---
+
+CORE PRINCIPLES (NON-NEGOTIABLE)
+
+- Silence is the default
+- Observations are contextual, not global
+- Compare entities only to themselves
+- No scoring, ranking, or grading
+- Observations must be dismissible
+
+---
+
+1) OBSERVATION INPUTS
+Donna may read ONLY these data points:
+- Historical process runs (grouped by routing step or program)
+- Expected vs actual duration (if available)
+- Step-level timestamps (if available)
+
+Donna must NOT read:
+- Labor data
+- Cost data
+- Scheduling commitments
+- User identities
+
+---
+
+2) BASELINE LOGIC (SIMPLE)
+For each observed entity (e.g., routing step or program):
+
+- Establish a rolling baseline:
+  - Last N completed runs (e.g., 5–10)
+- Calculate:
+  - Typical duration range
+  - Typical step timing pattern
+
+No statistical modeling required.
+No machine learning.
+Simple averages and bounds are sufficient.
+
+---
+
+3) OBSERVATION TYPES (LIMITED SET)
+
+Donna may generate observations such as:
+
+- “This process step usually completes in ~85–95 minutes, but the last 3 runs took over 120.”
+- “This program has recently started running longer than its usual baseline.”
+- “This step often overruns when run after a different process.”
+
+Do NOT:
+- Attribute blame
+- Suggest corrective action
+- Use urgent language
+
+---
+
+4) WHERE OBSERVATIONS APPEAR
+Observations should appear ONLY:
+- In Donna’s insight / suggestion area
+- Contextually (e.g., when viewing a job, routing step, or process history)
+
+Do NOT:
+- Push notifications
+- Interrupt workflows
+- Auto-create tasks
+- Auto-create Inbox items
+
+---
+
+5) DISMISSAL & SUPPRESSION
+Each observation must:
+- Be dismissible by the user
+- Respect dismissal for a cooldown period
+- Not reappear unless new data meaningfully changes the pattern
+
+Use existing dismissal/suppression logic if present.
+If not, implement minimal support.
+
+---
+
+6) NON-GOALS (DO NOT DO THESE)
+- No optimization recommendations
+- No “should” language
+- No automation
+- No cross-tenant analysis
+- No Core involvement
+
+---
+
+7) ACCEPTANCE CRITERIA
+- Donna surfaces observations ONLY when patterns are clear
+- Observations are calm, optional, and contextual
+- System behaves identically if Donna is ignored
+- No operational behavior is changed
+
+Proceed with the smallest implementation that allows Donna to quietly notice and communicate patterns.

@@ -31,6 +31,12 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { 
   Scissors, 
   Package, 
@@ -47,6 +53,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Barcode,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BarcodeInputField } from "@/components/BarcodeInputField";
@@ -1032,22 +1039,26 @@ export default function CuttingOperatorDashboard() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                All Fabric Inventory
-              </CardTitle>
-              <CardDescription>View and print barcodes for all fabric rolls</CardDescription>
+      <Accordion type="single" collapsible className="w-full" defaultValue="">
+        <AccordionItem value="all-fabric" className="border rounded-lg bg-card">
+          <AccordionTrigger className="px-6 py-4 hover:no-underline">
+            <div className="flex items-center gap-3">
+              <Package className="h-5 w-5 text-primary" />
+              <div className="text-left">
+                <div className="font-semibold">All Fabric Inventory</div>
+                <div className="text-sm text-muted-foreground font-normal">
+                  {fabricInventory.length} rolls in stock - View and print barcodes
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+          </AccordionTrigger>
+          <AccordionContent className="px-6 pb-4">
+            <div className="flex items-center gap-2 mb-4">
               <Input
-                placeholder="Search fabric..."
+                placeholder="Search by fabric type, roll, lot, or barcode..."
                 value={allFabricSearch}
                 onChange={(e) => setAllFabricSearch(e.target.value)}
-                className="w-64"
+                className="flex-1"
                 data-testid="input-all-fabric-search"
               />
               <Button
@@ -1061,90 +1072,100 @@ export default function CuttingOperatorDashboard() {
                 {generateAllBarcodesMutation.isPending ? 'Generating...' : 'Generate All Barcodes'}
               </Button>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="max-h-[500px] overflow-y-auto">
-            {loadingFabric ? (
-              <p className="text-muted-foreground text-center py-4">Loading fabric...</p>
-            ) : fabricInventory.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">No fabric inventory found</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fabric Type</TableHead>
-                    <TableHead>Roll #</TableHead>
-                    <TableHead>Lot #</TableHead>
-                    <TableHead>Available</TableHead>
-                    <TableHead>Freezer</TableHead>
-                    <TableHead>Barcode</TableHead>
-                    <TableHead>Exp Date</TableHead>
-                    <TableHead>Print</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {fabricInventory
-                    .filter(f => {
-                      if (!allFabricSearch.trim()) return true;
-                      const search = allFabricSearch.toLowerCase();
-                      return (
-                        (f.fabricType || '').toLowerCase().includes(search) ||
-                        (f.commonName || '').toLowerCase().includes(search) ||
-                        (f.rollNumber || '').toLowerCase().includes(search) ||
-                        (f.lotNumber || '').toLowerCase().includes(search) ||
-                        (f.barcode || '').toLowerCase().includes(search)
-                      );
-                    })
-                    .map((fabric) => (
-                    <TableRow key={fabric.id} data-testid={`row-all-fabric-${fabric.id}`}>
-                      <TableCell className="font-medium">{fabric.fabricType || fabric.commonName}</TableCell>
-                      <TableCell>{fabric.rollNumber || '-'}</TableCell>
-                      <TableCell className="text-xs">{fabric.lotNumber || '-'}</TableCell>
-                      <TableCell>{fabric.squareMeters?.toFixed(1)} m²</TableCell>
-                      <TableCell>{fabric.freezerLocation || '-'}</TableCell>
-                      <TableCell className="text-xs font-mono">
-                        {fabric.barcode ? (
-                          <Badge variant="outline" className="text-xs">{fabric.barcode}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">No barcode</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {fabric.expirationDate ? (
-                          <span className={cn(
-                            "text-xs",
-                            fabric.status === 'expired' ? 'text-red-600' : 
-                            fabric.status === 'expiring' ? 'text-amber-600' : 'text-muted-foreground'
-                          )}>
-                            {new Date(fabric.expirationDate).toLocaleDateString()}
-                          </span>
-                        ) : '-'}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            window.open(`/api/cutting-table/fabric-inventory/${fabric.id}/print-barcode`, '_blank');
-                            if (!fabric.barcode) {
-                              refetchFabric();
-                            }
-                          }}
-                          title="Print Barcode"
-                          data-testid={`button-print-all-${fabric.id}`}
-                        >
-                          <Printer className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+            <div className="max-h-[400px] overflow-y-auto rounded-md border">
+              {loadingFabric ? (
+                <p className="text-muted-foreground text-center py-8">Loading fabric...</p>
+              ) : fabricInventory.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">No fabric inventory found</p>
+              ) : (
+                <Table>
+                  <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur">
+                    <TableRow>
+                      <TableHead>Fabric Type</TableHead>
+                      <TableHead>Roll #</TableHead>
+                      <TableHead>Lot #</TableHead>
+                      <TableHead>Available</TableHead>
+                      <TableHead>Freezer</TableHead>
+                      <TableHead>Barcode</TableHead>
+                      <TableHead>Exp Date</TableHead>
+                      <TableHead className="w-16">Print</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {fabricInventory
+                      .filter(f => {
+                        if (!allFabricSearch.trim()) return true;
+                        const search = allFabricSearch.toLowerCase();
+                        return (
+                          (f.fabricType || '').toLowerCase().includes(search) ||
+                          (f.commonName || '').toLowerCase().includes(search) ||
+                          (f.rollNumber || '').toLowerCase().includes(search) ||
+                          (f.lotNumber || '').toLowerCase().includes(search) ||
+                          (f.barcode || '').toLowerCase().includes(search)
+                        );
+                      })
+                      .map((fabric) => (
+                      <TableRow key={fabric.id} className="hover:bg-muted/50" data-testid={`row-all-fabric-${fabric.id}`}>
+                        <TableCell className="font-medium">{fabric.fabricType || fabric.commonName}</TableCell>
+                        <TableCell>{fabric.rollNumber || '-'}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{fabric.lotNumber || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="font-mono">
+                            {fabric.squareMeters?.toFixed(1)} m²
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {fabric.freezerLocation ? (
+                            <Badge variant="outline" className="text-xs">
+                              <Snowflake className="h-3 w-3 mr-1" />
+                              {fabric.freezerLocation}
+                            </Badge>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {fabric.barcode ? (
+                            <code className="text-xs bg-muted px-2 py-1 rounded">{fabric.barcode}</code>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">None</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {fabric.expirationDate ? (
+                            <span className={cn(
+                              "text-xs",
+                              fabric.status === 'expired' ? 'text-red-600 font-medium' : 
+                              fabric.status === 'expiring' ? 'text-amber-600' : 'text-muted-foreground'
+                            )}>
+                              {new Date(fabric.expirationDate).toLocaleDateString()}
+                            </span>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => {
+                              window.open(`/api/cutting-table/fabric-inventory/${fabric.id}/print-barcode`, '_blank');
+                              if (!fabric.barcode) {
+                                refetchFabric();
+                              }
+                            }}
+                            title="Print Barcode Label"
+                            data-testid={`button-print-all-${fabric.id}`}
+                          >
+                            <Printer className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       <Card>
         <CardHeader>

@@ -67,6 +67,7 @@ type FabricInventoryItem = {
   expirationDate: string | null;
   location: string;
   freezerLocation: string | null;
+  barcode: string | null;
   barcodeValue: string;
   status: 'available' | 'low' | 'expired' | 'expiring';
   lowStockThreshold: number;
@@ -217,7 +218,8 @@ export default function CuttingOperatorDashboard() {
           ...item,
           fabricType,
           commonName: item.nickname || item.fabricType || item.fabric || 'Unknown',
-          barcodeValue: item.barcodeValue || `FAB-${item.internalControlNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
+          barcode: item.barcode || null,
+          barcodeValue: item.barcode || item.barcodeValue || `FAB-${item.internalControlNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
           status: getFabricStatus(squareMeters, item.expirationDate, item.lowStockThreshold || 10),
           isFifoNext: fifoByType[fabricType] === item.id,
           lowStockThreshold: item.lowStockThreshold || 10,
@@ -783,6 +785,7 @@ export default function CuttingOperatorDashboard() {
                       <TableHead>Lot #</TableHead>
                       <TableHead>Available</TableHead>
                       <TableHead>Freezer</TableHead>
+                      <TableHead>Print</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -830,6 +833,27 @@ export default function CuttingOperatorDashboard() {
                               ))}
                             </SelectContent>
                           </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              if (fabric.barcode) {
+                                window.open(`/api/cutting-table/fabric-inventory/${fabric.id}/print-barcode`, '_blank');
+                              } else {
+                                toast({ 
+                                  title: "No Barcode", 
+                                  description: "This fabric item doesn't have a barcode assigned.", 
+                                  variant: "destructive" 
+                                });
+                              }
+                            }}
+                            title="Print Barcode"
+                            data-testid={`button-print-barcode-${fabric.id}`}
+                          >
+                            <Printer className="h-4 w-4" />
+                          </Button>
                         </TableCell>
                         <TableCell>
                           {fabric.expirationDate && (

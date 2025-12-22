@@ -219,7 +219,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     mutationFn: async (data: any) => {
       if (editRouting) {
         return apiRequest(`/api/part-routings/${editRouting.id}`, {
-          method: 'PUT',
+          method: 'PATCH',
           body: data,
         });
       } else {

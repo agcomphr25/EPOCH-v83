@@ -46,6 +46,7 @@ import {
   Target,
   AlertTriangle,
   ArrowRight,
+  Barcode,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BarcodeInputField } from "@/components/BarcodeInputField";
@@ -388,6 +389,24 @@ export default function CuttingOperatorDashboard() {
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to generate labels.', variant: 'destructive' });
+    },
+  });
+
+  const generateAllBarcodesMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/cutting-table/fabric-inventory/generate-all-barcodes', {
+        method: 'POST',
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
+      toast({ 
+        title: 'Barcodes Generated', 
+        description: data.message || `Generated barcodes for ${data.totalProcessed} items.` 
+      });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to generate barcodes.', variant: 'destructive' });
     },
   });
 
@@ -840,14 +859,9 @@ export default function CuttingOperatorDashboard() {
                             size="sm"
                             variant="ghost"
                             onClick={() => {
-                              if (fabric.barcode) {
-                                window.open(`/api/cutting-table/fabric-inventory/${fabric.id}/print-barcode`, '_blank');
-                              } else {
-                                toast({ 
-                                  title: "No Barcode", 
-                                  description: "This fabric item doesn't have a barcode assigned.", 
-                                  variant: "destructive" 
-                                });
+                              window.open(`/api/cutting-table/fabric-inventory/${fabric.id}/print-barcode`, '_blank');
+                              if (!fabric.barcode) {
+                                refetchFabric();
                               }
                             }}
                             title="Print Barcode"
@@ -1036,6 +1050,16 @@ export default function CuttingOperatorDashboard() {
                 className="w-64"
                 data-testid="input-all-fabric-search"
               />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => generateAllBarcodesMutation.mutate()}
+                disabled={generateAllBarcodesMutation.isPending}
+                data-testid="button-generate-all-barcodes"
+              >
+                <Barcode className="h-4 w-4 mr-1" />
+                {generateAllBarcodesMutation.isPending ? 'Generating...' : 'Generate All Barcodes'}
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -1102,14 +1126,9 @@ export default function CuttingOperatorDashboard() {
                           size="sm"
                           variant="ghost"
                           onClick={() => {
-                            if (fabric.barcode) {
-                              window.open(`/api/cutting-table/fabric-inventory/${fabric.id}/print-barcode`, '_blank');
-                            } else {
-                              toast({ 
-                                title: "No Barcode", 
-                                description: "This fabric item doesn't have a barcode assigned.", 
-                                variant: "destructive" 
-                              });
+                            window.open(`/api/cutting-table/fabric-inventory/${fabric.id}/print-barcode`, '_blank');
+                            if (!fabric.barcode) {
+                              refetchFabric();
                             }
                           }}
                           title="Print Barcode"

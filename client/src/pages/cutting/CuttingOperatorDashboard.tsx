@@ -31,6 +31,12 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { 
   Scissors, 
   Package, 
@@ -46,6 +52,8 @@ import {
   Target,
   AlertTriangle,
   ArrowRight,
+  Barcode,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BarcodeInputField } from "@/components/BarcodeInputField";
@@ -67,6 +75,7 @@ type FabricInventoryItem = {
   expirationDate: string | null;
   location: string;
   freezerLocation: string | null;
+  barcode: string | null;
   barcodeValue: string;
   status: 'available' | 'low' | 'expired' | 'expiring';
   lowStockThreshold: number;
@@ -155,6 +164,7 @@ export default function CuttingOperatorDashboard() {
   
   const [universalBarcode, setUniversalBarcode] = useState("");
   const [fabricSearch, setFabricSearch] = useState("");
+  const [allFabricSearch, setAllFabricSearch] = useState("");
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const [productionForm, setProductionForm] = useState({
@@ -217,7 +227,8 @@ export default function CuttingOperatorDashboard() {
           ...item,
           fabricType,
           commonName: item.nickname || item.fabricType || item.fabric || 'Unknown',
-          barcodeValue: item.barcodeValue || `FAB-${item.internalControlNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
+          barcode: item.barcode || null,
+          barcodeValue: item.barcode || item.barcodeValue || `FAB-${item.internalControlNumber || 'UNK'}-${item.id?.substring(0, 8) || 'X'}`,
           status: getFabricStatus(squareMeters, item.expirationDate, item.lowStockThreshold || 10),
           isFifoNext: fifoByType[fabricType] === item.id,
           lowStockThreshold: item.lowStockThreshold || 10,
@@ -385,6 +396,24 @@ export default function CuttingOperatorDashboard() {
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to generate labels.', variant: 'destructive' });
+    },
+  });
+
+  const generateAllBarcodesMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/cutting-table/fabric-inventory/generate-all-barcodes', {
+        method: 'POST',
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
+      toast({ 
+        title: 'Barcodes Generated', 
+        description: data.message || `Generated barcodes for ${data.totalProcessed} items.` 
+      });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to generate barcodes.', variant: 'destructive' });
     },
   });
 
@@ -732,132 +761,73 @@ export default function CuttingOperatorDashboard() {
     ) || null;
   }, [selectedMfgItem, packetBOMs]);
 
+  const pendingReceiving = fabricInventory.filter(f => f.squareMeters > 0 && !f.freezerLocation).length;
+  const inProgressCount = mfgQueueItems.filter(i => i.status === 'IN_PROGRESS').length;
+  const pendingCount = mfgQueueItems.filter(i => i.status === 'PENDING').length;
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header with Quick Stats */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold" data-testid="text-page-title">Operator Dashboard</h2>
-          <p className="text-muted-foreground">Cutting workflow, fabric selection, and label printing</p>
+          <h2 className="text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
+            <Scissors className="h-6 w-6 text-primary" />
+            Operator Dashboard
+          </h2>
+          <p className="text-muted-foreground text-sm">Cutting workflow, fabric selection, and label printing</p>
         </div>
-        <div className="flex gap-2">
-          <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-            <SelectTrigger className="w-40" data-testid="select-status-filter">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ACTIVE">Active</SelectItem>
-              <SelectItem value="PENDING">Pending</SelectItem>
-              <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-              <SelectItem value="COMPLETED">Completed</SelectItem>
-              <SelectItem value="ALL">All</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" onClick={() => { refetchMfgQueue(); refetchFabric(); }} data-testid="button-refresh">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
+        <div className="flex items-center gap-3">
+          <div className="flex gap-2 text-sm">
+            {pendingReceiving > 0 && (
+              <Badge variant="secondary" className="gap-1">
+                <Package className="h-3 w-3" />
+                {pendingReceiving} to assign
+              </Badge>
+            )}
+            {inProgressCount > 0 && (
+              <Badge className="bg-blue-500 gap-1">
+                <Clock className="h-3 w-3" />
+                {inProgressCount} in progress
+              </Badge>
+            )}
+            {pendingCount > 0 && (
+              <Badge variant="outline" className="gap-1">
+                <Target className="h-3 w-3" />
+                {pendingCount} pending
+              </Badge>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <SelectTrigger className="w-36 h-9" data-testid="select-status-filter">
+                <SelectValue placeholder="Filter" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ACTIVE">Active</SelectItem>
+                <SelectItem value="PENDING">Pending</SelectItem>
+                <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                <SelectItem value="COMPLETED">Completed</SelectItem>
+                <SelectItem value="ALL">All</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={() => { refetchMfgQueue(); refetchFabric(); }} data-testid="button-refresh">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              Fabric Receiving - Assign Freezers
+      {/* Quick Actions Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Barcode Scanner - Primary Action */}
+        <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-background">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Scan className="h-4 w-4 text-primary" />
+              </div>
+              Quick Scan
             </CardTitle>
-            <CardDescription>Fabric rolls needing freezer assignment</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="max-h-[400px] overflow-y-auto">
-              {loadingFabric ? (
-                <p className="text-muted-foreground text-center py-4">Loading fabric...</p>
-              ) : fabricInventory.filter(f => f.squareMeters > 0 && !f.freezerLocation).length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">All fabric rolls have freezer assignments</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Fabric Type</TableHead>
-                      <TableHead>Roll #</TableHead>
-                      <TableHead>Lot #</TableHead>
-                      <TableHead>Available</TableHead>
-                      <TableHead>Freezer</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {fabricInventory
-                      .filter(f => f.squareMeters > 0 && !f.freezerLocation)
-                      .slice(0, 20)
-                      .map((fabric) => (
-                      <TableRow key={fabric.id} data-testid={`row-fabric-${fabric.id}`}>
-                        <TableCell className="font-medium">{fabric.fabricType || fabric.commonName}</TableCell>
-                        <TableCell>{fabric.rollNumber || '-'}</TableCell>
-                        <TableCell className="text-xs">{fabric.lotNumber || '-'}</TableCell>
-                        <TableCell>{fabric.squareMeters?.toFixed(1)} m²</TableCell>
-                        <TableCell>
-                          <Select 
-                            value={fabric.freezerLocation || ''} 
-                            onValueChange={(val) => {
-                              setReceivingForm({
-                                barcode: '',
-                                fabricId: fabric.id,
-                                fabricName: fabric.fabricType || fabric.commonName || '',
-                                currentFreezer: fabric.freezerLocation || '',
-                                freezerNumber: val,
-                                isP2: false,
-                                generatedBarcode: ''
-                              });
-                              // Auto-submit after selection
-                              apiRequest(`/api/cutting-table/fabric-inventory/${fabric.id}/assign-freezer`, {
-                                method: 'POST',
-                                body: JSON.stringify({ freezerNumber: val }),
-                              }).then(() => {
-                                queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
-                                toast({ title: 'Updated', description: `Assigned to Freezer ${val}` });
-                              }).catch(() => {
-                                toast({ title: 'Error', description: 'Failed to update freezer', variant: 'destructive' });
-                              });
-                            }}
-                          >
-                            <SelectTrigger className="w-28" data-testid={`select-freezer-${fabric.id}`}>
-                              <SelectValue placeholder="Assign..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Array.from({ length: 20 }, (_, i) => (
-                                <SelectItem key={i + 1} value={String(i + 1)}>Freezer {i + 1}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          {fabric.expirationDate && (
-                            <span className={cn(
-                              "text-xs",
-                              fabric.status === 'expired' ? 'text-red-600' : 
-                              fabric.status === 'expiring' ? 'text-amber-600' : 'text-muted-foreground'
-                            )}>
-                              Exp: {new Date(fabric.expirationDate).toLocaleDateString()}
-                            </span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Scan className="h-5 w-5" />
-              Barcode Scanner
-            </CardTitle>
-            <CardDescription>Scan fabric roll or part barcode</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex gap-2">
@@ -870,26 +840,29 @@ export default function CuttingOperatorDashboard() {
                     handleBarcodeScan(val);
                   }
                 }}
-                placeholder="Scan or enter barcode..."
+                placeholder="Scan fabric or part barcode..."
                 data-testid="input-universal-barcode"
               />
-              <Button onClick={() => handleBarcodeScan(universalBarcode)} data-testid="button-scan">
+              <Button onClick={() => handleBarcodeScan(universalBarcode)} className="shrink-0" data-testid="button-scan">
                 <Scan className="h-4 w-4" />
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Snowflake className="h-5 w-5" />
+        {/* FIFO Lookup */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <div className="p-2 rounded-lg bg-blue-500/10">
+                <Snowflake className="h-4 w-4 text-blue-500" />
+              </div>
               FIFO Fabric Lookup
+              <span className="text-xs text-muted-foreground font-normal ml-auto">Find next roll to use</span>
             </CardTitle>
-            <CardDescription>Search fabric to find next roll and on-hand quantity</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-3">
               <Input
                 placeholder="Search fabric type (e.g., cf_, fg_, mesa)..."
                 value={fabricSearch}
@@ -911,7 +884,11 @@ export default function CuttingOperatorDashboard() {
                   );
                   
                   if (directMatches.length === 0) {
-                    return <div className="text-sm text-muted-foreground">No fabric found matching "{fabricSearch}"</div>;
+                    return (
+                      <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-lg text-center">
+                        No fabric found matching "{fabricSearch}"
+                      </div>
+                    );
                   }
                   
                   const totalOnHand = directMatches.reduce((sum, f) => sum + (f.squareMeters || 0), 0);
@@ -922,25 +899,25 @@ export default function CuttingOperatorDashboard() {
                   })[0];
                   
                   return (
-                    <div className="p-3 bg-muted rounded-lg space-y-2">
+                    <div className="p-3 bg-muted/50 rounded-lg space-y-2">
                       <div className="flex justify-between items-center">
                         <span className="font-medium">{nextFifo?.fabricType || fabricSearch}</span>
-                        <Badge variant="outline" className="bg-green-100 text-green-800">
+                        <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                           {totalOnHand.toFixed(1)} m² on hand
                         </Badge>
                       </div>
                       {nextFifo && (
-                        <div className="flex items-center gap-2 p-2 bg-background rounded border">
-                          <Badge className="bg-green-600">FIFO Next</Badge>
-                          <div className="flex-1">
-                            <p className="font-medium">Roll {nextFifo.rollNumber}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Location: {nextFifo.freezerLocation || nextFifo.location || 'N/A'}
+                        <div className="flex items-center gap-2 p-2 bg-background rounded-lg border border-green-200 dark:border-green-800">
+                          <Badge className="bg-green-600 shrink-0">FIFO Next</Badge>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm">Roll {nextFifo.rollNumber}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {nextFifo.freezerLocation ? `Freezer ${nextFifo.freezerLocation}` : nextFifo.location || 'No location'}
                               {nextFifo.expirationDate && ` • Exp: ${new Date(nextFifo.expirationDate).toLocaleDateString()}`}
                             </p>
                           </div>
-                          <Badge variant="secondary">{nextFifo.squareMeters.toFixed(1)} m²</Badge>
-                          <Button size="sm" variant="outline" onClick={() => handleBarcodeScan(nextFifo.barcodeValue)}>
+                          <Badge variant="outline" className="shrink-0">{nextFifo.squareMeters.toFixed(1)} m²</Badge>
+                          <Button size="sm" onClick={() => handleBarcodeScan(nextFifo.barcodeValue)}>
                             Select
                           </Button>
                         </div>
@@ -949,31 +926,31 @@ export default function CuttingOperatorDashboard() {
                   );
                 }
                 
-                return matchingTypes.map(([type, rolls]) => {
+                return matchingTypes.slice(0, 3).map(([type, rolls]) => {
                   const allOfType = fabricInventory.filter(f => (f.fabricType || '') === type);
                   const totalOnHand = allOfType.reduce((sum, f) => sum + (f.squareMeters || 0), 0);
                   const nextRoll = rolls[0];
                   
                   return (
-                    <div key={type} className="p-3 bg-muted rounded-lg space-y-2">
+                    <div key={type} className="p-3 bg-muted/50 rounded-lg space-y-2">
                       <div className="flex justify-between items-center">
                         <span className="font-medium">{type}</span>
-                        <Badge variant="outline" className="bg-green-100 text-green-800">
-                          {totalOnHand.toFixed(1)} m² on hand ({allOfType.length} rolls)
+                        <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                          {totalOnHand.toFixed(1)} m² ({allOfType.length} rolls)
                         </Badge>
                       </div>
                       {nextRoll && (
-                        <div className="flex items-center gap-2 p-2 bg-background rounded border">
-                          <Badge className="bg-green-600">FIFO Next</Badge>
-                          <div className="flex-1">
-                            <p className="font-medium">Roll {nextRoll.rollNumber}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Location: {nextRoll.freezerLocation || nextRoll.location || 'N/A'}
+                        <div className="flex items-center gap-2 p-2 bg-background rounded-lg border border-green-200 dark:border-green-800">
+                          <Badge className="bg-green-600 shrink-0">FIFO Next</Badge>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm">Roll {nextRoll.rollNumber}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {nextRoll.freezerLocation ? `Freezer ${nextRoll.freezerLocation}` : nextRoll.location || 'No location'}
                               {nextRoll.expirationDate && ` • Exp: ${new Date(nextRoll.expirationDate).toLocaleDateString()}`}
                             </p>
                           </div>
-                          <Badge variant="secondary">{nextRoll.squareMeters.toFixed(1)} m²</Badge>
-                          <Button size="sm" variant="outline" onClick={() => handleBarcodeScan(nextRoll.barcodeValue)}>
+                          <Badge variant="outline" className="shrink-0">{nextRoll.squareMeters.toFixed(1)} m²</Badge>
+                          <Button size="sm" onClick={() => handleBarcodeScan(nextRoll.barcodeValue)}>
                             Select
                           </Button>
                         </div>
@@ -984,8 +961,8 @@ export default function CuttingOperatorDashboard() {
               })()}
               
               {!fabricSearch.trim() && (
-                <div className="text-sm text-muted-foreground">
-                  Enter a fabric type above to see FIFO recommendation and stock levels
+                <div className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-lg text-center">
+                  Type a fabric name to see FIFO recommendation and stock levels
                 </div>
               )}
             </div>
@@ -993,112 +970,377 @@ export default function CuttingOperatorDashboard() {
         </Card>
       </div>
 
+      {/* Fabric Receiving Section */}
+      {pendingReceiving > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-amber-500/10">
+                  <Package className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Fabric Receiving</CardTitle>
+                  <CardDescription>{pendingReceiving} rolls need freezer assignment</CardDescription>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg border overflow-hidden">
+              <div className="max-h-[300px] overflow-y-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur">
+                    <TableRow>
+                      <TableHead>Fabric Type</TableHead>
+                      <TableHead>Roll #</TableHead>
+                      <TableHead>Lot #</TableHead>
+                      <TableHead>Available</TableHead>
+                      <TableHead>Assign Freezer</TableHead>
+                      <TableHead className="w-20 text-center">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {fabricInventory
+                      .filter(f => f.squareMeters > 0 && !f.freezerLocation)
+                      .slice(0, 20)
+                      .map((fabric) => (
+                      <TableRow key={fabric.id} className="hover:bg-muted/50" data-testid={`row-fabric-${fabric.id}`}>
+                        <TableCell className="font-medium">{fabric.fabricType || fabric.commonName}</TableCell>
+                        <TableCell className="text-muted-foreground">{fabric.rollNumber || '-'}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{fabric.lotNumber || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="font-mono">
+                            {fabric.squareMeters?.toFixed(1)} m²
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Select 
+                            value={fabric.freezerLocation || ''} 
+                            onValueChange={(val) => {
+                              setReceivingForm({
+                                barcode: '',
+                                fabricId: fabric.id,
+                                fabricName: fabric.fabricType || fabric.commonName || '',
+                                currentFreezer: fabric.freezerLocation || '',
+                                freezerNumber: val,
+                                isP2: false,
+                                generatedBarcode: ''
+                              });
+                              apiRequest(`/api/cutting-table/fabric-inventory/${fabric.id}/assign-freezer`, {
+                                method: 'POST',
+                                body: JSON.stringify({ freezerNumber: val }),
+                              }).then(() => {
+                                queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
+                                toast({ title: 'Updated', description: `Assigned to Freezer ${val}` });
+                              }).catch(() => {
+                                toast({ title: 'Error', description: 'Failed to update freezer', variant: 'destructive' });
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="w-32" data-testid={`select-freezer-${fabric.id}`}>
+                              <Snowflake className="h-3 w-3 mr-1 text-blue-500" />
+                              <SelectValue placeholder="Select..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 20 }, (_, i) => (
+                                <SelectItem key={i + 1} value={String(i + 1)}>Freezer {i + 1}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-center gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => {
+                                window.open(`/api/cutting-table/fabric-inventory/${fabric.id}/print-barcode`, '_blank');
+                                if (!fabric.barcode) {
+                                  refetchFabric();
+                                }
+                              }}
+                              title="Print Barcode"
+                              data-testid={`button-print-barcode-${fabric.id}`}
+                            >
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Accordion type="single" collapsible className="w-full" defaultValue="">
+        <AccordionItem value="all-fabric" className="border rounded-lg bg-card">
+          <AccordionTrigger className="px-6 py-4 hover:no-underline">
+            <div className="flex items-center gap-3">
+              <Package className="h-5 w-5 text-primary" />
+              <div className="text-left">
+                <div className="font-semibold">All Fabric Inventory</div>
+                <div className="text-sm text-muted-foreground font-normal">
+                  {fabricInventory.length} rolls in stock - View and print barcodes
+                </div>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-6 pb-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Input
+                placeholder="Search by fabric type, roll, lot, or barcode..."
+                value={allFabricSearch}
+                onChange={(e) => setAllFabricSearch(e.target.value)}
+                className="flex-1"
+                data-testid="input-all-fabric-search"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => generateAllBarcodesMutation.mutate()}
+                disabled={generateAllBarcodesMutation.isPending}
+                data-testid="button-generate-all-barcodes"
+              >
+                <Barcode className="h-4 w-4 mr-1" />
+                {generateAllBarcodesMutation.isPending ? 'Generating...' : 'Generate All Barcodes'}
+              </Button>
+            </div>
+            <div className="max-h-[400px] overflow-y-auto rounded-md border">
+              {loadingFabric ? (
+                <p className="text-muted-foreground text-center py-8">Loading fabric...</p>
+              ) : fabricInventory.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">No fabric inventory found</p>
+              ) : (
+                <Table>
+                  <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur">
+                    <TableRow>
+                      <TableHead>Fabric Type</TableHead>
+                      <TableHead>Roll #</TableHead>
+                      <TableHead>Lot #</TableHead>
+                      <TableHead>Available</TableHead>
+                      <TableHead>Freezer</TableHead>
+                      <TableHead>Barcode</TableHead>
+                      <TableHead>Exp Date</TableHead>
+                      <TableHead className="w-16">Print</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {fabricInventory
+                      .filter(f => {
+                        if (!allFabricSearch.trim()) return true;
+                        const search = allFabricSearch.toLowerCase();
+                        return (
+                          (f.fabricType || '').toLowerCase().includes(search) ||
+                          (f.commonName || '').toLowerCase().includes(search) ||
+                          (f.rollNumber || '').toLowerCase().includes(search) ||
+                          (f.lotNumber || '').toLowerCase().includes(search) ||
+                          (f.barcode || '').toLowerCase().includes(search)
+                        );
+                      })
+                      .map((fabric) => (
+                      <TableRow key={fabric.id} className="hover:bg-muted/50" data-testid={`row-all-fabric-${fabric.id}`}>
+                        <TableCell className="font-medium">{fabric.fabricType || fabric.commonName}</TableCell>
+                        <TableCell>{fabric.rollNumber || '-'}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{fabric.lotNumber || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="font-mono">
+                            {fabric.squareMeters?.toFixed(1)} m²
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {fabric.freezerLocation ? (
+                            <Badge variant="outline" className="text-xs">
+                              <Snowflake className="h-3 w-3 mr-1" />
+                              {fabric.freezerLocation}
+                            </Badge>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {fabric.barcode ? (
+                            <code className="text-xs bg-muted px-2 py-1 rounded">{fabric.barcode}</code>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">None</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {fabric.expirationDate ? (
+                            <span className={cn(
+                              "text-xs",
+                              fabric.status === 'expired' ? 'text-red-600 font-medium' : 
+                              fabric.status === 'expiring' ? 'text-amber-600' : 'text-muted-foreground'
+                            )}>
+                              {new Date(fabric.expirationDate).toLocaleDateString()}
+                            </span>
+                          ) : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => {
+                              window.open(`/api/cutting-table/fabric-inventory/${fabric.id}/print-barcode`, '_blank');
+                              if (!fabric.barcode) {
+                                refetchFabric();
+                              }
+                            }}
+                            title="Print Barcode Label"
+                            data-testid={`button-print-all-${fabric.id}`}
+                          >
+                            <Printer className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Scissors className="h-5 w-5" />
-            Scheduled Packets
-          </CardTitle>
-          <CardDescription>Manufacturing queue items for cutting table</CardDescription>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-purple-500/10">
+                <Scissors className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Scheduled Packets</CardTitle>
+                <CardDescription>
+                  {mfgQueueItems.length} items in queue
+                  {inProgressCount > 0 && ` • ${inProgressCount} in progress`}
+                </CardDescription>
+              </div>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {loadingMfgQueue ? (
-            <div className="text-center py-8 text-muted-foreground">Loading queue...</div>
+            <div className="text-center py-12 text-muted-foreground">
+              <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 opacity-50" />
+              Loading queue...
+            </div>
           ) : mfgQueueItems.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No items in the queue. Schedule packets from the Weekly Schedule page.
+            <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
+              <Scissors className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              <p>No items in the queue</p>
+              <p className="text-sm">Schedule packets from the Weekly Schedule page</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Part Number</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Ordered</TableHead>
-                  <TableHead>Completed</TableHead>
-                  <TableHead>Est. Cuts</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead className="w-32"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {mfgQueueItems.map((item) => (
-                  <TableRow key={item.id} data-testid={`row-mfg-item-${item.id}`}>
-                    <TableCell className="font-medium">{item.partNumber || '-'}</TableCell>
-                    <TableCell>{item.partName || '-'}</TableCell>
-                    <TableCell>{item.quantityOrdered}</TableCell>
-                    <TableCell>
-                      <span className={cn(
-                        item.quantityCompleted >= item.quantityOrdered ? 'text-green-600' : ''
-                      )}>
-                        {item.quantityCompleted}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{item.estimatedCuts}</Badge>
-                    </TableCell>
-                    <TableCell>{getStatusBadge(item.status)}</TableCell>
-                    <TableCell>
-                      <Badge variant={item.priority >= 80 ? "destructive" : item.priority >= 60 ? "default" : "outline"}>
-                        {item.priority}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {item.dueDate ? new Date(item.dueDate).toLocaleDateString() : '-'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {item.status === 'PENDING' && (
-                          <Button 
-                            size="sm" 
-                            onClick={() => handleStartCuttingWorkflow(item)}
-                            data-testid={`button-start-${item.id}`}
-                          >
-                            <PlayCircle className="h-4 w-4 mr-1" />
-                            Start
-                          </Button>
-                        )}
-                        {item.status === 'IN_PROGRESS' && (
-                          <>
+            <div className="rounded-lg border overflow-hidden">
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow>
+                    <TableHead>Part Number</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="text-center">Progress</TableHead>
+                    <TableHead className="text-center">Cuts</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-center">Priority</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead className="w-40 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {mfgQueueItems.map((item) => (
+                    <TableRow 
+                      key={item.id} 
+                      className={cn(
+                        "hover:bg-muted/50 transition-colors",
+                        item.status === 'IN_PROGRESS' && "bg-blue-50/50 dark:bg-blue-950/20"
+                      )}
+                      data-testid={`row-mfg-item-${item.id}`}
+                    >
+                      <TableCell className="font-mono font-medium">{item.partNumber || '-'}</TableCell>
+                      <TableCell className="max-w-[200px] truncate">{item.partName || '-'}</TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <span className={cn(
+                            "font-medium",
+                            item.quantityCompleted >= item.quantityOrdered && 'text-green-600'
+                          )}>
+                            {item.quantityCompleted}
+                          </span>
+                          <span className="text-muted-foreground">/</span>
+                          <span>{item.quantityOrdered}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="font-mono">{item.estimatedCuts}</Badge>
+                      </TableCell>
+                      <TableCell>{getStatusBadge(item.status)}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge 
+                          variant={item.priority >= 80 ? "destructive" : item.priority >= 60 ? "default" : "secondary"}
+                          className="font-mono"
+                        >
+                          {item.priority}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {item.dueDate ? new Date(item.dueDate).toLocaleDateString() : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1 justify-end">
+                          {item.status === 'PENDING' && (
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleStartCuttingWorkflow(item)}
+                              data-testid={`button-start-${item.id}`}
+                            >
+                              <PlayCircle className="h-4 w-4 mr-1" />
+                              Start
+                            </Button>
+                          )}
+                          {item.status === 'IN_PROGRESS' && (
+                            <>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => { setSelectedMfgItem(item); setIsCuttingWorkflowOpen(true); }}
+                                data-testid={`button-view-workflow-${item.id}`}
+                              >
+                                <Scissors className="h-4 w-4 mr-1" />
+                                View
+                              </Button>
+                              <Button 
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700"
+                                onClick={() => { setSelectedMfgItem(item); setIsProductionDialogOpen(true); }}
+                                data-testid={`button-complete-${item.id}`}
+                              >
+                                <CheckCircle2 className="h-4 w-4 mr-1" />
+                                Complete
+                              </Button>
+                            </>
+                          )}
+                          {item.status === 'COMPLETED' && (
                             <Button 
                               size="sm" 
                               variant="outline"
-                              onClick={() => { setSelectedMfgItem(item); setIsCuttingWorkflowOpen(true); }}
-                              data-testid={`button-view-workflow-${item.id}`}
+                              onClick={() => generateLabelsMutation.mutate({ id: item.id, quantity: item.quantityCompleted || 1 })}
+                              data-testid={`button-print-${item.id}`}
                             >
-                              <Scissors className="h-4 w-4 mr-1" />
-                              View
+                              <Printer className="h-4 w-4 mr-1" />
+                              Labels
                             </Button>
-                            <Button 
-                              size="sm" 
-                              variant="secondary"
-                              onClick={() => { setSelectedMfgItem(item); setIsProductionDialogOpen(true); }}
-                              data-testid={`button-complete-${item.id}`}
-                            >
-                              <CheckCircle2 className="h-4 w-4 mr-1" />
-                              Complete
-                            </Button>
-                          </>
-                        )}
-                        {item.status === 'COMPLETED' && (
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => generateLabelsMutation.mutate({ id: item.id, quantity: item.quantityCompleted || 1 })}
-                            data-testid={`button-print-${item.id}`}
-                          >
-                            <Printer className="h-4 w-4 mr-1" />
-                            Labels
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

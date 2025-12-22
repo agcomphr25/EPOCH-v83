@@ -734,15 +734,21 @@ router.post('/fabric-inventory', async (req, res) => {
   try {
     const validatedData = insertCuttingFabricInventorySchema.parse(req.body);
     
-    // Auto-generate barcode for P2 items
-    if (validatedData.productionLineId) {
-      const line = await storage.getCuttingProductionLine(validatedData.productionLineId);
-      if (line && line.lineName === 'P2') {
-        // Generate unique barcode: FI-P2-YYYYMMDD-XXXX
-        const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
-        const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
-        validatedData.barcode = `FI-P2-${date}-${random}`;
+    // Auto-generate barcode for ALL fabric items if not provided
+    if (!validatedData.barcode) {
+      const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+      
+      // Check if it's a P2 item for specific prefix
+      let prefix = 'FAB';
+      if (validatedData.productionLineId) {
+        const line = await storage.getCuttingProductionLine(validatedData.productionLineId);
+        if (line && line.lineName === 'P2') {
+          prefix = 'FI-P2';
+        }
       }
+      
+      validatedData.barcode = `${prefix}-${date}-${random}`;
     }
     
     const inventory = await storage.createCuttingFabricInventory(validatedData);
@@ -1124,16 +1130,99 @@ router.post('/initialize', async (req, res) => {
   }
 });
 
-// Print barcode label for fabric inventory
-router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
+// Generate barcode for fabric that doesn't have one
+router.post('/fabric-inventory/:id/generate-barcode', async (req, res) => {
   try {
     const inventory = await storage.getCuttingFabricInventory(req.params.id);
     if (!inventory) {
       return res.status(404).json({ error: 'Inventory item not found' });
     }
 
+    if (inventory.barcode) {
+      return res.json({ success: true, barcode: inventory.barcode, message: 'Barcode already exists' });
+    }
+
+    // Generate unique barcode
+    const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+    
+    let prefix = 'FAB';
+    if (inventory.productionLineId) {
+      const line = await storage.getCuttingProductionLine(inventory.productionLineId);
+      if (line && line.lineName === 'P2') {
+        prefix = 'FI-P2';
+      }
+    }
+    
+    const barcode = `${prefix}-${date}-${random}`;
+    await storage.updateCuttingFabricInventory(req.params.id, { barcode });
+    
+    res.json({ success: true, barcode, message: 'Barcode generated successfully' });
+  } catch (error) {
+    console.error('Error generating barcode:', error);
+    res.status(500).json({ error: 'Failed to generate barcode' });
+  }
+});
+
+// Bulk generate barcodes for all fabrics without one
+router.post('/fabric-inventory/generate-all-barcodes', async (req, res) => {
+  try {
+    const allInventory = await storage.getAllCuttingFabricInventory();
+    const withoutBarcodes = allInventory.filter(item => !item.barcode);
+    
+    let generated = 0;
+    for (const item of withoutBarcodes) {
+      const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+      
+      let prefix = 'FAB';
+      if (item.productionLineId) {
+        const line = await storage.getCuttingProductionLine(item.productionLineId);
+        if (line && line.lineName === 'P2') {
+          prefix = 'FI-P2';
+        }
+      }
+      
+      const barcode = `${prefix}-${date}-${random}`;
+      await storage.updateCuttingFabricInventory(item.id, { barcode });
+      generated++;
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Generated barcodes for ${generated} fabric items`,
+      totalProcessed: generated,
+      totalWithoutBarcodes: withoutBarcodes.length
+    });
+  } catch (error) {
+    console.error('Error bulk generating barcodes:', error);
+    res.status(500).json({ error: 'Failed to bulk generate barcodes' });
+  }
+});
+
+// Print barcode label for fabric inventory
+router.get('/fabric-inventory/:id/print-barcode', async (req, res) => {
+  try {
+    let inventory = await storage.getCuttingFabricInventory(req.params.id);
+    if (!inventory) {
+      return res.status(404).json({ error: 'Inventory item not found' });
+    }
+
+    // Auto-generate barcode if missing
     if (!inventory.barcode) {
-      return res.status(400).json({ error: 'This item does not have a barcode' });
+      const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+      const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+      
+      let prefix = 'FAB';
+      if (inventory.productionLineId) {
+        const line = await storage.getCuttingProductionLine(inventory.productionLineId);
+        if (line && line.lineName === 'P2') {
+          prefix = 'FI-P2';
+        }
+      }
+      
+      const barcode = `${prefix}-${date}-${random}`;
+      inventory = await storage.updateCuttingFabricInventory(req.params.id, { barcode });
     }
 
     // Get production line info

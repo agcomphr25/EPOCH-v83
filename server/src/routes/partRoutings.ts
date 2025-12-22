@@ -1,9 +1,15 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { insertPartRoutingSchema } from '../../schema';
 
 const router = Router();
+
+// Middleware to log all requests to this router
+router.use((req: Request, res: Response, next: NextFunction) => {
+  console.log(`[PartRoutings] ${req.method} ${req.path} Content-Type: ${req.get('Content-Type')}`);
+  next();
+});
 
 // Get all part routings with optional filters
 router.get('/', async (req: Request, res: Response) => {
@@ -74,20 +80,42 @@ router.get('/:id', async (req: Request, res: Response) => {
 // Create new part routing
 router.post('/', async (req: Request, res: Response) => {
   try {
-    console.log('[PartRouting POST] Request body:', JSON.stringify(req.body, null, 2));
+    console.log('[PartRouting POST] ========== REQUEST DEBUG ==========');
+    console.log('[PartRouting POST] Request keys:', Object.keys(req.body || {}));
+    console.log('[PartRouting POST] Full body:', JSON.stringify(req.body, null, 2));
+    console.log('[PartRouting POST] =====================================');
+    
     const validatedData = insertPartRoutingSchema.parse(req.body);
+    console.log('[PartRouting POST] Validation passed, creating routing...');
     const routing = await storage.createPartRouting(validatedData);
     res.status(201).json(routing);
   } catch (error: any) {
-    console.error('Error creating part routing:', error);
+    console.error('[PartRouting POST] ========== ERROR ==========');
+    console.error('[PartRouting POST] Error type:', error.constructor.name);
+    console.error('[PartRouting POST] Error message:', error.message);
     
     if (error instanceof z.ZodError) {
-      console.error('[PartRouting POST] Zod validation errors:', JSON.stringify(error.errors, null, 2));
+      console.error('[PartRouting POST] Zod validation FAILED');
+      console.error('[PartRouting POST] Issues array:', JSON.stringify(error.issues, null, 2));
+      console.error('[PartRouting POST] Received keys:', Object.keys(req.body || {}));
+      console.error('[PartRouting POST] ===========================');
+      
       return res.status(400).json({ 
         error: 'Validation error',
-        details: error.errors 
+        message: 'One or more fields failed validation',
+        receivedKeys: Object.keys(req.body || {}),
+        issues: error.issues,
+        details: error.errors.map(e => ({
+          path: e.path.join('.'),
+          code: e.code,
+          message: e.message,
+          received: e.path.reduce((obj: any, key) => obj?.[key], req.body)
+        }))
       });
     }
+    
+    console.error('[PartRouting POST] Non-Zod error:', error);
+    console.error('[PartRouting POST] ===========================');
     
     res.status(500).json({ 
       error: 'Failed to create part routing',
@@ -99,17 +127,34 @@ router.post('/', async (req: Request, res: Response) => {
 // Update part routing
 router.patch('/:id', async (req: Request, res: Response) => {
   try {
+    console.log('[PartRouting PATCH] ========== REQUEST DEBUG ==========');
+    console.log('[PartRouting PATCH] ID:', req.params.id);
+    console.log('[PartRouting PATCH] Request keys:', Object.keys(req.body || {}));
+    console.log('[PartRouting PATCH] Full body:', JSON.stringify(req.body, null, 2));
+    console.log('[PartRouting PATCH] =====================================');
+    
     const { id } = req.params;
     const validatedData = insertPartRoutingSchema.partial().parse(req.body);
     const routing = await storage.updatePartRouting(id, validatedData);
     res.json(routing);
   } catch (error: any) {
-    console.error('Error updating part routing:', error);
+    console.error('[PartRouting PATCH] Error:', error);
     
     if (error instanceof z.ZodError) {
+      console.error('[PartRouting PATCH] Zod validation FAILED');
+      console.error('[PartRouting PATCH] Issues:', JSON.stringify(error.issues, null, 2));
+      
       return res.status(400).json({ 
         error: 'Validation error',
-        details: error.errors 
+        message: 'One or more fields failed validation',
+        receivedKeys: Object.keys(req.body || {}),
+        issues: error.issues,
+        details: error.errors.map(e => ({
+          path: e.path.join('.'),
+          code: e.code,
+          message: e.message,
+          received: e.path.reduce((obj: any, key) => obj?.[key], req.body)
+        }))
       });
     }
     

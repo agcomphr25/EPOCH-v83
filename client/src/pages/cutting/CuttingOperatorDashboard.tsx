@@ -156,6 +156,7 @@ export default function CuttingOperatorDashboard() {
   
   const [universalBarcode, setUniversalBarcode] = useState("");
   const [fabricSearch, setFabricSearch] = useState("");
+  const [allFabricSearch, setAllFabricSearch] = useState("");
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const [productionForm, setProductionForm] = useState({
@@ -1016,6 +1017,115 @@ export default function CuttingOperatorDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                All Fabric Inventory
+              </CardTitle>
+              <CardDescription>View and print barcodes for all fabric rolls</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Search fabric..."
+                value={allFabricSearch}
+                onChange={(e) => setAllFabricSearch(e.target.value)}
+                className="w-64"
+                data-testid="input-all-fabric-search"
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="max-h-[500px] overflow-y-auto">
+            {loadingFabric ? (
+              <p className="text-muted-foreground text-center py-4">Loading fabric...</p>
+            ) : fabricInventory.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No fabric inventory found</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fabric Type</TableHead>
+                    <TableHead>Roll #</TableHead>
+                    <TableHead>Lot #</TableHead>
+                    <TableHead>Available</TableHead>
+                    <TableHead>Freezer</TableHead>
+                    <TableHead>Barcode</TableHead>
+                    <TableHead>Exp Date</TableHead>
+                    <TableHead>Print</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {fabricInventory
+                    .filter(f => {
+                      if (!allFabricSearch.trim()) return true;
+                      const search = allFabricSearch.toLowerCase();
+                      return (
+                        (f.fabricType || '').toLowerCase().includes(search) ||
+                        (f.commonName || '').toLowerCase().includes(search) ||
+                        (f.rollNumber || '').toLowerCase().includes(search) ||
+                        (f.lotNumber || '').toLowerCase().includes(search) ||
+                        (f.barcode || '').toLowerCase().includes(search)
+                      );
+                    })
+                    .map((fabric) => (
+                    <TableRow key={fabric.id} data-testid={`row-all-fabric-${fabric.id}`}>
+                      <TableCell className="font-medium">{fabric.fabricType || fabric.commonName}</TableCell>
+                      <TableCell>{fabric.rollNumber || '-'}</TableCell>
+                      <TableCell className="text-xs">{fabric.lotNumber || '-'}</TableCell>
+                      <TableCell>{fabric.squareMeters?.toFixed(1)} m²</TableCell>
+                      <TableCell>{fabric.freezerLocation || '-'}</TableCell>
+                      <TableCell className="text-xs font-mono">
+                        {fabric.barcode ? (
+                          <Badge variant="outline" className="text-xs">{fabric.barcode}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">No barcode</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {fabric.expirationDate ? (
+                          <span className={cn(
+                            "text-xs",
+                            fabric.status === 'expired' ? 'text-red-600' : 
+                            fabric.status === 'expiring' ? 'text-amber-600' : 'text-muted-foreground'
+                          )}>
+                            {new Date(fabric.expirationDate).toLocaleDateString()}
+                          </span>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            if (fabric.barcode) {
+                              window.open(`/api/cutting-table/fabric-inventory/${fabric.id}/print-barcode`, '_blank');
+                            } else {
+                              toast({ 
+                                title: "No Barcode", 
+                                description: "This fabric item doesn't have a barcode assigned.", 
+                                variant: "destructive" 
+                              });
+                            }
+                          }}
+                          title="Print Barcode"
+                          data-testid={`button-print-all-${fabric.id}`}
+                        >
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

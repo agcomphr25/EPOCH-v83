@@ -19,12 +19,21 @@ import {
   Layers,
   Plus,
   Trash2,
+  Pencil,
   AlertCircle,
   CheckCircle,
   Package,
   ChevronsUpDown,
   Search
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
@@ -70,6 +79,7 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
   const [partsNeedingBOM, setPartsNeedingBOM] = useState<PartNeedingBOM[]>([]);
   const [currentBOMItems, setCurrentBOMItems] = useState<BOMItem[]>([]);
   const [newItem, setNewItem] = useState<Partial<BOMItem>>({});
+  const [editingItem, setEditingItem] = useState<BOMItem | null>(null);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [inventorySearch, setInventorySearch] = useState('');
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<any>(null);
@@ -246,6 +256,17 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
 
   const removeBOMItem = (id: string) => {
     setCurrentBOMItems(currentBOMItems.filter((item) => item.id !== id));
+  };
+
+  const updateBOMItem = (updatedItem: BOMItem) => {
+    setCurrentBOMItems(currentBOMItems.map((item) => 
+      item.id === updatedItem.id ? updatedItem : item
+    ));
+    setEditingItem(null);
+    toast({
+      title: 'Item Updated',
+      description: `${updatedItem.partNumber} has been updated.`,
+    });
   };
 
   const handleSaveAndNext = async () => {
@@ -566,20 +587,110 @@ export default function P2BOMWizard({ poId, onComplete, onCancel }: P2BOMWizardP
                     )}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeBOMItem(item.id)}
-                      data-testid={`button-remove-bom-${item.id}`}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingItem(item)}
+                        data-testid={`button-edit-bom-${item.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeBOMItem(item.id)}
+                        data-testid={`button-remove-bom-${item.id}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         )}
+
+        {/* Edit Item Dialog */}
+        <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Edit BOM Item</DialogTitle>
+              <DialogDescription>Update the component details</DialogDescription>
+            </DialogHeader>
+            {editingItem && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Part Number</Label>
+                    <Input
+                      value={editingItem.partNumber}
+                      onChange={(e) => setEditingItem({ ...editingItem, partNumber: e.target.value })}
+                      data-testid="input-edit-part-number"
+                    />
+                  </div>
+                  <div>
+                    <Label>Quantity</Label>
+                    <Input
+                      type="number"
+                      value={editingItem.quantity}
+                      onChange={(e) => setEditingItem({ ...editingItem, quantity: parseInt(e.target.value) || 1 })}
+                      data-testid="input-edit-quantity"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>Description</Label>
+                  <Input
+                    value={editingItem.description}
+                    onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
+                    data-testid="input-edit-description"
+                  />
+                </div>
+                <div>
+                  <Label>First Department</Label>
+                  <Select 
+                    value={editingItem.firstDepartment} 
+                    onValueChange={(v) => setEditingItem({ ...editingItem, firstDepartment: v })}
+                  >
+                    <SelectTrigger data-testid="select-edit-department">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DEPARTMENT_OPTIONS.map((dept) => (
+                        <SelectItem key={dept.value} value={dept.value}>
+                          {dept.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingItem.isManufactured}
+                    onChange={(e) => setEditingItem({ ...editingItem, isManufactured: e.target.checked })}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm">This is a manufactured part</span>
+                </label>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setEditingItem(null)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={() => {
+                    if (editingItem) {
+                      updateBOMItem({ ...editingItem });
+                    }
+                  }}>
+                    Save Changes
+                  </Button>
+                </DialogFooter>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         <div className="flex justify-between pt-4">
           <div className="flex gap-2">

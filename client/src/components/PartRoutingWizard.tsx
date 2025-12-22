@@ -303,13 +303,42 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   const handleSave = () => {
     if (!selectedItem) return;
 
+    // Build traceabilityConfig from departmentConfig materials' requiredFields
+    // Preserve existing config when editing, only update departments that have materials configured
+    const existingTraceabilityConfig = editRouting?.traceabilityConfig || {};
+    const traceabilityConfig: Record<string, string[]> = { ...existingTraceabilityConfig };
+    
+    selectedDepartments.forEach(dept => {
+      const config = departmentConfig[dept];
+      if (config?.materials && config.materials.length > 0) {
+        // Collect all unique required fields from all materials in this department
+        const allFields = new Set<string>();
+        config.materials.forEach(material => {
+          material.requiredFields?.forEach(field => allFields.add(field));
+        });
+        traceabilityConfig[dept] = Array.from(allFields);
+      } else if (!existingTraceabilityConfig[dept]) {
+        // Only set empty array for new departments that don't have existing config
+        traceabilityConfig[dept] = [];
+      }
+      // If department exists in existing config and no new materials, preserve existing
+    });
+    
+    // Remove departments no longer in sequence
+    Object.keys(traceabilityConfig).forEach(dept => {
+      if (!selectedDepartments.includes(dept)) {
+        delete traceabilityConfig[dept];
+      }
+    });
+
     const data = {
       inventoryItemId: selectedItem.id,
       partNumber: selectedItem.agPartNumber,
       partName: selectedItem.name,
       departmentSequence: selectedDepartments,
+      traceabilityConfig,
       departmentConfig,
-      createdBy: 'system', // TODO: Get from auth context
+      createdBy: editRouting?.createdBy || 'system', // Preserve original creator when editing
     };
 
     saveMutation.mutate(data);

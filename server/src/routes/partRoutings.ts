@@ -74,6 +74,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 // Create new part routing
 router.post('/', async (req: Request, res: Response) => {
   try {
+    console.log('[PartRouting POST] Request body:', JSON.stringify(req.body, null, 2));
     const validatedData = insertPartRoutingSchema.parse(req.body);
     const routing = await storage.createPartRouting(validatedData);
     res.status(201).json(routing);
@@ -81,6 +82,7 @@ router.post('/', async (req: Request, res: Response) => {
     console.error('Error creating part routing:', error);
     
     if (error instanceof z.ZodError) {
+      console.error('[PartRouting POST] Zod validation errors:', JSON.stringify(error.errors, null, 2));
       return res.status(400).json({ 
         error: 'Validation error',
         details: error.errors 

@@ -60,6 +60,7 @@ import {
   FileSignature,
   Archive,
   Image,
+  Eye,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -312,6 +313,12 @@ export default function Navigation() {
       label: 'PDF Templates',
       icon: FileText,
       description: 'Manage PDF templates with custom logos and styling for P1, P2, RFQ, etc.',
+    },
+    {
+      path: '/watch-rules',
+      label: 'Watch Rules',
+      icon: Eye,
+      description: 'Configure rules to monitor specific customer orders through departments',
     },
 
     // Documentation button disabled per user request - was causing problems

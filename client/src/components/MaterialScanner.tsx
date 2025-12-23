@@ -86,13 +86,12 @@ export default function MaterialScanner({
 
   const validateMutation = useMutation({
     mutationFn: async (icn: string) => {
-      return apiRequest(`/api/material-lots/validate/${encodeURIComponent(icn)}`, {
-        method: 'POST',
-        body: JSON.stringify({
-          requiredPartNumber,
-          requiredQty: requiredQty ? requiredQty.toString() : undefined,
-        }),
-      });
+      const params = new URLSearchParams();
+      if (requiredPartNumber) params.set('partNumber', requiredPartNumber);
+      if (requiredQty) params.set('qtyNeeded', requiredQty.toString());
+      const queryString = params.toString();
+      const url = `/api/material-lots/validate/${encodeURIComponent(icn)}${queryString ? `?${queryString}` : ''}`;
+      return apiRequest(url);
     },
     onSuccess: (result: ValidationResult) => {
       setValidationResult(result);

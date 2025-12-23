@@ -97,12 +97,16 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
       status: string;
       message: string;
       warnings: string[];
+      errors: string[];
+      requiresOverride: boolean;
       lot: typeof lot;
     } = {
       valid: true,
       status: 'OK',
       message: 'Material lot is valid for use',
       warnings: [],
+      errors: [],
+      requiresOverride: false,
       lot,
     };
 
@@ -111,6 +115,7 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
       validationResults.valid = false;
       validationResults.status = 'INVALID_STATUS';
       validationResults.message = `Material lot status is ${lot.status}. Only ACCEPTED or ISSUED lots can be consumed.`;
+      validationResults.errors.push(`Lot status is ${lot.status} - only ACCEPTED or ISSUED lots can be consumed`);
       return res.json(validationResults);
     }
 
@@ -122,6 +127,8 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
         validationResults.valid = false;
         validationResults.status = 'EXPIRED';
         validationResults.message = `Material lot expired on ${expDate.toLocaleDateString()}. Override required.`;
+        validationResults.errors.push(`Material expired on ${expDate.toLocaleDateString()}`);
+        validationResults.requiresOverride = true;
         return res.json(validationResults);
       }
       
@@ -140,6 +147,7 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
         validationResults.valid = false;
         validationResults.status = 'INSUFFICIENT_QTY';
         validationResults.message = `Insufficient quantity. Need ${needed}, have ${remaining} ${lot.unitOfMeasure}`;
+        validationResults.errors.push(`Insufficient quantity: need ${needed}, available ${remaining} ${lot.unitOfMeasure}`);
         return res.json(validationResults);
       }
     }
@@ -152,6 +160,8 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
         validationResults.valid = false;
         validationResults.status = 'OUT_TIME_EXCEEDED';
         validationResults.message = `Material has exceeded maximum out-time. ${lot.totalOutTimeMinutes} of ${lot.maxOutTimeMinutes} minutes used.`;
+        validationResults.errors.push(`Out-time exceeded: ${lot.totalOutTimeMinutes} of ${lot.maxOutTimeMinutes} minutes used`);
+        validationResults.requiresOverride = true;
         return res.json(validationResults);
       }
       

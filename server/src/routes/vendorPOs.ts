@@ -481,16 +481,17 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
       notes: z.string().optional(),
       createdBy: z.number().int().positive().optional(), // Employee ID
       cocLink: z.string().optional(), // Certificate of Conformance link
+      documentUrl: z.string().optional(), // Uploaded document URL
     });
 
-    const { receivedQuantity, receivedDate, notes, createdBy, cocLink } = receiveSchema.parse(req.body);
+    const { receivedQuantity, receivedDate, notes, createdBy, cocLink, documentUrl } = receiveSchema.parse(req.body);
 
     // Record PO receipt and calculate COGS
     const result = await storage.recordVendorPOReceipt({
       poLineItemId: itemId,
       receivedQuantity,
       receivedDate: receivedDate ? new Date(receivedDate) : new Date(),
-      notes,
+      notes: documentUrl ? `${notes || ''} | Document: ${documentUrl}`.trim() : notes,
       createdBy,
       cocLink,
     });

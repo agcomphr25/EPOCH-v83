@@ -15,9 +15,10 @@ const router = Router();
 router.use(authenticateToken);
 router.use(requireAdminAccess);
 
-// Ensure vendor-approvals directory exists
+// Ensure vendor-approvals and vendor-documents directories exist
 const uploadsDir = path.join(process.cwd(), 'uploads');
 const vendorApprovalsDir = path.join(uploadsDir, 'vendor-approvals');
+const vendorDocumentsDir = path.join(uploadsDir, 'vendor-documents');
 
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -25,6 +26,10 @@ if (!fs.existsSync(uploadsDir)) {
 
 if (!fs.existsSync(vendorApprovalsDir)) {
   fs.mkdirSync(vendorApprovalsDir, { recursive: true });
+}
+
+if (!fs.existsSync(vendorDocumentsDir)) {
+  fs.mkdirSync(vendorDocumentsDir, { recursive: true });
 }
 
 // Configure multer for vendor approval PDFs
@@ -42,6 +47,33 @@ const vendorApprovalStorage = multer.diskStorage({
 
 const vendorApprovalUpload = multer({
   storage: vendorApprovalStorage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'));
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+});
+
+// Configure multer for vendor document PDFs
+const vendorDocumentStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, vendorDocumentsDir);
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const hash = crypto.randomBytes(8).toString('hex');
+    const ext = path.extname(file.originalname);
+    cb(null, `vendor_document_${timestamp}_${hash}${ext}`);
+  },
+});
+
+const vendorDocumentUpload = multer({
+  storage: vendorDocumentStorage,
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'application/pdf') {
       cb(null, true);
@@ -380,6 +412,27 @@ router.post('/upload/approval', vendorApprovalUpload.single('file'), async (req:
     });
   } catch (error) {
     console.error('Vendor approval upload error:', error);
+    res.status(500).json({ error: 'Failed to upload file' });
+  }
+});
+
+// POST /api/vendors/upload/document - Upload vendor main document PDF
+router.post('/upload/document', vendorDocumentUpload.single('file'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const fileUrl = `/uploads/vendor-documents/${req.file.filename}`;
+    
+    res.status(200).json({
+      url: fileUrl,
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      size: req.file.size,
+    });
+  } catch (error) {
+    console.error('Vendor document upload error:', error);
     res.status(500).json({ error: 'Failed to upload file' });
   }
 });

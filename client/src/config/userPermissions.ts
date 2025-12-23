@@ -21,6 +21,7 @@ export const UNIVERSAL_ACCESS_ROUTES: string[] = ['/communications/inbox', '/emp
 export const VALID_NAVBAR_ROUTES = [
   '/admin/orders',
   '/admin/audit-settings',
+  '/admin/health-checks',
   '/analytics',
   '/badge-configuration',
   '/badge-scanner',
@@ -214,6 +215,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/marketing-communications',
       '/finance/bulk-payment',
       '/watch-rules',
+      '/refund-request',
     ],
   },
 

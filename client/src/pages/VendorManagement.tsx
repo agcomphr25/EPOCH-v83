@@ -77,6 +77,8 @@ import {
 import SimpleAddressInput from '@/components/SimpleAddressInput';
 import type { AddressData } from '@/utils/addressUtils';
 import VendorScopeSelector from '@/components/VendorScopeSelector';
+import MediaLibraryPicker from '@/components/MediaLibraryPicker';
+import { FolderOpen } from 'lucide-react';
 
 const vendorFormSchema = insertVendorSchema.extend({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
@@ -89,6 +91,7 @@ const vendorFormSchema = insertVendorSchema.extend({
   approvalLevel: z.string().optional(),
   approvalSource: z.string().optional(),
   approvalPdfUrl: z.string().optional(),
+  mainDocumentUrl: z.string().optional(),
   startRenewalDate: z.string().optional(),
   approvalExpiration: z.string().optional(),
   evaluationDate: z.string().optional(),
@@ -131,9 +134,14 @@ export default function VendorManagement() {
   // Pending contacts for new vendors (before vendor is created)
   const [pendingContacts, setPendingContacts] = useState<PendingContact[]>([]);
 
-  // File upload state
+  // File upload state (for approval document on Scope tab)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
+
+  // Main document upload state (for Main Info tab)
+  const [mainDocFile, setMainDocFile] = useState<File | null>(null);
+  const [uploadingMainDoc, setUploadingMainDoc] = useState(false);
+  const [isMediaLibraryOpen, setIsMediaLibraryOpen] = useState(false);
 
   // CSV import state
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
@@ -169,6 +177,7 @@ export default function VendorManagement() {
       approvalLevel: '',
       approvalSource: '',
       approvalPdfUrl: '',
+      mainDocumentUrl: '',
       startRenewalDate: '',
       approvalExpiration: '',
       approved: false,
@@ -505,6 +514,7 @@ export default function VendorManagement() {
   const handleOpenModal = (vendor?: Vendor) => {
     // Reset file upload state when opening modal
     setUploadedFile(null);
+    setMainDocFile(null);
     
     if (vendor) {
       setEditingVendor(vendor);
@@ -525,6 +535,7 @@ export default function VendorManagement() {
         approvalLevel: vendor.approvalLevel || '',
         approvalSource: vendor.approvalSource || '',
         approvalPdfUrl: vendor.approvalPdfUrl || '',
+        mainDocumentUrl: vendor.mainDocumentUrl || '',
         startRenewalDate: vendor.startRenewalDate || '',
         approvalExpiration: vendor.approvalExpiration || '',
         approved: vendor.approved,
@@ -578,6 +589,58 @@ export default function VendorManagement() {
     contactForm.reset();
     // Reset file upload state
     setUploadedFile(null);
+    setMainDocFile(null);
+  };
+
+  const handleMainDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast({
+        title: 'Invalid file type',
+        description: 'Please upload a PDF file',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUploadingMainDoc(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/vendors/upload/document', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+
+      const data = await response.json();
+      form.setValue('mainDocumentUrl', data.url);
+      setMainDocFile(file);
+      toast({ title: 'Document uploaded successfully' });
+    } catch (error) {
+      toast({
+        title: 'Upload failed',
+        description: 'Failed to upload document',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingMainDoc(false);
+    }
+  };
+
+  const handleRemoveMainDoc = () => {
+    setMainDocFile(null);
+    form.setValue('mainDocumentUrl', '');
+  };
+
+  const handleSelectFromLibrary = (url: string, filename: string) => {
+    form.setValue('mainDocumentUrl', url);
+    setMainDocFile(null); // Clear file since we're using library
+    toast({ title: `Selected: ${filename}` });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1052,6 +1115,86 @@ export default function VendorManagement() {
                         </FormItem>
                       )}
                     />
+
+                    <div className="space-y-2">
+                      <Label>Vendor Document (PDF)</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Upload a W-9, agreement, or other vendor document
+                      </p>
+                      {!mainDocFile && !form.watch('mainDocumentUrl') ? (
+                        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
+                          <div className="flex flex-col sm:flex-row gap-3 items-center justify-center">
+                            <div className="flex flex-col items-center">
+                              <Upload className="w-6 h-6 mb-1 text-gray-400" />
+                              <Label
+                                htmlFor="main-doc-upload"
+                                className="cursor-pointer text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                              >
+                                Upload from Computer
+                              </Label>
+                              <Input
+                                id="main-doc-upload"
+                                type="file"
+                                accept="application/pdf"
+                                onChange={handleMainDocUpload}
+                                className="hidden"
+                                data-testid="input-main-doc-upload"
+                                disabled={uploadingMainDoc}
+                              />
+                            </div>
+                            <span className="text-gray-400">or</span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setIsMediaLibraryOpen(true)}
+                              data-testid="button-select-from-library"
+                            >
+                              <FolderOpen className="w-4 h-4 mr-2" />
+                              Select from Library
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-5 h-5 text-blue-600" />
+                              <span className="text-sm font-medium truncate max-w-[200px]">
+                                {mainDocFile?.name || (
+                                  form.watch('mainDocumentUrl')
+                                    ? (form.watch('mainDocumentUrl') ?? '').split('/').pop()
+                                    : 'Vendor Document.pdf'
+                                )}
+                              </span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={handleRemoveMainDoc}
+                              data-testid="button-remove-main-doc"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          {form.watch('mainDocumentUrl') && (
+                            <a
+                              href={form.watch('mainDocumentUrl')}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2 inline-block"
+                              data-testid="link-view-main-doc"
+                            >
+                              View PDF
+                            </a>
+                          )}
+                        </div>
+                      )}
+                      {uploadingMainDoc && (
+                        <p className="text-xs text-gray-500">Uploading...</p>
+                      )}
+                    </div>
 
                     <DialogFooter>
                       <Button
@@ -2199,6 +2342,14 @@ export default function VendorManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MediaLibraryPicker
+        open={isMediaLibraryOpen}
+        onOpenChange={setIsMediaLibraryOpen}
+        onSelect={handleSelectFromLibrary}
+        acceptedTypes={['application/pdf']}
+        title="Select Vendor Document from Library"
+      />
     </div>
   );
 }

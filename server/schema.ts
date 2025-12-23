@@ -2765,6 +2765,7 @@ export const vendors = pgTable('vendors', {
   approvalLevel: text('approval_level'), // A, B, or C - vendor approval level
   approvalSource: text('approval_source'), // "Certification" or "Supplier Approval Form"
   approvalPdfUrl: text('approval_pdf_url'), // Path to uploaded PDF document
+  mainDocumentUrl: text('main_document_url'), // Main vendor document (W-9, agreement, etc.) - uploaded or from media library
   startRenewalDate: date('start_renewal_date'), // Date when vendor approval started or was renewed
   approvalExpiration: date('approval_expiration'), // Date when vendor approval expires
   approved: boolean('approved').notNull().default(false),
@@ -8408,6 +8409,7 @@ export const healthCheckTypes = pgTable('health_check_types', {
   isEnabled: boolean('is_enabled').default(true), // Whether this check runs in automated daily checks
   checkFunction: text('check_function'), // For custom checks: SQL query or function name
   testEmailAddress: text('test_email_address'), // For email checks: where to send test emails
+  testSmsPhone: text('test_sms_phone'), // For SMS checks: where to send test SMS
   sortOrder: integer('sort_order').default(0),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -8427,6 +8429,8 @@ export const healthCheckConfig = pgTable('health_check_config', {
   id: serial('id').primaryKey(),
   scheduledTime: text('scheduled_time').default('08:00'), // HH:MM format for daily automated run
   notificationEmail: text('notification_email'), // Where to send alerts if checks fail
+  testSmsPhone: text('test_sms_phone'), // Phone number to send test SMS health checks to
+  timezone: text('timezone').default('America/Chicago'), // Timezone for scheduled checks (default Central Time)
   isScheduleEnabled: boolean('is_schedule_enabled').default(true), // Whether automated daily checks are enabled
   lastRunAt: timestamp('last_run_at'),
   createdAt: timestamp('created_at').defaultNow(),

@@ -50,6 +50,8 @@ import {
   Loader2,
   RefreshCw,
   History,
+  MessageSquare,
+  Globe,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -63,6 +65,7 @@ interface HealthCheckType {
   isEnabled: boolean;
   checkFunction: string | null;
   testEmailAddress: string | null;
+  testSmsPhone: string | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -72,6 +75,8 @@ interface HealthCheckConfig {
   id: number;
   scheduledTime: string;
   notificationEmail: string | null;
+  testSmsPhone: string | null;
+  timezone: string | null;
   isScheduleEnabled: boolean;
   lastRunAt: string | null;
   createdAt: string;
@@ -110,6 +115,7 @@ const categoryIcons: Record<string, JSX.Element> = {
   database: <Database className="h-4 w-4" />,
   system: <Activity className="h-4 w-4" />,
   custom: <FileCheck className="h-4 w-4" />,
+  sms: <MessageSquare className="h-4 w-4" />,
 };
 
 export default function SystemHealthChecksPage() {
@@ -122,6 +128,8 @@ export default function SystemHealthChecksPage() {
   });
   const [editingEmailId, setEditingEmailId] = useState<number | null>(null);
   const [emailInput, setEmailInput] = useState('');
+  const [editingSmsId, setEditingSmsId] = useState<number | null>(null);
+  const [smsInput, setSmsInput] = useState('');
 
   const { data: checkTypes = [], isLoading: typesLoading } = useQuery<HealthCheckType[]>({
     queryKey: ['/api/health-checks/types'],
@@ -181,6 +189,23 @@ export default function SystemHealthChecksPage() {
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to update email address.', variant: 'destructive' });
+    },
+  });
+
+  const updateSmsMutation = useMutation({
+    mutationFn: async ({ id, testSmsPhone }: { id: number; testSmsPhone: string }) => {
+      return apiRequest(`/api/health-checks/types/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ testSmsPhone }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/health-checks/types'] });
+      setEditingSmsId(null);
+      toast({ title: 'Phone updated', description: 'Test SMS phone number has been saved.' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update phone number.', variant: 'destructive' });
     },
   });
 
@@ -392,7 +417,7 @@ export default function SystemHealthChecksPage() {
                     <TableHead className="w-12">Enabled</TableHead>
                     <TableHead>Check</TableHead>
                     <TableHead>Category</TableHead>
-                    <TableHead>Test Email</TableHead>
+                    <TableHead>Test Recipient</TableHead>
                     <TableHead className="w-32">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -471,6 +496,10 @@ export default function SystemHealthChecksPage() {
                               {check.testEmailAddress || 'Set email...'}
                             </Button>
                           )
+                        ) : check.category === 'sms' ? (
+                          <span className="text-sm text-muted-foreground">
+                            Uses phone from Schedule settings
+                          </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
@@ -594,41 +623,92 @@ export default function SystemHealthChecksPage() {
 
               <Separator />
 
-              <div className="space-y-2">
-                <Label htmlFor="scheduledTime">Run Time (24-hour format)</Label>
-                <div className="flex gap-2 items-center">
-                  <Input
-                    id="scheduledTime"
-                    type="time"
-                    value={config?.scheduledTime || '08:00'}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="scheduledTime">Run Time</Label>
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      id="scheduledTime"
+                      type="time"
+                      value={config?.scheduledTime || '07:00'}
+                      onChange={(e) =>
+                        updateConfigMutation.mutate({ scheduledTime: e.target.value })
+                      }
+                      className="w-32"
+                      data-testid="input-schedule-time"
+                    />
+                    <span className="text-muted-foreground">daily</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="timezone" className="flex items-center gap-2">
+                    <Globe className="h-4 w-4" />
+                    Timezone
+                  </Label>
+                  <select
+                    id="timezone"
+                    value={config?.timezone || 'America/Chicago'}
                     onChange={(e) =>
-                      updateConfigMutation.mutate({ scheduledTime: e.target.value })
+                      updateConfigMutation.mutate({ timezone: e.target.value })
                     }
-                    className="w-32"
-                    data-testid="input-schedule-time"
-                  />
-                  <span className="text-muted-foreground">daily</span>
+                    className="w-full px-3 py-2 border rounded-md bg-background"
+                    data-testid="select-timezone"
+                  >
+                    <option value="America/New_York">Eastern (ET)</option>
+                    <option value="America/Chicago">Central (CT)</option>
+                    <option value="America/Denver">Mountain (MT)</option>
+                    <option value="America/Los_Angeles">Pacific (PT)</option>
+                    <option value="America/Anchorage">Alaska (AKT)</option>
+                    <option value="Pacific/Honolulu">Hawaii (HT)</option>
+                  </select>
                 </div>
               </div>
 
               <Separator />
 
-              <div className="space-y-2">
-                <Label htmlFor="notificationEmail">Notification Email</Label>
-                <Input
-                  id="notificationEmail"
-                  type="email"
-                  value={config?.notificationEmail || ''}
-                  onChange={(e) =>
-                    updateConfigMutation.mutate({ notificationEmail: e.target.value })
-                  }
-                  placeholder="admin@example.com"
-                  className="max-w-md"
-                  data-testid="input-notification-email"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Receive alerts when health checks fail
-                </p>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="testSmsPhone" className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4" />
+                    Daily Test SMS Phone Number
+                  </Label>
+                  <Input
+                    id="testSmsPhone"
+                    type="tel"
+                    value={config?.testSmsPhone || ''}
+                    onChange={(e) =>
+                      updateConfigMutation.mutate({ testSmsPhone: e.target.value })
+                    }
+                    placeholder="+12565551234"
+                    className="max-w-md"
+                    data-testid="input-test-sms-phone"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Receive a daily test text at the scheduled time to verify SMS is working
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="notificationEmail" className="flex items-center gap-2">
+                    <Mail className="h-4 w-4" />
+                    Notification Email
+                  </Label>
+                  <Input
+                    id="notificationEmail"
+                    type="email"
+                    value={config?.notificationEmail || ''}
+                    onChange={(e) =>
+                      updateConfigMutation.mutate({ notificationEmail: e.target.value })
+                    }
+                    placeholder="admin@example.com"
+                    className="max-w-md"
+                    data-testid="input-notification-email"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Receive alerts when health checks fail
+                  </p>
+                </div>
               </div>
 
               {config?.lastRunAt && (

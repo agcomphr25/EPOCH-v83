@@ -26,6 +26,7 @@ const builtInChecks: Record<string, CheckFunction> = {
   sendgrid_email: checkSendGridEmail,
   signature_email: checkSignatureEmail,
   duplicate_orders: checkDuplicateOrders,
+  twilio_sms: checkTwilioSMS,
 };
 
 async function checkDatabaseConnection(): Promise<HealthCheckResponse> {
@@ -185,6 +186,84 @@ async function checkDuplicateOrders(): Promise<HealthCheckResponse> {
     return {
       status: 'fail',
       message: `Duplicate order check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      details: { error: String(error) },
+      executionTimeMs: Date.now() - startTime,
+    };
+  }
+}
+
+async function checkTwilioSMS(checkType: HealthCheckType): Promise<HealthCheckResponse> {
+  const startTime = Date.now();
+  
+  // Get phone from check type first, then fall back to global config
+  let testPhone = checkType.testSmsPhone;
+  if (!testPhone) {
+    const config = await getHealthCheckConfig();
+    testPhone = config?.testSmsPhone || null;
+  }
+  
+  if (!testPhone) {
+    return {
+      status: 'skipped',
+      message: 'No test phone number configured for SMS check. Set it in Schedule settings.',
+      executionTimeMs: Date.now() - startTime,
+    };
+  }
+
+  try {
+    const twilio = await import('twilio');
+    const accountSid = process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromNumber = process.env.TWILIO_NUMBER || process.env.TWILIO_PHONE_NUMBER;
+
+    if (!accountSid || !authToken || !fromNumber) {
+      return {
+        status: 'fail',
+        message: 'Twilio credentials not configured',
+        details: { 
+          accountSidSet: !!accountSid, 
+          authTokenSet: !!authToken, 
+          fromNumberSet: !!fromNumber 
+        },
+        executionTimeMs: Date.now() - startTime,
+      };
+    }
+
+    // Get timezone from config
+    const config = await getHealthCheckConfig();
+    const timezone = config?.timezone || 'America/Chicago';
+    const tzAbbreviations: Record<string, string> = {
+      'America/New_York': 'ET',
+      'America/Chicago': 'CT',
+      'America/Denver': 'MT',
+      'America/Los_Angeles': 'PT',
+      'America/Anchorage': 'AKT',
+      'Pacific/Honolulu': 'HT',
+    };
+    const tzAbbr = tzAbbreviations[timezone] || timezone;
+
+    const twilioClient = twilio.default(accountSid, authToken);
+    const now = new Date();
+    const message = await twilioClient.messages.create({
+      body: `[AG Composites Health Check] System is operational - ${now.toLocaleString('en-US', { timeZone: timezone })} ${tzAbbr}`,
+      from: fromNumber,
+      to: testPhone,
+    });
+
+    return {
+      status: 'pass',
+      message: `Test SMS sent successfully to ${testPhone}`,
+      details: { 
+        messageSid: message.sid, 
+        recipient: testPhone,
+        sentAt: now.toISOString()
+      },
+      executionTimeMs: Date.now() - startTime,
+    };
+  } catch (error) {
+    return {
+      status: 'fail',
+      message: `SMS check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       details: { error: String(error) },
       executionTimeMs: Date.now() - startTime,
     };
@@ -360,10 +439,34 @@ export async function seedDefaultHealthCheckConfig(): Promise<void> {
   }
 
   await db.insert(healthCheckConfig).values({
-    scheduledTime: '08:00',
+    scheduledTime: '07:00',
+    timezone: 'America/Chicago',
     isScheduleEnabled: true,
   });
   console.log('✅ Seeded default health check config');
+}
+
+export async function ensureSmsHealthCheckExists(): Promise<void> {
+  const existing = await db
+    .select()
+    .from(healthCheckTypes)
+    .where(eq(healthCheckTypes.name, 'twilio_sms'))
+    .limit(1);
+  
+  if (existing.length > 0) {
+    return;
+  }
+
+  await db.insert(healthCheckTypes).values({
+    name: 'twilio_sms',
+    displayName: 'Twilio SMS Service',
+    description: 'Sends a daily test SMS to verify text messaging is working (7:00 AM in your timezone)',
+    category: 'sms',
+    isBuiltIn: true,
+    isEnabled: true,
+    sortOrder: 5,
+  });
+  console.log('✅ Added Twilio SMS health check type');
 }
 
 export async function getHealthCheckConfig() {
@@ -371,7 +474,7 @@ export async function getHealthCheckConfig() {
   return config;
 }
 
-export async function updateHealthCheckConfig(updates: Partial<{ scheduledTime: string; notificationEmail: string; isScheduleEnabled: boolean }>) {
+export async function updateHealthCheckConfig(updates: Partial<{ scheduledTime: string; notificationEmail: string; testSmsPhone: string; timezone: string; isScheduleEnabled: boolean }>) {
   const [config] = await db
     .update(healthCheckConfig)
     .set({ ...updates, updatedAt: new Date() })
@@ -388,7 +491,7 @@ export async function toggleHealthCheck(checkId: number, isEnabled: boolean) {
   return updated;
 }
 
-export async function updateHealthCheckType(checkId: number, updates: Partial<{ testEmailAddress: string; description: string }>) {
+export async function updateHealthCheckType(checkId: number, updates: Partial<{ testEmailAddress: string; testSmsPhone: string; description: string }>) {
   const [updated] = await db
     .update(healthCheckTypes)
     .set({ ...updates, updatedAt: new Date() })

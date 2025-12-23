@@ -403,6 +403,7 @@ import {
   projectActivityLog,
   projectNotifications,
   projectStepAttachments,
+  preproductionChecklists,
   type Project,
   type InsertProject,
   type ProjectStep,
@@ -1892,6 +1893,11 @@ export interface IStorage {
   getProjectStepAttachment(id: number): Promise<ProjectStepAttachment | undefined>;
   createProjectStepAttachment(data: InsertProjectStepAttachment): Promise<ProjectStepAttachment>;
   deleteProjectStepAttachment(id: number): Promise<void>;
+
+  // Linked submission helpers
+  getLinkedSubmissionIds(stepType: string): Promise<(number | string)[]>;
+  getAllPreproductionChecklists(): Promise<any[]>;
+  getAllQuotes(): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -15418,6 +15424,48 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProjectStepAttachment(id: number): Promise<void> {
     await db.delete(projectStepAttachments).where(eq(projectStepAttachments.id, id));
+  }
+
+  async getLinkedSubmissionIds(stepType: string): Promise<(number | string)[]> {
+    const steps = await db.select().from(projectSteps);
+    const linkedIds: (number | string)[] = [];
+    
+    switch (stepType) {
+      case 'rfq_risk_assessment':
+        steps.forEach(step => {
+          if (step.linkedRfqId) linkedIds.push(step.linkedRfqId);
+        });
+        break;
+      case 'quote':
+        steps.forEach(step => {
+          if (step.linkedQuoteId) linkedIds.push(step.linkedQuoteId);
+        });
+        break;
+      case 'purchase_review_checklist':
+        steps.forEach(step => {
+          if (step.linkedPurchaseReviewId) linkedIds.push(step.linkedPurchaseReviewId);
+        });
+        break;
+      case 'preproduction_checklist':
+        steps.forEach(step => {
+          if (step.linkedPreproductionChecklistId) linkedIds.push(step.linkedPreproductionChecklistId);
+        });
+        break;
+      case 'p2_order':
+        steps.forEach(step => {
+          if (step.linkedP2OrderId) linkedIds.push(step.linkedP2OrderId);
+        });
+        break;
+    }
+    
+    return linkedIds;
+  }
+
+  async getAllPreproductionChecklists(): Promise<any[]> {
+    return await db
+      .select()
+      .from(preproductionChecklists)
+      .orderBy(desc(preproductionChecklists.createdAt));
   }
 }
 

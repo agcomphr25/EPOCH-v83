@@ -397,4 +397,103 @@ router.post('/notifications/:recipientId/mark-all-read', async (req, res) => {
   }
 });
 
+router.get('/unlinked-submissions/:stepType', async (req, res) => {
+  try {
+    const { stepType } = req.params;
+    const { customerId } = req.query;
+    const customerIdStr = customerId ? String(customerId) : null;
+    
+    const linkedIds = await storage.getLinkedSubmissionIds(stepType);
+    const linkedIdsSet = new Set(
+      linkedIds
+        .filter(id => id !== null && id !== undefined)
+        .map(id => String(id))
+    );
+    
+    let submissions: any[] = [];
+    
+    switch (stepType) {
+      case 'rfq_risk_assessment':
+        const allRfqs = await storage.getAllRFQRiskAssessments();
+        submissions = allRfqs
+          .filter(rfq => !linkedIdsSet.has(String(rfq.id)))
+          .filter(rfq => !customerIdStr || String(rfq.customerId) === customerIdStr)
+          .map(rfq => ({
+            id: String(rfq.id),
+            label: `${rfq.rfqNumber}: ${rfq.customerName || 'Unknown'}`,
+            customerId: String(rfq.customerId),
+            createdAt: rfq.createdAt,
+          }));
+        break;
+        
+      case 'quote':
+        const allQuotes = await storage.getAllQuotes();
+        submissions = allQuotes
+          .filter((quote: any) => !linkedIdsSet.has(String(quote.id)))
+          .filter((quote: any) => !customerIdStr || String(quote.customerId) === customerIdStr)
+          .map((quote: any) => ({
+            id: String(quote.id),
+            label: `Quote ${quote.quoteNumber || quote.id}: ${quote.customerName || 'Unknown'}`,
+            customerId: String(quote.customerId),
+            createdAt: quote.createdAt,
+          }));
+        break;
+        
+      case 'purchase_review_checklist':
+        const allPurchaseReviews = await storage.getAllPurchaseReviewChecklists();
+        submissions = allPurchaseReviews
+          .filter(pr => !linkedIdsSet.has(String(pr.id)))
+          .filter(pr => !customerIdStr || String(pr.customerId) === customerIdStr)
+          .map(pr => {
+            const formData = pr.formData as any;
+            return {
+              id: String(pr.id),
+              label: `PR-${pr.id}: ${formData?.customerName || 'Unknown'}`,
+              customerId: String(pr.customerId),
+              createdAt: pr.createdAt,
+            };
+          });
+        break;
+        
+      case 'preproduction_checklist':
+        const allPreproduction = await storage.getAllPreproductionChecklists();
+        submissions = allPreproduction
+          .filter((pp: any) => !linkedIdsSet.has(String(pp.id)))
+          .filter((pp: any) => !customerIdStr || String(pp.customerId) === customerIdStr)
+          .map((pp: any) => ({
+            id: String(pp.id),
+            label: `Pre-prod ${String(pp.id).substring(0, 8)}: ${pp.customerName || pp.projectName || 'Unknown'}`,
+            customerId: String(pp.customerId),
+            createdAt: pp.createdAt,
+          }));
+        break;
+        
+      case 'p2_order':
+        const allP2Orders = await storage.getAllP2PurchaseOrders();
+        submissions = allP2Orders
+          .filter(order => !linkedIdsSet.has(String(order.id)))
+          .map(order => ({
+            id: String(order.id),
+            label: `Order ${order.poNumber || order.id}: ${order.customerName}`,
+            createdAt: order.createdAt,
+          }));
+        break;
+        
+      default:
+        return res.status(400).json({ message: 'Invalid step type' });
+    }
+    
+    submissions.sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+    
+    res.json(submissions);
+  } catch (error) {
+    console.error('Error fetching unlinked submissions:', error);
+    res.status(500).json({ message: 'Failed to fetch unlinked submissions' });
+  }
+});
+
 export default router;

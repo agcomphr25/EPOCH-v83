@@ -140,6 +140,7 @@ export default function ProjectDetailPage() {
   const [selectedStep, setSelectedStep] = useState<ProjectStep | null>(null);
   const [linkId, setLinkId] = useState('');
   const [editData, setEditData] = useState<Partial<Project>>({});
+  const [showManualEntry, setShowManualEntry] = useState(false);
   const [uploadNotes, setUploadNotes] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -197,6 +198,24 @@ export default function ProjectDetailPage() {
   const { data: stepAttachments = [] } = useQuery<StepAttachment[]>({
     queryKey: ['/api/project-step-attachments', selectedStep?.id],
     enabled: !!selectedStep?.id && isUploadDialogOpen,
+  });
+
+  interface UnlinkedSubmission {
+    id: string | number;
+    label: string;
+    customerId?: string;
+    createdAt?: string;
+  }
+
+  const { data: availableSubmissions = [], isLoading: isLoadingSubmissions } = useQuery<UnlinkedSubmission[]>({
+    queryKey: ['/api/projects/unlinked-submissions', selectedStep?.stepType, project?.customerId],
+    queryFn: async () => {
+      const url = `/api/projects/unlinked-submissions/${selectedStep?.stepType}${project?.customerId ? `?customerId=${project.customerId}` : ''}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to fetch submissions');
+      return response.json();
+    },
+    enabled: !!selectedStep?.stepType && isLinkDialogOpen,
   });
 
   const deleteAttachmentMutation = useMutation({
@@ -660,7 +679,13 @@ export default function ProjectDetailPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isLinkDialogOpen} onOpenChange={setIsLinkDialogOpen}>
+      <Dialog open={isLinkDialogOpen} onOpenChange={(open) => {
+        setIsLinkDialogOpen(open);
+        if (!open) {
+          setShowManualEntry(false);
+          setLinkId('');
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Link Record</DialogTitle>
@@ -670,24 +695,77 @@ export default function ProjectDetailPage() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Record ID</Label>
-              <Input
-                value={linkId}
-                onChange={(e) => setLinkId(e.target.value)}
-                placeholder="Enter the record ID to link"
-              />
-              <p className="text-xs text-muted-foreground">
-                Enter the ID of the existing record you want to link to this step.
-              </p>
-              <div className="bg-muted p-3 rounded-md text-xs text-muted-foreground space-y-2 mt-2">
-                <p className="font-medium text-foreground">How to find the Record ID:</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li><strong>RFQ Risk Assessment:</strong> Go to the RFQ Risk Assessment page, find your submission in the list, and look for the ID number in the table.</li>
-                  <li><strong>Quote:</strong> Open the quote form and copy the quote ID from the URL or header.</li>
-                  <li><strong>Purchase Review:</strong> Find your submission in the Purchase Review Submissions page and note the ID.</li>
-                  <li><strong>Pre-production Checklist:</strong> Locate your checklist and copy its ID from the list.</li>
-                </ul>
-              </div>
+              <Label>Select Record</Label>
+              {isLoadingSubmissions ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <Clock className="h-4 w-4 animate-spin" />
+                  Loading available records...
+                </div>
+              ) : availableSubmissions.length > 0 && !showManualEntry ? (
+                <>
+                  <Select value={linkId} onValueChange={setLinkId}>
+                    <SelectTrigger data-testid="select-link-record">
+                      <SelectValue placeholder="Choose a record to link..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableSubmissions.map((submission) => (
+                        <SelectItem 
+                          key={String(submission.id)} 
+                          value={String(submission.id)}
+                          data-testid={`select-item-${submission.id}`}
+                        >
+                          {submission.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Showing {availableSubmissions.length} available record{availableSubmissions.length !== 1 ? 's' : ''} for this customer that haven't been linked to a project yet.
+                  </p>
+                  <Button 
+                    variant="link" 
+                    className="h-auto p-0 text-xs"
+                    onClick={() => setShowManualEntry(true)}
+                  >
+                    Can't find your record? Enter ID manually
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Input
+                    value={linkId}
+                    onChange={(e) => setLinkId(e.target.value)}
+                    placeholder="Enter the record ID to link"
+                    data-testid="input-link-record-id"
+                  />
+                  {availableSubmissions.length === 0 && !isLoadingSubmissions && (
+                    <p className="text-xs text-muted-foreground">
+                      No unlinked records found for this customer. Enter a record ID manually or create a new submission first.
+                    </p>
+                  )}
+                  {showManualEntry && availableSubmissions.length > 0 && (
+                    <Button 
+                      variant="link" 
+                      className="h-auto p-0 text-xs"
+                      onClick={() => {
+                        setShowManualEntry(false);
+                        setLinkId('');
+                      }}
+                    >
+                      Back to dropdown selection
+                    </Button>
+                  )}
+                  <div className="bg-muted p-3 rounded-md text-xs text-muted-foreground space-y-2 mt-2">
+                    <p className="font-medium text-foreground">How to find the Record ID:</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li><strong>RFQ Risk Assessment:</strong> Go to the RFQ Risk Assessment page, find your submission in the list, and look for the ID number in the table.</li>
+                      <li><strong>Quote:</strong> Open the quote form and copy the quote ID from the URL or header.</li>
+                      <li><strong>Purchase Review:</strong> Find your submission in the Purchase Review Submissions page and note the ID.</li>
+                      <li><strong>Pre-production Checklist:</strong> Locate your checklist and copy its ID from the list.</li>
+                    </ul>
+                  </div>
+                </>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -697,6 +775,7 @@ export default function ProjectDetailPage() {
             <Button 
               onClick={handleLinkStep}
               disabled={!linkId || updateStepMutation.isPending}
+              data-testid="button-link-record"
             >
               {updateStepMutation.isPending ? 'Linking...' : 'Link Record'}
             </Button>

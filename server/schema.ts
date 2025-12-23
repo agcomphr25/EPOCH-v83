@@ -2765,6 +2765,7 @@ export const vendors = pgTable('vendors', {
   approvalLevel: text('approval_level'), // A, B, or C - vendor approval level
   approvalSource: text('approval_source'), // "Certification" or "Supplier Approval Form"
   approvalPdfUrl: text('approval_pdf_url'), // Path to uploaded PDF document
+  mainDocumentUrl: text('main_document_url'), // Main vendor document (W-9, agreement, etc.) - uploaded or from media library
   startRenewalDate: date('start_renewal_date'), // Date when vendor approval started or was renewed
   approvalExpiration: date('approval_expiration'), // Date when vendor approval expires
   approved: boolean('approved').notNull().default(false),

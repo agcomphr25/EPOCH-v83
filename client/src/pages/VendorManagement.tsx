@@ -89,6 +89,7 @@ const vendorFormSchema = insertVendorSchema.extend({
   approvalLevel: z.string().optional(),
   approvalSource: z.string().optional(),
   approvalPdfUrl: z.string().optional(),
+  mainDocumentUrl: z.string().optional(),
   startRenewalDate: z.string().optional(),
   approvalExpiration: z.string().optional(),
   evaluationDate: z.string().optional(),

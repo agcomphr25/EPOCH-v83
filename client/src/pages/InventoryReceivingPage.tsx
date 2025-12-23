@@ -46,6 +46,9 @@ import {
   Copy,
   ArrowRight,
   ExternalLink,
+  Upload,
+  FileText as FilePdf,
+  X,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import JsBarcode from 'jsbarcode';
@@ -166,7 +169,10 @@ export default function InventoryReceivingPage() {
     receivedQuantity: 0,
     notes: '',
     cocLink: '',
+    pdfUrl: '',
   });
+  const [receivingPdfFile, setReceivingPdfFile] = useState<File | null>(null);
+  const [isUploadingReceivingPdf, setIsUploadingReceivingPdf] = useState(false);
   const [traceabilityData, setTraceabilityData] = useState<Record<string, string>>({});
   const [receivingData, setReceivingData] = useState<ReceivingItem>({
     agPartNumber: '',
@@ -481,7 +487,9 @@ export default function InventoryReceivingPage() {
       receivedQuantity: quantityToReceive,
       notes: '',
       cocLink: '',
+      pdfUrl: '',
     });
+    setReceivingPdfFile(null);
     
     // Initialize traceability data with empty values for each field
     const initialTraceabilityData: Record<string, string> = {};
@@ -495,8 +503,9 @@ export default function InventoryReceivingPage() {
     });
     setTraceabilityData(initialTraceabilityData);
     
-    // Set up per-unit mode if traceable item with quantity > 1
-    if (traceabilityRequired && traceabilityFields.length > 0 && quantityToReceive > 1) {
+    // Set up per-unit mode only if traceable item with whole-number quantity > 1
+    const isWholeNumber = Number.isInteger(quantityToReceive);
+    if (traceabilityRequired && traceabilityFields.length > 0 && quantityToReceive > 1 && isWholeNumber) {
       setPerUnitMode(true);
       setCurrentUnitIndex(0);
       setTotalUnitsToReceive(quantityToReceive);
@@ -597,6 +606,12 @@ export default function InventoryReceivingPage() {
       return;
     }
 
+    // For per-unit traceability mode, ensure quantity is a whole number
+    if (perUnitMode && !Number.isInteger(dialogReceivingData.receivedQuantity)) {
+      toast.error('When traceability is required, quantity must be a whole number');
+      return;
+    }
+
     // Validate required traceability fields for current unit
     if (selectedItemTraceability.required && selectedItemTraceability.fields.length > 0) {
       const missingFields = selectedItemTraceability.fields.filter(
@@ -660,6 +675,7 @@ export default function InventoryReceivingPage() {
           receivedQuantity: dialogReceivingData.receivedQuantity,
           notes: combinedNotes || undefined,
           cocLink: dialogReceivingData.cocLink || undefined,
+          documentUrl: dialogReceivingData.pdfUrl || undefined,
         }),
       });
 
@@ -740,7 +756,7 @@ export default function InventoryReceivingPage() {
         setReceivingDialogOpen(false);
         setSelectedReceivingItem(null);
         setSelectedItemTraceability({ required: false, fields: [] });
-        setDialogReceivingData({ receivedQuantity: 0, notes: '', cocLink: '' });
+        setDialogReceivingData({ receivedQuantity: 0, notes: '', cocLink: '', pdfUrl: '' });
         setTraceabilityData({});
         setCurrentPoGroupItems([]);
         setCurrentItemIndex(0);
@@ -750,6 +766,8 @@ export default function InventoryReceivingPage() {
         setCurrentUnitIndex(0);
         setTotalUnitsToReceive(0);
         setAllUnitsTraceabilityData([]);
+        // Reset PDF upload state
+        setReceivingPdfFile(null);
         if (showCompletion) {
           toast.success('All items in this PO have been received!');
         }
@@ -789,6 +807,7 @@ export default function InventoryReceivingPage() {
       receivedQuantity: 0,
       notes: '',
       cocLink: '',
+      pdfUrl: '',
     });
     setTraceabilityData({});
     // Reset all multi-item tracking state
@@ -801,6 +820,8 @@ export default function InventoryReceivingPage() {
     setCurrentUnitIndex(0);
     setTotalUnitsToReceive(0);
     setAllUnitsTraceabilityData([]);
+    // Reset PDF upload state
+    setReceivingPdfFile(null);
   };
 
   // Toggle item selection for barcode printing
@@ -1598,10 +1619,11 @@ export default function InventoryReceivingPage() {
                     onChange={(e) =>
                       setDialogReceivingData((prev) => ({
                         ...prev,
-                        receivedQuantity: parseInt(e.target.value) || 0,
+                        receivedQuantity: parseFloat(e.target.value) || 0,
                       }))
                     }
-                    min="1"
+                    min="0.01"
+                    step="0.01"
                     max={selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity}
                     data-testid="input-receive-quantity"
                   />
@@ -1620,18 +1642,28 @@ export default function InventoryReceivingPage() {
                           type="number"
                           value={dialogReceivingData.receivedQuantity}
                           onChange={(e) => {
-                            const newQty = parseInt(e.target.value) || 1;
+                            const newQty = parseFloat(e.target.value) || 0.01;
                             const maxQty = selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity;
-                            const clampedQty = Math.max(1, Math.min(newQty, maxQty));
+                            const clampedQty = Math.max(0.01, Math.min(newQty, maxQty));
                             setDialogReceivingData((prev) => ({
                               ...prev,
                               receivedQuantity: clampedQty,
                             }));
-                            setTotalUnitsToReceive(clampedQty);
+                            // Exit per-unit mode if quantity becomes a decimal or 1
+                            if (!Number.isInteger(clampedQty) || clampedQty <= 1) {
+                              setPerUnitMode(false);
+                              setTotalUnitsToReceive(0);
+                              setCurrentUnitIndex(0);
+                              setAllUnitsTraceabilityData([]);
+                              toast('Switched to single-unit mode for decimal/single quantity', { icon: 'ℹ️' });
+                            } else {
+                              setTotalUnitsToReceive(clampedQty);
+                            }
                           }}
-                          min="1"
+                          min="0.01"
+                          step="0.01"
                           max={selectedReceivingItem.expectedQuantity - selectedReceivingItem.receivedQuantity}
-                          className="w-20 h-8 text-center"
+                          className="w-24 h-8 text-center"
                           data-testid="input-receive-quantity-perunit"
                         />
                         <span className="text-sm text-muted-foreground">units</span>
@@ -1741,6 +1773,117 @@ export default function InventoryReceivingPage() {
                       Paste a link to the Certificate of Conformance for this material
                     </p>
                   </div>
+                  {/* PDF Document Upload */}
+                  <div>
+                    <Label className="flex items-center gap-1">
+                      <FilePdf className="h-3 w-3" />
+                      Supporting Document (PDF)
+                    </Label>
+                    <div className="mt-1.5 space-y-2">
+                      {!receivingPdfFile && !dialogReceivingData.pdfUrl ? (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => document.getElementById('receiving-pdf-upload')?.click()}
+                            disabled={isUploadingReceivingPdf}
+                            data-testid="button-upload-receiving-pdf"
+                          >
+                            {isUploadingReceivingPdf ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Uploading...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="h-4 w-4 mr-2" />
+                                Upload PDF
+                              </>
+                            )}
+                          </Button>
+                          <input
+                            id="receiving-pdf-upload"
+                            type="file"
+                            accept=".pdf"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                if (file.size > 10 * 1024 * 1024) {
+                                  toast.error('File size must be less than 10MB');
+                                  return;
+                                }
+                                if (!file.type.includes('pdf')) {
+                                  toast.error('Only PDF files are allowed');
+                                  return;
+                                }
+                                setReceivingPdfFile(file);
+                                setIsUploadingReceivingPdf(true);
+                                try {
+                                  const formData = new FormData();
+                                  formData.append('file', file);
+                                  formData.append('title', `Receiving Doc - ${selectedReceivingItem?.agPartNumber || 'Item'}`);
+                                  formData.append('documentType', 'receiving');
+                                  const response = await fetch('/api/documents/upload', {
+                                    method: 'POST',
+                                    body: formData,
+                                    credentials: 'include',
+                                  });
+                                  if (!response.ok) {
+                                    throw new Error('Upload failed');
+                                  }
+                                  const data = await response.json();
+                                  const documentUrl = data.id ? `/api/documents/${data.id}/download` : '';
+                                  setDialogReceivingData((prev) => ({ ...prev, pdfUrl: documentUrl }));
+                                  toast.success('Document uploaded successfully');
+                                } catch (error) {
+                                  toast.error('Failed to upload document');
+                                  setReceivingPdfFile(null);
+                                } finally {
+                                  setIsUploadingReceivingPdf(false);
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 p-2 border rounded bg-muted/50">
+                          <FilePdf className="h-4 w-4 text-red-600" />
+                          <span className="text-sm flex-1 truncate">
+                            {receivingPdfFile?.name || (dialogReceivingData.pdfUrl?.split('/').pop())}
+                          </span>
+                          {dialogReceivingData.pdfUrl && (
+                            <a
+                              href={dialogReceivingData.pdfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline text-sm"
+                            >
+                              View
+                            </a>
+                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setReceivingPdfFile(null);
+                              setDialogReceivingData((prev) => ({ ...prev, pdfUrl: '' }));
+                            }}
+                            className="h-6 w-6 p-0"
+                            data-testid="button-remove-receiving-pdf"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Upload supporting documentation like packing slips, inspection reports, or CoC documents
+                      </p>
+                    </div>
+                  </div>
+
                   <div>
                     <Label htmlFor="dialogNotes">Notes</Label>
                     <Textarea

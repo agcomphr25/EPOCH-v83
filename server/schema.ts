@@ -5107,7 +5107,7 @@ export const insertMaterialLotTransactionSchema = createInsertSchema(materialLot
     performedAt: z.coerce.date().optional(),
     reason: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
-    wasOverride: z.boolean().default(false),
+    wasOverride: z.boolean().optional().default(false),
     overrideApprovedBy: z.string().optional().nullable(),
     overrideReason: z.string().optional().nullable(),
   });
@@ -5133,7 +5133,7 @@ export const insertTravelerMaterialConsumptionSchema = createInsertSchema(travel
     scannedBy: z.string().min(1, 'Scanned by is required'),
     scannedAt: z.coerce.date().optional(),
     badgeScan: z.string().optional().nullable(),
-    wasOverride: z.boolean().default(false),
+    wasOverride: z.boolean().optional().default(false),
     overrideApprovedBy: z.string().optional().nullable(),
     overrideReason: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),

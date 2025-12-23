@@ -367,6 +367,81 @@ router.put('/tracking/:orderId', async (req: Request, res: Response) => {
   }
 });
 
+// Update tracking and optionally send notification (POST version for component compatibility)
+router.post('/update-tracking/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const {
+      trackingNumber,
+      carrier,
+      estimatedDelivery,
+      sendNotification = false,
+    } = req.body;
+
+    if (!trackingNumber) {
+      return res.status(400).json({ error: 'Tracking number is required' });
+    }
+
+    // Update order with tracking information
+    const updateData: any = {
+      trackingNumber: trackingNumber.trim(),
+      shippingCarrier: carrier || 'UPS',
+      updatedAt: new Date(),
+    };
+
+    if (estimatedDelivery) {
+      updateData.estimatedDelivery = new Date(estimatedDelivery);
+    }
+
+    // If order doesn't have a shipped date, set it now
+    updateData.shippedDate = new Date();
+
+    // Update in allOrders table
+    await db
+      .update(allOrders)
+      .set(updateData)
+      .where(eq(allOrders.orderId, orderId));
+
+    console.log(`Updated tracking for order ${orderId}: ${trackingNumber}`);
+
+    // Send notification if requested
+    let notificationResult = null;
+    if (sendNotification) {
+      try {
+        const { sendCustomerNotification } = await import('../../utils/notifications');
+        notificationResult = await sendCustomerNotification({
+          orderId,
+          trackingNumber: trackingNumber.trim(),
+          carrier: carrier || 'UPS',
+          estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : undefined,
+        });
+
+        if (notificationResult.success) {
+          console.log(`Notification sent for order ${orderId} via ${notificationResult.methods.join(', ')}`);
+        } else {
+          console.error(`Notification failed for order ${orderId}:`, notificationResult.errors);
+        }
+      } catch (notificationError) {
+        console.error('Failed to send customer notification:', notificationError);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: sendNotification && notificationResult?.success 
+        ? `Tracking updated and customer notified via ${notificationResult.methods.join(' and ')}`
+        : 'Tracking information updated',
+      trackingNumber: trackingNumber.trim(),
+      carrier: carrier || 'UPS',
+      notificationSent: notificationResult?.success || false,
+      notificationMethods: notificationResult?.methods || [],
+    });
+  } catch (error) {
+    console.error('Error updating tracking:', error);
+    res.status(500).json({ error: 'Failed to update tracking information' });
+  }
+});
+
 // Get shipping statistics
 router.get('/stats', async (req: Request, res: Response) => {
   try {

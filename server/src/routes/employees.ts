@@ -598,7 +598,42 @@ router.post('/', async (req: Request, res: Response) => {
       employeeData.employeeCode = await generateNextEmployeeCode();
     }
     
-    const newEmployee = await storage.createEmployee(employeeData);
+    // IC-2: Canonical Identity matching/creation
+    let canonicalId: string | null = null;
+    
+    if (employeeData.email) {
+      // Try to find existing canonical identity by email
+      const existingIdentity = await storage.getCanonicalIdentityByEmail(employeeData.email);
+      
+      if (existingIdentity) {
+        canonicalId = existingIdentity.id;
+        console.log(`[IC-2] Matched canonical identity ${canonicalId} for email ${employeeData.email}`);
+      } else {
+        // Create new canonical identity
+        const newIdentity = await storage.createCanonicalIdentity({
+          displayName: employeeData.name,
+          primaryEmail: employeeData.email,
+          source: 'epoch',
+          status: 'active',
+        });
+        canonicalId = newIdentity.id;
+        console.log(`[IC-2] Created new canonical identity ${canonicalId} for ${employeeData.name}`);
+      }
+    } else {
+      // No email - still create canonical identity for tracking
+      const newIdentity = await storage.createCanonicalIdentity({
+        displayName: employeeData.name,
+        source: 'epoch',
+        status: 'active',
+      });
+      canonicalId = newIdentity.id;
+      console.log(`[IC-2] Created canonical identity ${canonicalId} for ${employeeData.name} (no email)`);
+    }
+    
+    // Attach canonical_id to employee data
+    const employeeWithCanonical = { ...employeeData, canonicalId };
+    
+    const newEmployee = await storage.createEmployee(employeeWithCanonical);
     res.status(201).json(newEmployee);
   } catch (error) {
     console.error('Create employee error:', error);
@@ -619,14 +654,56 @@ router.put('/:id', async (req: Request, res: Response) => {
       updates.employeeCode = updates.employeeCode.trim();
     }
     
+    // Get current employee for comparison
+    const currentEmployee = await storage.getEmployee(employeeId);
+    if (!currentEmployee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    
     // Auto-generate employee code if missing/empty and employee doesn't have one
     if (!updates.employeeCode || updates.employeeCode === '') {
-      const currentEmployee = await storage.getEmployee(employeeId);
       if (!currentEmployee?.employeeCode) {
         updates.employeeCode = await generateNextEmployeeCode();
       } else {
         // Keep existing code if available
         delete updates.employeeCode;
+      }
+    }
+    
+    // IC-2: Check if key fields changed that require canonical identity upsert
+    const nameChanged = updates.name && updates.name !== currentEmployee.name;
+    const emailChanged = updates.email !== undefined && updates.email !== currentEmployee.email;
+    const statusChanged = updates.isActive !== undefined && updates.isActive !== currentEmployee.isActive;
+    
+    if (nameChanged || emailChanged || statusChanged) {
+      // Emit canonical identity upsert
+      if (currentEmployee.canonicalId) {
+        // Update existing canonical identity
+        await storage.updateCanonicalIdentity(currentEmployee.canonicalId, {
+          displayName: updates.name || currentEmployee.name,
+          primaryEmail: updates.email !== undefined ? updates.email : currentEmployee.email,
+          status: (updates.isActive !== undefined ? updates.isActive : currentEmployee.isActive) ? 'active' : 'inactive',
+          updatedAt: new Date(),
+        });
+        console.log(`[IC-2] Updated canonical identity ${currentEmployee.canonicalId} due to employee field changes`);
+      } else if (updates.email || currentEmployee.email) {
+        // Employee has no canonical ID but has email - try to match or create
+        const email = updates.email || currentEmployee.email;
+        const existingIdentity = await storage.getCanonicalIdentityByEmail(email);
+        
+        if (existingIdentity) {
+          updates.canonicalId = existingIdentity.id;
+          console.log(`[IC-2] Matched canonical identity ${existingIdentity.id} for updated email ${email}`);
+        } else {
+          const newIdentity = await storage.createCanonicalIdentity({
+            displayName: updates.name || currentEmployee.name,
+            primaryEmail: email,
+            source: 'epoch',
+            status: (updates.isActive !== undefined ? updates.isActive : currentEmployee.isActive) ? 'active' : 'inactive',
+          });
+          updates.canonicalId = newIdentity.id;
+          console.log(`[IC-2] Created canonical identity ${newIdentity.id} for employee update`);
+        }
       }
     }
     

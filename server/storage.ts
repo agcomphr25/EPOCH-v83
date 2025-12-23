@@ -178,6 +178,9 @@ import {
   type InsertDepartment,
   type Employee,
   type InsertEmployee,
+  type CanonicalIdentity,
+  type InsertCanonicalIdentity,
+  canonicalIdentities,
   // User authentication types
   type User,
   type InsertUser,
@@ -688,6 +691,13 @@ export interface IStorage {
       stockModel: string | null;
     }[]
   >;
+
+  // Canonical Identity CRUD (IC-2)
+  getCanonicalIdentityByEmail(email: string): Promise<CanonicalIdentity | undefined>;
+  getCanonicalIdentityById(id: string): Promise<CanonicalIdentity | undefined>;
+  createCanonicalIdentity(data: InsertCanonicalIdentity): Promise<CanonicalIdentity>;
+  updateCanonicalIdentity(id: string, data: Partial<InsertCanonicalIdentity>): Promise<CanonicalIdentity>;
+  getAllCanonicalIdentities(): Promise<CanonicalIdentity[]>;
 
   // Employees CRUD
   getAllEmployees(): Promise<Employee[]>;
@@ -4877,6 +4887,48 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(desc(orderDrafts.dueDate));
+  }
+
+  // Canonical Identity CRUD (IC-2)
+
+  async getCanonicalIdentityByEmail(email: string): Promise<CanonicalIdentity | undefined> {
+    const [identity] = await db
+      .select()
+      .from(canonicalIdentities)
+      .where(eq(canonicalIdentities.primaryEmail, email));
+    return identity || undefined;
+  }
+
+  async getCanonicalIdentityById(id: string): Promise<CanonicalIdentity | undefined> {
+    const [identity] = await db
+      .select()
+      .from(canonicalIdentities)
+      .where(eq(canonicalIdentities.id, id));
+    return identity || undefined;
+  }
+
+  async createCanonicalIdentity(data: InsertCanonicalIdentity): Promise<CanonicalIdentity> {
+    const [identity] = await db
+      .insert(canonicalIdentities)
+      .values(data)
+      .returning();
+    return identity;
+  }
+
+  async updateCanonicalIdentity(id: string, data: Partial<InsertCanonicalIdentity>): Promise<CanonicalIdentity> {
+    const [identity] = await db
+      .update(canonicalIdentities)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(canonicalIdentities.id, id))
+      .returning();
+    return identity;
+  }
+
+  async getAllCanonicalIdentities(): Promise<CanonicalIdentity[]> {
+    return await db
+      .select()
+      .from(canonicalIdentities)
+      .orderBy(canonicalIdentities.displayName);
   }
 
   // Employees CRUD

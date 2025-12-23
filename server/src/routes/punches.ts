@@ -28,9 +28,18 @@ router.post('/webhook', async (req: Request, res: Response) => {
     const signature = req.headers['x-punch-signature'] as string;
     const rawBody = JSON.stringify(req.body);
     
-    if (signature && !validateSignature(rawBody, signature)) {
-      console.warn('[IC-7] Invalid punch webhook signature');
-      return res.status(401).json({ error: 'Invalid signature' });
+    const secretIsConfigured = !!process.env.PUNCH_WEBHOOK_SECRET;
+    const bypassSignature = process.env.NODE_ENV === 'development' && !secretIsConfigured;
+    
+    if (!bypassSignature) {
+      if (!signature) {
+        console.warn('[IC-7] Missing punch webhook signature');
+        return res.status(401).json({ error: 'Missing signature' });
+      }
+      if (!validateSignature(rawBody, signature)) {
+        console.warn('[IC-7] Invalid punch webhook signature');
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
     }
     
     const { event, data } = req.body;

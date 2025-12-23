@@ -61,6 +61,7 @@ import {
   Archive,
   Image,
   Eye,
+  Boxes,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -524,6 +525,24 @@ export default function Navigation() {
       label: 'Certifications',
       icon: Award,
       description: 'Manage P2 certifications',
+    },
+    {
+      path: '/material-receiving',
+      label: 'Material Receiving',
+      icon: Package,
+      description: 'Receive materials with ICN generation',
+    },
+    {
+      path: '/material-inventory',
+      label: 'Material Inventory',
+      icon: Boxes,
+      description: 'Manage material lots with full traceability',
+    },
+    {
+      path: '/travelers',
+      label: 'Traveler Management',
+      icon: ClipboardList,
+      description: 'Create and manage production travelers',
     },
   ];
 

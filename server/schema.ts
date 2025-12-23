@@ -3879,6 +3879,8 @@ export const partRoutings = pgTable('part_routings', {
   inventoryItemId: text('inventory_item_id').notNull(), // Reference to inventory item
   partNumber: text('part_number').notNull(), // Denormalized for display
   partName: text('part_name').notNull(), // Denormalized for display
+  routingName: text('routing_name').default('Default').notNull(), // AS9100 routing name for revision control
+  routingRevision: integer('routing_revision').default(1).notNull(), // AS9100 controlled revision number
   departmentSequence: jsonb('department_sequence').notNull(), // Array of department names in order: ["Layup", "CNC", "Finish"]
   traceabilityConfig: jsonb('traceability_config').notNull(), // Requirements per department: { "Layup": ["lot_number", "batch_number", "expiration"], "CNC": ["custom_1"] }
   departmentConfig: jsonb('department_config'), // Full department configuration: { "Layup": { materials: [{partId, partNumber, partName, requiredFields, entryMethod}], technicianRequired: bool, qcStandards: [{standard, tolerance, requirement}] } }
@@ -3888,6 +3890,316 @@ export const partRoutings = pgTable('part_routings', {
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
   inventoryItemIdx: index('part_routings_inventory_item_idx').on(table.inventoryItemId),
+}));
+
+// ============================================================================
+// MATERIAL TRACEABILITY SYSTEM - AS9100 Digital Material Control
+// ============================================================================
+
+// Material Lots - One record per received lot/container with unique ICN
+export const materialLots = pgTable('material_lots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  
+  // Link to inventory item (material definition)
+  inventoryItemId: integer('inventory_item_id').notNull(),
+  materialPartNumber: text('material_part_number').notNull(), // Denormalized
+  materialName: text('material_name').notNull(), // Denormalized
+  
+  // Unique identifier
+  internalControlNumber: text('internal_control_number').notNull().unique(), // ICN-MAT-20251223-000184
+  
+  // Supplier info
+  supplier: text('supplier').notNull(),
+  supplierLotNumber: text('supplier_lot_number'),
+  supplierPartNumber: text('supplier_part_number'),
+  
+  // Receiving info
+  purchaseOrderNumber: text('purchase_order_number'),
+  receivingRecordNumber: text('receiving_record_number'),
+  
+  // Quantity tracking
+  receivedQty: numeric('received_qty').notNull(),
+  remainingQty: numeric('remaining_qty').notNull(),
+  unitOfMeasure: text('unit_of_measure').default('EA').notNull(), // EA, LB, FT, SQ_FT, GAL, etc.
+  
+  // Date tracking
+  expirationDate: timestamp('expiration_date'),
+  cureDate: timestamp('cure_date'), // For prepregs
+  manufactureDate: timestamp('manufacture_date'),
+  
+  // Storage
+  storageLocation: text('storage_location'), // Freezer #, rack, bin
+  storageRequirements: text('storage_requirements'), // Temperature, humidity requirements
+  
+  // Status tracking
+  status: text('status').default('RECEIVED').notNull(), // RECEIVED | QUARANTINE | ACCEPTED | REJECTED | EXPIRED | ISSUED | CONSUMED | SCRAPPED
+  
+  // Out-time tracking (for prepregs/time-sensitive materials)
+  totalOutTimeMinutes: integer('total_out_time_minutes').default(0),
+  maxOutTimeMinutes: integer('max_out_time_minutes'), // Limit before material expires
+  currentlyOutOfStorage: boolean('currently_out_of_storage').default(false),
+  lastOutAt: timestamp('last_out_at'),
+  
+  // Parent lot (for splits)
+  parentLotId: uuid('parent_lot_id'),
+  
+  // Documents
+  cocAttachment: text('coc_attachment'), // Certificate of Conformance file path
+  inspectionAttachment: text('inspection_attachment'),
+  
+  // Audit
+  receivedBy: text('received_by').notNull(),
+  receivedAt: timestamp('received_at').defaultNow(),
+  inspectedBy: text('inspected_by'),
+  inspectedAt: timestamp('inspected_at'),
+  acceptedBy: text('accepted_by'),
+  acceptedAt: timestamp('accepted_at'),
+  
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  icnIdx: index('material_lots_icn_idx').on(table.internalControlNumber),
+  inventoryItemIdx: index('material_lots_inventory_item_idx').on(table.inventoryItemId),
+  statusIdx: index('material_lots_status_idx').on(table.status),
+  supplierIdx: index('material_lots_supplier_idx').on(table.supplier),
+}));
+
+// Material Lot Transactions - Audit trail for all material lot movements
+export const materialLotTransactions = pgTable('material_lot_transactions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  
+  materialLotId: uuid('material_lot_id')
+    .references(() => materialLots.id, { onDelete: 'cascade' })
+    .notNull(),
+  internalControlNumber: text('internal_control_number').notNull(), // Denormalized for queries
+  
+  // Transaction type
+  transactionType: text('transaction_type').notNull(), // RECEIVE | MOVE | ISSUE | ADJUST | SCRAP | RETURN | SPLIT | OUT_START | OUT_END | ACCEPT | REJECT | QUARANTINE
+  
+  // Quantity change
+  qtyBefore: numeric('qty_before'),
+  qtyChange: numeric('qty_change'), // Negative for decreases
+  qtyAfter: numeric('qty_after'),
+  
+  // Location tracking
+  fromLocation: text('from_location'),
+  toLocation: text('to_location'),
+  
+  // Reference
+  referenceType: text('reference_type'), // TRAVELER | WORK_ORDER | ADJUSTMENT | SCRAP_REPORT
+  referenceId: text('reference_id'),
+  
+  // Actor
+  performedBy: text('performed_by').notNull(),
+  performedAt: timestamp('performed_at').defaultNow(),
+  
+  // Reason/notes
+  reason: text('reason'),
+  notes: text('notes'),
+  
+  // Override tracking
+  wasOverride: boolean('was_override').default(false),
+  overrideApprovedBy: text('override_approved_by'),
+  overrideReason: text('override_reason'),
+  
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  lotIdIdx: index('material_lot_transactions_lot_id_idx').on(table.materialLotId),
+  icnIdx: index('material_lot_transactions_icn_idx').on(table.internalControlNumber),
+  typeIdx: index('material_lot_transactions_type_idx').on(table.transactionType),
+}));
+
+// Traveler Material Consumption - Links materials to traveler steps
+// NOTE: Foreign keys to travelers/travelerSteps defined via SQL since those tables are defined later
+export const travelerMaterialConsumption = pgTable('traveler_material_consumption', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  
+  // Traveler reference (foreign keys added via database, not Drizzle refs due to table order)
+  travelerId: uuid('traveler_id').notNull(),
+  travelerStepId: uuid('traveler_step_id').notNull(),
+  travelerTaskId: uuid('traveler_task_id'), // Optional link to specific TRACE task
+  
+  // Material reference
+  materialLotId: uuid('material_lot_id')
+    .references(() => materialLots.id)
+    .notNull(),
+  internalControlNumber: text('internal_control_number').notNull(), // Denormalized
+  
+  // What was consumed
+  materialPartNumber: text('material_part_number').notNull(),
+  materialName: text('material_name').notNull(),
+  
+  // Quantity
+  qtyUsed: numeric('qty_used').notNull(),
+  unitOfMeasure: text('unit_of_measure').notNull(),
+  
+  // Validation status at time of scan
+  validationStatus: text('validation_status').notNull(), // VALID | OVERRIDE | WARNING
+  validationDetails: jsonb('validation_details'), // { expired: false, correctType: true, sufficientQty: true, ... }
+  
+  // Who scanned it
+  scannedBy: text('scanned_by').notNull(),
+  scannedAt: timestamp('scanned_at').defaultNow(),
+  badgeScan: text('badge_scan'),
+  
+  // Override tracking
+  wasOverride: boolean('was_override').default(false),
+  overrideApprovedBy: text('override_approved_by'),
+  overrideReason: text('override_reason'),
+  
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  travelerIdIdx: index('traveler_material_consumption_traveler_idx').on(table.travelerId),
+  stepIdIdx: index('traveler_material_consumption_step_idx').on(table.travelerStepId),
+  lotIdIdx: index('traveler_material_consumption_lot_idx').on(table.materialLotId),
+  icnIdx: index('traveler_material_consumption_icn_idx').on(table.internalControlNumber),
+}));
+
+// ============================================================================
+// TRAVELER SYSTEM - AS9100 Digital Travelers (Execution Records)
+// ============================================================================
+
+// Travelers - Header/controlled record for production execution
+export const travelers = pgTable('travelers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerNumber: text('traveler_number').notNull().unique(), // TRV-2025-000123
+  travelerRevision: integer('traveler_revision').default(1).notNull(),
+
+  // What are we building?
+  inventoryItemId: text('inventory_item_id').notNull(),
+  partNumber: text('part_number').notNull(),
+  partName: text('part_name').notNull(),
+
+  // Optional linkage to orders
+  salesOrderId: text('sales_order_id'),
+  workOrderId: text('work_order_id'),
+
+  // Traceability at traveler level
+  lotNumber: text('lot_number'),
+  serialNumber: text('serial_number'),
+  internalControlNumber: text('internal_control_number'), // ICN for the unit/lot
+  quantity: integer('quantity').default(1).notNull(),
+
+  status: text('status').default('DRAFT').notNull(), // DRAFT | IN_PROGRESS | COMPLETED | BLOCKED | CANCELED
+
+  // Which routing template created this traveler?
+  partRoutingId: uuid('part_routing_id'),
+  partRoutingRevision: integer('part_routing_revision'), // Snapshot of routing revision at creation
+
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  travelerNumberIdx: index('travelers_number_idx').on(table.travelerNumber),
+  statusIdx: index('travelers_status_idx').on(table.status),
+  partNumberIdx: index('travelers_part_number_idx').on(table.partNumber),
+  workOrderIdx: index('travelers_work_order_idx').on(table.workOrderId),
+}));
+
+// Traveler Steps - Departments in sequence
+export const travelerSteps = pgTable('traveler_steps', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerId: uuid('traveler_id')
+    .references(() => travelers.id, { onDelete: 'cascade' })
+    .notNull(),
+
+  departmentName: text('department_name').notNull(), // "Layup"
+  stepNumber: integer('step_number').notNull(), // 10,20,30 (makes insertions easy)
+  status: text('status').default('NOT_STARTED').notNull(), // NOT_STARTED | IN_PROGRESS | COMPLETED | BLOCKED
+
+  assignedTechnicianId: integer('assigned_technician_id'), // Optional preferred technician
+  
+  startedAt: timestamp('started_at'),
+  startedBy: text('started_by'),
+  completedAt: timestamp('completed_at'),
+  completedBy: text('completed_by'),
+}, (table) => ({
+  travelerIdIdx: index('traveler_steps_traveler_id_idx').on(table.travelerId),
+  stepNumberIdx: index('traveler_steps_step_number_idx').on(table.stepNumber),
+}));
+
+// Traveler Tasks - Start/end tasks, QC tasks, special process tasks per step
+export const travelerTasks = pgTable('traveler_tasks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerStepId: uuid('traveler_step_id')
+    .references(() => travelerSteps.id, { onDelete: 'cascade' })
+    .notNull(),
+
+  taskType: text('task_type').notNull(), // TRACE | QC | CUSTOM_FIELD | QUESTIONS | SPECIAL_PROCESS | NOTES | START_GATE | END_GATE
+  taskPhase: text('task_phase').notNull().default('WORK'), // START | WORK | FINISH - controls execution order enforcement
+
+  title: text('title').notNull(),
+  instructions: text('instructions'),
+  required: boolean('required').default(true).notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+
+  status: text('status').default('NOT_STARTED').notNull(), // NOT_STARTED | IN_PROGRESS | COMPLETED | FAILED | SKIPPED
+  completedAt: timestamp('completed_at'),
+  completedBy: text('completed_by'), // employee id/username
+}, (table) => ({
+  stepIdIdx: index('traveler_tasks_step_id_idx').on(table.travelerStepId),
+  taskTypeIdx: index('traveler_tasks_type_idx').on(table.taskType),
+  taskPhaseIdx: index('traveler_tasks_phase_idx').on(table.taskPhase),
+}));
+
+// Traveler Task Fields - Data capture per task (flexible, AS9100 evidence)
+export const travelerTaskFields = pgTable('traveler_task_fields', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerTaskId: uuid('traveler_task_id')
+    .references(() => travelerTasks.id, { onDelete: 'cascade' })
+    .notNull(),
+
+  fieldKey: text('field_key').notNull(), // "lot_number", "vacuum_start", etc.
+  fieldLabel: text('field_label').notNull(), // UI label
+  fieldType: text('field_type').notNull(), // text|number|date|yes_no|dropdown|barcode|attachment|json
+  required: boolean('required').default(false).notNull(),
+
+  value: jsonb('value'), // Store values in a consistent flexible format
+  validation: jsonb('validation'), // min/max/options/regex/etc.
+  
+  recordedBy: text('recorded_by'),
+  recordedAt: timestamp('recorded_at'),
+}, (table) => ({
+  taskIdIdx: index('traveler_task_fields_task_id_idx').on(table.travelerTaskId),
+}));
+
+// Traveler Signatures - Digital signature required for step completion
+export const travelerSignatures = pgTable('traveler_signatures', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerStepId: uuid('traveler_step_id')
+    .references(() => travelerSteps.id, { onDelete: 'cascade' })
+    .notNull(),
+
+  signedBy: text('signed_by').notNull(), // employee id/username
+  signedByName: text('signed_by_name'), // Display name
+  badgeScan: text('badge_scan'), // Optional badge scan value
+  signedAt: timestamp('signed_at').defaultNow(),
+
+  meaning: text('meaning').notNull(), // PERFORMED | INSPECTED | VERIFIED | RELEASED
+  signatureHash: text('signature_hash'), // Optional integrity hash
+  notes: text('notes'),
+}, (table) => ({
+  stepIdIdx: index('traveler_signatures_step_id_idx').on(table.travelerStepId),
+}));
+
+// Traveler Events - Audit trail for all actions
+export const travelerEvents = pgTable('traveler_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerId: uuid('traveler_id')
+    .references(() => travelers.id, { onDelete: 'cascade' })
+    .notNull(),
+
+  actor: text('actor').notNull(), // Who performed the action
+  actorName: text('actor_name'), // Display name
+  action: text('action').notNull(), // CREATED|EDITED|TASK_COMPLETED|SIGNED|STATUS_CHANGED|BLOCKED|UNBLOCKED|...
+  details: jsonb('details'), // Before/after deltas, context data
+
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  travelerIdIdx: index('traveler_events_traveler_id_idx').on(table.travelerId),
+  actionIdx: index('traveler_events_action_idx').on(table.action),
 }));
 
 // P2 Serialized Item Traceability - Stores scanned/entered traceability data per department
@@ -4725,6 +5037,261 @@ export const insertP2WorkTaskSchema = createInsertSchema(p2WorkTasks)
 export type InsertPartRouting = z.infer<typeof insertPartRoutingSchema>;
 export type UpdatePartRouting = z.infer<typeof updatePartRoutingSchema>;
 export type PartRouting = typeof partRoutings.$inferSelect;
+
+// ============================================================================
+// MATERIAL TRACEABILITY SYSTEM - Insert Schemas and Types
+// ============================================================================
+
+// Material Lot Insert Schema
+export const insertMaterialLotSchema = createInsertSchema(materialLots)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    inventoryItemId: z.number().int().positive('Inventory item ID is required'),
+    materialPartNumber: z.string().min(1, 'Material part number is required'),
+    materialName: z.string().min(1, 'Material name is required'),
+    internalControlNumber: z.string().min(1, 'ICN is required'),
+    supplier: z.string().min(1, 'Supplier is required'),
+    supplierLotNumber: z.string().optional().nullable(),
+    supplierPartNumber: z.string().optional().nullable(),
+    purchaseOrderNumber: z.string().optional().nullable(),
+    receivingRecordNumber: z.string().optional().nullable(),
+    receivedQty: z.string().min(1, 'Received quantity is required'),
+    remainingQty: z.string().min(1, 'Remaining quantity is required'),
+    unitOfMeasure: z.string().default('EA'),
+    expirationDate: z.coerce.date().optional().nullable(),
+    cureDate: z.coerce.date().optional().nullable(),
+    manufactureDate: z.coerce.date().optional().nullable(),
+    storageLocation: z.string().optional().nullable(),
+    storageRequirements: z.string().optional().nullable(),
+    status: z.enum(['RECEIVED', 'QUARANTINE', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'ISSUED', 'CONSUMED', 'SCRAPPED']).default('RECEIVED'),
+    totalOutTimeMinutes: z.number().int().default(0),
+    maxOutTimeMinutes: z.number().int().optional().nullable(),
+    currentlyOutOfStorage: z.boolean().default(false),
+    lastOutAt: z.coerce.date().optional().nullable(),
+    parentLotId: z.string().uuid().optional().nullable(),
+    cocAttachment: z.string().optional().nullable(),
+    inspectionAttachment: z.string().optional().nullable(),
+    receivedBy: z.string().min(1, 'Received by is required'),
+    receivedAt: z.coerce.date().optional(),
+    inspectedBy: z.string().optional().nullable(),
+    inspectedAt: z.coerce.date().optional().nullable(),
+    acceptedBy: z.string().optional().nullable(),
+    acceptedAt: z.coerce.date().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  });
+
+export const updateMaterialLotSchema = insertMaterialLotSchema.partial();
+
+// Material Lot Transaction Insert Schema
+export const insertMaterialLotTransactionSchema = createInsertSchema(materialLotTransactions)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    materialLotId: z.string().uuid('Invalid material lot ID'),
+    internalControlNumber: z.string().min(1, 'ICN is required'),
+    transactionType: z.enum(['RECEIVE', 'MOVE', 'ISSUE', 'ADJUST', 'SCRAP', 'RETURN', 'SPLIT', 'OUT_START', 'OUT_END', 'ACCEPT', 'REJECT', 'QUARANTINE']),
+    qtyBefore: z.string().optional().nullable(),
+    qtyChange: z.string().optional().nullable(),
+    qtyAfter: z.string().optional().nullable(),
+    fromLocation: z.string().optional().nullable(),
+    toLocation: z.string().optional().nullable(),
+    referenceType: z.string().optional().nullable(),
+    referenceId: z.string().optional().nullable(),
+    performedBy: z.string().min(1, 'Performed by is required'),
+    performedAt: z.coerce.date().optional(),
+    reason: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+    wasOverride: z.boolean().optional().default(false),
+    overrideApprovedBy: z.string().optional().nullable(),
+    overrideReason: z.string().optional().nullable(),
+  });
+
+// Traveler Material Consumption Insert Schema
+export const insertTravelerMaterialConsumptionSchema = createInsertSchema(travelerMaterialConsumption)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    travelerId: z.string().uuid('Invalid traveler ID'),
+    travelerStepId: z.string().uuid('Invalid traveler step ID'),
+    travelerTaskId: z.string().uuid().optional().nullable(),
+    materialLotId: z.string().uuid('Invalid material lot ID'),
+    internalControlNumber: z.string().min(1, 'ICN is required'),
+    materialPartNumber: z.string().min(1, 'Material part number is required'),
+    materialName: z.string().min(1, 'Material name is required'),
+    qtyUsed: z.string().min(1, 'Quantity used is required'),
+    unitOfMeasure: z.string().min(1, 'Unit of measure is required'),
+    validationStatus: z.enum(['VALID', 'OVERRIDE', 'WARNING']),
+    validationDetails: z.any().optional().nullable(),
+    scannedBy: z.string().min(1, 'Scanned by is required'),
+    scannedAt: z.coerce.date().optional(),
+    badgeScan: z.string().optional().nullable(),
+    wasOverride: z.boolean().optional().default(false),
+    overrideApprovedBy: z.string().optional().nullable(),
+    overrideReason: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  });
+
+// Material Traceability Types
+export type InsertMaterialLot = z.infer<typeof insertMaterialLotSchema>;
+export type UpdateMaterialLot = z.infer<typeof updateMaterialLotSchema>;
+export type MaterialLot = typeof materialLots.$inferSelect;
+
+export type InsertMaterialLotTransaction = z.infer<typeof insertMaterialLotTransactionSchema>;
+export type MaterialLotTransaction = typeof materialLotTransactions.$inferSelect;
+
+export type InsertTravelerMaterialConsumption = z.infer<typeof insertTravelerMaterialConsumptionSchema>;
+export type TravelerMaterialConsumption = typeof travelerMaterialConsumption.$inferSelect;
+
+// ============================================================================
+// TRAVELER SYSTEM - Insert Schemas and Types
+// ============================================================================
+
+// Traveler Insert Schema
+export const insertTravelerSchema = createInsertSchema(travelers)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    travelerNumber: z.string().min(1, 'Traveler number is required'),
+    travelerRevision: z.number().int().positive().default(1),
+    inventoryItemId: z.string().min(1, 'Inventory item ID is required'),
+    partNumber: z.string().min(1, 'Part number is required'),
+    partName: z.string().min(1, 'Part name is required'),
+    salesOrderId: z.string().optional().nullable(),
+    workOrderId: z.string().optional().nullable(),
+    lotNumber: z.string().optional().nullable(),
+    serialNumber: z.string().optional().nullable(),
+    internalControlNumber: z.string().optional().nullable(),
+    quantity: z.number().int().positive().default(1),
+    status: z.enum(['DRAFT', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED', 'CANCELED']).default('DRAFT'),
+    partRoutingId: z.string().uuid().optional().nullable(),
+    partRoutingRevision: z.number().int().optional().nullable(),
+    createdBy: z.string().min(1, 'Created by is required'),
+  });
+
+export const updateTravelerSchema = insertTravelerSchema.partial();
+
+// Traveler Step Insert Schema
+export const insertTravelerStepSchema = createInsertSchema(travelerSteps)
+  .omit({
+    id: true,
+  })
+  .extend({
+    travelerId: z.string().uuid('Invalid traveler ID'),
+    departmentName: z.string().min(1, 'Department name is required'),
+    stepNumber: z.number().int().positive(),
+    status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED']).default('NOT_STARTED'),
+    assignedTechnicianId: z.number().int().optional().nullable(),
+    startedAt: z.coerce.date().optional().nullable(),
+    startedBy: z.string().optional().nullable(),
+    completedAt: z.coerce.date().optional().nullable(),
+    completedBy: z.string().optional().nullable(),
+  });
+
+export const updateTravelerStepSchema = insertTravelerStepSchema.partial();
+
+// Traveler Task Insert Schema
+export const insertTravelerTaskSchema = createInsertSchema(travelerTasks)
+  .omit({
+    id: true,
+  })
+  .extend({
+    travelerStepId: z.string().uuid('Invalid traveler step ID'),
+    taskType: z.enum(['TRACE', 'QC', 'CUSTOM_FIELD', 'QUESTIONS', 'SPECIAL_PROCESS', 'NOTES', 'START_GATE', 'END_GATE']),
+    taskPhase: z.enum(['START', 'WORK', 'FINISH']).default('WORK'), // Controls execution order enforcement
+    title: z.string().min(1, 'Task title is required'),
+    instructions: z.string().optional().nullable(),
+    required: z.boolean().default(true),
+    sortOrder: z.number().int().default(0),
+    status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'SKIPPED']).default('NOT_STARTED'),
+    completedAt: z.coerce.date().optional().nullable(),
+    completedBy: z.string().optional().nullable(),
+  });
+
+export const updateTravelerTaskSchema = insertTravelerTaskSchema.partial();
+
+// Traveler Task Field Insert Schema
+export const insertTravelerTaskFieldSchema = createInsertSchema(travelerTaskFields)
+  .omit({
+    id: true,
+  })
+  .extend({
+    travelerTaskId: z.string().uuid('Invalid traveler task ID'),
+    fieldKey: z.string().min(1, 'Field key is required'),
+    fieldLabel: z.string().min(1, 'Field label is required'),
+    fieldType: z.enum(['text', 'number', 'date', 'yes_no', 'dropdown', 'barcode', 'attachment', 'json']),
+    required: z.boolean().default(false),
+    value: z.any().optional().nullable(),
+    validation: z.any().optional().nullable(),
+    recordedBy: z.string().optional().nullable(),
+    recordedAt: z.coerce.date().optional().nullable(),
+  });
+
+export const updateTravelerTaskFieldSchema = insertTravelerTaskFieldSchema.partial();
+
+// Traveler Signature Insert Schema
+export const insertTravelerSignatureSchema = createInsertSchema(travelerSignatures)
+  .omit({
+    id: true,
+  })
+  .extend({
+    travelerStepId: z.string().uuid('Invalid traveler step ID'),
+    signedBy: z.string().min(1, 'Signed by is required'),
+    signedByName: z.string().optional().nullable(),
+    badgeScan: z.string().optional().nullable(),
+    signedAt: z.coerce.date().optional(),
+    meaning: z.enum(['PERFORMED', 'INSPECTED', 'VERIFIED', 'RELEASED']),
+    signatureHash: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  });
+
+// Traveler Event Insert Schema
+export const insertTravelerEventSchema = createInsertSchema(travelerEvents)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    travelerId: z.string().uuid('Invalid traveler ID'),
+    actor: z.string().min(1, 'Actor is required'),
+    actorName: z.string().optional().nullable(),
+    action: z.string().min(1, 'Action is required'),
+    details: z.any().optional().nullable(),
+  });
+
+// Traveler Types
+export type InsertTraveler = z.infer<typeof insertTravelerSchema>;
+export type UpdateTraveler = z.infer<typeof updateTravelerSchema>;
+export type Traveler = typeof travelers.$inferSelect;
+
+export type InsertTravelerStep = z.infer<typeof insertTravelerStepSchema>;
+export type UpdateTravelerStep = z.infer<typeof updateTravelerStepSchema>;
+export type TravelerStep = typeof travelerSteps.$inferSelect;
+
+export type InsertTravelerTask = z.infer<typeof insertTravelerTaskSchema>;
+export type UpdateTravelerTask = z.infer<typeof updateTravelerTaskSchema>;
+export type TravelerTask = typeof travelerTasks.$inferSelect;
+
+export type InsertTravelerTaskField = z.infer<typeof insertTravelerTaskFieldSchema>;
+export type UpdateTravelerTaskField = z.infer<typeof updateTravelerTaskFieldSchema>;
+export type TravelerTaskField = typeof travelerTaskFields.$inferSelect;
+
+export type InsertTravelerSignature = z.infer<typeof insertTravelerSignatureSchema>;
+export type TravelerSignature = typeof travelerSignatures.$inferSelect;
+
+export type InsertTravelerEvent = z.infer<typeof insertTravelerEventSchema>;
+export type TravelerEvent = typeof travelerEvents.$inferSelect;
+
 export type InsertP2SerializedItemTraceability = z.infer<typeof insertP2SerializedItemTraceabilitySchema>;
 export type P2SerializedItemTraceability = typeof p2SerializedItemTraceability.$inferSelect;
 export type InsertP2SerializedItemCustomData = z.infer<typeof insertP2SerializedItemCustomDataSchema>;

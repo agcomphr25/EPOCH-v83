@@ -1,0 +1,199 @@
+Yes — the next “specific thing” to do is make the traveler enforceable (AS9100-ish) and make creation deterministic from part_routings, not just “linked”.
+
+So the answer is: build the traveler creation + execution pipeline around those tables, with a couple of small schema tweaks so you get:
+
+Controlled revision linkage (traveler records which routing revision it came from)
+
+Generated step/task records (objective evidence, not just a JSON blob)
+
+Server-side rules that enforce “required fields + signature required”
+
+API routes to create, run, and sign the traveler
+
+Below is exactly what I want you to do with these tables, in order.
+
+1) Add 3 fields to lock the routing relationship (AS9100-friendly)
+In part_routings
+
+Add controlled identity fields:
+
+routingName (text)
+
+routingRevision (int)
+
+isReleased (boolean) or status (DRAFT/RELEASED/OBSOLETE)
+
+Why: “updatedAt” isn’t revision control. AS9100 auditors will expect you to show which revision of the plan was used.
+
+In travelers
+
+Add:
+
+partRoutingRevisionUsed (int, copied at creation time)
+
+partRoutingSnapshot (jsonb, optional but strong)
+
+Why snapshot? If you edit the template later, the traveler’s historical record must remain stable. A snapshot gives you “traveler is a controlled record”.
+
+Minimum viable: partRoutingRevisionUsed only.
+Better: revision + snapshot.
+
+2) Don’t store execution in departmentConfig on the traveler
+
+The traveler should not “interpret” the template live every time.
+
+Instead, at traveler creation, generate:
+
+traveler_steps
+
+traveler_tasks
+
+traveler_task_fields
+
+signature requirements
+
+This makes your traveler a real executable record.
+
+3) Build the core API routes for travelers (this is the main next task)
+A) Create traveler from a part routing template
+
+POST /api/travelers
+
+Payload example:
+
+{
+  "inventoryItemId": "INV-123",
+  "partRoutingId": "uuid-of-template",
+  "workOrderId": "WO-456",
+  "lotNumber": "LOT-2025-019",
+  "serialNumber": null,
+  "internalControlNumber": "ICN-000991",
+  "quantity": 5,
+  "createdBy": "tasha"
+}
+
+
+Server behavior:
+
+Load part routing by partRoutingId
+
+Copy stable fields: partNumber, partName, etc.
+
+Set partRoutingRevisionUsed
+
+(Optional) store snapshot of departmentSequence, traceabilityConfig, departmentConfig
+
+Create steps from departmentSequence
+
+For each step, generate tasks + fields from template config
+
+Write an audit event: CREATED
+
+This is the “wizard finish button” endpoint.
+
+B) Read full traveler (header + steps + tasks + fields + signatures)
+
+GET /api/travelers/:id
+
+Return a single JSON tree ready for UI.
+
+C) Complete a task (validate required fields)
+
+POST /api/travelers/:travelerId/tasks/:taskId/complete
+
+Server enforces:
+
+required fields present
+
+QC pass/fail logic (if fail → force NCR or block)
+
+D) Sign a step (your “digital signature required” rule)
+
+POST /api/travelers/:travelerId/steps/:stepId/sign
+
+Server enforces:
+
+all required tasks under the step are complete
+
+no failures unresolved
+
+stores signature record: signedBy, badgeScan, signedAt, meaning
+
+This is the AS9100-critical enforcement.
+
+E) Complete traveler
+
+POST /api/travelers/:id/complete
+Server enforces every step signed.
+
+4) Tighten the traveler–routing link (what “tighter” means)
+
+“Tighter” doesn’t mean more foreign keys.
+
+It means:
+
+traveler stores routing revision used
+
+traveler stores snapshot OR has generated immutable steps/tasks that reflect that revision
+
+edits to templates do not retroactively change existing travelers
+
+That’s the key difference between a “software workflow” and a “quality record”.
+
+5) Wizard changes you should make (minimal)
+
+Your existing PartRoutingWizard is for building the template.
+
+Add a new wizard:
+
+TravelerWizard
+
+Steps:
+
+Select inventory part
+
+Pick routing template (by partNumber or inventoryItemId)
+
+Enter traveler header info (WO/SO, lot/serial/ICN/qty)
+
+Review generated steps/tasks (optional edits if you allow)
+
+Create traveler (calls POST /api/travelers)
+
+Even if you skip step 4 for now, it still works.
+
+6) What I want you to do right now
+
+Implement only these three deliverables first (they unlock everything else):
+
+Schema update: add traveler tables + routing revision fields
+
+Backend route: POST /api/travelers that generates steps/tasks/fields from part_routings
+
+Backend rule: POST /api/travelers/:travelerId/steps/:stepId/sign that blocks signing unless tasks complete
+
+Once those exist, the UI becomes straightforward.
+
+If you want, I can write the exact code next
+
+To generate the correct code in your project style, paste:
+
+your server/src/routes/partRoutings.ts (so I match your router patterns + error handling)
+
+your storage implementation in server/storage.ts (not just interface)
+
+how you identify employees/badges today (even if it’s just createdBy strings)
+
+Then I’ll return copy-paste ready files:
+
+server/src/routes/travelers.ts
+
+schema additions in server/schema.ts
+
+storage methods
+
+zod schemas for traveler create/sign
+
+plus the generation function that converts departmentSequence + traceabilityConfig + departmentConfig into steps/tasks/fields
+
+If you paste those 2–3 files, I’ll produce the exact diffs in your naming conventions (Drizzle + Zod) and match your existing /api/part-routings style.

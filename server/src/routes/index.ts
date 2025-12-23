@@ -83,6 +83,8 @@ import p2TravelerRoutes from './p2Traveler';
 import p2TravelerViewerRoutes from './p2TravelerViewer';
 import p2ProductionQueueRoutes from './p2ProductionQueue';
 import partRoutingsRoutes from './partRoutings';
+import travelersRoutes from './travelers';
+import materialLotsRoutes from './materialLots';
 
 import pdfSettingsRoutes from './pdfSettings';
 import p2LayupSchedulesRoutes from './p2LayupSchedules';
@@ -183,6 +185,12 @@ export function registerRoutes(app: Express): Server {
   
   // Part routing management routes
   app.use('/api/part-routings', partRoutingsRoutes);
+  
+  // Travelers management routes (AS9100-compliant traveler execution)
+  app.use('/api/travelers', travelersRoutes);
+  
+  // Material Lot management routes (AS9100-compliant material traceability)
+  app.use('/api/material-lots', materialLotsRoutes);
   
   // P2 Customer management routes (mount same router for P2-specific endpoints)
   app.use('/api/p2', customersRoutes);

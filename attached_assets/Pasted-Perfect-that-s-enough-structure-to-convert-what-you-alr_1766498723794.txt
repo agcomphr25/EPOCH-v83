@@ -1,0 +1,319 @@
+Perfect — that’s enough structure to convert what you already have into a Traveler Wizard that generates an AS9100-style digital traveler (routing + controlled records + traceability + objective evidence + signatures + audit trail).
+
+Below is a concrete, “drop into EPOCH-v83” plan with exact schema additions, API endpoints, and how to generate a traveler from your existing part_routings.
+
+1) Keep part_routings as the “Template”
+
+Your current part_routings table is already a route template:
+
+departmentSequence = the route
+
+traceabilityConfig + departmentConfig = the “step requirements”
+
+isActive = template control
+
+✅ That stays.
+
+What you’re missing is the execution record: the actual traveler instance tied to a job/order/serial/lot, with step tasks, data capture, signatures, and audit history.
+
+So we add Traveler tables.
+
+2) Add Traveler Tables (server/schema.ts)
+2.1 travelers (header / controlled record)
+export const travelers = pgTable('travelers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+
+  travelerNumber: text('traveler_number').notNull().unique(), // TRV-2025-000123
+  travelerRevision: integer('traveler_revision').default(1).notNull(),
+
+  // what are we building?
+  inventoryItemId: text('inventory_item_id').notNull(),
+  partNumber: text('part_number').notNull(),
+  partName: text('part_name').notNull(),
+
+  // optional linkage
+  salesOrderId: text('sales_order_id'),
+  workOrderId: text('work_order_id'),
+
+  // traceability at traveler level
+  lotNumber: text('lot_number'),
+  serialNumber: text('serial_number'),
+  internalControlNumber: text('internal_control_number'), // ICN for the unit/lot
+  quantity: integer('quantity').default(1).notNull(),
+
+  status: text('status').default('DRAFT').notNull(), // DRAFT | IN_PROGRESS | COMPLETED | BLOCKED | CANCELED
+
+  // which routing template created this traveler?
+  partRoutingId: uuid('part_routing_id'),
+
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+2.2 traveler_steps (departments in sequence)
+export const travelerSteps = pgTable('traveler_steps', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerId: uuid('traveler_id').notNull(),
+
+  departmentName: text('department_name').notNull(), // "Layup"
+  stepNumber: integer('step_number').notNull(), // 10,20,30 (makes insertions easy)
+  status: text('status').default('NOT_STARTED').notNull(), // NOT_STARTED | IN_PROGRESS | COMPLETED | BLOCKED
+
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+});
+
+2.3 traveler_tasks (start/end tasks, QC tasks, special process tasks)
+export const travelerTasks = pgTable('traveler_tasks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerStepId: uuid('traveler_step_id').notNull(),
+
+  taskType: text('task_type').notNull(),
+  // TRACE | QC | CUSTOM_FIELD | QUESTIONS | SPECIAL_PROCESS | NOTES | START_GATE | END_GATE
+
+  title: text('title').notNull(),
+  instructions: text('instructions'),
+  required: boolean('required').default(true).notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+
+  status: text('status').default('NOT_STARTED').notNull(), // NOT_STARTED | IN_PROGRESS | COMPLETED | FAILED | SKIPPED
+  completedAt: timestamp('completed_at'),
+  completedBy: text('completed_by'), // employee id/username
+});
+
+2.4 traveler_task_fields (data capture per task — flexible, AS9100 evidence)
+export const travelerTaskFields = pgTable('traveler_task_fields', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerTaskId: uuid('traveler_task_id').notNull(),
+
+  fieldKey: text('field_key').notNull(),       // "lot_number", "vacuum_start", etc.
+  fieldLabel: text('field_label').notNull(),   // UI label
+  fieldType: text('field_type').notNull(),     // text|number|date|yes_no|dropdown|barcode|attachment|json
+  required: boolean('required').default(false).notNull(),
+
+  value: jsonb('value'),                       // store values in a consistent flexible format
+  validation: jsonb('validation'),             // min/max/options/regex/etc.
+});
+
+2.5 traveler_signatures (the “digital signature required” part)
+export const travelerSignatures = pgTable('traveler_signatures', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerStepId: uuid('traveler_step_id').notNull(),
+
+  signedBy: text('signed_by').notNull(),       // employee id/username
+  badgeScan: text('badge_scan'),               // optional
+  signedAt: timestamp('signed_at').defaultNow(),
+
+  meaning: text('meaning').notNull(),          // PERFORMED | INSPECTED | VERIFIED | RELEASED
+  signatureHash: text('signature_hash'),       // optional integrity hash
+});
+
+2.6 traveler_events (audit trail)
+export const travelerEvents = pgTable('traveler_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerId: uuid('traveler_id').notNull(),
+
+  actor: text('actor').notNull(),
+  action: text('action').notNull(),            // CREATED|EDITED|TASK_COMPLETED|SIGNED|STATUS_CHANGED|...
+  details: jsonb('details'),                   // before/after deltas, etc.
+
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+
+That combo gets you the AS9100 “feel”:
+
+controlled record header
+
+step-by-step objective evidence
+
+signatures + timestamp
+
+audit trail
+
+3) Convert a Part Routing into a Traveler (Generation Logic)
+
+When the wizard finishes and user clicks “Create Traveler”:
+
+Inputs:
+
+inventoryItem + (optional SO/WO/lot/serial/qty)
+
+chosen route (either from existing part_routings.departmentSequence or customized)
+
+task configs per department (derived from traceabilityConfig + departmentConfig, plus what they build in the wizard)
+
+Output:
+
+insert travelers
+
+insert ordered traveler_steps
+
+insert tasks for each step
+
+insert fields for each task
+
+StepNumber strategy:
+
+Use 10, 20, 30… so you can insert steps later without renumbering.
+
+4) Add API Endpoints (server/src/routes)
+
+Keep your /api/part-routings endpoints as-is.
+
+Add traveler endpoints:
+
+Traveler CRUD + execution
+
+POST /api/travelers → create traveler from routing + wizard config
+
+GET /api/travelers?status=&partNumber=&workOrderId= → list
+
+GET /api/travelers/:id → full traveler (header + steps + tasks + fields + signatures)
+
+PATCH /api/travelers/:id → edit header (restricted if in progress)
+
+POST /api/travelers/:id/start → set IN_PROGRESS
+
+POST /api/travelers/:id/steps/:stepId/start
+
+POST /api/travelers/:id/tasks/:taskId/complete (validates required fields)
+
+POST /api/travelers/:id/steps/:stepId/sign (requires all required tasks complete)
+
+POST /api/travelers/:id/complete (requires all steps signed)
+
+(Optional but recommended) NCR path
+
+POST /api/travelers/:id/ncr → create nonconformance and block step
+
+5) Enforcing “Signature Required” Correctly
+
+Rule to implement in backend:
+A step can only be signed if:
+
+all required tasks under that step are COMPLETED
+
+any QC tasks with pass/fail must be PASS (or NCR exists and disposition says proceed)
+
+Rule for traveler completion:
+Traveler can only move to COMPLETED if:
+
+every step is signed (PERFORMED + INSPECTED if you want dual signoff)
+
+no steps are BLOCKED
+
+This is the part that makes it enforceable instead of just “a checkbox”.
+
+6) Updating Your Frontend Wizard
+
+You already have PartRoutingWizard.tsx with 4 steps.
+
+Don’t delete it.
+You’ll add a new wizard:
+
+New: TravelerWizard.tsx (5 steps)
+
+Select Part (inventory item)
+
+Select Routing Template (pick part_routings by partNumber OR inventoryItemId)
+
+Department Sequence (pre-filled from routing; reorder/add/remove)
+
+Configure Tasks per Department (your start/end tasks, QC criteria, special process, questions, technicians/badges)
+
+Review & Create Traveler (preview print-style view)
+
+New pages
+
+TravelerManagement.tsx (list + filters)
+
+TravelerExecution.tsx (shop floor view: step-by-step, scan badge, capture data, sign)
+
+7) How to Map Your Existing Config (traceabilityConfig, departmentConfig) into Tasks
+
+You already store:
+
+traceabilityConfig: { "Layup": ["lot_number","batch_number"] }
+
+So generation does:
+
+for each department step:
+
+create a TRACE task if traceabilityConfig has fields
+
+create those fields automatically (barcode/ICN/etc)
+
+create QC tasks from departmentConfig.qcStandards (if exists)
+
+create SPECIAL_PROCESS tasks from departmentConfig.specialProcesses (if exists)
+
+create QUESTIONS tasks from departmentConfig.checklist (if exists)
+
+always add END_GATE signature requirement (sign step)
+
+If departmentConfig is currently “freeform”, that’s okay — you can normalize gradually.
+
+8) The Most Important Change to Your Current Part Routing Schema
+
+Right now you have:
+
+departmentSequence (good)
+
+traceabilityConfig (good)
+
+departmentConfig (optional full config)
+
+To support the traveler wizard cleanly, I’d add one field:
+
+Add routingRevision and routingName
+routingName: text('routing_name').default('Default').notNull(),
+routingRevision: integer('routing_revision').default(1).notNull(),
+
+
+Why:
+
+AS9100 wants controlled revisions
+
+Travelers should reference which routing revision they were built from
+
+You already have updatedAt, but that’s not the same as a controlled revision.
+
+9) What I’d Like You To Paste Next (so I can write the exact diffs)
+
+You don’t need to explain anything—just paste the code:
+
+server/src/routes/partRoutings.ts (full file)
+
+server/storage.ts methods implementation for part routings
+
+client/src/components/PartRoutingWizard.tsx
+
+Then I’ll return:
+
+updated schema.ts (with the new traveler tables)
+
+updated storage interface + implementation
+
+brand new routes: server/src/routes/travelers.ts
+
+new front-end: TravelerWizard.tsx + TravelerExecution.tsx
+
+plus validation rules so “signature required” is enforced server-side
+
+Quick win you can do immediately (no new UI yet)
+
+Add one endpoint:
+
+POST /api/travelers/from-part-routing/:partRoutingId
+
+creates a traveler using the routing’s departmentSequence
+
+creates basic TRACE tasks from traceabilityConfig
+
+adds signature requirement at each department
+
+That gets you a working traveler fast — then the wizard becomes the “advanced configuration” layer.
+
+If you paste those 3 files, I’ll write the exact drop-in code changes in the same style you’re already using (Drizzle + Zod schemas + your route registration patterns).

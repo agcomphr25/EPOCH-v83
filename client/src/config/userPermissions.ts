@@ -102,6 +102,9 @@ export const VALID_NAVBAR_ROUTES = [
   '/media-library',
   '/signed-documents',
   '/reference-docs',
+  '/travelers',
+  '/material-receiving',
+  '/material-inventory',
 ];
 
 export const USER_PERMISSIONS: Record<string, UserPermissions> = {

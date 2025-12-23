@@ -1,0 +1,326 @@
+i want this process to be completely digital; barcode created upon recieving materials and inventory and lots, expirations, batch number, all traceable aspects are entered then and a barcode label is created and printed for that product; then when that product is used on the composite part it is scaned in
+
+Yep — that’s a clean, fully digital end-to-end traceability flow, and it fits perfectly with the Routing → Traveler execution model.
+
+Here’s the practical design that will work in your Replit app and hold up under AS9100 expectations.
+
+The end-to-end digital flow
+A) Receiving (Material is born here)
+
+Goal: create a unique, traceable identity for every received material lot/container, then print a label.
+
+At receiving, user enters:
+
+Supplier
+
+PO / receiving record
+
+Material PN / description (your internal inventory item)
+
+Supplier lot number
+
+Internal batch number (optional)
+
+Expiration date (and/or cure date, out-time rules if prepreg)
+
+Quantity + unit of measure
+
+Storage location (freezer #, rack, bin)
+
+Certificate of Conformance / cert PDF attachment
+
+Incoming inspection results (if required)
+
+System generates:
+
+ICN (Internal Control Number) — your master trace ID
+Example: ICN-MAT-20251223-000184
+
+Barcode value (usually the ICN)
+
+Label printed with human-readable + barcode/QR
+
+✅ Result: every physical container now has a scannable identity.
+
+B) Inventory (Live status control)
+
+Goal: track where it is, whether it’s usable, and the history.
+
+Track per ICN:
+
+status: RECEIVED | QUARANTINE | ACCEPTED | REJECTED | EXPIRED | ISSUED | CONSUMED | SCRAPPED
+
+location moves (freezer/bin)
+
+quantity changes (partial usage)
+
+out-time exposure (if applicable)
+
+split/child labels (if you divide a roll into smaller rolls)
+
+Every scan creates a transaction event (audit trail).
+
+C) Traveler execution (Material is “consumed” here)
+
+Goal: make it impossible to proceed unless required materials are scanned and valid.
+
+On the traveler, at the correct step (often START tasks in Layup):
+
+Worker scans material ICN barcodes:
+
+resin
+
+fabric/prepreg
+
+core
+
+adhesive/film
+
+primer/paint (if applicable)
+
+System validates:
+
+correct material type for the task
+
+not expired
+
+correct status (ACCEPTED)
+
+enough quantity remaining
+
+matches routing requirements (optional strict mode)
+
+Then the traveler records:
+
+which ICNs were used
+
+when
+
+by who (badge scan)
+
+on which traveler/step
+
+✅ Now your traveler is objective evidence that material traceability is complete.
+
+What you need in the database (minimum)
+
+You already have inventory items and routing/traveler tables; add these:
+
+1) material_lots (one per received lot/container)
+
+Fields:
+
+id (uuid)
+
+inventoryItemId (material PN record)
+
+supplier
+
+supplierLotNumber
+
+internalControlNumber (ICN) unique
+
+expirationDate
+
+receivedQty + uom
+
+remainingQty
+
+status
+
+locationId (freezer/bin)
+
+receivedAt / receivedBy
+
+attachments (CoC, inspection) (or separate table)
+
+2) inventory_transactions (audit trail)
+
+Fields:
+
+id
+
+icn
+
+type: RECEIVE / MOVE / ISSUE / ADJUST / SCRAP / RETURN / SPLIT
+
+qty delta
+
+from/to location
+
+actor
+
+timestamp
+
+notes
+
+3) traveler_material_consumption (links material to traveler step)
+
+Fields:
+
+travelerId
+
+travelerStepId
+
+materialLotId (or ICN)
+
+qtyUsed
+
+usedBy
+
+usedAt
+
+This is the “scan in” record.
+
+Barcode/Label format (simple + effective)
+
+Use ICN as the primary barcode value.
+
+Label shows:
+
+Material PN
+
+Description
+
+Supplier lot
+
+ICN (big)
+
+Expiration date (big)
+
+Location
+
+Optional: QR code also (QR is easier to scan on phones)
+
+Barcode type:
+
+Code128 (common for labels)
+
+OR QR code if you want more data on the label
+
+Best practice: barcode contains only the ICN, not multiple fields.
+Everything else is pulled from DB after scan.
+
+Validation rules at scan time (what makes this “AS9100-ish”)
+
+When worker scans an ICN during a traveler step:
+
+Block scan / show error if:
+
+status ≠ ACCEPTED
+
+expired
+
+insufficient remaining quantity
+
+wrong storage condition (optional)
+
+wrong material type for the task (optional)
+
+not the correct lot required by routing (optional)
+
+If you allow overrides:
+
+require supervisor badge scan
+
+log override reason into traveler_events
+
+UI pages to implement (clean workflow)
+Receiving
+
+“Receive Material” form
+
+“Print Label” after save
+
+Inventory
+
+search ICN / view history
+
+move location
+
+split lot (create child ICNs)
+
+Traveler Execution
+
+“Scan Materials” panel inside Layup (or wherever required)
+
+shows required items checklist
+
+shows scanned items + expiration/status
+
+won’t allow step signoff until requirements are met
+
+Printing labels (practical options)
+
+You’ve got 3 realistic paths:
+
+Option 1 (best for shop): Zebra / Brother label printer
+
+Use ZPL (Zebra Programming Language) for Zebra printers
+
+Print from browser using a local print service (common approach)
+
+Produces consistent barcode labels
+
+Option 2 (fastest): Print PDF labels
+
+Generate a 2x1 inch or 4x2 inch PDF label
+
+Use standard print dialog
+
+Works immediately, no special integrations
+
+Option 3: Mobile scanning + AirPrint
+
+Useful if you use phones/tablets on the floor
+
+If you tell me what printers you have (Zebra? Brother? Dymo?), I’ll tailor it.
+
+How it ties into your existing Part Routing + Traveler system
+In part_routings.departmentConfig
+
+You can define “material requirements” per department:
+
+required material types (fabric/resin/core/adhesive)
+
+min required scans
+
+whether strict PN match is required
+
+When traveler is generated:
+
+it creates START tasks like:
+
+“Scan Fabric ICN”
+
+“Scan Resin ICN”
+
+“Scan Core ICN”
+
+and those tasks automatically populate into traveler_material_consumption
+
+So routing defines what needs to be scanned, traveler records what was scanned.
+
+Next step (most useful thing to implement first)
+
+Build Receiving → Create ICN → Print Label.
+
+Because once that exists, the rest is just scanning those ICNs into traveler tasks.
+
+If you want, paste:
+
+your current inventory items schema/table name
+
+your current “freezer inventory” table (you mentioned one earlier)
+
+what label printer you use (or if you want PDF labels)
+
+And I’ll write:
+
+the material_lots schema
+
+receiving endpoint + UI
+
+label PDF generator (or Zebra ZPL output)
+
+scan endpoint that records consumption and validates expiry/status

@@ -1768,6 +1768,28 @@ export const insertCanonicalIdentitySchema = createInsertSchema(canonicalIdentit
     metadata: z.record(z.any()).optional().nullable(),
   });
 
+function normalizePunchType(value: string): string {
+  const normalized = value.toLowerCase();
+  switch (normalized) {
+    case 'in':
+    case 'clock_in':
+      return 'clock_in';
+    case 'out':
+    case 'clock_out':
+      return 'clock_out';
+    case 'break_start':
+      return 'break_start';
+    case 'break_end':
+      return 'break_end';
+    default:
+      return value;
+  }
+}
+
+const punchTypeSchema = z.string()
+  .transform(normalizePunchType)
+  .pipe(z.enum(['clock_in', 'clock_out', 'break_start', 'break_end']));
+
 // Punch Event schema for ingestion (IC-7)
 export const insertPunchEventSchema = createInsertSchema(punchEvents)
   .omit({
@@ -1779,7 +1801,7 @@ export const insertPunchEventSchema = createInsertSchema(punchEvents)
     externalPunchId: z.string().min(1, 'External punch ID is required'),
     canonicalId: z.string().uuid('Canonical ID must be a valid UUID'),
     epochEmployeeId: z.number().int().optional().nullable(),
-    punchType: z.enum(['clock_in', 'clock_out', 'break_start', 'break_end']),
+    punchType: punchTypeSchema,
     punchTime: z.string().or(z.date()),
     source: z.string().default('timeclock'),
     departmentCode: z.string().optional().nullable(),

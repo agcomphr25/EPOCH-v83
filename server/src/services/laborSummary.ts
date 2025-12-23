@@ -39,6 +39,14 @@ export interface SiteLaborSummary {
   intervals: LaborInterval[];
 }
 
+function isClockIn(punchType: string): boolean {
+  return punchType === 'clock_in' || punchType === 'IN' || punchType === 'in';
+}
+
+function isClockOut(punchType: string): boolean {
+  return punchType === 'clock_out' || punchType === 'OUT' || punchType === 'out';
+}
+
 export function deriveLaborIntervals(punches: PunchEvent[]): LaborInterval[] {
   const sortedPunches = [...punches].sort(
     (a, b) => new Date(a.punchTime).getTime() - new Date(b.punchTime).getTime()
@@ -48,7 +56,7 @@ export function deriveLaborIntervals(punches: PunchEvent[]): LaborInterval[] {
   let currentClockIn: PunchEvent | null = null;
 
   for (const punch of sortedPunches) {
-    if (punch.punchType === 'clock_in') {
+    if (isClockIn(punch.punchType)) {
       if (currentClockIn) {
         intervals.push({
           canonicalId: currentClockIn.canonicalId,
@@ -63,7 +71,7 @@ export function deriveLaborIntervals(punches: PunchEvent[]): LaborInterval[] {
         });
       }
       currentClockIn = punch;
-    } else if (punch.punchType === 'clock_out' && currentClockIn) {
+    } else if (isClockOut(punch.punchType) && currentClockIn) {
       const clockInTime = new Date(currentClockIn.punchTime);
       const clockOutTime = new Date(punch.punchTime);
       const durationMs = clockOutTime.getTime() - clockInTime.getTime();

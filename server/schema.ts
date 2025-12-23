@@ -3893,6 +3893,171 @@ export const partRoutings = pgTable('part_routings', {
 }));
 
 // ============================================================================
+// MATERIAL TRACEABILITY SYSTEM - AS9100 Digital Material Control
+// ============================================================================
+
+// Material Lots - One record per received lot/container with unique ICN
+export const materialLots = pgTable('material_lots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  
+  // Link to inventory item (material definition)
+  inventoryItemId: integer('inventory_item_id').notNull(),
+  materialPartNumber: text('material_part_number').notNull(), // Denormalized
+  materialName: text('material_name').notNull(), // Denormalized
+  
+  // Unique identifier
+  internalControlNumber: text('internal_control_number').notNull().unique(), // ICN-MAT-20251223-000184
+  
+  // Supplier info
+  supplier: text('supplier').notNull(),
+  supplierLotNumber: text('supplier_lot_number'),
+  supplierPartNumber: text('supplier_part_number'),
+  
+  // Receiving info
+  purchaseOrderNumber: text('purchase_order_number'),
+  receivingRecordNumber: text('receiving_record_number'),
+  
+  // Quantity tracking
+  receivedQty: numeric('received_qty').notNull(),
+  remainingQty: numeric('remaining_qty').notNull(),
+  unitOfMeasure: text('unit_of_measure').default('EA').notNull(), // EA, LB, FT, SQ_FT, GAL, etc.
+  
+  // Date tracking
+  expirationDate: timestamp('expiration_date'),
+  cureDate: timestamp('cure_date'), // For prepregs
+  manufactureDate: timestamp('manufacture_date'),
+  
+  // Storage
+  storageLocation: text('storage_location'), // Freezer #, rack, bin
+  storageRequirements: text('storage_requirements'), // Temperature, humidity requirements
+  
+  // Status tracking
+  status: text('status').default('RECEIVED').notNull(), // RECEIVED | QUARANTINE | ACCEPTED | REJECTED | EXPIRED | ISSUED | CONSUMED | SCRAPPED
+  
+  // Out-time tracking (for prepregs/time-sensitive materials)
+  totalOutTimeMinutes: integer('total_out_time_minutes').default(0),
+  maxOutTimeMinutes: integer('max_out_time_minutes'), // Limit before material expires
+  currentlyOutOfStorage: boolean('currently_out_of_storage').default(false),
+  lastOutAt: timestamp('last_out_at'),
+  
+  // Parent lot (for splits)
+  parentLotId: uuid('parent_lot_id'),
+  
+  // Documents
+  cocAttachment: text('coc_attachment'), // Certificate of Conformance file path
+  inspectionAttachment: text('inspection_attachment'),
+  
+  // Audit
+  receivedBy: text('received_by').notNull(),
+  receivedAt: timestamp('received_at').defaultNow(),
+  inspectedBy: text('inspected_by'),
+  inspectedAt: timestamp('inspected_at'),
+  acceptedBy: text('accepted_by'),
+  acceptedAt: timestamp('accepted_at'),
+  
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  icnIdx: index('material_lots_icn_idx').on(table.internalControlNumber),
+  inventoryItemIdx: index('material_lots_inventory_item_idx').on(table.inventoryItemId),
+  statusIdx: index('material_lots_status_idx').on(table.status),
+  supplierIdx: index('material_lots_supplier_idx').on(table.supplier),
+}));
+
+// Material Lot Transactions - Audit trail for all material lot movements
+export const materialLotTransactions = pgTable('material_lot_transactions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  
+  materialLotId: uuid('material_lot_id')
+    .references(() => materialLots.id, { onDelete: 'cascade' })
+    .notNull(),
+  internalControlNumber: text('internal_control_number').notNull(), // Denormalized for queries
+  
+  // Transaction type
+  transactionType: text('transaction_type').notNull(), // RECEIVE | MOVE | ISSUE | ADJUST | SCRAP | RETURN | SPLIT | OUT_START | OUT_END | ACCEPT | REJECT | QUARANTINE
+  
+  // Quantity change
+  qtyBefore: numeric('qty_before'),
+  qtyChange: numeric('qty_change'), // Negative for decreases
+  qtyAfter: numeric('qty_after'),
+  
+  // Location tracking
+  fromLocation: text('from_location'),
+  toLocation: text('to_location'),
+  
+  // Reference
+  referenceType: text('reference_type'), // TRAVELER | WORK_ORDER | ADJUSTMENT | SCRAP_REPORT
+  referenceId: text('reference_id'),
+  
+  // Actor
+  performedBy: text('performed_by').notNull(),
+  performedAt: timestamp('performed_at').defaultNow(),
+  
+  // Reason/notes
+  reason: text('reason'),
+  notes: text('notes'),
+  
+  // Override tracking
+  wasOverride: boolean('was_override').default(false),
+  overrideApprovedBy: text('override_approved_by'),
+  overrideReason: text('override_reason'),
+  
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  lotIdIdx: index('material_lot_transactions_lot_id_idx').on(table.materialLotId),
+  icnIdx: index('material_lot_transactions_icn_idx').on(table.internalControlNumber),
+  typeIdx: index('material_lot_transactions_type_idx').on(table.transactionType),
+}));
+
+// Traveler Material Consumption - Links materials to traveler steps
+// NOTE: Foreign keys to travelers/travelerSteps defined via SQL since those tables are defined later
+export const travelerMaterialConsumption = pgTable('traveler_material_consumption', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  
+  // Traveler reference (foreign keys added via database, not Drizzle refs due to table order)
+  travelerId: uuid('traveler_id').notNull(),
+  travelerStepId: uuid('traveler_step_id').notNull(),
+  travelerTaskId: uuid('traveler_task_id'), // Optional link to specific TRACE task
+  
+  // Material reference
+  materialLotId: uuid('material_lot_id')
+    .references(() => materialLots.id)
+    .notNull(),
+  internalControlNumber: text('internal_control_number').notNull(), // Denormalized
+  
+  // What was consumed
+  materialPartNumber: text('material_part_number').notNull(),
+  materialName: text('material_name').notNull(),
+  
+  // Quantity
+  qtyUsed: numeric('qty_used').notNull(),
+  unitOfMeasure: text('unit_of_measure').notNull(),
+  
+  // Validation status at time of scan
+  validationStatus: text('validation_status').notNull(), // VALID | OVERRIDE | WARNING
+  validationDetails: jsonb('validation_details'), // { expired: false, correctType: true, sufficientQty: true, ... }
+  
+  // Who scanned it
+  scannedBy: text('scanned_by').notNull(),
+  scannedAt: timestamp('scanned_at').defaultNow(),
+  badgeScan: text('badge_scan'),
+  
+  // Override tracking
+  wasOverride: boolean('was_override').default(false),
+  overrideApprovedBy: text('override_approved_by'),
+  overrideReason: text('override_reason'),
+  
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  travelerIdIdx: index('traveler_material_consumption_traveler_idx').on(table.travelerId),
+  stepIdIdx: index('traveler_material_consumption_step_idx').on(table.travelerStepId),
+  lotIdIdx: index('traveler_material_consumption_lot_idx').on(table.materialLotId),
+  icnIdx: index('traveler_material_consumption_icn_idx').on(table.internalControlNumber),
+}));
+
+// ============================================================================
 // TRAVELER SYSTEM - AS9100 Digital Travelers (Execution Records)
 // ============================================================================
 
@@ -4872,6 +5037,118 @@ export const insertP2WorkTaskSchema = createInsertSchema(p2WorkTasks)
 export type InsertPartRouting = z.infer<typeof insertPartRoutingSchema>;
 export type UpdatePartRouting = z.infer<typeof updatePartRoutingSchema>;
 export type PartRouting = typeof partRoutings.$inferSelect;
+
+// ============================================================================
+// MATERIAL TRACEABILITY SYSTEM - Insert Schemas and Types
+// ============================================================================
+
+// Material Lot Insert Schema
+export const insertMaterialLotSchema = createInsertSchema(materialLots)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    inventoryItemId: z.number().int().positive('Inventory item ID is required'),
+    materialPartNumber: z.string().min(1, 'Material part number is required'),
+    materialName: z.string().min(1, 'Material name is required'),
+    internalControlNumber: z.string().min(1, 'ICN is required'),
+    supplier: z.string().min(1, 'Supplier is required'),
+    supplierLotNumber: z.string().optional().nullable(),
+    supplierPartNumber: z.string().optional().nullable(),
+    purchaseOrderNumber: z.string().optional().nullable(),
+    receivingRecordNumber: z.string().optional().nullable(),
+    receivedQty: z.string().min(1, 'Received quantity is required'),
+    remainingQty: z.string().min(1, 'Remaining quantity is required'),
+    unitOfMeasure: z.string().default('EA'),
+    expirationDate: z.coerce.date().optional().nullable(),
+    cureDate: z.coerce.date().optional().nullable(),
+    manufactureDate: z.coerce.date().optional().nullable(),
+    storageLocation: z.string().optional().nullable(),
+    storageRequirements: z.string().optional().nullable(),
+    status: z.enum(['RECEIVED', 'QUARANTINE', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'ISSUED', 'CONSUMED', 'SCRAPPED']).default('RECEIVED'),
+    totalOutTimeMinutes: z.number().int().default(0),
+    maxOutTimeMinutes: z.number().int().optional().nullable(),
+    currentlyOutOfStorage: z.boolean().default(false),
+    lastOutAt: z.coerce.date().optional().nullable(),
+    parentLotId: z.string().uuid().optional().nullable(),
+    cocAttachment: z.string().optional().nullable(),
+    inspectionAttachment: z.string().optional().nullable(),
+    receivedBy: z.string().min(1, 'Received by is required'),
+    receivedAt: z.coerce.date().optional(),
+    inspectedBy: z.string().optional().nullable(),
+    inspectedAt: z.coerce.date().optional().nullable(),
+    acceptedBy: z.string().optional().nullable(),
+    acceptedAt: z.coerce.date().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  });
+
+export const updateMaterialLotSchema = insertMaterialLotSchema.partial();
+
+// Material Lot Transaction Insert Schema
+export const insertMaterialLotTransactionSchema = createInsertSchema(materialLotTransactions)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    materialLotId: z.string().uuid('Invalid material lot ID'),
+    internalControlNumber: z.string().min(1, 'ICN is required'),
+    transactionType: z.enum(['RECEIVE', 'MOVE', 'ISSUE', 'ADJUST', 'SCRAP', 'RETURN', 'SPLIT', 'OUT_START', 'OUT_END', 'ACCEPT', 'REJECT', 'QUARANTINE']),
+    qtyBefore: z.string().optional().nullable(),
+    qtyChange: z.string().optional().nullable(),
+    qtyAfter: z.string().optional().nullable(),
+    fromLocation: z.string().optional().nullable(),
+    toLocation: z.string().optional().nullable(),
+    referenceType: z.string().optional().nullable(),
+    referenceId: z.string().optional().nullable(),
+    performedBy: z.string().min(1, 'Performed by is required'),
+    performedAt: z.coerce.date().optional(),
+    reason: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+    wasOverride: z.boolean().default(false),
+    overrideApprovedBy: z.string().optional().nullable(),
+    overrideReason: z.string().optional().nullable(),
+  });
+
+// Traveler Material Consumption Insert Schema
+export const insertTravelerMaterialConsumptionSchema = createInsertSchema(travelerMaterialConsumption)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    travelerId: z.string().uuid('Invalid traveler ID'),
+    travelerStepId: z.string().uuid('Invalid traveler step ID'),
+    travelerTaskId: z.string().uuid().optional().nullable(),
+    materialLotId: z.string().uuid('Invalid material lot ID'),
+    internalControlNumber: z.string().min(1, 'ICN is required'),
+    materialPartNumber: z.string().min(1, 'Material part number is required'),
+    materialName: z.string().min(1, 'Material name is required'),
+    qtyUsed: z.string().min(1, 'Quantity used is required'),
+    unitOfMeasure: z.string().min(1, 'Unit of measure is required'),
+    validationStatus: z.enum(['VALID', 'OVERRIDE', 'WARNING']),
+    validationDetails: z.any().optional().nullable(),
+    scannedBy: z.string().min(1, 'Scanned by is required'),
+    scannedAt: z.coerce.date().optional(),
+    badgeScan: z.string().optional().nullable(),
+    wasOverride: z.boolean().default(false),
+    overrideApprovedBy: z.string().optional().nullable(),
+    overrideReason: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  });
+
+// Material Traceability Types
+export type InsertMaterialLot = z.infer<typeof insertMaterialLotSchema>;
+export type UpdateMaterialLot = z.infer<typeof updateMaterialLotSchema>;
+export type MaterialLot = typeof materialLots.$inferSelect;
+
+export type InsertMaterialLotTransaction = z.infer<typeof insertMaterialLotTransactionSchema>;
+export type MaterialLotTransaction = typeof materialLotTransactions.$inferSelect;
+
+export type InsertTravelerMaterialConsumption = z.infer<typeof insertTravelerMaterialConsumptionSchema>;
+export type TravelerMaterialConsumption = typeof travelerMaterialConsumption.$inferSelect;
 
 // ============================================================================
 // TRAVELER SYSTEM - Insert Schemas and Types

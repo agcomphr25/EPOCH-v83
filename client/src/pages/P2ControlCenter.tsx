@@ -71,9 +71,10 @@ interface Traveler {
 interface PartRouting {
   id: string;
   partNumber: string;
-  name: string;
-  revision: string | null;
-  status: string;
+  partName: string;
+  routingName: string;
+  routingRevision: number;
+  isActive: boolean;
 }
 
 export default function P2ControlCenter() {
@@ -503,7 +504,7 @@ function P2TravelersTab() {
     queryKey: ['/api/part-routings'],
   });
 
-  const activeRoutings = routings.filter(r => r.status === 'ACTIVE');
+  const activeRoutings = routings.filter(r => r.isActive);
 
   const generateTravelerMutation = useMutation({
     mutationFn: async (data: { routingId: string; workOrderId?: string; quantity?: number; createdBy: string }) => {
@@ -783,8 +784,8 @@ function P2TravelersTab() {
                   ) : (
                     activeRoutings.map((routing) => (
                       <SelectItem key={routing.id} value={routing.id}>
-                        {routing.partNumber} - {routing.name}
-                        {routing.revision && ` (Rev ${routing.revision})`}
+                        {routing.partNumber} - {routing.partName}
+                        {routing.routingRevision && ` (Rev ${routing.routingRevision})`}
                       </SelectItem>
                     ))
                   )}

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { storage } from '../../storage';
 import { insertPunchEventSchema } from '@shared/schema';
 import crypto from 'crypto';
+import { proteusTrustMiddleware, ProteusRequest } from '../middleware/proteusTrust';
 
 const router = Router();
 
@@ -91,6 +92,63 @@ router.post('/webhook', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('[IC-7] Punch webhook error:', error);
+    if (error instanceof Error && error.name === 'ZodError') {
+      return res.status(400).json({ error: 'Invalid punch data', details: error.message });
+    }
+    res.status(500).json({ error: 'Failed to process punch' });
+  }
+});
+
+router.post('/v2/webhook', proteusTrustMiddleware({ required: true }), async (req: ProteusRequest, res: Response) => {
+  try {
+    const { event, data } = req.body;
+    
+    if (event !== 'PUNCH_RECORDED') {
+      return res.status(200).json({ message: 'Event ignored', event });
+    }
+    
+    const existingPunch = await storage.getPunchEventByExternalId(data.externalPunchId);
+    if (existingPunch) {
+      console.log(`[IC-8] Punch already exists: ${data.externalPunchId} (source: ${req.proteusSource})`);
+      return res.status(200).json({ message: 'Punch already recorded', id: existingPunch.id });
+    }
+    
+    let epochEmployeeId: number | null = null;
+    if (data.canonicalId) {
+      const identity = await storage.getCanonicalIdentityById(data.canonicalId);
+      if (identity) {
+        const employees = await storage.getAllEmployees();
+        const matchedEmployee = employees.find(e => e.canonicalId === data.canonicalId);
+        if (matchedEmployee) {
+          epochEmployeeId = matchedEmployee.id;
+        }
+      }
+    }
+    
+    const punchData = insertPunchEventSchema.parse({
+      externalPunchId: data.externalPunchId,
+      canonicalId: data.canonicalId,
+      epochEmployeeId,
+      punchType: data.punchType,
+      punchTime: data.punchTime,
+      source: req.proteusSource || 'proteus',
+      departmentCode: data.departmentCode,
+      jobCode: data.jobCode,
+      locationCode: data.locationCode,
+      metadata: data.metadata,
+    });
+    
+    const punch = await storage.createPunchEvent(punchData);
+    console.log(`[IC-8] PUNCH_RECORDED via Proteus from ${req.proteusSource}: ${punch.id}`);
+    
+    res.status(201).json({ 
+      message: 'Punch recorded',
+      id: punch.id,
+      epochEmployeeId,
+      source: req.proteusSource,
+    });
+  } catch (error) {
+    console.error('[IC-8] Proteus punch webhook error:', error);
     if (error instanceof Error && error.name === 'ZodError') {
       return res.status(400).json({ error: 'Invalid punch data', details: error.message });
     }

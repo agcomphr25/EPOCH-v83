@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -18,9 +18,15 @@ import {
   Layers,
   Route,
   Award,
-  ClipboardList
+  ClipboardList,
+  ScrollText,
+  Play,
+  Eye,
+  Plus,
+  Ban,
+  PenLine
 } from 'lucide-react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
 import P2BOMWizard from '@/components/p2/P2BOMWizard';
 import P2ProductionScheduler from '@/components/p2/P2ProductionScheduler';
@@ -28,6 +34,14 @@ import P2StatusDashboard from '@/components/p2/P2StatusDashboard';
 import P2ProductionQueue from '@/components/p2/P2ProductionQueue';
 import P2CertificationsManager from './P2CertificationsManager';
 import PartRoutingManagement from './PartRoutingManagement';
+import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface P2Stats {
   openPOs: number;
@@ -36,6 +50,30 @@ interface P2Stats {
   inProduction: number;
   completedThisWeek: number;
   pendingQC: number;
+  activeTravelers?: number;
+}
+
+interface Traveler {
+  id: string;
+  travelerNumber: string;
+  partNumber: string;
+  partName: string | null;
+  workOrderId: string | null;
+  status: string;
+  quantity: number;
+  routingName: string | null;
+  routingRevision: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+interface PartRouting {
+  id: string;
+  partNumber: string;
+  name: string;
+  revision: string | null;
+  status: string;
 }
 
 export default function P2ControlCenter() {
@@ -288,7 +326,7 @@ export default function P2ControlCenter() {
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="status" className="flex items-center gap-2" data-testid="tab-status">
             <BarChart3 className="h-4 w-4" />
             Status
@@ -304,6 +342,10 @@ export default function P2ControlCenter() {
           <TabsTrigger value="production" className="flex items-center gap-2" data-testid="tab-production">
             <Factory className="h-4 w-4" />
             Production
+          </TabsTrigger>
+          <TabsTrigger value="travelers" className="flex items-center gap-2" data-testid="tab-travelers">
+            <ScrollText className="h-4 w-4" />
+            Travelers
           </TabsTrigger>
           <TabsTrigger value="routing" className="flex items-center gap-2" data-testid="tab-routing">
             <Route className="h-4 w-4" />
@@ -384,6 +426,10 @@ export default function P2ControlCenter() {
           <P2ProductionQueue />
         </TabsContent>
 
+        <TabsContent value="travelers">
+          <P2TravelersTab />
+        </TabsContent>
+
         <TabsContent value="routing">
           <PartRoutingManagement />
         </TabsContent>
@@ -435,6 +481,355 @@ function POsNeedingBOMs({ onSelectPO }: { onSelectPO: (poId: number) => void }) 
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function P2TravelersTab() {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [selectedRoutingId, setSelectedRoutingId] = useState<string>('');
+  const [workOrderId, setWorkOrderId] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  const { data: travelers = [], isLoading: travelersLoading } = useQuery<Traveler[]>({
+    queryKey: ['/api/travelers'],
+    refetchInterval: 15000,
+  });
+
+  const { data: routings = [] } = useQuery<PartRouting[]>({
+    queryKey: ['/api/part-routings'],
+  });
+
+  const activeRoutings = routings.filter(r => r.status === 'ACTIVE');
+
+  const generateTravelerMutation = useMutation({
+    mutationFn: async (data: { routingId: string; workOrderId?: string; quantity?: number; createdBy: string }) => {
+      return apiRequest(`/api/travelers/from-routing/${data.routingId}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          workOrderId: data.workOrderId,
+          quantity: data.quantity,
+          createdBy: data.createdBy,
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+      setShowCreateDialog(false);
+      setSelectedRoutingId('');
+      setWorkOrderId('');
+      setQuantity(1);
+      toast({
+        title: 'Traveler Created',
+        description: 'A new traveler has been generated from the routing.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to create traveler',
+      });
+    },
+  });
+
+  const filteredTravelers = travelers.filter(t => {
+    if (statusFilter === 'all') return true;
+    return t.status === statusFilter;
+  });
+
+  const getStatusBadge = (status: string) => {
+    const configs: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }> = {
+      DRAFT: { variant: 'outline' },
+      IN_PROGRESS: { variant: 'default', className: 'bg-blue-600' },
+      COMPLETED: { variant: 'default', className: 'bg-green-600' },
+      BLOCKED: { variant: 'destructive' },
+      CANCELED: { variant: 'secondary' },
+    };
+    const config = configs[status] || { variant: 'outline' };
+    return (
+      <Badge variant={config.variant} className={config.className}>
+        {status.replace('_', ' ')}
+      </Badge>
+    );
+  };
+
+  const handleCreateTraveler = () => {
+    if (!selectedRoutingId) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Please select a routing',
+      });
+      return;
+    }
+
+    generateTravelerMutation.mutate({
+      routingId: selectedRoutingId,
+      workOrderId: workOrderId || undefined,
+      quantity,
+      createdBy: 'system',
+    });
+  };
+
+  const travelerStats = {
+    draft: travelers.filter(t => t.status === 'DRAFT').length,
+    inProgress: travelers.filter(t => t.status === 'IN_PROGRESS').length,
+    completed: travelers.filter(t => t.status === 'COMPLETED').length,
+    blocked: travelers.filter(t => t.status === 'BLOCKED').length,
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <ScrollText className="h-5 w-5" />
+                Production Travelers
+              </CardTitle>
+              <CardDescription>
+                AS9100-compliant digital travelers for tracking work through production
+              </CardDescription>
+            </div>
+            <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-traveler">
+              <Plus className="h-4 w-4 mr-2" />
+              Generate Traveler
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-4 gap-4 mb-6">
+            <Card className="cursor-pointer hover:bg-accent/50" onClick={() => setStatusFilter('DRAFT')}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <PenLine className="h-4 w-4 text-gray-500" />
+                  <span className="text-sm text-muted-foreground">Draft</span>
+                </div>
+                <div className="text-2xl font-bold mt-1">{travelerStats.draft}</div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:bg-accent/50" onClick={() => setStatusFilter('IN_PROGRESS')}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Play className="h-4 w-4 text-blue-500" />
+                  <span className="text-sm text-muted-foreground">In Progress</span>
+                </div>
+                <div className="text-2xl font-bold mt-1">{travelerStats.inProgress}</div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:bg-accent/50" onClick={() => setStatusFilter('COMPLETED')}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span className="text-sm text-muted-foreground">Completed</span>
+                </div>
+                <div className="text-2xl font-bold mt-1">{travelerStats.completed}</div>
+              </CardContent>
+            </Card>
+            <Card className="cursor-pointer hover:bg-accent/50" onClick={() => setStatusFilter('BLOCKED')}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Ban className="h-4 w-4 text-red-500" />
+                  <span className="text-sm text-muted-foreground">Blocked</span>
+                </div>
+                <div className="text-2xl font-bold mt-1">{travelerStats.blocked}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="flex items-center gap-4 mb-4">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-48" data-testid="select-status-filter">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="DRAFT">Draft</SelectItem>
+                <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                <SelectItem value="COMPLETED">Completed</SelectItem>
+                <SelectItem value="BLOCKED">Blocked</SelectItem>
+                <SelectItem value="CANCELED">Canceled</SelectItem>
+              </SelectContent>
+            </Select>
+            {statusFilter !== 'all' && (
+              <Button variant="ghost" size="sm" onClick={() => setStatusFilter('all')}>
+                Clear Filter
+              </Button>
+            )}
+          </div>
+
+          {travelersLoading ? (
+            <div className="space-y-2">
+              {[...Array(3)].map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : filteredTravelers.length === 0 ? (
+            <div className="text-center py-12 border rounded-lg bg-muted/50">
+              <ScrollText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="font-semibold mb-2">No Travelers Found</h3>
+              <p className="text-muted-foreground mb-4">
+                {statusFilter !== 'all' 
+                  ? `No travelers with status "${statusFilter.replace('_', ' ')}" found.`
+                  : 'Generate a traveler from a part routing to get started.'}
+              </p>
+              {statusFilter === 'all' && (
+                <Button onClick={() => setShowCreateDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Generate First Traveler
+                </Button>
+              )}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Traveler #</TableHead>
+                  <TableHead>Part Number</TableHead>
+                  <TableHead>Work Order</TableHead>
+                  <TableHead>Routing</TableHead>
+                  <TableHead>Qty</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTravelers.map((traveler) => (
+                  <TableRow key={traveler.id} data-testid={`row-traveler-${traveler.id}`}>
+                    <TableCell className="font-mono font-medium">{traveler.travelerNumber}</TableCell>
+                    <TableCell>
+                      <div>
+                        <span className="font-medium">{traveler.partNumber}</span>
+                        {traveler.partName && (
+                          <div className="text-xs text-muted-foreground">{traveler.partName}</div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>{traveler.workOrderId || '-'}</TableCell>
+                    <TableCell>
+                      {traveler.routingName ? (
+                        <div>
+                          <span>{traveler.routingName}</span>
+                          {traveler.routingRevision && (
+                            <Badge variant="outline" className="ml-2 text-xs">
+                              Rev {traveler.routingRevision}
+                            </Badge>
+                          )}
+                        </div>
+                      ) : '-'}
+                    </TableCell>
+                    <TableCell>{traveler.quantity}</TableCell>
+                    <TableCell>{getStatusBadge(traveler.status)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(traveler.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => navigate(`/travelers/${traveler.id}`)}
+                          data-testid={`button-view-traveler-${traveler.id}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        {(traveler.status === 'DRAFT' || traveler.status === 'IN_PROGRESS') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(`/travelers/${traveler.id}/execute`)}
+                            data-testid={`button-execute-traveler-${traveler.id}`}
+                          >
+                            <Play className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Generate Traveler from Routing</DialogTitle>
+            <DialogDescription>
+              Select a part routing to generate a new production traveler with all steps, tasks, and traceability requirements.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="routing">Part Routing *</Label>
+              <Select value={selectedRoutingId} onValueChange={setSelectedRoutingId}>
+                <SelectTrigger data-testid="select-routing">
+                  <SelectValue placeholder="Select a routing..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeRoutings.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground text-center">
+                      No active routings available
+                    </div>
+                  ) : (
+                    activeRoutings.map((routing) => (
+                      <SelectItem key={routing.id} value={routing.id}>
+                        {routing.partNumber} - {routing.name}
+                        {routing.revision && ` (Rev ${routing.revision})`}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="workOrderId">Work Order ID (Optional)</Label>
+              <Input
+                id="workOrderId"
+                placeholder="e.g., WO-2024-001"
+                value={workOrderId}
+                onChange={(e) => setWorkOrderId(e.target.value)}
+                data-testid="input-work-order"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="quantity">Quantity</Label>
+              <Input
+                id="quantity"
+                type="number"
+                min={1}
+                value={quantity}
+                onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                data-testid="input-quantity"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCreateTraveler}
+              disabled={generateTravelerMutation.isPending || !selectedRoutingId}
+              data-testid="button-confirm-create-traveler"
+            >
+              {generateTravelerMutation.isPending ? 'Generating...' : 'Generate Traveler'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

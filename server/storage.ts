@@ -49,6 +49,12 @@ import {
   p2SerializedItems,
   p2SerializedItemEvents,
   partRoutings,
+  travelers,
+  travelerSteps,
+  travelerTasks,
+  travelerTaskFields,
+  travelerSignatures,
+  travelerEvents,
   p2SerializedItemTraceability,
   P2_DEPARTMENT_STAGES,
   rfqRiskAssessments,
@@ -260,6 +266,18 @@ import {
   type InsertP2SerializedItem,
   type P2SerializedItemEvent,
   type InsertP2SerializedItemEvent,
+  type Traveler,
+  type InsertTraveler,
+  type TravelerStep,
+  type InsertTravelerStep,
+  type TravelerTask,
+  type InsertTravelerTask,
+  type TravelerTaskField,
+  type InsertTravelerTaskField,
+  type TravelerSignature,
+  type InsertTravelerSignature,
+  type TravelerEvent,
+  type InsertTravelerEvent,
   type RFQRiskAssessment,
   type InsertRFQRiskAssessment,
   type Mold,
@@ -1209,6 +1227,76 @@ export interface IStorage {
   getPartRoutingByPartNumber(partNumber: string): Promise<PartRouting | undefined>;
   updatePartRouting(id: string, data: Partial<InsertPartRouting>): Promise<PartRouting>;
   deletePartRouting(id: string): Promise<void>;
+
+  // ============================================================================
+  // TRAVELER SYSTEM CRUD
+  // ============================================================================
+
+  // Travelers
+  createTraveler(data: InsertTraveler): Promise<Traveler>;
+  getTravelers(filters?: {
+    status?: string;
+    partNumber?: string;
+    workOrderId?: string;
+    inventoryItemId?: string;
+  }): Promise<Traveler[]>;
+  getTraveler(id: string): Promise<Traveler | undefined>;
+  getTravelerByNumber(travelerNumber: string): Promise<Traveler | undefined>;
+  updateTraveler(id: string, data: Partial<InsertTraveler>): Promise<Traveler>;
+  deleteTraveler(id: string): Promise<void>;
+  generateTravelerNumber(): Promise<string>;
+
+  // Traveler with full details (steps, tasks, fields, signatures, events)
+  getTravelerWithDetails(id: string): Promise<{
+    traveler: Traveler;
+    steps: (TravelerStep & {
+      tasks: (TravelerTask & { fields: TravelerTaskField[] })[];
+      signatures: TravelerSignature[];
+    })[];
+    events: TravelerEvent[];
+  } | undefined>;
+
+  // Traveler Steps
+  createTravelerStep(data: InsertTravelerStep): Promise<TravelerStep>;
+  getTravelerSteps(travelerId: string): Promise<TravelerStep[]>;
+  getTravelerStep(id: string): Promise<TravelerStep | undefined>;
+  updateTravelerStep(id: string, data: Partial<InsertTravelerStep>): Promise<TravelerStep>;
+  deleteTravelerStep(id: string): Promise<void>;
+
+  // Traveler Tasks
+  createTravelerTask(data: InsertTravelerTask): Promise<TravelerTask>;
+  getTravelerTasks(stepId: string): Promise<TravelerTask[]>;
+  getTravelerTask(id: string): Promise<TravelerTask | undefined>;
+  updateTravelerTask(id: string, data: Partial<InsertTravelerTask>): Promise<TravelerTask>;
+  deleteTravelerTask(id: string): Promise<void>;
+
+  // Traveler Task Fields
+  createTravelerTaskField(data: InsertTravelerTaskField): Promise<TravelerTaskField>;
+  getTravelerTaskFields(taskId: string): Promise<TravelerTaskField[]>;
+  updateTravelerTaskField(id: string, data: Partial<InsertTravelerTaskField>): Promise<TravelerTaskField>;
+  deleteTravelerTaskField(id: string): Promise<void>;
+
+  // Traveler Signatures
+  createTravelerSignature(data: InsertTravelerSignature): Promise<TravelerSignature>;
+  getTravelerSignatures(stepId: string): Promise<TravelerSignature[]>;
+
+  // Traveler Events (audit trail)
+  createTravelerEvent(data: InsertTravelerEvent): Promise<TravelerEvent>;
+  getTravelerEvents(travelerId: string): Promise<TravelerEvent[]>;
+
+  // Traveler from Part Routing (generation)
+  generateTravelerFromRouting(
+    partRoutingId: string,
+    data: {
+      workOrderId?: string;
+      salesOrderId?: string;
+      lotNumber?: string;
+      serialNumber?: string;
+      internalControlNumber?: string;
+      quantity?: number;
+      createdBy: string;
+    }
+  ): Promise<Traveler>;
 
   // P2 Serialized Item Traceability CRUD
   addTraceabilityData(data: InsertP2SerializedItemTraceability): Promise<P2SerializedItemTraceability>;
@@ -11895,6 +11983,467 @@ export class DatabaseStorage implements IStorage {
 
   async deletePartRouting(id: string): Promise<void> {
     await db.delete(partRoutings).where(eq(partRoutings.id, id));
+  }
+
+  // ============================================================================
+  // TRAVELER SYSTEM CRUD IMPLEMENTATIONS
+  // ============================================================================
+
+  // Travelers
+  async createTraveler(data: InsertTraveler): Promise<Traveler> {
+    const [traveler] = await db.insert(travelers).values(data).returning();
+    return traveler;
+  }
+
+  async getTravelers(filters?: {
+    status?: string;
+    partNumber?: string;
+    workOrderId?: string;
+    inventoryItemId?: string;
+  }): Promise<Traveler[]> {
+    const conditions = [];
+
+    if (filters?.status) {
+      conditions.push(eq(travelers.status, filters.status));
+    }
+    if (filters?.partNumber) {
+      conditions.push(eq(travelers.partNumber, filters.partNumber));
+    }
+    if (filters?.workOrderId) {
+      conditions.push(eq(travelers.workOrderId, filters.workOrderId));
+    }
+    if (filters?.inventoryItemId) {
+      conditions.push(eq(travelers.inventoryItemId, filters.inventoryItemId));
+    }
+
+    if (conditions.length === 0) {
+      return await db.select().from(travelers).orderBy(desc(travelers.createdAt));
+    }
+
+    return await db
+      .select()
+      .from(travelers)
+      .where(and(...conditions))
+      .orderBy(desc(travelers.createdAt));
+  }
+
+  async getTraveler(id: string): Promise<Traveler | undefined> {
+    const [traveler] = await db.select().from(travelers).where(eq(travelers.id, id));
+    return traveler;
+  }
+
+  async getTravelerByNumber(travelerNumber: string): Promise<Traveler | undefined> {
+    const [traveler] = await db
+      .select()
+      .from(travelers)
+      .where(eq(travelers.travelerNumber, travelerNumber));
+    return traveler;
+  }
+
+  async updateTraveler(id: string, data: Partial<InsertTraveler>): Promise<Traveler> {
+    const [updated] = await db
+      .update(travelers)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(travelers.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new Error(`Traveler ${id} not found`);
+    }
+    return updated;
+  }
+
+  async deleteTraveler(id: string): Promise<void> {
+    await db.delete(travelers).where(eq(travelers.id, id));
+  }
+
+  async generateTravelerNumber(): Promise<string> {
+    const year = new Date().getFullYear();
+    const prefix = `TRV-${year}-`;
+
+    // Find the highest existing number for this year
+    const existing = await db
+      .select({ travelerNumber: travelers.travelerNumber })
+      .from(travelers)
+      .where(sql`${travelers.travelerNumber} LIKE ${prefix + '%'}`)
+      .orderBy(desc(travelers.travelerNumber))
+      .limit(1);
+
+    let nextNum = 1;
+    if (existing.length > 0 && existing[0].travelerNumber) {
+      const match = existing[0].travelerNumber.match(/TRV-\d{4}-(\d+)/);
+      if (match) {
+        nextNum = parseInt(match[1], 10) + 1;
+      }
+    }
+
+    return `${prefix}${String(nextNum).padStart(6, '0')}`;
+  }
+
+  async getTravelerWithDetails(id: string): Promise<{
+    traveler: Traveler;
+    steps: (TravelerStep & {
+      tasks: (TravelerTask & { fields: TravelerTaskField[] })[];
+      signatures: TravelerSignature[];
+    })[];
+    events: TravelerEvent[];
+  } | undefined> {
+    const traveler = await this.getTraveler(id);
+    if (!traveler) return undefined;
+
+    const steps = await this.getTravelerSteps(id);
+    const events = await this.getTravelerEvents(id);
+
+    const stepsWithDetails = await Promise.all(
+      steps.map(async (step) => {
+        const tasks = await this.getTravelerTasks(step.id);
+        const signatures = await this.getTravelerSignatures(step.id);
+
+        const tasksWithFields = await Promise.all(
+          tasks.map(async (task) => {
+            const fields = await this.getTravelerTaskFields(task.id);
+            return { ...task, fields };
+          })
+        );
+
+        return { ...step, tasks: tasksWithFields, signatures };
+      })
+    );
+
+    return { traveler, steps: stepsWithDetails, events };
+  }
+
+  // Traveler Steps
+  async createTravelerStep(data: InsertTravelerStep): Promise<TravelerStep> {
+    const [step] = await db.insert(travelerSteps).values(data).returning();
+    return step;
+  }
+
+  async getTravelerSteps(travelerId: string): Promise<TravelerStep[]> {
+    return await db
+      .select()
+      .from(travelerSteps)
+      .where(eq(travelerSteps.travelerId, travelerId))
+      .orderBy(travelerSteps.stepNumber);
+  }
+
+  async getTravelerStep(id: string): Promise<TravelerStep | undefined> {
+    const [step] = await db.select().from(travelerSteps).where(eq(travelerSteps.id, id));
+    return step;
+  }
+
+  async updateTravelerStep(id: string, data: Partial<InsertTravelerStep>): Promise<TravelerStep> {
+    const [updated] = await db
+      .update(travelerSteps)
+      .set(data)
+      .where(eq(travelerSteps.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new Error(`Traveler step ${id} not found`);
+    }
+    return updated;
+  }
+
+  async deleteTravelerStep(id: string): Promise<void> {
+    await db.delete(travelerSteps).where(eq(travelerSteps.id, id));
+  }
+
+  // Traveler Tasks
+  async createTravelerTask(data: InsertTravelerTask): Promise<TravelerTask> {
+    const [task] = await db.insert(travelerTasks).values(data).returning();
+    return task;
+  }
+
+  async getTravelerTasks(stepId: string): Promise<TravelerTask[]> {
+    return await db
+      .select()
+      .from(travelerTasks)
+      .where(eq(travelerTasks.travelerStepId, stepId))
+      .orderBy(travelerTasks.sortOrder);
+  }
+
+  async getTravelerTask(id: string): Promise<TravelerTask | undefined> {
+    const [task] = await db.select().from(travelerTasks).where(eq(travelerTasks.id, id));
+    return task;
+  }
+
+  async updateTravelerTask(id: string, data: Partial<InsertTravelerTask>): Promise<TravelerTask> {
+    const [updated] = await db
+      .update(travelerTasks)
+      .set(data)
+      .where(eq(travelerTasks.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new Error(`Traveler task ${id} not found`);
+    }
+    return updated;
+  }
+
+  async deleteTravelerTask(id: string): Promise<void> {
+    await db.delete(travelerTasks).where(eq(travelerTasks.id, id));
+  }
+
+  // Traveler Task Fields
+  async createTravelerTaskField(data: InsertTravelerTaskField): Promise<TravelerTaskField> {
+    const [field] = await db.insert(travelerTaskFields).values(data).returning();
+    return field;
+  }
+
+  async getTravelerTaskFields(taskId: string): Promise<TravelerTaskField[]> {
+    return await db
+      .select()
+      .from(travelerTaskFields)
+      .where(eq(travelerTaskFields.travelerTaskId, taskId));
+  }
+
+  async updateTravelerTaskField(
+    id: string,
+    data: Partial<InsertTravelerTaskField>
+  ): Promise<TravelerTaskField> {
+    const [updated] = await db
+      .update(travelerTaskFields)
+      .set(data)
+      .where(eq(travelerTaskFields.id, id))
+      .returning();
+
+    if (!updated) {
+      throw new Error(`Traveler task field ${id} not found`);
+    }
+    return updated;
+  }
+
+  async deleteTravelerTaskField(id: string): Promise<void> {
+    await db.delete(travelerTaskFields).where(eq(travelerTaskFields.id, id));
+  }
+
+  // Traveler Signatures
+  async createTravelerSignature(data: InsertTravelerSignature): Promise<TravelerSignature> {
+    const [signature] = await db.insert(travelerSignatures).values(data).returning();
+    return signature;
+  }
+
+  async getTravelerSignatures(stepId: string): Promise<TravelerSignature[]> {
+    return await db
+      .select()
+      .from(travelerSignatures)
+      .where(eq(travelerSignatures.travelerStepId, stepId))
+      .orderBy(travelerSignatures.signedAt);
+  }
+
+  // Traveler Events (audit trail)
+  async createTravelerEvent(data: InsertTravelerEvent): Promise<TravelerEvent> {
+    const [event] = await db.insert(travelerEvents).values(data).returning();
+    return event;
+  }
+
+  async getTravelerEvents(travelerId: string): Promise<TravelerEvent[]> {
+    return await db
+      .select()
+      .from(travelerEvents)
+      .where(eq(travelerEvents.travelerId, travelerId))
+      .orderBy(desc(travelerEvents.createdAt));
+  }
+
+  // Generate Traveler from Part Routing
+  async generateTravelerFromRouting(
+    partRoutingId: string,
+    data: {
+      workOrderId?: string;
+      salesOrderId?: string;
+      lotNumber?: string;
+      serialNumber?: string;
+      internalControlNumber?: string;
+      quantity?: number;
+      createdBy: string;
+    }
+  ): Promise<Traveler> {
+    // Get the part routing
+    const routing = await this.getPartRouting(partRoutingId);
+    if (!routing) {
+      throw new Error(`Part routing ${partRoutingId} not found`);
+    }
+
+    // Generate traveler number
+    const travelerNumber = await this.generateTravelerNumber();
+
+    // Create the traveler
+    const traveler = await this.createTraveler({
+      travelerNumber,
+      travelerRevision: 1,
+      inventoryItemId: routing.inventoryItemId,
+      partNumber: routing.partNumber,
+      partName: routing.partName,
+      salesOrderId: data.salesOrderId || null,
+      workOrderId: data.workOrderId || null,
+      lotNumber: data.lotNumber || null,
+      serialNumber: data.serialNumber || null,
+      internalControlNumber: data.internalControlNumber || null,
+      quantity: data.quantity || 1,
+      status: 'DRAFT',
+      partRoutingId: routing.id,
+      partRoutingRevision: (routing as any).routingRevision || 1,
+      createdBy: data.createdBy,
+    });
+
+    // Create steps from routing departmentSequence
+    const departmentSequence = routing.departmentSequence as string[];
+    const traceabilityConfig = routing.traceabilityConfig as Record<string, string[]>;
+    const departmentConfig = (routing.departmentConfig || {}) as Record<string, any>;
+
+    for (let i = 0; i < departmentSequence.length; i++) {
+      const deptName = departmentSequence[i];
+      const stepNumber = (i + 1) * 10; // 10, 20, 30, etc.
+      const deptConfig = departmentConfig[deptName] || {};
+
+      // Create the step
+      const step = await this.createTravelerStep({
+        travelerId: traveler.id,
+        departmentName: deptName,
+        stepNumber,
+        status: 'NOT_STARTED',
+        assignedTechnicianId: deptConfig.assignedTechnicianId || null,
+      });
+
+      let sortOrder = 0;
+
+      // Create START_GATE task
+      await this.createTravelerTask({
+        travelerStepId: step.id,
+        taskType: 'START_GATE',
+        title: `Start ${deptName}`,
+        instructions: `Badge scan to start work in ${deptName}`,
+        required: true,
+        sortOrder: sortOrder++,
+        status: 'NOT_STARTED',
+      });
+
+      // Create TRACE tasks from traceabilityConfig
+      const traceFields = traceabilityConfig[deptName] || [];
+      if (traceFields.length > 0) {
+        const traceTask = await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'TRACE',
+          title: 'Material Traceability',
+          instructions: 'Record traceability data for materials used',
+          required: true,
+          sortOrder: sortOrder++,
+          status: 'NOT_STARTED',
+        });
+
+        // Create fields for each traceability item
+        for (const fieldKey of traceFields) {
+          await this.createTravelerTaskField({
+            travelerTaskId: traceTask.id,
+            fieldKey,
+            fieldLabel: fieldKey.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+            fieldType: fieldKey.includes('date') || fieldKey.includes('Date') ? 'date' : 'text',
+            required: true,
+          });
+        }
+      }
+
+      // Create QC tasks from departmentConfig.qcStandards
+      const qcStandards = deptConfig.qcStandards || [];
+      if (qcStandards.length > 0) {
+        const qcTask = await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'QC',
+          title: 'Quality Control Checks',
+          instructions: 'Complete all quality control verifications',
+          required: true,
+          sortOrder: sortOrder++,
+          status: 'NOT_STARTED',
+        });
+
+        for (const qc of qcStandards) {
+          await this.createTravelerTaskField({
+            travelerTaskId: qcTask.id,
+            fieldKey: `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
+            fieldLabel: qc.standard || 'QC Check',
+            fieldType: 'yes_no',
+            required: true,
+            validation: { tolerance: qc.tolerance, requirement: qc.requirement },
+          });
+        }
+      }
+
+      // Create custom field tasks from departmentConfig.customDataFields
+      const customFields = deptConfig.customDataFields || [];
+      if (customFields.length > 0) {
+        const customTask = await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'CUSTOM_FIELD',
+          title: 'Additional Data Entry',
+          instructions: 'Enter required custom data',
+          required: true,
+          sortOrder: sortOrder++,
+          status: 'NOT_STARTED',
+        });
+
+        for (const field of customFields) {
+          await this.createTravelerTaskField({
+            travelerTaskId: customTask.id,
+            fieldKey: field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
+            fieldLabel: field.fieldName || 'Custom Field',
+            fieldType: field.fieldType || 'text',
+            required: field.isRequired || false,
+          });
+        }
+      }
+
+      // Create oven curing task if applicable
+      const ovenCuringSteps = deptConfig.ovenCuringSteps || [];
+      if (ovenCuringSteps.length > 0) {
+        const ovenTask = await this.createTravelerTask({
+          travelerStepId: step.id,
+          taskType: 'SPECIAL_PROCESS',
+          title: 'Oven Curing',
+          instructions: 'Complete oven curing process',
+          required: true,
+          sortOrder: sortOrder++,
+          status: 'NOT_STARTED',
+        });
+
+        for (let j = 0; j < ovenCuringSteps.length; j++) {
+          const cureStep = ovenCuringSteps[j];
+          await this.createTravelerTaskField({
+            travelerTaskId: ovenTask.id,
+            fieldKey: `cure_step_${j + 1}_complete`,
+            fieldLabel: `Cure Step ${j + 1}: ${cureStep.temperature} for ${cureStep.time}`,
+            fieldType: 'yes_no',
+            required: true,
+            validation: { temperature: cureStep.temperature, time: cureStep.time },
+          });
+        }
+      }
+
+      // Create END_GATE task (signature required)
+      await this.createTravelerTask({
+        travelerStepId: step.id,
+        taskType: 'END_GATE',
+        title: `Complete ${deptName}`,
+        instructions: `Badge scan and signature to complete ${deptName}`,
+        required: true,
+        sortOrder: sortOrder++,
+        status: 'NOT_STARTED',
+      });
+    }
+
+    // Create audit event
+    await this.createTravelerEvent({
+      travelerId: traveler.id,
+      actor: data.createdBy,
+      action: 'CREATED',
+      details: {
+        fromRoutingId: routing.id,
+        fromRoutingRevision: (routing as any).routingRevision || 1,
+        departmentCount: departmentSequence.length,
+      },
+    });
+
+    return traveler;
   }
 
   // P2 Serialized Item Traceability CRUD

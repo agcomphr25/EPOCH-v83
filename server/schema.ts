@@ -3879,6 +3879,8 @@ export const partRoutings = pgTable('part_routings', {
   inventoryItemId: text('inventory_item_id').notNull(), // Reference to inventory item
   partNumber: text('part_number').notNull(), // Denormalized for display
   partName: text('part_name').notNull(), // Denormalized for display
+  routingName: text('routing_name').default('Default').notNull(), // AS9100 routing name for revision control
+  routingRevision: integer('routing_revision').default(1).notNull(), // AS9100 controlled revision number
   departmentSequence: jsonb('department_sequence').notNull(), // Array of department names in order: ["Layup", "CNC", "Finish"]
   traceabilityConfig: jsonb('traceability_config').notNull(), // Requirements per department: { "Layup": ["lot_number", "batch_number", "expiration"], "CNC": ["custom_1"] }
   departmentConfig: jsonb('department_config'), // Full department configuration: { "Layup": { materials: [{partId, partNumber, partName, requiredFields, entryMethod}], technicianRequired: bool, qcStandards: [{standard, tolerance, requirement}] } }
@@ -3888,6 +3890,149 @@ export const partRoutings = pgTable('part_routings', {
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
   inventoryItemIdx: index('part_routings_inventory_item_idx').on(table.inventoryItemId),
+}));
+
+// ============================================================================
+// TRAVELER SYSTEM - AS9100 Digital Travelers (Execution Records)
+// ============================================================================
+
+// Travelers - Header/controlled record for production execution
+export const travelers = pgTable('travelers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerNumber: text('traveler_number').notNull().unique(), // TRV-2025-000123
+  travelerRevision: integer('traveler_revision').default(1).notNull(),
+
+  // What are we building?
+  inventoryItemId: text('inventory_item_id').notNull(),
+  partNumber: text('part_number').notNull(),
+  partName: text('part_name').notNull(),
+
+  // Optional linkage to orders
+  salesOrderId: text('sales_order_id'),
+  workOrderId: text('work_order_id'),
+
+  // Traceability at traveler level
+  lotNumber: text('lot_number'),
+  serialNumber: text('serial_number'),
+  internalControlNumber: text('internal_control_number'), // ICN for the unit/lot
+  quantity: integer('quantity').default(1).notNull(),
+
+  status: text('status').default('DRAFT').notNull(), // DRAFT | IN_PROGRESS | COMPLETED | BLOCKED | CANCELED
+
+  // Which routing template created this traveler?
+  partRoutingId: uuid('part_routing_id'),
+  partRoutingRevision: integer('part_routing_revision'), // Snapshot of routing revision at creation
+
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  travelerNumberIdx: index('travelers_number_idx').on(table.travelerNumber),
+  statusIdx: index('travelers_status_idx').on(table.status),
+  partNumberIdx: index('travelers_part_number_idx').on(table.partNumber),
+  workOrderIdx: index('travelers_work_order_idx').on(table.workOrderId),
+}));
+
+// Traveler Steps - Departments in sequence
+export const travelerSteps = pgTable('traveler_steps', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerId: uuid('traveler_id')
+    .references(() => travelers.id, { onDelete: 'cascade' })
+    .notNull(),
+
+  departmentName: text('department_name').notNull(), // "Layup"
+  stepNumber: integer('step_number').notNull(), // 10,20,30 (makes insertions easy)
+  status: text('status').default('NOT_STARTED').notNull(), // NOT_STARTED | IN_PROGRESS | COMPLETED | BLOCKED
+
+  assignedTechnicianId: integer('assigned_technician_id'), // Optional preferred technician
+  
+  startedAt: timestamp('started_at'),
+  startedBy: text('started_by'),
+  completedAt: timestamp('completed_at'),
+  completedBy: text('completed_by'),
+}, (table) => ({
+  travelerIdIdx: index('traveler_steps_traveler_id_idx').on(table.travelerId),
+  stepNumberIdx: index('traveler_steps_step_number_idx').on(table.stepNumber),
+}));
+
+// Traveler Tasks - Start/end tasks, QC tasks, special process tasks per step
+export const travelerTasks = pgTable('traveler_tasks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerStepId: uuid('traveler_step_id')
+    .references(() => travelerSteps.id, { onDelete: 'cascade' })
+    .notNull(),
+
+  taskType: text('task_type').notNull(), // TRACE | QC | CUSTOM_FIELD | QUESTIONS | SPECIAL_PROCESS | NOTES | START_GATE | END_GATE
+
+  title: text('title').notNull(),
+  instructions: text('instructions'),
+  required: boolean('required').default(true).notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+
+  status: text('status').default('NOT_STARTED').notNull(), // NOT_STARTED | IN_PROGRESS | COMPLETED | FAILED | SKIPPED
+  completedAt: timestamp('completed_at'),
+  completedBy: text('completed_by'), // employee id/username
+}, (table) => ({
+  stepIdIdx: index('traveler_tasks_step_id_idx').on(table.travelerStepId),
+  taskTypeIdx: index('traveler_tasks_type_idx').on(table.taskType),
+}));
+
+// Traveler Task Fields - Data capture per task (flexible, AS9100 evidence)
+export const travelerTaskFields = pgTable('traveler_task_fields', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerTaskId: uuid('traveler_task_id')
+    .references(() => travelerTasks.id, { onDelete: 'cascade' })
+    .notNull(),
+
+  fieldKey: text('field_key').notNull(), // "lot_number", "vacuum_start", etc.
+  fieldLabel: text('field_label').notNull(), // UI label
+  fieldType: text('field_type').notNull(), // text|number|date|yes_no|dropdown|barcode|attachment|json
+  required: boolean('required').default(false).notNull(),
+
+  value: jsonb('value'), // Store values in a consistent flexible format
+  validation: jsonb('validation'), // min/max/options/regex/etc.
+  
+  recordedBy: text('recorded_by'),
+  recordedAt: timestamp('recorded_at'),
+}, (table) => ({
+  taskIdIdx: index('traveler_task_fields_task_id_idx').on(table.travelerTaskId),
+}));
+
+// Traveler Signatures - Digital signature required for step completion
+export const travelerSignatures = pgTable('traveler_signatures', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerStepId: uuid('traveler_step_id')
+    .references(() => travelerSteps.id, { onDelete: 'cascade' })
+    .notNull(),
+
+  signedBy: text('signed_by').notNull(), // employee id/username
+  signedByName: text('signed_by_name'), // Display name
+  badgeScan: text('badge_scan'), // Optional badge scan value
+  signedAt: timestamp('signed_at').defaultNow(),
+
+  meaning: text('meaning').notNull(), // PERFORMED | INSPECTED | VERIFIED | RELEASED
+  signatureHash: text('signature_hash'), // Optional integrity hash
+  notes: text('notes'),
+}, (table) => ({
+  stepIdIdx: index('traveler_signatures_step_id_idx').on(table.travelerStepId),
+}));
+
+// Traveler Events - Audit trail for all actions
+export const travelerEvents = pgTable('traveler_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerId: uuid('traveler_id')
+    .references(() => travelers.id, { onDelete: 'cascade' })
+    .notNull(),
+
+  actor: text('actor').notNull(), // Who performed the action
+  actorName: text('actor_name'), // Display name
+  action: text('action').notNull(), // CREATED|EDITED|TASK_COMPLETED|SIGNED|STATUS_CHANGED|BLOCKED|UNBLOCKED|...
+  details: jsonb('details'), // Before/after deltas, context data
+
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  travelerIdIdx: index('traveler_events_traveler_id_idx').on(table.travelerId),
+  actionIdx: index('traveler_events_action_idx').on(table.action),
 }));
 
 // P2 Serialized Item Traceability - Stores scanned/entered traceability data per department
@@ -4725,6 +4870,148 @@ export const insertP2WorkTaskSchema = createInsertSchema(p2WorkTasks)
 export type InsertPartRouting = z.infer<typeof insertPartRoutingSchema>;
 export type UpdatePartRouting = z.infer<typeof updatePartRoutingSchema>;
 export type PartRouting = typeof partRoutings.$inferSelect;
+
+// ============================================================================
+// TRAVELER SYSTEM - Insert Schemas and Types
+// ============================================================================
+
+// Traveler Insert Schema
+export const insertTravelerSchema = createInsertSchema(travelers)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    travelerNumber: z.string().min(1, 'Traveler number is required'),
+    travelerRevision: z.number().int().positive().default(1),
+    inventoryItemId: z.string().min(1, 'Inventory item ID is required'),
+    partNumber: z.string().min(1, 'Part number is required'),
+    partName: z.string().min(1, 'Part name is required'),
+    salesOrderId: z.string().optional().nullable(),
+    workOrderId: z.string().optional().nullable(),
+    lotNumber: z.string().optional().nullable(),
+    serialNumber: z.string().optional().nullable(),
+    internalControlNumber: z.string().optional().nullable(),
+    quantity: z.number().int().positive().default(1),
+    status: z.enum(['DRAFT', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED', 'CANCELED']).default('DRAFT'),
+    partRoutingId: z.string().uuid().optional().nullable(),
+    partRoutingRevision: z.number().int().optional().nullable(),
+    createdBy: z.string().min(1, 'Created by is required'),
+  });
+
+export const updateTravelerSchema = insertTravelerSchema.partial();
+
+// Traveler Step Insert Schema
+export const insertTravelerStepSchema = createInsertSchema(travelerSteps)
+  .omit({
+    id: true,
+  })
+  .extend({
+    travelerId: z.string().uuid('Invalid traveler ID'),
+    departmentName: z.string().min(1, 'Department name is required'),
+    stepNumber: z.number().int().positive(),
+    status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED']).default('NOT_STARTED'),
+    assignedTechnicianId: z.number().int().optional().nullable(),
+    startedAt: z.coerce.date().optional().nullable(),
+    startedBy: z.string().optional().nullable(),
+    completedAt: z.coerce.date().optional().nullable(),
+    completedBy: z.string().optional().nullable(),
+  });
+
+export const updateTravelerStepSchema = insertTravelerStepSchema.partial();
+
+// Traveler Task Insert Schema
+export const insertTravelerTaskSchema = createInsertSchema(travelerTasks)
+  .omit({
+    id: true,
+  })
+  .extend({
+    travelerStepId: z.string().uuid('Invalid traveler step ID'),
+    taskType: z.enum(['TRACE', 'QC', 'CUSTOM_FIELD', 'QUESTIONS', 'SPECIAL_PROCESS', 'NOTES', 'START_GATE', 'END_GATE']),
+    title: z.string().min(1, 'Task title is required'),
+    instructions: z.string().optional().nullable(),
+    required: z.boolean().default(true),
+    sortOrder: z.number().int().default(0),
+    status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'SKIPPED']).default('NOT_STARTED'),
+    completedAt: z.coerce.date().optional().nullable(),
+    completedBy: z.string().optional().nullable(),
+  });
+
+export const updateTravelerTaskSchema = insertTravelerTaskSchema.partial();
+
+// Traveler Task Field Insert Schema
+export const insertTravelerTaskFieldSchema = createInsertSchema(travelerTaskFields)
+  .omit({
+    id: true,
+  })
+  .extend({
+    travelerTaskId: z.string().uuid('Invalid traveler task ID'),
+    fieldKey: z.string().min(1, 'Field key is required'),
+    fieldLabel: z.string().min(1, 'Field label is required'),
+    fieldType: z.enum(['text', 'number', 'date', 'yes_no', 'dropdown', 'barcode', 'attachment', 'json']),
+    required: z.boolean().default(false),
+    value: z.any().optional().nullable(),
+    validation: z.any().optional().nullable(),
+    recordedBy: z.string().optional().nullable(),
+    recordedAt: z.coerce.date().optional().nullable(),
+  });
+
+export const updateTravelerTaskFieldSchema = insertTravelerTaskFieldSchema.partial();
+
+// Traveler Signature Insert Schema
+export const insertTravelerSignatureSchema = createInsertSchema(travelerSignatures)
+  .omit({
+    id: true,
+  })
+  .extend({
+    travelerStepId: z.string().uuid('Invalid traveler step ID'),
+    signedBy: z.string().min(1, 'Signed by is required'),
+    signedByName: z.string().optional().nullable(),
+    badgeScan: z.string().optional().nullable(),
+    signedAt: z.coerce.date().optional(),
+    meaning: z.enum(['PERFORMED', 'INSPECTED', 'VERIFIED', 'RELEASED']),
+    signatureHash: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  });
+
+// Traveler Event Insert Schema
+export const insertTravelerEventSchema = createInsertSchema(travelerEvents)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  .extend({
+    travelerId: z.string().uuid('Invalid traveler ID'),
+    actor: z.string().min(1, 'Actor is required'),
+    actorName: z.string().optional().nullable(),
+    action: z.string().min(1, 'Action is required'),
+    details: z.any().optional().nullable(),
+  });
+
+// Traveler Types
+export type InsertTraveler = z.infer<typeof insertTravelerSchema>;
+export type UpdateTraveler = z.infer<typeof updateTravelerSchema>;
+export type Traveler = typeof travelers.$inferSelect;
+
+export type InsertTravelerStep = z.infer<typeof insertTravelerStepSchema>;
+export type UpdateTravelerStep = z.infer<typeof updateTravelerStepSchema>;
+export type TravelerStep = typeof travelerSteps.$inferSelect;
+
+export type InsertTravelerTask = z.infer<typeof insertTravelerTaskSchema>;
+export type UpdateTravelerTask = z.infer<typeof updateTravelerTaskSchema>;
+export type TravelerTask = typeof travelerTasks.$inferSelect;
+
+export type InsertTravelerTaskField = z.infer<typeof insertTravelerTaskFieldSchema>;
+export type UpdateTravelerTaskField = z.infer<typeof updateTravelerTaskFieldSchema>;
+export type TravelerTaskField = typeof travelerTaskFields.$inferSelect;
+
+export type InsertTravelerSignature = z.infer<typeof insertTravelerSignatureSchema>;
+export type TravelerSignature = typeof travelerSignatures.$inferSelect;
+
+export type InsertTravelerEvent = z.infer<typeof insertTravelerEventSchema>;
+export type TravelerEvent = typeof travelerEvents.$inferSelect;
+
 export type InsertP2SerializedItemTraceability = z.infer<typeof insertP2SerializedItemTraceabilitySchema>;
 export type P2SerializedItemTraceability = typeof p2SerializedItemTraceability.$inferSelect;
 export type InsertP2SerializedItemCustomData = z.infer<typeof insertP2SerializedItemCustomDataSchema>;

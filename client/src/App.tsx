@@ -170,6 +170,8 @@ import PreproductionChecklistPage from './pages/PreproductionChecklistPage';
 import ProjectsPage from './pages/ProjectsPage';
 import ProjectDetailPage from './pages/ProjectDetailPage';
 import HelpCenter from './pages/HelpCenter';
+import TravelerManagement from './pages/TravelerManagement';
+import TravelerExecution from './pages/TravelerExecution';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -652,6 +654,11 @@ function App() {
                   <Route path="/manufacturing-queue" component={ManufacturingQueue} />
                   <Route path="/cutting-table-mfg-queue">{() => { window.location.href = '/cutting-control-center'; return null; }}</Route>
                   <Route path="/part-routing-management">{() => { window.location.href = '/p2-control-center'; return null; }}</Route>
+                  
+                  {/* Traveler System - AS9100 compliant production travelers */}
+                  <Route path="/travelers" component={TravelerManagement} />
+                  <Route path="/travelers/:id" component={TravelerExecution} />
+                  <Route path="/travelers/:id/execute" component={TravelerExecution} />
                   <Route
                     path="/master-document-register"
                     component={MasterDocumentRegister}

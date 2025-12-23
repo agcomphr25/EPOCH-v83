@@ -89,6 +89,7 @@ import p2LayupSchedulesRoutes from './p2LayupSchedules';
 import preproductionChecklistsRoutes from './preproductionChecklists';
 import healthChecksRoutes from './healthChecks';
 import projectsRoutes from './projects';
+import projectStepAttachmentsRoutes from './projectStepAttachments';
 import modelAnalyticsRoutes from './modelAnalytics';
 import aqlSamplingRoutes from './aqlSampling';
 import auditRoutes from './audit';
@@ -353,6 +354,9 @@ export function registerRoutes(app: Express): Server {
 
   // P2 Projects routes
   app.use('/api/projects', projectsRoutes);
+
+  // Project Step Attachments routes
+  app.use('/api/project-step-attachments', projectStepAttachmentsRoutes);
 
   // Health Checks routes
   app.use('/api/health-checks', healthChecksRoutes);

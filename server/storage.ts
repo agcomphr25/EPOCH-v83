@@ -402,9 +402,12 @@ import {
   projectSteps,
   projectActivityLog,
   projectNotifications,
+  projectStepAttachments,
   type Project,
   type InsertProject,
   type ProjectStep,
+  type ProjectStepAttachment,
+  type InsertProjectStepAttachment,
   type InsertProjectStep,
   type ProjectActivityLog,
   type InsertProjectActivityLog,
@@ -1883,6 +1886,12 @@ export interface IStorage {
   createProjectNotification(data: InsertProjectNotification): Promise<ProjectNotification>;
   markProjectNotificationRead(id: number): Promise<void>;
   markAllProjectNotificationsRead(recipientId: number): Promise<void>;
+
+  // Project Step Attachments
+  getProjectStepAttachments(stepId: string): Promise<ProjectStepAttachment[]>;
+  getProjectStepAttachment(id: number): Promise<ProjectStepAttachment | undefined>;
+  createProjectStepAttachment(data: InsertProjectStepAttachment): Promise<ProjectStepAttachment>;
+  deleteProjectStepAttachment(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -15383,6 +15392,32 @@ export class DatabaseStorage implements IStorage {
       .update(projectNotifications)
       .set({ isRead: true, readAt: new Date() })
       .where(eq(projectNotifications.recipientId, recipientId));
+  }
+
+  // Project Step Attachments
+  async getProjectStepAttachments(stepId: string): Promise<ProjectStepAttachment[]> {
+    return await db
+      .select()
+      .from(projectStepAttachments)
+      .where(eq(projectStepAttachments.stepId, stepId))
+      .orderBy(desc(projectStepAttachments.createdAt));
+  }
+
+  async getProjectStepAttachment(id: number): Promise<ProjectStepAttachment | undefined> {
+    const [attachment] = await db
+      .select()
+      .from(projectStepAttachments)
+      .where(eq(projectStepAttachments.id, id));
+    return attachment || undefined;
+  }
+
+  async createProjectStepAttachment(data: InsertProjectStepAttachment): Promise<ProjectStepAttachment> {
+    const [attachment] = await db.insert(projectStepAttachments).values(data).returning();
+    return attachment;
+  }
+
+  async deleteProjectStepAttachment(id: number): Promise<void> {
+    await db.delete(projectStepAttachments).where(eq(projectStepAttachments.id, id));
   }
 }
 

@@ -8,6 +8,7 @@ import {
   getTodayDateRange,
   deriveLaborIntervals,
 } from '../services/laborSummary';
+import { evaluatePunchAwareness, AwarenessConfig } from '../services/missedPunchAwareness';
 
 const router = Router();
 
@@ -207,6 +208,78 @@ router.get('/pay-period-info', async (_req: Request, res: Response) => {
   } catch (error) {
     console.error('[IC-F1] Get pay period info error:', error);
     res.status(500).json({ error: 'Failed to fetch pay period info' });
+  }
+});
+
+router.get('/awareness/:canonicalId', async (req: Request, res: Response) => {
+  try {
+    const { canonicalId } = req.params;
+    const thresholdHours = req.query.thresholdHours 
+      ? parseFloat(req.query.thresholdHours as string) 
+      : undefined;
+    
+    const config: Partial<AwarenessConfig> = {};
+    if (thresholdHours) {
+      config.openPunchThresholdHours = thresholdHours;
+    }
+    
+    const today = getTodayDateRange();
+    const punches = await storage.getPunchEventsByCanonicalId(canonicalId, 100);
+    const recentPunches = punches.filter(p => {
+      const punchTime = new Date(p.punchTime);
+      return punchTime >= today.start;
+    });
+    
+    const awareness = evaluatePunchAwareness(recentPunches, { 
+      openPunchThresholdHours: config.openPunchThresholdHours ?? 10,
+      workdayEndHour: 18 
+    });
+    
+    res.json(awareness);
+  } catch (error) {
+    console.error('[IC-I1] Get punch awareness error:', error);
+    res.status(500).json({ error: 'Failed to evaluate punch awareness' });
+  }
+});
+
+router.get('/awareness-by-employee/:employeeId', async (req: Request, res: Response) => {
+  try {
+    const employeeId = parseInt(req.params.employeeId);
+    if (isNaN(employeeId)) {
+      return res.status(400).json({ error: 'Invalid employee ID' });
+    }
+    
+    const employee = await storage.getEmployee(employeeId);
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    
+    if (!employee.canonicalId) {
+      return res.json({
+        state: 'looks_good',
+        message: null,
+        actionText: null,
+        openPunchTime: null,
+        hoursOpen: null,
+      });
+    }
+    
+    const today = getTodayDateRange();
+    const punches = await storage.getPunchEventsByCanonicalId(employee.canonicalId, 100);
+    const recentPunches = punches.filter(p => {
+      const punchTime = new Date(p.punchTime);
+      return punchTime >= today.start;
+    });
+    
+    const awareness = evaluatePunchAwareness(recentPunches, { 
+      openPunchThresholdHours: 10,
+      workdayEndHour: 18 
+    });
+    
+    res.json(awareness);
+  } catch (error) {
+    console.error('[IC-I1] Get punch awareness by employee error:', error);
+    res.status(500).json({ error: 'Failed to evaluate punch awareness' });
   }
 });
 

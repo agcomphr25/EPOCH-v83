@@ -14,6 +14,7 @@ import {
   Phone,
   Shield,
   ExternalLink,
+  AlertCircle,
 } from 'lucide-react';
 import {
   Card,
@@ -55,6 +56,14 @@ interface Evaluation {
   evaluationPeriodEnd: string;
   overallRating: number;
   status: string;
+}
+
+interface PunchAwareness {
+  state: 'looks_good' | 'possible_missed_punch' | 'open_punch_today';
+  message: string | null;
+  actionText: string | null;
+  openPunchTime: string | null;
+  hoursOpen: number | null;
 }
 
 export default function EmployeePortal() {
@@ -105,6 +114,19 @@ export default function EmployeePortal() {
       return response.json();
     },
     enabled: !!employee?.id,
+  });
+
+  const { data: punchAwareness } = useQuery<PunchAwareness>({
+    queryKey: ['/api/labor/awareness-by-employee', employee?.id],
+    queryFn: async () => {
+      const response = await fetch(
+        `/api/labor/awareness-by-employee/${employee.id}`
+      );
+      if (!response.ok) throw new Error('Failed to fetch punch awareness');
+      return response.json();
+    },
+    enabled: !!employee?.id,
+    refetchInterval: 60000,
   });
 
   const formatDate = (dateString: string) => {
@@ -394,11 +416,16 @@ export default function EmployeePortal() {
           </Card>
 
           {/* Time Clock */}
-          <Card className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all group">
+          <Card className={`bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all group ${
+            punchAwareness?.state !== 'looks_good' ? 'ring-1 ring-amber-200' : ''
+          }`}>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Clock className="w-5 h-5 text-indigo-600" />
                 <span>Time Clock</span>
+                {punchAwareness?.state !== 'looks_good' && (
+                  <AlertCircle className="w-4 h-4 text-amber-500" />
+                )}
               </CardTitle>
               <CardDescription>
                 Clock in/out and view your timesheet
@@ -413,8 +440,17 @@ export default function EmployeePortal() {
                   {currentTime.toLocaleDateString()}
                 </p>
               </div>
+              
+              {punchAwareness?.state !== 'looks_good' && punchAwareness?.message && (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-100 rounded-lg">
+                  <p className="text-sm text-amber-800">
+                    {punchAwareness.message}
+                  </p>
+                </div>
+              )}
+              
               <Button
-                variant="default"
+                variant={punchAwareness?.state !== 'looks_good' ? 'default' : 'default'}
                 className="w-full"
                 onClick={() => {
                   const baseUrl = import.meta.env.VITE_TIME_CLOCK_URL || '';
@@ -433,7 +469,7 @@ export default function EmployeePortal() {
                 data-testid="button-open-timeclock"
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
-                Open Time Clock
+                {punchAwareness?.actionText || 'Open Time Clock'}
               </Button>
               <p className="text-xs text-gray-500 text-center mt-2">
                 Time Clock opens in a separate system for security.

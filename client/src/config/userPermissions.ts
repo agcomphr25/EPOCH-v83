@@ -214,6 +214,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/marketing-communications',
       '/finance/bulk-payment',
       '/watch-rules',
+      '/refund-request',
     ],
   },
 

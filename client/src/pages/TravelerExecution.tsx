@@ -49,6 +49,7 @@ import {
   Wrench,
   Flag,
 } from 'lucide-react';
+import MaterialScanner from '@/components/MaterialScanner';
 
 interface TravelerTaskField {
   id: string;
@@ -701,92 +702,116 @@ export default function TravelerExecution() {
                                           </p>
                                         )}
 
-                                        {task.fields.length > 0 && (
-                                          <div className="space-y-3">
-                                            {task.fields.map((field) => (
-                                              <div key={field.id} className="space-y-1">
-                                                <Label className="text-sm">
-                                                  {field.fieldLabel}
-                                                  {field.required && (
-                                                    <span className="text-red-500 ml-1">*</span>
-                                                  )}
-                                                </Label>
-                                                {field.fieldType === 'yes_no' ? (
-                                                  <div className="flex items-center gap-2">
-                                                    <Checkbox
-                                                      id={field.id}
-                                                      checked={
-                                                        fieldValues[task.id]?.[field.fieldKey] ===
-                                                          'yes' || field.value === 'yes'
-                                                      }
-                                                      onCheckedChange={(checked) =>
-                                                        handleFieldChange(
-                                                          task.id,
-                                                          field.fieldKey,
-                                                          checked ? 'yes' : 'no'
-                                                        )
-                                                      }
-                                                      disabled={isComplete}
-                                                    />
-                                                    <Label htmlFor={field.id} className="text-sm">
-                                                      Verified
+                                        {task.taskType === 'TRACE' && !isComplete ? (
+                                          <MaterialScanner
+                                            travelerId={traveler.id}
+                                            travelerStepId={currentStep.id}
+                                            onMaterialConsumed={(result) => {
+                                              const consumption = result?.consumption;
+                                              const lot = result?.updatedLot;
+                                              const traceFieldVals: Record<string, string> = {
+                                                material_icn: consumption?.internalControlNumber || lot?.internalControlNumber || '',
+                                                material_lot: lot?.supplierLotNumber || '',
+                                                qty_used: consumption?.qtyUsed?.toString() || '',
+                                                unit_of_measure: consumption?.unitOfMeasure || lot?.unitOfMeasure || '',
+                                                material_part_number: lot?.materialPartNumber || '',
+                                              };
+                                              completeTaskMutation.mutate({ 
+                                                taskId: task.id, 
+                                                fieldVals: traceFieldVals 
+                                              });
+                                            }}
+                                          />
+                                        ) : (
+                                          <>
+                                            {task.fields.length > 0 && (
+                                              <div className="space-y-3">
+                                                {task.fields.map((field) => (
+                                                  <div key={field.id} className="space-y-1">
+                                                    <Label className="text-sm">
+                                                      {field.fieldLabel}
+                                                      {field.required && (
+                                                        <span className="text-red-500 ml-1">*</span>
+                                                      )}
                                                     </Label>
+                                                    {field.fieldType === 'yes_no' ? (
+                                                      <div className="flex items-center gap-2">
+                                                        <Checkbox
+                                                          id={field.id}
+                                                          checked={
+                                                            fieldValues[task.id]?.[field.fieldKey] ===
+                                                              'yes' || field.value === 'yes'
+                                                          }
+                                                          onCheckedChange={(checked) =>
+                                                            handleFieldChange(
+                                                              task.id,
+                                                              field.fieldKey,
+                                                              checked ? 'yes' : 'no'
+                                                            )
+                                                          }
+                                                          disabled={isComplete}
+                                                        />
+                                                        <Label htmlFor={field.id} className="text-sm">
+                                                          Verified
+                                                        </Label>
+                                                      </div>
+                                                    ) : field.fieldType === 'textarea' ? (
+                                                      <Textarea
+                                                        value={
+                                                          fieldValues[task.id]?.[field.fieldKey] ||
+                                                          field.value ||
+                                                          ''
+                                                        }
+                                                        onChange={(e) =>
+                                                          handleFieldChange(
+                                                            task.id,
+                                                            field.fieldKey,
+                                                            e.target.value
+                                                          )
+                                                        }
+                                                        disabled={isComplete}
+                                                        className="text-sm"
+                                                      />
+                                                    ) : (
+                                                      <Input
+                                                        type={field.fieldType === 'number' ? 'number' : 'text'}
+                                                        value={
+                                                          fieldValues[task.id]?.[field.fieldKey] ||
+                                                          field.value ||
+                                                          ''
+                                                        }
+                                                        onChange={(e) =>
+                                                          handleFieldChange(
+                                                            task.id,
+                                                            field.fieldKey,
+                                                            e.target.value
+                                                          )
+                                                        }
+                                                        disabled={isComplete}
+                                                        className="text-sm"
+                                                      />
+                                                    )}
                                                   </div>
-                                                ) : field.fieldType === 'textarea' ? (
-                                                  <Textarea
-                                                    value={
-                                                      fieldValues[task.id]?.[field.fieldKey] ||
-                                                      field.value ||
-                                                      ''
-                                                    }
-                                                    onChange={(e) =>
-                                                      handleFieldChange(
-                                                        task.id,
-                                                        field.fieldKey,
-                                                        e.target.value
-                                                      )
-                                                    }
-                                                    disabled={isComplete}
-                                                    className="text-sm"
-                                                  />
-                                                ) : (
-                                                  <Input
-                                                    type={field.fieldType === 'number' ? 'number' : 'text'}
-                                                    value={
-                                                      fieldValues[task.id]?.[field.fieldKey] ||
-                                                      field.value ||
-                                                      ''
-                                                    }
-                                                    onChange={(e) =>
-                                                      handleFieldChange(
-                                                        task.id,
-                                                        field.fieldKey,
-                                                        e.target.value
-                                                      )
-                                                    }
-                                                    disabled={isComplete}
-                                                    className="text-sm"
-                                                  />
-                                                )}
+                                                ))}
                                               </div>
-                                            ))}
-                                          </div>
-                                        )}
-
-                                        {!isComplete && task.taskType !== 'END_GATE' && (
-                                          <Button
-                                            size="sm"
-                                            onClick={() => handleCompleteTask(task)}
-                                            disabled={completeTaskMutation.isPending}
-                                            data-testid={`button-complete-task-${task.id}`}
-                                          >
-                                            {completeTaskMutation.isPending ? (
-                                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                            ) : (
-                                              <CheckCircle className="h-4 w-4 mr-2" />
                                             )}
-                                            Complete Task
-                                          </Button>
+
+                                            {!isComplete && task.taskType !== 'END_GATE' && task.taskType !== 'TRACE' && (
+                                              <Button
+                                                size="sm"
+                                                onClick={() => handleCompleteTask(task)}
+                                                disabled={completeTaskMutation.isPending}
+                                                data-testid={`button-complete-task-${task.id}`}
+                                              >
+                                                {completeTaskMutation.isPending ? (
+                                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                ) : (
+                                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                                )}
+                                                Complete Task
+                                              </Button>
+                                            )}
+                                          </>
                                         )}
 
                                         {isComplete && (

@@ -45,6 +45,9 @@ import {
   ClipboardCheck,
   Lock,
   Unlock,
+  ScanBarcode,
+  Wrench,
+  Flag,
 } from 'lucide-react';
 
 interface TravelerTaskField {
@@ -152,6 +155,36 @@ const TASK_TYPE_ICONS: Record<string, any> = {
   SPECIAL_PROCESS: AlertTriangle,
   NOTES: FileText,
 };
+
+const PHASE_CONFIG: Record<string, { label: string; icon: any; color: string; bgColor: string; borderColor: string; description: string }> = {
+  START: {
+    label: 'Start Phase',
+    icon: ScanBarcode,
+    color: 'text-blue-700',
+    bgColor: 'bg-blue-50',
+    borderColor: 'border-blue-200',
+    description: 'Material scans, tooling verification, technician assignment'
+  },
+  WORK: {
+    label: 'Work Phase',
+    icon: Wrench,
+    color: 'text-amber-700',
+    bgColor: 'bg-amber-50',
+    borderColor: 'border-amber-200',
+    description: 'Process data entry, special process parameters'
+  },
+  FINISH: {
+    label: 'Finish Phase',
+    icon: Flag,
+    color: 'text-green-700',
+    bgColor: 'bg-green-50',
+    borderColor: 'border-green-200',
+    description: 'QC checks, acceptance criteria, final sign-off'
+  },
+};
+
+type TaskPhase = 'START' | 'WORK' | 'FINISH';
+const PHASE_ORDER: TaskPhase[] = ['START', 'WORK', 'FINISH'];
 
 export default function TravelerExecution() {
   const params = useParams();
@@ -553,149 +586,227 @@ export default function TravelerExecution() {
                 )}
 
                 {currentStep.status === 'IN_PROGRESS' && (
-                  <div className="space-y-4">
-                    <Accordion type="multiple" defaultValue={currentStep.tasks.map((t) => t.id)}>
-                      {currentStep.tasks.map((task) => {
-                        const TaskIcon = TASK_TYPE_ICONS[task.taskType] || FileText;
-                        const isComplete = task.status === 'COMPLETED';
+                  <div className="space-y-6">
+                    {PHASE_ORDER.map((phase, phaseIndex) => {
+                      const phaseTasks = currentStep.tasks
+                        .filter((t) => t.taskPhase === phase)
+                        .sort((a, b) => a.sortOrder - b.sortOrder);
+                      
+                      if (phaseTasks.length === 0) return null;
+                      
+                      const phaseConfig = PHASE_CONFIG[phase];
+                      const PhaseIcon = phaseConfig.icon;
+                      const allPhaseTasksComplete = phaseTasks.every((t) => t.status === 'COMPLETED');
+                      
+                      const previousPhasesComplete = PHASE_ORDER.slice(0, phaseIndex).every((prevPhase) => {
+                        const prevTasks = currentStep.tasks.filter((t) => t.taskPhase === prevPhase);
+                        return prevTasks
+                          .filter((t) => t.required && t.taskType !== 'END_GATE')
+                          .every((t) => t.status === 'COMPLETED');
+                      });
+                      
+                      const phaseUnlocked = previousPhasesComplete;
+                      const completedCount = phaseTasks.filter((t) => t.status === 'COMPLETED').length;
 
-                        return (
-                          <AccordionItem key={task.id} value={task.id}>
-                            <AccordionTrigger className="hover:no-underline">
+                      return (
+                        <div 
+                          key={phase} 
+                          className={`border rounded-lg overflow-hidden ${phaseConfig.borderColor} ${
+                            !phaseUnlocked ? 'opacity-60' : ''
+                          }`}
+                        >
+                          <div className={`px-4 py-3 ${phaseConfig.bgColor} border-b ${phaseConfig.borderColor}`}>
+                            <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
-                                <div
-                                  className={`p-2 rounded ${
-                                    isComplete ? 'bg-green-100' : 'bg-gray-100'
-                                  }`}
-                                >
-                                  <TaskIcon
-                                    className={`h-4 w-4 ${
-                                      isComplete ? 'text-green-600' : 'text-gray-600'
-                                    }`}
-                                  />
+                                <div className={`p-2 rounded-full ${allPhaseTasksComplete ? 'bg-green-100' : 'bg-white'}`}>
+                                  {allPhaseTasksComplete ? (
+                                    <CheckCircle className="h-5 w-5 text-green-600" />
+                                  ) : phaseUnlocked ? (
+                                    <PhaseIcon className={`h-5 w-5 ${phaseConfig.color}`} />
+                                  ) : (
+                                    <Lock className="h-5 w-5 text-gray-400" />
+                                  )}
                                 </div>
-                                <div className="text-left">
-                                  <p className="font-medium">{task.title}</p>
+                                <div>
+                                  <h3 className={`font-semibold ${phaseConfig.color}`}>
+                                    {phaseConfig.label}
+                                  </h3>
                                   <p className="text-xs text-muted-foreground">
-                                    {task.taskType}
-                                    {task.required && ' • Required'}
+                                    {phaseConfig.description}
                                   </p>
                                 </div>
-                                {isComplete && (
-                                  <CheckCircle className="h-5 w-5 text-green-500 ml-auto" />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className={phaseConfig.borderColor}>
+                                  {completedCount}/{phaseTasks.length} complete
+                                </Badge>
+                                {allPhaseTasksComplete && (
+                                  <Badge className="bg-green-100 text-green-700 border-green-300">
+                                    Phase Complete
+                                  </Badge>
                                 )}
                               </div>
-                            </AccordionTrigger>
-                            <AccordionContent>
-                              <div className="pl-12 space-y-4">
-                                {task.instructions && (
-                                  <p className="text-sm text-muted-foreground">
-                                    {task.instructions}
-                                  </p>
-                                )}
+                            </div>
+                          </div>
+                          
+                          {!phaseUnlocked ? (
+                            <div className="p-6 text-center text-muted-foreground bg-gray-50">
+                              <Lock className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                              <p className="text-sm">
+                                Complete all required tasks in previous phase{phaseIndex > 1 ? 's' : ''} to unlock
+                              </p>
+                            </div>
+                          ) : (
+                            <Accordion 
+                              type="multiple" 
+                              defaultValue={phaseTasks.map((t) => t.id)}
+                              className="bg-white"
+                            >
+                              {phaseTasks.map((task) => {
+                                const TaskIcon = TASK_TYPE_ICONS[task.taskType] || FileText;
+                                const isComplete = task.status === 'COMPLETED';
 
-                                {task.fields.length > 0 && (
-                                  <div className="space-y-3">
-                                    {task.fields.map((field) => (
-                                      <div key={field.id} className="space-y-1">
-                                        <Label className="text-sm">
-                                          {field.fieldLabel}
-                                          {field.required && (
-                                            <span className="text-red-500 ml-1">*</span>
-                                          )}
-                                        </Label>
-                                        {field.fieldType === 'yes_no' ? (
-                                          <div className="flex items-center gap-2">
-                                            <Checkbox
-                                              id={field.id}
-                                              checked={
-                                                fieldValues[task.id]?.[field.fieldKey] ===
-                                                  'yes' || field.value === 'yes'
-                                              }
-                                              onCheckedChange={(checked) =>
-                                                handleFieldChange(
-                                                  task.id,
-                                                  field.fieldKey,
-                                                  checked ? 'yes' : 'no'
-                                                )
-                                              }
-                                              disabled={isComplete}
-                                            />
-                                            <Label htmlFor={field.id} className="text-sm">
-                                              Verified
-                                            </Label>
-                                          </div>
-                                        ) : field.fieldType === 'textarea' ? (
-                                          <Textarea
-                                            value={
-                                              fieldValues[task.id]?.[field.fieldKey] ||
-                                              field.value ||
-                                              ''
-                                            }
-                                            onChange={(e) =>
-                                              handleFieldChange(
-                                                task.id,
-                                                field.fieldKey,
-                                                e.target.value
-                                              )
-                                            }
-                                            disabled={isComplete}
-                                            className="text-sm"
+                                return (
+                                  <AccordionItem key={task.id} value={task.id} className="border-b last:border-b-0">
+                                    <AccordionTrigger className="hover:no-underline px-4">
+                                      <div className="flex items-center gap-3">
+                                        <div
+                                          className={`p-2 rounded ${
+                                            isComplete ? 'bg-green-100' : 'bg-gray-100'
+                                          }`}
+                                        >
+                                          <TaskIcon
+                                            className={`h-4 w-4 ${
+                                              isComplete ? 'text-green-600' : 'text-gray-600'
+                                            }`}
                                           />
-                                        ) : (
-                                          <Input
-                                            type={field.fieldType === 'number' ? 'number' : 'text'}
-                                            value={
-                                              fieldValues[task.id]?.[field.fieldKey] ||
-                                              field.value ||
-                                              ''
-                                            }
-                                            onChange={(e) =>
-                                              handleFieldChange(
-                                                task.id,
-                                                field.fieldKey,
-                                                e.target.value
-                                              )
-                                            }
-                                            disabled={isComplete}
-                                            className="text-sm"
-                                          />
+                                        </div>
+                                        <div className="text-left">
+                                          <p className="font-medium">{task.title}</p>
+                                          <p className="text-xs text-muted-foreground">
+                                            {task.taskType}
+                                            {task.required && ' • Required'}
+                                          </p>
+                                        </div>
+                                        {isComplete && (
+                                          <CheckCircle className="h-5 w-5 text-green-500 ml-auto" />
                                         )}
                                       </div>
-                                    ))}
-                                  </div>
-                                )}
+                                    </AccordionTrigger>
+                                    <AccordionContent className="px-4">
+                                      <div className="pl-12 space-y-4 pb-4">
+                                        {task.instructions && (
+                                          <p className="text-sm text-muted-foreground">
+                                            {task.instructions}
+                                          </p>
+                                        )}
 
-                                {!isComplete && task.taskType !== 'END_GATE' && (
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleCompleteTask(task)}
-                                    disabled={completeTaskMutation.isPending}
-                                    data-testid={`button-complete-task-${task.id}`}
-                                  >
-                                    {completeTaskMutation.isPending ? (
-                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    ) : (
-                                      <CheckCircle className="h-4 w-4 mr-2" />
-                                    )}
-                                    Complete Task
-                                  </Button>
-                                )}
+                                        {task.fields.length > 0 && (
+                                          <div className="space-y-3">
+                                            {task.fields.map((field) => (
+                                              <div key={field.id} className="space-y-1">
+                                                <Label className="text-sm">
+                                                  {field.fieldLabel}
+                                                  {field.required && (
+                                                    <span className="text-red-500 ml-1">*</span>
+                                                  )}
+                                                </Label>
+                                                {field.fieldType === 'yes_no' ? (
+                                                  <div className="flex items-center gap-2">
+                                                    <Checkbox
+                                                      id={field.id}
+                                                      checked={
+                                                        fieldValues[task.id]?.[field.fieldKey] ===
+                                                          'yes' || field.value === 'yes'
+                                                      }
+                                                      onCheckedChange={(checked) =>
+                                                        handleFieldChange(
+                                                          task.id,
+                                                          field.fieldKey,
+                                                          checked ? 'yes' : 'no'
+                                                        )
+                                                      }
+                                                      disabled={isComplete}
+                                                    />
+                                                    <Label htmlFor={field.id} className="text-sm">
+                                                      Verified
+                                                    </Label>
+                                                  </div>
+                                                ) : field.fieldType === 'textarea' ? (
+                                                  <Textarea
+                                                    value={
+                                                      fieldValues[task.id]?.[field.fieldKey] ||
+                                                      field.value ||
+                                                      ''
+                                                    }
+                                                    onChange={(e) =>
+                                                      handleFieldChange(
+                                                        task.id,
+                                                        field.fieldKey,
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    disabled={isComplete}
+                                                    className="text-sm"
+                                                  />
+                                                ) : (
+                                                  <Input
+                                                    type={field.fieldType === 'number' ? 'number' : 'text'}
+                                                    value={
+                                                      fieldValues[task.id]?.[field.fieldKey] ||
+                                                      field.value ||
+                                                      ''
+                                                    }
+                                                    onChange={(e) =>
+                                                      handleFieldChange(
+                                                        task.id,
+                                                        field.fieldKey,
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    disabled={isComplete}
+                                                    className="text-sm"
+                                                  />
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
 
-                                {isComplete && (
-                                  <p className="text-xs text-muted-foreground">
-                                    Completed by {task.completedBy} at{' '}
-                                    {task.completedAt
-                                      ? new Date(task.completedAt).toLocaleString()
-                                      : 'N/A'}
-                                  </p>
-                                )}
-                              </div>
-                            </AccordionContent>
-                          </AccordionItem>
-                        );
-                      })}
-                    </Accordion>
+                                        {!isComplete && task.taskType !== 'END_GATE' && (
+                                          <Button
+                                            size="sm"
+                                            onClick={() => handleCompleteTask(task)}
+                                            disabled={completeTaskMutation.isPending}
+                                            data-testid={`button-complete-task-${task.id}`}
+                                          >
+                                            {completeTaskMutation.isPending ? (
+                                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                            ) : (
+                                              <CheckCircle className="h-4 w-4 mr-2" />
+                                            )}
+                                            Complete Task
+                                          </Button>
+                                        )}
+
+                                        {isComplete && (
+                                          <p className="text-xs text-muted-foreground">
+                                            Completed by {task.completedBy} at{' '}
+                                            {task.completedAt
+                                              ? new Date(task.completedAt).toLocaleString()
+                                              : 'N/A'}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </AccordionContent>
+                                  </AccordionItem>
+                                );
+                              })}
+                            </Accordion>
+                          )}
+                        </div>
+                      );
+                    })}
 
                     <div className="flex justify-end pt-4 border-t">
                       <Button

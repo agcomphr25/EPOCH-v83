@@ -917,7 +917,32 @@ router.get('/sales-order/:orderId', async (req: Request, res: Response) => {
     
     // If no signed PDF exists, generate a new one using centralized generator
     console.log(`📄 Generating new sales order PDF for ${orderId}`);
-    const order = await storage.getOrderById(orderId);
+    let order = await storage.getOrderById(orderId);
+    
+    // If not found and this is a P1 order, check production_orders table
+    if (!order && orderId.startsWith('P1-')) {
+      console.log(`📄 Order not found in regular tables, checking production_orders for P1 order: ${orderId}`);
+      const productionOrder = await storage.getProductionOrderByOrderId(orderId);
+      if (productionOrder) {
+        // Convert production order to a format compatible with PDF generation
+        order = {
+          orderId: productionOrder.orderId,
+          customerId: productionOrder.customerId,
+          customer: productionOrder.customerName,
+          modelId: productionOrder.itemId || '',
+          orderDate: productionOrder.orderDate,
+          dueDate: productionOrder.dueDate,
+          currentDepartment: productionOrder.currentDepartment,
+          status: productionOrder.productionStatus || 'IN_PROGRESS',
+          notes: productionOrder.notes,
+          features: productionOrder.specifications || {},
+          // P1-specific fields
+          poNumber: productionOrder.poNumber,
+          itemName: productionOrder.itemName,
+          itemType: productionOrder.itemType,
+        } as any;
+      }
+    }
     
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });

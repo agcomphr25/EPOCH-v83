@@ -104,6 +104,7 @@ import { registerOutreachEngineRoutes } from './outreachEngine';
 import { registerObjectStorageRoutes } from '../../replit_integrations/object_storage';
 import { getAccessToken } from '../utils/upsShipping';
 import punchesRoutes from './punches';
+import laborRoutes from './labor';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -141,6 +142,9 @@ export function registerRoutes(app: Express): Server {
 
   // Punch events routes (IC-7) - Read-only mirror from Time Clock
   app.use('/api/punches', punchesRoutes);
+
+  // Labor summary routes (IC-F1) - Derived insights from punch events
+  app.use('/api/labor', laborRoutes);
 
   // Order management routes
   app.use('/api/orders', ordersRoutes);

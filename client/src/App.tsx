@@ -172,6 +172,8 @@ import ProjectDetailPage from './pages/ProjectDetailPage';
 import HelpCenter from './pages/HelpCenter';
 import TravelerManagement from './pages/TravelerManagement';
 import TravelerExecution from './pages/TravelerExecution';
+import MaterialReceivingPage from './pages/MaterialReceivingPage';
+import MaterialInventoryPage from './pages/MaterialInventoryPage';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -659,6 +661,10 @@ function App() {
                   <Route path="/travelers" component={TravelerManagement} />
                   <Route path="/travelers/:id" component={TravelerExecution} />
                   <Route path="/travelers/:id/execute" component={TravelerExecution} />
+                  
+                  {/* Material Traceability System - AS9100 compliant material tracking */}
+                  <Route path="/material-receiving" component={MaterialReceivingPage} />
+                  <Route path="/material-inventory" component={MaterialInventoryPage} />
                   <Route
                     path="/master-document-register"
                     component={MasterDocumentRegister}

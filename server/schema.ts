@@ -8616,6 +8616,32 @@ export const insertProjectNotificationSchema = createInsertSchema(projectNotific
 export type ProjectNotification = typeof projectNotifications.$inferSelect;
 export type InsertProjectNotification = z.infer<typeof insertProjectNotificationSchema>;
 
+// Project Step Attachments - Documents/PDFs attached to workflow steps
+export const projectStepAttachments = pgTable('project_step_attachments', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  stepId: uuid('step_id').notNull().references(() => projectSteps.id, { onDelete: 'cascade' }),
+  fileName: text('file_name').notNull(),
+  originalFileName: text('original_file_name').notNull(),
+  fileSize: integer('file_size').notNull(),
+  mimeType: text('mime_type').notNull(),
+  filePath: text('file_path').notNull(),
+  uploadedBy: integer('uploaded_by').references(() => employees.id),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  projectIdIdx: index('project_step_attachments_project_id_idx').on(table.projectId),
+  stepIdIdx: index('project_step_attachments_step_id_idx').on(table.stepId),
+}));
+
+export const insertProjectStepAttachmentSchema = createInsertSchema(projectStepAttachments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProjectStepAttachment = typeof projectStepAttachments.$inferSelect;
+export type InsertProjectStepAttachment = z.infer<typeof insertProjectStepAttachmentSchema>;
+
 // AQL Sampling Chart - Standard quality sampling requirements based on lot size
 export const aqlSamplingChart = pgTable('aql_sampling_chart', {
   id: serial('id').primaryKey(),

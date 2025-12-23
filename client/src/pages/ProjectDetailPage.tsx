@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useParams, useLocation } from 'wouter';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useToast } from '@/hooks/use-toast';
 import { 
   ArrowLeft, 
   CheckCircle2, 
@@ -28,7 +29,11 @@ import {
   Bell,
   Link as LinkIcon,
   Edit,
-  Settings
+  Settings,
+  Upload,
+  Paperclip,
+  Download,
+  Trash2
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -83,6 +88,20 @@ interface Employee {
   userRole: string;
 }
 
+interface StepAttachment {
+  id: number;
+  projectId: string;
+  stepId: string;
+  fileName: string;
+  originalFileName: string;
+  fileSize: number;
+  mimeType: string;
+  filePath: string;
+  uploadedBy: number | null;
+  notes: string | null;
+  createdAt: string;
+}
+
 const STEP_CONFIG: Record<string, { label: string; route: string; icon: typeof FileText }> = {
   rfq_risk_assessment: { label: 'RFQ Risk Assessment', route: '/rfq-risk-assessment', icon: FileText },
   quote: { label: 'Quote', route: '/p2-quote-form', icon: FileText },
@@ -117,9 +136,15 @@ export default function ProjectDetailPage() {
   const [, setLocation] = useLocation();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [selectedStep, setSelectedStep] = useState<ProjectStep | null>(null);
   const [linkId, setLinkId] = useState('');
   const [editData, setEditData] = useState<Partial<Project>>({});
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [uploadNotes, setUploadNotes] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const { data: project, isLoading } = useQuery<Project>({
     queryKey: ['/api/projects', id],
@@ -169,6 +194,119 @@ export default function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
     },
   });
+
+  const { data: stepAttachments = [] } = useQuery<StepAttachment[]>({
+    queryKey: ['/api/project-step-attachments', selectedStep?.id],
+    enabled: !!selectedStep?.id && isUploadDialogOpen,
+  });
+
+  interface UnlinkedSubmission {
+    id: string | number;
+    label: string;
+    customerId?: string;
+    createdAt?: string;
+  }
+
+  const { data: availableSubmissions = [], isLoading: isLoadingSubmissions } = useQuery<UnlinkedSubmission[]>({
+    queryKey: ['/api/projects/unlinked-submissions', selectedStep?.stepType, project?.customerId],
+    queryFn: async () => {
+      const url = `/api/projects/unlinked-submissions/${selectedStep?.stepType}${project?.customerId ? `?customerId=${project.customerId}` : ''}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to fetch submissions');
+      return response.json();
+    },
+    enabled: !!selectedStep?.stepType && isLinkDialogOpen,
+  });
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: async (attachmentId: number) => {
+      const response = await fetch(`/api/project-step-attachments/${attachmentId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to delete attachment');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments', selectedStep?.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      toast({ title: 'Document deleted', description: 'The attachment has been removed.' });
+    },
+  });
+
+  const handleFileUpload = async (file: File) => {
+    if (!selectedStep || !project) return;
+    
+    setIsUploading(true);
+    try {
+      const urlResponse = await fetch('/api/project-step-attachments/request-upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          contentType: file.type || 'application/octet-stream',
+          projectId: project.id,
+          stepId: selectedStep.id,
+        }),
+      });
+
+      if (!urlResponse.ok) {
+        throw new Error('Failed to get upload URL');
+      }
+
+      const { uploadURL, objectPath } = await urlResponse.json();
+
+      const uploadResponse = await fetch(uploadURL, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file');
+      }
+
+      const completeResponse = await fetch('/api/project-step-attachments/complete-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          objectPath,
+          projectId: project.id,
+          stepId: selectedStep.id,
+          originalFileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type || 'application/octet-stream',
+          notes: uploadNotes || null,
+        }),
+      });
+
+      if (!completeResponse.ok) {
+        throw new Error('Failed to complete upload');
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['/api/project-step-attachments', selectedStep.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      setUploadNotes('');
+      toast({ title: 'Document uploaded', description: `${file.name} has been attached to this step.` });
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({ title: 'Upload failed', description: 'There was an error uploading the document.', variant: 'destructive' });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   if (isLoading) {
     return (
@@ -369,6 +507,18 @@ export default function ProjectDetailPage() {
                                   size="sm"
                                   onClick={() => {
                                     setSelectedStep(step);
+                                    setIsUploadDialogOpen(true);
+                                  }}
+                                  data-testid={`button-upload-${step.stepType}`}
+                                >
+                                  <Upload className="mr-1 h-4 w-4" />
+                                  Attach PDF
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedStep(step);
                                     setLinkId(linkedId?.toString() || '');
                                     setIsLinkDialogOpen(true);
                                   }}
@@ -529,7 +679,13 @@ export default function ProjectDetailPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isLinkDialogOpen} onOpenChange={setIsLinkDialogOpen}>
+      <Dialog open={isLinkDialogOpen} onOpenChange={(open) => {
+        setIsLinkDialogOpen(open);
+        if (!open) {
+          setShowManualEntry(false);
+          setLinkId('');
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Link Record</DialogTitle>
@@ -539,15 +695,77 @@ export default function ProjectDetailPage() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Record ID</Label>
-              <Input
-                value={linkId}
-                onChange={(e) => setLinkId(e.target.value)}
-                placeholder="Enter the record ID to link"
-              />
-              <p className="text-xs text-muted-foreground">
-                Enter the ID of the existing record you want to link to this step
-              </p>
+              <Label>Select Record</Label>
+              {isLoadingSubmissions ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <Clock className="h-4 w-4 animate-spin" />
+                  Loading available records...
+                </div>
+              ) : availableSubmissions.length > 0 && !showManualEntry ? (
+                <>
+                  <Select value={linkId} onValueChange={setLinkId}>
+                    <SelectTrigger data-testid="select-link-record">
+                      <SelectValue placeholder="Choose a record to link..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableSubmissions.map((submission) => (
+                        <SelectItem 
+                          key={String(submission.id)} 
+                          value={String(submission.id)}
+                          data-testid={`select-item-${submission.id}`}
+                        >
+                          {submission.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Showing {availableSubmissions.length} available record{availableSubmissions.length !== 1 ? 's' : ''} for this customer that haven't been linked to a project yet.
+                  </p>
+                  <Button 
+                    variant="link" 
+                    className="h-auto p-0 text-xs"
+                    onClick={() => setShowManualEntry(true)}
+                  >
+                    Can't find your record? Enter ID manually
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Input
+                    value={linkId}
+                    onChange={(e) => setLinkId(e.target.value)}
+                    placeholder="Enter the record ID to link"
+                    data-testid="input-link-record-id"
+                  />
+                  {availableSubmissions.length === 0 && !isLoadingSubmissions && (
+                    <p className="text-xs text-muted-foreground">
+                      No unlinked records found for this customer. Enter a record ID manually or create a new submission first.
+                    </p>
+                  )}
+                  {showManualEntry && availableSubmissions.length > 0 && (
+                    <Button 
+                      variant="link" 
+                      className="h-auto p-0 text-xs"
+                      onClick={() => {
+                        setShowManualEntry(false);
+                        setLinkId('');
+                      }}
+                    >
+                      Back to dropdown selection
+                    </Button>
+                  )}
+                  <div className="bg-muted p-3 rounded-md text-xs text-muted-foreground space-y-2 mt-2">
+                    <p className="font-medium text-foreground">How to find the Record ID:</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li><strong>RFQ Risk Assessment:</strong> Go to the RFQ Risk Assessment page, find your submission in the list, and look for the ID number in the table.</li>
+                      <li><strong>Quote:</strong> Open the quote form and copy the quote ID from the URL or header.</li>
+                      <li><strong>Purchase Review:</strong> Find your submission in the Purchase Review Submissions page and note the ID.</li>
+                      <li><strong>Pre-production Checklist:</strong> Locate your checklist and copy its ID from the list.</li>
+                    </ul>
+                  </div>
+                </>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -557,8 +775,112 @@ export default function ProjectDetailPage() {
             <Button 
               onClick={handleLinkStep}
               disabled={!linkId || updateStepMutation.isPending}
+              data-testid="button-link-record"
             >
               {updateStepMutation.isPending ? 'Linking...' : 'Link Record'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isUploadDialogOpen} onOpenChange={(open) => {
+        setIsUploadDialogOpen(open);
+        if (!open) {
+          setUploadNotes('');
+          setSelectedStep(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Attach Document</DialogTitle>
+            <DialogDescription>
+              Upload a PDF or document for {STEP_CONFIG[selectedStep?.stepType || '']?.label || 'this step'}. 
+              Use this when work was completed outside the system.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Upload File</Label>
+              <div className="flex gap-2">
+                <Input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handleFileUpload(file);
+                    }
+                  }}
+                  disabled={isUploading}
+                  data-testid="input-file-upload"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Accepted formats: PDF, Word, Excel, PNG, JPG
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Notes (optional)</Label>
+              <Textarea
+                value={uploadNotes}
+                onChange={(e) => setUploadNotes(e.target.value)}
+                placeholder="Add any notes about this document..."
+                data-testid="input-upload-notes"
+              />
+            </div>
+
+            {isUploading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+                Uploading document...
+              </div>
+            )}
+
+            {stepAttachments.length > 0 && (
+              <div className="space-y-2">
+                <Label>Attached Documents</Label>
+                <div className="border rounded-md divide-y">
+                  {stepAttachments.map((attachment) => (
+                    <div key={attachment.id} className="flex items-center justify-between p-3" data-testid={`attachment-${attachment.id}`}>
+                      <div className="flex items-center gap-3">
+                        <Paperclip className="h-4 w-4 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium">{attachment.originalFileName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatFileSize(attachment.fileSize)} - {formatDistanceToNow(new Date(attachment.createdAt), { addSuffix: true })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => window.open(`/api/project-step-attachments/download/${attachment.id}`, '_blank')}
+                          data-testid={`button-download-${attachment.id}`}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteAttachmentMutation.mutate(attachment.id)}
+                          disabled={deleteAttachmentMutation.isPending}
+                          data-testid={`button-delete-${attachment.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsUploadDialogOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

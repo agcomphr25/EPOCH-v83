@@ -794,6 +794,24 @@ export const canonicalIdentities = pgTable('canonical_identities', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// Punch Events - Read-only mirror from Time Clock (IC-7)
+export const punchEvents = pgTable('punch_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  externalPunchId: text('external_punch_id').unique().notNull(), // ID from source system
+  canonicalId: uuid('canonical_id').notNull(), // Link to canonical identity
+  epochEmployeeId: integer('epoch_employee_id'), // Matched EPOCH employee (nullable if not matched)
+  punchType: text('punch_type').notNull(), // clock_in, clock_out, break_start, break_end
+  punchTime: timestamp('punch_time').notNull(), // When the punch occurred
+  source: text('source').notNull().default('timeclock'), // Source system
+  departmentCode: text('department_code'), // Department at time of punch
+  jobCode: text('job_code'), // Job/cost center code
+  locationCode: text('location_code'), // Physical location
+  metadata: jsonb('metadata'), // Additional punch data
+  signature: text('signature'), // Event signature for validation
+  receivedAt: timestamp('received_at').defaultNow().notNull(), // When EPOCH received this event
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // Enhanced Employee Management System
 export const employees = pgTable('employees', {
   id: serial('id').primaryKey(),
@@ -1750,6 +1768,27 @@ export const insertCanonicalIdentitySchema = createInsertSchema(canonicalIdentit
     metadata: z.record(z.any()).optional().nullable(),
   });
 
+// Punch Event schema for ingestion (IC-7)
+export const insertPunchEventSchema = createInsertSchema(punchEvents)
+  .omit({
+    id: true,
+    receivedAt: true,
+    createdAt: true,
+  })
+  .extend({
+    externalPunchId: z.string().min(1, 'External punch ID is required'),
+    canonicalId: z.string().uuid('Canonical ID must be a valid UUID'),
+    epochEmployeeId: z.number().int().optional().nullable(),
+    punchType: z.enum(['clock_in', 'clock_out', 'break_start', 'break_end']),
+    punchTime: z.string().or(z.date()),
+    source: z.string().default('timeclock'),
+    departmentCode: z.string().optional().nullable(),
+    jobCode: z.string().optional().nullable(),
+    locationCode: z.string().optional().nullable(),
+    metadata: z.record(z.any()).optional().nullable(),
+    signature: z.string().optional().nullable(),
+  });
+
 export const insertEmployeeSchema = createInsertSchema(employees)
   .omit({
     id: true,
@@ -2294,6 +2333,8 @@ export type InsertVendorScopeGroup = z.infer<typeof insertVendorScopeGroupSchema
 export type VendorScopeGroup = typeof vendorScopeGroups.$inferSelect;
 export type InsertCanonicalIdentity = z.infer<typeof insertCanonicalIdentitySchema>;
 export type CanonicalIdentity = typeof canonicalIdentities.$inferSelect;
+export type InsertPunchEvent = z.infer<typeof insertPunchEventSchema>;
+export type PunchEvent = typeof punchEvents.$inferSelect;
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type Employee = typeof employees.$inferSelect;
 

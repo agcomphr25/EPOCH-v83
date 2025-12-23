@@ -181,6 +181,9 @@ import {
   type CanonicalIdentity,
   type InsertCanonicalIdentity,
   canonicalIdentities,
+  type PunchEvent,
+  type InsertPunchEvent,
+  punchEvents,
   // User authentication types
   type User,
   type InsertUser,
@@ -698,6 +701,13 @@ export interface IStorage {
   createCanonicalIdentity(data: InsertCanonicalIdentity): Promise<CanonicalIdentity>;
   updateCanonicalIdentity(id: string, data: Partial<InsertCanonicalIdentity>): Promise<CanonicalIdentity>;
   getAllCanonicalIdentities(): Promise<CanonicalIdentity[]>;
+
+  // Punch Events (IC-7) - Read-only mirror
+  getPunchEventByExternalId(externalPunchId: string): Promise<PunchEvent | undefined>;
+  createPunchEvent(data: InsertPunchEvent): Promise<PunchEvent>;
+  getPunchEventsByCanonicalId(canonicalId: string, limit?: number): Promise<PunchEvent[]>;
+  getPunchEventsByEmployeeId(employeeId: number, limit?: number): Promise<PunchEvent[]>;
+  getPunchEventsByDateRange(startDate: Date, endDate: Date): Promise<PunchEvent[]>;
 
   // Employees CRUD
   getAllEmployees(): Promise<Employee[]>;
@@ -4929,6 +4939,58 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(canonicalIdentities)
       .orderBy(canonicalIdentities.displayName);
+  }
+
+  // Punch Events (IC-7) - Read-only mirror
+
+  async getPunchEventByExternalId(externalPunchId: string): Promise<PunchEvent | undefined> {
+    const [event] = await db
+      .select()
+      .from(punchEvents)
+      .where(eq(punchEvents.externalPunchId, externalPunchId));
+    return event || undefined;
+  }
+
+  async createPunchEvent(data: InsertPunchEvent): Promise<PunchEvent> {
+    const [event] = await db
+      .insert(punchEvents)
+      .values({
+        ...data,
+        punchTime: typeof data.punchTime === 'string' ? new Date(data.punchTime) : data.punchTime,
+      })
+      .returning();
+    return event;
+  }
+
+  async getPunchEventsByCanonicalId(canonicalId: string, limit: number = 100): Promise<PunchEvent[]> {
+    return await db
+      .select()
+      .from(punchEvents)
+      .where(eq(punchEvents.canonicalId, canonicalId))
+      .orderBy(desc(punchEvents.punchTime))
+      .limit(limit);
+  }
+
+  async getPunchEventsByEmployeeId(employeeId: number, limit: number = 100): Promise<PunchEvent[]> {
+    return await db
+      .select()
+      .from(punchEvents)
+      .where(eq(punchEvents.epochEmployeeId, employeeId))
+      .orderBy(desc(punchEvents.punchTime))
+      .limit(limit);
+  }
+
+  async getPunchEventsByDateRange(startDate: Date, endDate: Date): Promise<PunchEvent[]> {
+    return await db
+      .select()
+      .from(punchEvents)
+      .where(
+        and(
+          gte(punchEvents.punchTime, startDate),
+          lte(punchEvents.punchTime, endDate)
+        )
+      )
+      .orderBy(desc(punchEvents.punchTime));
   }
 
   // Employees CRUD

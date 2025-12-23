@@ -103,6 +103,7 @@ import { registerTimeClockRoutes } from './timeClock';
 import { registerOutreachEngineRoutes } from './outreachEngine';
 import { registerObjectStorageRoutes } from '../../replit_integrations/object_storage';
 import { getAccessToken } from '../utils/upsShipping';
+import punchesRoutes from './punches';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -137,6 +138,9 @@ export function registerRoutes(app: Express): Server {
 
   // Employee management routes
   app.use('/api/employees', employeesRoutes);
+
+  // Punch events routes (IC-7) - Read-only mirror from Time Clock
+  app.use('/api/punches', punchesRoutes);
 
   // Order management routes
   app.use('/api/orders', ordersRoutes);

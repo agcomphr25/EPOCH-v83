@@ -1,0 +1,223 @@
+2) Add ONE field to traveler_tasks
+Schema change
+taskPhase: text('task_phase').notNull(),
+// START | WORK | FINISH
+
+
+Full example:
+
+export const travelerTasks = pgTable('traveler_tasks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  travelerStepId: uuid('traveler_step_id').notNull(),
+
+  taskType: text('task_type').notNull(),
+  taskPhase: text('task_phase').notNull(), // START | WORK | FINISH
+
+  title: text('title').notNull(),
+  instructions: text('instructions'),
+  required: boolean('required').default(true).notNull(),
+  sortOrder: integer('sort_order').default(0).notNull(),
+
+  status: text('status').default('NOT_STARTED').notNull(),
+  completedAt: timestamp('completed_at'),
+  completedBy: text('completed_by'),
+});
+
+
+This single field unlocks:
+
+Start gates
+
+Finish gates
+
+Ordered enforcement
+
+Clear UI separation
+
+3) How the Wizard lets users define Start vs Finish tasks
+
+In TravelerWizard – Configure Department Step:
+
+For each department:
+
+Section A: Start Tasks
+
+Traceability scans
+
+Material/lot verification
+
+Tooling verification
+
+Setup checklists
+
+Section B: Work Tasks
+
+Data entry
+
+Special process execution
+
+QC in-process checks
+
+Section C: Finish Tasks
+
+Final inspection
+
+Dimensional checks
+
+Leak test verification
+
+Cleanup / FOD check
+
+Step signoff preparation
+
+When saving:
+
+taskPhase: "START" | "WORK" | "FINISH"
+
+4) Backend enforcement rules (this is the important part)
+Rule 1 — You cannot start work until START tasks are done
+
+When a user tries to mark a step as IN_PROGRESS:
+
+SELECT count(*) FROM traveler_tasks
+WHERE traveler_step_id = $stepId
+AND task_phase = 'START'
+AND required = true
+AND status != 'COMPLETED';
+
+
+If count > 0 → ❌ block
+
+Rule 2 — You cannot sign the step until FINISH tasks are done
+
+When calling:
+
+POST /api/travelers/:travelerId/steps/:stepId/sign
+
+
+Backend checks:
+
+// all required FINISH tasks completed
+AND task_phase = 'FINISH'
+AND required = true
+AND status = 'COMPLETED'
+
+
+If any missing → ❌ block signature
+
+Rule 3 — QC Failures override everything
+
+If any task has:
+
+taskType = 'QC' AND value.result = 'FAIL'
+
+
+Then:
+
+step becomes BLOCKED
+
+signing is disabled
+
+NCR required
+
+5) Example (Layup Department)
+START tasks
+
+Scan fabric ICN
+
+Verify freezer expiration
+
+Verify mold ID
+
+Badge scan technician
+
+WORK tasks
+
+Record ply count
+
+Record resin batch
+
+Record vacuum achieved
+
+Oven cure special process (with chart upload)
+
+FINISH tasks
+
+Visual inspection (pass/fail)
+
+Vacuum leak test verification
+
+Cleanliness check
+
+Supervisor signoff ready
+
+Result
+
+Operator cannot start layup without material scans
+
+Operator cannot sign layup without inspections
+
+Signature locks the step
+
+This is exactly how auditors expect it.
+
+6) How this maps to AS9100 language (so you’re safe)
+AS9100 Concept	Your Implementation
+Process control	START / WORK / FINISH task phases
+Objective evidence	task fields + attachments
+Special processes	SPECIAL_PROCESS taskType
+Verification	FINISH QC tasks
+Authorization	Digital signature
+Traceability	ICN / barcode fields
+Record retention	immutable traveler records
+7) Do you want task role enforcement too?
+
+This is optional but powerful:
+
+Add:
+
+requiredRole: text('required_role'), 
+// OPERATOR | INSPECTOR | SUPERVISOR
+
+
+Then:
+
+Operators can complete WORK
+
+Inspectors must complete FINISH QC
+
+Supervisors sign
+
+If you want this, say the word and I’ll include it cleanly.
+
+8) Bottom line
+
+✔ Yes, this design explicitly allows:
+
+Start-only tasks
+
+Finish-only tasks
+
+Enforced order
+
+Enforced signoff
+
+✔ And it does so with one additional column and server-side rules, not just UI hints.
+
+Next best step
+
+If you want, I can:
+
+update your traveler_tasks schema + Zod schema
+
+write the exact backend checks for:
+
+step start
+
+task complete
+
+step sign
+
+show the UI layout for START / WORK / FINISH in React
+
+Just tell me which one you want next, or paste your current traveler_tasks schema file if you’ve already started it.

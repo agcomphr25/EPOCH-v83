@@ -64,6 +64,7 @@ interface TravelerTask {
   id: string;
   travelerStepId: string;
   taskType: string;
+  taskPhase: 'START' | 'WORK' | 'FINISH'; // Execution order enforcement
   title: string;
   instructions: string | null;
   required: boolean;

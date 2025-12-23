@@ -493,6 +493,44 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
     }
 
     const tasks = await storage.getTravelerTasks(stepId);
+    
+    // Rule: Check for QC failures - any FAILED QC task blocks signing
+    const failedQCTasks = tasks.filter(
+      (t) => t.taskType === 'QC' && t.status === 'FAILED'
+    );
+    if (failedQCTasks.length > 0) {
+      return res.status(400).json({
+        error: 'Cannot sign step with failed QC tasks. NCR required.',
+        failedTasks: failedQCTasks.map((t) => ({
+          id: t.id,
+          title: t.title,
+          taskType: t.taskType,
+          status: t.status,
+        })),
+      });
+    }
+
+    // Rule: All required FINISH phase tasks must be completed before signing
+    const incompleteFinishTasks = tasks.filter(
+      (t) => t.required && 
+             (t as any).taskPhase === 'FINISH' && 
+             t.status !== 'COMPLETED' && 
+             t.taskType !== 'END_GATE'
+    );
+    if (incompleteFinishTasks.length > 0) {
+      return res.status(400).json({
+        error: 'All required FINISH tasks must be completed before signing',
+        incompleteTasks: incompleteFinishTasks.map((t) => ({
+          id: t.id,
+          title: t.title,
+          taskType: t.taskType,
+          taskPhase: (t as any).taskPhase,
+          status: t.status,
+        })),
+      });
+    }
+
+    // Rule: All other required tasks (START, WORK) must also be completed
     const incompleteTasks = tasks.filter(
       (t) => t.required && t.status !== 'COMPLETED' && t.taskType !== 'END_GATE'
     );
@@ -504,6 +542,7 @@ router.post('/:travelerId/steps/:stepId/sign', async (req: Request, res: Respons
           id: t.id,
           title: t.title,
           taskType: t.taskType,
+          taskPhase: (t as any).taskPhase,
           status: t.status,
         })),
       });

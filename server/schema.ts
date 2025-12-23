@@ -3963,6 +3963,7 @@ export const travelerTasks = pgTable('traveler_tasks', {
     .notNull(),
 
   taskType: text('task_type').notNull(), // TRACE | QC | CUSTOM_FIELD | QUESTIONS | SPECIAL_PROCESS | NOTES | START_GATE | END_GATE
+  taskPhase: text('task_phase').notNull().default('WORK'), // START | WORK | FINISH - controls execution order enforcement
 
   title: text('title').notNull(),
   instructions: text('instructions'),
@@ -3975,6 +3976,7 @@ export const travelerTasks = pgTable('traveler_tasks', {
 }, (table) => ({
   stepIdIdx: index('traveler_tasks_step_id_idx').on(table.travelerStepId),
   taskTypeIdx: index('traveler_tasks_type_idx').on(table.taskType),
+  taskPhaseIdx: index('traveler_tasks_phase_idx').on(table.taskPhase),
 }));
 
 // Traveler Task Fields - Data capture per task (flexible, AS9100 evidence)
@@ -4929,6 +4931,7 @@ export const insertTravelerTaskSchema = createInsertSchema(travelerTasks)
   .extend({
     travelerStepId: z.string().uuid('Invalid traveler step ID'),
     taskType: z.enum(['TRACE', 'QC', 'CUSTOM_FIELD', 'QUESTIONS', 'SPECIAL_PROCESS', 'NOTES', 'START_GATE', 'END_GATE']),
+    taskPhase: z.enum(['START', 'WORK', 'FINISH']).default('WORK'), // Controls execution order enforcement
     title: z.string().min(1, 'Task title is required'),
     instructions: z.string().optional().nullable(),
     required: z.boolean().default(true),

@@ -12308,10 +12308,11 @@ export class DatabaseStorage implements IStorage {
 
       let sortOrder = 0;
 
-      // Create START_GATE task
+      // Create START_GATE task (START phase)
       await this.createTravelerTask({
         travelerStepId: step.id,
         taskType: 'START_GATE',
+        taskPhase: 'START',
         title: `Start ${deptName}`,
         instructions: `Badge scan to start work in ${deptName}`,
         required: true,
@@ -12319,12 +12320,13 @@ export class DatabaseStorage implements IStorage {
         status: 'NOT_STARTED',
       });
 
-      // Create TRACE tasks from traceabilityConfig
+      // Create TRACE tasks from traceabilityConfig (START phase - material verification)
       const traceFields = traceabilityConfig[deptName] || [];
       if (traceFields.length > 0) {
         const traceTask = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: 'TRACE',
+          taskPhase: 'START',
           title: 'Material Traceability',
           instructions: 'Record traceability data for materials used',
           required: true,
@@ -12344,12 +12346,13 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Create QC tasks from departmentConfig.qcStandards
+      // Create QC tasks from departmentConfig.qcStandards (FINISH phase - final inspection)
       const qcStandards = deptConfig.qcStandards || [];
       if (qcStandards.length > 0) {
         const qcTask = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: 'QC',
+          taskPhase: 'FINISH',
           title: 'Quality Control Checks',
           instructions: 'Complete all quality control verifications',
           required: true,
@@ -12369,12 +12372,13 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Create custom field tasks from departmentConfig.customDataFields
+      // Create custom field tasks from departmentConfig.customDataFields (WORK phase)
       const customFields = deptConfig.customDataFields || [];
       if (customFields.length > 0) {
         const customTask = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: 'CUSTOM_FIELD',
+          taskPhase: 'WORK',
           title: 'Additional Data Entry',
           instructions: 'Enter required custom data',
           required: true,
@@ -12393,12 +12397,13 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Create oven curing task if applicable
+      // Create oven curing task if applicable (WORK phase - special process)
       const ovenCuringSteps = deptConfig.ovenCuringSteps || [];
       if (ovenCuringSteps.length > 0) {
         const ovenTask = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: 'SPECIAL_PROCESS',
+          taskPhase: 'WORK',
           title: 'Oven Curing',
           instructions: 'Complete oven curing process',
           required: true,
@@ -12419,10 +12424,11 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Create END_GATE task (signature required)
+      // Create END_GATE task (FINISH phase - signature required)
       await this.createTravelerTask({
         travelerStepId: step.id,
         taskType: 'END_GATE',
+        taskPhase: 'FINISH',
         title: `Complete ${deptName}`,
         instructions: `Badge scan and signature to complete ${deptName}`,
         required: true,

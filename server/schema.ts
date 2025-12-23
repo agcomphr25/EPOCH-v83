@@ -781,10 +781,24 @@ export const rtsSaleItems = pgTable('rts_sale_items', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Canonical Identities - Central identity management for cross-system deduplication
+export const canonicalIdentities = pgTable('canonical_identities', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  displayName: text('display_name').notNull(),
+  primaryEmail: text('primary_email').unique(),
+  source: text('source').notNull().default('epoch'), // epoch, timeclock, external
+  status: text('status').notNull().default('active'), // active, inactive, merged
+  mergedIntoId: uuid('merged_into_id'), // If merged, points to surviving identity
+  metadata: jsonb('metadata'), // Additional identity attributes
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // Enhanced Employee Management System
 export const employees = pgTable('employees', {
   id: serial('id').primaryKey(),
   employeeCode: text('employee_code').unique(),
+  canonicalId: uuid('canonical_id'), // Link to canonical identity for cross-system deduplication
   name: text('name').notNull(),
   email: text('email').unique(),
   phone: text('phone'),
@@ -1720,6 +1734,22 @@ export const insertVendorScopeGroupSchema = createInsertSchema(vendorScopeGroups
     groupId: z.number().int().positive('Group ID is required'),
   });
 
+// Canonical Identity schema for cross-system identity management
+export const insertCanonicalIdentitySchema = createInsertSchema(canonicalIdentities)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    displayName: z.string().min(1, 'Display name is required'),
+    primaryEmail: z.string().email().optional().nullable(),
+    source: z.enum(['epoch', 'timeclock', 'external']).default('epoch'),
+    status: z.enum(['active', 'inactive', 'merged']).default('active'),
+    mergedIntoId: z.string().uuid().optional().nullable(),
+    metadata: z.record(z.any()).optional().nullable(),
+  });
+
 export const insertEmployeeSchema = createInsertSchema(employees)
   .omit({
     id: true,
@@ -2262,6 +2292,8 @@ export type InsertVendorScopeItem = z.infer<typeof insertVendorScopeItemSchema>;
 export type VendorScopeItem = typeof vendorScopeItems.$inferSelect;
 export type InsertVendorScopeGroup = z.infer<typeof insertVendorScopeGroupSchema>;
 export type VendorScopeGroup = typeof vendorScopeGroups.$inferSelect;
+export type InsertCanonicalIdentity = z.infer<typeof insertCanonicalIdentitySchema>;
+export type CanonicalIdentity = typeof canonicalIdentities.$inferSelect;
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type Employee = typeof employees.$inferSelect;
 

@@ -24,7 +24,6 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import TimeClockModal from '@/components/employee/TimeClockModal';
 import DailyChecklistModal from '@/components/employee/DailyChecklistModal';
 import HandbookModal from '@/components/employee/HandbookModal';
 
@@ -61,7 +60,6 @@ interface Evaluation {
 export default function EmployeePortal() {
   const { portalId } = useParams();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [timeClockOpen, setTimeClockOpen] = useState(false);
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [handbookOpen, setHandbookOpen] = useState(false);
 
@@ -396,15 +394,11 @@ export default function EmployeePortal() {
           </Card>
 
           {/* Time Clock */}
-          <Card
-            className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all cursor-pointer group"
-            onClick={() => setTimeClockOpen(true)}
-          >
+          <Card className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all group">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Clock className="w-5 h-5 text-indigo-600" />
                 <span>Time Clock</span>
-                <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
               </CardTitle>
               <CardDescription>
                 Clock in/out and view your timesheet
@@ -419,10 +413,31 @@ export default function EmployeePortal() {
                   {currentTime.toLocaleDateString()}
                 </p>
               </div>
-              <Button variant="outline" className="w-full">
-                <Clock className="w-4 h-4 mr-2" />
+              <Button
+                variant="default"
+                className="w-full"
+                onClick={() => {
+                  const baseUrl = import.meta.env.VITE_TIME_CLOCK_URL || '';
+                  if (!baseUrl) {
+                    console.warn('Time Clock URL not configured');
+                    return;
+                  }
+                  const params = new URLSearchParams();
+                  if (employee?.email) {
+                    params.set('email', employee.email);
+                  }
+                  params.set('source', 'epoch');
+                  const url = `${baseUrl}/employee/login?${params.toString()}`;
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                }}
+                data-testid="button-open-timeclock"
+              >
+                <ExternalLink className="w-4 h-4 mr-2" />
                 Open Time Clock
               </Button>
+              <p className="text-xs text-gray-500 text-center mt-2">
+                Time Clock opens in a separate system for security.
+              </p>
             </CardContent>
           </Card>
 
@@ -554,12 +569,6 @@ export default function EmployeePortal() {
       </div>
 
       {/* Modals */}
-      <TimeClockModal
-        employeeId={employee?.id?.toString() || ''}
-        isOpen={timeClockOpen}
-        onClose={() => setTimeClockOpen(false)}
-      />
-
       <DailyChecklistModal
         employeeId={employee?.id || 0}
         department={employee?.department || 'General'}

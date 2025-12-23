@@ -100,19 +100,28 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
     console.log(`✅ API Response from ${url}: ${response.status}`);
 
     if (!response.ok) {
-      let errorMessage = `HTTP error! status: ${response.status}`;
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.error || errorMessage;
+      const text = await response.text();
+      console.error("API error raw body:", text);
+      
+      let data: any = null;
+      try { 
+        data = JSON.parse(text); 
       } catch {
-        // If JSON parsing fails, use text
-        try {
-          const text = await response.text();
-          errorMessage = text || errorMessage;
-        } catch {
-          // Keep the default error message
-        }
+        // Not JSON
       }
+      
+      // Build error message from various possible formats
+      const errorMessage =
+        data?.message ||
+        data?.error ||
+        (Array.isArray(data?.details)
+          ? data.details.map((i: any) => `${(i.path || []).join(".")}: ${i.message}`).join(", ")
+          : null) ||
+        (Array.isArray(data?.issues)
+          ? data.issues.map((i: any) => `${(i.path || []).join(".")}: ${i.message}`).join(", ")
+          : null) ||
+        text ||
+        `Request failed (${response.status})`;
 
       // Special handling for deployment database timeouts
       if (response.status === 408 || errorMessage.includes('timeout')) {

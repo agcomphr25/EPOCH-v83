@@ -89,6 +89,7 @@ import p2LayupSchedulesRoutes from './p2LayupSchedules';
 import preproductionChecklistsRoutes from './preproductionChecklists';
 import healthChecksRoutes from './healthChecks';
 import projectsRoutes from './projects';
+import projectStepAttachmentsRoutes from './projectStepAttachments';
 import modelAnalyticsRoutes from './modelAnalytics';
 import aqlSamplingRoutes from './aqlSampling';
 import auditRoutes from './audit';
@@ -103,6 +104,8 @@ import { registerTimeClockRoutes } from './timeClock';
 import { registerOutreachEngineRoutes } from './outreachEngine';
 import { registerObjectStorageRoutes } from '../../replit_integrations/object_storage';
 import { getAccessToken } from '../utils/upsShipping';
+import punchesRoutes from './punches';
+import laborRoutes from './labor';
 
 export function registerRoutes(app: Express): Server {
   // Authentication routes
@@ -137,6 +140,12 @@ export function registerRoutes(app: Express): Server {
 
   // Employee management routes
   app.use('/api/employees', employeesRoutes);
+
+  // Punch events routes (IC-7) - Read-only mirror from Time Clock
+  app.use('/api/punches', punchesRoutes);
+
+  // Labor summary routes (IC-F1) - Derived insights from punch events
+  app.use('/api/labor', laborRoutes);
 
   // Order management routes
   app.use('/api/orders', ordersRoutes);
@@ -345,6 +354,9 @@ export function registerRoutes(app: Express): Server {
 
   // P2 Projects routes
   app.use('/api/projects', projectsRoutes);
+
+  // Project Step Attachments routes
+  app.use('/api/project-step-attachments', projectStepAttachmentsRoutes);
 
   // Health Checks routes
   app.use('/api/health-checks', healthChecksRoutes);

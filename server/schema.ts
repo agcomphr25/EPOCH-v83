@@ -781,10 +781,42 @@ export const rtsSaleItems = pgTable('rts_sale_items', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Canonical Identities - Central identity management for cross-system deduplication
+export const canonicalIdentities = pgTable('canonical_identities', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  displayName: text('display_name').notNull(),
+  primaryEmail: text('primary_email').unique(),
+  source: text('source').notNull().default('epoch'), // epoch, timeclock, external
+  status: text('status').notNull().default('active'), // active, inactive, merged
+  mergedIntoId: uuid('merged_into_id'), // If merged, points to surviving identity
+  metadata: jsonb('metadata'), // Additional identity attributes
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Punch Events - Read-only mirror from Time Clock (IC-7)
+export const punchEvents = pgTable('punch_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  externalPunchId: text('external_punch_id').unique().notNull(), // ID from source system
+  canonicalId: uuid('canonical_id').notNull(), // Link to canonical identity
+  epochEmployeeId: integer('epoch_employee_id'), // Matched EPOCH employee (nullable if not matched)
+  punchType: text('punch_type').notNull(), // clock_in, clock_out, break_start, break_end
+  punchTime: timestamp('punch_time').notNull(), // When the punch occurred
+  source: text('source').notNull().default('timeclock'), // Source system
+  departmentCode: text('department_code'), // Department at time of punch
+  jobCode: text('job_code'), // Job/cost center code
+  locationCode: text('location_code'), // Physical location
+  metadata: jsonb('metadata'), // Additional punch data
+  signature: text('signature'), // Event signature for validation
+  receivedAt: timestamp('received_at').defaultNow().notNull(), // When EPOCH received this event
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // Enhanced Employee Management System
 export const employees = pgTable('employees', {
   id: serial('id').primaryKey(),
   employeeCode: text('employee_code').unique(),
+  canonicalId: uuid('canonical_id'), // Link to canonical identity for cross-system deduplication
   name: text('name').notNull(),
   email: text('email').unique(),
   phone: text('phone'),
@@ -1720,6 +1752,65 @@ export const insertVendorScopeGroupSchema = createInsertSchema(vendorScopeGroups
     groupId: z.number().int().positive('Group ID is required'),
   });
 
+// Canonical Identity schema for cross-system identity management
+export const insertCanonicalIdentitySchema = createInsertSchema(canonicalIdentities)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    displayName: z.string().min(1, 'Display name is required'),
+    primaryEmail: z.string().email().optional().nullable(),
+    source: z.enum(['epoch', 'timeclock', 'external']).default('epoch'),
+    status: z.enum(['active', 'inactive', 'merged']).default('active'),
+    mergedIntoId: z.string().uuid().optional().nullable(),
+    metadata: z.record(z.any()).optional().nullable(),
+  });
+
+function normalizePunchType(value: string): string {
+  const normalized = value.toLowerCase();
+  switch (normalized) {
+    case 'in':
+    case 'clock_in':
+      return 'clock_in';
+    case 'out':
+    case 'clock_out':
+      return 'clock_out';
+    case 'break_start':
+      return 'break_start';
+    case 'break_end':
+      return 'break_end';
+    default:
+      return value;
+  }
+}
+
+const punchTypeSchema = z.string()
+  .transform(normalizePunchType)
+  .pipe(z.enum(['clock_in', 'clock_out', 'break_start', 'break_end']));
+
+// Punch Event schema for ingestion (IC-7)
+export const insertPunchEventSchema = createInsertSchema(punchEvents)
+  .omit({
+    id: true,
+    receivedAt: true,
+    createdAt: true,
+  })
+  .extend({
+    externalPunchId: z.string().min(1, 'External punch ID is required'),
+    canonicalId: z.string().uuid('Canonical ID must be a valid UUID'),
+    epochEmployeeId: z.number().int().optional().nullable(),
+    punchType: punchTypeSchema,
+    punchTime: z.string().or(z.date()),
+    source: z.string().default('timeclock'),
+    departmentCode: z.string().optional().nullable(),
+    jobCode: z.string().optional().nullable(),
+    locationCode: z.string().optional().nullable(),
+    metadata: z.record(z.any()).optional().nullable(),
+    signature: z.string().optional().nullable(),
+  });
+
 export const insertEmployeeSchema = createInsertSchema(employees)
   .omit({
     id: true,
@@ -2262,6 +2353,10 @@ export type InsertVendorScopeItem = z.infer<typeof insertVendorScopeItemSchema>;
 export type VendorScopeItem = typeof vendorScopeItems.$inferSelect;
 export type InsertVendorScopeGroup = z.infer<typeof insertVendorScopeGroupSchema>;
 export type VendorScopeGroup = typeof vendorScopeGroups.$inferSelect;
+export type InsertCanonicalIdentity = z.infer<typeof insertCanonicalIdentitySchema>;
+export type CanonicalIdentity = typeof canonicalIdentities.$inferSelect;
+export type InsertPunchEvent = z.infer<typeof insertPunchEventSchema>;
+export type PunchEvent = typeof punchEvents.$inferSelect;
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type Employee = typeof employees.$inferSelect;
 
@@ -7953,6 +8048,32 @@ export const insertProjectNotificationSchema = createInsertSchema(projectNotific
 
 export type ProjectNotification = typeof projectNotifications.$inferSelect;
 export type InsertProjectNotification = z.infer<typeof insertProjectNotificationSchema>;
+
+// Project Step Attachments - Documents/PDFs attached to workflow steps
+export const projectStepAttachments = pgTable('project_step_attachments', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  stepId: uuid('step_id').notNull().references(() => projectSteps.id, { onDelete: 'cascade' }),
+  fileName: text('file_name').notNull(),
+  originalFileName: text('original_file_name').notNull(),
+  fileSize: integer('file_size').notNull(),
+  mimeType: text('mime_type').notNull(),
+  filePath: text('file_path').notNull(),
+  uploadedBy: integer('uploaded_by').references(() => employees.id),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  projectIdIdx: index('project_step_attachments_project_id_idx').on(table.projectId),
+  stepIdIdx: index('project_step_attachments_step_id_idx').on(table.stepId),
+}));
+
+export const insertProjectStepAttachmentSchema = createInsertSchema(projectStepAttachments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProjectStepAttachment = typeof projectStepAttachments.$inferSelect;
+export type InsertProjectStepAttachment = z.infer<typeof insertProjectStepAttachmentSchema>;
 
 // AQL Sampling Chart - Standard quality sampling requirements based on lot size
 export const aqlSamplingChart = pgTable('aql_sampling_chart', {

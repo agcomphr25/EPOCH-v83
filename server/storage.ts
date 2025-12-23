@@ -178,6 +178,12 @@ import {
   type InsertDepartment,
   type Employee,
   type InsertEmployee,
+  type CanonicalIdentity,
+  type InsertCanonicalIdentity,
+  canonicalIdentities,
+  type PunchEvent,
+  type InsertPunchEvent,
+  punchEvents,
   // User authentication types
   type User,
   type InsertUser,
@@ -396,9 +402,13 @@ import {
   projectSteps,
   projectActivityLog,
   projectNotifications,
+  projectStepAttachments,
+  preproductionChecklists,
   type Project,
   type InsertProject,
   type ProjectStep,
+  type ProjectStepAttachment,
+  type InsertProjectStepAttachment,
   type InsertProjectStep,
   type ProjectActivityLog,
   type InsertProjectActivityLog,
@@ -688,6 +698,20 @@ export interface IStorage {
       stockModel: string | null;
     }[]
   >;
+
+  // Canonical Identity CRUD (IC-2)
+  getCanonicalIdentityByEmail(email: string): Promise<CanonicalIdentity | undefined>;
+  getCanonicalIdentityById(id: string): Promise<CanonicalIdentity | undefined>;
+  createCanonicalIdentity(data: InsertCanonicalIdentity): Promise<CanonicalIdentity>;
+  updateCanonicalIdentity(id: string, data: Partial<InsertCanonicalIdentity>): Promise<CanonicalIdentity>;
+  getAllCanonicalIdentities(): Promise<CanonicalIdentity[]>;
+
+  // Punch Events (IC-7) - Read-only mirror
+  getPunchEventByExternalId(externalPunchId: string): Promise<PunchEvent | undefined>;
+  createPunchEvent(data: InsertPunchEvent): Promise<PunchEvent>;
+  getPunchEventsByCanonicalId(canonicalId: string, limit?: number): Promise<PunchEvent[]>;
+  getPunchEventsByEmployeeId(employeeId: number, limit?: number): Promise<PunchEvent[]>;
+  getPunchEventsByDateRange(startDate: Date, endDate: Date): Promise<PunchEvent[]>;
 
   // Employees CRUD
   getAllEmployees(): Promise<Employee[]>;
@@ -1863,6 +1887,17 @@ export interface IStorage {
   createProjectNotification(data: InsertProjectNotification): Promise<ProjectNotification>;
   markProjectNotificationRead(id: number): Promise<void>;
   markAllProjectNotificationsRead(recipientId: number): Promise<void>;
+
+  // Project Step Attachments
+  getProjectStepAttachments(stepId: string): Promise<ProjectStepAttachment[]>;
+  getProjectStepAttachment(id: number): Promise<ProjectStepAttachment | undefined>;
+  createProjectStepAttachment(data: InsertProjectStepAttachment): Promise<ProjectStepAttachment>;
+  deleteProjectStepAttachment(id: number): Promise<void>;
+
+  // Linked submission helpers
+  getLinkedSubmissionIds(stepType: string): Promise<(number | string)[]>;
+  getAllPreproductionChecklists(): Promise<any[]>;
+  getAllQuotes(): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4877,6 +4912,100 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(desc(orderDrafts.dueDate));
+  }
+
+  // Canonical Identity CRUD (IC-2)
+
+  async getCanonicalIdentityByEmail(email: string): Promise<CanonicalIdentity | undefined> {
+    const [identity] = await db
+      .select()
+      .from(canonicalIdentities)
+      .where(eq(canonicalIdentities.primaryEmail, email));
+    return identity || undefined;
+  }
+
+  async getCanonicalIdentityById(id: string): Promise<CanonicalIdentity | undefined> {
+    const [identity] = await db
+      .select()
+      .from(canonicalIdentities)
+      .where(eq(canonicalIdentities.id, id));
+    return identity || undefined;
+  }
+
+  async createCanonicalIdentity(data: InsertCanonicalIdentity): Promise<CanonicalIdentity> {
+    const [identity] = await db
+      .insert(canonicalIdentities)
+      .values(data)
+      .returning();
+    return identity;
+  }
+
+  async updateCanonicalIdentity(id: string, data: Partial<InsertCanonicalIdentity>): Promise<CanonicalIdentity> {
+    const [identity] = await db
+      .update(canonicalIdentities)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(canonicalIdentities.id, id))
+      .returning();
+    return identity;
+  }
+
+  async getAllCanonicalIdentities(): Promise<CanonicalIdentity[]> {
+    return await db
+      .select()
+      .from(canonicalIdentities)
+      .orderBy(canonicalIdentities.displayName);
+  }
+
+  // Punch Events (IC-7) - Read-only mirror
+
+  async getPunchEventByExternalId(externalPunchId: string): Promise<PunchEvent | undefined> {
+    const [event] = await db
+      .select()
+      .from(punchEvents)
+      .where(eq(punchEvents.externalPunchId, externalPunchId));
+    return event || undefined;
+  }
+
+  async createPunchEvent(data: InsertPunchEvent): Promise<PunchEvent> {
+    const [event] = await db
+      .insert(punchEvents)
+      .values({
+        ...data,
+        punchTime: typeof data.punchTime === 'string' ? new Date(data.punchTime) : data.punchTime,
+      })
+      .returning();
+    return event;
+  }
+
+  async getPunchEventsByCanonicalId(canonicalId: string, limit: number = 100): Promise<PunchEvent[]> {
+    return await db
+      .select()
+      .from(punchEvents)
+      .where(eq(punchEvents.canonicalId, canonicalId))
+      .orderBy(desc(punchEvents.punchTime))
+      .limit(limit);
+  }
+
+  async getPunchEventsByEmployeeId(employeeId: number, limit: number = 100): Promise<PunchEvent[]> {
+    return await db
+      .select()
+      .from(punchEvents)
+      .where(eq(punchEvents.epochEmployeeId, employeeId))
+      .orderBy(desc(punchEvents.punchTime))
+      .limit(limit);
+  }
+
+  async getPunchEventsByDateRange(startDate: Date, endDate: Date): Promise<PunchEvent[]> {
+    return await db
+      .select()
+      .from(punchEvents)
+      .where(
+        and(
+          gte(punchEvents.punchTime, startDate),
+          lte(punchEvents.punchTime, endDate)
+        )
+      )
+      .orderBy(desc(punchEvents.punchTime));
   }
 
   // Employees CRUD
@@ -15269,6 +15398,74 @@ export class DatabaseStorage implements IStorage {
       .update(projectNotifications)
       .set({ isRead: true, readAt: new Date() })
       .where(eq(projectNotifications.recipientId, recipientId));
+  }
+
+  // Project Step Attachments
+  async getProjectStepAttachments(stepId: string): Promise<ProjectStepAttachment[]> {
+    return await db
+      .select()
+      .from(projectStepAttachments)
+      .where(eq(projectStepAttachments.stepId, stepId))
+      .orderBy(desc(projectStepAttachments.createdAt));
+  }
+
+  async getProjectStepAttachment(id: number): Promise<ProjectStepAttachment | undefined> {
+    const [attachment] = await db
+      .select()
+      .from(projectStepAttachments)
+      .where(eq(projectStepAttachments.id, id));
+    return attachment || undefined;
+  }
+
+  async createProjectStepAttachment(data: InsertProjectStepAttachment): Promise<ProjectStepAttachment> {
+    const [attachment] = await db.insert(projectStepAttachments).values(data).returning();
+    return attachment;
+  }
+
+  async deleteProjectStepAttachment(id: number): Promise<void> {
+    await db.delete(projectStepAttachments).where(eq(projectStepAttachments.id, id));
+  }
+
+  async getLinkedSubmissionIds(stepType: string): Promise<(number | string)[]> {
+    const steps = await db.select().from(projectSteps);
+    const linkedIds: (number | string)[] = [];
+    
+    switch (stepType) {
+      case 'rfq_risk_assessment':
+        steps.forEach(step => {
+          if (step.linkedRfqId) linkedIds.push(step.linkedRfqId);
+        });
+        break;
+      case 'quote':
+        steps.forEach(step => {
+          if (step.linkedQuoteId) linkedIds.push(step.linkedQuoteId);
+        });
+        break;
+      case 'purchase_review_checklist':
+        steps.forEach(step => {
+          if (step.linkedPurchaseReviewId) linkedIds.push(step.linkedPurchaseReviewId);
+        });
+        break;
+      case 'preproduction_checklist':
+        steps.forEach(step => {
+          if (step.linkedPreproductionChecklistId) linkedIds.push(step.linkedPreproductionChecklistId);
+        });
+        break;
+      case 'p2_order':
+        steps.forEach(step => {
+          if (step.linkedP2OrderId) linkedIds.push(step.linkedP2OrderId);
+        });
+        break;
+    }
+    
+    return linkedIds;
+  }
+
+  async getAllPreproductionChecklists(): Promise<any[]> {
+    return await db
+      .select()
+      .from(preproductionChecklists)
+      .orderBy(desc(preproductionChecklists.createdAt));
   }
 }
 

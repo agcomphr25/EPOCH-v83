@@ -157,11 +157,12 @@ router.post('/sms', async (req, res) => {
     const data = smsSchema.parse(req.body);
 
     // Initialize Twilio
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const accountSid = process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+    const fromNumber = process.env.TWILIO_NUMBER || process.env.TWILIO_PHONE_NUMBER;
 
     if (!accountSid || !authToken || !fromNumber) {
+      console.error('Missing Twilio config:', { accountSid: !!accountSid, authToken: !!authToken, fromNumber: !!fromNumber });
       return res
         .status(500)
         .json({ error: 'Twilio credentials not configured' });
@@ -227,7 +228,7 @@ router.get('/sms-status/:messageId', async (req, res) => {
   try {
     const { messageId } = req.params;
 
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const accountSid = process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
 
     if (!accountSid || !authToken) {

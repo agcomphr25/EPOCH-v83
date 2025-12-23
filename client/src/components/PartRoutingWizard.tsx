@@ -219,7 +219,7 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
     mutationFn: async (data: any) => {
       if (editRouting) {
         return apiRequest(`/api/part-routings/${editRouting.id}`, {
-          method: 'PUT',
+          method: 'PATCH',
           body: data,
         });
       } else {
@@ -331,13 +331,25 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
       }
     });
 
+    // Ensure all material partIds are strings in departmentConfig
+    const sanitizedDepartmentConfig: Record<string, DepartmentConfiguration> = {};
+    Object.entries(departmentConfig).forEach(([dept, config]) => {
+      sanitizedDepartmentConfig[dept] = {
+        ...config,
+        materials: config.materials.map(m => ({
+          ...m,
+          partId: String(m.partId), // Ensure partId is string
+        })),
+      };
+    });
+
     const data = {
-      inventoryItemId: selectedItem.id,
+      inventoryItemId: String(selectedItem.id), // Ensure inventoryItemId is string
       partNumber: selectedItem.agPartNumber,
       partName: selectedItem.name,
       departmentSequence: selectedDepartments,
       traceabilityConfig,
-      departmentConfig,
+      departmentConfig: sanitizedDepartmentConfig,
       createdBy: editRouting?.createdBy || 'system', // Preserve original creator when editing
     };
 

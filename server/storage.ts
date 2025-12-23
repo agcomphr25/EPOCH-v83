@@ -428,6 +428,16 @@ import {
   type InsertProjectActivityLog,
   type ProjectNotification,
   type InsertProjectNotification,
+  // Material Lot types
+  materialLots,
+  materialLotTransactions,
+  travelerMaterialConsumption,
+  type MaterialLot,
+  type InsertMaterialLot,
+  type MaterialLotTransaction,
+  type InsertMaterialLotTransaction,
+  type TravelerMaterialConsumption,
+  type InsertTravelerMaterialConsumption,
 } from './schema';
 import { db, pool } from './db';
 import {
@@ -1971,6 +1981,30 @@ export interface IStorage {
   createProjectNotification(data: InsertProjectNotification): Promise<ProjectNotification>;
   markProjectNotificationRead(id: number): Promise<void>;
   markAllProjectNotificationsRead(recipientId: number): Promise<void>;
+
+  // Material Lot Management
+  getAllMaterialLots(): Promise<MaterialLot[]>;
+  getMaterialLot(id: string): Promise<MaterialLot | undefined>;
+  getMaterialLotByICN(icn: string): Promise<MaterialLot | undefined>;
+  getMaterialLotsByStatus(status: string): Promise<MaterialLot[]>;
+  getMaterialLotsByInventoryItem(inventoryItemId: number): Promise<MaterialLot[]>;
+  getMaterialLotsExpiringSoon(days: number): Promise<MaterialLot[]>;
+  getMaterialLotsNearingOutTime(thresholdPercent: number): Promise<MaterialLot[]>;
+  createMaterialLot(data: InsertMaterialLot): Promise<MaterialLot>;
+  updateMaterialLot(id: string, data: Partial<InsertMaterialLot>): Promise<MaterialLot>;
+  deleteMaterialLot(id: string): Promise<void>;
+  generateNextICN(): Promise<string>;
+
+  // Material Lot Transactions
+  getMaterialLotTransactions(lotId: string): Promise<MaterialLotTransaction[]>;
+  getMaterialLotTransactionsByICN(icn: string): Promise<MaterialLotTransaction[]>;
+  createMaterialLotTransaction(data: InsertMaterialLotTransaction): Promise<MaterialLotTransaction>;
+
+  // Traveler Material Consumption
+  getTravelerMaterialConsumption(travelerId: string): Promise<TravelerMaterialConsumption[]>;
+  getTravelerStepMaterialConsumption(stepId: string): Promise<TravelerMaterialConsumption[]>;
+  createTravelerMaterialConsumption(data: InsertTravelerMaterialConsumption): Promise<TravelerMaterialConsumption>;
+  deleteTravelerMaterialConsumption(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -15938,6 +15972,168 @@ export class DatabaseStorage implements IStorage {
       .update(projectNotifications)
       .set({ isRead: true, readAt: new Date() })
       .where(eq(projectNotifications.recipientId, recipientId));
+  }
+
+  // Material Lot Management
+  async getAllMaterialLots(): Promise<MaterialLot[]> {
+    return await db
+      .select()
+      .from(materialLots)
+      .orderBy(desc(materialLots.receivedAt));
+  }
+
+  async getMaterialLot(id: string): Promise<MaterialLot | undefined> {
+    const [lot] = await db.select().from(materialLots).where(eq(materialLots.id, id));
+    return lot || undefined;
+  }
+
+  async getMaterialLotByICN(icn: string): Promise<MaterialLot | undefined> {
+    const [lot] = await db
+      .select()
+      .from(materialLots)
+      .where(eq(materialLots.internalControlNumber, icn));
+    return lot || undefined;
+  }
+
+  async getMaterialLotsByStatus(status: string): Promise<MaterialLot[]> {
+    return await db
+      .select()
+      .from(materialLots)
+      .where(eq(materialLots.status, status))
+      .orderBy(desc(materialLots.receivedAt));
+  }
+
+  async getMaterialLotsByInventoryItem(inventoryItemId: number): Promise<MaterialLot[]> {
+    return await db
+      .select()
+      .from(materialLots)
+      .where(eq(materialLots.inventoryItemId, inventoryItemId))
+      .orderBy(desc(materialLots.receivedAt));
+  }
+
+  async getMaterialLotsExpiringSoon(days: number): Promise<MaterialLot[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() + days);
+    
+    return await db
+      .select()
+      .from(materialLots)
+      .where(
+        and(
+          isNotNull(materialLots.expirationDate),
+          lte(materialLots.expirationDate, cutoffDate),
+          gt(materialLots.remainingQty, '0'),
+          not(eq(materialLots.status, 'CONSUMED')),
+          not(eq(materialLots.status, 'REJECTED'))
+        )
+      )
+      .orderBy(asc(materialLots.expirationDate));
+  }
+
+  async getMaterialLotsNearingOutTime(thresholdPercent: number): Promise<MaterialLot[]> {
+    return await db
+      .select()
+      .from(materialLots)
+      .where(
+        and(
+          isNotNull(materialLots.maxOutTimeMinutes),
+          gt(materialLots.maxOutTimeMinutes, 0),
+          gt(materialLots.remainingQty, '0'),
+          not(eq(materialLots.status, 'CONSUMED')),
+          not(eq(materialLots.status, 'REJECTED')),
+          sql`(${materialLots.totalOutTimeMinutes}::float / ${materialLots.maxOutTimeMinutes}::float * 100) >= ${thresholdPercent}`
+        )
+      )
+      .orderBy(desc(sql`${materialLots.totalOutTimeMinutes}::float / ${materialLots.maxOutTimeMinutes}::float`));
+  }
+
+  async createMaterialLot(data: InsertMaterialLot): Promise<MaterialLot> {
+    const [lot] = await db.insert(materialLots).values(data).returning();
+    return lot;
+  }
+
+  async updateMaterialLot(id: string, data: Partial<InsertMaterialLot>): Promise<MaterialLot> {
+    const [lot] = await db
+      .update(materialLots)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(materialLots.id, id))
+      .returning();
+    return lot;
+  }
+
+  async deleteMaterialLot(id: string): Promise<void> {
+    await db.delete(materialLots).where(eq(materialLots.id, id));
+  }
+
+  async generateNextICN(): Promise<string> {
+    // ICN format: ICN-MAT-YYYYMMDD-NNNNNN
+    const today = new Date();
+    const datePrefix = today.toISOString().slice(0, 10).replace(/-/g, '');
+    const prefix = `ICN-MAT-${datePrefix}-`;
+    
+    // Find highest existing ICN for today
+    const [result] = await db
+      .select({ maxIcn: max(materialLots.internalControlNumber) })
+      .from(materialLots)
+      .where(like(materialLots.internalControlNumber, `${prefix}%`));
+    
+    let nextNumber = 1;
+    if (result?.maxIcn) {
+      const match = result.maxIcn.match(/ICN-MAT-\d{8}-(\d+)/);
+      if (match) {
+        nextNumber = parseInt(match[1], 10) + 1;
+      }
+    }
+    
+    return `${prefix}${nextNumber.toString().padStart(6, '0')}`;
+  }
+
+  // Material Lot Transactions
+  async getMaterialLotTransactions(lotId: string): Promise<MaterialLotTransaction[]> {
+    return await db
+      .select()
+      .from(materialLotTransactions)
+      .where(eq(materialLotTransactions.materialLotId, lotId))
+      .orderBy(desc(materialLotTransactions.performedAt));
+  }
+
+  async getMaterialLotTransactionsByICN(icn: string): Promise<MaterialLotTransaction[]> {
+    return await db
+      .select()
+      .from(materialLotTransactions)
+      .where(eq(materialLotTransactions.internalControlNumber, icn))
+      .orderBy(desc(materialLotTransactions.performedAt));
+  }
+
+  async createMaterialLotTransaction(data: InsertMaterialLotTransaction): Promise<MaterialLotTransaction> {
+    const [transaction] = await db.insert(materialLotTransactions).values(data).returning();
+    return transaction;
+  }
+
+  // Traveler Material Consumption
+  async getTravelerMaterialConsumption(travelerId: string): Promise<TravelerMaterialConsumption[]> {
+    return await db
+      .select()
+      .from(travelerMaterialConsumption)
+      .where(eq(travelerMaterialConsumption.travelerId, travelerId))
+      .orderBy(desc(travelerMaterialConsumption.scannedAt));
+  }
+
+  async getTravelerStepMaterialConsumption(stepId: string): Promise<TravelerMaterialConsumption[]> {
+    return await db
+      .select()
+      .from(travelerMaterialConsumption)
+      .where(eq(travelerMaterialConsumption.travelerStepId, stepId))
+      .orderBy(desc(travelerMaterialConsumption.scannedAt));
+  }
+
+  async createTravelerMaterialConsumption(data: InsertTravelerMaterialConsumption): Promise<TravelerMaterialConsumption> {
+    const [consumption] = await db.insert(travelerMaterialConsumption).values(data).returning();
+    return consumption;
+  }
+
+  async deleteTravelerMaterialConsumption(id: string): Promise<void> {
+    await db.delete(travelerMaterialConsumption).where(eq(travelerMaterialConsumption.id, id));
   }
 }
 

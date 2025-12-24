@@ -2825,6 +2825,16 @@ export class DatabaseStorage implements IStorage {
     const stockModelMap = new Map(
       allStockModels.map((sm) => [sm.id, sm.displayName || sm.name])
     );
+    
+    // Get purchase order items for P1 PO item name lookup
+    const poItems = await db.select({
+      id: purchaseOrderItems.id,
+      itemName: purchaseOrderItems.itemName,
+      stockModelId: purchaseOrderItems.stockModelId,
+    }).from(purchaseOrderItems);
+    const poItemMap = new Map(
+      poItems.map((poi) => [poi.id.toString(), poi.itemName || stockModelMap.get(poi.stockModelId || '') || poi.id.toString()])
+    );
 
     // Enrich orders with customer names and add required frontend fields
     const enrichedOrders = orders.map((order) => ({
@@ -2875,6 +2885,9 @@ export class DatabaseStorage implements IStorage {
         }
       }
       
+      // Look up the proper item name from purchase_order_items table
+      const resolvedItemName = poItemMap.get(po.itemId?.toString() || '') || po.itemName || po.itemId || 'Unknown Product';
+      
       return {
         id: po.id,
         orderId: po.orderId,
@@ -2887,7 +2900,7 @@ export class DatabaseStorage implements IStorage {
         isCustomOrder: null,
         modelId: po.itemId,
         itemId: po.itemId,
-        itemName: po.itemName,
+        itemName: resolvedItemName,
         handedness: parsedSpecs?.handedness ?? null,
         shankLength: parsedSpecs?.shank_length ?? parsedSpecs?.shankLength ?? null,
         features: Object.keys(mappedFeatures).length > 0 ? mappedFeatures : null,
@@ -2949,7 +2962,7 @@ export class DatabaseStorage implements IStorage {
         createdAt: po.createdAt,
         updatedAt: po.updatedAt,
         customer: po.customerName || customerMap.get(po.customerId) || 'Unknown Customer',
-        product: po.itemName || stockModelMap.get(po.itemId || '') || po.itemId || 'Unknown Product',
+        product: resolvedItemName,
         isFlattop: false,
       };
     }) as any;

@@ -3,24 +3,28 @@ import sgMail from '@sendgrid/mail';
 let connectionSettings: any;
 
 async function getCredentials() {
-  // Always use environment variables for consistent behavior
-  // This ensures dev and production work the same way
-  // Support both SENDGRID_FROM_EMAIL and SENDGRID_FROM for backwards compatibility
+  // LOCKED: Sender must be explicitly configured via SENDGRID_FROM_EMAIL
+  // No fallbacks allowed - this prevents sender drift and ensures determinism
   const apiKey = process.env.SENDGRID_API_KEY;
-  const email = process.env.SENDGRID_FROM_EMAIL || process.env.SENDGRID_FROM;
+  const email = process.env.SENDGRID_FROM_EMAIL;
 
   console.log('🔍 SendGrid credentials check:', {
-    hasEnvApiKey: !!apiKey,
-    hasEnvFromEmail: !!email,
+    hasApiKey: !!apiKey,
+    hasFromEmail: !!email,
     nodeEnv: process.env.NODE_ENV,
   });
 
-  if (!apiKey || !email) {
-    console.error('❌ SendGrid not configured - missing SENDGRID_API_KEY or SENDGRID_FROM_EMAIL/SENDGRID_FROM');
-    throw new Error('SendGrid not configured. Please set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL (or SENDGRID_FROM) environment variables.');
+  if (!apiKey) {
+    console.error('❌ SENDGRID_API_KEY is required');
+    throw new Error('SENDGRID_API_KEY is required');
   }
 
-  console.log('✅ Using SendGrid credentials from environment variables');
+  if (!email) {
+    console.error('❌ SENDGRID_FROM_EMAIL is required and must be a verified SendGrid sender');
+    throw new Error('SENDGRID_FROM_EMAIL is required and must be a verified SendGrid sender');
+  }
+
+  console.log('✅ SendGrid configured with sender:', email);
   return { apiKey, email };
 }
 
@@ -81,10 +85,22 @@ async function getCredentialsViaConnector() {
 // Always call this function again to get a fresh client.
 export async function getUncachableSendGridClient() {
   const { apiKey, email } = await getCredentials();
+  
+  // Validate sender email is explicitly configured
+  if (!email) {
+    throw new Error('SENDGRID_FROM_EMAIL is required and must be a verified SendGrid sender');
+  }
+  
   sgMail.setApiKey(apiKey);
+  
+  const fromEmail = { email, name: 'A G Composites' };
+  
+  // Log resolved sender for debugging (on each send)
+  console.log('📧 SendGrid sender resolved:', fromEmail.email);
+  
   return {
     client: sgMail,
-    fromEmail: { email, name: 'A G Composites' },
+    fromEmail,
   };
 }
 

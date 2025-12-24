@@ -45,9 +45,13 @@ router.post('/email', async (req, res) => {
   try {
     const data = emailSchema.parse(req.body);
 
-    // Determine email provider (default to SendGrid, but can use Microsoft if specified or configured)
-    const defaultProvider: EmailProvider = (process.env.EMAIL_PROVIDER as EmailProvider) || 'sendgrid';
-    const provider: EmailProvider = data.provider || defaultProvider;
+    // Explicitly resolve provider - only use Microsoft if explicitly configured
+    // Default strictly to SendGrid for stability
+    const provider: EmailProvider = process.env.EMAIL_PROVIDER === 'microsoft' 
+      ? 'microsoft' 
+      : 'sendgrid';
+
+    console.log('📧 Email provider resolved to:', provider);
 
     let externalId: string | undefined;
     let senderEmail = 'stacisales@agcomposites.com';
@@ -473,6 +477,100 @@ router.get('/customer/:customerId/history', async (req, res) => {
   } catch (error: any) {
     console.error('Communication history error:', error);
     res.status(500).json({ error: 'Failed to fetch communication history' });
+  }
+});
+
+// Test SendGrid configuration - bypasses order logic to validate email delivery
+router.post('/test-sendgrid', async (req, res) => {
+  try {
+    const { testEmail } = req.body;
+    
+    if (!testEmail) {
+      return res.status(400).json({ 
+        error: 'testEmail is required in request body' 
+      });
+    }
+
+    console.log('🧪 Testing SendGrid configuration...');
+    
+    // Validate SendGrid credentials - LOCKED to SENDGRID_FROM_EMAIL only (no fallbacks)
+    const hasApiKey = !!process.env.SENDGRID_API_KEY;
+    const hasFromEmail = !!process.env.SENDGRID_FROM_EMAIL;
+    const fromEmail = process.env.SENDGRID_FROM_EMAIL;
+    
+    console.log('🧪 SendGrid config check:', {
+      hasApiKey,
+      hasFromEmail,
+      fromEmail: fromEmail ? `${fromEmail.substring(0, 3)}...` : 'NOT SET',
+    });
+    
+    if (!hasApiKey) {
+      return res.status(500).json({
+        error: 'SENDGRID_API_KEY is required',
+        hint: 'Set SENDGRID_API_KEY environment variable',
+      });
+    }
+    
+    if (!hasFromEmail) {
+      return res.status(500).json({
+        error: 'SENDGRID_FROM_EMAIL is required and must be a verified SendGrid sender',
+        hint: 'Set SENDGRID_FROM_EMAIL environment variable to a verified sender email',
+      });
+    }
+
+    // Attempt to send a test email via SendGrid
+    const { client, fromEmail: resolvedFrom } = await getUncachableSendGridClient();
+    
+    console.log('🧪 Sending test email with sender:', resolvedFrom.email);
+    
+    const testMsg = {
+      to: testEmail,
+      from: resolvedFrom,
+      subject: 'EPOCH v8 - SendGrid Configuration Test',
+      text: `This is a test email from EPOCH v8 to verify SendGrid configuration.\n\nSender: ${resolvedFrom.email}\nTimestamp: ${new Date().toISOString()}\n\nIf you received this email, SendGrid is properly configured.`,
+      html: `
+        <h2>EPOCH v8 - SendGrid Test</h2>
+        <p>This is a test email to verify SendGrid configuration.</p>
+        <ul>
+          <li><strong>Sender:</strong> ${resolvedFrom.email}</li>
+          <li><strong>Timestamp:</strong> ${new Date().toISOString()}</li>
+        </ul>
+        <p>If you received this email, SendGrid is properly configured.</p>
+      `,
+    };
+
+    const [response] = await client.send(testMsg);
+    
+    console.log('✅ SendGrid test email sent successfully:', {
+      statusCode: response.statusCode,
+      messageId: response.headers['x-message-id'],
+    });
+
+    res.json({
+      success: true,
+      message: 'Test email sent successfully',
+      details: {
+        senderEmail: resolvedFrom.email,
+        recipientEmail: testEmail,
+        messageId: response.headers['x-message-id'],
+        statusCode: response.statusCode,
+        provider: 'sendgrid',
+      },
+    });
+  } catch (error: any) {
+    console.error('❌ SendGrid test failed:', error);
+    
+    // Provide helpful error details
+    let errorDetails = error.message;
+    if (error.response?.body?.errors) {
+      errorDetails = error.response.body.errors;
+    }
+    
+    res.status(500).json({
+      error: 'SendGrid test failed',
+      details: errorDetails,
+      hint: 'Check that SENDGRID_FROM_EMAIL is a verified sender in your SendGrid account',
+    });
   }
 });
 

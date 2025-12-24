@@ -10354,11 +10354,39 @@ export class DatabaseStorage implements IStorage {
       // Try to find order in finalized orders first
       let currentOrder = await this.getFinalizedOrderById(orderId);
       let isFinalized = true;
+      let isProductionOrder = false;
+      let productionOrderRecord: ProductionOrder | undefined;
 
       if (!currentOrder) {
         // If not found in finalized orders, try draft orders
         currentOrder = await this.getOrderDraft(orderId);
         isFinalized = false;
+      }
+
+      // If still not found, check production_orders table for P1 PO items
+      if (!currentOrder) {
+        productionOrderRecord = await this.getProductionOrderByOrderId(orderId);
+        if (productionOrderRecord) {
+          isProductionOrder = true;
+          // Create a compatible order object from production order
+          // Parse specifications to extract features if needed
+          let parsedFeatures = null;
+          try {
+            parsedFeatures = typeof productionOrderRecord.specifications === 'string'
+              ? JSON.parse(productionOrderRecord.specifications)
+              : productionOrderRecord.specifications;
+          } catch (e) {
+            parsedFeatures = null;
+          }
+          currentOrder = {
+            orderId: productionOrderRecord.orderId,
+            currentDepartment: productionOrderRecord.currentDepartment,
+            departmentHistory: productionOrderRecord.departmentHistory || [],
+            features: parsedFeatures,
+            isFlattop: false,
+          } as any;
+          console.log(`📦 Found P1 Production Order: ${orderId} in department ${productionOrderRecord.currentDepartment}`);
+        }
       }
 
       if (!currentOrder) {
@@ -10457,7 +10485,105 @@ export class DatabaseStorage implements IStorage {
 
       // Update the appropriate table
       let updatedOrder;
-      if (isFinalized) {
+      if (isProductionOrder && productionOrderRecord) {
+        // Handle P1 Production Order progression
+        // Note: production_orders uses slightly different column names than allOrders
+        
+        // Build department history
+        const existingHistory = Array.isArray(productionOrderRecord.departmentHistory) 
+          ? productionOrderRecord.departmentHistory 
+          : [];
+        const newHistoryEntry = {
+          department: currentOrder.currentDepartment,
+          completedAt: now.toISOString(),
+          movedTo: nextDept,
+        };
+        const updatedHistory = [...existingHistory, newHistoryEntry];
+        
+        const productionCompletionUpdates: any = {
+          currentDepartment: nextDept,
+          departmentHistory: updatedHistory,
+          updatedAt: now,
+        };
+        
+        // Map completion timestamps for production orders (using schema column names)
+        // Schema columns: barcodeCompletedAt, layupCompletedAt, cncCompletedAt, 
+        // finishCompletedAt, gunsmithCompletedAt, paintCompletedAt, qcCompletedAt, shippingCompletedAt
+        switch (currentOrder.currentDepartment) {
+          case 'Barcode':
+            productionCompletionUpdates.barcodeCompletedAt = now;
+            break;
+          case 'Layup/Plugging':
+            productionCompletionUpdates.layupCompletedAt = now;
+            productionCompletionUpdates.laidUpAt = now;
+            productionCompletionUpdates.productionStatus = 'LAID_UP';
+            break;
+          case 'CNC':
+            productionCompletionUpdates.cncCompletedAt = now;
+            break;
+          case 'Finish':
+            productionCompletionUpdates.finishCompletedAt = now;
+            break;
+          case 'Finish QC':
+            // No specific column for Finish QC, just update department
+            break;
+          case 'Gunsmith':
+            productionCompletionUpdates.gunsmithCompletedAt = now;
+            break;
+          case 'Paint':
+            productionCompletionUpdates.paintCompletedAt = now;
+            break;
+          case 'Shipping QC':
+            productionCompletionUpdates.qcCompletedAt = now;
+            break;
+          case 'Shipping':
+            productionCompletionUpdates.shippingCompletedAt = now;
+            productionCompletionUpdates.productionStatus = 'SHIPPED';
+            productionCompletionUpdates.shippedAt = now;
+            break;
+        }
+        
+        const updated = await this.updateProductionOrder(productionOrderRecord.id, productionCompletionUpdates);
+        console.log(`✅ P1 Production Order ${orderId} progressed from ${currentOrder.currentDepartment} to ${nextDept}`);
+        
+        // Return as an AllOrder-compatible object with required fields
+        updatedOrder = {
+          id: updated.id,
+          orderId: updated.orderId,
+          orderDate: updated.orderDate,
+          dueDate: updated.dueDate,
+          customerId: updated.customerId,
+          customerName: updated.customerName,
+          customer: updated.customerName,
+          customerPO: updated.poNumber,
+          modelId: updated.itemId,
+          itemId: updated.itemId,
+          itemName: updated.itemName,
+          productName: updated.itemName,
+          stockModelId: updated.itemId,
+          status: updated.productionStatus,
+          currentDepartment: updated.currentDepartment,
+          departmentHistory: updated.departmentHistory || [],
+          notes: updated.notes,
+          createdAt: updated.createdAt,
+          updatedAt: updated.updatedAt,
+          priorityScore: updated.priorityScore || 50,
+          isProductionOrder: true,
+          poId: updated.poId,
+          poItemId: updated.poItemId,
+          poNumber: updated.poNumber,
+          barcodeCompletedAt: updated.barcodeCompletedAt,
+          layupCompletedAt: updated.layupCompletedAt,
+          cncCompletedAt: updated.cncCompletedAt,
+          finishCompletedAt: updated.finishCompletedAt,
+          gunsmithCompletedAt: updated.gunsmithCompletedAt,
+          paintCompletedAt: updated.paintCompletedAt,
+          qcCompletedAt: updated.qcCompletedAt,
+          shippingCompletedAt: updated.shippingCompletedAt,
+          shippedAt: updated.shippedAt,
+          laidUpAt: updated.laidUpAt,
+        } as any;
+      } else if (isFinalized) {
         updatedOrder = await this.updateFinalizedOrder(orderId, {
           currentDepartment: nextDept,
           ...completionUpdates,

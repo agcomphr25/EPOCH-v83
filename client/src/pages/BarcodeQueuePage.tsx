@@ -277,8 +277,12 @@ export default function BarcodeQueuePage() {
       const stockModel = (stockModels as any[]).find(
         (m: any) => m.id === modelId
       );
-      const categoryKey =
-        stockModel?.displayName || stockModel?.name || modelId;
+      // For P1 PO orders, use itemName or product field which contains the actual stock model name
+      // P1 PO orders have numeric modelId that won't match stock model IDs
+      const isPOOrder = order.orderId?.startsWith('PO-') || order.orderId?.startsWith('P1-');
+      const categoryKey = isPOOrder 
+        ? (order.itemName || order.product || modelId)
+        : (stockModel?.displayName || stockModel?.name || modelId);
 
       if (!categories[categoryKey]) {
         categories[categoryKey] = [];

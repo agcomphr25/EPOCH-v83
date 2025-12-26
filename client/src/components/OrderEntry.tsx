@@ -1115,6 +1115,11 @@ export default function OrderEntry() {
       setIsLoadingOrder(true);
       setIsDuplicateMode(true);
 
+      // Check URL params for editMode and clearSpecs
+      const urlParams = new URLSearchParams(window.location.search);
+      const shouldEnterEditMode = urlParams.get('editMode') === 'true';
+      const shouldClearSpecs = urlParams.get('clearSpecs') === 'true';
+
       // Fetch the order to duplicate
       const order = await apiRequest(`/api/orders/${duplicateOrderId}`);
       
@@ -1140,8 +1145,23 @@ export default function OrderEntry() {
       }
 
       // Copy order data (but reset certain fields)
-      setModelId(order.modelId || '');
-      setFeatures(order.features || {});
+      // If clearSpecs is true, don't copy model/features/notes
+      if (shouldClearSpecs) {
+        setModelId('');
+        setFeatures({});
+        setNotes('');
+        setMiscItems([]);
+      } else {
+        setModelId(order.modelId || '');
+        setFeatures(order.features || {});
+        setNotes(order.notes || '');
+        // Load miscellaneous items from features if present
+        const featuresObj = order.features || {};
+        if (featuresObj.miscItems && Array.isArray(featuresObj.miscItems)) {
+          setMiscItems(featuresObj.miscItems);
+        }
+      }
+
       setOrderDate(new Date()); // Fresh order date
       setDueDate(new Date(Date.now() + 98 * 24 * 60 * 60 * 1000)); // Fresh due date
       setHasCustomerPO(!!order.customerPO);
@@ -1151,7 +1171,6 @@ export default function OrderEntry() {
       setAgrOrderDetails(order.agrOrderDetails || '');
       setIsFlattop(order.isFlattop || false);
       setFlattopPriceOverride(order.flattopPriceOverride || null);
-      setNotes(order.notes || '');
       setIsCustomOrder(order.isCustomOrder === 'yes');
 
       // Reset fields that shouldn't carry over
@@ -1161,7 +1180,6 @@ export default function OrderEntry() {
       setDiscountCode('');
       setCustomDiscountValue(0);
       setShowCustomDiscount(false);
-      setMiscItems([]);
       setIsVerified(false);
       setIsManualDueDate(false);
       setIsManualOrderDate(false);
@@ -1182,18 +1200,22 @@ export default function OrderEntry() {
         });
       }
 
-      // Load miscellaneous items from features if present
-      const featuresObj = order.features || {};
-      if (featuresObj.miscItems && Array.isArray(featuresObj.miscItems)) {
-        setMiscItems(featuresObj.miscItems);
-      }
-
       // Generate new order ID for the duplicate
       await generateOrderId();
 
+      // Enter edit mode if requested (shows save buttons immediately)
+      if (shouldEnterEditMode) {
+        setIsEditMode(true);
+        setEditingOrderId(null); // Ensure not updating original
+      }
+
+      const toastMessage = shouldClearSpecs 
+        ? `Order duplicated (specs cleared). Select new model and features.`
+        : `Order data copied from ${duplicateOrderId}. Review and submit as a new order.`;
+
       toast({
         title: 'Order Duplicated',
-        description: `Order data copied from ${duplicateOrderId}. Review and submit as a new order.`,
+        description: toastMessage,
         duration: 5000,
       });
 

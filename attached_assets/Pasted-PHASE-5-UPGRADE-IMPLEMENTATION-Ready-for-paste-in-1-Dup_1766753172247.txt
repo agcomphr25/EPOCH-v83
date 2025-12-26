@@ -1,0 +1,153 @@
+PHASE 5 UPGRADE IMPLEMENTATION
+
+Ready for paste-in
+
+1) Duplicate opens OrderEntry immediately in edit mode
+
+Update the dropdown duplicate action:
+
+📄 client/src/pages/OrdersList.tsx
+
+<DropdownMenuItem
+  onClick={async () => {
+    const res = await duplicateOrder(order.orderId);
+    toast.success(`Duplicated → ${res.newOrderId}`);
+    navigate(`/order-entry?duplicate=${res.newOrderId}&editMode=true`);
+  }}
+>
+  <Copy className="mr-2 h-4 w-4" /> Duplicate Order
+</DropdownMenuItem>
+
+Now auto-open with populated fields + save buttons visible
+
+Modify preload function to detect edit mode:
+
+📄 OrderEntry.tsx insert under preloadDuplicateOrder()
+
+if (url.searchParams.get("editMode") === "true") {
+   setIsEditMode(true);          // already exists in this file
+   setEditingOrderId(null);      // ensure not updating original
+}
+
+2) Add Duplicate option on OrderDetail page
+
+Find Order Detail Component (likely client/src/components/OrderDetail.tsx or similar)
+
+Inside header action area add:
+
+<Button
+  variant="secondary"
+  onClick={async () => {
+    const res = await duplicateOrder(order.orderId);
+    toast.success(`Duplicated → ${res.newOrderId}`);
+    navigate(`/order-entry?duplicate=${res.newOrderId}&editMode=true`);
+  }}
+>
+  <Copy className="h-4 w-4 mr-2" /> Duplicate Order
+</Button>
+
+
+If file differs, tell me the component name — I’ll place it accurately.
+
+3) Bulk Duplicate Feature ("Order 10 copies")
+Backend — modify duplicate endpoint to support count
+
+📄 server/src/routes/orders.ts replace current duplicate route with:
+
+router.post('/duplicate/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const count = Number(req.body.count ?? 1);
+
+    const existing = await db.select().from(allOrders)
+      .where(eq(allOrders.orderId, orderId))
+      .limit(1);
+
+    if (!existing.length) return res.status(404).json({ error: 'Original not found' });
+
+    const original = existing[0];
+    const results = [];
+
+    for (let i = 0; i < count; i++) {
+      const newId = await storage.generateNextOrderId();
+
+      const clone = {
+        ...original,
+        orderId: newId,
+        isReplacement: false,
+        replacedOrderId: original.orderId,
+        notes: `${original.notes || ''}\n\n🟩 DUPLICATED FROM ${original.orderId}`,
+        status: 'DRAFT',
+        id: undefined,
+        scrappedQuantity: 0,
+        departmentHistory: [],
+        layupCompletedAt: null,
+        pluggingCompletedAt: null,
+        cncCompletedAt: null,
+        finishCompletedAt: null,
+        qcCompletedAt: null,
+        shippingCompletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const inserted = await storage.createFinalizedOrder(clone);
+      results.push(inserted);
+    }
+
+    return res.json({
+      message: `Duplicated ${count} orders`,
+      created: results.map(r => r.orderId),
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Duplication failed' });
+  }
+});
+
+Frontend UI
+
+📄 Add Duplicate xN option to dropdown:
+
+<DropdownMenuItem
+    onClick={() => {
+      const count = prompt("How many duplicates? (enter number)");
+      if (!count) return;
+      duplicateOrder(order.orderId, { count: Number(count) })
+        .then(res => {
+          toast.success(`${res.created.length} duplicates created`);
+          navigate(`/orders`); // or first duplicate view
+        })
+    }}
+>
+  <CopyPlus className="mr-2 h-4 w-4" /> Duplicate xN
+</DropdownMenuItem>
+
+4) Add "Duplicate → Clear Model/Specs" option
+
+Another CSR action (not user-based, not automatic)
+
+UI Action
+<DropdownMenuItem
+  onClick={async () => {
+    const res = await duplicateOrder(order.orderId);
+    toast.success(`Duplicated (Specs Cleared) → ${res.newOrderId}`);
+    navigate(`/order-entry?duplicate=${res.newOrderId}&clearSpecs=true&editMode=true`);
+  }}
+>
+  <Eraser className="mr-2 h-4 w-4" /> Duplicate (Clear Specs)
+</DropdownMenuItem>
+
+Modify preloadDuplicateOrder to clear when requested
+
+In preload function:
+
+const clear = url.searchParams.get("clearSpecs") === "true";
+
+if (clear) {
+   setModelId('');
+   setFeatures({});
+   setMiscItems([]);
+   setNotes('');
+}

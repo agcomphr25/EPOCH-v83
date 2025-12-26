@@ -210,9 +210,13 @@ export const getQueryFn: <T>(options: {
     }
   };
 
-export async function duplicateOrder(orderId: string) {
+export async function duplicateOrder(orderId: string, options?: { count?: number }) {
   return apiRequest(`/api/orders/duplicate/${orderId}`, {
     method: 'POST',
+    body: JSON.stringify(options || {}),
+    headers: {
+      'Content-Type': 'application/json',
+    },
   });
 }
 

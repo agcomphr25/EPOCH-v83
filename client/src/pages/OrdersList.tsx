@@ -97,7 +97,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import AuditDrawer from '@/components/AuditDrawer';
-import { History, Clock } from 'lucide-react';
+import { History, Clock, CopyPlus, Eraser } from 'lucide-react';
 import toast from 'react-hot-toast';
 import CommunicationCompose from '@/components/CommunicationCompose';
 import LinkOrdersDialog from '@/components/LinkOrdersDialog';
@@ -1701,8 +1701,8 @@ export default function OrdersList() {
                                 onClick={async () => {
                                   try {
                                     const res = await duplicateOrder(order.orderId);
-                                    toast.success(`Order duplicated as ${res.newOrderId}`);
-                                    setLocation(`/order-entry?duplicate=${res.newOrderId}`);
+                                    toast.success(`Duplicated → ${res.newOrderId}`);
+                                    setLocation(`/order-entry?duplicate=${res.newOrderId}&editMode=true`);
                                   } catch (error) {
                                     toast.error('Failed to duplicate order');
                                   }
@@ -1711,6 +1711,47 @@ export default function OrdersList() {
                               >
                                 <Copy className="mr-2 h-4 w-4" />
                                 Duplicate Order
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  const countStr = prompt('How many duplicates? (enter number 1-50)');
+                                  if (!countStr) return;
+                                  const count = parseInt(countStr, 10);
+                                  if (isNaN(count) || count < 1 || count > 50) {
+                                    toast.error('Please enter a number between 1 and 50');
+                                    return;
+                                  }
+                                  try {
+                                    const res = await duplicateOrder(order.orderId, { count });
+                                    if (res.created) {
+                                      toast.success(`${res.created.length} duplicates created`);
+                                    } else {
+                                      toast.success(`Duplicated → ${res.newOrderId}`);
+                                    }
+                                    setLocation('/orders');
+                                  } catch (error) {
+                                    toast.error('Failed to duplicate orders');
+                                  }
+                                }}
+                                data-testid={`button-duplicate-xn-${order.orderId}`}
+                              >
+                                <CopyPlus className="mr-2 h-4 w-4" />
+                                Duplicate xN
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  try {
+                                    const res = await duplicateOrder(order.orderId);
+                                    toast.success(`Duplicated (Specs Cleared) → ${res.newOrderId}`);
+                                    setLocation(`/order-entry?duplicate=${res.newOrderId}&clearSpecs=true&editMode=true`);
+                                  } catch (error) {
+                                    toast.error('Failed to duplicate order');
+                                  }
+                                }}
+                                data-testid={`button-duplicate-clear-specs-${order.orderId}`}
+                              >
+                                <Eraser className="mr-2 h-4 w-4" />
+                                Duplicate (Clear Specs)
                               </DropdownMenuItem>
                               {(order.urgency === 'high' || order.urgency === 'critical') ? (
                                 <DropdownMenuItem

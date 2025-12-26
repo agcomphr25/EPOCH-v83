@@ -1098,7 +1098,7 @@ export default function OrdersList() {
 
     return (
       <div className="container mx-auto p-6">
-        <div className="mb-6">
+        <div className="sticky top-0 z-20 bg-background pb-4 mb-2 border-b">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">

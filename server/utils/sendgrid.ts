@@ -154,18 +154,44 @@ export async function sendEmailViaSendGrid(options: {
       attachmentCount: options.attachments?.length || 0,
     });
 
-    const [response] = await client.send(msg);
+    // DIAGNOSTIC: Log runtime configuration before send
+    console.log('[Email Debug] Provider: SendGrid');
+    console.log('[Email Debug] From:', fromEmail.email);
+    console.log('[Email Debug] Using Key:', process.env.SENDGRID_API_KEY ? 'present' : 'missing');
+    console.log('[Compare] HealthCheck From vs Notification From');
+    console.log('[Compare] Notification From:', fromEmail.email);
+    console.log('[Compare] ENV SENDGRID_FROM_EMAIL:', process.env.SENDGRID_FROM_EMAIL || 'NOT SET');
 
-    console.log('✅ SendGrid response:', {
-      statusCode: response.statusCode,
-      messageId: response.headers['x-message-id'],
-    });
+    try {
+      const [response] = await client.send(msg);
 
-    return {
-      success: true,
-      messageId: response.headers['x-message-id'] as string,
-    };
-  } catch (error) {
+      console.log('✅ SendGrid response:', {
+        statusCode: response.statusCode,
+        messageId: response.headers['x-message-id'],
+      });
+
+      return {
+        success: true,
+        messageId: response.headers['x-message-id'] as string,
+      };
+    } catch (sendErr: any) {
+      // DIAGNOSTIC: Capture and log full SendGrid error response
+      console.error('[SendGrid Error Response]', sendErr?.response?.body || sendErr);
+      console.error('[SendGrid Error Status]', sendErr?.code || sendErr?.response?.statusCode);
+      
+      const errorPayload = sendErr?.response?.body || { message: sendErr?.message || 'Unknown SendGrid error' };
+      throw new Error('SENDGRID_FAIL:' + JSON.stringify(errorPayload));
+    }
+  } catch (error: any) {
+    // Re-throw SENDGRID_FAIL errors to propagate details
+    if (error?.message?.startsWith('SENDGRID_FAIL:')) {
+      console.error('SendGrid send failed with details:', error.message);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+    
     console.error('SendGrid error:', error);
     return {
       success: false,

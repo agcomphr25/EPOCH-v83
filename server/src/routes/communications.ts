@@ -574,4 +574,88 @@ router.post('/test-sendgrid', async (req, res) => {
   }
 });
 
+// DIAGNOSTIC: Test email endpoint using same path as tracking notifications
+// GET /api/debug/email-test - Hard-coded to send to glenn@agcomposites.com
+router.get('/debug/email-test', async (req, res) => {
+  console.log('='.repeat(60));
+  console.log('[DEBUG EMAIL TEST] Starting diagnostic email test');
+  console.log('[DEBUG EMAIL TEST] Timestamp:', new Date().toISOString());
+  console.log('='.repeat(60));
+  
+  try {
+    // Log configuration
+    console.log('[DEBUG EMAIL TEST] Environment Check:');
+    console.log('  SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? 'present' : 'MISSING');
+    console.log('  SENDGRID_FROM_EMAIL:', process.env.SENDGRID_FROM_EMAIL || 'NOT SET');
+    console.log('  EMAIL_PROVIDER:', process.env.EMAIL_PROVIDER || 'not set (defaults to sendgrid)');
+    
+    // Get SendGrid client (same path as notifications)
+    const { client, fromEmail } = await getUncachableSendGridClient();
+    
+    console.log('[DEBUG EMAIL TEST] Resolved sender:', fromEmail.email);
+    console.log('[DEBUG EMAIL TEST] Sending test email to glenn@agcomposites.com');
+    
+    const testMsg = {
+      to: 'glenn@agcomposites.com',
+      from: fromEmail,
+      subject: 'EPOCH Email Test - Tracking Notification Pipeline',
+      text: `Tracking notification pipeline test\n\nTimestamp: ${new Date().toISOString()}\nSender: ${fromEmail.email}\n\nThis email uses the same SendGrid path as tracking notifications.`,
+      html: `
+        <h2>EPOCH Email Test - Tracking Notification Pipeline</h2>
+        <p>This email uses the same SendGrid path as tracking notifications.</p>
+        <ul>
+          <li><strong>Timestamp:</strong> ${new Date().toISOString()}</li>
+          <li><strong>Sender:</strong> ${fromEmail.email}</li>
+          <li><strong>Provider:</strong> SendGrid</li>
+        </ul>
+      `,
+    };
+    
+    console.log('[DEBUG EMAIL TEST] Message payload:', {
+      to: testMsg.to,
+      from: testMsg.from,
+      subject: testMsg.subject,
+    });
+    
+    const [response] = await client.send(testMsg);
+    
+    console.log('[DEBUG EMAIL TEST] ✅ SUCCESS');
+    console.log('[DEBUG EMAIL TEST] Status Code:', response.statusCode);
+    console.log('[DEBUG EMAIL TEST] Message ID:', response.headers['x-message-id']);
+    console.log('='.repeat(60));
+    
+    res.json({
+      success: true,
+      message: 'Diagnostic email sent successfully',
+      details: {
+        to: 'glenn@agcomposites.com',
+        from: fromEmail.email,
+        statusCode: response.statusCode,
+        messageId: response.headers['x-message-id'],
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (error: any) {
+    console.error('[DEBUG EMAIL TEST] ❌ FAILED');
+    console.error('[DEBUG EMAIL TEST] Error:', error?.message || error);
+    console.error('[DEBUG EMAIL TEST] Response Body:', error?.response?.body || 'N/A');
+    console.error('[DEBUG EMAIL TEST] Status Code:', error?.code || error?.response?.statusCode || 'N/A');
+    console.error('='.repeat(60));
+    
+    // Return full error details
+    const errorBody = error?.response?.body || { message: error?.message || 'Unknown error' };
+    
+    res.status(500).json({
+      success: false,
+      error: 'Diagnostic email failed',
+      details: {
+        message: error?.message,
+        responseBody: errorBody,
+        statusCode: error?.code || error?.response?.statusCode,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  }
+});
+
 export default router;

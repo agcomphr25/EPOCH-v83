@@ -93,6 +93,7 @@ export default function ShippingTracker() {
   // Mutation to send notification to customer
   const sendNotificationMutation = useMutation({
     mutationFn: async (orderId: string) => {
+      console.log('[UI] Sending notify request for order:', orderId);
       const response = await fetch(`/api/shipping/notify-customer/${orderId}`, {
         method: 'POST',
         headers: {
@@ -100,14 +101,18 @@ export default function ShippingTracker() {
         },
       });
 
+      const result = await response.json();
+      console.log('[UI RESPONSE] status:', response.status, 'body:', result);
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to send notification');
+        console.error('[NOTIFY FAIL RESULT]', result);
+        throw new Error(result.error || 'Failed to send notification');
       }
 
-      return response.json();
+      return result;
     },
     onSuccess: (data, orderId) => {
+      console.log('[UI SUCCESS]', data);
       toast({
         title: 'Notification Sent',
         description: data.message || `Customer notified via ${data.methods?.join(' and ')}`,
@@ -116,9 +121,10 @@ export default function ShippingTracker() {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
     },
     onError: (error: Error, orderId) => {
+      console.error('[UI ERROR] Failed notification for order:', orderId, error);
       toast({
         title: 'Failed to Send Notification',
-        description: error.message,
+        description: error.message + ' — see browser console for details',
         variant: 'destructive',
       });
     },

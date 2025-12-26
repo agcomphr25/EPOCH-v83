@@ -2442,19 +2442,23 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
         ? `Customer notified via ${notificationResult.methods.join(' and ')}, but some methods failed`
         : `Customer notified successfully via ${notificationResult.methods.join(' and ')}`;
 
-      res.json({
+      const responsePayload = {
         success: true,
         message: responseMessage,
         methods: notificationResult.methods,
         warnings: notificationResult.errors,
-      });
+      };
+      console.log('[API RESPONSE] notify-customer returning:', JSON.stringify(responsePayload));
+      res.json(responsePayload);
     } else {
       // All methods failed
-      res.status(500).json({
+      const errorPayload = {
         success: false,
         error: 'All notification methods failed. Check SendGrid sender verification or configure Microsoft Graph API.',
         details: notificationResult.errors,
-      });
+      };
+      console.log('[API RESPONSE] notify-customer FAIL returning:', JSON.stringify(errorPayload));
+      res.status(500).json(errorPayload);
     }
   } catch (error) {
     console.error('Error sending customer notification:', error);

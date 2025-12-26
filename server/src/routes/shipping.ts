@@ -2409,9 +2409,13 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
     // Send notification
     const { sendCustomerNotification } = await import('../../utils/notifications');
     
-    const preferredMethods: string[] = [];
-    if (customer.email) preferredMethods.push('email');
-    if (customer.phone) preferredMethods.push('sms');
+    // Use customer's actual preferred communication method, or default to email if not set
+    const customerPreference = (customer.preferredCommunicationMethod as string[]) || [];
+    const preferredMethods: string[] = customerPreference.length > 0 
+      ? customerPreference 
+      : (customer.email ? ['email'] : (customer.phone ? ['sms'] : []));
+    
+    console.log('[NOTIFY-CUSTOMER] Customer preference:', customerPreference, '→ Using:', preferredMethods);
     
     const notificationResult = await sendCustomerNotification({
       orderId: order.orderId,
@@ -2420,6 +2424,8 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
       estimatedDelivery: order.estimatedDelivery ? new Date(order.estimatedDelivery) : undefined,
       preferredMethods,
     });
+    
+    console.log('[NOTIFY-CUSTOMER] Result:', JSON.stringify(notificationResult));
 
     // Consider it successful if at least ONE method worked
     const hasSuccessfulNotification = notificationResult.methods.length > 0;

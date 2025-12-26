@@ -1348,6 +1348,7 @@ export default function OrdersList() {
                   {paginatedOrders.map((order) => (
                     <TableRow
                       key={`${order.id}-${order.orderId}`}
+                      interactive
                       className={cn(
                         order.isCustomOrder === 'yes'
                           ? 'bg-pink-50 hover:bg-pink-100'

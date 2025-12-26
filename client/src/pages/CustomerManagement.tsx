@@ -1772,7 +1772,10 @@ export default function CustomerManagement() {
                     customerAddresses[0];
 
                   return (
-                    <TableRow key={customer.id}>
+                    <TableRow 
+                      key={customer.id}
+                      interactive
+                    >
                       <TableCell>
                         <div className="font-medium">{customer.name}</div>
                         <div className="space-y-1 mt-1">

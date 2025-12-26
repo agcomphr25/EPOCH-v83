@@ -677,6 +677,7 @@ export default function AllOrdersList() {
                 return (
                   <TableRow
                     key={order.orderId}
+                    interactive
                     className={rowClassName}
                     style={
                       order.isVerified

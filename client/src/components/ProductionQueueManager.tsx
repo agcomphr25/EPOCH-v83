@@ -1065,7 +1065,7 @@ export default function ProductionQueueManager() {
                     <TableBody>
                       {Array.isArray(attentionOrders) &&
                         attentionOrders.map((order) => (
-                          <TableRow key={order.orderId} className="bg-amber-50">
+                          <TableRow key={order.orderId} interactive className="bg-amber-50">
                             <TableCell className="font-medium">
                               {order.orderId}
                             </TableCell>
@@ -1321,6 +1321,7 @@ export default function ProductionQueueManager() {
                                     return (
                                       <TableRow
                                         key={item.id}
+                                        interactive
                                         data-testid={`row-po-item-${item.id}`}
                                         className={selectedQty > 0 ? 'bg-blue-50' : ''}
                                       >
@@ -1594,6 +1595,7 @@ export default function ProductionQueueManager() {
                         return (
                           <TableRow
                             key={order.orderId}
+                            interactive
                             className={order.isOverdue ? 'bg-red-50' : ''}
                           >
                             <TableCell>

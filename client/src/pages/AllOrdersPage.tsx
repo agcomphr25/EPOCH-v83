@@ -802,6 +802,7 @@ export default function AllOrdersPage() {
               {orders.map((order) => (
                 <TableRow
                   key={order.orderId}
+                  interactive
                   className={cn(
                     order.isVerified ? 'bg-green-50 dark:bg-green-950' : ''
                   )}

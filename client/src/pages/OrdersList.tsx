@@ -82,12 +82,13 @@ import {
   AlertTriangle,
   Link as LinkIcon,
   Zap,
+  Copy,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import OrderSummaryTooltip from '@/components/OrderSummaryTooltip';
 import { BarcodeDisplay } from '@/components/BarcodeDisplay';
-import { queryClient, apiRequest } from '@/lib/queryClient';
+import { queryClient, apiRequest, duplicateOrder } from '@/lib/queryClient';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -1695,6 +1696,21 @@ export default function OrdersList() {
                               >
                                 <LinkIcon className="mr-2 h-4 w-4" />
                                 Link Orders
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  try {
+                                    const res = await duplicateOrder(order.orderId);
+                                    toast.success(`Order duplicated as ${res.newOrderId}`);
+                                    setLocation(`/order-entry?duplicate=${res.newOrderId}`);
+                                  } catch (error) {
+                                    toast.error('Failed to duplicate order');
+                                  }
+                                }}
+                                data-testid={`button-duplicate-order-${order.orderId}`}
+                              >
+                                <Copy className="mr-2 h-4 w-4" />
+                                Duplicate Order
                               </DropdownMenuItem>
                               {(order.urgency === 'high' || order.urgency === 'critical') ? (
                                 <DropdownMenuItem

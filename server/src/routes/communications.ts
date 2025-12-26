@@ -43,7 +43,11 @@ const smsSchema = z.object({
 // Send email via SendGrid or Microsoft Graph
 router.post('/email', async (req, res) => {
   try {
+    console.log('[ZOD] Email payload about to validate:', JSON.stringify(req.body, null, 2));
+    
     const data = emailSchema.parse(req.body);
+    
+    console.log('[ZOD] Email payload validated successfully');
 
     // Explicitly resolve provider - only use Microsoft if explicitly configured
     // Default strictly to SendGrid for stability
@@ -80,8 +84,10 @@ router.post('/email', async (req, res) => {
     } else {
       // Send via SendGrid (default) using Replit integration
       try {
+        console.log('[SENDGRID] Getting SendGrid client...');
         const { client, fromEmail } = await getUncachableSendGridClient();
         senderEmail = fromEmail.email; // Use verified sender email from integration
+        console.log('[SENDGRID] Client obtained, sender:', senderEmail);
 
         const msg = {
           to: data.to,
@@ -90,14 +96,20 @@ router.post('/email', async (req, res) => {
           text: data.message,
           html: data.html || data.message.replace(/\n/g, '<br>'),
         };
+        
+        console.log('[SENDGRID] Sending message:', { to: msg.to, from: msg.from, subject: msg.subject });
 
         const emailResult = await client.send(msg);
         externalId = emailResult[0].headers['x-message-id'] as string;
+        console.log('[SENDGRID] Send successful, messageId:', externalId);
       } catch (error: any) {
-        console.error('SendGrid integration error:', error);
+        console.error('[SENDGRID ERROR] Integration error:', error);
+        console.error('[SENDGRID ERROR] Response body:', error?.response?.body || 'N/A');
+        console.error('[SENDGRID ERROR] Status:', error?.code || error?.response?.statusCode || 'N/A');
         return res.status(500).json({ 
           error: 'SendGrid not configured',
           details: error.message,
+          responseBody: error?.response?.body,
           hint: 'Make sure SendGrid integration is set up with a verified sender email'
         });
       }
@@ -139,9 +151,19 @@ router.post('/email', async (req, res) => {
       provider,
     });
   } catch (error: any) {
-    console.error('Email error:', error);
+    console.error('[EMAIL ERROR] Full error:', error);
+    
+    // Check for Zod validation errors
+    if (error.name === 'ZodError') {
+      console.error('[ZOD ERROR] Validation failed:', JSON.stringify(error.errors, null, 2));
+      return res.status(400).json({
+        error: 'Email validation error',
+        details: error.errors,
+      });
+    }
 
     if (error.response?.body?.errors) {
+      console.error('[EMAIL ERROR] Service error body:', error.response.body.errors);
       return res.status(400).json({
         error: 'Email service error',
         details: error.response.body.errors,

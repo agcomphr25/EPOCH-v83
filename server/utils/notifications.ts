@@ -28,6 +28,7 @@ export async function sendCustomerNotification(
   };
 
   console.log('📬 Starting customer notification for order:', data.orderId);
+  console.log('[TRACKING NOTIFY] Incoming notification data:', JSON.stringify(data, null, 2));
 
   // Get customer preferences - look in both finalized and draft orders
   let customer = null;
@@ -92,6 +93,15 @@ export async function sendCustomerNotification(
 
   // Send email notification if preferred and email available
   if (preferredMethods.includes('email') && email) {
+    console.log('[TRACKING NOTIFY] Preparing email for:', email, 'Order:', data.orderId);
+    console.log('[TRACKING NOTIFY] Email payload:', {
+      email,
+      orderId: data.orderId,
+      trackingNumber: data.trackingNumber,
+      carrier: data.carrier,
+      estimatedDelivery: data.estimatedDelivery,
+      customerId: customer?.id?.toString(),
+    });
     try {
       console.log('📧 Attempting email notification to:', email);
       await sendEmailNotification(
@@ -105,12 +115,17 @@ export async function sendCustomerNotification(
         customer?.id.toString()
       );
       successfulMethods.push('email');
+      console.log('[TRACKING NOTIFY] Email sent successfully');
       console.log('✅ Email notification succeeded');
-    } catch (error) {
+    } catch (error: any) {
+      console.error('[TRACKING ERROR] Full error:', error);
+      console.error('[TRACKING ERROR RAW]', error?.response?.body || error?.message || error);
       const errorMsg = `Email failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
       results.errors.push(errorMsg);
       console.error('❌ Email notification failed:', error);
     }
+  } else {
+    console.log('[TRACKING NOTIFY] Email skipped - preferredMethods:', preferredMethods, 'hasEmail:', !!email);
   }
 
   // Send SMS notification if preferred and phone available

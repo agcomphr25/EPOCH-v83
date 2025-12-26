@@ -210,6 +210,12 @@ export const getQueryFn: <T>(options: {
     }
   };
 
+export async function duplicateOrder(orderId: string) {
+  return apiRequest(`/api/orders/duplicate/${orderId}`, {
+    method: 'POST',
+  });
+}
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

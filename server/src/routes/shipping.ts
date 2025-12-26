@@ -2406,7 +2406,9 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
       });
     }
 
-    // Send notification
+    // ===========================================
+    // 🔥 FINAL NOTIFICATION SUCCESS LOGIC
+    // ===========================================
     const { sendCustomerNotification } = await import('../../utils/notifications');
     
     // Use customer's actual preferred communication method, or default to email if not set
@@ -2427,50 +2429,32 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
     
     console.log('[NOTIFY-CUSTOMER] Result:', JSON.stringify(notificationResult));
 
-    // Consider it successful if at least ONE method worked
-    const hasSuccessfulNotification = notificationResult.methods.length > 0;
-
-    if (hasSuccessfulNotification) {
-      // Update order with notification status
-      const updateData = {
-        customerNotified: true,
-        notificationMethod: notificationResult.methods.join(', '),
-        notificationSentAt: new Date(),
-      };
-
-      await db
-        .update(allOrders)
-        .set(updateData)
-        .where(eq(allOrders.orderId, orderId));
-
-      // Return success with warnings if some methods failed
-      const responseMessage = (notificationResult.errors && notificationResult.errors.length > 0)
-        ? `Customer notified via ${notificationResult.methods.join(' and ')}, but some methods failed`
-        : `Customer notified successfully via ${notificationResult.methods.join(' and ')}`;
-
-      const responsePayload = {
+    // If at least one notification method succeeded → return success
+    const succeededMethods = notificationResult.methods || [];
+    
+    if (succeededMethods.length > 0) {
+      console.log('[API RESPONSE] Notification successful via:', succeededMethods);
+      
+      return res.status(200).json({
         success: true,
-        message: responseMessage,
-        methods: notificationResult.methods,
-        warnings: notificationResult.errors,
-      };
-      console.log('[API RESPONSE] notify-customer returning:', JSON.stringify(responsePayload));
-      res.json(responsePayload);
-    } else {
-      // All methods failed
-      const errorPayload = {
-        success: false,
-        error: 'All notification methods failed. Check SendGrid sender verification or configure Microsoft Graph API.',
-        details: notificationResult.errors,
-      };
-      console.log('[API RESPONSE] notify-customer FAIL returning:', JSON.stringify(errorPayload));
-      res.status(500).json(errorPayload);
+        methods: succeededMethods,
+        message: `Notification sent via: ${succeededMethods.join(', ')}`,
+      });
     }
-  } catch (error) {
-    console.error('Error sending customer notification:', error);
-    res.status(500).json({ 
-      error: 'Failed to send notification',
-      details: error instanceof Error ? error.message : 'Unknown error',
+
+    // Otherwise fail (email+sms both failed)
+    console.log('[API RESPONSE] All notification methods failed:', notificationResult.errors);
+    return res.status(500).json({
+      success: false,
+      error: 'No valid notification method could be delivered',
+      details: notificationResult.errors,
+    });
+
+  } catch (err: any) {
+    console.error('[API ERROR] Notification failed:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Notification failed',
     });
   }
 });

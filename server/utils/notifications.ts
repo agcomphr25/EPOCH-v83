@@ -27,6 +27,8 @@ export async function sendCustomerNotification(
     errors: [] as string[],
   };
 
+  console.log('📬 Starting customer notification for order:', data.orderId);
+
   // Get customer preferences - look in both finalized and draft orders
   let customer = null;
   let order = null;
@@ -66,9 +68,9 @@ export async function sendCustomerNotification(
   }
 
   if (!order || !customer) {
-    results.errors.push(
-      'Order or customer not found in either finalized or draft orders'
-    );
+    const errorMsg = 'Order or customer not found in either finalized or draft orders';
+    results.errors.push(errorMsg);
+    console.error('❌ Notification failed:', errorMsg);
     return results;
   }
 
@@ -78,9 +80,20 @@ export async function sendCustomerNotification(
   const email = data.customerEmail || customer.email;
   const phone = data.customerPhone || customer.phone;
 
+  console.log('📬 Notification config:', {
+    orderId: data.orderId,
+    preferredMethods,
+    hasEmail: !!email,
+    hasPhone: !!phone,
+  });
+
+  // Track successful sends - only update DB after confirmed success
+  const successfulMethods: string[] = [];
+
   // Send email notification if preferred and email available
   if (preferredMethods.includes('email') && email) {
     try {
+      console.log('📧 Attempting email notification to:', email);
       await sendEmailNotification(
         {
           email,
@@ -91,17 +104,19 @@ export async function sendCustomerNotification(
         },
         customer?.id.toString()
       );
-      results.methods.push('email');
+      successfulMethods.push('email');
+      console.log('✅ Email notification succeeded');
     } catch (error) {
-      results.errors.push(
-        `Email failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      const errorMsg = `Email failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      results.errors.push(errorMsg);
+      console.error('❌ Email notification failed:', error);
     }
   }
 
   // Send SMS notification if preferred and phone available
   if (preferredMethods.includes('sms') && phone) {
     try {
+      console.log('📱 Attempting SMS notification to:', phone);
       await sendSMSNotification(
         {
           phone,
@@ -112,26 +127,35 @@ export async function sendCustomerNotification(
         },
         customer?.id.toString()
       );
-      results.methods.push('sms');
+      successfulMethods.push('sms');
+      console.log('✅ SMS notification succeeded');
     } catch (error) {
-      results.errors.push(
-        `SMS failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      const errorMsg = `SMS failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      results.errors.push(errorMsg);
+      console.error('❌ SMS notification failed:', error);
     }
   }
 
-  // Update order notification status
-  if (results.methods.length > 0) {
+  // CRITICAL: Only update order notification status if at least one method succeeded
+  // This ensures failed sends do NOT mark the order as notified, allowing retries
+  if (successfulMethods.length > 0) {
+    console.log('📬 Updating order notification status - methods succeeded:', successfulMethods);
     await db
       .update(allOrders)
       .set({
         customerNotified: true,
-        notificationMethod: results.methods.join(', '),
+        notificationMethod: successfulMethods.join(', '),
         notificationSentAt: new Date(),
       })
       .where(eq(allOrders.orderId, data.orderId));
 
     results.success = true;
+    results.methods = successfulMethods;
+    console.log('✅ Notification complete for order:', data.orderId);
+  } else {
+    // All methods failed - do NOT update customerNotified
+    // This allows automatic triggers and manual resend to retry later
+    console.error('❌ All notification methods failed for order:', data.orderId, results.errors);
   }
 
   return results;

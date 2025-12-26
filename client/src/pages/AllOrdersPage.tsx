@@ -637,154 +637,155 @@ export default function AllOrdersPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-[95%] mx-auto">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Package className="h-6 w-6" />
-          All Orders
-        </h1>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleExportCSV}
-            variant="outline"
-            className="flex items-center gap-2"
-            data-testid="export-csv-button"
-          >
-            <Download className="h-4 w-4" />
-            Export CSV (Active)
-          </Button>
-          <Link href="/order-reports">
+      <div className="sticky top-0 z-20 bg-background pb-4 border-b space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Package className="h-6 w-6" />
+            All Orders
+          </h1>
+          <div className="flex items-center gap-2">
             <Button
+              onClick={handleExportCSV}
               variant="outline"
               className="flex items-center gap-2"
-              data-testid="link-advanced-reports"
+              data-testid="export-csv-button"
             >
-              <FileText className="h-4 w-4" />
-              Advanced Reports
+              <Download className="h-4 w-4" />
+              Export CSV (Active)
             </Button>
-          </Link>
+            <Link href="/order-reports">
+              <Button
+                variant="outline"
+                className="flex items-center gap-2"
+                data-testid="link-advanced-reports"
+              >
+                <FileText className="h-4 w-4" />
+                Advanced Reports
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            <span className="font-semibold">Orders ({sortedOrders.length})</span>
+            <span className="text-sm text-gray-500">
+              Page {currentPage} of {totalPages} ({totalOrders} total orders)
+            </span>
+          </div>
+          <div className="flex items-center gap-4">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by Order ID, Customer, FB Order #..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 w-96"
+                data-testid="input-search-orders"
+              />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1 h-6 w-6 p-0"
+                  onClick={() => setSearchTerm('')}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            {/* Department Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Department:</span>
+              <Select
+                value={selectedDepartment}
+                onValueChange={setSelectedDepartment}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="All Departments" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Departments</SelectItem>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept} value={dept}>
+                      {dept}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Status Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Status:</span>
+              <Select
+                value={selectedStatus}
+                onValueChange={setSelectedStatus}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="PENDING_SIGNATURE">Pending Signature</SelectItem>
+                  <SelectItem value="FINALIZED">Finalized</SelectItem>
+                  <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                  <SelectItem value="FULFILLED">Fulfilled</SelectItem>
+                  <SelectItem value="SHIPPED">Shipped</SelectItem>
+                  <SelectItem value="HOLDING">Holding</SelectItem>
+                  <SelectItem value="DRAFT">Draft</SelectItem>
+                </SelectContent>
+              </Select>
+              {/* Test Reminder Button - visible when filtering for PENDING_SIGNATURE or for admin */}
+              {(selectedStatus === 'PENDING_SIGNATURE' || currentUser?.role === 'ADMIN') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => testReminderMutation.mutate()}
+                  disabled={testReminderMutation.isPending}
+                  title="Manually run the 5-day reminder check for unsigned orders"
+                  data-testid="button-test-reminder"
+                >
+                  <Mail className="h-4 w-4 mr-1" />
+                  {testReminderMutation.isPending ? 'Checking...' : 'Test Reminder'}
+                </Button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Sort by:</span>
+              <Select
+                value={sortBy}
+                onValueChange={(
+                  value:
+                    | 'orderDate'
+                    | 'dueDate'
+                    | 'customer'
+                    | 'model'
+                    | 'enteredDate'
+                ) => setSortBy(value)}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="orderDate">Order Date</SelectItem>
+                  <SelectItem value="dueDate">Due Date</SelectItem>
+                  <SelectItem value="customer">Customer</SelectItem>
+                  <SelectItem value="model">Model</SelectItem>
+                  <SelectItem value="enteredDate">Entered Date</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              <span>Orders ({sortedOrders.length})</span>
-              <span className="text-sm text-gray-500">
-                Page {currentPage} of {totalPages} ({totalOrders} total orders)
-              </span>
-            </div>
-            <div className="flex items-center gap-4">
-              {/* Search Input */}
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by Order ID, Customer, FB Order #..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8 w-96"
-                  data-testid="input-search-orders"
-                />
-                {searchTerm && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-1 top-1 h-6 w-6 p-0"
-                    onClick={() => setSearchTerm('')}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-
-              {/* Department Filter */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Department:</span>
-                <Select
-                  value={selectedDepartment}
-                  onValueChange={setSelectedDepartment}
-                >
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="All Departments" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept} value={dept}>
-                        {dept}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Status Filter */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Status:</span>
-                <Select
-                  value={selectedStatus}
-                  onValueChange={setSelectedStatus}
-                >
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="All Statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="PENDING_SIGNATURE">Pending Signature</SelectItem>
-                    <SelectItem value="FINALIZED">Finalized</SelectItem>
-                    <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                    <SelectItem value="FULFILLED">Fulfilled</SelectItem>
-                    <SelectItem value="SHIPPED">Shipped</SelectItem>
-                    <SelectItem value="HOLDING">Holding</SelectItem>
-                    <SelectItem value="DRAFT">Draft</SelectItem>
-                  </SelectContent>
-                </Select>
-                {/* Test Reminder Button - visible when filtering for PENDING_SIGNATURE or for admin */}
-                {(selectedStatus === 'PENDING_SIGNATURE' || currentUser?.role === 'ADMIN') && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => testReminderMutation.mutate()}
-                    disabled={testReminderMutation.isPending}
-                    title="Manually run the 5-day reminder check for unsigned orders"
-                    data-testid="button-test-reminder"
-                  >
-                    <Mail className="h-4 w-4 mr-1" />
-                    {testReminderMutation.isPending ? 'Checking...' : 'Test Reminder'}
-                  </Button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Sort by:</span>
-                <Select
-                  value={sortBy}
-                  onValueChange={(
-                    value:
-                      | 'orderDate'
-                      | 'dueDate'
-                      | 'customer'
-                      | 'model'
-                      | 'enteredDate'
-                  ) => setSortBy(value)}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="orderDate">Order Date</SelectItem>
-                    <SelectItem value="dueDate">Due Date</SelectItem>
-                    <SelectItem value="customer">Customer</SelectItem>
-                    <SelectItem value="model">Model</SelectItem>
-                    <SelectItem value="enteredDate">Entered Date</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           <Table>
             <TableHeader>
               <TableRow>
@@ -802,6 +803,18 @@ export default function AllOrdersPage() {
               {orders.map((order) => (
                 <TableRow
                   key={order.orderId}
+                  interactive
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest('button, a, [role="menu"], [role="menuitem"], input, select, [data-radix-collection-item]')) return;
+                    setLocation(`/order-entry?draft=${order.orderId}`);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !(e.target as HTMLElement).closest('button, a, [role="menu"], input, select')) {
+                      setLocation(`/order-entry?draft=${order.orderId}`);
+                    }
+                  }}
                   className={cn(
                     order.isVerified ? 'bg-green-50 dark:bg-green-950' : ''
                   )}

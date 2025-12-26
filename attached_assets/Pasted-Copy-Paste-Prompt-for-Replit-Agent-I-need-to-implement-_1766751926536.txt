@@ -1,0 +1,77 @@
+Copy-Paste Prompt for Replit Agent
+I need to implement a **Duplicate Order** feature in EPOCH. 
+Please gather and output the following information exactly and clearly, in a format I can copy/paste back into Andrew/Andy (ChatGPT):
+
+===============================================================
+1. DATABASE SCHEMAS
+Locate and paste the code for:
+  - salesOrders table
+  - salesOrderItems (or equivalent order line schema)
+  - any related tables used during order creation (customers, addresses, orderSpecs, etc.)
+Include file paths above each block like this:
+📄 server/db/schema/salesOrders.ts
+<code>
+
+===============================================================
+2. ORDER CREATION FLOW
+I need to see how orders are currently created.
+
+A) Backend new-order route/handler  
+   Example pattern: POST /api/orders/create
+   Paste entire function + file path
+
+B) Frontend page for creating orders  
+   Example pattern: client/src/pages/orders/NewOrderPage.tsx
+   Paste entire file or relevant create form section
+
+C) Component that submits the order creation form  
+   Example patterns:
+      OrderForm.tsx
+      OrderCreateForm.tsx
+
+Paste full component(s), including submit logic, useMutation/useForm handlers, and initial form defaults.
+
+===============================================================
+3. FIELD MAPPING REFERENCES
+Search and paste any code that defines:
+  - default/initial values for new orders
+  - form value mapping > backend payload
+  - orderId assignment logic (if custom generated)
+
+===============================================================
+4. ORDER ID GENERATION
+Search the codebase for logic that creates a new Order ID.
+Paste the relevant function(s) that handle this.
+
+Search keywords:
+  "generate"
+  "orderId"
+  "newOrder"
+  "sequence"
+  "uuid"
+  "AGC"
+
+===============================================================
+5. FRONTEND ROUTES & UI PLACEMENT
+Return:
+  - the file where order detail view is rendered
+  - where the Edit/Delete buttons are currently located
+  - where action buttons can be inserted
+
+Search patterns:
+  OrderDetail
+  OrderView
+  SalesOrderPage
+  OrderSummaryModal
+  actions
+  buttons
+
+Paste paths and code for that portion.
+
+===============================================================
+Output Format Required:
+Return all results cleanly grouped under the 5 numbered sections above.
+DO NOT refactor or modify any code — only locate and return it.
+===============================================================
+
+After you output everything, stop. I will return the next prompt for building the feature.

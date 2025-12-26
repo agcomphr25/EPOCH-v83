@@ -841,6 +841,105 @@ router.delete('/draft/:id', async (req: Request, res: Response) => {
   }
 });
 
+// ============================================================
+// 🔁 DUPLICATE ORDER (supports bulk duplication via count parameter)
+// ============================================================
+router.post('/duplicate/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const count = Math.min(Math.max(Number(req.body.count ?? 1), 1), 50); // Clamp between 1-50
+
+    // 1. Fetch existing order
+    const existing = await db.select().from(allOrders)
+      .where(eq(allOrders.orderId, orderId))
+      .limit(1);
+
+    if (!existing.length) {
+      return res.status(404).json({ error: 'Original order not found' });
+    }
+
+    const original = existing[0];
+    const results: any[] = [];
+
+    // 2. Create specified number of duplicates
+    for (let i = 0; i < count; i++) {
+      const newOrderId = await storage.generateNextOrderId();
+
+      // 3. Build cloned order object with type-safe defaults
+      const clonedOrder = {
+        ...original,
+        orderId: newOrderId,
+        id: undefined,
+        status: 'DRAFT',
+        currentDepartment: 'Layup',
+        departmentHistory: [],
+        shipping: original.shipping ?? 36.95,
+        isVerified: original.isVerified ?? false,
+        qdSameSideConfirmed: original.qdSameSideConfirmed ?? false,
+        isCustomOrder: original.isCustomOrder as 'yes' | 'no' | null,
+        features: original.features as Record<string, any> | null,
+        featureQuantities: original.featureQuantities as Record<string, any> | null,
+        isPaid: false,
+        paymentAmount: null,
+        paymentType: null,
+        paymentDate: null,
+        paymentTimestamp: null,
+        trackingNumber: null,
+        shippingLabelGenerated: false,
+        customerNotified: false,
+        shippedDate: null,
+        estimatedDelivery: null,
+        deliveryConfirmed: false,
+        deliveryConfirmedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        notes: count > 1 
+          ? `${original.notes || ''}\n\n🟩 DUPLICATED FROM ${orderId} (${i + 1}/${count})`
+          : original.notes,
+
+        // Drop timestamps from previous workflow
+        layupCompletedAt: null,
+        pluggingCompletedAt: null,
+        cncCompletedAt: null,
+        finishCompletedAt: null,
+        gunsmithCompletedAt: null,
+        paintCompletedAt: null,
+        qcCompletedAt: null,
+        shippingCompletedAt: null,
+
+        // Scrap flags cleared
+        scrappedQuantity: 0,
+        scrapDate: null,
+        scrapReason: null,
+        scrapDisposition: null,
+        scrapAuthorization: null,
+      };
+
+      // 4. Insert cloned order
+      const inserted = await storage.createFinalizedOrder(clonedOrder);
+      results.push(inserted);
+    }
+
+    // Return response based on count
+    if (count === 1) {
+      return res.status(201).json({
+        message: 'Order duplicated',
+        newOrderId: results[0].orderId,
+        order: results[0],
+      });
+    } else {
+      return res.status(201).json({
+        message: `Duplicated ${count} orders`,
+        created: results.map(r => r.orderId),
+        orders: results,
+      });
+    }
+  } catch (error) {
+    console.error('Duplicate order failed:', error);
+    return res.status(500).json({ error: 'Failed to duplicate order' });
+  }
+});
+
 // Order Management (duplicate removed)
 // Specific routes must come before parameterized routes
 

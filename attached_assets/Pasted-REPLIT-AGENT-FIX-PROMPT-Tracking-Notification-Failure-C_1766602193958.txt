@@ -1,0 +1,135 @@
+REPLIT AGENT FIX PROMPT — Tracking Notification Failure
+
+Context
+Tracking notifications are failing with the error:
+“All notification methods failed. Check SendGrid sender verification or configure Microsoft Graph API.”
+The root cause is an invalid or drifting SendGrid sender identity and premature setting of customerNotified=true even when delivery fails.
+
+Objective
+Make tracking notifications reliable, deterministic, and correct — without changing the UI or adding new providers.
+
+Tasks (Do All of the Following)
+1. Lock the SendGrid sender identity
+
+In server/utils/sendgrid.ts:
+
+Require SENDGRID_FROM_EMAIL to be defined.
+
+Remove any fallback or default sender.
+
+Throw a clear error if missing.
+
+if (!process.env.SENDGRID_FROM_EMAIL) {
+  throw new Error("SENDGRID_FROM_EMAIL is required and must be a verified SendGrid sender");
+}
+
+
+Log the resolved sender once when sending (for debugging):
+
+console.log("SendGrid sender:", fromEmail);
+
+2. Ensure provider selection is stable
+
+In server/src/routes/communications.ts:
+
+Explicitly resolve provider from EMAIL_PROVIDER
+
+Default strictly to 'sendgrid'
+
+Log the resolved provider
+
+const provider = process.env.EMAIL_PROVIDER === 'microsoft'
+  ? 'microsoft'
+  : 'sendgrid';
+
+console.log("Email provider resolved to:", provider);
+
+
+Do not attempt Microsoft Graph unless explicitly selected.
+
+3. Prevent false “customerNotified” updates
+
+In server/utils/notifications.ts:
+
+Track whether at least one notification method succeeds
+
+Only update:
+
+customerNotified
+
+notificationMethod
+
+notificationSentAt
+
+after a successful send
+
+Example pattern:
+
+let notificationSucceeded = false;
+
+try {
+  await sendEmailNotification(...);
+  notificationSucceeded = true;
+} catch (err) {
+  console.error("Email notification failed:", err);
+}
+
+if (notificationSucceeded) {
+  await updateOrderNotificationStatus(...);
+} else {
+  throw new Error("All notification methods failed");
+}
+
+4. Do not suppress future notifications on failure
+
+Ensure that:
+
+Failed sends do not mark the order as notified
+
+Automatic triggers can retry later
+
+Manual resend remains possible
+
+5. Add one minimal test endpoint
+
+Create a backend-only test function or route:
+
+Sends a hard-coded email to a known address
+
+Uses the same SendGrid path
+
+Bypasses order logic
+
+Purpose: validate configuration independently of shipping flow
+
+Non-Goals
+
+Do NOT modify frontend UI
+
+Do NOT add new providers
+
+Do NOT refactor unrelated code
+
+Do NOT change customer preference logic
+
+Success Criteria
+
+Manual “Notify” works
+
+Automatic notifications resume
+
+No notification is marked sent unless delivery succeeds
+
+Sender identity is explicit and verifiable
+
+No “worked once” behavior
+
+After Completing
+
+Report:
+
+The resolved sender email
+
+Active email provider
+
+Confirmation that failed sends no longer mark customerNotified=true

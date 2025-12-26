@@ -7,6 +7,8 @@ import { sendFollowupOrderEmail } from '../../utils/followupOrderEmail';
 import { sendOrderSignedConfirmation } from '../../utils/orderSignedConfirmation';
 import { calculatePriorityScore } from '../../utils/priorityScore';
 import { sendReminderForOverdueOrders } from '../../utils/followupOrderReminder';
+import { auditService } from '../services/auditService';
+import { authenticateToken } from '../../middleware/auth';
 import * as fs from 'fs';
 import * as path from 'path';
 import { nanoid } from 'nanoid';
@@ -836,6 +838,25 @@ router.post('/:id/sign', async (req, res) => {
       });
       
       console.log(`🎯 Order ${followupOrder.orderId} finalized and in production queue with signature (priority: ${priorityScore})`);
+      
+      // Log audit event for customer signature
+      try {
+        await auditService.logEvent({
+          entityType: 'p1_order',
+          entityId: followupOrder.orderId,
+          action: 'CUSTOMER_SIGNATURE',
+          reason: 'Customer signed order confirmation',
+          meta: {
+            signedAt: new Date().toISOString(),
+            movedToProduction: true,
+            signedPdfAvailable: true,
+          }
+        });
+        console.log(`📋 Audit event logged for customer signature on order ${followupOrder.orderId}`);
+      } catch (auditError) {
+        console.error('Failed to log audit event for signature:', auditError);
+        // Don't fail the signature process if audit fails
+      }
     } catch (finalizeError) {
       console.error('Error finalizing order:', finalizeError);
       throw new Error('Failed to finalize order after signature');
@@ -1219,6 +1240,73 @@ router.post('/test-reminder', async (req, res) => {
     console.error('Error running reminder check:', error);
     res.status(500).json({ 
       error: 'Failed to run reminder check',
+      details: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
+// GET /api/followup-orders/signed-pdf/:orderId - Download signed PDF for an order (requires authentication)
+router.get('/signed-pdf/:orderId', authenticateToken, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    // Find the followup order by orderId
+    const followupOrder = await storage.getFollowupOrderByOrderId(orderId);
+    
+    if (!followupOrder) {
+      return res.status(404).json({ error: 'No signature record found for this order' });
+    }
+    
+    if (!followupOrder.signatureSigned) {
+      return res.status(400).json({ error: 'Order has not been signed yet' });
+    }
+    
+    if (!followupOrder.signedPdfPath) {
+      return res.status(404).json({ error: 'Signed PDF file path not found' });
+    }
+    
+    if (!fs.existsSync(followupOrder.signedPdfPath)) {
+      return res.status(404).json({ error: 'Signed PDF file not found on disk' });
+    }
+    
+    // Send the signed PDF file
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="signed_order_${orderId}.pdf"`);
+    res.sendFile(path.resolve(followupOrder.signedPdfPath));
+  } catch (error) {
+    console.error('Error fetching signed PDF:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch signed PDF',
+      details: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
+// GET /api/followup-orders/signature-info/:orderId - Get signature info for an order (requires authentication)
+router.get('/signature-info/:orderId', authenticateToken, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    // Find the followup order by orderId
+    const followupOrder = await storage.getFollowupOrderByOrderId(orderId);
+    
+    if (!followupOrder) {
+      return res.json({ 
+        hasSignature: false,
+        orderId 
+      });
+    }
+    
+    res.json({
+      hasSignature: followupOrder.signatureSigned || false,
+      signedAt: followupOrder.signedAt,
+      signedPdfAvailable: !!(followupOrder.signedPdfPath && fs.existsSync(followupOrder.signedPdfPath)),
+      orderId
+    });
+  } catch (error) {
+    console.error('Error fetching signature info:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch signature info',
       details: error instanceof Error ? error.message : 'Unknown error' 
     });
   }

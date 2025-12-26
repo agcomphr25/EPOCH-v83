@@ -16,9 +16,13 @@ import {
   Package,
   Calendar,
   DollarSign,
+  Copy,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { useLocation } from 'wouter';
+import { duplicateOrder } from '@/lib/queryClient';
+import toast from 'react-hot-toast';
 
 interface SalesOrderModalProps {
   isOpen: boolean;
@@ -47,6 +51,22 @@ export function SalesOrderModal({
   orderId,
 }: SalesOrderModalProps) {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
+  const [, setLocation] = useLocation();
+
+  const handleDuplicate = async () => {
+    try {
+      setDuplicating(true);
+      const res = await duplicateOrder(orderId);
+      toast.success(`Duplicated → ${res.newOrderId}`);
+      onClose();
+      setLocation(`/order-entry?duplicate=${res.newOrderId}&editMode=true`);
+    } catch (error) {
+      toast.error('Failed to duplicate order');
+    } finally {
+      setDuplicating(false);
+    }
+  };
 
   // Fetch order data - we'll use the existing orders API
   const {
@@ -377,18 +397,34 @@ export function SalesOrderModal({
               <Button variant="outline" onClick={onClose}>
                 Close
               </Button>
-              <Button
-                onClick={handleDownloadPdf}
-                disabled={downloadingPdf}
-                className="flex items-center gap-2"
-              >
-                {downloadingPdf ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4" />
-                )}
-                Download PDF
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={handleDuplicate}
+                  disabled={duplicating}
+                  className="flex items-center gap-2"
+                  data-testid="button-duplicate-from-modal"
+                >
+                  {duplicating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                  Duplicate Order
+                </Button>
+                <Button
+                  onClick={handleDownloadPdf}
+                  disabled={downloadingPdf}
+                  className="flex items-center gap-2"
+                >
+                  {downloadingPdf ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  Download PDF
+                </Button>
+              </div>
             </div>
           </div>
         )}

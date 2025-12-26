@@ -144,6 +144,7 @@ export default function OrderEntry() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [isLoadingOrder, setIsLoadingOrder] = useState(false);
+  const [isDuplicateMode, setIsDuplicateMode] = useState(false);
 
   // Note: All feature data is now stored in the unified features object
   // Legacy separate state variables removed to prevent data consistency issues
@@ -816,6 +817,12 @@ export default function OrderEntry() {
     return urlParams.get('draft') || urlParams.get('edit');
   };
 
+  // Extract duplicate order ID from URL if duplicating an order
+  const getDuplicateOrderIdFromUrl = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('duplicate');
+  };
+
   // Track loading state to ensure proper order
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   // Force component re-render when loading existing order
@@ -840,6 +847,8 @@ export default function OrderEntry() {
     if (!initialDataLoaded) return;
 
     const editOrderId = getOrderIdFromUrl();
+    const duplicateOrderId = getDuplicateOrderIdFromUrl();
+    
     if (editOrderId) {
       // Only load existing order if we have model options
       if (modelOptions.length > 0) {
@@ -851,9 +860,19 @@ export default function OrderEntry() {
         );
         loadExistingOrder(editOrderId);
       }
+    } else if (duplicateOrderId) {
+      // Duplicate mode - load order data but create as new order
+      if (modelOptions.length > 0) {
+        console.log(
+          '🔁 Duplicating order with model options available:',
+          modelOptions.length
+        );
+        preloadDuplicateOrder(duplicateOrderId);
+      }
     } else {
       setIsEditMode(false);
       setEditingOrderId(null);
+      setIsDuplicateMode(false);
       generateOrderId(); // Generate order ID even without stock models
     }
   }, [initialDataLoaded, modelOptions.length]); // Wait for initial data, but don't block on model options
@@ -1088,6 +1107,129 @@ export default function OrderEntry() {
     features.bottom_metal,
     toast,
   ]);
+
+  // Preload order data for duplication (copies most fields but generates new ID)
+  const preloadDuplicateOrder = async (duplicateOrderId: string) => {
+    try {
+      console.log('Preloading order for duplication:', duplicateOrderId);
+      setIsLoadingOrder(true);
+      setIsDuplicateMode(true);
+
+      // Check URL params for editMode and clearSpecs
+      const urlParams = new URLSearchParams(window.location.search);
+      const shouldEnterEditMode = urlParams.get('editMode') === 'true';
+      const shouldClearSpecs = urlParams.get('clearSpecs') === 'true';
+
+      // Fetch the order to duplicate
+      const order = await apiRequest(`/api/orders/${duplicateOrderId}`);
+      
+      if (!order) {
+        throw new Error(`Order ${duplicateOrderId} not found`);
+      }
+
+      console.log('Order data for duplication:', order);
+
+      // Load customer data if available
+      if (order.customerId) {
+        try {
+          const customers = await apiRequest('/api/customers');
+          const customerData = customers.find(
+            (c: any) => c.id.toString() === order.customerId.toString()
+          );
+          if (customerData) {
+            setCustomer(customerData);
+          }
+        } catch (error) {
+          console.error('Failed to load customer for duplication:', error);
+        }
+      }
+
+      // Copy order data (but reset certain fields)
+      // If clearSpecs is true, don't copy model/features/notes
+      if (shouldClearSpecs) {
+        setModelId('');
+        setFeatures({});
+        setNotes('');
+        setMiscItems([]);
+      } else {
+        setModelId(order.modelId || '');
+        setFeatures(order.features || {});
+        setNotes(order.notes || '');
+        // Load miscellaneous items from features if present
+        const featuresObj = order.features || {};
+        if (featuresObj.miscItems && Array.isArray(featuresObj.miscItems)) {
+          setMiscItems(featuresObj.miscItems);
+        }
+      }
+
+      setOrderDate(new Date()); // Fresh order date
+      setDueDate(new Date(Date.now() + 98 * 24 * 60 * 60 * 1000)); // Fresh due date
+      setHasCustomerPO(!!order.customerPO);
+      setCustomerPO(order.customerPO || '');
+      setFbOrderNumber(order.fbOrderNumber || '');
+      setHasAGROrder(!!order.agrOrderDetails);
+      setAgrOrderDetails(order.agrOrderDetails || '');
+      setIsFlattop(order.isFlattop || false);
+      setFlattopPriceOverride(order.flattopPriceOverride || null);
+      setIsCustomOrder(order.isCustomOrder === 'yes');
+
+      // Reset fields that shouldn't carry over
+      setPriceOverride(null);
+      setShowPriceOverride(false);
+      setShipping(36.95);
+      setDiscountCode('');
+      setCustomDiscountValue(0);
+      setShowCustomDiscount(false);
+      setIsVerified(false);
+      setIsManualDueDate(false);
+      setIsManualOrderDate(false);
+
+      // Reset alt ship to
+      setHasAltShipTo(order.hasAltShipTo || false);
+      if (order.hasAltShipTo) {
+        setAltShipToName(order.altShipToName || '');
+        setAltShipToCompany(order.altShipToCompany || '');
+        setAltShipToEmail(order.altShipToEmail || '');
+        setAltShipToPhone(order.altShipToPhone || '');
+        setAltShipToAddress(order.altShipToAddress || {
+          street: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          country: 'United States',
+        });
+      }
+
+      // Generate new order ID for the duplicate
+      await generateOrderId();
+
+      // Enter edit mode if requested (shows save buttons immediately)
+      if (shouldEnterEditMode) {
+        setIsEditMode(true);
+        setEditingOrderId(null); // Ensure not updating original
+      }
+
+      const toastMessage = shouldClearSpecs 
+        ? `Order duplicated (specs cleared). Select new model and features.`
+        : `Order data copied from ${duplicateOrderId}. Review and submit as a new order.`;
+
+      toast({
+        title: 'Order Duplicated',
+        description: toastMessage,
+        duration: 5000,
+      });
+
+    } catch (error) {
+      console.error('Failed to preload order for duplication:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to load order ${duplicateOrderId} for duplication`,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingOrder(false);
+    }
+  };
 
   // Load existing order data for editing
   const loadExistingOrder = async (orderIdToEdit: string) => {

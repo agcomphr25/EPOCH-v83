@@ -82,12 +82,13 @@ import {
   AlertTriangle,
   Link as LinkIcon,
   Zap,
+  Copy,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import CustomerDetailsTooltip from '@/components/CustomerDetailsTooltip';
 import OrderSummaryTooltip from '@/components/OrderSummaryTooltip';
 import { BarcodeDisplay } from '@/components/BarcodeDisplay';
-import { queryClient, apiRequest } from '@/lib/queryClient';
+import { queryClient, apiRequest, duplicateOrder } from '@/lib/queryClient';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -96,7 +97,7 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { getDisplayOrderId } from '@/lib/orderUtils';
 import AuditDrawer from '@/components/AuditDrawer';
-import { History, Clock } from 'lucide-react';
+import { History, Clock, CopyPlus, Eraser } from 'lucide-react';
 import toast from 'react-hot-toast';
 import CommunicationCompose from '@/components/CommunicationCompose';
 import LinkOrdersDialog from '@/components/LinkOrdersDialog';
@@ -1098,7 +1099,7 @@ export default function OrdersList() {
 
     return (
       <div className="container mx-auto p-6">
-        <div className="mb-6">
+        <div className="sticky top-0 z-20 bg-background pb-4 mb-2 border-b">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -1348,6 +1349,18 @@ export default function OrdersList() {
                   {paginatedOrders.map((order) => (
                     <TableRow
                       key={`${order.id}-${order.orderId}`}
+                      interactive
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('button, a, [role="menu"], [role="menuitem"], input, select, [data-radix-collection-item]')) return;
+                        setLocation(`/order-entry?draft=${order.orderId}`);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !(e.target as HTMLElement).closest('button, a, [role="menu"], input, select')) {
+                          setLocation(`/order-entry?draft=${order.orderId}`);
+                        }
+                      }}
                       className={cn(
                         order.isCustomOrder === 'yes'
                           ? 'bg-pink-50 hover:bg-pink-100'
@@ -1684,6 +1697,62 @@ export default function OrdersList() {
                                 <LinkIcon className="mr-2 h-4 w-4" />
                                 Link Orders
                               </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  try {
+                                    const res = await duplicateOrder(order.orderId);
+                                    toast.success(`Duplicated → ${res.newOrderId}`);
+                                    setLocation(`/order-entry?duplicate=${res.newOrderId}&editMode=true`);
+                                  } catch (error) {
+                                    toast.error('Failed to duplicate order');
+                                  }
+                                }}
+                                data-testid={`button-duplicate-order-${order.orderId}`}
+                              >
+                                <Copy className="mr-2 h-4 w-4" />
+                                Duplicate Order
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  const countStr = prompt('How many duplicates? (enter number 1-50)');
+                                  if (!countStr) return;
+                                  const count = parseInt(countStr, 10);
+                                  if (isNaN(count) || count < 1 || count > 50) {
+                                    toast.error('Please enter a number between 1 and 50');
+                                    return;
+                                  }
+                                  try {
+                                    const res = await duplicateOrder(order.orderId, { count });
+                                    if (res.created) {
+                                      toast.success(`${res.created.length} duplicates created`);
+                                    } else {
+                                      toast.success(`Duplicated → ${res.newOrderId}`);
+                                    }
+                                    setLocation('/orders');
+                                  } catch (error) {
+                                    toast.error('Failed to duplicate orders');
+                                  }
+                                }}
+                                data-testid={`button-duplicate-xn-${order.orderId}`}
+                              >
+                                <CopyPlus className="mr-2 h-4 w-4" />
+                                Duplicate xN
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  try {
+                                    const res = await duplicateOrder(order.orderId);
+                                    toast.success(`Duplicated (Specs Cleared) → ${res.newOrderId}`);
+                                    setLocation(`/order-entry?duplicate=${res.newOrderId}&clearSpecs=true&editMode=true`);
+                                  } catch (error) {
+                                    toast.error('Failed to duplicate order');
+                                  }
+                                }}
+                                data-testid={`button-duplicate-clear-specs-${order.orderId}`}
+                              >
+                                <Eraser className="mr-2 h-4 w-4" />
+                                Duplicate (Clear Specs)
+                              </DropdownMenuItem>
                               {(order.urgency === 'high' || order.urgency === 'critical') ? (
                                 <DropdownMenuItem
                                   onClick={() =>
@@ -1755,6 +1824,28 @@ export default function OrdersList() {
                               >
                                 <Clock className="mr-2 h-4 w-4" />
                                 View Timeline
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  try {
+                                    // First check if signed PDF is available
+                                    const response = await fetch(`/api/followup-orders/signature-info/${order.orderId}`);
+                                    const data = await response.json();
+                                    if (data.hasSignature && data.signedPdfAvailable) {
+                                      window.open(`/api/followup-orders/signed-pdf/${order.orderId}`, '_blank');
+                                    } else if (data.hasSignature) {
+                                      toast.error('Signed PDF file not found on server');
+                                    } else {
+                                      toast.error('Order has not been signed by customer yet');
+                                    }
+                                  } catch (error) {
+                                    toast.error('Failed to check signature status');
+                                  }
+                                }}
+                                data-testid={`button-view-signed-pdf-${order.orderId}`}
+                              >
+                                <FileText className="mr-2 h-4 w-4" />
+                                View Signed Confirmation
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>

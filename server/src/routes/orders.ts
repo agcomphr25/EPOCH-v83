@@ -877,6 +877,8 @@ router.post('/duplicate/:orderId', async (req: Request, res: Response) => {
         isVerified: original.isVerified ?? false,
         qdSameSideConfirmed: original.qdSameSideConfirmed ?? false,
         isCustomOrder: original.isCustomOrder as 'yes' | 'no' | null,
+        features: original.features as Record<string, any> | null,
+        featureQuantities: original.featureQuantities as Record<string, any> | null,
         isPaid: false,
         paymentAmount: null,
         paymentType: null,

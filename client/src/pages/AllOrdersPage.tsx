@@ -803,6 +803,17 @@ export default function AllOrdersPage() {
                 <TableRow
                   key={order.orderId}
                   interactive
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    if ((e.target as HTMLElement).closest('button, a, [role="menu"], [role="menuitem"], input, select, [data-radix-collection-item]')) return;
+                    setLocation(`/order-entry?draft=${order.orderId}`);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !(e.target as HTMLElement).closest('button, a, [role="menu"], input, select')) {
+                      setLocation(`/order-entry?draft=${order.orderId}`);
+                    }
+                  }}
                   className={cn(
                     order.isVerified ? 'bg-green-50 dark:bg-green-950' : ''
                   )}

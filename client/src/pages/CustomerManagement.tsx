@@ -1775,6 +1775,17 @@ export default function CustomerManagement() {
                     <TableRow 
                       key={customer.id}
                       interactive
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('button, a, [role="menu"], [role="menuitem"], input, select, [data-radix-collection-item]')) return;
+                        handleEditCustomer(customer);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !(e.target as HTMLElement).closest('button, a, [role="menu"], input, select')) {
+                          handleEditCustomer(customer);
+                        }
+                      }}
                     >
                       <TableCell>
                         <div className="font-medium">{customer.name}</div>

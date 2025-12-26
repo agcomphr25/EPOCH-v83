@@ -678,6 +678,17 @@ export default function AllOrdersList() {
                   <TableRow
                     key={order.orderId}
                     interactive
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest('button, a, [role="menu"], [role="menuitem"], input, select, [data-radix-collection-item]')) return;
+                      setLocation(`/order-entry?draft=${order.orderId}`);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !(e.target as HTMLElement).closest('button, a, [role="menu"], input, select')) {
+                        setLocation(`/order-entry?draft=${order.orderId}`);
+                      }
+                    }}
                     className={rowClassName}
                     style={
                       order.isVerified

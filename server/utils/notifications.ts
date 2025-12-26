@@ -81,18 +81,34 @@ export async function sendCustomerNotification(
   const email = data.customerEmail || customer.email;
   const phone = data.customerPhone || customer.phone;
 
+  // Check if Twilio is configured
+  const allowSms = Boolean(process.env.TWILIO_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_NUMBER);
+  const prefersSms = preferredMethods.includes('sms');
+  const prefersEmail = preferredMethods.includes('email');
+
   console.log('📬 Notification config:', {
     orderId: data.orderId,
     preferredMethods,
+    prefersEmail,
+    prefersSms,
     hasEmail: !!email,
     hasPhone: !!phone,
+    allowSms,
   });
 
   // Track successful sends - only update DB after confirmed success
-  const successfulMethods: string[] = [];
+  let notificationSucceeded = false;
+  const succeededMethods: string[] = [];
 
-  // Send email notification if preferred and email available
-  if (preferredMethods.includes('email') && email) {
+  // Determine if we need email fallback (SMS preferred but Twilio not configured)
+  const needsEmailFallback = prefersSms && !prefersEmail && !allowSms && email;
+  if (needsEmailFallback) {
+    console.log('[NOTIFY] SMS preferred but Twilio missing → fallback to email');
+  }
+
+  // --- EMAIL PATH ---
+  // Send email if: customer prefers email OR we need fallback from SMS
+  if ((prefersEmail || needsEmailFallback) && email) {
     console.log('[TRACKING NOTIFY] Preparing email for:', email, 'Order:', data.orderId);
     console.log('[TRACKING NOTIFY] Email payload:', {
       email,
@@ -101,6 +117,7 @@ export async function sendCustomerNotification(
       carrier: data.carrier,
       estimatedDelivery: data.estimatedDelivery,
       customerId: customer?.id?.toString(),
+      reason: needsEmailFallback ? 'SMS fallback' : 'customer preference',
     });
     try {
       console.log('📧 Attempting email notification to:', email);
@@ -114,58 +131,74 @@ export async function sendCustomerNotification(
         },
         customer?.id.toString()
       );
-      successfulMethods.push('email');
-      console.log('[TRACKING NOTIFY] Email sent successfully');
+      succeededMethods.push('email');
+      notificationSucceeded = true;
+      console.log('[NOTIFY] Email succeeded');
       console.log('✅ Email notification succeeded');
     } catch (error: any) {
-      console.error('[TRACKING ERROR] Full error:', error);
+      console.error('[NOTIFY-EMAIL-FAIL]', error);
       console.error('[TRACKING ERROR RAW]', error?.response?.body || error?.message || error);
       const errorMsg = `Email failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
       results.errors.push(errorMsg);
       console.error('❌ Email notification failed:', error);
     }
-  } else {
-    console.log('[TRACKING NOTIFY] Email skipped - preferredMethods:', preferredMethods, 'hasEmail:', !!email);
+  } else if (!prefersEmail && !needsEmailFallback) {
+    console.log('[NOTIFY] Email skipped - not in customer preferences');
+  } else if (!email) {
+    console.log('[NOTIFY] Email skipped - no email address available');
   }
 
-  // Send SMS notification if preferred and phone available
-  if (preferredMethods.includes('sms') && phone) {
-    try {
-      console.log('📱 Attempting SMS notification to:', phone);
-      await sendSMSNotification(
-        {
-          phone,
-          orderId: data.orderId,
-          trackingNumber: data.trackingNumber,
-          carrier: data.carrier,
-          estimatedDelivery: data.estimatedDelivery,
-        },
-        customer?.id.toString()
-      );
-      successfulMethods.push('sms');
-      console.log('✅ SMS notification succeeded');
-    } catch (error) {
-      const errorMsg = `SMS failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      results.errors.push(errorMsg);
-      console.error('❌ SMS notification failed:', error);
+  // --- SMS PATH ---
+  if (prefersSms && phone) {
+    if (!allowSms) {
+      console.log('[NOTIFY] SMS preferred but Twilio credentials missing → skipping SMS');
+      // Don't add to errors if we already have email fallback success
+      if (!notificationSucceeded) {
+        results.errors.push('SMS preferred but Twilio not configured');
+      }
+    } else {
+      try {
+        console.log('📱 Attempting SMS notification to:', phone);
+        await sendSMSNotification(
+          {
+            phone,
+            orderId: data.orderId,
+            trackingNumber: data.trackingNumber,
+            carrier: data.carrier,
+            estimatedDelivery: data.estimatedDelivery,
+          },
+          customer?.id.toString()
+        );
+        succeededMethods.push('sms');
+        notificationSucceeded = true;
+        console.log('[NOTIFY] SMS succeeded');
+        console.log('✅ SMS notification succeeded');
+      } catch (error) {
+        console.error('[NOTIFY-SMS-FAIL]', error);
+        const errorMsg = `SMS failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        results.errors.push(errorMsg);
+        console.error('❌ SMS notification failed:', error);
+      }
     }
+  } else if (prefersSms && !phone) {
+    console.log('[NOTIFY] SMS skipped - no phone number available');
   }
 
   // CRITICAL: Only update order notification status if at least one method succeeded
   // This ensures failed sends do NOT mark the order as notified, allowing retries
-  if (successfulMethods.length > 0) {
-    console.log('📬 Updating order notification status - methods succeeded:', successfulMethods);
+  if (notificationSucceeded && succeededMethods.length > 0) {
+    console.log('📬 Updating order notification status - methods succeeded:', succeededMethods);
     await db
       .update(allOrders)
       .set({
         customerNotified: true,
-        notificationMethod: successfulMethods.join(', '),
+        notificationMethod: succeededMethods.join(', '),
         notificationSentAt: new Date(),
       })
       .where(eq(allOrders.orderId, data.orderId));
 
     results.success = true;
-    results.methods = successfulMethods;
+    results.methods = succeededMethods;
     console.log('✅ Notification complete for order:', data.orderId);
   } else {
     // All methods failed - do NOT update customerNotified

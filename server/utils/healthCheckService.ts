@@ -27,6 +27,7 @@ const builtInChecks: Record<string, CheckFunction> = {
   signature_email: checkSignatureEmail,
   duplicate_orders: checkDuplicateOrders,
   twilio_sms: checkTwilioSMS,
+  tracking_notification_pipeline: checkTrackingNotificationPipeline,
 };
 
 async function checkDatabaseConnection(): Promise<HealthCheckResponse> {
@@ -270,6 +271,172 @@ async function checkTwilioSMS(checkType: HealthCheckType): Promise<HealthCheckRe
   }
 }
 
+async function checkTrackingNotificationPipeline(checkType: HealthCheckType): Promise<HealthCheckResponse> {
+  const startTime = Date.now();
+  const testEmail = checkType.testEmailAddress;
+  
+  // Track results
+  let emailSuccess = false;
+  let emailError: string | null = null;
+  let emailMessageId: string | null = null;
+  let smsSuccess = false;
+  let smsError: string | null = null;
+  let smsMessageId: string | null = null;
+  let smsConfigured = false;
+  
+  // Get sender info
+  const emailSender = process.env.SENDGRID_FROM_EMAIL || 'NOT_CONFIGURED';
+  const timestamp = new Date().toISOString();
+  
+  console.log('[TRACKING PIPELINE CHECK] Starting notification pipeline health check');
+  console.log('[TRACKING PIPELINE CHECK] Test email:', testEmail || 'NOT_CONFIGURED');
+  console.log('[TRACKING PIPELINE CHECK] Email sender:', emailSender);
+  
+  // 1. Test Email (Required)
+  if (!testEmail) {
+    return {
+      status: 'skipped',
+      message: 'No test email address configured. Set it in the check settings.',
+      details: {
+        emailSender,
+        smsConfigured: false,
+        lastTestTimestamp: timestamp,
+      },
+      executionTimeMs: Date.now() - startTime,
+    };
+  }
+  
+  try {
+    console.log('[TRACKING PIPELINE CHECK] Testing email delivery...');
+    const result = await sendEmailViaSendGrid({
+      to: testEmail,
+      subject: `[Tracking Pipeline Check] Test Notification - ${new Date().toLocaleString()}`,
+      text: `This is a tracking notification pipeline test.\n\nTimestamp: ${timestamp}\nSender: ${emailSender}\n\nIf you received this email, the tracking notification email path is working.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2 style="color: #28a745;">🔔 Tracking Notification Pipeline Test</h2>
+          <p>This is a tracking notification pipeline health check.</p>
+          <table style="margin: 20px 0;">
+            <tr><td><strong>Timestamp:</strong></td><td>${timestamp}</td></tr>
+            <tr><td><strong>Sender:</strong></td><td>${emailSender}</td></tr>
+          </table>
+          <p>If you received this email, the tracking notification email path is working correctly.</p>
+          <hr style="margin: 20px 0;">
+          <p style="color: #666; font-size: 12px;">AG Composites - Tracking Pipeline Health Check</p>
+        </div>
+      `,
+    });
+    
+    if (result.success) {
+      emailSuccess = true;
+      emailMessageId = result.messageId || null;
+      console.log('[TRACKING PIPELINE CHECK] ✅ Email sent successfully, messageId:', emailMessageId);
+    } else {
+      emailError = result.error || 'Unknown email error';
+      console.error('[TRACKING PIPELINE CHECK] ❌ Email failed:', emailError);
+    }
+  } catch (error) {
+    emailError = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[TRACKING PIPELINE CHECK] ❌ Email exception:', emailError);
+  }
+  
+  // 2. Test SMS (Optional - only if Twilio configured)
+  const accountSid = process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_NUMBER || process.env.TWILIO_PHONE_NUMBER;
+  
+  smsConfigured = !!(accountSid && authToken && fromNumber);
+  console.log('[TRACKING PIPELINE CHECK] SMS configured:', smsConfigured);
+  
+  if (smsConfigured) {
+    // Get test phone from check type or global config
+    let testPhone = checkType.testSmsPhone;
+    if (!testPhone) {
+      const config = await getHealthCheckConfig();
+      testPhone = config?.testSmsPhone || null;
+    }
+    
+    if (testPhone) {
+      try {
+        console.log('[TRACKING PIPELINE CHECK] Testing SMS delivery to:', testPhone);
+        const twilio = await import('twilio');
+        const twilioClient = twilio.default(accountSid, authToken);
+        
+        const config = await getHealthCheckConfig();
+        const timezone = config?.timezone || 'America/Chicago';
+        const now = new Date();
+        
+        const message = await twilioClient.messages.create({
+          body: `[AG Composites] Tracking pipeline test - ${now.toLocaleString('en-US', { timeZone: timezone })}`,
+          from: fromNumber,
+          to: testPhone,
+        });
+        
+        smsSuccess = true;
+        smsMessageId = message.sid;
+        console.log('[TRACKING PIPELINE CHECK] ✅ SMS sent successfully, sid:', smsMessageId);
+      } catch (error) {
+        smsError = error instanceof Error ? error.message : 'Unknown SMS error';
+        console.error('[TRACKING PIPELINE CHECK] ❌ SMS failed:', smsError);
+      }
+    } else {
+      console.log('[TRACKING PIPELINE CHECK] SMS skipped - no test phone configured');
+    }
+  }
+  
+  // 3. Determine final status
+  const details = {
+    emailSender,
+    emailSuccess,
+    emailMessageId,
+    emailError,
+    smsConfigured,
+    smsSuccess,
+    smsMessageId,
+    smsError,
+    lastTestTimestamp: timestamp,
+  };
+  
+  if (!emailSuccess) {
+    // 🔴 Email failed - critical failure
+    return {
+      status: 'fail',
+      message: `Email notification failed: ${emailError}. No tracking notifications can be delivered.`,
+      details,
+      executionTimeMs: Date.now() - startTime,
+    };
+  }
+  
+  if (smsConfigured && !smsSuccess) {
+    // 🟡 Email works, SMS configured but failed
+    return {
+      status: 'warning',
+      message: `Email working (${emailSender}), but SMS failed: ${smsError}`,
+      details,
+      executionTimeMs: Date.now() - startTime,
+    };
+  }
+  
+  if (emailSuccess && (!smsConfigured || smsSuccess)) {
+    // 🟢 Fully working
+    const smsStatus = smsConfigured ? 'SMS working' : 'SMS not configured';
+    return {
+      status: 'pass',
+      message: `Tracking notifications operational. Email: ✓ (${emailSender}), ${smsStatus}`,
+      details,
+      executionTimeMs: Date.now() - startTime,
+    };
+  }
+  
+  // Fallback
+  return {
+    status: 'warning',
+    message: 'Tracking notification pipeline check completed with mixed results',
+    details,
+    executionTimeMs: Date.now() - startTime,
+  };
+}
+
 export async function runHealthCheck(checkType: HealthCheckType, runType: 'manual' | 'scheduled', batchId: string): Promise<HealthCheckResult> {
   let response: HealthCheckResponse;
 
@@ -467,6 +634,29 @@ export async function ensureSmsHealthCheckExists(): Promise<void> {
     sortOrder: 5,
   });
   console.log('✅ Added Twilio SMS health check type');
+}
+
+export async function ensureTrackingPipelineHealthCheckExists(): Promise<void> {
+  const existing = await db
+    .select()
+    .from(healthCheckTypes)
+    .where(eq(healthCheckTypes.name, 'tracking_notification_pipeline'))
+    .limit(1);
+  
+  if (existing.length > 0) {
+    return;
+  }
+
+  await db.insert(healthCheckTypes).values({
+    name: 'tracking_notification_pipeline',
+    displayName: 'Tracking Notification Pipeline',
+    description: 'Tests the complete tracking notification delivery path (email + optional SMS). Shows 🟢 if email works, 🟡 if email works but SMS fails, 🔴 if email fails.',
+    category: 'notifications',
+    isBuiltIn: true,
+    isEnabled: true,
+    sortOrder: 6,
+  });
+  console.log('✅ Added Tracking Notification Pipeline health check type');
 }
 
 export async function getHealthCheckConfig() {

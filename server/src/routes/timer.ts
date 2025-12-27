@@ -64,4 +64,61 @@ router.post("/stop/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
+/*
+  POST /api/timer/run-complete
+  Receives completion data from external Timer app
+  Body:
+  {
+    sku: string,
+    instanceName: string,
+    startedAt: string,      // ISO timestamp
+    finishedAt: string,     // ISO timestamp
+    totalMs: number
+  }
+*/
+router.post("/run-complete", async (req, res) => {
+  try {
+    const { sku, instanceName, startedAt, finishedAt, totalMs } = req.body;
+
+    if (!sku || !startedAt || !finishedAt) {
+      return res.status(400).json({ error: "sku, startedAt, finishedAt required" });
+    }
+
+    // Find the matching run by SKU and update with completion data
+    const [existingRun] = await db.select().from(programRuns).where(eq(programRuns.sku, sku));
+    
+    if (existingRun) {
+      await db.update(programRuns)
+        .set({
+          status: "completed",
+          completedAt: new Date(finishedAt),
+          startedAt: new Date(startedAt),
+          instanceName: instanceName || existingRun.instanceName,
+          notes: `Total duration: ${totalMs}ms`
+        })
+        .where(eq(programRuns.sku, sku));
+      
+      return res.json({ status: "PROGRAM RUN UPDATED" });
+    } else {
+      // Create a new completed run record if none exists
+      await db.insert(programRuns).values({
+        programId: null,
+        programName: "External Timer",
+        steps: [],
+        instanceName: instanceName || "Unknown",
+        sku,
+        status: "completed",
+        startedAt: new Date(startedAt),
+        completedAt: new Date(finishedAt),
+        notes: `Total duration: ${totalMs}ms`
+      });
+      
+      return res.json({ status: "PROGRAM RUN CREATED" });
+    }
+  } catch (err) {
+    console.error("Timer run-complete error:", err);
+    return res.status(500).json({ error: "failed to update program run" });
+  }
+});
+
 export default router;

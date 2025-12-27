@@ -9382,7 +9382,7 @@ export type InsertProgram = typeof programs.$inferInsert;
 // Timer Program Runs - Active instances of running programs
 export const programRuns = pgTable('program_runs', {
   id: uuid('id').defaultRandom().primaryKey(),
-  programId: uuid('program_id').notNull().references(() => programs.id),
+  programId: uuid('program_id').references(() => programs.id), // Nullable for external timer entries
   programName: text('program_name').notNull(),
   steps: jsonb('steps').notNull().default([]),
   currentStepIndex: integer('current_step_index').default(0).notNull(),

@@ -101,6 +101,7 @@ import voiceNotesRoutes from './voiceNotes';
 import patternSignalsRoutes from './patternSignals';
 import signPdfRoutes from './signPdf';
 import signatureWorkflowRoutes from './signatureWorkflow';
+import timerRoutes from './timer';
 import { registerProcessRunnerRoutes } from './processRunner';
 import { registerTimeClockRoutes } from './timeClock';
 import { registerOutreachEngineRoutes } from './outreachEngine';
@@ -259,6 +260,7 @@ export function registerRoutes(app: Express): Server {
   
   // Signature workflow routes - multi-signer document routing
   app.use('/api/signature-workflow', signatureWorkflowRoutes);
+  app.use('/api/timer', timerRoutes);
   
   // Object storage routes - cloud file uploads
   registerObjectStorageRoutes(app);

@@ -574,6 +574,12 @@ export default function Navigation() {
       icon: Wrench,
       description: 'Preventive maintenance schedules',
     },
+    {
+      path: '/timer/station',
+      label: 'Timer Station',
+      icon: Clock,
+      description: 'Step-based timing programs for production processes',
+    },
   ];
 
   const trainingItems = [

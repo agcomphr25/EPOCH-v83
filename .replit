@@ -66,10 +66,10 @@ DEV_AUTH_BYPASS = "true"
 FEATURE_WEBSITE_IMPORT = "true"
 VITE_FEATURE_WEBSITE_IMPORT = "true"
 PROTEUS_KEY_TIMECLOCK = "test-timeclock-key"
-VITE_TIMER_APP_URL = "https://time-keeper-glenn51.replit.app"
+VITE_TIMER_APP_URL = "https://time-keeper--glenn51.replit.app"
 
 [userenv.production]
-VITE_TIMER_APP_URL = "https://time-keeper-glenn51.replit.app"
+VITE_TIMER_APP_URL = "https://time-keeper--glenn51.replit.app"
 
 [agent]
 expertMode = true

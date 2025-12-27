@@ -69,7 +69,7 @@ PROTEUS_KEY_TIMECLOCK = "test-timeclock-key"
 VITE_TIMER_APP_URL = "http://localhost:5173"
 
 [userenv.production]
-VITE_TIMER_APP_URL = "https://timer.time-keeper--glenn51.replit.app"
+VITE_TIMER_APP_URL = "https://time-keeper--glenn51.replit.app"
 
 [agent]
 expertMode = true

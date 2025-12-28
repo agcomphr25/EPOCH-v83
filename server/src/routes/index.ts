@@ -90,6 +90,7 @@ import pdfSettingsRoutes from './pdfSettings';
 import p2LayupSchedulesRoutes from './p2LayupSchedules';
 import preproductionChecklistsRoutes from './preproductionChecklists';
 import healthChecksRoutes from './healthChecks';
+import monitoredLinksRoutes from './monitoredLinks';
 import projectsRoutes from './projects';
 import projectStepAttachmentsRoutes from './projectStepAttachments';
 import modelAnalyticsRoutes from './modelAnalytics';
@@ -370,6 +371,9 @@ export function registerRoutes(app: Express): Server {
 
   // Health Checks routes
   app.use('/api/health-checks', healthChecksRoutes);
+
+  // Monitored Links routes (for link health checks)
+  app.use('/api/monitored-links', monitoredLinksRoutes);
 
   // Reports routes
   app.use('/api/reports', reportsRoutes);

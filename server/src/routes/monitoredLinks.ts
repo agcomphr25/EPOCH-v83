@@ -95,4 +95,154 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+router.post('/:id/check', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [link] = await db.select().from(monitoredLinks).where(eq(monitoredLinks.id, parseInt(id)));
+    
+    if (!link) {
+      return res.status(404).json({ message: 'Link not found' });
+    }
+    
+    const startTime = Date.now();
+    let status: number | null = null;
+    let checkResult = 'unknown';
+    
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      
+      const response = await fetch(link.url, { 
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'EPOCH-Link-Health-Checker/1.0'
+        }
+      });
+      
+      clearTimeout(timeout);
+      status = response.status;
+      
+      if (status === link.expectedStatus) {
+        checkResult = 'healthy';
+      } else if (status === 404) {
+        checkResult = '404_not_found';
+      } else if (status >= 500) {
+        checkResult = 'server_error';
+      } else if (status >= 400) {
+        checkResult = 'client_error';
+      } else {
+        checkResult = 'unexpected_status';
+      }
+    } catch (fetchError: any) {
+      if (fetchError.name === 'AbortError') {
+        checkResult = 'timeout';
+      } else {
+        checkResult = 'connection_error';
+      }
+    }
+    
+    const responseTime = Date.now() - startTime;
+    const consecutiveFailures = checkResult === 'healthy' ? 0 : (link.consecutiveFailures || 0) + 1;
+    
+    const [updatedLink] = await db.update(monitoredLinks)
+      .set({
+        lastCheckedAt: new Date(),
+        lastStatus: status,
+        lastCheckResult: checkResult,
+        consecutiveFailures,
+        updatedAt: new Date()
+      })
+      .where(eq(monitoredLinks.id, parseInt(id)))
+      .returning();
+    
+    res.json({
+      ...updatedLink,
+      responseTime,
+      checkResult
+    });
+  } catch (error) {
+    console.error('Error checking monitored link:', error);
+    res.status(500).json({ message: 'Failed to check monitored link' });
+  }
+});
+
+router.post('/check-all', async (req, res) => {
+  try {
+    const enabledLinks = await db.select().from(monitoredLinks).where(eq(monitoredLinks.isEnabled, true));
+    
+    const results = await Promise.all(enabledLinks.map(async (link) => {
+      const startTime = Date.now();
+      let status: number | null = null;
+      let checkResult = 'unknown';
+      
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        
+        const response = await fetch(link.url, { 
+          method: 'GET',
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'EPOCH-Link-Health-Checker/1.0'
+          }
+        });
+        
+        clearTimeout(timeout);
+        status = response.status;
+        
+        if (status === link.expectedStatus) {
+          checkResult = 'healthy';
+        } else if (status === 404) {
+          checkResult = '404_not_found';
+        } else if (status >= 500) {
+          checkResult = 'server_error';
+        } else if (status >= 400) {
+          checkResult = 'client_error';
+        } else {
+          checkResult = 'unexpected_status';
+        }
+      } catch (fetchError: any) {
+        if (fetchError.name === 'AbortError') {
+          checkResult = 'timeout';
+        } else {
+          checkResult = 'connection_error';
+        }
+      }
+      
+      const responseTime = Date.now() - startTime;
+      const consecutiveFailures = checkResult === 'healthy' ? 0 : (link.consecutiveFailures || 0) + 1;
+      
+      const [updatedLink] = await db.update(monitoredLinks)
+        .set({
+          lastCheckedAt: new Date(),
+          lastStatus: status,
+          lastCheckResult: checkResult,
+          consecutiveFailures,
+          updatedAt: new Date()
+        })
+        .where(eq(monitoredLinks.id, link.id))
+        .returning();
+      
+      return {
+        ...updatedLink,
+        responseTime
+      };
+    }));
+    
+    const healthy = results.filter(r => r.lastCheckResult === 'healthy').length;
+    const unhealthy = results.length - healthy;
+    
+    res.json({
+      checked: results.length,
+      healthy,
+      unhealthy,
+      results
+    });
+  } catch (error) {
+    console.error('Error checking all monitored links:', error);
+    res.status(500).json({ message: 'Failed to check all monitored links' });
+  }
+});
+
 export default router;

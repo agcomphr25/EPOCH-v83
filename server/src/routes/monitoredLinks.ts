@@ -95,6 +95,14 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+function getFullUrl(link: { url: string; linkType: string }): string {
+  if (link.linkType === 'internal' && link.url.startsWith('/')) {
+    const port = process.env.PORT || 5000;
+    return `http://localhost:${port}${link.url}`;
+  }
+  return link.url;
+}
+
 router.post('/:id/check', async (req, res) => {
   try {
     const { id } = req.params;
@@ -107,12 +115,13 @@ router.post('/:id/check', async (req, res) => {
     const startTime = Date.now();
     let status: number | null = null;
     let checkResult = 'unknown';
+    const fullUrl = getFullUrl(link);
     
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000);
       
-      const response = await fetch(link.url, { 
+      const response = await fetch(fullUrl, { 
         method: 'GET',
         signal: controller.signal,
         headers: {
@@ -175,12 +184,13 @@ router.post('/check-all', async (req, res) => {
       const startTime = Date.now();
       let status: number | null = null;
       let checkResult = 'unknown';
+      const fullUrl = getFullUrl(link);
       
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
         
-        const response = await fetch(link.url, { 
+        const response = await fetch(fullUrl, { 
           method: 'GET',
           signal: controller.signal,
           headers: {

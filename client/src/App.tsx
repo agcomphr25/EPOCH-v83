@@ -155,6 +155,7 @@ import SimplifiedLayupScheduler from './components/SimplifiedLayupScheduler';
 import CustomerSatisfaction from './pages/CustomerSatisfaction';
 import AdminPanelPage from './pages/AdminPanelPage';
 import SystemHealthChecksPage from './pages/SystemHealthChecksPage';
+import MonitoredLinksManager from './pages/MonitoredLinksManager';
 import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
 import PDFTemplateManager from './pages/PDFTemplateManager';
@@ -356,6 +357,7 @@ function App() {
                   {/* Admin Panel Routes */}
                   <Route path="/admin/orders" component={AdminPanelPage} />
                   <Route path="/admin/health-checks" component={SystemHealthChecksPage} />
+                  <Route path="/admin/monitored-links" component={MonitoredLinksManager} />
                   <Route path="/audit-settings" component={AuditSettings} />
                   <Route path="/order-timeline/:entityType/:entityId" component={OrderTimeline} />
                   <Route path="/media-library" component={MediaLibrary} />

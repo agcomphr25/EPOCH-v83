@@ -52,8 +52,10 @@ import {
   History,
   MessageSquare,
   Globe,
+  Link2,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { Link } from 'wouter';
 
 interface HealthCheckType {
   id: number;
@@ -116,6 +118,7 @@ const categoryIcons: Record<string, JSX.Element> = {
   system: <Activity className="h-4 w-4" />,
   custom: <FileCheck className="h-4 w-4" />,
   sms: <MessageSquare className="h-4 w-4" />,
+  link: <Link2 className="h-4 w-4" />,
 };
 
 export default function SystemHealthChecksPage() {
@@ -500,6 +503,17 @@ export default function SystemHealthChecksPage() {
                           <span className="text-sm text-muted-foreground">
                             Uses phone from Schedule settings
                           </span>
+                        ) : check.name === 'link_health' ? (
+                          <Link href="/admin/monitored-links">
+                            <Button
+                              variant="link"
+                              className="p-0 h-auto text-blue-600 hover:text-blue-800"
+                              data-testid="button-manage-links"
+                            >
+                              <Link2 className="h-3 w-3 mr-1" />
+                              Manage Links
+                            </Button>
+                          </Link>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

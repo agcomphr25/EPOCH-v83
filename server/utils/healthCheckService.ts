@@ -4,9 +4,11 @@ import {
   healthCheckResults, 
   healthCheckConfig,
   allOrders,
+  monitoredLinks,
   type HealthCheckType,
   type HealthCheckResult,
-  type InsertHealthCheckResult
+  type InsertHealthCheckResult,
+  type MonitoredLink
 } from '../schema';
 import { eq, sql, desc } from 'drizzle-orm';
 import { sendEmailViaSendGrid } from './sendgrid';
@@ -28,6 +30,7 @@ const builtInChecks: Record<string, CheckFunction> = {
   duplicate_orders: checkDuplicateOrders,
   twilio_sms: checkTwilioSMS,
   tracking_notification_pipeline: checkTrackingNotificationPipeline,
+  link_health: checkLinkHealth,
 };
 
 async function checkDatabaseConnection(): Promise<HealthCheckResponse> {
@@ -435,6 +438,150 @@ async function checkTrackingNotificationPipeline(checkType: HealthCheckType): Pr
     details,
     executionTimeMs: Date.now() - startTime,
   };
+}
+
+async function checkLinkHealth(): Promise<HealthCheckResponse> {
+  const startTime = Date.now();
+  
+  try {
+    // Get all enabled monitored links
+    const links = await db.select().from(monitoredLinks).where(eq(monitoredLinks.isEnabled, true));
+    
+    if (links.length === 0) {
+      return {
+        status: 'skipped',
+        message: 'No monitored links configured. Add links in the Link Health settings.',
+        details: { linksChecked: 0 },
+        executionTimeMs: Date.now() - startTime,
+      };
+    }
+    
+    const results: Array<{
+      name: string;
+      url: string;
+      status: number | null;
+      result: 'pass' | 'fail' | 'warning';
+      error?: string;
+      responseTimeMs: number;
+    }> = [];
+    
+    let passCount = 0;
+    let failCount = 0;
+    let warningCount = 0;
+    
+    // Check each link
+    for (const link of links) {
+      const linkStartTime = Date.now();
+      let status: number | null = null;
+      let result: 'pass' | 'fail' | 'warning' = 'pass';
+      let error: string | undefined;
+      
+      try {
+        // Use HEAD request first (faster), fall back to GET if needed
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const response = await fetch(link.url, {
+          method: 'HEAD',
+          signal: controller.signal,
+          redirect: 'follow',
+        });
+        
+        clearTimeout(timeout);
+        status = response.status;
+        
+        // Check if status matches expected
+        const expectedStatus = link.expectedStatus || 200;
+        if (status === expectedStatus) {
+          result = 'pass';
+          passCount++;
+        } else if (status === 404) {
+          result = 'fail';
+          failCount++;
+          error = `Got 404 Not Found (expected ${expectedStatus})`;
+        } else if (status >= 400) {
+          result = 'fail';
+          failCount++;
+          error = `Got ${status} error (expected ${expectedStatus})`;
+        } else {
+          result = 'warning';
+          warningCount++;
+          error = `Got ${status} (expected ${expectedStatus})`;
+        }
+      } catch (err) {
+        result = 'fail';
+        failCount++;
+        if (err instanceof Error) {
+          if (err.name === 'AbortError') {
+            error = 'Request timed out after 10 seconds';
+          } else {
+            error = err.message;
+          }
+        } else {
+          error = 'Unknown error';
+        }
+      }
+      
+      const responseTimeMs = Date.now() - linkStartTime;
+      
+      results.push({
+        name: link.name,
+        url: link.url,
+        status,
+        result,
+        error,
+        responseTimeMs,
+      });
+      
+      // Update the link with latest check results
+      await db.update(monitoredLinks)
+        .set({
+          lastCheckedAt: new Date(),
+          lastStatus: status,
+          lastCheckResult: result,
+          consecutiveFailures: result === 'fail' 
+            ? (link.consecutiveFailures || 0) + 1 
+            : 0,
+          updatedAt: new Date(),
+        })
+        .where(eq(monitoredLinks.id, link.id));
+    }
+    
+    // Determine overall status
+    let overallStatus: 'pass' | 'fail' | 'warning' = 'pass';
+    let message = '';
+    
+    if (failCount > 0) {
+      overallStatus = 'fail';
+      const failedLinks = results.filter(r => r.result === 'fail').map(r => r.name);
+      message = `${failCount} link(s) failed: ${failedLinks.join(', ')}`;
+    } else if (warningCount > 0) {
+      overallStatus = 'warning';
+      message = `${warningCount} link(s) returned unexpected status codes`;
+    } else {
+      message = `All ${passCount} monitored links are healthy`;
+    }
+    
+    return {
+      status: overallStatus,
+      message,
+      details: {
+        linksChecked: links.length,
+        passCount,
+        failCount,
+        warningCount,
+        results,
+      },
+      executionTimeMs: Date.now() - startTime,
+    };
+  } catch (error) {
+    return {
+      status: 'fail',
+      message: `Link health check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      details: { error: String(error) },
+      executionTimeMs: Date.now() - startTime,
+    };
+  }
 }
 
 export async function runHealthCheck(checkType: HealthCheckType, runType: 'manual' | 'scheduled', batchId: string): Promise<HealthCheckResult> {

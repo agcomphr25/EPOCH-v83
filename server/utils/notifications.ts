@@ -193,6 +193,8 @@ export async function sendCustomerNotification(
     console.log('✅ Notification complete for order:', data.orderId);
   } else {
     // Always log failure to communication_logs
+    const fallbackMessage = `Shipping notification attempt failed for order ${data.orderId}. Errors: ${results.errors?.join('; ') || 'Unknown failure'}`;
+
     await db.insert(communicationLogs).values({
       orderId: data.orderId,
       customerId: customer.id.toString(),
@@ -201,7 +203,8 @@ export async function sendCustomerNotification(
       type: 'shipping-notification',
       recipient: email || phone || 'no-contact',
       status: 'failed',
-      error: results.errors?.join('; ') || 'No deliverable method available',
+      error: results.errors?.join('; ') || 'No contact method available',
+      message: fallbackMessage,
       sentAt: new Date(),
     });
 

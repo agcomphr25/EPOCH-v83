@@ -680,4 +680,45 @@ router.get('/debug/email-test', async (req, res) => {
   }
 });
 
+// Get notification history for a specific order
+router.get('/order/:orderId/history', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    if (!orderId) {
+      return res.status(400).json({ error: 'Order ID is required' });
+    }
+
+    // Get all communication logs for this order, ordered by most recent first
+    const notifications = await db
+      .select()
+      .from(communicationLogs)
+      .where(eq(communicationLogs.orderId, orderId))
+      .orderBy(desc(communicationLogs.sentAt));
+
+    res.json({
+      orderId,
+      count: notifications.length,
+      notifications: notifications.map((n) => ({
+        id: n.id,
+        method: n.method,
+        type: n.type,
+        recipient: n.recipient,
+        subject: n.subject,
+        message: n.message?.substring(0, 200) + (n.message && n.message.length > 200 ? '...' : ''),
+        status: n.status,
+        error: n.error,
+        sentAt: n.sentAt,
+        externalId: n.externalId,
+      })),
+    });
+  } catch (error: any) {
+    console.error('Error fetching notification history:', error);
+    res.status(500).json({
+      error: 'Failed to fetch notification history',
+      details: error.message,
+    });
+  }
+});
+
 export default router;

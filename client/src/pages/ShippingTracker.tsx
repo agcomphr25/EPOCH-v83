@@ -176,7 +176,7 @@ export default function ShippingTracker() {
   });
 
   // Fetch notification history when an order is selected
-  const { data: notificationHistory, isLoading: historyLoading } = useQuery<NotificationHistoryResponse>({
+  const { data: notificationHistory, isLoading: historyLoading, isError: historyError } = useQuery<NotificationHistoryResponse>({
     queryKey: ['/api/communications/order', historyOrderId, 'history'],
     queryFn: async () => {
       const response = await fetch(`/api/communications/order/${historyOrderId}/history`);
@@ -184,6 +184,7 @@ export default function ShippingTracker() {
       return response.json();
     },
     enabled: !!historyOrderId,
+    retry: 1,
   });
 
   // Filter orders by search term (order number or customer name)
@@ -764,6 +765,12 @@ export default function ShippingTracker() {
           <ScrollArea className="max-h-[500px]">
             {historyLoading ? (
               <div className="text-center py-8 text-gray-500">Loading...</div>
+            ) : historyError ? (
+              <div className="text-center py-8 text-red-500">
+                <XCircle className="h-12 w-12 mx-auto text-red-300 mb-2" />
+                <p>Failed to load notification history.</p>
+                <p className="text-sm text-gray-500 mt-1">Please try again later.</p>
+              </div>
             ) : !notificationHistory?.notifications?.length ? (
               <div className="text-center py-8 text-gray-500">
                 <MessageSquare className="h-12 w-12 mx-auto text-gray-300 mb-2" />

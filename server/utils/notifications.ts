@@ -1,5 +1,5 @@
 import { customers } from '@shared/schema';
-import { allOrders } from '../schema.js';
+import { allOrders, communicationLogs } from '../schema.js';
 import { eq } from 'drizzle-orm';
 
 import { db } from '../db.js';
@@ -76,13 +76,19 @@ export async function sendCustomerNotification(
   }
 
   // Determine notification methods
-  const preferredMethods = data.preferredMethods ||
-    (customer.preferredCommunicationMethod as string[]) || ['email'];
+  let preferredMethods = data.preferredMethods ||
+    (customer.preferredCommunicationMethod as string[]) || [];
   const email = data.customerEmail || customer.email;
   const phone = data.customerPhone || customer.phone;
 
   // 1. Detect Twilio availability
   const allowSms = Boolean(process.env.TWILIO_SID && process.env.TWILIO_AUTH_TOKEN);
+
+  // Auto-select best possible method if preferred list empty
+  if (!preferredMethods.length) {
+    if (email) preferredMethods.push('email');
+    else if (phone && allowSms) preferredMethods.push('sms');
+  }
   const prefersSms = preferredMethods.includes('sms');
   const prefersEmail = preferredMethods.includes('email');
 
@@ -159,18 +165,45 @@ export async function sendCustomerNotification(
   results.methods = succeededMethods;
 
   if (results.success) {
-    console.log('📬 Updating order notification status - methods succeeded:', succeededMethods);
-    await db
-      .update(allOrders)
+    console.log('📬 Updating order notification status - methods:', succeededMethods);
+
+    await db.update(allOrders)
       .set({
         customerNotified: true,
         notificationMethod: succeededMethods.join(', '),
         notificationSentAt: new Date(),
       })
       .where(eq(allOrders.orderId, data.orderId));
+
+    // Log success to communication_logs for each method
+    for (const method of succeededMethods) {
+      await db.insert(communicationLogs).values({
+        orderId: data.orderId,
+        customerId: customer.id.toString(),
+        method,
+        type: 'shipping-notification',
+        recipient: (method === 'email' ? email : phone) || 'unknown',
+        status: 'sent',
+        message: `Tracking: ${data.trackingNumber}`,
+        sentAt: new Date(),
+      });
+    }
+
     console.log('✅ Notification complete for order:', data.orderId);
   } else {
-    console.error('❌ All notification methods failed for order:', data.orderId, results.errors);
+    // Always log failure to communication_logs
+    await db.insert(communicationLogs).values({
+      orderId: data.orderId,
+      customerId: customer.id.toString(),
+      method: preferredMethods.length ? preferredMethods.join(',') : 'none',
+      type: 'shipping-notification',
+      recipient: email || phone || 'no-contact',
+      status: 'failed',
+      error: results.errors?.join('; ') || 'No deliverable method available',
+      sentAt: new Date(),
+    });
+
+    console.error('❌ Notification failed:', data.orderId, results.errors);
   }
 
   return results;

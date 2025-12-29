@@ -1476,7 +1476,6 @@ router.post('/add-tracking/:orderId', async (req: Request, res: Response) => {
 router.post('/bulk/create-consolidated-label', async (req: Request, res: Response) => {
   try {
     const {
-      orderIds,
       items, // New: array of {orderId, isRma, rmaId, originalOrderId}
       packageDetails,
       serviceCode,
@@ -1484,6 +1483,9 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
       receiverAccount,
       declaredValue,
     } = req.body;
+
+    // Derive orderIds from request body or from items array (safety fallback)
+    const orderIds: string[] = req.body.orderIds || items?.map((i: any) => i.orderId) || [];
 
     // Support both old format (orderIds) and new format (items with RMA info)
     const shipmentItems = items || orderIds?.map((id: string) => ({ orderId: id })) || [];
@@ -1673,7 +1675,7 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
 
     const shipmentPayload = buildUPSShipmentPayloadOAuth(
       {
-        orderId: orderIds.join('+'), // Combine order IDs for reference
+        orderId: orderIds.length ? orderIds.join('+') : 'UNKNOWN', // Safely combine order IDs
         shipToAddress,
         shipFromAddress,
         packageWeight: packageDetails.weight || 5,
@@ -1685,7 +1687,9 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
         billingOption: billingOption || 'sender',
         receiverAccount: billingOption === 'receiver' ? receiverAccount : undefined,
         serviceType: serviceCode || '03',
-        reference1: `${orderIds.length} orders: ${orderIds[0]}${orderIds.length > 1 ? '+' : ''}`.substring(0, 35),
+        reference1: orderIds.length
+          ? `${orderIds.length} orders: ${orderIds[0]}`.substring(0, 35)
+          : 'Consolidated shipment'.substring(0, 35),
         reference2: `Consolidated shipment`.substring(0, 35),
       },
       upsShipperNumber
@@ -1780,6 +1784,10 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
     }
   } catch (error: any) {
     console.error('Error creating consolidated label:', error);
+    // Log full UPS error response for debugging
+    if (error?.response?.data) {
+      console.error('[UPS SHIP ERROR]', JSON.stringify(error.response.data, null, 2));
+    }
     res.status(500).json({
       success: false,
       error: error.response?.data?.response?.errors?.[0]?.message || error.message || 'Failed to create consolidated shipping label',

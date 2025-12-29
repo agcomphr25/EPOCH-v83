@@ -239,6 +239,7 @@ export function BulkShippingActions({
       }));
 
       const response = await axios.post('/api/shipping/bulk/create-consolidated-label', {
+        orderIds: selectedOrders,  // Required for backend .join() operations
         items,
         packageDetails: {
           weight: packageDetails.weight,

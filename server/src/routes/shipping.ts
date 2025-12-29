@@ -417,7 +417,7 @@ router.post('/update-tracking/:orderId', async (req: Request, res: Response) => 
         });
 
         if (notificationResult.success) {
-          console.log(`Notification sent for order ${orderId} via ${notificationResult.methods.join(', ')}`);
+          console.log(`Notification sent for order ${orderId} via ${notificationResult.methods?.join(', ') || 'unknown'}`);
         } else {
           console.error(`Notification failed for order ${orderId}:`, notificationResult.errors);
         }
@@ -429,7 +429,7 @@ router.post('/update-tracking/:orderId', async (req: Request, res: Response) => 
     res.json({
       success: true,
       message: sendNotification && notificationResult?.success 
-        ? `Tracking updated and customer notified via ${notificationResult.methods.join(' and ')}`
+        ? `Tracking updated and customer notified via ${notificationResult.methods?.join(' and ') || 'email/sms'}`
         : 'Tracking information updated',
       trackingNumber: trackingNumber.trim(),
       carrier: carrier || 'UPS',
@@ -855,13 +855,13 @@ router.post('/create-label', async (req: Request, res: Response) => {
 
               if (notificationResult.success) {
                 console.log(
-                  `✅ Shipping notification sent via ${notificationResult.methods.join(', ')} for order ${orderId}`
+                  `✅ Shipping notification sent via ${notificationResult.methods?.join(', ') || 'unknown'} for order ${orderId}`
                 );
                 
                 // Update order with notification status
                 const notificationUpdateData = {
                   customerNotified: true,
-                  notificationMethod: notificationResult.methods.join(', '),
+                  notificationMethod: notificationResult.methods?.join(', ') || 'email',
                   notificationSentAt: new Date(),
                 };
                 

@@ -180,6 +180,7 @@ export async function sendCustomerNotification(
       await db.insert(communicationLogs).values({
         orderId: data.orderId,
         customerId: customer.id.toString(),
+        messageType: 'transactional',
         method,
         type: 'shipping-notification',
         recipient: (method === 'email' ? email : phone) || 'unknown',
@@ -195,6 +196,7 @@ export async function sendCustomerNotification(
     await db.insert(communicationLogs).values({
       orderId: data.orderId,
       customerId: customer.id.toString(),
+      messageType: 'transactional',
       method: preferredMethods.length ? preferredMethods.join(',') : 'none',
       type: 'shipping-notification',
       recipient: email || phone || 'no-contact',

@@ -2,6 +2,7 @@ import { customers } from '@shared/schema';
 import { allOrders, communicationLogs } from '../schema.js';
 import { eq } from 'drizzle-orm';
 import sgMail from '@sendgrid/mail';
+import twilio from 'twilio';
 
 import { db } from '../db.js';
 import { 
@@ -342,40 +343,46 @@ async function sendSMSNotification(
 ) {
   const message = `AG Composites: Your order ${data.orderId} has shipped! Track with ${data.trackingNumber} on ${data.carrier}. ${data.estimatedDelivery ? `Est. delivery: ${data.estimatedDelivery.toLocaleDateString()}` : ''}`;
 
-  console.log('Sending SMS shipping notification:', {
+  console.log('📱 [DIRECT TWILIO] Sending SMS shipping notification:', {
     to: data.phone,
     message: message.substring(0, 50) + '...',
   });
 
-  // Use the actual SMS API endpoint
+  // Call Twilio directly (bypasses authenticated API route)
+  const twilioConfig = getTwilioConfig();
+  
+  if (!isTwilioConfigured()) {
+    throw new Error('Twilio is not configured (missing Account SID, Auth Token, or From Number)');
+  }
+
   try {
-    // In Replit, use relative path since we're making internal server-to-server call
-    const response = await fetch(`http://127.0.0.1:5000/api/communications/sms`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        to: data.phone,
-        message: message,
-        customerId: customerId || data.orderId, // Use actual customer ID or fallback to order ID
-        orderId: data.orderId,
-      }),
+    const twilioClient = twilio(twilioConfig.accountSid, twilioConfig.authToken);
+    
+    const twilioMessage = await twilioClient.messages.create({
+      body: message,
+      from: twilioConfig.fromNumber,
+      to: data.phone,
     });
 
-    if (!response.ok) {
-      const errorData = await response.json() as any;
-      throw new Error(errorData.error || 'SMS API request failed');
-    }
+    console.log('✅ [DIRECT TWILIO] SMS sent successfully:', twilioMessage.sid);
 
-    const result = await response.json() as any;
-    console.log(
-      'SMS shipping notification sent successfully:',
-      result.externalId
-    );
-    return result;
-  } catch (error) {
-    console.error('Failed to send SMS shipping notification:', error);
+    // Log to communication_logs
+    await db.insert(communicationLogs).values({
+      customerId: customerId || data.orderId,
+      orderId: data.orderId,
+      messageType: 'transactional',
+      method: 'sms',
+      type: 'shipping-notification',
+      recipient: data.phone,
+      status: 'sent',
+      message: message,
+      externalId: twilioMessage.sid,
+      sentAt: new Date(),
+    });
+
+    return { success: true, messageSid: twilioMessage.sid };
+  } catch (error: any) {
+    console.error('❌ [DIRECT TWILIO] Failed to send SMS:', error.message);
     throw error;
   }
 }

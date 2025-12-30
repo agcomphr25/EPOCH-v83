@@ -1,8 +1,14 @@
 import { customers } from '@shared/schema';
 import { allOrders, communicationLogs } from '../schema.js';
 import { eq } from 'drizzle-orm';
+import sgMail from '@sendgrid/mail';
 
 import { db } from '../db.js';
+
+// Initialize SendGrid with API key
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+}
 
 export interface NotificationData {
   orderId: string;
@@ -224,7 +230,6 @@ async function sendEmailNotification(
   },
   customerId?: string
 ) {
-  // Email notification logic
   const subject = `Your Order ${data.orderId} Has Shipped - AG Composites`;
   const deliveryText = data.estimatedDelivery
     ? `Estimated delivery: ${data.estimatedDelivery.toLocaleDateString()}`
@@ -251,42 +256,36 @@ Owens Cross Roads, AL 35763
 Phone: 256-723-8381
   `.trim();
 
-  console.log('Sending email shipping notification:', {
+  console.log('📧 [DIRECT SENDGRID] Sending email shipping notification:', {
     to: data.email,
     subject,
-    message: message.substring(0, 100) + '...',
+    from: process.env.SENDGRID_FROM_EMAIL,
   });
 
-  // Use the actual email API endpoint
+  // Validate SendGrid configuration
+  if (!process.env.SENDGRID_API_KEY) {
+    throw new Error('SENDGRID_API_KEY is not configured');
+  }
+  if (!process.env.SENDGRID_FROM_EMAIL) {
+    throw new Error('SENDGRID_FROM_EMAIL is not configured');
+  }
+
   try {
-    // In Replit, use relative path since we're making internal server-to-server call
-    const response = await fetch(`http://127.0.0.1:5000/api/communications/email`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        to: data.email,
-        subject: subject,
-        message: message,
-        customerId: customerId || data.orderId, // Use actual customer ID or fallback to order ID
-        orderId: data.orderId,
-      }),
-    });
+    const emailData = {
+      to: data.email,
+      from: process.env.SENDGRID_FROM_EMAIL,
+      subject,
+      text: message,
+      html: message.replace(/\n/g, '<br>'),
+    };
 
-    if (!response.ok) {
-      const errorData = await response.json() as any;
-      throw new Error(errorData.error || 'Email API request failed');
-    }
-
-    const result = await response.json() as any;
-    console.log(
-      'Email shipping notification sent successfully:',
-      result.externalId
-    );
-    return result;
-  } catch (error) {
-    console.error('Failed to send email shipping notification:', error);
+    const result = await sgMail.send(emailData);
+    const messageId = result[0]?.headers?.['x-message-id'] || 'unknown';
+    
+    console.log('✅ [DIRECT SENDGRID] Email sent successfully, messageId:', messageId);
+    return { status: 'sent', messageId };
+  } catch (error: any) {
+    console.error('❌ [DIRECT SENDGRID] Failed to send email:', error?.response?.body || error.message);
     throw error;
   }
 }

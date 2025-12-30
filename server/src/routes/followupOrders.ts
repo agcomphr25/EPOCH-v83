@@ -730,9 +730,10 @@ router.post('/:id/sign', async (req, res) => {
       return res.status(400).json({ error: 'Signature data is required' });
     }
 
+    // Normalize undefined/token mismatch cases
     if (!signatureToken) {
       console.log(`❌ Missing signature token for order ID: ${id}`);
-      return res.status(400).json({ error: 'Signature token is required' });
+      return res.status(400).json({ error: 'Missing signature token' });
     }
 
     const followupOrder = await storage.getFollowupOrder(id);
@@ -743,10 +744,10 @@ router.post('/:id/sign', async (req, res) => {
 
     console.log(`📋 Found followup order: ${followupOrder.orderId}, pdfPath: ${followupOrder.pdfPath || 'MISSING'}`);
 
-    // Verify the signature token matches
-    if (followupOrder.signatureToken !== signatureToken) {
+    // Support both new (`?token=`) and old (`:token`) formats by trimming whitespace
+    if (!followupOrder.signatureToken || followupOrder.signatureToken.trim() !== signatureToken.trim()) {
       console.log(`❌ Token mismatch for order ${followupOrder.orderId}. Expected: ${followupOrder.signatureToken?.substring(0, 8)}..., Got: ${signatureToken?.substring(0, 8)}...`);
-      return res.status(403).json({ error: 'Invalid signature token. This link may have expired. Please request a new signature email.' });
+      return res.status(403).json({ error: 'Invalid or expired signing link token' });
     }
 
     if (followupOrder.signatureSigned) {

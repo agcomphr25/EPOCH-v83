@@ -188,7 +188,7 @@ function ConditionalNavigation() {
     location === '/ag-dashboard' ||
     location === '/staciw-dashboard' ||
     location === '/login' ||
-    location.startsWith('/sign-order/'); // Hide navigation on customer sign order page
+    location.startsWith('/sign-order'); // Hide navigation on customer sign order page
 
   return hideNavigation ? null : <Navigation />;
 }
@@ -822,9 +822,13 @@ function App() {
                     component={ShippingLabelPage}
                   />
 
-                  {/* Sign Order Route - Public route for customers */}
+                  {/* Sign Order Routes - Public routes for customers */}
                   <Route
                     path="/sign-order/:token"
+                    component={SignOrderPage}
+                  />
+                  <Route
+                    path="/sign-order"
                     component={SignOrderPage}
                   />
 

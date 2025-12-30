@@ -4,14 +4,19 @@ import { eq } from 'drizzle-orm';
 import sgMail from '@sendgrid/mail';
 
 import { db } from '../db.js';
+import { 
+  getTwilioConfig, 
+  getSendGridConfig, 
+  isTwilioConfigured, 
+  isSendGridConfigured,
+  logNotificationConfig 
+} from '../config/notifications.js';
 
-// Initialize SendGrid with API key
-if (process.env.SENDGRID_API_KEY) {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// Initialize SendGrid with API key from centralized config
+const sendGridConfig = getSendGridConfig();
+if (sendGridConfig.apiKey) {
+  sgMail.setApiKey(sendGridConfig.apiKey);
 }
-
-// Twilio "from" number getter - evaluated at runtime to ensure env vars are loaded
-const getTwilioFrom = () => process.env.TWILIO_FROM_NUMBER || process.env.TWILIO_NUMBER;
 
 export interface NotificationData {
   orderId: string;
@@ -90,9 +95,8 @@ export async function sendCustomerNotification(
   const email = data.customerEmail || customer.email;
   const phone = data.customerPhone || customer.phone;
 
-  // 1. Detect Twilio availability (requires SID, auth token, AND from number)
-  const twilioFrom = getTwilioFrom();
-  const allowSms = Boolean(process.env.TWILIO_SID && process.env.TWILIO_AUTH_TOKEN && twilioFrom);
+  // 1. Detect Twilio availability using centralized config
+  const allowSms = isTwilioConfigured();
 
   // Auto-select best possible method if preferred list empty
   if (!preferredMethods.length) {
@@ -145,16 +149,12 @@ export async function sendCustomerNotification(
   }
 
   // ================= SMS PATH ========================
+  const twilioConfig = getTwilioConfig();
   console.log("📡 SMS CONFIG CHECK:", {
-    sid: process.env.TWILIO_SID ? "✔" : "❌",
-    token: process.env.TWILIO_AUTH_TOKEN ? "✔" : "❌",
-    fromEnv: {
-      TWILIO_FROM_NUMBER: process.env.TWILIO_FROM_NUMBER,
-      TWILIO_NUMBER: process.env.TWILIO_NUMBER
-    },
-    resolvedFrom: process.env.TWILIO_FROM_NUMBER || process.env.TWILIO_NUMBER || "❌ NONE FOUND",
+    configured: allowSms ? "✔" : "❌",
+    fromNumber: twilioConfig.fromNumber || "❌ NOT SET",
     prefersSms,
-    phone,
+    phone: phone || "❌ NO PHONE",
     allowSms
   });
   
@@ -273,24 +273,23 @@ Owens Cross Roads, AL 35763
 Phone: 256-723-8381
   `.trim();
 
+  const emailConfig = getSendGridConfig();
+  
   console.log('📧 [DIRECT SENDGRID] Sending email shipping notification:', {
     to: data.email,
     subject,
-    from: process.env.SENDGRID_FROM_EMAIL,
+    from: emailConfig.fromEmail,
   });
 
-  // Validate SendGrid configuration
-  if (!process.env.SENDGRID_API_KEY) {
-    throw new Error('SENDGRID_API_KEY is not configured');
-  }
-  if (!process.env.SENDGRID_FROM_EMAIL) {
-    throw new Error('SENDGRID_FROM_EMAIL is not configured');
+  // Validate SendGrid configuration using centralized check
+  if (!isSendGridConfigured()) {
+    throw new Error('SendGrid is not configured (missing API key or from email)');
   }
 
   try {
     const emailData = {
       to: data.email,
-      from: process.env.SENDGRID_FROM_EMAIL,
+      from: emailConfig.fromEmail,
       subject,
       text: message,
       html: message.replace(/\n/g, '<br>'),

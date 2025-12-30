@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Truck, Package, X, ChevronLeft, ChevronRight, DollarSign, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
 import axios from 'axios';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -270,6 +271,9 @@ export function BulkShippingActions({
             title: "Customer Notified",
             description: "Shipping notification sent automatically.",
           });
+          // Refresh orders data so UI shows updated notification status
+          queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/shipping/ready-to-ship'] });
         } catch (err) {
           console.error("Auto notification failed:", err);
           toast({

@@ -688,6 +688,20 @@ export async function runSingleCheck(checkId: number, runType: 'manual' | 'sched
   return runHealthCheck(checkType, runType, batchId);
 }
 
+export async function runSingleCheckByName(checkName: string, runType: 'manual' | 'scheduled' = 'manual'): Promise<HealthCheckResult | null> {
+  const batchId = nanoid();
+  const [checkType] = await db
+    .select()
+    .from(healthCheckTypes)
+    .where(eq(healthCheckTypes.name, checkName));
+
+  if (!checkType) {
+    return null;
+  }
+
+  return runHealthCheck(checkType, runType, batchId);
+}
+
 export async function getHealthCheckTypes(): Promise<HealthCheckType[]> {
   return db.select().from(healthCheckTypes).orderBy(healthCheckTypes.sortOrder);
 }

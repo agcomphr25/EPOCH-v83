@@ -10,8 +10,8 @@ if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
-// Twilio "from" number - support both naming conventions
-const TWILIO_FROM = process.env.TWILIO_FROM_NUMBER || process.env.TWILIO_NUMBER;
+// Twilio "from" number getter - evaluated at runtime to ensure env vars are loaded
+const getTwilioFrom = () => process.env.TWILIO_FROM_NUMBER || process.env.TWILIO_NUMBER;
 
 export interface NotificationData {
   orderId: string;
@@ -91,7 +91,8 @@ export async function sendCustomerNotification(
   const phone = data.customerPhone || customer.phone;
 
   // 1. Detect Twilio availability (requires SID, auth token, AND from number)
-  const allowSms = Boolean(process.env.TWILIO_SID && process.env.TWILIO_AUTH_TOKEN && TWILIO_FROM);
+  const twilioFrom = getTwilioFrom();
+  const allowSms = Boolean(process.env.TWILIO_SID && process.env.TWILIO_AUTH_TOKEN && twilioFrom);
 
   // Auto-select best possible method if preferred list empty
   if (!preferredMethods.length) {

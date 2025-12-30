@@ -10,6 +10,9 @@ if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
+// Twilio "from" number - support both naming conventions
+const TWILIO_FROM = process.env.TWILIO_FROM_NUMBER || process.env.TWILIO_NUMBER;
+
 export interface NotificationData {
   orderId: string;
   trackingNumber: string;
@@ -87,8 +90,8 @@ export async function sendCustomerNotification(
   const email = data.customerEmail || customer.email;
   const phone = data.customerPhone || customer.phone;
 
-  // 1. Detect Twilio availability
-  const allowSms = Boolean(process.env.TWILIO_SID && process.env.TWILIO_AUTH_TOKEN);
+  // 1. Detect Twilio availability (requires SID, auth token, AND from number)
+  const allowSms = Boolean(process.env.TWILIO_SID && process.env.TWILIO_AUTH_TOKEN && TWILIO_FROM);
 
   // Auto-select best possible method if preferred list empty
   if (!preferredMethods.length) {

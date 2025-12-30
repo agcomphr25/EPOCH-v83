@@ -261,6 +261,24 @@ export function BulkShippingActions({
           description: `Tracking #${trackingNumber} applied to all ${selectedOrders.length} orders`,
         });
 
+        // Auto-notify customers after successful label creation
+        try {
+          for (const item of items) {
+            await axios.post(`/api/shipping/notify-customer/${item.orderId}`);
+          }
+          toast({
+            title: "Customer Notified",
+            description: "Shipping notification sent automatically.",
+          });
+        } catch (err) {
+          console.error("Auto notification failed:", err);
+          toast({
+            title: "Notification Error",
+            description: "Label created but notification could not be delivered.",
+            variant: "destructive",
+          });
+        }
+
         // Download label
         if (labelImage) {
           const link = document.createElement('a');

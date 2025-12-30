@@ -178,6 +178,30 @@ export async function sendCustomerNotification(
       console.error('[NOTIFY SMS FAIL]', error);
       const errorMsg = `SMS failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
       results.errors.push(errorMsg);
+      
+      // SMS failed - try email as fallback if available
+      if (email && !succeededMethods.includes('email')) {
+        console.log('[NOTIFY] SMS failed, attempting email fallback to:', email);
+        try {
+          await sendEmailNotification(
+            {
+              email,
+              orderId: data.orderId,
+              trackingNumber: data.trackingNumber,
+              carrier: data.carrier,
+              estimatedDelivery: data.estimatedDelivery,
+            },
+            customer?.id.toString()
+          );
+          succeededMethods.push('email');
+          notificationSucceeded = true;
+          console.log('[NOTIFY] Email fallback succeeded after SMS failure');
+        } catch (emailError: any) {
+          console.error('[NOTIFY EMAIL FALLBACK FAIL]', emailError);
+          const emailErrorMsg = `Email fallback failed: ${emailError instanceof Error ? emailError.message : 'Unknown error'}`;
+          results.errors.push(emailErrorMsg);
+        }
+      }
     }
   } else if (prefersSms && !allowSms && email) {
     console.log('[NOTIFY] SMS preferred but Twilio missing → fallback to email');

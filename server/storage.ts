@@ -14091,9 +14091,8 @@ export class DatabaseStorage implements IStorage {
       const signatureToken = nanoid(32);
 
       // Generate signature link using unified URL resolution
-      const { getAppBaseUrl } = await import('./utils/magicLink');
-      const baseUrl = getAppBaseUrl();
-      const signatureLink = `${baseUrl}/sign-order/${signatureToken}`;
+      const { createMagicLink } = await import('./utils/magicLink');
+      const signatureLink = createMagicLink(signatureToken);
 
       // Get customer address
       const addresses = await this.getCustomerAddresses(order.customerId || '');

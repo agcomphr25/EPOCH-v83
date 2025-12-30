@@ -9,7 +9,7 @@ import { calculatePriorityScore } from '../../utils/priorityScore';
 import { sendReminderForOverdueOrders } from '../../utils/followupOrderReminder';
 import { auditService } from '../services/auditService';
 import { authenticateToken } from '../../middleware/auth';
-import { getAppBaseUrl } from '../../utils/magicLink';
+import { createMagicLink } from '../../utils/magicLink';
 import * as fs from 'fs';
 import * as path from 'path';
 import { nanoid } from 'nanoid';
@@ -330,9 +330,8 @@ router.post('/', async (req, res) => {
     // Generate unique signature token
     const signatureToken = nanoid(32);
 
-    // Generate signature link using production-aware URL
-    const baseUrl = getAppBaseUrl();
-    const signatureLink = `${baseUrl}/sign-order/${signatureToken}`;
+    // Generate signature link using unified URL resolution
+    const signatureLink = createMagicLink(signatureToken);
 
     // Extract miscellaneous items from features object
     const miscItems = (order.features as any)?.miscItems || [];
@@ -1031,9 +1030,8 @@ router.post('/:orderId/resend-email', async (req, res) => {
       }
     }
 
-    // Generate signature link using the fresh token with production-aware URL
-    const baseUrl = getAppBaseUrl();
-    const signatureLink = `${baseUrl}/sign-order/${followupOrder.signatureToken}`;
+    // Generate signature link using the fresh token with unified URL resolution
+    const signatureLink = createMagicLink(followupOrder.signatureToken || '');
 
     // Extract miscellaneous items from features object
     const miscItems = (order.features as any)?.miscItems || [];

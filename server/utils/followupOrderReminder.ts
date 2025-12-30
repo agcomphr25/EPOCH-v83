@@ -31,9 +31,8 @@ export async function sendReminderForOverdueOrders() {
         console.log(`📨 Sending reminder for order ${followupOrder.orderId} to ${followupOrder.customerEmail}`);
         
         // Generate signature link using unified URL resolution
-        const { getAppBaseUrl } = await import('./magicLink');
-        const baseUrl = getAppBaseUrl();
-        const signatureUrl = `${baseUrl}/sign-order/${followupOrder.signatureToken}`;
+        const { createMagicLink } = await import('./magicLink');
+        const signatureUrl = createMagicLink(followupOrder.signatureToken || '');
         
         // Create reminder email
         const emailHtml = `

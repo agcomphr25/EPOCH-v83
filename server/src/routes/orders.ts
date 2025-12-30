@@ -23,7 +23,7 @@ import {
   ADMIN_FIELD_CONFIG 
 } from '../../../shared/adminConfig';
 import { auditService } from '../services/auditService';
-import { getAppBaseUrl } from '../../utils/magicLink';
+import { createMagicLink } from '../../utils/magicLink';
 
 const router = Router();
 
@@ -656,8 +656,6 @@ router.post('/finalized', async (req: Request, res: Response) => {
         console.log(`✅ Follow-up order created for ${order.orderId}, sending signature email...`);
         
         // Prepare email data using unified URL resolution
-        const baseUrl = getAppBaseUrl();
-        
         const emailData = {
           orderId: order.orderId,
           customerName: customer.name,
@@ -666,7 +664,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
           modelId: stockModel?.displayName || order.modelId || 'Custom',
           orderDate: new Date(order.orderDate).toISOString().split('T')[0],
           dueDate: new Date(order.dueDate).toISOString().split('T')[0],
-          signatureLink: `${baseUrl}/sign-order/${signatureToken}`,
+          signatureLink: createMagicLink(signatureToken),
           features: order.features as Record<string, any> || undefined,
         };
         

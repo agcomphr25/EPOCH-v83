@@ -144,6 +144,19 @@ export async function sendCustomerNotification(
   }
 
   // ================= SMS PATH ========================
+  console.log("📡 SMS CONFIG CHECK:", {
+    sid: process.env.TWILIO_SID ? "✔" : "❌",
+    token: process.env.TWILIO_AUTH_TOKEN ? "✔" : "❌",
+    fromEnv: {
+      TWILIO_FROM_NUMBER: process.env.TWILIO_FROM_NUMBER,
+      TWILIO_NUMBER: process.env.TWILIO_NUMBER
+    },
+    resolvedFrom: process.env.TWILIO_FROM_NUMBER || process.env.TWILIO_NUMBER || "❌ NONE FOUND",
+    prefersSms,
+    phone,
+    allowSms
+  });
+  
   if (prefersSms && phone && allowSms) {
     try {
       console.log('📱 Attempting SMS notification to:', phone);

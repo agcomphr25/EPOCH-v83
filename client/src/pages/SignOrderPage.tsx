@@ -55,8 +55,10 @@ interface FollowupOrder {
 }
 
 export default function SignOrderPage() {
+  // Accept both /sign-order/:token and /sign-order?token=xxxx
+  const searchToken = new URLSearchParams(window.location.search).get('token');
   const [, params] = useRoute('/sign-order/:token');
-  const token = params?.token;
+  const token = params?.token || searchToken;
   const { toast } = useToast();
   const signatureRef = useRef<SignatureCanvas>(null);
   const [signatureEmpty, setSignatureEmpty] = useState(true);

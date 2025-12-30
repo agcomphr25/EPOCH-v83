@@ -30,13 +30,9 @@ export async function sendReminderForOverdueOrders() {
       try {
         console.log(`📨 Sending reminder for order ${followupOrder.orderId} to ${followupOrder.customerEmail}`);
         
-        // Generate signature link using production-aware URL
-        const productionDomain = process.env.PRODUCTION_DOMAIN || 'agcompepoch.xyz';
-        const baseUrl = (process.env.NODE_ENV === 'production' || process.env.REPL_DEPLOYMENT)
-          ? `https://${productionDomain}`
-          : process.env.REPLIT_DOMAINS 
-            ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-            : 'http://localhost:5000';
+        // Generate signature link using unified URL resolution
+        const { getAppBaseUrl } = await import('./magicLink');
+        const baseUrl = getAppBaseUrl();
         const signatureUrl = `${baseUrl}/sign-order/${followupOrder.signatureToken}`;
         
         // Create reminder email

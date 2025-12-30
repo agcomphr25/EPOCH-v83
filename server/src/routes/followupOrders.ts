@@ -9,30 +9,12 @@ import { calculatePriorityScore } from '../../utils/priorityScore';
 import { sendReminderForOverdueOrders } from '../../utils/followupOrderReminder';
 import { auditService } from '../services/auditService';
 import { authenticateToken } from '../../middleware/auth';
+import { getAppBaseUrl } from '../../utils/magicLink';
 import * as fs from 'fs';
 import * as path from 'path';
 import { nanoid } from 'nanoid';
 
 const router = express.Router();
-
-// Helper function to get the correct base URL for signature links
-// In production, always use the production domain to ensure email links work
-function getSignatureLinkBaseUrl(): string {
-  // Check for explicit production domain first
-  const productionDomain = process.env.PRODUCTION_DOMAIN || 'agcompepoch.xyz';
-  
-  // In production mode or if REPL_DEPLOYMENT is set, use production domain
-  if (process.env.NODE_ENV === 'production' || process.env.REPL_DEPLOYMENT) {
-    return `https://${productionDomain}`;
-  }
-  
-  // In development, use REPLIT_DOMAINS if available, otherwise localhost
-  if (process.env.REPLIT_DOMAINS) {
-    return `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
-  }
-  
-  return 'http://localhost:5000';
-}
 
 // Ensure uploads directory exists
 const uploadsDir = 'uploads/followup-orders';
@@ -349,7 +331,7 @@ router.post('/', async (req, res) => {
     const signatureToken = nanoid(32);
 
     // Generate signature link using production-aware URL
-    const baseUrl = getSignatureLinkBaseUrl();
+    const baseUrl = getAppBaseUrl();
     const signatureLink = `${baseUrl}/sign-order/${signatureToken}`;
 
     // Extract miscellaneous items from features object
@@ -1050,7 +1032,7 @@ router.post('/:orderId/resend-email', async (req, res) => {
     }
 
     // Generate signature link using the fresh token with production-aware URL
-    const baseUrl = getSignatureLinkBaseUrl();
+    const baseUrl = getAppBaseUrl();
     const signatureLink = `${baseUrl}/sign-order/${followupOrder.signatureToken}`;
 
     // Extract miscellaneous items from features object

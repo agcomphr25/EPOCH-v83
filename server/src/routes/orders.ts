@@ -23,27 +23,9 @@ import {
   ADMIN_FIELD_CONFIG 
 } from '../../../shared/adminConfig';
 import { auditService } from '../services/auditService';
+import { getAppBaseUrl } from '../../utils/magicLink';
 
 const router = Router();
-
-// Helper function to get the correct base URL for signature links
-// In production, always use the production domain to ensure email links work
-function getSignatureLinkBaseUrl(): string {
-  // Check for explicit production domain first
-  const productionDomain = process.env.PRODUCTION_DOMAIN || 'agcompepoch.xyz';
-  
-  // In production mode or if REPL_DEPLOYMENT is set, use production domain
-  if (process.env.NODE_ENV === 'production' || process.env.REPL_DEPLOYMENT) {
-    return `https://${productionDomain}`;
-  }
-  
-  // In development, use REPLIT_DOMAINS if available, otherwise localhost
-  if (process.env.REPLIT_DOMAINS) {
-    return `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
-  }
-  
-  return 'http://localhost:5000';
-}
 
 // Get all orders for All Orders List (root endpoint)
 router.get('/', async (req: Request, res: Response) => {
@@ -673,8 +655,8 @@ router.post('/finalized', async (req: Request, res: Response) => {
         
         console.log(`✅ Follow-up order created for ${order.orderId}, sending signature email...`);
         
-        // Prepare email data using production-aware base URL
-        const baseUrl = getSignatureLinkBaseUrl();
+        // Prepare email data using unified URL resolution
+        const baseUrl = getAppBaseUrl();
         
         const emailData = {
           orderId: order.orderId,

@@ -14090,16 +14090,9 @@ export class DatabaseStorage implements IStorage {
       // Generate unique signature token
       const signatureToken = nanoid(32);
 
-      // Generate signature link using production-aware URL
-      const productionDomain = process.env.PRODUCTION_DOMAIN || 'agcompepoch.xyz';
-      let baseUrl: string;
-      if (process.env.NODE_ENV === 'production' || process.env.REPL_DEPLOYMENT) {
-        baseUrl = `https://${productionDomain}`;
-      } else if (process.env.REPLIT_DOMAINS) {
-        baseUrl = `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
-      } else {
-        baseUrl = 'http://localhost:5000';
-      }
+      // Generate signature link using unified URL resolution
+      const { getAppBaseUrl } = await import('./utils/magicLink');
+      const baseUrl = getAppBaseUrl();
       const signatureLink = `${baseUrl}/sign-order/${signatureToken}`;
 
       // Get customer address

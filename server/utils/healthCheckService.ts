@@ -13,6 +13,7 @@ import {
 import { eq, sql, desc } from 'drizzle-orm';
 import { sendEmailViaSendGrid } from './sendgrid';
 import { nanoid } from 'nanoid';
+import { getTwilioConfig, getSendGridConfig, isTwilioConfigured, isSendGridConfigured } from '../config/notifications';
 
 export interface HealthCheckResponse {
   status: 'pass' | 'fail' | 'warning' | 'skipped';
@@ -216,18 +217,16 @@ async function checkTwilioSMS(checkType: HealthCheckType): Promise<HealthCheckRe
 
   try {
     const twilio = await import('twilio');
-    const accountSid = process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_NUMBER || process.env.TWILIO_PHONE_NUMBER;
+    const twilioConfig = getTwilioConfig();
 
-    if (!accountSid || !authToken || !fromNumber) {
+    if (!isTwilioConfigured()) {
       return {
         status: 'fail',
         message: 'Twilio credentials not configured',
         details: { 
-          accountSidSet: !!accountSid, 
-          authTokenSet: !!authToken, 
-          fromNumberSet: !!fromNumber 
+          accountSidSet: !!twilioConfig.accountSid, 
+          authTokenSet: !!twilioConfig.authToken, 
+          fromNumberSet: !!twilioConfig.fromNumber 
         },
         executionTimeMs: Date.now() - startTime,
       };
@@ -246,11 +245,11 @@ async function checkTwilioSMS(checkType: HealthCheckType): Promise<HealthCheckRe
     };
     const tzAbbr = tzAbbreviations[timezone] || timezone;
 
-    const twilioClient = twilio.default(accountSid, authToken);
+    const twilioClient = twilio.default(twilioConfig.accountSid, twilioConfig.authToken);
     const now = new Date();
     const message = await twilioClient.messages.create({
       body: `[AG Composites Health Check] System is operational - ${now.toLocaleString('en-US', { timeZone: timezone })} ${tzAbbr}`,
-      from: fromNumber,
+      from: twilioConfig.fromNumber,
       to: testPhone,
     });
 
@@ -287,8 +286,9 @@ async function checkTrackingNotificationPipeline(checkType: HealthCheckType): Pr
   let smsMessageId: string | null = null;
   let smsConfigured = false;
   
-  // Get sender info
-  const emailSender = process.env.SENDGRID_FROM_EMAIL || 'NOT_CONFIGURED';
+  // Get sender info from centralized config
+  const emailSenderConfig = getSendGridConfig();
+  const emailSender = emailSenderConfig.fromEmail || 'NOT_CONFIGURED';
   const timestamp = new Date().toISOString();
   
   console.log('[TRACKING PIPELINE CHECK] Starting notification pipeline health check');
@@ -344,11 +344,8 @@ async function checkTrackingNotificationPipeline(checkType: HealthCheckType): Pr
   }
   
   // 2. Test SMS (Optional - only if Twilio configured)
-  const accountSid = process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const fromNumber = process.env.TWILIO_NUMBER || process.env.TWILIO_PHONE_NUMBER;
-  
-  smsConfigured = !!(accountSid && authToken && fromNumber);
+  const smsTwilioConfig = getTwilioConfig();
+  smsConfigured = isTwilioConfigured();
   console.log('[TRACKING PIPELINE CHECK] SMS configured:', smsConfigured);
   
   if (smsConfigured) {
@@ -363,7 +360,7 @@ async function checkTrackingNotificationPipeline(checkType: HealthCheckType): Pr
       try {
         console.log('[TRACKING PIPELINE CHECK] Testing SMS delivery to:', testPhone);
         const twilio = await import('twilio');
-        const twilioClient = twilio.default(accountSid, authToken);
+        const twilioClient = twilio.default(smsTwilioConfig.accountSid, smsTwilioConfig.authToken);
         
         const config = await getHealthCheckConfig();
         const timezone = config?.timezone || 'America/Chicago';
@@ -371,7 +368,7 @@ async function checkTrackingNotificationPipeline(checkType: HealthCheckType): Pr
         
         const message = await twilioClient.messages.create({
           body: `[AG Composites] Tracking pipeline test - ${now.toLocaleString('en-US', { timeZone: timezone })}`,
-          from: fromNumber,
+          from: smsTwilioConfig.fromNumber,
           to: testPhone,
         });
         

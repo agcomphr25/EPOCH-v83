@@ -8,7 +8,7 @@
 
 // ============== TWILIO (SMS) ==============
 export const getTwilioConfig = () => ({
-  accountSid: process.env.TWILIO_SID || '',
+  accountSid: process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID || '',
   authToken: process.env.TWILIO_AUTH_TOKEN || '',
   fromNumber: process.env.TWILIO_NUMBER || process.env.TWILIO_FROM_NUMBER || process.env.TWILIO_PHONE_NUMBER || '',
 });

@@ -11,6 +11,7 @@ import {
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { sendEmailViaGraphAPI } from '../../utils/microsoftGraph';
 import { getUncachableSendGridClient } from '../../utils/sendgrid';
+import { getTwilioConfig, isTwilioConfigured } from '../../config/notifications';
 
 const router = Router();
 
@@ -197,19 +198,18 @@ router.post('/sms', async (req, res) => {
   try {
     const data = smsSchema.parse(req.body);
 
-    // Initialize Twilio
-    const accountSid = process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_NUMBER || process.env.TWILIO_PHONE_NUMBER;
+    // Initialize Twilio using centralized config
+    const twilioConfig = getTwilioConfig();
 
-    if (!accountSid || !authToken || !fromNumber) {
-      console.error('Missing Twilio config:', { accountSid: !!accountSid, authToken: !!authToken, fromNumber: !!fromNumber });
+    if (!isTwilioConfigured()) {
+      console.error('Missing Twilio config:', { accountSid: !!twilioConfig.accountSid, authToken: !!twilioConfig.authToken, fromNumber: !!twilioConfig.fromNumber });
       return res
         .status(500)
         .json({ error: 'Twilio credentials not configured' });
     }
 
-    const twilioClient = twilio(accountSid, authToken);
+    const twilioClient = twilio(twilioConfig.accountSid, twilioConfig.authToken);
+    const fromNumber = twilioConfig.fromNumber;
 
     const message = await twilioClient.messages.create({
       body: data.message,

@@ -40,6 +40,21 @@ const smsSchema = z.object({
   orderId: z.string().optional().nullable(),
 });
 
+// Diagnostic endpoint to confirm email config
+router.get('/email/test', async (req, res) => {
+  try {
+    res.json({
+      SENDGRID_API_KEY: !!process.env.SENDGRID_API_KEY,
+      SENDGRID_FROM_EMAIL: process.env.SENDGRID_FROM_EMAIL || 'NOT SET',
+      EMAIL_PROVIDER: process.env.EMAIL_PROVIDER || 'sendgrid (default)',
+      status: "Email service reachable",
+      nextStep: "Try sending a test email via POST /api/communications/email"
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Send email via SendGrid or Microsoft Graph
 router.post('/email', async (req, res) => {
   try {

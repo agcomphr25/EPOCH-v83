@@ -107,6 +107,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/travelers',
   '/material-receiving',
   '/material-inventory',
+  '/business-review',
 ];
 
 export const USER_PERMISSIONS: Record<string, UserPermissions> = {

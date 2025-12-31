@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -393,29 +392,53 @@ function getSourceBadge(source: DataField['source']) {
   }
 }
 
+interface FieldWithSlide extends DataField {
+  slideId: number;
+  slideTitle: string;
+}
+
 export default function BusinessReviewPresentation() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [view, setView] = useState<'presentation' | 'data-mapping'>('presentation');
 
-  const { data: shippedStats } = useQuery<{ currentMonth: number; previousMonth: number }>({
-    queryKey: ['/api/reports/shipped-stats'],
-  });
-
-  const { data: paymentStats } = useQuery<{ currentMonth: number; ytd: number }>({
-    queryKey: ['/api/reports/payment-stats'],
-  });
-
-  const goToSlide = (index: number) => {
+  const goToSlide = useCallback((index: number) => {
     if (index >= 0 && index < slides.length) {
       setCurrentSlide(index);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (view !== 'presentation') return;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        goToSlide(currentSlide - 1);
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        goToSlide(currentSlide + 1);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        goToSlide(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        goToSlide(slides.length - 1);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentSlide, view, goToSlide]);
 
   const currentSlideData = slides[currentSlide];
 
-  const epochFields = slides.flatMap(s => s.dataFields.filter(f => f.source === 'epoch'));
-  const calculatedFields = slides.flatMap(s => s.dataFields.filter(f => f.source === 'calculated'));
-  const manualFields = slides.flatMap(s => s.dataFields.filter(f => f.source === 'manual'));
+  const epochFieldsWithSlides: FieldWithSlide[] = slides.flatMap(s => 
+    s.dataFields.filter(f => f.source === 'epoch').map(f => ({ ...f, slideId: s.id, slideTitle: s.title }))
+  );
+  const calculatedFieldsWithSlides: FieldWithSlide[] = slides.flatMap(s => 
+    s.dataFields.filter(f => f.source === 'calculated').map(f => ({ ...f, slideId: s.id, slideTitle: s.title }))
+  );
+  const manualFieldsWithSlides: FieldWithSlide[] = slides.flatMap(s => 
+    s.dataFields.filter(f => f.source === 'manual').map(f => ({ ...f, slideId: s.id, slideTitle: s.title }))
+  );
 
   const sections = Array.from(new Set(slides.map(s => s.section)));
 
@@ -579,7 +602,7 @@ export default function BusinessReviewPresentation() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-green-700">{epochFields.length}</p>
+                <p className="text-3xl font-bold text-green-700">{epochFieldsWithSlides.length}</p>
                 <p className="text-sm text-muted-foreground">Fields can be pulled from database</p>
               </CardContent>
             </Card>
@@ -592,7 +615,7 @@ export default function BusinessReviewPresentation() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-blue-700">{calculatedFields.length}</p>
+                <p className="text-3xl font-bold text-blue-700">{calculatedFieldsWithSlides.length}</p>
                 <p className="text-sm text-muted-foreground">Derived from EPOCH data</p>
               </CardContent>
             </Card>
@@ -605,7 +628,7 @@ export default function BusinessReviewPresentation() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-orange-700">{manualFields.length}</p>
+                <p className="text-3xl font-bold text-orange-700">{manualFieldsWithSlides.length}</p>
                 <p className="text-sm text-muted-foreground">Requires external data input</p>
               </CardContent>
             </Card>
@@ -615,15 +638,15 @@ export default function BusinessReviewPresentation() {
             <TabsList>
               <TabsTrigger value="epoch" className="gap-2">
                 <Database className="h-4 w-4" />
-                EPOCH Fields ({epochFields.length})
+                EPOCH Fields ({epochFieldsWithSlides.length})
               </TabsTrigger>
               <TabsTrigger value="calculated" className="gap-2">
                 <BarChart3 className="h-4 w-4" />
-                Calculated ({calculatedFields.length})
+                Calculated ({calculatedFieldsWithSlides.length})
               </TabsTrigger>
               <TabsTrigger value="manual" className="gap-2">
                 <Edit className="h-4 w-4" />
-                Manual ({manualFields.length})
+                Manual ({manualFieldsWithSlides.length})
               </TabsTrigger>
             </TabsList>
 
@@ -637,20 +660,23 @@ export default function BusinessReviewPresentation() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {epochFields.map((field, index) => (
+                    {epochFieldsWithSlides.map((field, index) => (
                       <div
                         key={index}
                         className="flex items-start gap-3 p-4 rounded-lg border bg-green-50/50"
                       >
                         <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
                             <span className="font-semibold">{field.name}</span>
                             {field.table && (
                               <code className="text-xs bg-green-100 px-2 py-0.5 rounded text-green-800">
                                 {field.table}
                               </code>
                             )}
+                            <Badge variant="outline" className="text-xs">
+                              Slide {field.slideId}: {field.slideTitle}
+                            </Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">{field.description}</p>
                         </div>
@@ -671,15 +697,20 @@ export default function BusinessReviewPresentation() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {calculatedFields.map((field, index) => (
+                    {calculatedFieldsWithSlides.map((field, index) => (
                       <div
                         key={index}
                         className="flex items-start gap-3 p-4 rounded-lg border bg-blue-50/50"
                       >
                         <BarChart3 className="h-5 w-5 text-blue-600 mt-0.5" />
                         <div className="flex-1">
-                          <span className="font-semibold">{field.name}</span>
-                          <p className="text-sm text-muted-foreground mt-1">{field.description}</p>
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="font-semibold">{field.name}</span>
+                            <Badge variant="outline" className="text-xs">
+                              Slide {field.slideId}: {field.slideTitle}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{field.description}</p>
                         </div>
                       </div>
                     ))}
@@ -698,15 +729,20 @@ export default function BusinessReviewPresentation() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {manualFields.map((field, index) => (
+                    {manualFieldsWithSlides.map((field, index) => (
                       <div
                         key={index}
                         className="flex items-start gap-3 p-4 rounded-lg border bg-orange-50/50"
                       >
                         <AlertTriangle className="h-5 w-5 text-orange-500 mt-0.5" />
                         <div className="flex-1">
-                          <span className="font-semibold">{field.name}</span>
-                          <p className="text-sm text-muted-foreground mt-1">{field.description}</p>
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="font-semibold">{field.name}</span>
+                            <Badge variant="outline" className="text-xs">
+                              Slide {field.slideId}: {field.slideTitle}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{field.description}</p>
                         </div>
                       </div>
                     ))}

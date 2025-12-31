@@ -24,7 +24,13 @@ import {
   Eye,
   Plus,
   Ban,
-  PenLine
+  PenLine,
+  Users,
+  Pencil,
+  Trash2,
+  Mail,
+  Phone,
+  Building
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
@@ -327,10 +333,14 @@ export default function P2ControlCenter() {
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="status" className="flex items-center gap-2" data-testid="tab-status">
             <BarChart3 className="h-4 w-4" />
             Status
+          </TabsTrigger>
+          <TabsTrigger value="customers" className="flex items-center gap-2" data-testid="tab-customers">
+            <Users className="h-4 w-4" />
+            Customers
           </TabsTrigger>
           <TabsTrigger value="setup" className="flex items-center gap-2" data-testid="tab-setup">
             <Settings className="h-4 w-4" />
@@ -354,7 +364,7 @@ export default function P2ControlCenter() {
           </TabsTrigger>
           <TabsTrigger value="certifications" className="flex items-center gap-2" data-testid="tab-certifications">
             <Award className="h-4 w-4" />
-            Certifications
+            Certs
           </TabsTrigger>
         </TabsList>
 
@@ -369,6 +379,10 @@ export default function P2ControlCenter() {
               setActiveTab('schedule');
             }}
           />
+        </TabsContent>
+
+        <TabsContent value="customers">
+          <P2CustomersTab />
         </TabsContent>
 
         <TabsContent value="setup">
@@ -832,5 +846,502 @@ function P2TravelersTab() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+interface P2Customer {
+  id: number;
+  customerId: string;
+  customerName: string;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  billingAddress: string | null;
+  shippingAddress: string | null;
+  shipToAddress: string | null;
+  paymentTerms: string;
+  status: string;
+  notes: string | null;
+  rfqPrefix: string | null;
+  rfqSequences: Record<string, number> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function P2CustomersTab() {
+  const { toast } = useToast();
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<P2Customer | null>(null);
+  const [formData, setFormData] = useState({
+    customerId: '',
+    customerName: '',
+    contactEmail: '',
+    contactPhone: '',
+    billingAddress: '',
+    shippingAddress: '',
+    shipToAddress: '',
+    paymentTerms: 'NET_30',
+    status: 'ACTIVE',
+    notes: '',
+    rfqPrefix: '',
+  });
+
+  const { data: customers = [], isLoading } = useQuery<P2Customer[]>({
+    queryKey: ['/api/p2-customers-bypass'],
+    refetchInterval: 30000,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: typeof formData) => {
+      return apiRequest('/api/p2/customers', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-customers-bypass'] });
+      setShowAddDialog(false);
+      resetForm();
+      toast({ title: 'Customer created successfully' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to create customer', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: typeof formData }) => {
+      return apiRequest(`/api/p2/customers/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-customers-bypass'] });
+      setShowEditDialog(false);
+      setSelectedCustomer(null);
+      resetForm();
+      toast({ title: 'Customer updated successfully' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to update customer', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest(`/api/p2/customers/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-customers-bypass'] });
+      toast({ title: 'Customer deleted successfully' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to delete customer', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const resetForm = () => {
+    setFormData({
+      customerId: '',
+      customerName: '',
+      contactEmail: '',
+      contactPhone: '',
+      billingAddress: '',
+      shippingAddress: '',
+      shipToAddress: '',
+      paymentTerms: 'NET_30',
+      status: 'ACTIVE',
+      notes: '',
+      rfqPrefix: '',
+    });
+  };
+
+  const openEditDialog = (customer: P2Customer) => {
+    setSelectedCustomer(customer);
+    setFormData({
+      customerId: customer.customerId,
+      customerName: customer.customerName,
+      contactEmail: customer.contactEmail || '',
+      contactPhone: customer.contactPhone || '',
+      billingAddress: customer.billingAddress || '',
+      shippingAddress: customer.shippingAddress || '',
+      shipToAddress: customer.shipToAddress || '',
+      paymentTerms: customer.paymentTerms || 'NET_30',
+      status: customer.status,
+      notes: customer.notes || '',
+      rfqPrefix: customer.rfqPrefix || '',
+    });
+    setShowEditDialog(true);
+  };
+
+  const handleSubmit = () => {
+    if (!formData.customerId || !formData.customerName) {
+      toast({ title: 'Customer ID and Name are required', variant: 'destructive' });
+      return;
+    }
+    createMutation.mutate(formData);
+  };
+
+  const handleUpdate = () => {
+    if (!selectedCustomer) return;
+    updateMutation.mutate({ id: selectedCustomer.id, data: formData });
+  };
+
+  const handleDelete = (customer: P2Customer) => {
+    if (confirm(`Are you sure you want to delete ${customer.customerName}?`)) {
+      deleteMutation.mutate(customer.id);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>P2 Customers</CardTitle>
+            <CardDescription>
+              Manage customers for P2 purchase orders and RFQ tracking
+            </CardDescription>
+          </div>
+          <Button onClick={() => { resetForm(); setShowAddDialog(true); }} data-testid="button-add-p2-customer">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Customer
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : customers.length === 0 ? (
+          <div className="text-center py-8 border rounded-lg bg-muted/50">
+            <Users className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+            <p className="text-muted-foreground">No P2 customers yet</p>
+            <p className="text-sm text-muted-foreground mt-1">Add your first P2 customer to get started</p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Customer ID</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead>RFQ Prefix</TableHead>
+                <TableHead>Payment Terms</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {customers.map((customer) => (
+                <TableRow key={customer.id}>
+                  <TableCell className="font-mono text-sm">{customer.customerId}</TableCell>
+                  <TableCell className="font-medium">{customer.customerName}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1 text-sm">
+                      {customer.contactEmail && (
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <Mail className="h-3 w-3" />
+                          {customer.contactEmail}
+                        </div>
+                      )}
+                      {customer.contactPhone && (
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <Phone className="h-3 w-3" />
+                          {customer.contactPhone}
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {customer.rfqPrefix ? (
+                      <Badge variant="outline">{customer.rfqPrefix}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>{customer.paymentTerms || 'NET_30'}</TableCell>
+                  <TableCell>
+                    <Badge variant={customer.status === 'ACTIVE' ? 'default' : 'secondary'}>
+                      {customer.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => openEditDialog(customer)}
+                        data-testid={`button-edit-customer-${customer.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleDelete(customer)}
+                        className="text-red-600 hover:text-red-700"
+                        data-testid={`button-delete-customer-${customer.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add P2 Customer</DialogTitle>
+            <DialogDescription>
+              Create a new customer for P2 purchase orders
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="customerId">Customer ID *</Label>
+              <Input
+                id="customerId"
+                placeholder="e.g., STRATA-G"
+                value={formData.customerId}
+                onChange={(e) => setFormData({ ...formData, customerId: e.target.value.toUpperCase() })}
+                data-testid="input-customer-id"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="customerName">Customer Name *</Label>
+              <Input
+                id="customerName"
+                placeholder="e.g., Strata-G Solutions"
+                value={formData.customerName}
+                onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                data-testid="input-customer-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contactEmail">Contact Email</Label>
+              <Input
+                id="contactEmail"
+                type="email"
+                placeholder="contact@example.com"
+                value={formData.contactEmail}
+                onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                data-testid="input-contact-email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="contactPhone">Contact Phone</Label>
+              <Input
+                id="contactPhone"
+                placeholder="(555) 123-4567"
+                value={formData.contactPhone}
+                onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                data-testid="input-contact-phone"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rfqPrefix">RFQ Prefix (3 letters)</Label>
+              <Input
+                id="rfqPrefix"
+                placeholder="e.g., STR"
+                maxLength={3}
+                value={formData.rfqPrefix}
+                onChange={(e) => setFormData({ ...formData, rfqPrefix: e.target.value.toUpperCase() })}
+                data-testid="input-rfq-prefix"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="paymentTerms">Payment Terms</Label>
+              <Select value={formData.paymentTerms} onValueChange={(v) => setFormData({ ...formData, paymentTerms: v })}>
+                <SelectTrigger data-testid="select-payment-terms">
+                  <SelectValue placeholder="Select terms" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NET_15">Net 15</SelectItem>
+                  <SelectItem value="NET_30">Net 30</SelectItem>
+                  <SelectItem value="NET_45">Net 45</SelectItem>
+                  <SelectItem value="NET_60">Net 60</SelectItem>
+                  <SelectItem value="DUE_ON_RECEIPT">Due on Receipt</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="billingAddress">Billing Address</Label>
+              <Input
+                id="billingAddress"
+                placeholder="123 Main St, City, State ZIP"
+                value={formData.billingAddress}
+                onChange={(e) => setFormData({ ...formData, billingAddress: e.target.value })}
+                data-testid="input-billing-address"
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="shippingAddress">Shipping Address</Label>
+              <Input
+                id="shippingAddress"
+                placeholder="456 Warehouse Rd, City, State ZIP"
+                value={formData.shippingAddress}
+                onChange={(e) => setFormData({ ...formData, shippingAddress: e.target.value })}
+                data-testid="input-shipping-address"
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="notes">Notes</Label>
+              <Input
+                id="notes"
+                placeholder="Any additional notes..."
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                data-testid="input-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
+            <Button 
+              onClick={handleSubmit} 
+              disabled={createMutation.isPending}
+              data-testid="button-save-customer"
+            >
+              {createMutation.isPending ? 'Creating...' : 'Create Customer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit P2 Customer</DialogTitle>
+            <DialogDescription>
+              Update customer details
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-customerId">Customer ID</Label>
+              <Input
+                id="edit-customerId"
+                value={formData.customerId}
+                disabled
+                className="bg-muted"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-customerName">Customer Name *</Label>
+              <Input
+                id="edit-customerName"
+                value={formData.customerName}
+                onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                data-testid="input-edit-customer-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-contactEmail">Contact Email</Label>
+              <Input
+                id="edit-contactEmail"
+                type="email"
+                value={formData.contactEmail}
+                onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                data-testid="input-edit-contact-email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-contactPhone">Contact Phone</Label>
+              <Input
+                id="edit-contactPhone"
+                value={formData.contactPhone}
+                onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                data-testid="input-edit-contact-phone"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-rfqPrefix">RFQ Prefix (3 letters)</Label>
+              <Input
+                id="edit-rfqPrefix"
+                maxLength={3}
+                value={formData.rfqPrefix}
+                onChange={(e) => setFormData({ ...formData, rfqPrefix: e.target.value.toUpperCase() })}
+                data-testid="input-edit-rfq-prefix"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-paymentTerms">Payment Terms</Label>
+              <Select value={formData.paymentTerms} onValueChange={(v) => setFormData({ ...formData, paymentTerms: v })}>
+                <SelectTrigger data-testid="select-edit-payment-terms">
+                  <SelectValue placeholder="Select terms" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NET_15">Net 15</SelectItem>
+                  <SelectItem value="NET_30">Net 30</SelectItem>
+                  <SelectItem value="NET_45">Net 45</SelectItem>
+                  <SelectItem value="NET_60">Net 60</SelectItem>
+                  <SelectItem value="DUE_ON_RECEIPT">Due on Receipt</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-status">Status</Label>
+              <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v })}>
+                <SelectTrigger data-testid="select-edit-status">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ACTIVE">Active</SelectItem>
+                  <SelectItem value="INACTIVE">Inactive</SelectItem>
+                  <SelectItem value="SUSPENDED">Suspended</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="edit-billingAddress">Billing Address</Label>
+              <Input
+                id="edit-billingAddress"
+                value={formData.billingAddress}
+                onChange={(e) => setFormData({ ...formData, billingAddress: e.target.value })}
+                data-testid="input-edit-billing-address"
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="edit-shippingAddress">Shipping Address</Label>
+              <Input
+                id="edit-shippingAddress"
+                value={formData.shippingAddress}
+                onChange={(e) => setFormData({ ...formData, shippingAddress: e.target.value })}
+                data-testid="input-edit-shipping-address"
+              />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label htmlFor="edit-notes">Notes</Label>
+              <Input
+                id="edit-notes"
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                data-testid="input-edit-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+            <Button 
+              onClick={handleUpdate} 
+              disabled={updateMutation.isPending}
+              data-testid="button-update-customer"
+            >
+              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }

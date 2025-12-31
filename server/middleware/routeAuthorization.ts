@@ -78,7 +78,13 @@ const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-list',
       '/orders-management',
       '/customers',
+      '/customer-satisfaction',
       '/shipping-tracker',
+      '/discounts',
+      '/marketing-communications',
+      '/finance/bulk-payment',
+      '/watch-rules',
+      '/refund-request',
     ],
   },
 

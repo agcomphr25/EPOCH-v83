@@ -33,7 +33,10 @@ import {
   Upload,
   Paperclip,
   Download,
-  Trash2
+  Trash2,
+  Eye,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -143,8 +146,15 @@ export default function ProjectDetailPage() {
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [uploadNotes, setUploadNotes] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  const { data: currentUser } = useQuery<{ username: string; role: string }>({
+    queryKey: ['/api/auth/me'],
+  });
+
+  const isAdmin = currentUser?.role === 'ADMIN' || currentUser?.role === 'OWNER';
 
   const { data: project, isLoading } = useQuery<Project>({
     queryKey: ['/api/projects', id],
@@ -154,6 +164,27 @@ export default function ProjectDetailPage() {
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ['/api/employees'],
   });
+
+  const { data: allStepAttachments = [] } = useQuery<StepAttachment[]>({
+    queryKey: ['/api/project-step-attachments/by-project', id],
+    enabled: !!id,
+  });
+
+  const getAttachmentsForStep = (stepId: string) => {
+    return allStepAttachments.filter(a => a.stepId === stepId);
+  };
+
+  const toggleStepExpanded = (stepId: string) => {
+    setExpandedSteps(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(stepId)) {
+        newSet.delete(stepId);
+      } else {
+        newSet.add(stepId);
+      }
+      return newSet;
+    });
+  };
 
   const updateProjectMutation = useMutation({
     mutationFn: async (data: Partial<Project>) => {
@@ -469,6 +500,9 @@ export default function ProjectDetailPage() {
                   const StatusIcon = STEP_STATUS_ICONS[step.status];
                   const linkedId = getLinkedId(step);
                   const isLast = index === project.steps.length - 1;
+                  const stepAttachments = getAttachmentsForStep(step.id);
+                  const isExpanded = expandedSteps.has(step.id);
+                  const hasContent = stepAttachments.length > 0 || linkedId;
 
                   return (
                     <div key={step.id} className="relative flex gap-4 pb-8" data-testid={`step-${step.stepType}`}>
@@ -490,7 +524,7 @@ export default function ProjectDetailPage() {
                                 : 'Pending'}
                             </p>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 flex-wrap justify-end">
                             {step.status === 'in_progress' && (
                               <>
                                 <Button
@@ -538,16 +572,124 @@ export default function ProjectDetailPage() {
                                 </Button>
                               </>
                             )}
-                            {step.status === 'completed' && linkedId && (
-                              <Badge variant="secondary" className="flex items-center gap-1">
-                                <LinkIcon className="h-3 w-3" />
-                                Linked: {linkedId}
-                              </Badge>
+                            {step.status === 'completed' && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => window.open(config?.route, '_blank')}
+                                  data-testid={`button-view-${step.stepType}`}
+                                >
+                                  <Eye className="mr-1 h-4 w-4" />
+                                  View Form
+                                </Button>
+                                {hasContent && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => toggleStepExpanded(step.id)}
+                                    data-testid={`button-toggle-${step.stepType}`}
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronUp className="mr-1 h-4 w-4" />
+                                    ) : (
+                                      <ChevronDown className="mr-1 h-4 w-4" />
+                                    )}
+                                    {stepAttachments.length > 0 ? `${stepAttachments.length} Docs` : 'Details'}
+                                  </Button>
+                                )}
+                                {isAdmin && (
+                                  <>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedStep(step);
+                                        setIsUploadDialogOpen(true);
+                                      }}
+                                      data-testid={`button-upload-completed-${step.stepType}`}
+                                    >
+                                      <Upload className="mr-1 h-4 w-4" />
+                                      Attach
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedStep(step);
+                                        setLinkId(linkedId?.toString() || '');
+                                        setIsLinkDialogOpen(true);
+                                      }}
+                                      data-testid={`button-link-completed-${step.stepType}`}
+                                    >
+                                      <LinkIcon className="mr-1 h-4 w-4" />
+                                      {linkedId ? 'Edit Link' : 'Link'}
+                                    </Button>
+                                  </>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
                         {step.notes && (
                           <p className="text-sm bg-muted p-2 rounded">{step.notes}</p>
+                        )}
+                        {step.status === 'completed' && isExpanded && (
+                          <div className="mt-3 space-y-3 pl-2 border-l-2 border-green-200">
+                            {linkedId && (
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary" className="flex items-center gap-1">
+                                  <LinkIcon className="h-3 w-3" />
+                                  Linked Record: {linkedId}
+                                </Badge>
+                              </div>
+                            )}
+                            {stepAttachments.length > 0 && (
+                              <div className="space-y-2">
+                                <p className="text-sm font-medium text-muted-foreground">Attached Documents:</p>
+                                <div className="space-y-1">
+                                  {stepAttachments.map((attachment) => (
+                                    <div 
+                                      key={attachment.id} 
+                                      className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                        <span>{attachment.originalFileName}</span>
+                                        <span className="text-xs text-muted-foreground">
+                                          ({(attachment.fileSize / 1024).toFixed(1)} KB)
+                                        </span>
+                                      </div>
+                                      <div className="flex gap-1">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => window.open(`/api/project-step-attachments/download/${attachment.id}`, '_blank')}
+                                          data-testid={`button-download-attachment-${attachment.id}`}
+                                        >
+                                          <Download className="h-4 w-4" />
+                                        </Button>
+                                        {isAdmin && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-red-600 hover:text-red-700"
+                                            onClick={() => {
+                                              setSelectedStep(step);
+                                              deleteAttachmentMutation.mutate(attachment.id);
+                                            }}
+                                            data-testid={`button-delete-attachment-${attachment.id}`}
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>

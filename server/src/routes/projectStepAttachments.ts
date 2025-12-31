@@ -7,6 +7,23 @@ import { sessionAwareAuth } from '../../middleware/auth';
 const router = express.Router();
 const objectStorageService = new ObjectStorageService();
 
+router.get('/by-project/:projectId', sessionAwareAuth, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    const project = await storage.getProject(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    const attachments = await storage.getProjectStepAttachmentsByProject(projectId);
+    res.json(attachments);
+  } catch (error) {
+    console.error('Error fetching project step attachments by project:', error);
+    res.status(500).json({ error: 'Failed to fetch project step attachments' });
+  }
+});
+
 router.get('/:stepId', sessionAwareAuth, async (req, res) => {
   try {
     const { stepId } = req.params;

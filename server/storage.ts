@@ -1976,6 +1976,13 @@ export interface IStorage {
   updateProjectStep(id: string, data: Partial<InsertProjectStep>): Promise<ProjectStep>;
   deleteProjectStep(id: string): Promise<void>;
 
+  // Project Step Attachments CRUD
+  getProjectStepAttachments(stepId: string): Promise<ProjectStepAttachment[]>;
+  getProjectStepAttachmentsByProject(projectId: string): Promise<ProjectStepAttachment[]>;
+  getProjectStepAttachment(id: number): Promise<ProjectStepAttachment | undefined>;
+  createProjectStepAttachment(data: InsertProjectStepAttachment): Promise<ProjectStepAttachment>;
+  deleteProjectStepAttachment(id: number): Promise<void>;
+
   // Project Activity Log
   getProjectActivityLog(projectId: string): Promise<ProjectActivityLog[]>;
   createProjectActivityLog(data: InsertProjectActivityLog): Promise<ProjectActivityLog>;
@@ -16060,6 +16067,40 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProjectStep(id: string): Promise<void> {
     await db.delete(projectSteps).where(eq(projectSteps.id, id));
+  }
+
+  // Project Step Attachments CRUD
+  async getProjectStepAttachments(stepId: string): Promise<ProjectStepAttachment[]> {
+    return await db
+      .select()
+      .from(projectStepAttachments)
+      .where(eq(projectStepAttachments.stepId, stepId))
+      .orderBy(desc(projectStepAttachments.createdAt));
+  }
+
+  async getProjectStepAttachmentsByProject(projectId: string): Promise<ProjectStepAttachment[]> {
+    return await db
+      .select()
+      .from(projectStepAttachments)
+      .where(eq(projectStepAttachments.projectId, projectId))
+      .orderBy(desc(projectStepAttachments.createdAt));
+  }
+
+  async getProjectStepAttachment(id: number): Promise<ProjectStepAttachment | undefined> {
+    const [attachment] = await db
+      .select()
+      .from(projectStepAttachments)
+      .where(eq(projectStepAttachments.id, id));
+    return attachment || undefined;
+  }
+
+  async createProjectStepAttachment(data: InsertProjectStepAttachment): Promise<ProjectStepAttachment> {
+    const [attachment] = await db.insert(projectStepAttachments).values(data).returning();
+    return attachment;
+  }
+
+  async deleteProjectStepAttachment(id: number): Promise<void> {
+    await db.delete(projectStepAttachments).where(eq(projectStepAttachments.id, id));
   }
 
   // Project Activity Log

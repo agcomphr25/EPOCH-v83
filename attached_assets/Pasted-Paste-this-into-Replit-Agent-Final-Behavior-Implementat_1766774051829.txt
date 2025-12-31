@@ -1,0 +1,89 @@
+Paste this into Replit Agent — Final Behavior Implementation Prompt
+
+This will update notifications.ts logic so notifications respect customer preference correctly.
+
+Goal: Update shipping notification behavior to follow these rules:
+
+Notification Delivery Rules
+
+If customer's preferredCommunicationMethod = ['sms'] → send SMS only
+
+If ['email'] → send email only
+
+If ['sms','email'] or ['email','sms'] → try both, but notification counts successful if at least one succeeds
+
+If SMS preferred but Twilio credentials missing → fallback to email instead of failing
+
+If no delivery succeeds → throw error
+
+Code Changes to Apply in server/utils/notifications.ts
+const allowSms = Boolean(process.env.TWILIO_SID && process.env.TWILIO_AUTH_TOKEN);
+const prefersSms = preferredMethods.includes("sms");
+const prefersEmail = preferredMethods.includes("email");
+
+let notificationSucceeded = false;
+const succeededMethods: string[] = [];
+
+// --- EMAIL PATH ---
+if (prefersEmail) {
+  try {
+    await sendEmailNotification(...);
+    succeededMethods.push("email");
+    notificationSucceeded = true;
+    console.log("[NOTIFY] Email succeeded");
+  } catch (err) {
+    console.error("[NOTIFY-EMAIL-FAIL]", err);
+  }
+}
+
+// --- SMS PATH ---
+if (prefersSms) {
+  if (!allowSms) {
+    console.log("[NOTIFY] SMS preferred but Twilio missing → fallback to email only");
+  } else {
+    try {
+      await sendSMSNotification(...);
+      succeededMethods.push("sms");
+      notificationSucceeded = true;
+      console.log("[NOTIFY] SMS succeeded");
+    } catch (err) {
+      console.error("[NOTIFY-SMS-FAIL]", err);
+    }
+  }
+}
+
+// Final decision
+if (!notificationSucceeded) {
+  throw new Error("No notification method succeeded");
+}
+
+// Update order only if success
+await updateOrderNotificationStatus(orderId, succeededMethods);
+
+Acceptance Criteria
+
+If customer prefers email only → SMS never attempted
+
+If customer prefers SMS only → email not attempted unless Twilio missing (fallback)
+
+UI success shows even if one method fails but others succeed
+
+No more red error toast if email sent successfully
+
+Customer notified status updates correctly
+
+After implementation:
+
+Test order with email preference → expect successful email notification
+
+Test order with sms preference →
+
+With Twilio configured → SMS sent
+
+Without Twilio → fallback email sent
+
+Test ['sms','email'] → one success marks completed
+
+Report logs back if anything unexpected appears
+
+Return the diff summary when complete.

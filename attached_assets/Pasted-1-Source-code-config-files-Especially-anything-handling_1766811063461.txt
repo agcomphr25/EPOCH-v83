@@ -1,0 +1,85 @@
+1. Source code & config files
+
+(Especially anything handling auth, users, tokens, secrets, uploads, or DB access)
+
+Ask the agent:
+
+Show me all code related to authentication, login, tokens, and permissions.
+List files containing "jwt", "auth", "login", "password", or "token".
+Show database connection and environment variable handling code.
+Show code for file uploads and downloads.
+Show any endpoint that interacts with customers or external systems.
+
+2. Secrets & environment handling
+
+(to verify secrets aren’t hardcoded or exposed)
+
+Ask:
+
+Search for API keys, passwords, tokens in code.
+Show .env or environment variable usage (without revealing secret values).
+Check if any credentials are present in source control.
+
+3. API endpoints & server routes
+
+I look for input validation, unsafe queries, access control, etc.
+
+Ask:
+
+List all backend routes and their HTTP verbs.
+Show middleware stack (especially auth + role checks).
+List routes that write or delete data.
+
+
+If using Express/TS:
+
+Search in server routes folder and display route definitions.
+Search for "router." in project.
+
+4. Database queries
+
+(to check for injection, unescaped input, privilege leaks)
+
+Ask:
+
+Search for raw SQL queries.
+Show code performing inserts/updates based on user input.
+Show Drizzle query snippets handling parameters.
+
+5. User roles & permission enforcement
+
+(this is a common vulnerability area)
+
+Ask:
+
+Show role and permission handling logic.
+Show the authorize or protectRoute middleware.
+Search project for "admin", "role", "permissions".
+
+6. Frontend protections
+
+(xss, csrf, insecure storage, exposed env vars)
+
+Ask:
+
+Search for usage of localStorage/sessionStorage for tokens.
+Show fetch() calls to see how tokens are transmitted.
+Show any client-side environment variables (NEXT_PUBLIC, VITE_*).
+
+7. Package & dependency review
+
+(old libraries = CVE risk)
+
+Ask:
+
+Show package.json dependencies.
+Run npm audit or equivalent.
+
+8. Logging & error handling
+
+(to ensure sensitive info isn't logged or leaked)
+
+Ask:
+
+Search for console.log statements in auth and DB files.
+Show global error handler.

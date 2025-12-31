@@ -11,6 +11,7 @@ import {
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { sendEmailViaGraphAPI } from '../../utils/microsoftGraph';
 import { getUncachableSendGridClient } from '../../utils/sendgrid';
+import { getTwilioConfig, isTwilioConfigured } from '../../config/notifications';
 
 const router = Router();
 
@@ -40,10 +41,29 @@ const smsSchema = z.object({
   orderId: z.string().optional().nullable(),
 });
 
+// Diagnostic endpoint to confirm email config
+router.get('/email/test', async (req, res) => {
+  try {
+    res.json({
+      SENDGRID_API_KEY: !!process.env.SENDGRID_API_KEY,
+      SENDGRID_FROM_EMAIL: process.env.SENDGRID_FROM_EMAIL || 'NOT SET',
+      EMAIL_PROVIDER: process.env.EMAIL_PROVIDER || 'sendgrid (default)',
+      status: "Email service reachable",
+      nextStep: "Try sending a test email via POST /api/communications/email"
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Send email via SendGrid or Microsoft Graph
 router.post('/email', async (req, res) => {
   try {
+    console.log('[ZOD] Email payload about to validate:', JSON.stringify(req.body, null, 2));
+    
     const data = emailSchema.parse(req.body);
+    
+    console.log('[ZOD] Email payload validated successfully');
 
     // Explicitly resolve provider - only use Microsoft if explicitly configured
     // Default strictly to SendGrid for stability
@@ -80,8 +100,10 @@ router.post('/email', async (req, res) => {
     } else {
       // Send via SendGrid (default) using Replit integration
       try {
+        console.log('[SENDGRID] Getting SendGrid client...');
         const { client, fromEmail } = await getUncachableSendGridClient();
         senderEmail = fromEmail.email; // Use verified sender email from integration
+        console.log('[SENDGRID] Client obtained, sender:', senderEmail);
 
         const msg = {
           to: data.to,
@@ -90,14 +112,20 @@ router.post('/email', async (req, res) => {
           text: data.message,
           html: data.html || data.message.replace(/\n/g, '<br>'),
         };
+        
+        console.log('[SENDGRID] Sending message:', { to: msg.to, from: msg.from, subject: msg.subject });
 
         const emailResult = await client.send(msg);
         externalId = emailResult[0].headers['x-message-id'] as string;
+        console.log('[SENDGRID] Send successful, messageId:', externalId);
       } catch (error: any) {
-        console.error('SendGrid integration error:', error);
+        console.error('[SENDGRID ERROR] Integration error:', error);
+        console.error('[SENDGRID ERROR] Response body:', error?.response?.body || 'N/A');
+        console.error('[SENDGRID ERROR] Status:', error?.code || error?.response?.statusCode || 'N/A');
         return res.status(500).json({ 
           error: 'SendGrid not configured',
           details: error.message,
+          responseBody: error?.response?.body,
           hint: 'Make sure SendGrid integration is set up with a verified sender email'
         });
       }
@@ -139,9 +167,19 @@ router.post('/email', async (req, res) => {
       provider,
     });
   } catch (error: any) {
-    console.error('Email error:', error);
+    console.error('[EMAIL ERROR] Full error:', error);
+    
+    // Check for Zod validation errors
+    if (error.name === 'ZodError') {
+      console.error('[ZOD ERROR] Validation failed:', JSON.stringify(error.errors, null, 2));
+      return res.status(400).json({
+        error: 'Email validation error',
+        details: error.errors,
+      });
+    }
 
     if (error.response?.body?.errors) {
+      console.error('[EMAIL ERROR] Service error body:', error.response.body.errors);
       return res.status(400).json({
         error: 'Email service error',
         details: error.response.body.errors,
@@ -160,19 +198,18 @@ router.post('/sms', async (req, res) => {
   try {
     const data = smsSchema.parse(req.body);
 
-    // Initialize Twilio
-    const accountSid = process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_NUMBER || process.env.TWILIO_PHONE_NUMBER;
+    // Initialize Twilio using centralized config
+    const twilioConfig = getTwilioConfig();
 
-    if (!accountSid || !authToken || !fromNumber) {
-      console.error('Missing Twilio config:', { accountSid: !!accountSid, authToken: !!authToken, fromNumber: !!fromNumber });
+    if (!isTwilioConfigured()) {
+      console.error('Missing Twilio config:', { accountSid: !!twilioConfig.accountSid, authToken: !!twilioConfig.authToken, fromNumber: !!twilioConfig.fromNumber });
       return res
         .status(500)
         .json({ error: 'Twilio credentials not configured' });
     }
 
-    const twilioClient = twilio(accountSid, authToken);
+    const twilioClient = twilio(twilioConfig.accountSid, twilioConfig.authToken);
+    const fromNumber = twilioConfig.fromNumber;
 
     const message = await twilioClient.messages.create({
       body: data.message,
@@ -570,6 +607,131 @@ router.post('/test-sendgrid', async (req, res) => {
       error: 'SendGrid test failed',
       details: errorDetails,
       hint: 'Check that SENDGRID_FROM_EMAIL is a verified sender in your SendGrid account',
+    });
+  }
+});
+
+// DIAGNOSTIC: Test email endpoint using same path as tracking notifications
+// GET /api/debug/email-test - Hard-coded to send to glenn@agcomposites.com
+router.get('/debug/email-test', async (req, res) => {
+  console.log('='.repeat(60));
+  console.log('[DEBUG EMAIL TEST] Starting diagnostic email test');
+  console.log('[DEBUG EMAIL TEST] Timestamp:', new Date().toISOString());
+  console.log('='.repeat(60));
+  
+  try {
+    // Log configuration
+    console.log('[DEBUG EMAIL TEST] Environment Check:');
+    console.log('  SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? 'present' : 'MISSING');
+    console.log('  SENDGRID_FROM_EMAIL:', process.env.SENDGRID_FROM_EMAIL || 'NOT SET');
+    console.log('  EMAIL_PROVIDER:', process.env.EMAIL_PROVIDER || 'not set (defaults to sendgrid)');
+    
+    // Get SendGrid client (same path as notifications)
+    const { client, fromEmail } = await getUncachableSendGridClient();
+    
+    console.log('[DEBUG EMAIL TEST] Resolved sender:', fromEmail.email);
+    console.log('[DEBUG EMAIL TEST] Sending test email to glenn@agcomposites.com');
+    
+    const testMsg = {
+      to: 'glenn@agcomposites.com',
+      from: fromEmail,
+      subject: 'EPOCH Email Test - Tracking Notification Pipeline',
+      text: `Tracking notification pipeline test\n\nTimestamp: ${new Date().toISOString()}\nSender: ${fromEmail.email}\n\nThis email uses the same SendGrid path as tracking notifications.`,
+      html: `
+        <h2>EPOCH Email Test - Tracking Notification Pipeline</h2>
+        <p>This email uses the same SendGrid path as tracking notifications.</p>
+        <ul>
+          <li><strong>Timestamp:</strong> ${new Date().toISOString()}</li>
+          <li><strong>Sender:</strong> ${fromEmail.email}</li>
+          <li><strong>Provider:</strong> SendGrid</li>
+        </ul>
+      `,
+    };
+    
+    console.log('[DEBUG EMAIL TEST] Message payload:', {
+      to: testMsg.to,
+      from: testMsg.from,
+      subject: testMsg.subject,
+    });
+    
+    const [response] = await client.send(testMsg);
+    
+    console.log('[DEBUG EMAIL TEST] ✅ SUCCESS');
+    console.log('[DEBUG EMAIL TEST] Status Code:', response.statusCode);
+    console.log('[DEBUG EMAIL TEST] Message ID:', response.headers['x-message-id']);
+    console.log('='.repeat(60));
+    
+    res.json({
+      success: true,
+      message: 'Diagnostic email sent successfully',
+      details: {
+        to: 'glenn@agcomposites.com',
+        from: fromEmail.email,
+        statusCode: response.statusCode,
+        messageId: response.headers['x-message-id'],
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (error: any) {
+    console.error('[DEBUG EMAIL TEST] ❌ FAILED');
+    console.error('[DEBUG EMAIL TEST] Error:', error?.message || error);
+    console.error('[DEBUG EMAIL TEST] Response Body:', error?.response?.body || 'N/A');
+    console.error('[DEBUG EMAIL TEST] Status Code:', error?.code || error?.response?.statusCode || 'N/A');
+    console.error('='.repeat(60));
+    
+    // Return full error details
+    const errorBody = error?.response?.body || { message: error?.message || 'Unknown error' };
+    
+    res.status(500).json({
+      success: false,
+      error: 'Diagnostic email failed',
+      details: {
+        message: error?.message,
+        responseBody: errorBody,
+        statusCode: error?.code || error?.response?.statusCode,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  }
+});
+
+// Get notification history for a specific order
+router.get('/order/:orderId/history', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    if (!orderId) {
+      return res.status(400).json({ error: 'Order ID is required' });
+    }
+
+    // Get all communication logs for this order, ordered by most recent first
+    const notifications = await db
+      .select()
+      .from(communicationLogs)
+      .where(eq(communicationLogs.orderId, orderId))
+      .orderBy(desc(communicationLogs.sentAt));
+
+    res.json({
+      orderId,
+      count: notifications.length,
+      notifications: notifications.map((n) => ({
+        id: n.id,
+        method: n.method,
+        type: n.type,
+        recipient: n.recipient,
+        subject: n.subject,
+        message: n.message?.substring(0, 200) + (n.message && n.message.length > 200 ? '...' : ''),
+        status: n.status,
+        error: n.error,
+        sentAt: n.sentAt,
+        externalId: n.externalId,
+      })),
+    });
+  } catch (error: any) {
+    console.error('Error fetching notification history:', error);
+    res.status(500).json({
+      error: 'Failed to fetch notification history',
+      details: error.message,
     });
   }
 });

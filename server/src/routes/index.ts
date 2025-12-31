@@ -90,6 +90,7 @@ import pdfSettingsRoutes from './pdfSettings';
 import p2LayupSchedulesRoutes from './p2LayupSchedules';
 import preproductionChecklistsRoutes from './preproductionChecklists';
 import healthChecksRoutes from './healthChecks';
+import monitoredLinksRoutes from './monitoredLinks';
 import projectsRoutes from './projects';
 import projectStepAttachmentsRoutes from './projectStepAttachments';
 import modelAnalyticsRoutes from './modelAnalytics';
@@ -101,6 +102,7 @@ import voiceNotesRoutes from './voiceNotes';
 import patternSignalsRoutes from './patternSignals';
 import signPdfRoutes from './signPdf';
 import signatureWorkflowRoutes from './signatureWorkflow';
+import timerRoutes from './timer';
 import { registerProcessRunnerRoutes } from './processRunner';
 import { registerTimeClockRoutes } from './timeClock';
 import { registerOutreachEngineRoutes } from './outreachEngine';
@@ -259,6 +261,7 @@ export function registerRoutes(app: Express): Server {
   
   // Signature workflow routes - multi-signer document routing
   app.use('/api/signature-workflow', signatureWorkflowRoutes);
+  app.use('/api/timer', timerRoutes);
   
   // Object storage routes - cloud file uploads
   registerObjectStorageRoutes(app);
@@ -368,6 +371,9 @@ export function registerRoutes(app: Express): Server {
 
   // Health Checks routes
   app.use('/api/health-checks', healthChecksRoutes);
+
+  // Monitored Links routes (for link health checks)
+  app.use('/api/monitored-links', monitoredLinksRoutes);
 
   // Reports routes
   app.use('/api/reports', reportsRoutes);

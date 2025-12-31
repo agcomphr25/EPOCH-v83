@@ -417,7 +417,7 @@ router.post('/update-tracking/:orderId', async (req: Request, res: Response) => 
         });
 
         if (notificationResult.success) {
-          console.log(`Notification sent for order ${orderId} via ${notificationResult.methods.join(', ')}`);
+          console.log(`Notification sent for order ${orderId} via ${notificationResult.methods?.join(', ') || 'unknown'}`);
         } else {
           console.error(`Notification failed for order ${orderId}:`, notificationResult.errors);
         }
@@ -429,7 +429,7 @@ router.post('/update-tracking/:orderId', async (req: Request, res: Response) => 
     res.json({
       success: true,
       message: sendNotification && notificationResult?.success 
-        ? `Tracking updated and customer notified via ${notificationResult.methods.join(' and ')}`
+        ? `Tracking updated and customer notified via ${notificationResult.methods?.join(' and ') || 'email/sms'}`
         : 'Tracking information updated',
       trackingNumber: trackingNumber.trim(),
       carrier: carrier || 'UPS',
@@ -855,13 +855,13 @@ router.post('/create-label', async (req: Request, res: Response) => {
 
               if (notificationResult.success) {
                 console.log(
-                  `✅ Shipping notification sent via ${notificationResult.methods.join(', ')} for order ${orderId}`
+                  `✅ Shipping notification sent via ${notificationResult.methods?.join(', ') || 'unknown'} for order ${orderId}`
                 );
                 
                 // Update order with notification status
                 const notificationUpdateData = {
                   customerNotified: true,
-                  notificationMethod: notificationResult.methods.join(', '),
+                  notificationMethod: notificationResult.methods?.join(', ') || 'email',
                   notificationSentAt: new Date(),
                 };
                 
@@ -1476,7 +1476,6 @@ router.post('/add-tracking/:orderId', async (req: Request, res: Response) => {
 router.post('/bulk/create-consolidated-label', async (req: Request, res: Response) => {
   try {
     const {
-      orderIds,
       items, // New: array of {orderId, isRma, rmaId, originalOrderId}
       packageDetails,
       serviceCode,
@@ -1484,6 +1483,9 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
       receiverAccount,
       declaredValue,
     } = req.body;
+
+    // Derive orderIds from request body or from items array (safety fallback)
+    const orderIds: string[] = req.body.orderIds || items?.map((i: any) => i.orderId) || [];
 
     // Support both old format (orderIds) and new format (items with RMA info)
     const shipmentItems = items || orderIds?.map((id: string) => ({ orderId: id })) || [];
@@ -1673,7 +1675,7 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
 
     const shipmentPayload = buildUPSShipmentPayloadOAuth(
       {
-        orderId: orderIds.join('+'), // Combine order IDs for reference
+        orderId: orderIds.length ? orderIds.join('+') : 'UNKNOWN', // Safely combine order IDs
         shipToAddress,
         shipFromAddress,
         packageWeight: packageDetails.weight || 5,
@@ -1685,7 +1687,9 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
         billingOption: billingOption || 'sender',
         receiverAccount: billingOption === 'receiver' ? receiverAccount : undefined,
         serviceType: serviceCode || '03',
-        reference1: `${orderIds.length} orders: ${orderIds[0]}${orderIds.length > 1 ? '+' : ''}`.substring(0, 35),
+        reference1: orderIds.length
+          ? `${orderIds.length} orders: ${orderIds[0]}`.substring(0, 35)
+          : 'Consolidated shipment'.substring(0, 35),
         reference2: `Consolidated shipment`.substring(0, 35),
       },
       upsShipperNumber
@@ -1780,6 +1784,10 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
     }
   } catch (error: any) {
     console.error('Error creating consolidated label:', error);
+    // Log full UPS error response for debugging
+    if (error?.response?.data) {
+      console.error('[UPS SHIP ERROR]', JSON.stringify(error.response.data, null, 2));
+    }
     res.status(500).json({
       success: false,
       error: error.response?.data?.response?.errors?.[0]?.message || error.message || 'Failed to create consolidated shipping label',
@@ -2406,12 +2414,18 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
       });
     }
 
-    // Send notification
+    // ===========================================
+    // 🔥 FINAL NOTIFICATION SUCCESS LOGIC
+    // ===========================================
     const { sendCustomerNotification } = await import('../../utils/notifications');
     
-    const preferredMethods: string[] = [];
-    if (customer.email) preferredMethods.push('email');
-    if (customer.phone) preferredMethods.push('sms');
+    // Use customer's actual preferred communication method, or default to email if not set
+    const customerPreference = (customer.preferredCommunicationMethod as string[]) || [];
+    const preferredMethods: string[] = customerPreference.length > 0 
+      ? customerPreference 
+      : (customer.email ? ['email'] : (customer.phone ? ['sms'] : []));
+    
+    console.log('[NOTIFY-CUSTOMER] Customer preference:', customerPreference, '→ Using:', preferredMethods);
     
     const notificationResult = await sendCustomerNotification({
       orderId: order.orderId,
@@ -2420,47 +2434,35 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
       estimatedDelivery: order.estimatedDelivery ? new Date(order.estimatedDelivery) : undefined,
       preferredMethods,
     });
+    
+    console.log('[NOTIFY-CUSTOMER] Result:', JSON.stringify(notificationResult));
 
-    // Consider it successful if at least ONE method worked
-    const hasSuccessfulNotification = notificationResult.methods.length > 0;
-
-    if (hasSuccessfulNotification) {
-      // Update order with notification status
-      const updateData = {
-        customerNotified: true,
-        notificationMethod: notificationResult.methods.join(', '),
-        notificationSentAt: new Date(),
-      };
-
-      await db
-        .update(allOrders)
-        .set(updateData)
-        .where(eq(allOrders.orderId, orderId));
-
-      // Return success with warnings if some methods failed
-      const responseMessage = (notificationResult.errors && notificationResult.errors.length > 0)
-        ? `Customer notified via ${notificationResult.methods.join(' and ')}, but some methods failed`
-        : `Customer notified successfully via ${notificationResult.methods.join(' and ')}`;
-
-      res.json({
+    // If at least one notification method succeeded → return success
+    const succeededMethods = notificationResult.methods || [];
+    
+    if (succeededMethods.length > 0) {
+      console.log('[API RESPONSE] Notification successful via:', succeededMethods);
+      
+      return res.status(200).json({
         success: true,
-        message: responseMessage,
-        methods: notificationResult.methods,
-        warnings: notificationResult.errors,
-      });
-    } else {
-      // All methods failed
-      res.status(500).json({
-        success: false,
-        error: 'All notification methods failed. Check SendGrid sender verification or configure Microsoft Graph API.',
-        details: notificationResult.errors,
+        methods: succeededMethods,
+        message: `Notification sent via: ${succeededMethods.join(', ')}`,
       });
     }
-  } catch (error) {
-    console.error('Error sending customer notification:', error);
-    res.status(500).json({ 
-      error: 'Failed to send notification',
-      details: error instanceof Error ? error.message : 'Unknown error',
+
+    // Otherwise fail (email+sms both failed)
+    console.log('[API RESPONSE] All notification methods failed:', notificationResult.errors);
+    return res.status(500).json({
+      success: false,
+      error: 'No valid notification method could be delivered',
+      details: notificationResult.errors,
+    });
+
+  } catch (err: any) {
+    console.error('[API ERROR] Notification failed:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Notification failed',
     });
   }
 });

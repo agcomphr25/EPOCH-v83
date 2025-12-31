@@ -9,6 +9,7 @@ import {
   deleteCustomCheck,
   runAllEnabledChecks,
   runSingleCheck,
+  runSingleCheckByName,
   getRecentResults,
   getResultsByBatchId,
 } from '../../utils/healthCheckService';
@@ -108,7 +109,19 @@ router.post('/run', async (req, res) => {
 router.post('/run/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await runSingleCheck(parseInt(id), 'manual');
+    const checkId = parseInt(id);
+    
+    // Support both numeric IDs and check names
+    if (isNaN(checkId)) {
+      // Look up by name
+      const result = await runSingleCheckByName(id, 'manual');
+      if (!result) {
+        return res.status(404).json({ message: `Health check '${id}' not found` });
+      }
+      return res.json(result);
+    }
+    
+    const result = await runSingleCheck(checkId, 'manual');
     if (!result) {
       return res.status(404).json({ message: 'Health check not found' });
     }

@@ -1,0 +1,92 @@
+FULL FIX (A+B+C)
+
+Paste the block below directly to Replit agent to apply changes:
+
+🟩 1. Modify sendCustomerNotification() to always log attempts
+
+Add universal logging section at bottom (inside the else branch).
+
+Find in notifications.ts:
+
+if (results.success) {
+
+
+Replace FULL success/error section with:
+
+if (results.success) {
+  console.log('📬 Updating order notification status - methods:', succeededMethods);
+
+  await db.update(allOrders)
+    .set({
+      customerNotified: true,
+      notificationMethod: succeededMethods.join(', '),
+      notificationSentAt: new Date(),
+    })
+    .where(eq(allOrders.orderId, data.orderId));
+
+  // 🔥 Log success to communication_logs
+  for (const method of succeededMethods) {
+    await db.insert(communicationLogs).values({
+      orderId: data.orderId,
+      customerId: customer.id.toString(),
+      method,
+      type: 'shipping-notification',
+      recipient: method === 'email' ? email : phone,
+      status: 'sent',
+      message: `Tracking: ${data.trackingNumber}`,
+      sentAt: new Date(),
+    });
+  }
+
+  console.log('✅ Notification complete for order:', data.orderId);
+} else {
+
+  // ❗ Always log failure
+  await db.insert(communicationLogs).values({
+    orderId: data.orderId,
+    customerId: customer.id.toString(),
+    method: preferredMethods.join(',') || 'none',
+    type: 'shipping-notification',
+    recipient: email || phone || 'none',
+    status: 'failed',
+    error: results.errors?.join('; ') || 'No deliverable method available',
+    sentAt: new Date(),
+  });
+
+  console.error('❌ Notification failed:', results.errors);
+}
+
+🟩 2. Add safety fallback rule near top of function
+
+Right after email + phone const lines, insert:
+
+// 🔥 Auto-select best possible method if preferred list empty
+if (!preferredMethods.length) {
+  if (email) preferredMethods.push('email');
+  else if (phone && allowSms) preferredMethods.push('sms');
+}
+
+Optional (Highly Recommended)
+🟩 3. Auto-send notification immediately after label creation
+
+Add inside consolidated label success block:
+
+// After label creation
+await axios.post(`/api/shipping/notify-customer/${orderId}`);
+
+
+If bulk, loop through items.
+
+Result After Patch 🚀
+Action	Before	After
+No email/phone available	silent fail	logged to communication history
+Twilio off + user pref sms	fail	fallback to email OR log fail
+Notification fails	no history	full failure entry recorded
+Tracking page "Notify"	only works sometimes	always records attempt
+Auto-log on ship	❌	✔ configurable
+
+Shipping Tracker UI will now show:
+
+Dec 29 — Email Sent (success)
+Dec 29 — SMS Failed (Twilio not configured)
+Dec 29 — No contact available — logged

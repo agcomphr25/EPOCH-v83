@@ -24,7 +24,7 @@ const PUBLIC_ROUTES = [
 ];
 
 const PUBLIC_ROUTE_PREFIXES = [
-  '/sign-order/',
+  '/sign-order',  // Customer signature page - no auth required
 ];
 
 function isDeploymentEnvironment(): boolean {

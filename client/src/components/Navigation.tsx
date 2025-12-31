@@ -574,6 +574,14 @@ export default function Navigation() {
       icon: Wrench,
       description: 'Preventive maintenance schedules',
     },
+    {
+      path: '/timer/station',
+      label: 'Timer Station',
+      icon: Clock,
+      description: 'Step-based timing programs for production processes',
+      external: true,
+      externalUrl: import.meta.env.VITE_TIMER_APP_URL || 'http://localhost:5173',
+    },
   ];
 
   const trainingItems = [
@@ -1570,7 +1578,11 @@ export default function Navigation() {
                           )}
                           onClick={() => {
                             closeAllDropdowns();
-                            setLocation(item.path);
+                            if ((item as any).external && (item as any).externalUrl) {
+                              window.open(`${(item as any).externalUrl}/station-timers?from=epoch`, '_blank');
+                            } else {
+                              setLocation(item.path);
+                            }
                           }}
                         >
                           <Icon className="h-4 w-4" />

@@ -22,6 +22,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/admin/orders',
   '/admin/audit-settings',
   '/admin/health-checks',
+  '/admin/monitored-links',
   '/analytics',
   '/badge-configuration',
   '/badge-scanner',

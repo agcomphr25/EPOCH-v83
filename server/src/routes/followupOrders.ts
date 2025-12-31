@@ -9,30 +9,12 @@ import { calculatePriorityScore } from '../../utils/priorityScore';
 import { sendReminderForOverdueOrders } from '../../utils/followupOrderReminder';
 import { auditService } from '../services/auditService';
 import { authenticateToken } from '../../middleware/auth';
+import { createMagicLink } from '../../utils/magicLink';
 import * as fs from 'fs';
 import * as path from 'path';
 import { nanoid } from 'nanoid';
 
 const router = express.Router();
-
-// Helper function to get the correct base URL for signature links
-// In production, always use the production domain to ensure email links work
-function getSignatureLinkBaseUrl(): string {
-  // Check for explicit production domain first
-  const productionDomain = process.env.PRODUCTION_DOMAIN || 'agcompepoch.xyz';
-  
-  // In production mode or if REPL_DEPLOYMENT is set, use production domain
-  if (process.env.NODE_ENV === 'production' || process.env.REPL_DEPLOYMENT) {
-    return `https://${productionDomain}`;
-  }
-  
-  // In development, use REPLIT_DOMAINS if available, otherwise localhost
-  if (process.env.REPLIT_DOMAINS) {
-    return `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`;
-  }
-  
-  return 'http://localhost:5000';
-}
 
 // Ensure uploads directory exists
 const uploadsDir = 'uploads/followup-orders';
@@ -348,9 +330,8 @@ router.post('/', async (req, res) => {
     // Generate unique signature token
     const signatureToken = nanoid(32);
 
-    // Generate signature link using production-aware URL
-    const baseUrl = getSignatureLinkBaseUrl();
-    const signatureLink = `${baseUrl}/sign-order/${signatureToken}`;
+    // Generate signature link using unified URL resolution
+    const signatureLink = createMagicLink(signatureToken);
 
     // Extract miscellaneous items from features object
     const miscItems = (order.features as any)?.miscItems || [];
@@ -749,9 +730,10 @@ router.post('/:id/sign', async (req, res) => {
       return res.status(400).json({ error: 'Signature data is required' });
     }
 
+    // Normalize undefined/token mismatch cases
     if (!signatureToken) {
       console.log(`❌ Missing signature token for order ID: ${id}`);
-      return res.status(400).json({ error: 'Signature token is required' });
+      return res.status(400).json({ error: 'Missing signature token' });
     }
 
     const followupOrder = await storage.getFollowupOrder(id);
@@ -762,10 +744,10 @@ router.post('/:id/sign', async (req, res) => {
 
     console.log(`📋 Found followup order: ${followupOrder.orderId}, pdfPath: ${followupOrder.pdfPath || 'MISSING'}`);
 
-    // Verify the signature token matches
-    if (followupOrder.signatureToken !== signatureToken) {
+    // Support both new (`?token=`) and old (`:token`) formats by trimming whitespace
+    if (!followupOrder.signatureToken || followupOrder.signatureToken.trim() !== signatureToken.trim()) {
       console.log(`❌ Token mismatch for order ${followupOrder.orderId}. Expected: ${followupOrder.signatureToken?.substring(0, 8)}..., Got: ${signatureToken?.substring(0, 8)}...`);
-      return res.status(403).json({ error: 'Invalid signature token. This link may have expired. Please request a new signature email.' });
+      return res.status(403).json({ error: 'Invalid or expired signing link token' });
     }
 
     if (followupOrder.signatureSigned) {
@@ -1049,9 +1031,8 @@ router.post('/:orderId/resend-email', async (req, res) => {
       }
     }
 
-    // Generate signature link using the fresh token with production-aware URL
-    const baseUrl = getSignatureLinkBaseUrl();
-    const signatureLink = `${baseUrl}/sign-order/${followupOrder.signatureToken}`;
+    // Generate signature link using the fresh token with unified URL resolution
+    const signatureLink = createMagicLink(followupOrder.signatureToken || '');
 
     // Extract miscellaneous items from features object
     const miscItems = (order.features as any)?.miscItems || [];

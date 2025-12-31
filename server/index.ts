@@ -241,10 +241,11 @@ async function initializeBackgroundServices() {
       console.log('✅ Database connection successful');
       
       // Seed default health check types and config if not present
-      const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists } = await import('./utils/healthCheckService');
+      const { seedDefaultHealthCheckTypes, seedDefaultHealthCheckConfig, ensureSmsHealthCheckExists, ensureTrackingPipelineHealthCheckExists } = await import('./utils/healthCheckService');
       await seedDefaultHealthCheckTypes();
       await seedDefaultHealthCheckConfig();
       await ensureSmsHealthCheckExists();
+      await ensureTrackingPipelineHealthCheckExists();
     }
 
     // Set up monthly vendor evaluation reset

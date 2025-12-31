@@ -12,6 +12,7 @@ import {
 import { eq, desc, and, sql, inArray, like, or } from 'drizzle-orm';
 import { getUncachableSendGridClient } from '../../utils/sendgrid';
 import twilio from 'twilio';
+import { getTwilioConfig, isTwilioConfigured } from '../../config/notifications';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -916,14 +917,15 @@ router.post('/send-bulk-sms', async (req, res) => {
   try {
     const data = bulkSmsSchema.parse(req.body);
     
-    const accountSid = process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_NUMBER || process.env.TWILIO_PHONE_NUMBER;
+    // Use centralized Twilio config
+    const twilioConfig = getTwilioConfig();
     
-    if (!accountSid || !authToken || !fromNumber) {
-      console.error('Missing Twilio config:', { accountSid: !!accountSid, authToken: !!authToken, fromNumber: !!fromNumber });
+    if (!isTwilioConfigured()) {
+      console.error('Missing Twilio config:', { accountSid: !!twilioConfig.accountSid, authToken: !!twilioConfig.authToken, fromNumber: !!twilioConfig.fromNumber });
       return res.status(500).json({ error: 'Twilio credentials not configured' });
     }
+    
+    const fromNumber = twilioConfig.fromNumber;
     
     let targetCustomers: any[] = [];
     
@@ -980,7 +982,7 @@ router.post('/send-bulk-sms', async (req, res) => {
       })
       .returning();
     
-    const twilioClient = twilio(accountSid, authToken);
+    const twilioClient = twilio(twilioConfig.accountSid, twilioConfig.authToken);
     let successCount = 0;
     let failedCount = 0;
     const results: { phone: string; success: boolean; error?: string }[] = [];

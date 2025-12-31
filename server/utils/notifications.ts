@@ -1,8 +1,23 @@
 import { customers } from '@shared/schema';
-import { allOrders } from '../schema.js';
+import { allOrders, communicationLogs } from '../schema.js';
 import { eq } from 'drizzle-orm';
+import sgMail from '@sendgrid/mail';
+import twilio from 'twilio';
 
 import { db } from '../db.js';
+import { 
+  getTwilioConfig, 
+  getSendGridConfig, 
+  isTwilioConfigured, 
+  isSendGridConfigured,
+  logNotificationConfig 
+} from '../config/notifications.js';
+
+// Initialize SendGrid with API key from centralized config
+const sendGridConfig = getSendGridConfig();
+if (sendGridConfig.apiKey) {
+  sgMail.setApiKey(sendGridConfig.apiKey);
+}
 
 export interface NotificationData {
   orderId: string;
@@ -28,6 +43,7 @@ export async function sendCustomerNotification(
   };
 
   console.log('📬 Starting customer notification for order:', data.orderId);
+  console.log('[TRACKING NOTIFY] Incoming notification data:', JSON.stringify(data, null, 2));
 
   // Get customer preferences - look in both finalized and draft orders
   let customer = null;
@@ -75,23 +91,42 @@ export async function sendCustomerNotification(
   }
 
   // Determine notification methods
-  const preferredMethods = data.preferredMethods ||
-    (customer.preferredCommunicationMethod as string[]) || ['email'];
+  let preferredMethods = data.preferredMethods ||
+    (customer.preferredCommunicationMethod as string[]) || [];
   const email = data.customerEmail || customer.email;
   const phone = data.customerPhone || customer.phone;
+
+  // 1. Detect Twilio availability using centralized config
+  const allowSms = isTwilioConfigured();
+
+  // Auto-select best possible method if preferred list empty
+  if (!preferredMethods.length) {
+    if (email) preferredMethods.push('email');
+    else if (phone && allowSms) preferredMethods.push('sms');
+  }
+  const prefersSms = preferredMethods.includes('sms');
+  const prefersEmail = preferredMethods.includes('email');
+
+  // 2. SMS → Email Fallback rule
+  const needsEmailFallback = prefersSms && !allowSms;
 
   console.log('📬 Notification config:', {
     orderId: data.orderId,
     preferredMethods,
+    prefersEmail,
+    prefersSms,
     hasEmail: !!email,
     hasPhone: !!phone,
+    allowSms,
+    needsEmailFallback,
   });
 
-  // Track successful sends - only update DB after confirmed success
-  const successfulMethods: string[] = [];
+  // Track successful sends
+  let notificationSucceeded = false;
+  const succeededMethods: string[] = [];
 
-  // Send email notification if preferred and email available
-  if (preferredMethods.includes('email') && email) {
+  // ================= EMAIL PATH ======================
+  if ((prefersEmail || needsEmailFallback) && email) {
     try {
       console.log('📧 Attempting email notification to:', email);
       await sendEmailNotification(
@@ -104,17 +139,27 @@ export async function sendCustomerNotification(
         },
         customer?.id.toString()
       );
-      successfulMethods.push('email');
-      console.log('✅ Email notification succeeded');
-    } catch (error) {
+      succeededMethods.push('email');
+      notificationSucceeded = true;
+      console.log('[NOTIFY] Email sent (direct or fallback)');
+    } catch (error: any) {
+      console.error('[NOTIFY EMAIL FAIL]', error);
       const errorMsg = `Email failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
       results.errors.push(errorMsg);
-      console.error('❌ Email notification failed:', error);
     }
   }
 
-  // Send SMS notification if preferred and phone available
-  if (preferredMethods.includes('sms') && phone) {
+  // ================= SMS PATH ========================
+  const twilioConfig = getTwilioConfig();
+  console.log("📡 SMS CONFIG CHECK:", {
+    configured: allowSms ? "✔" : "❌",
+    fromNumber: twilioConfig.fromNumber || "❌ NOT SET",
+    prefersSms,
+    phone: phone || "❌ NO PHONE",
+    allowSms
+  });
+  
+  if (prefersSms && phone && allowSms) {
     try {
       console.log('📱 Attempting SMS notification to:', phone);
       await sendSMSNotification(
@@ -127,35 +172,91 @@ export async function sendCustomerNotification(
         },
         customer?.id.toString()
       );
-      successfulMethods.push('sms');
-      console.log('✅ SMS notification succeeded');
-    } catch (error) {
+      succeededMethods.push('sms');
+      notificationSucceeded = true;
+      console.log('[NOTIFY] SMS sent');
+    } catch (error: any) {
+      console.error('[NOTIFY SMS FAIL]', error);
       const errorMsg = `SMS failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
       results.errors.push(errorMsg);
-      console.error('❌ SMS notification failed:', error);
+      
+      // SMS failed - try email as fallback if available
+      if (email && !succeededMethods.includes('email')) {
+        console.log('[NOTIFY] SMS failed, attempting email fallback to:', email);
+        try {
+          await sendEmailNotification(
+            {
+              email,
+              orderId: data.orderId,
+              trackingNumber: data.trackingNumber,
+              carrier: data.carrier,
+              estimatedDelivery: data.estimatedDelivery,
+            },
+            customer?.id.toString()
+          );
+          succeededMethods.push('email');
+          notificationSucceeded = true;
+          console.log('[NOTIFY] Email fallback succeeded after SMS failure');
+        } catch (emailError: any) {
+          console.error('[NOTIFY EMAIL FALLBACK FAIL]', emailError);
+          const emailErrorMsg = `Email fallback failed: ${emailError instanceof Error ? emailError.message : 'Unknown error'}`;
+          results.errors.push(emailErrorMsg);
+        }
+      }
     }
+  } else if (prefersSms && !allowSms && email) {
+    console.log('[NOTIFY] SMS preferred but Twilio missing → fallback to email');
   }
 
-  // CRITICAL: Only update order notification status if at least one method succeeded
-  // This ensures failed sends do NOT mark the order as notified, allowing retries
-  if (successfulMethods.length > 0) {
-    console.log('📬 Updating order notification status - methods succeeded:', successfulMethods);
-    await db
-      .update(allOrders)
+  // ================= FINAL RESULT RETURN ==============
+  results.success = succeededMethods.length > 0;
+  results.methods = succeededMethods;
+
+  if (results.success) {
+    console.log('📬 Updating order notification status - methods:', succeededMethods);
+
+    await db.update(allOrders)
       .set({
         customerNotified: true,
-        notificationMethod: successfulMethods.join(', '),
+        notificationMethod: succeededMethods.join(', '),
         notificationSentAt: new Date(),
       })
       .where(eq(allOrders.orderId, data.orderId));
 
-    results.success = true;
-    results.methods = successfulMethods;
+    // Log success to communication_logs for each method
+    for (const method of succeededMethods) {
+      await db.insert(communicationLogs).values({
+        orderId: data.orderId,
+        customerId: customer.id.toString(),
+        messageType: 'transactional',
+        method,
+        type: 'shipping-notification',
+        recipient: (method === 'email' ? email : phone) || 'unknown',
+        status: 'sent',
+        message: `Tracking: ${data.trackingNumber}`,
+        sentAt: new Date(),
+      });
+    }
+
     console.log('✅ Notification complete for order:', data.orderId);
   } else {
-    // All methods failed - do NOT update customerNotified
-    // This allows automatic triggers and manual resend to retry later
-    console.error('❌ All notification methods failed for order:', data.orderId, results.errors);
+    // Always log failure to communication_logs
+    const fallbackMessage = `Shipping notification attempt failed for order ${data.orderId}. Errors: ${results.errors?.join('; ') || 'Unknown failure'}`;
+
+    await db.insert(communicationLogs).values({
+      orderId: data.orderId,
+      customerId: customer.id.toString(),
+      messageType: 'transactional',
+      method: preferredMethods.length ? preferredMethods.join(',') : 'none',
+      type: 'shipping-notification',
+      recipient: email || phone || 'no-contact',
+      status: 'failed',
+      error: results.errors?.join('; ') || 'No contact method available',
+      message: fallbackMessage,
+      sentAt: new Date(),
+    });
+
+    console.error('❌ Notification failed:', data.orderId, results.errors);
   }
 
   return results;
@@ -171,7 +272,6 @@ async function sendEmailNotification(
   },
   customerId?: string
 ) {
-  // Email notification logic
   const subject = `Your Order ${data.orderId} Has Shipped - AG Composites`;
   const deliveryText = data.estimatedDelivery
     ? `Estimated delivery: ${data.estimatedDelivery.toLocaleDateString()}`
@@ -198,42 +298,35 @@ Owens Cross Roads, AL 35763
 Phone: 256-723-8381
   `.trim();
 
-  console.log('Sending email shipping notification:', {
+  const emailConfig = getSendGridConfig();
+  
+  console.log('📧 [DIRECT SENDGRID] Sending email shipping notification:', {
     to: data.email,
     subject,
-    message: message.substring(0, 100) + '...',
+    from: emailConfig.fromEmail,
   });
 
-  // Use the actual email API endpoint
+  // Validate SendGrid configuration using centralized check
+  if (!isSendGridConfigured()) {
+    throw new Error('SendGrid is not configured (missing API key or from email)');
+  }
+
   try {
-    // In Replit, use relative path since we're making internal server-to-server call
-    const response = await fetch(`http://127.0.0.1:5000/api/communications/email`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        to: data.email,
-        subject: subject,
-        message: message,
-        customerId: customerId || data.orderId, // Use actual customer ID or fallback to order ID
-        orderId: data.orderId,
-      }),
-    });
+    const emailData = {
+      to: data.email,
+      from: emailConfig.fromEmail,
+      subject,
+      text: message,
+      html: message.replace(/\n/g, '<br>'),
+    };
 
-    if (!response.ok) {
-      const errorData = await response.json() as any;
-      throw new Error(errorData.error || 'Email API request failed');
-    }
-
-    const result = await response.json() as any;
-    console.log(
-      'Email shipping notification sent successfully:',
-      result.externalId
-    );
-    return result;
-  } catch (error) {
-    console.error('Failed to send email shipping notification:', error);
+    const result = await sgMail.send(emailData);
+    const messageId = result[0]?.headers?.['x-message-id'] || 'unknown';
+    
+    console.log('✅ [DIRECT SENDGRID] Email sent successfully, messageId:', messageId);
+    return { status: 'sent', messageId };
+  } catch (error: any) {
+    console.error('❌ [DIRECT SENDGRID] Failed to send email:', error?.response?.body || error.message);
     throw error;
   }
 }
@@ -250,40 +343,46 @@ async function sendSMSNotification(
 ) {
   const message = `AG Composites: Your order ${data.orderId} has shipped! Track with ${data.trackingNumber} on ${data.carrier}. ${data.estimatedDelivery ? `Est. delivery: ${data.estimatedDelivery.toLocaleDateString()}` : ''}`;
 
-  console.log('Sending SMS shipping notification:', {
+  console.log('📱 [DIRECT TWILIO] Sending SMS shipping notification:', {
     to: data.phone,
     message: message.substring(0, 50) + '...',
   });
 
-  // Use the actual SMS API endpoint
+  // Call Twilio directly (bypasses authenticated API route)
+  const twilioConfig = getTwilioConfig();
+  
+  if (!isTwilioConfigured()) {
+    throw new Error('Twilio is not configured (missing Account SID, Auth Token, or From Number)');
+  }
+
   try {
-    // In Replit, use relative path since we're making internal server-to-server call
-    const response = await fetch(`http://127.0.0.1:5000/api/communications/sms`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        to: data.phone,
-        message: message,
-        customerId: customerId || data.orderId, // Use actual customer ID or fallback to order ID
-        orderId: data.orderId,
-      }),
+    const twilioClient = twilio(twilioConfig.accountSid, twilioConfig.authToken);
+    
+    const twilioMessage = await twilioClient.messages.create({
+      body: message,
+      from: twilioConfig.fromNumber,
+      to: data.phone,
     });
 
-    if (!response.ok) {
-      const errorData = await response.json() as any;
-      throw new Error(errorData.error || 'SMS API request failed');
-    }
+    console.log('✅ [DIRECT TWILIO] SMS sent successfully:', twilioMessage.sid);
 
-    const result = await response.json() as any;
-    console.log(
-      'SMS shipping notification sent successfully:',
-      result.externalId
-    );
-    return result;
-  } catch (error) {
-    console.error('Failed to send SMS shipping notification:', error);
+    // Log to communication_logs
+    await db.insert(communicationLogs).values({
+      customerId: customerId || data.orderId,
+      orderId: data.orderId,
+      messageType: 'transactional',
+      method: 'sms',
+      type: 'shipping-notification',
+      recipient: data.phone,
+      status: 'sent',
+      message: message,
+      externalId: twilioMessage.sid,
+      sentAt: new Date(),
+    });
+
+    return { success: true, messageSid: twilioMessage.sid };
+  } catch (error: any) {
+    console.error('❌ [DIRECT TWILIO] Failed to send SMS:', error.message);
     throw error;
   }
 }

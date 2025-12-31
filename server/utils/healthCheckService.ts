@@ -4,13 +4,16 @@ import {
   healthCheckResults, 
   healthCheckConfig,
   allOrders,
+  monitoredLinks,
   type HealthCheckType,
   type HealthCheckResult,
-  type InsertHealthCheckResult
+  type InsertHealthCheckResult,
+  type MonitoredLink
 } from '../schema';
 import { eq, sql, desc } from 'drizzle-orm';
 import { sendEmailViaSendGrid } from './sendgrid';
 import { nanoid } from 'nanoid';
+import { getTwilioConfig, getSendGridConfig, isTwilioConfigured, isSendGridConfigured } from '../config/notifications';
 
 export interface HealthCheckResponse {
   status: 'pass' | 'fail' | 'warning' | 'skipped';
@@ -27,6 +30,8 @@ const builtInChecks: Record<string, CheckFunction> = {
   signature_email: checkSignatureEmail,
   duplicate_orders: checkDuplicateOrders,
   twilio_sms: checkTwilioSMS,
+  tracking_notification_pipeline: checkTrackingNotificationPipeline,
+  link_health: checkLinkHealth,
 };
 
 async function checkDatabaseConnection(): Promise<HealthCheckResponse> {
@@ -212,18 +217,16 @@ async function checkTwilioSMS(checkType: HealthCheckType): Promise<HealthCheckRe
 
   try {
     const twilio = await import('twilio');
-    const accountSid = process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_NUMBER || process.env.TWILIO_PHONE_NUMBER;
+    const twilioConfig = getTwilioConfig();
 
-    if (!accountSid || !authToken || !fromNumber) {
+    if (!isTwilioConfigured()) {
       return {
         status: 'fail',
         message: 'Twilio credentials not configured',
         details: { 
-          accountSidSet: !!accountSid, 
-          authTokenSet: !!authToken, 
-          fromNumberSet: !!fromNumber 
+          accountSidSet: !!twilioConfig.accountSid, 
+          authTokenSet: !!twilioConfig.authToken, 
+          fromNumberSet: !!twilioConfig.fromNumber 
         },
         executionTimeMs: Date.now() - startTime,
       };
@@ -242,11 +245,11 @@ async function checkTwilioSMS(checkType: HealthCheckType): Promise<HealthCheckRe
     };
     const tzAbbr = tzAbbreviations[timezone] || timezone;
 
-    const twilioClient = twilio.default(accountSid, authToken);
+    const twilioClient = twilio.default(twilioConfig.accountSid, twilioConfig.authToken);
     const now = new Date();
     const message = await twilioClient.messages.create({
       body: `[AG Composites Health Check] System is operational - ${now.toLocaleString('en-US', { timeZone: timezone })} ${tzAbbr}`,
-      from: fromNumber,
+      from: twilioConfig.fromNumber,
       to: testPhone,
     });
 
@@ -264,6 +267,314 @@ async function checkTwilioSMS(checkType: HealthCheckType): Promise<HealthCheckRe
     return {
       status: 'fail',
       message: `SMS check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      details: { error: String(error) },
+      executionTimeMs: Date.now() - startTime,
+    };
+  }
+}
+
+async function checkTrackingNotificationPipeline(checkType: HealthCheckType): Promise<HealthCheckResponse> {
+  const startTime = Date.now();
+  const testEmail = checkType.testEmailAddress;
+  
+  // Track results
+  let emailSuccess = false;
+  let emailError: string | null = null;
+  let emailMessageId: string | null = null;
+  let smsSuccess = false;
+  let smsError: string | null = null;
+  let smsMessageId: string | null = null;
+  let smsConfigured = false;
+  
+  // Get sender info from centralized config
+  const emailSenderConfig = getSendGridConfig();
+  const emailSender = emailSenderConfig.fromEmail || 'NOT_CONFIGURED';
+  const timestamp = new Date().toISOString();
+  
+  console.log('[TRACKING PIPELINE CHECK] Starting notification pipeline health check');
+  console.log('[TRACKING PIPELINE CHECK] Test email:', testEmail || 'NOT_CONFIGURED');
+  console.log('[TRACKING PIPELINE CHECK] Email sender:', emailSender);
+  
+  // 1. Test Email (Required)
+  if (!testEmail) {
+    return {
+      status: 'skipped',
+      message: 'No test email address configured. Set it in the check settings.',
+      details: {
+        emailSender,
+        smsConfigured: false,
+        lastTestTimestamp: timestamp,
+      },
+      executionTimeMs: Date.now() - startTime,
+    };
+  }
+  
+  try {
+    console.log('[TRACKING PIPELINE CHECK] Testing email delivery...');
+    const result = await sendEmailViaSendGrid({
+      to: testEmail,
+      subject: `[Tracking Pipeline Check] Test Notification - ${new Date().toLocaleString()}`,
+      text: `This is a tracking notification pipeline test.\n\nTimestamp: ${timestamp}\nSender: ${emailSender}\n\nIf you received this email, the tracking notification email path is working.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2 style="color: #28a745;">🔔 Tracking Notification Pipeline Test</h2>
+          <p>This is a tracking notification pipeline health check.</p>
+          <table style="margin: 20px 0;">
+            <tr><td><strong>Timestamp:</strong></td><td>${timestamp}</td></tr>
+            <tr><td><strong>Sender:</strong></td><td>${emailSender}</td></tr>
+          </table>
+          <p>If you received this email, the tracking notification email path is working correctly.</p>
+          <hr style="margin: 20px 0;">
+          <p style="color: #666; font-size: 12px;">AG Composites - Tracking Pipeline Health Check</p>
+        </div>
+      `,
+    });
+    
+    if (result.success) {
+      emailSuccess = true;
+      emailMessageId = result.messageId || null;
+      console.log('[TRACKING PIPELINE CHECK] ✅ Email sent successfully, messageId:', emailMessageId);
+    } else {
+      emailError = result.error || 'Unknown email error';
+      console.error('[TRACKING PIPELINE CHECK] ❌ Email failed:', emailError);
+    }
+  } catch (error) {
+    emailError = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[TRACKING PIPELINE CHECK] ❌ Email exception:', emailError);
+  }
+  
+  // 2. Test SMS (Optional - only if Twilio configured)
+  const smsTwilioConfig = getTwilioConfig();
+  smsConfigured = isTwilioConfigured();
+  console.log('[TRACKING PIPELINE CHECK] SMS configured:', smsConfigured);
+  
+  if (smsConfigured) {
+    // Get test phone from check type or global config
+    let testPhone = checkType.testSmsPhone;
+    if (!testPhone) {
+      const config = await getHealthCheckConfig();
+      testPhone = config?.testSmsPhone || null;
+    }
+    
+    if (testPhone) {
+      try {
+        console.log('[TRACKING PIPELINE CHECK] Testing SMS delivery to:', testPhone);
+        const twilio = await import('twilio');
+        const twilioClient = twilio.default(smsTwilioConfig.accountSid, smsTwilioConfig.authToken);
+        
+        const config = await getHealthCheckConfig();
+        const timezone = config?.timezone || 'America/Chicago';
+        const now = new Date();
+        
+        const message = await twilioClient.messages.create({
+          body: `[AG Composites] Tracking pipeline test - ${now.toLocaleString('en-US', { timeZone: timezone })}`,
+          from: smsTwilioConfig.fromNumber,
+          to: testPhone,
+        });
+        
+        smsSuccess = true;
+        smsMessageId = message.sid;
+        console.log('[TRACKING PIPELINE CHECK] ✅ SMS sent successfully, sid:', smsMessageId);
+      } catch (error) {
+        smsError = error instanceof Error ? error.message : 'Unknown SMS error';
+        console.error('[TRACKING PIPELINE CHECK] ❌ SMS failed:', smsError);
+      }
+    } else {
+      console.log('[TRACKING PIPELINE CHECK] SMS skipped - no test phone configured');
+    }
+  }
+  
+  // 3. Determine final status
+  const details = {
+    emailSender,
+    emailSuccess,
+    emailMessageId,
+    emailError,
+    smsConfigured,
+    smsSuccess,
+    smsMessageId,
+    smsError,
+    lastTestTimestamp: timestamp,
+  };
+  
+  if (!emailSuccess) {
+    // 🔴 Email failed - critical failure
+    return {
+      status: 'fail',
+      message: `Email notification failed: ${emailError}. No tracking notifications can be delivered.`,
+      details,
+      executionTimeMs: Date.now() - startTime,
+    };
+  }
+  
+  if (smsConfigured && !smsSuccess) {
+    // 🟡 Email works, SMS configured but failed
+    return {
+      status: 'warning',
+      message: `Email working (${emailSender}), but SMS failed: ${smsError}`,
+      details,
+      executionTimeMs: Date.now() - startTime,
+    };
+  }
+  
+  if (emailSuccess && (!smsConfigured || smsSuccess)) {
+    // 🟢 Fully working
+    const smsStatus = smsConfigured ? 'SMS working' : 'SMS not configured';
+    return {
+      status: 'pass',
+      message: `Tracking notifications operational. Email: ✓ (${emailSender}), ${smsStatus}`,
+      details,
+      executionTimeMs: Date.now() - startTime,
+    };
+  }
+  
+  // Fallback
+  return {
+    status: 'warning',
+    message: 'Tracking notification pipeline check completed with mixed results',
+    details,
+    executionTimeMs: Date.now() - startTime,
+  };
+}
+
+async function checkLinkHealth(): Promise<HealthCheckResponse> {
+  const startTime = Date.now();
+  
+  try {
+    // Get all enabled monitored links
+    const links = await db.select().from(monitoredLinks).where(eq(monitoredLinks.isEnabled, true));
+    
+    if (links.length === 0) {
+      return {
+        status: 'skipped',
+        message: 'No monitored links configured. Add links in the Link Health settings.',
+        details: { linksChecked: 0 },
+        executionTimeMs: Date.now() - startTime,
+      };
+    }
+    
+    const results: Array<{
+      name: string;
+      url: string;
+      status: number | null;
+      result: 'pass' | 'fail' | 'warning';
+      error?: string;
+      responseTimeMs: number;
+    }> = [];
+    
+    let passCount = 0;
+    let failCount = 0;
+    let warningCount = 0;
+    
+    // Check each link
+    for (const link of links) {
+      const linkStartTime = Date.now();
+      let status: number | null = null;
+      let result: 'pass' | 'fail' | 'warning' = 'pass';
+      let error: string | undefined;
+      
+      try {
+        // Use HEAD request first (faster), fall back to GET if needed
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const response = await fetch(link.url, {
+          method: 'HEAD',
+          signal: controller.signal,
+          redirect: 'follow',
+        });
+        
+        clearTimeout(timeout);
+        status = response.status;
+        
+        // Check if status matches expected
+        const expectedStatus = link.expectedStatus || 200;
+        if (status === expectedStatus) {
+          result = 'pass';
+          passCount++;
+        } else if (status === 404) {
+          result = 'fail';
+          failCount++;
+          error = `Got 404 Not Found (expected ${expectedStatus})`;
+        } else if (status >= 400) {
+          result = 'fail';
+          failCount++;
+          error = `Got ${status} error (expected ${expectedStatus})`;
+        } else {
+          result = 'warning';
+          warningCount++;
+          error = `Got ${status} (expected ${expectedStatus})`;
+        }
+      } catch (err) {
+        result = 'fail';
+        failCount++;
+        if (err instanceof Error) {
+          if (err.name === 'AbortError') {
+            error = 'Request timed out after 10 seconds';
+          } else {
+            error = err.message;
+          }
+        } else {
+          error = 'Unknown error';
+        }
+      }
+      
+      const responseTimeMs = Date.now() - linkStartTime;
+      
+      results.push({
+        name: link.name,
+        url: link.url,
+        status,
+        result,
+        error,
+        responseTimeMs,
+      });
+      
+      // Update the link with latest check results
+      await db.update(monitoredLinks)
+        .set({
+          lastCheckedAt: new Date(),
+          lastStatus: status,
+          lastCheckResult: result,
+          consecutiveFailures: result === 'fail' 
+            ? (link.consecutiveFailures || 0) + 1 
+            : 0,
+          updatedAt: new Date(),
+        })
+        .where(eq(monitoredLinks.id, link.id));
+    }
+    
+    // Determine overall status
+    let overallStatus: 'pass' | 'fail' | 'warning' = 'pass';
+    let message = '';
+    
+    if (failCount > 0) {
+      overallStatus = 'fail';
+      const failedLinks = results.filter(r => r.result === 'fail').map(r => r.name);
+      message = `${failCount} link(s) failed: ${failedLinks.join(', ')}`;
+    } else if (warningCount > 0) {
+      overallStatus = 'warning';
+      message = `${warningCount} link(s) returned unexpected status codes`;
+    } else {
+      message = `All ${passCount} monitored links are healthy`;
+    }
+    
+    return {
+      status: overallStatus,
+      message,
+      details: {
+        linksChecked: links.length,
+        passCount,
+        failCount,
+        warningCount,
+        results,
+      },
+      executionTimeMs: Date.now() - startTime,
+    };
+  } catch (error) {
+    return {
+      status: 'fail',
+      message: `Link health check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       details: { error: String(error) },
       executionTimeMs: Date.now() - startTime,
     };
@@ -377,6 +688,20 @@ export async function runSingleCheck(checkId: number, runType: 'manual' | 'sched
   return runHealthCheck(checkType, runType, batchId);
 }
 
+export async function runSingleCheckByName(checkName: string, runType: 'manual' | 'scheduled' = 'manual'): Promise<HealthCheckResult | null> {
+  const batchId = nanoid();
+  const [checkType] = await db
+    .select()
+    .from(healthCheckTypes)
+    .where(eq(healthCheckTypes.name, checkName));
+
+  if (!checkType) {
+    return null;
+  }
+
+  return runHealthCheck(checkType, runType, batchId);
+}
+
 export async function getHealthCheckTypes(): Promise<HealthCheckType[]> {
   return db.select().from(healthCheckTypes).orderBy(healthCheckTypes.sortOrder);
 }
@@ -467,6 +792,29 @@ export async function ensureSmsHealthCheckExists(): Promise<void> {
     sortOrder: 5,
   });
   console.log('✅ Added Twilio SMS health check type');
+}
+
+export async function ensureTrackingPipelineHealthCheckExists(): Promise<void> {
+  const existing = await db
+    .select()
+    .from(healthCheckTypes)
+    .where(eq(healthCheckTypes.name, 'tracking_notification_pipeline'))
+    .limit(1);
+  
+  if (existing.length > 0) {
+    return;
+  }
+
+  await db.insert(healthCheckTypes).values({
+    name: 'tracking_notification_pipeline',
+    displayName: 'Tracking Notification Pipeline',
+    description: 'Tests the complete tracking notification delivery path (email + optional SMS). Shows 🟢 if email works, 🟡 if email works but SMS fails, 🔴 if email fails.',
+    category: 'notifications',
+    isBuiltIn: true,
+    isEnabled: true,
+    sortOrder: 6,
+  });
+  console.log('✅ Added Tracking Notification Pipeline health check type');
 }
 
 export async function getHealthCheckConfig() {

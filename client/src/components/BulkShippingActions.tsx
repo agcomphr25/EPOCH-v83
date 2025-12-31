@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Truck, Package, X, ChevronLeft, ChevronRight, DollarSign, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
 import axios from 'axios';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -239,6 +240,7 @@ export function BulkShippingActions({
       }));
 
       const response = await axios.post('/api/shipping/bulk/create-consolidated-label', {
+        orderIds: selectedOrders,  // Required for backend .join() operations
         items,
         packageDetails: {
           weight: packageDetails.weight,
@@ -259,6 +261,27 @@ export function BulkShippingActions({
           title: 'Bulk Shipping Label Created',
           description: `Tracking #${trackingNumber} applied to all ${selectedOrders.length} orders`,
         });
+
+        // Auto-notify customers after successful label creation
+        try {
+          for (const item of items) {
+            await axios.post(`/api/shipping/notify-customer/${item.orderId}`);
+          }
+          toast({
+            title: "Customer Notified",
+            description: "Shipping notification sent automatically.",
+          });
+          // Refresh orders data so UI shows updated notification status
+          queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/shipping/ready-to-ship'] });
+        } catch (err) {
+          console.error("Auto notification failed:", err);
+          toast({
+            title: "Notification Error",
+            description: "Label created but notification could not be delivered.",
+            variant: "destructive",
+          });
+        }
 
         // Download label
         if (labelImage) {

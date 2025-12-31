@@ -60,12 +60,18 @@ ACCEPT_BLUE_ENVIRONMENT = "production"
 JWT_SECRET = "3adbfd669c7ffae02a7e7493342fc37e1115d182d8ef3ba7874d0a73c0f830814caac3a972cdc39dd185451fe355d6e2c28a81dfe0475d69d98dec1023f71a61"
 JWT_TOKEN = "3adbfd669c7ffae02a7e7493342fc37e1115d182d8ef3ba7874d0a73c0f830814caac3a972cdc39dd185451fe355d6e2c28a81dfe0475d69d98dec1023f71a61"
 PORTAL_JWT_SECRET = "3adbfd669c7ffae02a7e7493342fc37e1115d182d8ef3ba7874d0a73c0f830814caac3a972cdc39dd185451fe355d6e2c28a81dfe0475d69d98dec1023f71a61"
+APP_URL = "https://agcompepoch.xyz"
+PRODUCTION_DOMAIN = "agcompepoch.xyz"
 
 [userenv.development]
 DEV_AUTH_BYPASS = "true"
 FEATURE_WEBSITE_IMPORT = "true"
 VITE_FEATURE_WEBSITE_IMPORT = "true"
 PROTEUS_KEY_TIMECLOCK = "test-timeclock-key"
+VITE_TIMER_APP_URL = "https://time-keeper--glenn51.replit.app"
+
+[userenv.production]
+VITE_TIMER_APP_URL = "https://time-keeper--glenn51.replit.app"
 
 [agent]
 expertMode = true

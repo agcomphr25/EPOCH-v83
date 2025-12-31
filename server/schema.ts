@@ -8473,6 +8473,39 @@ export const insertHealthCheckResultSchema = createInsertSchema(healthCheckResul
 export type HealthCheckResult = typeof healthCheckResults.$inferSelect;
 export type InsertHealthCheckResult = z.infer<typeof insertHealthCheckResultSchema>;
 
+// Monitored Links - URLs to check for 404s and availability
+export const monitoredLinks = pgTable('monitored_links', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(), // Friendly name for the link
+  url: text('url').notNull(), // Full URL to check
+  linkType: text('link_type').notNull().default('external'), // 'external', 'internal'
+  description: text('description'), // What this link is for
+  isEnabled: boolean('is_enabled').default(true), // Whether to include in health checks
+  expectedStatus: integer('expected_status').default(200), // Expected HTTP status code
+  lastCheckedAt: timestamp('last_checked_at'),
+  lastStatus: integer('last_status'), // Last HTTP status received
+  lastCheckResult: text('last_check_result'), // 'pass', 'fail', 'warning'
+  consecutiveFailures: integer('consecutive_failures').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  linkTypeIdx: index('monitored_links_link_type_idx').on(table.linkType),
+  isEnabledIdx: index('monitored_links_is_enabled_idx').on(table.isEnabled),
+}));
+
+export const insertMonitoredLinkSchema = createInsertSchema(monitoredLinks).omit({
+  id: true,
+  lastCheckedAt: true,
+  lastStatus: true,
+  lastCheckResult: true,
+  consecutiveFailures: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type MonitoredLink = typeof monitoredLinks.$inferSelect;
+export type InsertMonitoredLink = z.infer<typeof insertMonitoredLinkSchema>;
+
 // ============================================
 // P2 PROJECTS MODULE
 // ============================================
@@ -9364,5 +9397,38 @@ export const epochOutreachAttempts = pgTable('epoch_outreach_attempts', {
 
 export type EpochOutreachAttempt = typeof epochOutreachAttempts.$inferSelect;
 export type InsertEpochOutreachAttempt = typeof epochOutreachAttempts.$inferInsert;
+
+// Timer Programs - Configurable step-based timing programs
+export const programs = pgTable('programs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  steps: jsonb('steps').notNull().default([]), // Array of step definitions
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export type Program = typeof programs.$inferSelect;
+export type InsertProgram = typeof programs.$inferInsert;
+
+// Timer Program Runs - Active instances of running programs
+export const programRuns = pgTable('program_runs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  programId: uuid('program_id').references(() => programs.id), // Nullable for external timer entries
+  programName: text('program_name').notNull(),
+  steps: jsonb('steps').notNull().default([]),
+  currentStepIndex: integer('current_step_index').default(0).notNull(),
+  status: text('status').default('running').notNull(), // 'running' | 'paused' | 'completed'
+  instanceName: text('instance_name'),
+  sku: text('sku'),
+  notes: text('notes'),
+  lastUpdated: timestamp('last_updated').defaultNow(),
+  startedAt: timestamp('started_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+});
+
+export type ProgramRun = typeof programRuns.$inferSelect;
+export type InsertProgramRun = typeof programRuns.$inferInsert;
 
 export * from './calendar.schema';

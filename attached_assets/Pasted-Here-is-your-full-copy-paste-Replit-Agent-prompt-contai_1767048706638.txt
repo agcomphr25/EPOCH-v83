@@ -1,0 +1,65 @@
+Here is your full copy-paste Replit Agent prompt containing both A + B fixes, including safe guards and improved UPS debug output.
+
+🔥 Paste this directly into your Replit Agent
+Apply the following fixes to the consolidated shipping label workflow:
+
+### 1. FRONTEND FIX (BulkShippingActions.tsx)
+Modify the axios POST payload inside handleCreateConsolidatedLabel to also send orderIds.
+
+Find:
+
+await axios.post('/api/shipping/bulk/create-consolidated-label', {
+
+Replace with:
+
+await axios.post('/api/shipping/bulk/create-consolidated-label', {
+  orderIds: selectedOrders,          // <-- Required for backend .join()
+  items,
+  packageDetails: {
+    weight: packageDetails.weight,
+    length: packageDetails.length,
+    width: packageDetails.width,
+    height: packageDetails.height,
+  },
+  serviceCode: selectedService,
+  billingOption,
+  receiverAccount: billingOption === 'receiver' ? receiverAccount : undefined,
+  declaredValue: packageDetails.declaredValue,
+});
+
+### 2. BACKEND FIX — derive orderIds from items if not passed
+Open: server/src/routes/shipping.ts
+
+Find the handler:
+router.post('/bulk/create-consolidated-label', async (req, res) => {
+
+Immediately after destructuring, add:
+
+const orderIds = req.body.orderIds || req.body.items?.map(i => i.orderId) || [];
+
+### 3. SAFETY GUARD (prevents undefined .join crash)
+In the UPS payload builder section, replace:
+
+orderId: orderIds.join('+'),
+
+With:
+
+orderId: orderIds.length ? orderIds.join('+') : 'UNKNOWN',
+
+And update reference fields safely:
+
+reference1: orderIds.length
+  ? `${orderIds.length} orders: ${orderIds[0]}`.substring(0, 35)
+  : 'Consolidated shipment'.substring(0, 35),
+
+### OPTIONAL — UPS error visibility improvement
+Inside catch(error) of /bulk/create-consolidated-label route, before returning res.status(500):
+
+console.error('[UPS SHIP ERROR]', JSON.stringify(error?.response?.data, null, 2));
+
+This lets us see real UPS responses instead of generic errors.
+
+----------------------------------------------
+
+Once complete, save all files and restart server.
+Return confirmation once finished.

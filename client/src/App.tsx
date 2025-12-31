@@ -155,6 +155,7 @@ import SimplifiedLayupScheduler from './components/SimplifiedLayupScheduler';
 import CustomerSatisfaction from './pages/CustomerSatisfaction';
 import AdminPanelPage from './pages/AdminPanelPage';
 import SystemHealthChecksPage from './pages/SystemHealthChecksPage';
+import MonitoredLinksManager from './pages/MonitoredLinksManager';
 import VendorsPage from './pages/VendorsPage';
 import VendorPOPage from './pages/VendorPOPage';
 import PDFTemplateManager from './pages/PDFTemplateManager';
@@ -174,6 +175,7 @@ import TravelerManagement from './pages/TravelerManagement';
 import TravelerExecution from './pages/TravelerExecution';
 import MaterialReceivingPage from './pages/MaterialReceivingPage';
 import MaterialInventoryPage from './pages/MaterialInventoryPage';
+import BusinessReviewPresentation from './pages/BusinessReviewPresentation';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -187,7 +189,7 @@ function ConditionalNavigation() {
     location === '/ag-dashboard' ||
     location === '/staciw-dashboard' ||
     location === '/login' ||
-    location.startsWith('/sign-order/'); // Hide navigation on customer sign order page
+    location.startsWith('/sign-order'); // Hide navigation on customer sign order page
 
   return hideNavigation ? null : <Navigation />;
 }
@@ -335,6 +337,7 @@ function App() {
                   <Route path="/orders-simple" component={OrdersListSimple} />
                   <Route path="/all-orders" component={AllOrdersPage} />
                   <Route path="/order-reports" component={OrderReports} />
+                  <Route path="/business-review" component={BusinessReviewPresentation} />
                   <Route path="/analytics" component={AnalyticsDashboard} />
                   <Route path="/finish-qc-completed-report" component={FinishQCCompletedReport} />
                   <Route path="/discounts" component={DiscountManagement} />
@@ -356,6 +359,7 @@ function App() {
                   {/* Admin Panel Routes */}
                   <Route path="/admin/orders" component={AdminPanelPage} />
                   <Route path="/admin/health-checks" component={SystemHealthChecksPage} />
+                  <Route path="/admin/monitored-links" component={MonitoredLinksManager} />
                   <Route path="/audit-settings" component={AuditSettings} />
                   <Route path="/order-timeline/:entityType/:entityId" component={OrderTimeline} />
                   <Route path="/media-library" component={MediaLibrary} />
@@ -820,9 +824,13 @@ function App() {
                     component={ShippingLabelPage}
                   />
 
-                  {/* Sign Order Route - Public route for customers */}
+                  {/* Sign Order Routes - Public routes for customers */}
                   <Route
                     path="/sign-order/:token"
+                    component={SignOrderPage}
+                  />
+                  <Route
+                    path="/sign-order"
                     component={SignOrderPage}
                   />
 

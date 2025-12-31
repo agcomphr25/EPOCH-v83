@@ -26,6 +26,13 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
   Package,
   TrendingUp,
   Calendar,
@@ -36,6 +43,9 @@ import {
   ExternalLink,
   Mail,
   Send,
+  History,
+  MessageSquare,
+  Phone,
 } from 'lucide-react';
 import {
   getCurrentCompanyWeek,
@@ -81,6 +91,25 @@ interface WeeklyStats {
   orders: string[];
 }
 
+interface NotificationHistoryItem {
+  id: number;
+  method: string;
+  type: string;
+  recipient: string;
+  subject: string | null;
+  message: string | null;
+  status: string;
+  error: string | null;
+  sentAt: string | null;
+  externalId: string | null;
+}
+
+interface NotificationHistoryResponse {
+  orderId: string;
+  count: number;
+  notifications: NotificationHistoryItem[];
+}
+
 export default function ShippingTracker() {
   const currentYear = new Date().getFullYear();
   const currentWeek = getCurrentCompanyWeek();
@@ -89,10 +118,12 @@ export default function ShippingTracker() {
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedWeek, setSelectedWeek] = useState<number>(currentWeek);
   const [searchTerm, setSearchTerm] = useState('');
+  const [historyOrderId, setHistoryOrderId] = useState<string | null>(null);
 
   // Mutation to send notification to customer
   const sendNotificationMutation = useMutation({
     mutationFn: async (orderId: string) => {
+      console.log('[UI] Sending notify request for order:', orderId);
       const response = await fetch(`/api/shipping/notify-customer/${orderId}`, {
         method: 'POST',
         headers: {
@@ -100,14 +131,18 @@ export default function ShippingTracker() {
         },
       });
 
+      const result = await response.json();
+      console.log('[UI RESPONSE] status:', response.status, 'body:', result);
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to send notification');
+        console.error('[NOTIFY FAIL RESULT]', result);
+        throw new Error(result.error || 'Failed to send notification');
       }
 
-      return response.json();
+      return result;
     },
     onSuccess: (data, orderId) => {
+      console.log('[UI SUCCESS]', data);
       toast({
         title: 'Notification Sent',
         description: data.message || `Customer notified via ${data.methods?.join(' and ')}`,
@@ -116,9 +151,10 @@ export default function ShippingTracker() {
       queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
     },
     onError: (error: Error, orderId) => {
+      console.error('[UI ERROR] Failed notification for order:', orderId, error);
       toast({
         title: 'Failed to Send Notification',
-        description: error.message,
+        description: error.message + ' — see browser console for details',
         variant: 'destructive',
       });
     },
@@ -137,6 +173,18 @@ export default function ShippingTracker() {
   // Fetch customers for name search
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ['/api/customers'],
+  });
+
+  // Fetch notification history when an order is selected
+  const { data: notificationHistory, isLoading: historyLoading, isError: historyError } = useQuery<NotificationHistoryResponse>({
+    queryKey: ['/api/communications/order', historyOrderId, 'history'],
+    queryFn: async () => {
+      const response = await fetch(`/api/communications/order/${historyOrderId}/history`);
+      if (!response.ok) throw new Error('Failed to fetch notification history');
+      return response.json();
+    },
+    enabled: !!historyOrderId,
+    retry: 1,
   });
 
   // Filter orders by search term (order number or customer name)
@@ -582,23 +630,34 @@ export default function ShippingTracker() {
                                 </div>
                               )}
                               {order.trackingNumber && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 px-2"
-                                  onClick={() => sendNotificationMutation.mutate(order.orderId)}
-                                  disabled={sendNotificationMutation.isPending}
-                                  data-testid={`button-notify-${order.orderId}`}
-                                >
-                                  {sendNotificationMutation.isPending ? (
-                                    <span className="text-xs">Sending...</span>
-                                  ) : (
-                                    <>
-                                      <Send className="h-3 w-3 mr-1" />
-                                      <span className="text-xs">Notify</span>
-                                    </>
-                                  )}
-                                </Button>
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-2"
+                                    onClick={() => sendNotificationMutation.mutate(order.orderId)}
+                                    disabled={sendNotificationMutation.isPending}
+                                    data-testid={`button-notify-${order.orderId}`}
+                                  >
+                                    {sendNotificationMutation.isPending ? (
+                                      <span className="text-xs">Sending...</span>
+                                    ) : (
+                                      <>
+                                        <Send className="h-3 w-3 mr-1" />
+                                        <span className="text-xs">Notify</span>
+                                      </>
+                                    )}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2"
+                                    onClick={() => setHistoryOrderId(order.orderId)}
+                                    data-testid={`button-history-${order.orderId}`}
+                                  >
+                                    <History className="h-3 w-3" />
+                                  </Button>
+                                </>
                               )}
                             </div>
                           </TableCell>
@@ -693,6 +752,86 @@ export default function ShippingTracker() {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+
+      {/* Notification History Dialog */}
+      <Dialog open={!!historyOrderId} onOpenChange={(open) => !open && setHistoryOrderId(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Notification History - Order {historyOrderId}
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[500px]">
+            {historyLoading ? (
+              <div className="text-center py-8 text-gray-500">Loading...</div>
+            ) : historyError ? (
+              <div className="text-center py-8 text-red-500">
+                <XCircle className="h-12 w-12 mx-auto text-red-300 mb-2" />
+                <p>Failed to load notification history.</p>
+                <p className="text-sm text-gray-500 mt-1">Please try again later.</p>
+              </div>
+            ) : !notificationHistory?.notifications?.length ? (
+              <div className="text-center py-8 text-gray-500">
+                <MessageSquare className="h-12 w-12 mx-auto text-gray-300 mb-2" />
+                <p>No notifications have been sent for this order yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-500 mb-4">
+                  {notificationHistory.count} notification(s) sent
+                </p>
+                {notificationHistory.notifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className="border rounded-lg p-4 bg-gray-50"
+                    data-testid={`notification-item-${notification.id}`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        {notification.method === 'email' ? (
+                          <Mail className="h-4 w-4 text-blue-600" />
+                        ) : (
+                          <Phone className="h-4 w-4 text-green-600" />
+                        )}
+                        <Badge variant={notification.status === 'sent' ? 'default' : 'destructive'}>
+                          {notification.status}
+                        </Badge>
+                        <Badge variant="outline">{notification.method}</Badge>
+                      </div>
+                      <span className="text-xs text-gray-500">
+                        {notification.sentAt
+                          ? format(new Date(notification.sentAt), 'MMM d, yyyy h:mm a')
+                          : 'Unknown'}
+                      </span>
+                    </div>
+                    <div className="text-sm space-y-1">
+                      <p>
+                        <span className="font-medium">To:</span> {notification.recipient}
+                      </p>
+                      {notification.subject && (
+                        <p>
+                          <span className="font-medium">Subject:</span> {notification.subject}
+                        </p>
+                      )}
+                      {notification.message && (
+                        <p className="text-gray-600 text-xs mt-2 bg-white p-2 rounded border">
+                          {notification.message}
+                        </p>
+                      )}
+                      {notification.error && (
+                        <p className="text-red-600 text-xs mt-2">
+                          <span className="font-medium">Error:</span> {notification.error}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -42,24 +42,38 @@ export function hashToken(token: string): string {
 }
 
 /**
- * Get the base URL for magic links
+ * UNIFIED URL RESOLUTION
+ * Single source of truth for base URL across all magic links and signature links
  */
-export function getMagicLinkBaseUrl(): string {
+export function getAppBaseUrl(): string {
+  if (process.env.APP_URL) return process.env.APP_URL;
+  if (process.env.PRODUCTION_DOMAIN) return `https://${process.env.PRODUCTION_DOMAIN}`;
   if (process.env.REPLIT_DOMAINS) {
-    const domains = process.env.REPLIT_DOMAINS.split(',');
-    return `https://${domains[0]}`;
+    const domain = process.env.REPLIT_DOMAINS.split(',')[0];
+    return `https://${domain}`;
   }
-  return process.env.NODE_ENV === 'production'
-    ? process.env.APP_URL || 'https://your-app.com'
-    : 'http://localhost:5000';
+  return 'http://localhost:5000';
 }
 
 /**
- * Create a magic link URL
+ * @deprecated Use getAppBaseUrl() instead
+ */
+export function getMagicLinkBaseUrl(): string {
+  return getAppBaseUrl();
+}
+
+/**
+ * Create a magic link URL for signature/verification
+ */
+export function createMagicLink(token: string): string {
+  return `${getAppBaseUrl()}/sign-order?token=${token}`;
+}
+
+/**
+ * Create a magic link URL with purpose parameter (legacy API routes)
  */
 export function createMagicLinkUrl(token: string, purpose: string): string {
-  const baseUrl = getMagicLinkBaseUrl();
-  return `${baseUrl}/api/magic-link/verify?token=${token}&purpose=${purpose}`;
+  return `${getAppBaseUrl()}/api/magic-link/verify?token=${token}&purpose=${purpose}`;
 }
 
 /**
@@ -347,7 +361,7 @@ export async function sendMagicLink(options: SendMagicLinkOptions): Promise<{
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json() as { error?: string };
       throw new Error(errorData.error || 'Failed to send email');
     }
 

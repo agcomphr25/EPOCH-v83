@@ -1939,9 +1939,10 @@ router.get('/weekly-cutting-queue', async (req, res) => {
       console.log('Regular production queue query skipped:', err);
     }
 
-    // 4. P2 PO Items - Purchase order items with BOMs requiring cutting
+    // 4. P2 PO Items - Purchase order items with BOMs requiring cutting (packets only)
     try {
-      // Query P2 production orders table - all pending items need cutting
+      // Query P2 production orders table - only items that are packets or have a packet BOM
+      // Join with inventory_items to check is_packet flag, or check if matching BOM exists
       const p2Result = showAll === 'true'
         ? await pool.query(`
             SELECT 
@@ -1954,10 +1955,23 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               po.priority,
               po.status,
               COALESCE(p2.customer_name, 'P2 Order') as "customer",
-              'P2' as source
+              'P2' as source,
+              COALESCE(inv.is_packet, false) as "isPacket",
+              bom.id as "matchedBomId"
             FROM p2_production_orders po
             LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
+            LEFT JOIN inventory_items inv ON (
+              LOWER(inv.name) = LOWER(po.part_name) OR 
+              inv.ag_part_number = po.part_name OR
+              LOWER(inv.ag_part_number) = LOWER(po.part_name)
+            )
+            LEFT JOIN cutting_packet_boms bom ON (
+              bom.part_number = po.part_name OR 
+              LOWER(bom.packet_type) = LOWER(po.part_name) OR
+              LOWER(bom.part_number) = LOWER(po.part_name)
+            )
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
+              AND (inv.is_packet = true OR bom.id IS NOT NULL)
             ORDER BY po.due_date ASC NULLS LAST
             LIMIT 500
           `)
@@ -1972,22 +1986,37 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               po.priority,
               po.status,
               COALESCE(p2.customer_name, 'P2 Order') as "customer",
-              'P2' as source
+              'P2' as source,
+              COALESCE(inv.is_packet, false) as "isPacket",
+              bom.id as "matchedBomId"
             FROM p2_production_orders po
             LEFT JOIN p2_purchase_orders p2 ON po.p2_po_id = p2.id
+            LEFT JOIN inventory_items inv ON (
+              LOWER(inv.name) = LOWER(po.part_name) OR 
+              inv.ag_part_number = po.part_name OR
+              LOWER(inv.ag_part_number) = LOWER(po.part_name)
+            )
+            LEFT JOIN cutting_packet_boms bom ON (
+              bom.part_number = po.part_name OR 
+              LOWER(bom.packet_type) = LOWER(po.part_name) OR
+              LOWER(bom.part_number) = LOWER(po.part_name)
+            )
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
               AND po.due_date >= $1 AND po.due_date < $2
+              AND (inv.is_packet = true OR bom.id IS NOT NULL)
             ORDER BY po.due_date ASC
           `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
 
       const p2Rows = Array.isArray(p2Result) ? p2Result : (p2Result as any).rows || [];
       for (const item of p2Rows) {
-        // Match with a BOM by item name or part number
-        const matchingBom = boms.find(b => 
-          b.partNumber === item.itemName || 
-          b.packetType?.toLowerCase() === item.itemName?.toLowerCase() ||
-          b.partNumber?.toLowerCase().includes(item.itemName?.toLowerCase() || '')
-        );
+        // Use the pre-matched BOM from query, or find a match
+        const matchingBomId = item.matchedBomId;
+        const matchingBom = matchingBomId ? boms.find(b => b.id === matchingBomId) : 
+          boms.find(b => 
+            b.partNumber === item.itemName || 
+            b.packetType?.toLowerCase() === item.itemName?.toLowerCase() ||
+            b.partNumber?.toLowerCase().includes(item.itemName?.toLowerCase() || '')
+          );
         
         // Determine material type from BOM or item name
         let materialType = 'unknown';
@@ -2019,6 +2048,8 @@ router.get('/weekly-cutting-queue', async (req, res) => {
           usesInventory: false,
           requiresNewCut: true,
           bomId: matchingBom?.id,
+          isPacket: item.isPacket || !!matchingBom,
+          packetBomId: matchingBom?.id,
         });
       }
     } catch (err) {

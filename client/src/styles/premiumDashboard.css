@@ -1,0 +1,239 @@
+.premium-bg {
+  background:
+    radial-gradient(circle at top, rgba(255,255,255,0.05), transparent 70%),
+    url("https://transparenttextures.com/patterns/asfalt-light.png"),
+    #0C0D10;
+  background-size: cover;
+  background-blend-mode: overlay;
+  position: relative;
+}
+
+.premium-bg::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.4) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.premium-content {
+  position: relative;
+  z-index: 1;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.depth-card {
+  background: linear-gradient(145deg, #1A1C21, #14161A);
+  border-radius: 16px;
+  padding: 22px;
+  min-height: 140px;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.38), inset 0 1px 1px rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.05);
+  transition: transform 0.26s ease, box-shadow 0.26s ease;
+  will-change: transform, box-shadow;
+}
+
+.depth-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 16px 30px rgba(0,0,0,0.45);
+}
+
+.depth-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.depth-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.depth-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #E5E7EB;
+}
+
+.depth-card-content {
+  color: #9CA3AF;
+  font-size: 0.875rem;
+}
+
+.depth-card-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: #D1D5DB;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+
+.depth-card-link:hover {
+  background-color: rgba(255,255,255,0.08);
+  color: #FFFFFF;
+}
+
+.depth-card-link-icon {
+  width: 18px;
+  height: 18px;
+  opacity: 0.7;
+}
+
+.premium-header {
+  margin-bottom: 32px;
+}
+
+.premium-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #FFFFFF 0%, #9CA3AF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+}
+
+.premium-subtitle {
+  color: #6B7280;
+  font-size: 1rem;
+}
+
+.premium-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(255,255,255,0.08);
+  color: #9CA3AF;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.kpi-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.kpi-label {
+  font-size: 0.75rem;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.kpi-trend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.875rem;
+  margin-top: 8px;
+}
+
+.kpi-trend.positive {
+  color: #10B981;
+}
+
+.kpi-trend.negative {
+  color: #EF4444;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.status-indicator.online {
+  background: #10B981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 6px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.quick-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #E5E7EB;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.quick-action-btn:hover {
+  background: rgba(255,255,255,0.12);
+  transform: translateY(-2px);
+}
+
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  margin: 32px 0;
+}
+
+.theme-toggle-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}

@@ -1,0 +1,159 @@
+FULL REPLIT AGENT PROMPT — COPY & PASTE
+Create a new premium personal dashboard page in the project. This page should NOT replace the site layout globally — it should be a standalone route called `/dashboard` for a specific logged-in user.
+
+The dashboard must implement an industrial dark theme with depth and medium shadows (no neon glow). Use matte charcoal cards with scroll-reactive scale + shadow depth to create a 3D feel.
+
+### FILES TO CREATE:
+
+1. Create `client/src/pages/DashboardPremium.tsx` with the following:
+- Full page layout with dark background
+- 3-column responsive grid layout (auto → 2-column tablet → 1-column mobile)
+- 8 example bento-style tiles with placeholder content
+- Each tile must use a `.depth-card` class for depth animation
+- Include demo widgets:
+  * Upcoming Events
+  * Skill Progress
+  * Attendance
+  * Messages
+  * Billing Quick Link 
+  * Program Enrollment Tile
+  * KPI metric card
+  * Photo/Media preview card
+- Include a top header reading "Your Dashboard"
+- Give each card a title and mock content section
+
+2. Create styles in `client/src/styles/premiumDashboard.css`:
+- Dark gradient background with subtle vignette + noise layer
+- Depth card styling:
+    background: linear-gradient(145deg, #1A1C21, #14161A);
+    border-radius: 16px;
+    padding: 22px;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.38), inset 0 1px 1px rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.05);
+    transition: transform .26s ease, box-shadow .26s ease;
+    will-change: transform, box-shadow;
+- Base shadow state, hover, and scroll-center shadow states
+
+3. Create `client/src/scripts/scrollDepth.js` that:
+- Selects all `.depth-card`
+- On scroll, calculate card distance from viewport center
+- Scale up to 1.03 when centered
+- Box-shadow grows to `0 25px 50px rgba(0,0,0,0.55)` at center
+- requestAnimationFrame loop
+- Smooth easing transform
+
+4. Import both CSS + JS into the dashboard page:
+```tsx
+import "../styles/premiumDashboard.css";
+import "../../scripts/scrollDepth.js";
+
+
+Add a new route in client/src/App.tsx:
+
+<Route path="/dashboard" element={<DashboardPremium />} />
+
+PAGE STRUCTURE TEMPLATE (place inside DashboardPremium.tsx component):
+import "../styles/premiumDashboard.css";
+
+export default function DashboardPremium(){
+  return (
+    <div className="premium-bg min-h-screen text-white p-10">
+      <h1 className="text-4xl font-semibold mb-10">Your Dashboard</h1>
+
+      <div className="dashboard-grid">
+        <div className="depth-card">Upcoming Events</div>
+        <div className="depth-card">Skill Progress</div>
+        <div className="depth-card">Attendance Overview</div>
+        <div className="depth-card">Messages</div>
+        <div className="depth-card">Billing & Payments</div>
+        <div className="depth-card">Program Enrollment</div>
+        <div className="depth-card">KPI Metrics</div>
+        <div className="depth-card">Photos / Media</div>
+      </div>
+    </div>
+  )
+}
+
+CSS SECTION (place inside premiumDashboard.css):
+
+.premium-bg {
+background:
+radial-gradient(circle at top, rgba(255,255,255,0.05), transparent 70%),
+url("https://transparenttextures.com/patterns/asfalt-light.png
+"),
+#0C0D10;
+background-size: cover;
+background-blend-mode: overlay;
+}
+
+.dashboard-grid {
+display:grid;
+grid-template-columns: repeat(auto-fit, minmax(300px,1fr));
+gap:24px;
+}
+
+.depth-card {
+background: linear-gradient(145deg,#1A1C21,#14161A);
+border-radius: 16px;
+padding:22px;
+min-height:140px;
+box-shadow:0 8px 18px rgba(0,0,0,0.38), inset 0 1px 1px rgba(255,255,255,0.04);
+border:1px solid rgba(255,255,255,0.05);
+transition:transform .26s ease, box-shadow .26s ease;
+will-change:transform,box-shadow;
+}
+
+.depth-card:hover {
+transform:scale(1.02);
+box-shadow:0 16px 30px rgba(0,0,0,0.45);
+}
+
+JAVASCRIPT SCROLL ANIMATION (scrollDepth.js):
+
+const cards = document.querySelectorAll('.depth-card');
+
+function animateDepth(){
+const vh = window.innerHeight;
+cards.forEach(card=>{
+const rect=card.getBoundingClientRect();
+const dist=Math.abs(rect.top+rect.height/2 - vh/2);
+const norm=Math.min(dist/(vh/2),1);
+const scale=1.03 - norm*.03;
+const shadow=0 ${25 - norm*20}px ${50 - norm*35}px rgba(0,0,0,${.55 - norm*.35});
+card.style.transform = scale(${scale});
+card.style.boxShadow = shadow;
+});
+requestAnimationFrame(animateDepth);
+}
+animateDepth();
+
+Completed Task:
+
+Once finished, respond with file paths, created component preview, and screenshot instructions.
+
+
+---
+
+When you paste that into the agent, it will:
+
+✅ create a **standalone personal premium dashboard**  
+✅ give you **dark 3D card depth + scroll motion**  
+✅ set up the layout & styles automatically  
+✅ not affect your main site UI  
+⚙️ accessible at **/dashboard** immediately
+
+---
+
+If you'd like next:
+
+**A)** Add charts (donut, bar, KPI line)  
+**B)** Add image/video tile animation  
+**C)** Add interactive user widgets  
+**D)** Add Program Recommendations / AI Suggestions  
+**E)** Make it theme toggle (Light ↔ Dark)  
+**F)** Make it customizable like iPhone home screen  
+**G)** ALL features step-by-step upgrade
+
+Reply with A-G.
+
+You’re about to have a dashboard people will want to screenshot.

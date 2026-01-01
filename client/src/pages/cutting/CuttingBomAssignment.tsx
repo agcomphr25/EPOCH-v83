@@ -225,23 +225,52 @@ export default function CuttingBomAssignment() {
     },
   });
 
-  const packetsNeedingBom = useMemo(() => {
-    if (!weeklyQueueData?.items) return [];
+  const { packetsNeedingBom, bomDemandById } = useMemo(() => {
+    if (!weeklyQueueData?.items) return { packetsNeedingBom: [], bomDemandById: new Map<string, { demand: number; source: string }>() };
+    
+    const demandById = new Map<string, { demand: number; source: string }>();
+    
+    const bomLookup = new Map<string, PacketBOM[]>();
+    packetBOMs.forEach(bom => {
+      const keys = [
+        bom.id?.toLowerCase(),
+        bom.partNumber?.toLowerCase(),
+        bom.packetType?.toLowerCase(),
+      ].filter(Boolean) as string[];
+      
+      keys.forEach(key => {
+        if (!bomLookup.has(key)) {
+          bomLookup.set(key, []);
+        }
+        bomLookup.get(key)!.push(bom);
+      });
+    });
+    
+    const getCategoryBomsP1 = (materialType: string, nameLower: string) => {
+      const matchingBoms: PacketBOM[] = [];
+      packetBOMs.forEach(bom => {
+        const ptLower = bom.packetType?.toLowerCase() || '';
+        const pnLower = bom.partNumber?.toLowerCase() || '';
+        
+        if (materialType === 'carbon_fiber' || nameLower.startsWith('cf_') || nameLower.includes('carbon')) {
+          if (ptLower.includes('cf') || ptLower.includes('carbon') || pnLower.includes('cf') || pnLower.includes('carbon')) {
+            matchingBoms.push(bom);
+          }
+        } else if (materialType === 'fiberglass' || nameLower.startsWith('fg_') || nameLower.includes('fiberglass')) {
+          if (ptLower.includes('fg') || ptLower.includes('fiberglass') || pnLower.includes('fg') || pnLower.includes('fiberglass')) {
+            matchingBoms.push(bom);
+          }
+        } else if (nameLower.includes('mesa')) {
+          if (ptLower.includes('mesa') || pnLower.includes('mesa')) {
+            matchingBoms.push(bom);
+          }
+        }
+      });
+      return matchingBoms;
+    };
     
     const existingBomTypes = new Set(
       packetBOMs.flatMap(bom => [bom.partNumber?.toLowerCase(), bom.packetType?.toLowerCase()].filter(Boolean))
-    );
-    
-    const hasCfBom = packetBOMs.some(bom => 
-      bom.packetType?.toLowerCase().includes('cf') || 
-      bom.packetType?.toLowerCase().includes('carbon')
-    );
-    const hasFgBom = packetBOMs.some(bom => 
-      bom.packetType?.toLowerCase().includes('fg') || 
-      bom.packetType?.toLowerCase().includes('fiberglass')
-    );
-    const hasMesaBom = packetBOMs.some(bom => 
-      bom.packetType?.toLowerCase().includes('mesa')
     );
     
     const stockPacketDemand = { cf: 0, fg: 0, mesa: 0 };
@@ -253,8 +282,14 @@ export default function CuttingBomAssignment() {
       const nameLower = name.toLowerCase();
       const materialType = (item.materialType || '').toLowerCase();
       const isP1 = item.source === 'P1' || item.source === 'P1_PO';
+      const packetBomId = item.packetBomId;
       
-      // Group P1/P1_PO items by material type into stock packet categories
+      if (packetBomId) {
+        const existing = demandById.get(packetBomId) || { demand: 0, source: item.source };
+        demandById.set(packetBomId, { demand: existing.demand + demand, source: item.source });
+        return;
+      }
+      
       if (isP1) {
         if (materialType === 'carbon_fiber' || nameLower.startsWith('cf_') || nameLower.includes('carbon')) {
           stockPacketDemand.cf += demand;
@@ -263,11 +298,24 @@ export default function CuttingBomAssignment() {
         } else if (nameLower.includes('mesa')) {
           stockPacketDemand.mesa += demand;
         }
-        // Skip P1/P1_PO items that don't match known patterns (like numeric IDs)
+        
+        const matchingBoms = getCategoryBomsP1(materialType, nameLower);
+        matchingBoms.forEach(bom => {
+          const existing = demandById.get(bom.id) || { demand: 0, source: item.source };
+          demandById.set(bom.id, { demand: existing.demand + demand, source: item.source });
+        });
         return;
       }
       
-      // P2 items - group by specific packet name
+      const matchedBoms = bomLookup.get(nameLower) || [];
+      if (matchedBoms.length > 0) {
+        matchedBoms.forEach(bom => {
+          const existing = demandById.get(bom.id) || { demand: 0, source: item.source };
+          demandById.set(bom.id, { demand: existing.demand + demand, source: item.source });
+        });
+        return;
+      }
+      
       if (!name || existingBomTypes.has(nameLower)) return;
       
       if (!p2Packets[name]) {
@@ -277,6 +325,16 @@ export default function CuttingBomAssignment() {
     });
     
     const result: { name: string; demand: number; source: string }[] = [];
+    
+    const hasCfBom = packetBOMs.some(bom => 
+      bom.packetType?.toLowerCase().includes('cf') || bom.packetType?.toLowerCase().includes('carbon')
+    );
+    const hasFgBom = packetBOMs.some(bom => 
+      bom.packetType?.toLowerCase().includes('fg') || bom.packetType?.toLowerCase().includes('fiberglass')
+    );
+    const hasMesaBom = packetBOMs.some(bom => 
+      bom.packetType?.toLowerCase().includes('mesa')
+    );
     
     if (stockPacketDemand.cf > 0 && !hasCfBom) {
       result.push({ name: 'CF Stock Packet', demand: stockPacketDemand.cf, source: 'P1' });
@@ -290,8 +348,22 @@ export default function CuttingBomAssignment() {
     
     result.push(...Object.values(p2Packets));
     
-    return result.sort((a, b) => b.demand - a.demand);
+    return { 
+      packetsNeedingBom: result.sort((a, b) => b.demand - a.demand),
+      bomDemandById: demandById
+    };
   }, [weeklyQueueData?.items, packetBOMs]);
+
+  const bomsWithDemand = useMemo(() => {
+    return packetBOMs.filter(bom => bomDemandById.has(bom.id)).map(bom => {
+      const demandInfo = bomDemandById.get(bom.id);
+      return {
+        ...bom,
+        currentDemand: demandInfo?.demand || 0,
+        demandSource: demandInfo?.source || '',
+      };
+    }).sort((a, b) => b.currentDemand - a.currentDemand);
+  }, [packetBOMs, bomDemandById]);
 
   const createPacketBomMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -615,20 +687,20 @@ export default function CuttingBomAssignment() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            Packet BOMs
+            Packets to Manufacture
           </CardTitle>
-          <CardDescription>Configured packet BOMs with cutting specifications</CardDescription>
+          <CardDescription>BOMs with current manufacturing demand from the schedule</CardDescription>
         </CardHeader>
         <CardContent>
           {loadingBOMs ? (
             <div className="text-center py-8 text-muted-foreground">Loading BOMs...</div>
-          ) : packetBOMs.length === 0 ? (
+          ) : bomsWithDemand.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No packet BOMs configured. Create one to get started.
+              No packets currently need manufacturing. Check back when there's demand from the schedule.
             </div>
           ) : (
             <Accordion type="single" collapsible className="w-full">
-              {packetBOMs.map((bom) => (
+              {bomsWithDemand.map((bom) => (
                 <AccordionItem key={bom.id} value={bom.id}>
                   <AccordionTrigger className="hover:no-underline">
                     <div className="flex items-center justify-between w-full pr-4">
@@ -636,6 +708,8 @@ export default function CuttingBomAssignment() {
                         <Layers className="h-4 w-4 text-muted-foreground" />
                         <span className="font-medium">{bom.partNumber || bom.packetType}</span>
                         <Badge variant="outline">{bom.packetType}</Badge>
+                        <Badge variant="destructive">{bom.currentDemand} needed</Badge>
+                        <Badge variant="secondary">{bom.demandSource}</Badge>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span>{bom.parts?.length || 0} parts</span>

@@ -316,6 +316,11 @@ export default function CuttingBomAssignment() {
         return;
       }
       
+      // Only add to packetsNeedingBom if it's flagged as a packet
+      // Items without isPacket=true are regular inventory items that don't need packet BOMs
+      const isPacketItem = item.isPacket === true || item.bomId || item.packetBomId;
+      if (!isPacketItem) return;
+      
       if (!name || existingBomTypes.has(nameLower)) return;
       
       if (!p2Packets[name]) {

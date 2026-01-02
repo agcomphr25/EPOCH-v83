@@ -307,7 +307,18 @@ export default function CuttingBomAssignment() {
         return;
       }
       
-      const matchedBoms = bomLookup.get(nameLower) || [];
+      let matchedBoms = bomLookup.get(nameLower) || [];
+      
+      // If no exact match, try partial matching (e.g., "Disruptor" matches "Disruptor Packet")
+      if (matchedBoms.length === 0) {
+        matchedBoms = packetBOMs.filter(bom => {
+          const ptLower = bom.packetType?.toLowerCase() || '';
+          const pnLower = bom.partNumber?.toLowerCase() || '';
+          return ptLower.includes(nameLower) || nameLower.includes(ptLower) ||
+                 pnLower.includes(nameLower) || nameLower.includes(pnLower);
+        });
+      }
+      
       if (matchedBoms.length > 0) {
         matchedBoms.forEach(bom => {
           const existing = demandById.get(bom.id) || { demand: 0, source: item.source };
@@ -319,6 +330,15 @@ export default function CuttingBomAssignment() {
       // Only add to packetsNeedingBom if it's flagged as a packet in inventory
       // Items without isPacket=true are regular inventory items that don't need packet BOMs
       if (item.isPacket !== true) return;
+      
+      // Check if any BOM exists with partial match before adding to needsBom list
+      const hasPartialBomMatch = packetBOMs.some(bom => {
+        const ptLower = bom.packetType?.toLowerCase() || '';
+        const pnLower = bom.partNumber?.toLowerCase() || '';
+        return ptLower.includes(nameLower) || nameLower.includes(ptLower) ||
+               pnLower.includes(nameLower) || nameLower.includes(pnLower);
+      });
+      if (hasPartialBomMatch) return;
       
       if (!name || existingBomTypes.has(nameLower)) return;
       

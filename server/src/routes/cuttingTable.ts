@@ -1966,9 +1966,13 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               LOWER(inv.ag_part_number) = LOWER(po.part_name)
             )
             LEFT JOIN cutting_packet_boms bom ON (
-              bom.part_number = po.part_name OR 
-              LOWER(bom.packet_type) = LOWER(po.part_name) OR
-              LOWER(bom.part_number) = LOWER(po.part_name)
+              bom.is_active = true AND (
+                bom.part_number = po.part_name OR 
+                LOWER(bom.packet_type) = LOWER(po.part_name) OR
+                LOWER(bom.part_number) = LOWER(po.part_name) OR
+                LOWER(bom.packet_type) LIKE '%' || LOWER(po.part_name) || '%' OR
+                LOWER(po.part_name) LIKE '%' || LOWER(bom.packet_type) || '%'
+              )
             )
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
               AND inv.is_packet = true
@@ -1997,9 +2001,13 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               LOWER(inv.ag_part_number) = LOWER(po.part_name)
             )
             LEFT JOIN cutting_packet_boms bom ON (
-              bom.part_number = po.part_name OR 
-              LOWER(bom.packet_type) = LOWER(po.part_name) OR
-              LOWER(bom.part_number) = LOWER(po.part_name)
+              bom.is_active = true AND (
+                bom.part_number = po.part_name OR 
+                LOWER(bom.packet_type) = LOWER(po.part_name) OR
+                LOWER(bom.part_number) = LOWER(po.part_name) OR
+                LOWER(bom.packet_type) LIKE '%' || LOWER(po.part_name) || '%' OR
+                LOWER(po.part_name) LIKE '%' || LOWER(bom.packet_type) || '%'
+              )
             )
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
               AND po.due_date >= $1 AND po.due_date < $2

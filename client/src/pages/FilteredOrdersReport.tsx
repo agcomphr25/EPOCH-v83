@@ -81,9 +81,7 @@ export default function FilteredOrdersReport() {
     queryKey: ['/api/auth/me'],
   });
   
-  const hasAccess = currentUser?.username && ALLOWED_USERS.includes(currentUser.username);
-  
-  // Filter states
+  // Filter states - must be declared before any conditional returns
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -91,27 +89,7 @@ export default function FilteredOrdersReport() {
   const [excludedCustomers, setExcludedCustomers] = useState<Set<string>>(new Set());
   const [excludeDropdownOpen, setExcludeDropdownOpen] = useState(false);
 
-  // Show access denied if user doesn't have access
-  if (!userLoading && !hasAccess) {
-    return (
-      <div className="container mx-auto p-6">
-        <Card className="max-w-md mx-auto">
-          <CardContent className="pt-6 text-center">
-            <ShieldX className="h-16 w-16 text-destructive mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-destructive mb-2">Access Restricted</h2>
-            <p className="text-muted-foreground mb-4">
-              This report is currently restricted to specific users only.
-            </p>
-            <Link href="/">
-              <Button>Return to Dashboard</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Fetch orders
+  // Fetch orders - must be declared before any conditional returns
   const { data: orders = [], isLoading: ordersLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders/with-payment-status'],
   });
@@ -162,29 +140,7 @@ export default function FilteredOrdersReport() {
     ).slice(0, 10); // Limit to 10 results
   }, [uniqueCustomerNames, customerSearch]);
 
-  // Toggle customer exclusion
-  const toggleCustomerExclusion = (customerName: string) => {
-    setExcludedCustomers((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(customerName)) {
-        newSet.delete(customerName);
-      } else {
-        newSet.add(customerName);
-      }
-      return newSet;
-    });
-  };
-
-  // Toggle status selection
-  const toggleStatus = (status: string) => {
-    setSelectedStatuses((prev) =>
-      prev.includes(status)
-        ? prev.filter((s) => s !== status)
-        : [...prev, status]
-    );
-  };
-
-  // Apply all filters
+  // Apply all filters - must be before conditional return
   const filteredOrders = useMemo(() => {
     let result = [...orders];
 
@@ -229,6 +185,51 @@ export default function FilteredOrdersReport() {
 
     return result;
   }, [orders, selectedStatuses, startDate, endDate, excludedCustomers]);
+  
+  // Access check
+  const hasAccess = currentUser?.username && ALLOWED_USERS.includes(currentUser.username);
+
+  // Show access denied if user doesn't have access (after all hooks)
+  if (!userLoading && !hasAccess) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card className="max-w-md mx-auto">
+          <CardContent className="pt-6 text-center">
+            <ShieldX className="h-16 w-16 text-destructive mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-destructive mb-2">Access Restricted</h2>
+            <p className="text-muted-foreground mb-4">
+              This report is currently restricted to specific users only.
+            </p>
+            <Link href="/">
+              <Button>Return to Dashboard</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Toggle customer exclusion
+  const toggleCustomerExclusion = (customerName: string) => {
+    setExcludedCustomers((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(customerName)) {
+        newSet.delete(customerName);
+      } else {
+        newSet.add(customerName);
+      }
+      return newSet;
+    });
+  };
+
+  // Toggle status selection
+  const toggleStatus = (status: string) => {
+    setSelectedStatuses((prev) =>
+      prev.includes(status)
+        ? prev.filter((s) => s !== status)
+        : [...prev, status]
+    );
+  };
 
   // Format date for display
   const formatDate = (dateStr: string | null | undefined) => {

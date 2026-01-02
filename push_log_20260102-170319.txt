@@ -1,0 +1,29 @@
+Your branch is behind 'origin/main' by 17 commits, and can be fast-forwarded.
+  (use "git pull" to update your local branch)
+Updating 789dbdab..bcf2566a
+Fast-forward
+ ...RY-TIMEOUT-api-auth-session-t_1767361244584.txt | 114 ++++
+ ...RY-TIMEOUT-api-auth-session-t_1767361415903.txt | 186 +++++
+ attached_assets/image_1767368143883.png            | Bin 0 -> 111629 bytes
+ attached_assets/image_1767368566272.png            | Bin 0 -> 87787 bytes
+ attached_assets/image_1767369283375.png            | Bin 0 -> 54399 bytes
+ client/src/App.tsx                                 |   2 +
+ client/src/components/Navigation.tsx               |   7 +
+ client/src/components/p2/P2POCreationWizard.tsx    |   4 +-
+ client/src/config/userPermissions.ts               |   1 +
+ client/src/pages/FilteredOrdersReport.tsx          | 747 +++++++++++++++++++++
+ client/src/pages/cutting/CuttingBomAssignment.tsx  |  22 +-
+ push_log_20260102-162251.txt                       |   3 +
+ replit.md                                          |   1 +
+ server/schema.ts                                   |   1 +
+ server/src/routes/customers.ts                     |  70 +-
+ server/src/routes/cuttingTable.ts                  |  20 +-
+ server/src/routes/index.ts                         |  59 +-
+ 17 files changed, 1214 insertions(+), 23 deletions(-)
+ create mode 100644 attached_assets/Pasted-index-DMXUtiZy-js-4041-QUERY-TIMEOUT-api-auth-session-t_1767361244584.txt
+ create mode 100644 attached_assets/Pasted-index-DMXUtiZy-js-4041-QUERY-TIMEOUT-api-auth-session-t_1767361415903.txt
+ create mode 100644 attached_assets/image_1767368143883.png
+ create mode 100644 attached_assets/image_1767368566272.png
+ create mode 100644 attached_assets/image_1767369283375.png
+ create mode 100644 client/src/pages/FilteredOrdersReport.tsx
+ create mode 100644 push_log_20260102-162251.txt

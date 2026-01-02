@@ -1486,17 +1486,70 @@ export function registerRoutes(app: Express): Server {
   app.post('/api/p2-purchase-orders-bypass', softAuth, async (req, res) => {
     try {
       console.log('🔧 P2 PURCHASE ORDER CREATE BYPASS ROUTE CALLED');
+      console.log('🔧 Request body:', JSON.stringify(req.body, null, 2));
       const { storage } = await import('../../storage');
-      const poData = req.body;
+      
+      const { customerId, customerPONumber, dueDate, toleranceAuthorizerId, toleranceAuthorizerName, toleranceNotes, notes, lineItems } = req.body;
+      
+      // Get customer info
+      const customer = await storage.getP2Customer(customerId);
+      if (!customer) {
+        return res.status(400).json({ error: 'Customer not found' });
+      }
+      
+      // Generate unique PO number (P2PO-XXXX format)
+      const allPOs = await storage.getAllP2PurchaseOrders();
+      const maxPoNum = allPOs.reduce((max: number, po: any) => {
+        const match = po.poNumber?.match(/P2PO-(\d+)/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          return num > max ? num : max;
+        }
+        return max;
+      }, 0);
+      const poNumber = `P2PO-${String(maxPoNum + 1).padStart(4, '0')}`;
+      
+      // Build the complete PO data with all required fields
+      const poData = {
+        poNumber,
+        customerId: customer.customerId,
+        customerName: customer.customerName,
+        poDate: new Date().toISOString().split('T')[0],
+        expectedDelivery: dueDate,
+        status: 'OPEN',
+        notes: notes || toleranceNotes || null,
+        toleranceAuthorizerId: toleranceAuthorizerId || null,
+        toleranceAuthorizerName: toleranceAuthorizerName || null,
+        toleranceNotes: toleranceNotes || null,
+      };
+      
+      console.log('🔧 Creating PO with complete data:', JSON.stringify(poData, null, 2));
       const po = await storage.createP2PurchaseOrder(poData);
-      console.log('🔧 Created P2 purchase order:', po.id);
+      console.log('🔧 Created P2 purchase order:', po.id, po.poNumber);
+      
+      // Create line items if provided
+      if (lineItems && Array.isArray(lineItems) && lineItems.length > 0) {
+        console.log('🔧 Creating line items:', lineItems.length);
+        for (const item of lineItems) {
+          await storage.createP2PurchaseOrderItem({
+            poId: po.id,
+            partNumber: item.partNumber,
+            description: item.description,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice || 0,
+          });
+        }
+      }
+      
       res.status(201).json(po);
-    } catch (_error) {
+    } catch (_error: any) {
       console.error('🔧 P2 purchase order create bypass _error:', _error);
+      console.error('🔧 Error message:', _error?.message);
       res
         .status(500)
         .json({
           _error: 'Failed to create P2 purchase order via bypass route',
+          message: _error?.message || 'Unknown error',
         });
     }
   });

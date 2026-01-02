@@ -1,0 +1,114 @@
+index-DMXUtiZy.js:4041 🚨 QUERY TIMEOUT: /api/auth/session took longer than 15000ms
+console.error @ index-DMXUtiZy.js:4041
+index-DMXUtiZy.js:4041 🚨 QUERY TIMEOUT: /api/internal-messages/unread/count/19 took longer than 15000ms
+console.error @ index-DMXUtiZy.js:4041
+index-DMXUtiZy.js:4041 🚨 QUERY TIMEOUT: /api/cutting-table/packet-boms took longer than 15000ms
+console.error @ index-DMXUtiZy.js:4041
+index-DMXUtiZy.js:4041 🚨 QUERY TIMEOUT: /api/cutting-table-mfg-queue/available-packets took longer than 15000ms
+console.error @ index-DMXUtiZy.js:4041
+index-DMXUtiZy.js:4041 🚨 QUERY TIMEOUT: /api/cutting-table/fabric-items took longer than 15000ms
+console.error @ index-DMXUtiZy.js:4041
+index-DMXUtiZy.js:4041 🚨 QUERY TIMEOUT: /api/cutting-table/packet-items took longer than 15000ms
+console.error @ index-DMXUtiZy.js:4041
+index-DMXUtiZy.js:4041 🚨 QUERY TIMEOUT: /api/cutting-table/packet-part-items took longer than 15000ms
+console.error @ index-DMXUtiZy.js:4041
+api/cutting-table/weekly-cutting-queue?showAll=true:1  Failed to load resource: net::ERR_INTERNET_DISCONNECTED
+api/auth/session:1  Failed to load resource: net::ERR_INTERNET_DISCONNECTED
+index-DMXUtiZy.js:4041 Failed to fetch user data: TypeError: Failed to fetch
+    at queryFn (index-DMXUtiZy.js:1352:23420)
+    at Object.o [as fn] (index-DMXUtiZy.js:51:29558)
+    at p (index-DMXUtiZy.js:51:24767)
+    at Object.start (index-DMXUtiZy.js:51:25250)
+    at dEe.fetch (index-DMXUtiZy.js:51:30394)
+    at pEe.aP (index-DMXUtiZy.js:51:51769)
+    at pEe.fetch (index-DMXUtiZy.js:51:48510)
+    at pEe.refetch (index-DMXUtiZy.js:51:48302)
+    at dEe.onOnline (index-DMXUtiZy.js:51:28169)
+    at index-DMXUtiZy.js:51:33859
+console.error @ index-DMXUtiZy.js:4041
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+19:1  Failed to load resource: the server responded with a status of 403 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-DMXUtiZy.js:4041 Failed to fetch session for redirect: Error: Not authenticated
+    at index-DMXUtiZy.js:4038:35412
+console.error @ index-DMXUtiZy.js:4041
+p2-purchase-orders-bypass:1  Failed to load resource: the server responded with a status of 500 ()
+index-DMXUtiZy.js:4041 API error raw body: {"_error":"Failed to create P2 purchase order via bypass route"}
+console.error @ index-DMXUtiZy.js:4041
+index-DMXUtiZy.js:4041 💥 API Request failed for /api/p2-purchase-orders-bypass: Error: {"_error":"Failed to create P2 purchase order via bypass route"}
+    at ze (index-DMXUtiZy.js:235:6164)
+    at async Object.mutationFn (index-DMXUtiZy.js:2608:141291)
+console.error @ index-DMXUtiZy.js:4041
+index-DMXUtiZy.js:235  POST https://agcompepoch.xyz/api/p2-purchase-orders-bypass 500 (Internal Server Error)
+ze @ index-DMXUtiZy.js:235
+mutationFn @ index-DMXUtiZy.js:2608
+fn @ index-DMXUtiZy.js:51
+p @ index-DMXUtiZy.js:51
+start @ index-DMXUtiZy.js:51
+execute @ index-DMXUtiZy.js:51
+await in execute
+mutate @ index-DMXUtiZy.js:51
+(anonymous) @ index-DMXUtiZy.js:51
+w @ index-DMXUtiZy.js:2608
+qat @ index-DMXUtiZy.js:37
+zat @ index-DMXUtiZy.js:37
+Hat @ index-DMXUtiZy.js:37
+tme @ index-DMXUtiZy.js:37
+wDe @ index-DMXUtiZy.js:37
+(anonymous) @ index-DMXUtiZy.js:37
+iie @ index-DMXUtiZy.js:40
+GBe @ index-DMXUtiZy.js:37
+YG @ index-DMXUtiZy.js:37
+Oae @ index-DMXUtiZy.js:37
+oit @ index-DMXUtiZy.js:37
+index-DMXUtiZy.js:4041 API error raw body: {"_error":"Failed to create P2 purchase order via bypass route"}
+console.error @ index-DMXUtiZy.js:4041
+ze @ index-DMXUtiZy.js:235
+await in ze
+mutationFn @ index-DMXUtiZy.js:2608
+fn @ index-DMXUtiZy.js:51
+p @ index-DMXUtiZy.js:51
+start @ index-DMXUtiZy.js:51
+execute @ index-DMXUtiZy.js:51
+await in execute
+mutate @ index-DMXUtiZy.js:51
+(anonymous) @ index-DMXUtiZy.js:51
+w @ index-DMXUtiZy.js:2608
+qat @ index-DMXUtiZy.js:37
+zat @ index-DMXUtiZy.js:37
+Hat @ index-DMXUtiZy.js:37
+tme @ index-DMXUtiZy.js:37
+wDe @ index-DMXUtiZy.js:37
+(anonymous) @ index-DMXUtiZy.js:37
+iie @ index-DMXUtiZy.js:40
+GBe @ index-DMXUtiZy.js:37
+YG @ index-DMXUtiZy.js:37
+Oae @ index-DMXUtiZy.js:37
+oit @ index-DMXUtiZy.js:37
+index-DMXUtiZy.js:4041 💥 API Request failed for /api/p2-purchase-orders-bypass: Error: {"_error":"Failed to create P2 purchase order via bypass route"}
+    at ze (index-DMXUtiZy.js:235:6164)
+    at async Object.mutationFn (index-DMXUtiZy.js:2608:141291)
+console.error @ index-DMXUtiZy.js:4041
+ze @ index-DMXUtiZy.js:235
+await in ze
+mutationFn @ index-DMXUtiZy.js:2608
+fn @ index-DMXUtiZy.js:51
+p @ index-DMXUtiZy.js:51
+start @ index-DMXUtiZy.js:51
+execute @ index-DMXUtiZy.js:51
+await in execute
+mutate @ index-DMXUtiZy.js:51
+(anonymous) @ index-DMXUtiZy.js:51
+w @ index-DMXUtiZy.js:2608
+qat @ index-DMXUtiZy.js:37
+zat @ index-DMXUtiZy.js:37
+Hat @ index-DMXUtiZy.js:37
+tme @ index-DMXUtiZy.js:37
+wDe @ index-DMXUtiZy.js:37
+(anonymous) @ index-DMXUtiZy.js:37
+iie @ index-DMXUtiZy.js:40
+GBe @ index-DMXUtiZy.js:37
+YG @ index-DMXUtiZy.js:37
+Oae @ index-DMXUtiZy.js:37
+oit @ index-DMXUtiZy.js:37

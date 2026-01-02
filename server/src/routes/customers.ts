@@ -61,6 +61,7 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       console.log('🔧 P2 PURCHASE ORDER CREATE BYPASS ROUTE CALLED');
+      console.log('🔧 Request body:', JSON.stringify(req.body, null, 2));
       
       const validation = insertP2PurchaseOrderSchema.safeParse(req.body);
       if (!validation.success) {
@@ -71,14 +72,21 @@ router.post(
         });
       }
       
+      console.log('🔧 Validation passed, creating PO with data:', JSON.stringify(validation.data, null, 2));
       const po = await storage.createP2PurchaseOrder(validation.data);
       console.log('🔧 Created P2 purchase order:', po.id);
       res.status(201).json(po);
-    } catch (error) {
+    } catch (error: any) {
       console.error('🔧 P2 purchase order create bypass error:', error);
+      console.error('🔧 Error message:', error?.message);
+      console.error('🔧 Error stack:', error?.stack);
       res
         .status(500)
-        .json({ error: 'Failed to create P2 purchase order via bypass route' });
+        .json({ 
+          error: 'Failed to create P2 purchase order via bypass route',
+          message: error?.message || 'Unknown error',
+          details: error?.detail || error?.code || null
+        });
     }
   }
 );

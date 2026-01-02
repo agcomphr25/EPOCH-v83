@@ -351,10 +351,10 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
                         {employees
-                          .filter((emp: any) => emp.role === 'ADMIN' || emp.role === 'OWNER')
+                          .filter((emp: any) => emp.isActive !== false)
                           .map((emp: any) => (
                             <SelectItem key={emp.id} value={emp.id.toString()}>
-                              {emp.firstName} {emp.lastName}
+                              {emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || `Employee ${emp.id}`}
                             </SelectItem>
                           ))}
                       </SelectContent>

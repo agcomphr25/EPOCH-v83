@@ -25,9 +25,11 @@ import {
   Search,
   X,
   ChevronDown,
+  ChevronUp,
   FileSpreadsheet,
   AlertCircle,
   ShieldX,
+  ArrowUpDown,
 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { getDisplayOrderId } from '@/lib/orderUtils';
@@ -35,6 +37,9 @@ import OrderSummaryModal from '@/components/OrderSummaryModal';
 import { useLocation, Link } from 'wouter';
 
 const ALLOWED_USERS = ['glennj'];
+
+type SortColumn = 'orderId' | 'orderDate' | 'customer' | 'customerPO' | 'product' | 'department' | 'dueDate' | 'payment' | 'status';
+type SortDirection = 'asc' | 'desc';
 
 interface Order {
   id: number;
@@ -88,6 +93,10 @@ export default function FilteredOrdersReport() {
   const [customerSearch, setCustomerSearch] = useState('');
   const [excludedCustomers, setExcludedCustomers] = useState<Set<string>>(new Set());
   const [excludeDropdownOpen, setExcludeDropdownOpen] = useState(false);
+  
+  // Sort state
+  const [sortColumn, setSortColumn] = useState<SortColumn>('orderDate');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   // Fetch orders - must be declared before any conditional returns
   const { data: orders = [], isLoading: ordersLoading } = useQuery<Order[]>({
@@ -183,8 +192,57 @@ export default function FilteredOrdersReport() {
       });
     }
 
+    // Sort the results
+    result.sort((a, b) => {
+      let aVal: string | number = '';
+      let bVal: string | number = '';
+      
+      switch (sortColumn) {
+        case 'orderId':
+          aVal = a.orderId || '';
+          bVal = b.orderId || '';
+          break;
+        case 'orderDate':
+          aVal = a.orderDate || '';
+          bVal = b.orderDate || '';
+          break;
+        case 'customer':
+          aVal = getCustomerName(a).toLowerCase();
+          bVal = getCustomerName(b).toLowerCase();
+          break;
+        case 'customerPO':
+          aVal = (a.customerPO || '').toLowerCase();
+          bVal = (b.customerPO || '').toLowerCase();
+          break;
+        case 'product':
+          aVal = (a.product || getModelDisplayName(a.modelId)).toLowerCase();
+          bVal = (b.product || getModelDisplayName(b.modelId)).toLowerCase();
+          break;
+        case 'department':
+          aVal = (a.currentDepartment || '').toLowerCase();
+          bVal = (b.currentDepartment || '').toLowerCase();
+          break;
+        case 'dueDate':
+          aVal = a.dueDate || '';
+          bVal = b.dueDate || '';
+          break;
+        case 'payment':
+          aVal = a.paymentTotal || 0;
+          bVal = b.paymentTotal || 0;
+          break;
+        case 'status':
+          aVal = (a.isCancelled ? 'CANCELLED' : a.status || '').toLowerCase();
+          bVal = (b.isCancelled ? 'CANCELLED' : b.status || '').toLowerCase();
+          break;
+      }
+      
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
     return result;
-  }, [orders, selectedStatuses, startDate, endDate, excludedCustomers]);
+  }, [orders, selectedStatuses, startDate, endDate, excludedCustomers, sortColumn, sortDirection, stockModels]);
   
   // Access check
   const hasAccess = currentUser?.username && ALLOWED_USERS.includes(currentUser.username);
@@ -229,6 +287,26 @@ export default function FilteredOrdersReport() {
         ? prev.filter((s) => s !== status)
         : [...prev, status]
     );
+  };
+
+  // Handle column sort
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  // Render sort indicator
+  const SortIndicator = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ChevronUp className="h-3 w-3 ml-1" />
+      : <ChevronDown className="h-3 w-3 ml-1" />;
   };
 
   // Format date for display
@@ -532,21 +610,93 @@ export default function FilteredOrdersReport() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Order ID</TableHead>
-                    <TableHead>Order Date</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Customer PO</TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Current Dept</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead>Payment</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('orderId')}
+                    >
+                      <div className="flex items-center">
+                        Order ID
+                        <SortIndicator column="orderId" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('orderDate')}
+                    >
+                      <div className="flex items-center">
+                        Order Date
+                        <SortIndicator column="orderDate" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('customer')}
+                    >
+                      <div className="flex items-center">
+                        Customer
+                        <SortIndicator column="customer" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('customerPO')}
+                    >
+                      <div className="flex items-center">
+                        Customer PO
+                        <SortIndicator column="customerPO" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('product')}
+                    >
+                      <div className="flex items-center">
+                        Product
+                        <SortIndicator column="product" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('department')}
+                    >
+                      <div className="flex items-center">
+                        Current Dept
+                        <SortIndicator column="department" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('dueDate')}
+                    >
+                      <div className="flex items-center">
+                        Due Date
+                        <SortIndicator column="dueDate" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('payment')}
+                    >
+                      <div className="flex items-center">
+                        Payment
+                        <SortIndicator column="payment" />
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50 select-none"
+                      onClick={() => handleSort('status')}
+                    >
+                      <div className="flex items-center">
+                        Status
+                        <SortIndicator column="status" />
+                      </div>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredOrders.slice(0, 500).map((order) => (
+                  {filteredOrders.slice(0, 500).map((order, index) => (
                     <TableRow
-                      key={order.orderId}
+                      key={`${order.orderId}-${index}`}
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => setLocation(`/order-entry?draft=${order.orderId}`)}
                       data-testid={`row-order-${order.orderId}`}

@@ -62,6 +62,7 @@ import {
   Image,
   Eye,
   Boxes,
+  Filter,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -492,6 +493,12 @@ export default function Navigation() {
       label: 'Preproduction Checklist',
       icon: FileCheck,
       description: 'Quality control checklists for preproduction validation',
+    },
+    {
+      path: '/filtered-orders-report',
+      label: 'Filtered Orders Report',
+      icon: Filter,
+      description: 'Filter orders by status with customer exclusions and CSV export',
     },
   ];
 

@@ -78,7 +78,7 @@ export default function FilteredOrdersReport() {
   
   // Check user access
   const { data: currentUser, isLoading: userLoading } = useQuery<{ username: string }>({
-    queryKey: ['/api/auth/me'],
+    queryKey: ['/api/auth/session'],
   });
   
   // Filter states - must be declared before any conditional returns

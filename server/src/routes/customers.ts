@@ -1902,7 +1902,7 @@ router.post(
   '/part-routings',
   async (req: Request, res: Response) => {
     try {
-      const { insertPartRoutingSchema } = await import('@/schema');
+      const { insertPartRoutingSchema } = await import('../../schema');
       const validated = insertPartRoutingSchema.parse(req.body);
       const routing = await storage.createPartRouting(validated);
       res.json(routing);
@@ -2003,7 +2003,7 @@ router.put(
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { updatePartRoutingSchema } = await import('@/schema');
+      const { updatePartRoutingSchema } = await import('../../schema');
       
       // Validate against dedicated update schema (with refinements)
       const validated = updatePartRoutingSchema.parse(req.body);
@@ -2047,7 +2047,7 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { insertP2SerializedItemTraceabilitySchema } = await import('@/schema');
+      const { insertP2SerializedItemTraceabilitySchema } = await import('../../schema');
       const data = { ...req.body, serializedItemId: id };
       const validated = insertP2SerializedItemTraceabilitySchema.parse(data);
       const record = await storage.addTraceabilityData(validated);
@@ -2093,7 +2093,7 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { insertP2SerializedItemCustomDataSchema } = await import('@/schema');
+      const { insertP2SerializedItemCustomDataSchema } = await import('../../schema');
       const data = { ...req.body, serializedItemId: id };
       const validated = insertP2SerializedItemCustomDataSchema.parse(data);
       const record = await storage.addCustomData(validated);

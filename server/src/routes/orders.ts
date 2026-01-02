@@ -43,6 +43,36 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// Get order stats for dashboard
+router.get('/stats', async (req: Request, res: Response) => {
+  try {
+    const orders = await storage.getAllOrders();
+    const pending = orders.filter((o: any) => 
+      o.status?.toLowerCase() === 'pending' || 
+      o.status?.toLowerCase() === 'new' ||
+      o.status?.toLowerCase() === 'order received'
+    ).length;
+    const inProduction = orders.filter((o: any) => 
+      o.status?.toLowerCase().includes('production') ||
+      o.status?.toLowerCase() === 'in progress' ||
+      o.status?.toLowerCase() === 'manufacturing'
+    ).length;
+    const completed = orders.filter((o: any) => 
+      o.status?.toLowerCase() === 'completed' || 
+      o.status?.toLowerCase() === 'shipped' ||
+      o.status?.toLowerCase() === 'delivered'
+    ).length;
+    
+    res.json({ pending, inProduction, completed });
+  } catch (error) {
+    console.error('Error retrieving order stats:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch order stats',
+      details: (error as any).message 
+    });
+  }
+});
+
 // Get all orders with payment status for All Orders List with payment column
 router.get('/with-payment-status', async (req: Request, res: Response) => {
   try {

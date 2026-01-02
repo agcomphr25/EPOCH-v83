@@ -1971,7 +1971,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
               LOWER(bom.part_number) = LOWER(po.part_name)
             )
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
-              AND (inv.is_packet = true OR bom.id IS NOT NULL)
+              AND inv.is_packet = true
             ORDER BY po.due_date ASC NULLS LAST
             LIMIT 500
           `)
@@ -2003,7 +2003,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
             )
             WHERE po.status IN ('pending', 'in_progress', 'queued', 'PENDING')
               AND po.due_date >= $1 AND po.due_date < $2
-              AND (inv.is_packet = true OR bom.id IS NOT NULL)
+              AND inv.is_packet = true
             ORDER BY po.due_date ASC
           `, [startDate.toISOString().split('T')[0], endDate.toISOString().split('T')[0]]);
 
@@ -2048,7 +2048,7 @@ router.get('/weekly-cutting-queue', async (req, res) => {
           usesInventory: false,
           requiresNewCut: true,
           bomId: matchingBom?.id,
-          isPacket: item.isPacket || !!matchingBom,
+          isPacket: item.isPacket === true,
           packetBomId: matchingBom?.id,
         });
       }

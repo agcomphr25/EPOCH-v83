@@ -47,7 +47,7 @@ import {
 } from '@react-pdf/renderer';
 
 interface Survey {
-  id: number;
+  id: string;
   title: string;
   description?: string;
   isActive: boolean;
@@ -58,18 +58,21 @@ interface Survey {
 }
 
 interface SurveyResponse {
-  id: number;
-  surveyId: number;
+  id: string;
+  surveyId: string;
   surveyTitle: string;
-  customerId: number;
-  customerName: string;
-  customerEmail?: string;
-  orderId?: string;
+  respondentId: string;
+  respondentType: string;
+  respondentName: string;
+  respondentEmail?: string;
+  contextId?: string;
+  contextType?: string;
   responses: Record<string, any>;
   overallSatisfaction?: number;
   npsScore?: number;
   aggregateScore?: number;
   responseTimeSeconds?: number;
+  submittedBy?: string;
   isComplete: boolean;
   surveyDate?: string;
   submittedAt?: string;
@@ -194,21 +197,21 @@ const SurveyResponsePDF = ({
       </View>
 
       <View style={pdfStyles.section}>
-        <Text style={pdfStyles.sectionTitle}>Customer Information</Text>
+        <Text style={pdfStyles.sectionTitle}>Respondent Information</Text>
         <View style={pdfStyles.row}>
           <Text style={pdfStyles.label}>Name:</Text>
-          <Text style={pdfStyles.value}>{response.customerName}</Text>
+          <Text style={pdfStyles.value}>{response.respondentName}</Text>
         </View>
-        {response.customerEmail && (
+        {response.respondentEmail && (
           <View style={pdfStyles.row}>
             <Text style={pdfStyles.label}>Email:</Text>
-            <Text style={pdfStyles.value}>{response.customerEmail}</Text>
+            <Text style={pdfStyles.value}>{response.respondentEmail}</Text>
           </View>
         )}
-        {response.orderId && (
+        {response.contextId && (
           <View style={pdfStyles.row}>
-            <Text style={pdfStyles.label}>Order #:</Text>
-            <Text style={pdfStyles.value}>{response.orderId}</Text>
+            <Text style={pdfStyles.label}>Reference #:</Text>
+            <Text style={pdfStyles.value}>{response.contextId}</Text>
           </View>
         )}
       </View>
@@ -274,7 +277,7 @@ export default function CustomerSatisfaction() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `survey-response-${response.customerName.replace(/\s+/g, '-')}-${response.id}.pdf`;
+      link.download = `survey-response-${response.respondentName.replace(/\s+/g, '-')}-${response.id}.pdf`;
       link.click();
       URL.revokeObjectURL(url);
 
@@ -291,34 +294,34 @@ export default function CustomerSatisfaction() {
     }
   };
 
-  // Fetch surveys
+  // Fetch surveys from generic survey engine
   const { data: surveys = [], isLoading: surveysLoading } = useQuery({
-    queryKey: ['/api/customer-satisfaction/surveys'],
-    queryFn: () => apiRequest('/api/customer-satisfaction/surveys'),
+    queryKey: ['/api/survey-engine/surveys'],
+    queryFn: () => apiRequest('/api/survey-engine/surveys'),
   });
 
-  // Fetch responses
+  // Fetch responses from generic survey engine
   const { data: responses = [], isLoading: responsesLoading } = useQuery({
-    queryKey: ['/api/customer-satisfaction/responses'],
-    queryFn: () => apiRequest('/api/customer-satisfaction/responses'),
+    queryKey: ['/api/survey-engine/responses'],
+    queryFn: () => apiRequest('/api/survey-engine/responses'),
   });
 
-  // Fetch analytics
+  // Fetch analytics from generic survey engine
   const { data: analytics } = useQuery<Analytics>({
-    queryKey: ['/api/customer-satisfaction/analytics'],
-    queryFn: () => apiRequest('/api/customer-satisfaction/analytics'),
+    queryKey: ['/api/survey-engine/analytics'],
+    queryFn: () => apiRequest('/api/survey-engine/analytics'),
   });
 
-  // Fetch customers
+  // Fetch customers (still needed for customer lookup display)
   const { data: customers = [] } = useQuery({
     queryKey: ['/api/customers'],
     queryFn: () => apiRequest('/api/customers'),
   });
 
-  // Delete response mutation
+  // Delete response mutation using generic survey engine
   const deleteResponse = useMutation({
-    mutationFn: (responseId: number) =>
-      apiRequest(`/api/customer-satisfaction/responses/${responseId}`, {
+    mutationFn: (responseId: string) =>
+      apiRequest(`/api/survey-engine/responses/${responseId}`, {
         method: 'DELETE',
       }),
     onSuccess: () => {
@@ -327,10 +330,10 @@ export default function CustomerSatisfaction() {
         description: 'Survey response has been deleted successfully.',
       });
       queryClient.invalidateQueries({
-        queryKey: ['/api/customer-satisfaction/responses'],
+        queryKey: ['/api/survey-engine/responses'],
       });
       queryClient.invalidateQueries({
-        queryKey: ['/api/customer-satisfaction/analytics'],
+        queryKey: ['/api/survey-engine/analytics'],
       });
     },
     onError: (error: any) => {
@@ -431,7 +434,7 @@ export default function CustomerSatisfaction() {
                   className="flex items-center justify-between p-4 border rounded-lg"
                 >
                   <div className="space-y-1">
-                    <div className="font-medium">{response.customerName}</div>
+                    <div className="font-medium">{response.respondentName}</div>
                     <div className="text-sm text-gray-600">
                       {response.surveyTitle}
                     </div>
@@ -530,11 +533,11 @@ export default function CustomerSatisfaction() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="font-medium text-gray-900">
-                            {response.customerName}
+                            {response.respondentName}
                           </div>
-                          {response.customerEmail && (
+                          {response.respondentEmail && (
                             <div className="text-sm text-gray-500">
-                              {response.customerEmail}
+                              {response.respondentEmail}
                             </div>
                           )}
                         </div>
@@ -875,10 +878,10 @@ export default function CustomerSatisfaction() {
                   setIsTakeSurveyOpen(false);
                   setSelectedCustomer(null);
                   queryClient.invalidateQueries({
-                    queryKey: ['/api/customer-satisfaction/responses'],
+                    queryKey: ['/api/survey-engine/responses'],
                   });
                   queryClient.invalidateQueries({
-                    queryKey: ['/api/customer-satisfaction/analytics'],
+                    queryKey: ['/api/survey-engine/analytics'],
                   });
                 }}
               />
@@ -897,9 +900,9 @@ export default function CustomerSatisfaction() {
           {editingResponse && (
             <div className="space-y-4">
               <div className="text-sm text-gray-600 p-3 bg-gray-50 rounded">
-                <strong>Customer:</strong> {editingResponse.customerName}
-                {editingResponse.customerEmail &&
-                  ` (${editingResponse.customerEmail})`}
+                <strong>Respondent:</strong> {editingResponse.respondentName}
+                {editingResponse.respondentEmail &&
+                  ` (${editingResponse.respondentEmail})`}
                 <br />
                 <strong>Survey:</strong> {editingResponse.surveyTitle}
                 <br />
@@ -909,17 +912,17 @@ export default function CustomerSatisfaction() {
 
               <CustomerSatisfactionSurvey
                 surveyId={editingResponse.surveyId}
-                customerId={editingResponse.customerId}
-                orderId={editingResponse.orderId}
+                customerId={editingResponse.respondentId ? parseInt(editingResponse.respondentId) : undefined}
+                orderId={editingResponse.contextId}
                 existingResponse={editingResponse}
                 onComplete={() => {
                   setIsEditResponseOpen(false);
                   setEditingResponse(null);
                   queryClient.invalidateQueries({
-                    queryKey: ['/api/customer-satisfaction/responses'],
+                    queryKey: ['/api/survey-engine/responses'],
                   });
                   queryClient.invalidateQueries({
-                    queryKey: ['/api/customer-satisfaction/analytics'],
+                    queryKey: ['/api/survey-engine/analytics'],
                   });
                   toast({
                     title: 'Response Updated',

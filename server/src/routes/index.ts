@@ -39,6 +39,7 @@ import productionQueueRoutes from './productionQueue';
 import layupScheduleRoutes from './layupSchedule';
 import gatewayReportsRoutes from './gatewayReports';
 import customerSatisfactionRoutes from './customerSatisfaction';
+import surveyEngineRoutes from './surveyEngine';
 import poProductsRoutes from './poProducts';
 import p1POQueueRoutes from './p1POQueue';
 import poShippingQCRoutes from './poShippingQC';
@@ -339,8 +340,11 @@ export function registerRoutes(app: Express): Server {
   // Gateway reports routes
   app.use('/api/gateway-reports', gatewayReportsRoutes);
 
-  // Customer satisfaction survey routes
+  // Customer satisfaction survey routes (legacy EPOCH-specific)
   app.use('/api/customer-satisfaction', customerSatisfactionRoutes);
+
+  // Survey Engine routes (generic reusable survey system)
+  app.use('/api/survey-engine', surveyEngineRoutes);
 
   // PO Products routes
   app.use('/api/po-products', poProductsRoutes);

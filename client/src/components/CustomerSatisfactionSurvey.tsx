@@ -52,7 +52,7 @@ interface SurveyQuestion {
 }
 
 interface Survey {
-  id: number;
+  id: string;
   title: string;
   description?: string;
   isActive: boolean;
@@ -72,11 +72,11 @@ interface Customer {
 }
 
 interface CustomerSatisfactionSurveyProps {
-  surveyId?: number;
+  surveyId?: string;
   customerId?: number;
   orderId?: string;
   existingResponse?: any;
-  onComplete?: (responseId: number) => void;
+  onComplete?: (responseId: string) => void;
 }
 
 export default function CustomerSatisfactionSurvey({
@@ -97,13 +97,13 @@ export default function CustomerSatisfactionSurvey({
     Record<string, string>
   >({});
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
-    customerId || existingResponse?.customerId || null
+    customerId ?? (existingResponse?.respondentId ? parseInt(existingResponse.respondentId) : null)
   );
   const [orderNumber, setOrderNumber] = useState<string>(
-    existingResponse?.orderId || ''
+    existingResponse?.contextId || ''
   );
   const [csrName, setCsrName] = useState<string>(
-    existingResponse?.csrName || ''
+    existingResponse?.submittedBy || ''
   );
   const [surveyDate, setSurveyDate] = useState<Date | undefined>(
     existingResponse?.surveyDate
@@ -111,10 +111,10 @@ export default function CustomerSatisfactionSurvey({
       : new Date()
   );
 
-  // Fetch active surveys
+  // Fetch active surveys from generic survey engine
   const { data: surveys = [], isLoading: surveysLoading } = useQuery({
-    queryKey: ['/api/customer-satisfaction/surveys'],
-    queryFn: () => apiRequest('/api/customer-satisfaction/surveys'),
+    queryKey: ['/api/survey-engine/surveys'],
+    queryFn: () => apiRequest('/api/survey-engine/surveys'),
   });
 
   // Fetch customers for selection
@@ -135,13 +135,13 @@ export default function CustomerSatisfactionSurvey({
     surveys.find((s: Survey) => s.isActive) ||
     null;
 
-  // Submit survey response mutation
+  // Submit survey response mutation to generic survey engine
   const submitResponse = useMutation({
     mutationFn: async (data: any) => {
       const isUpdating = existingResponse?.id;
       const url = isUpdating
-        ? `/api/customer-satisfaction/responses/${existingResponse.id}`
-        : '/api/customer-satisfaction/responses';
+        ? `/api/survey-engine/responses/${existingResponse.id}`
+        : '/api/survey-engine/responses';
       const method = isUpdating ? 'PUT' : 'POST';
 
       return apiRequest(url, {
@@ -167,7 +167,7 @@ export default function CustomerSatisfactionSurvey({
         onComplete(response.id);
       }
       queryClient.invalidateQueries({
-        queryKey: ['/api/customer-satisfaction/responses'],
+        queryKey: ['/api/survey-engine/responses'],
       });
     },
     onError: (error: any) => {
@@ -250,18 +250,28 @@ export default function CustomerSatisfactionSurvey({
       0
     );
 
+    // Get selected customer details for respondent fields
+    const selectedCustomer = customers.find((c: Customer) => c.id === selectedCustomerId);
+
+    // Build response data using generic survey engine schema
     const responseData = {
       surveyId: selectedSurvey.id,
-      customerId: selectedCustomerId,
-      orderId: orderNumber || orderId || null,
+      // Respondent abstraction - ensure respondentId is a valid non-empty string
+      respondentId: selectedCustomerId ? String(selectedCustomerId) : 'anonymous',
+      respondentType: selectedCustomerId ? 'customer' as const : 'anonymous' as const,
+      respondentName: selectedCustomer?.name || null,
+      respondentEmail: selectedCustomer?.email || null,
+      // Context abstraction
+      contextId: orderNumber || orderId || null,
+      contextType: (orderNumber || orderId) ? 'order' as const : 'general' as const,
       responses,
-      overallSatisfaction: productQuality, // Use product quality as overall satisfaction
-      npsScore: recommendationLikelihood, // Use recommendation as NPS equivalent
-      aggregateScore, // Sum of all question responses
+      overallSatisfaction: productQuality || null,
+      npsScore: recommendationLikelihood || null,
+      aggregateScore: aggregateScore || null,
       responseTimeSeconds: Math.floor(
         (new Date().getTime() - startTime.getTime()) / 1000
       ),
-      csrName: csrName || null, // Customer Service Representative name
+      submittedBy: csrName || null,
       surveyDate: surveyDate
         ? surveyDate.toISOString()
         : new Date().toISOString(),
@@ -269,7 +279,7 @@ export default function CustomerSatisfactionSurvey({
       submittedAt: new Date().toISOString(),
     };
 
-    console.log('Submitting response data:', responseData); // Debug log
+    console.log('Submitting response data:', responseData);
     submitResponse.mutate(responseData);
   };
 

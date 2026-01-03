@@ -1148,9 +1148,16 @@ router.post('/generate-id', async (req: Request, res: Response) => {
 
 // Parameterized route - MUST be after specific routes
 // Supports both regular orders and P1 production orders
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response, next: Function) => {
   try {
     const orderId = req.params.id;
+    
+    // Skip static routes that should be handled by other handlers defined later
+    const staticRoutes = ['heat-map', 'stats', 'all', 'generate-id', 'last-id', 'reference'];
+    if (staticRoutes.some(route => orderId === route || orderId.startsWith(route + '/'))) {
+      return next('route');
+    }
+    
     console.log(`📋 GET /${orderId} - Fetching order details`);
 
     // Try to find the order in both drafts and finalized tables
@@ -3614,9 +3621,10 @@ router.get('/heat-map', async (req: Request, res: Response) => {
         ca.state,
         COUNT(DISTINCT o.order_id) as count
       FROM all_orders o
-      JOIN customer_addresses ca ON o.customer_id = ca.customer_id
+      JOIN customer_addresses ca ON o.customer_id::integer = ca.customer_id
       WHERE o.is_cancelled = false 
         AND ca.is_default = true
+        AND o.customer_id ~ '^[0-9]+$'
     `;
     
     const queryParams: any[] = [];

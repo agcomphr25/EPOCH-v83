@@ -177,6 +177,7 @@ import MaterialReceivingPage from './pages/MaterialReceivingPage';
 import MaterialInventoryPage from './pages/MaterialInventoryPage';
 import BusinessReviewPresentation from './pages/BusinessReviewPresentation';
 import FilteredOrdersReport from './pages/FilteredOrdersReport';
+import OrderHeatMap from './pages/OrderHeatMap';
 
 import { Toaster as HotToaster } from 'react-hot-toast';
 import DeploymentAuthWrapper from './components/DeploymentAuthWrapper';
@@ -339,6 +340,7 @@ function App() {
                   <Route path="/all-orders" component={AllOrdersPage} />
                   <Route path="/order-reports" component={OrderReports} />
                   <Route path="/filtered-orders-report" component={FilteredOrdersReport} />
+                  <Route path="/order-heat-map" component={OrderHeatMap} />
                   <Route path="/business-review" component={BusinessReviewPresentation} />
                   <Route path="/analytics" component={AnalyticsDashboard} />
                   <Route path="/finish-qc-completed-report" component={FinishQCCompletedReport} />

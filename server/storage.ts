@@ -11223,21 +11223,33 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteP2PurchaseOrder(id: number): Promise<void> {
-    // Delete related records first to avoid foreign key constraint violations
-    // 1. Delete production orders for this PO
+    // Delete/nullify related records first to avoid foreign key constraint violations
+    
+    // 1. Nullify optional references in other tables
+    await db.update(purchaseReviewChecklists)
+      .set({ customerPoId: null })
+      .where(eq(purchaseReviewChecklists.customerPoId, id));
+    
+    await db.update(projects)
+      .set({ linkedP2OrderId: null })
+      .where(eq(projects.linkedP2OrderId, id));
+    
+    // 2. Delete serialized items that reference this PO directly
+    await db.delete(p2SerializedItems).where(eq(p2SerializedItems.poId, id));
+    
+    // 3. Delete production orders for this PO (check both poId and p2PoId columns)
     await db.delete(p2ProductionOrders).where(eq(p2ProductionOrders.poId, id));
     
-    // 2. Get all PO items to delete their serialized items
+    // 4. Get all PO items and delete their remaining serialized items by poItemId
     const items = await this.getP2PurchaseOrderItems(id);
     for (const item of items) {
-      // Delete serialized items for each PO item
       await db.delete(p2SerializedItems).where(eq(p2SerializedItems.poItemId, item.id));
     }
     
-    // 3. Delete PO items
+    // 5. Delete PO items
     await db.delete(p2PurchaseOrderItems).where(eq(p2PurchaseOrderItems.poId, id));
     
-    // 4. Finally delete the PO itself
+    // 6. Finally delete the PO itself
     await db.delete(p2PurchaseOrders).where(eq(p2PurchaseOrders.id, id));
   }
 

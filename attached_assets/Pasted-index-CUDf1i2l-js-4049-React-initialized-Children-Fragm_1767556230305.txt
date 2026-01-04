@@ -1,0 +1,56 @@
+index-CUDf1i2l.js:4049 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-CUDf1i2l.js:4049 React hooks: {useState: ƒ, useEffect: ƒ}
+index-CUDf1i2l.js:4046 App component is rendering...
+index-CUDf1i2l.js:4046 Environment: production
+index-CUDf1i2l.js:4046 Base URL: /
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2-purchase-orders-bypass/5 (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2-purchase-orders-bypass/5: 500
+index-CUDf1i2l.js:4049 API error raw body: {"_error":"Failed to delete P2 purchase order via bypass route"}
+console.error @ index-CUDf1i2l.js:4049
+We @ index-CUDf1i2l.js:235
+await in We
+mutationFn @ index-CUDf1i2l.js:2673
+fn @ index-CUDf1i2l.js:51
+g @ index-CUDf1i2l.js:51
+start @ index-CUDf1i2l.js:51
+execute @ index-CUDf1i2l.js:51
+await in execute
+mutate @ index-CUDf1i2l.js:51
+(anonymous) @ index-CUDf1i2l.js:51
+onClick @ index-CUDf1i2l.js:2677
+Kat @ index-CUDf1i2l.js:37
+Yat @ index-CUDf1i2l.js:37
+Xat @ index-CUDf1i2l.js:37
+nme @ index-CUDf1i2l.js:37
+SDe @ index-CUDf1i2l.js:37
+(anonymous) @ index-CUDf1i2l.js:37
+cie @ index-CUDf1i2l.js:40
+YBe @ index-CUDf1i2l.js:37
+ZG @ index-CUDf1i2l.js:37
+Rae @ index-CUDf1i2l.js:37
+fit @ index-CUDf1i2l.js:37
+index-CUDf1i2l.js:4049 💥 API Request failed for /api/p2-purchase-orders-bypass/5: Error: {"_error":"Failed to delete P2 purchase order via bypass route"}
+    at We (index-CUDf1i2l.js:235:6164)
+console.error @ index-CUDf1i2l.js:4049
+We @ index-CUDf1i2l.js:235
+await in We
+mutationFn @ index-CUDf1i2l.js:2673
+fn @ index-CUDf1i2l.js:51
+g @ index-CUDf1i2l.js:51
+start @ index-CUDf1i2l.js:51
+execute @ index-CUDf1i2l.js:51
+await in execute
+mutate @ index-CUDf1i2l.js:51
+(anonymous) @ index-CUDf1i2l.js:51
+onClick @ index-CUDf1i2l.js:2677
+Kat @ index-CUDf1i2l.js:37
+Yat @ index-CUDf1i2l.js:37
+Xat @ index-CUDf1i2l.js:37
+nme @ index-CUDf1i2l.js:37
+SDe @ index-CUDf1i2l.js:37
+(anonymous) @ index-CUDf1i2l.js:37
+cie @ index-CUDf1i2l.js:40
+YBe @ index-CUDf1i2l.js:37
+ZG @ index-CUDf1i2l.js:37
+Rae @ index-CUDf1i2l.js:37
+fit @ index-CUDf1i2l.js:37

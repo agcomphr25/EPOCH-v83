@@ -40,6 +40,8 @@ import P2StatusDashboard from '@/components/p2/P2StatusDashboard';
 import P2ProductionQueue from '@/components/p2/P2ProductionQueue';
 import P2CertificationsManager from './P2CertificationsManager';
 import PartRoutingManagement from './PartRoutingManagement';
+import { P2POManager } from '@/components/P2POManager';
+import { P2POItemsManager } from '@/components/P2POItemsManager';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -88,6 +90,7 @@ export default function P2ControlCenter() {
   const [showPOWizard, setShowPOWizard] = useState(false);
   const [showBOMWizard, setShowBOMWizard] = useState(false);
   const [selectedPOForBOM, setSelectedPOForBOM] = useState<number | null>(null);
+  const [poItemsView, setPOItemsView] = useState<{ poId: number; poNumber: string } | null>(null);
 
   const { data: stats } = useQuery<P2Stats>({
     queryKey: ['/api/p2/control-center/stats'],
@@ -342,6 +345,10 @@ export default function P2ControlCenter() {
             <Users className="h-4 w-4" />
             Customers
           </TabsTrigger>
+          <TabsTrigger value="pos" className="flex items-center gap-2" data-testid="tab-pos">
+            <FileText className="h-4 w-4" />
+            POs
+          </TabsTrigger>
           <TabsTrigger value="setup" className="flex items-center gap-2" data-testid="tab-setup">
             <Settings className="h-4 w-4" />
             Setup
@@ -383,6 +390,20 @@ export default function P2ControlCenter() {
 
         <TabsContent value="customers">
           <P2CustomersTab />
+        </TabsContent>
+
+        <TabsContent value="pos">
+          {poItemsView ? (
+            <P2POItemsManager
+              poId={poItemsView.poId}
+              poNumber={poItemsView.poNumber}
+              onBack={() => setPOItemsView(null)}
+            />
+          ) : (
+            <P2POManager 
+              onManageItems={(poId, poNumber) => setPOItemsView({ poId, poNumber })} 
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="setup">

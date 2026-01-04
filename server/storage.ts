@@ -11223,6 +11223,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteP2PurchaseOrder(id: number): Promise<void> {
+    // Delete related records first to avoid foreign key constraint violations
+    // 1. Delete production orders for this PO
+    await db.delete(p2ProductionOrders).where(eq(p2ProductionOrders.poId, id));
+    
+    // 2. Get all PO items to delete their serialized items
+    const items = await this.getP2PurchaseOrderItems(id);
+    for (const item of items) {
+      // Delete serialized items for each PO item
+      await db.delete(p2SerializedItems).where(eq(p2SerializedItems.poItemId, item.id));
+    }
+    
+    // 3. Delete PO items
+    await db.delete(p2PurchaseOrderItems).where(eq(p2PurchaseOrderItems.poId, id));
+    
+    // 4. Finally delete the PO itself
     await db.delete(p2PurchaseOrders).where(eq(p2PurchaseOrders.id, id));
   }
 

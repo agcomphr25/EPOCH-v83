@@ -25,6 +25,7 @@ const PUBLIC_ROUTES = [
 
 const PUBLIC_ROUTE_PREFIXES = [
   '/sign-order',  // Customer signature page - no auth required
+  '/p2-traveler', // P2 traveler viewer - public access for customers/vendors
 ];
 
 function isDeploymentEnvironment(): boolean {

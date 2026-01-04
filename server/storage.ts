@@ -11234,22 +11234,27 @@ export class DatabaseStorage implements IStorage {
       .set({ linkedP2OrderId: null })
       .where(eq(projects.linkedP2OrderId, id));
     
-    // 2. Delete serialized items that reference this PO directly
+    // 2. Nullify manufacturing queue references
+    await db.update(manufacturingQueue)
+      .set({ p2PoId: null, p2PoItemId: null })
+      .where(eq(manufacturingQueue.p2PoId, id));
+    
+    // 3. Delete serialized items that reference this PO directly
     await db.delete(p2SerializedItems).where(eq(p2SerializedItems.poId, id));
     
-    // 3. Delete production orders for this PO (check both poId and p2PoId columns)
-    await db.delete(p2ProductionOrders).where(eq(p2ProductionOrders.poId, id));
+    // 4. Delete production orders for this PO (uses p2PoId column)
+    await db.delete(p2ProductionOrders).where(eq(p2ProductionOrders.p2PoId, id));
     
-    // 4. Get all PO items and delete their remaining serialized items by poItemId
+    // 5. Get all PO items and delete their remaining serialized items by poItemId
     const items = await this.getP2PurchaseOrderItems(id);
     for (const item of items) {
       await db.delete(p2SerializedItems).where(eq(p2SerializedItems.poItemId, item.id));
     }
     
-    // 5. Delete PO items
+    // 6. Delete PO items
     await db.delete(p2PurchaseOrderItems).where(eq(p2PurchaseOrderItems.poId, id));
     
-    // 6. Finally delete the PO itself
+    // 7. Finally delete the PO itself
     await db.delete(p2PurchaseOrders).where(eq(p2PurchaseOrders.id, id));
   }
 

@@ -289,7 +289,7 @@ export default function ExpiredPromoCodesAdmin() {
         </CardContent>
       </Card>
 
-      <Dialog open={reasonDialogOpen} onOpenChange={setReasonDialogOpen}>
+      <Dialog open={reasonDialogOpen} onOpenChange={(open) => !isPending && setReasonDialogOpen(open)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>

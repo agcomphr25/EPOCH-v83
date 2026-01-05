@@ -192,7 +192,8 @@ function ConditionalNavigation() {
     location === '/ag-dashboard' ||
     location === '/staciw-dashboard' ||
     location === '/login' ||
-    location.startsWith('/sign-order'); // Hide navigation on customer sign order page
+    location.startsWith('/sign-order') || // Hide navigation on customer sign order page
+    location.startsWith('/sign-pollard-pdf'); // Hide navigation on Pollard PDF signing page
 
   return hideNavigation ? null : <Navigation />;
 }

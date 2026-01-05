@@ -157,6 +157,22 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting }: P
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Sync state when wizard opens with editRouting data
+  useEffect(() => {
+    if (open && editRouting) {
+      setSelectedItemId(editRouting.inventoryItemId || '');
+      setSelectedDepartments(editRouting.departmentSequence || []);
+      setDepartmentConfig(editRouting.departmentConfig || {});
+      setStep(1);
+    } else if (open && !editRouting) {
+      // Reset for new routing
+      setSelectedItemId('');
+      setSelectedDepartments([]);
+      setDepartmentConfig({});
+      setStep(1);
+    }
+  }, [open, editRouting]);
+
   // Initialize department configs for all selected departments
   useEffect(() => {
     if (!open) return;

@@ -32,7 +32,10 @@ import {
   Clock,
   Loader2,
   Info,
+  FileText,
+  QrCode,
 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface MaterialLot {
   id: string;
@@ -66,6 +69,7 @@ interface MaterialScannerProps {
   requiredQty?: number;
   onMaterialConsumed?: (consumption: any) => void;
   onClose?: () => void;
+  allowFreeTextEntry?: boolean; // Allow entering control numbers without validation
 }
 
 export default function MaterialScanner({
@@ -75,6 +79,7 @@ export default function MaterialScanner({
   requiredQty,
   onMaterialConsumed,
   onClose,
+  allowFreeTextEntry = false,
 }: MaterialScannerProps) {
   const [scanInput, setScanInput] = useState('');
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
@@ -82,6 +87,8 @@ export default function MaterialScanner({
   const [showOverrideDialog, setShowOverrideDialog] = useState(false);
   const [overrideReason, setOverrideReason] = useState('');
   const [overrideApprovedBy, setOverrideApprovedBy] = useState('');
+  const [entryMode, setEntryMode] = useState<'scan' | 'manual'>('scan');
+  const [freeTextControlNumber, setFreeTextControlNumber] = useState('');
   const queryClient = useQueryClient();
 
   const validateMutation = useMutation({
@@ -194,6 +201,22 @@ export default function MaterialScanner({
     setQtyToUse('');
     setOverrideReason('');
     setOverrideApprovedBy('');
+    setFreeTextControlNumber('');
+  };
+
+  const handleFreeTextSubmit = () => {
+    if (!freeTextControlNumber.trim()) {
+      toast.error('Please enter an internal control number');
+      return;
+    }
+    onMaterialConsumed?.({
+      internalControlNumber: freeTextControlNumber.trim(),
+      entryMethod: 'manual',
+      travelerId,
+      travelerStepId,
+    });
+    resetScanner();
+    toast.success('Control number recorded');
   };
 
   const getStatusIcon = (status: string) => {
@@ -223,29 +246,73 @@ export default function MaterialScanner({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <Input
-              placeholder="Scan or enter ICN (e.g., ICN-MAT-20241223-000001)"
-              value={scanInput}
-              onChange={(e) => setScanInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleScan()}
-              autoFocus
-              data-testid="input-icn-scan"
-            />
+        {allowFreeTextEntry && (
+          <Tabs value={entryMode} onValueChange={(v) => setEntryMode(v as 'scan' | 'manual')} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="scan" className="flex items-center gap-2" data-testid="tab-scan-barcode">
+                <QrCode className="h-4 w-4" />
+                Scan Barcode
+              </TabsTrigger>
+              <TabsTrigger value="manual" className="flex items-center gap-2" data-testid="tab-control-number">
+                <FileText className="h-4 w-4" />
+                Control Number
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
+
+        {entryMode === 'manual' && allowFreeTextEntry ? (
+          <div className="space-y-4">
+            <Alert>
+              <FileText className="h-4 w-4" />
+              <AlertDescription>
+                Enter internal control number for traceability records
+              </AlertDescription>
+            </Alert>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Input
+                  placeholder="Enter internal control number..."
+                  value={freeTextControlNumber}
+                  onChange={(e) => setFreeTextControlNumber(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleFreeTextSubmit()}
+                  autoFocus
+                  data-testid="input-control-number"
+                />
+              </div>
+              <Button
+                onClick={handleFreeTextSubmit}
+                data-testid="button-submit-control-number"
+              >
+                <CheckCircle className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <Button
-            onClick={handleScan}
-            disabled={validateMutation.isPending}
-            data-testid="button-validate-scan"
-          >
-            {validateMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Scan className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
+        ) : (
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Input
+                placeholder="Scan or enter ICN (e.g., ICN-MAT-20241223-000001)"
+                value={scanInput}
+                onChange={(e) => setScanInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleScan()}
+                autoFocus
+                data-testid="input-icn-scan"
+              />
+            </div>
+            <Button
+              onClick={handleScan}
+              disabled={validateMutation.isPending}
+              data-testid="button-validate-scan"
+            >
+              {validateMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Scan className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        )}
 
         {requiredPartNumber && (
           <Alert>

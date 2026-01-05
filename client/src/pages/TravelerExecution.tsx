@@ -706,7 +706,33 @@ export default function TravelerExecution() {
                                           <MaterialScanner
                                             travelerId={traveler.id}
                                             travelerStepId={currentStep.id}
+                                            allowFreeTextEntry={true}
                                             onMaterialConsumed={(result) => {
+                                              // Handle manual entry (free text control number)
+                                              if (result?.entryMethod === 'manual') {
+                                                const today = new Date().toISOString().split('T')[0];
+                                                const traceFieldVals: Record<string, string> = {
+                                                  internalControlNumber: result.internalControlNumber || '',
+                                                  material_icn: result.internalControlNumber || '',
+                                                  material_lot: '',
+                                                  qty_used: '',
+                                                  unit_of_measure: '',
+                                                  material_part_number: '',
+                                                  supplier: 'Manual Entry',
+                                                  inventoryPartNumber: 'Manual Entry',
+                                                  supplierBatchLot: 'N/A',
+                                                  manufacturer: 'Manual Entry',
+                                                  rollNumber: 'N/A',
+                                                  expirationDate: today,
+                                                  receivedDate: today,
+                                                };
+                                                completeTaskMutation.mutate({ 
+                                                  taskId: task.id, 
+                                                  fieldVals: traceFieldVals 
+                                                });
+                                                return;
+                                              }
+                                              // Handle validated scan entry
                                               const consumption = result?.consumption;
                                               const lot = result?.updatedLot;
                                               const traceFieldVals: Record<string, string> = {

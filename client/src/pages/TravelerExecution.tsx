@@ -717,6 +717,7 @@ export default function TravelerExecution() {
                                                   qty_used: '',
                                                   unit_of_measure: '',
                                                   material_part_number: '',
+                                                  supplier: 'Manual Entry',
                                                 };
                                                 completeTaskMutation.mutate({ 
                                                   taskId: task.id, 

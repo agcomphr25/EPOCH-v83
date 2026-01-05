@@ -710,6 +710,7 @@ export default function TravelerExecution() {
                                             onMaterialConsumed={(result) => {
                                               // Handle manual entry (free text control number)
                                               if (result?.entryMethod === 'manual') {
+                                                const today = new Date().toISOString().split('T')[0];
                                                 const traceFieldVals: Record<string, string> = {
                                                   internalControlNumber: result.internalControlNumber || '',
                                                   material_icn: result.internalControlNumber || '',
@@ -718,6 +719,12 @@ export default function TravelerExecution() {
                                                   unit_of_measure: '',
                                                   material_part_number: '',
                                                   supplier: 'Manual Entry',
+                                                  inventoryPartNumber: 'Manual Entry',
+                                                  supplierBatchLot: 'N/A',
+                                                  manufacturer: 'Manual Entry',
+                                                  rollNumber: 'N/A',
+                                                  expirationDate: today,
+                                                  receivedDate: today,
                                                 };
                                                 completeTaskMutation.mutate({ 
                                                   taskId: task.id, 

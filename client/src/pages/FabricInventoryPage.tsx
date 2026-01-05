@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -42,6 +43,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useUpload } from "@/hooks/use-upload";
 import { 
   Package, 
   Plus, 
@@ -54,7 +56,11 @@ import {
   AlertTriangle,
   Clock,
   CheckSquare,
-  Square
+  Square,
+  Upload,
+  Link,
+  FileCheck,
+  Loader2
 } from "lucide-react";
 import JsBarcode from "jsbarcode";
 
@@ -138,6 +144,38 @@ export default function FabricInventoryPage() {
   const [selectedForPrint, setSelectedForPrint] = useState<Set<string>>(new Set());
   const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
   const [printQuantities, setPrintQuantities] = useState<Record<string, number>>({});
+  
+  // Conformance document link type (url or storage)
+  const [conformanceLinkType, setConformanceLinkType] = useState<"url" | "storage">("url");
+  const [uploadedFileName, setUploadedFileName] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // File upload hook for object storage
+  const { uploadFile, isUploading, progress } = useUpload({
+    onSuccess: (response) => {
+      // Object storage serves files at /objects/... path - trust the objectPath verbatim
+      setForm(prev => ({ ...prev, conformanceDocumentLink: response.objectPath }));
+      setUploadedFileName(response.metadata.name);
+      toast({ title: "Success", description: "Document uploaded successfully" });
+    },
+    onError: (error) => {
+      toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
+    }
+  });
+  
+  // Helper to check if a link is from storage (internal path or GCS URL)
+  const isStorageLink = (link: string): boolean => {
+    return link.startsWith("/objects/") || 
+           link.includes("storage.googleapis.com") ||
+           link.includes("storage.cloud.google.com");
+  };
+  
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await uploadFile(file);
+    }
+  };
 
   const { data: fabricInventory = [], isLoading, refetch } = useQuery<FabricInventory[]>({
     queryKey: ['/api/cutting-table/fabric-inventory'],
@@ -245,6 +283,8 @@ export default function FabricInventoryPage() {
 
   const handleAdd = () => {
     setForm(emptyForm);
+    setConformanceLinkType("url");
+    setUploadedFileName("");
     setIsAddDialogOpen(true);
   };
 
@@ -270,6 +310,18 @@ export default function FabricInventoryPage() {
       lowStockThreshold: String(item.lowStockThreshold || 10),
       notes: item.notes || "",
     });
+    // Detect if existing link is from storage or external URL
+    const link = item.conformanceDocumentLink || "";
+    if (link && isStorageLink(link)) {
+      setConformanceLinkType("storage");
+      // Extract filename from path or provide fallback
+      const pathParts = link.split("/");
+      const lastPart = pathParts[pathParts.length - 1] || "";
+      setUploadedFileName(lastPart.includes("-") ? "Uploaded document" : lastPart || "Uploaded document");
+    } else {
+      setConformanceLinkType("url");
+      setUploadedFileName("");
+    }
     setIsEditDialogOpen(true);
   };
 
@@ -766,16 +818,112 @@ export default function FabricInventoryPage() {
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="conformanceDocumentLink">Conformance Document Link</Label>
-        <Input
-          id="conformanceDocumentLink"
-          type="url"
-          value={form.conformanceDocumentLink}
-          onChange={(e) => setForm({ ...form, conformanceDocumentLink: e.target.value })}
-          placeholder="https://..."
-          data-testid="input-conformance-link"
-        />
+      <div className="space-y-3">
+        <Label>Conformance Document</Label>
+        <RadioGroup
+          value={conformanceLinkType}
+          onValueChange={(value: "url" | "storage") => {
+            setConformanceLinkType(value);
+            // Don't clear the link when switching - preserve existing data
+          }}
+          className="flex gap-4"
+          data-testid="radio-conformance-type"
+        >
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="url" id="link-type-url" />
+            <Label htmlFor="link-type-url" className="flex items-center gap-1 cursor-pointer font-normal">
+              <Link className="h-4 w-4" />
+              External URL
+            </Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="storage" id="link-type-storage" />
+            <Label htmlFor="link-type-storage" className="flex items-center gap-1 cursor-pointer font-normal">
+              <Upload className="h-4 w-4" />
+              Upload to Storage
+            </Label>
+          </div>
+        </RadioGroup>
+        
+        {conformanceLinkType === "url" ? (
+          <Input
+            id="conformanceDocumentLink"
+            type="url"
+            value={form.conformanceDocumentLink}
+            onChange={(e) => setForm({ ...form, conformanceDocumentLink: e.target.value })}
+            placeholder="https://..."
+            data-testid="input-conformance-link"
+          />
+        ) : (
+          <div className="space-y-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+              onChange={handleFileSelect}
+              className="hidden"
+              data-testid="input-conformance-file"
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                data-testid="button-upload-conformance"
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading... {progress}%
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Choose File
+                  </>
+                )}
+              </Button>
+              {uploadedFileName && (
+                <div className="flex items-center gap-2 text-sm text-green-600">
+                  <FileCheck className="h-4 w-4" />
+                  <span>{uploadedFileName}</span>
+                </div>
+              )}
+            </div>
+            {form.conformanceDocumentLink && (
+              <div className="flex items-center justify-between p-2 bg-muted rounded-md">
+                <div className="flex items-center gap-2">
+                  <FileCheck className="h-4 w-4 text-green-600" />
+                  <span className="text-sm">{uploadedFileName || "Document uploaded"}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a 
+                    href={form.conformanceDocumentLink} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline text-xs flex items-center gap-1"
+                  >
+                    View <ExternalLink className="h-3 w-3" />
+                  </a>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setForm(prev => ({ ...prev, conformanceDocumentLink: "" }));
+                      setUploadedFileName("");
+                    }}
+                    className="h-6 px-2 text-xs text-destructive hover:text-destructive"
+                    data-testid="button-remove-document"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">

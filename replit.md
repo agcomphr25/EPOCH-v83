@@ -30,7 +30,7 @@ The application is a full-stack TypeScript monorepo, emphasizing type safety, da
 - **Order Management**: Features atomic order ID reservation, rush fees, and an urgency/priority system.
 - **Inventory & Production**: Includes parts list management, P1 Purchase Orders, vendor POs with Zod validation, inventory CSV import, and enhanced layup scheduling.
 - **Quality Control**: Nonconformance Record System and Vendor Evaluation System with automated scoring.
-- **Cutting Table Operations**: FIFO-based packet building with two-phase allocation, AS9100 traceability via barcode scanning, dynamic inventory thresholds, packet scheduling, and demand-filtered BOM assignment.
+- **Cutting Table Operations**: FIFO-based packet building with two-phase allocation, AS9100 traceability via barcode scanning, dynamic inventory thresholds, packet scheduling, demand-filtered BOM assignment, and fabric inventory with conformance document support (external URLs or App Storage uploads).
 - **Barcode Strategy**: CODE128 for serialized items, CODE39 for regular orders, with an automatic helper function.
 - **P2 Serialized Item Tracking**: Complete P2 purchase order serialized item tracking with customizable workflows, barcode scanning, fail-closed traceability gating, a Traveler Viewer, and Electronic Signature System.
 - **Financial & Reporting**: Cost Center Management, dynamic discount system, Credit Memo Management, Payment Analytics, and Refund Request/Queue with Accept.Blue integration.

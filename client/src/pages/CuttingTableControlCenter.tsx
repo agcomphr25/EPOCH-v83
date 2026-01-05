@@ -103,15 +103,16 @@ type FabricInventoryItem = {
   rollNumber: string;
   quantityInStock: number;
   squareMeters: number;
+  manufactureDate: string | null;
   receivedDate: string;
   expirationDate: string | null;
   location: string;
   freezerLocation: string | null;
+  conformanceDocumentLink: string | null;
   barcode: string | null;
   barcodeValue: string;
   status: 'available' | 'low' | 'expired' | 'expiring';
   lowStockThreshold: number;
-  conformanceDocumentLink: string | null;
   isFifoNext: boolean;
 };
 
@@ -253,8 +254,11 @@ export default function CuttingTableControlCenter() {
     batchNumber: "",
     rollNumber: "",
     squareMeters: "",
+    manufactureDate: "",
+    receivedDate: new Date().toISOString().split('T')[0],
     expirationDate: "",
     freezerLocation: "",
+    conformanceDocumentLink: "",
     notes: "",
   });
   
@@ -583,18 +587,21 @@ export default function CuttingTableControlCenter() {
           supplierPartNumber: data.supplierPartNumber,
           internalControlNumber: data.internalControlNumber,
           batchNumber: data.batchNumber,
+          lotNumber: data.batchNumber,
           rollNumber: data.rollNumber,
           quantityInStock: 1,
           squareMeters: data.squareMeters || '0',
+          manufactureDate: data.manufactureDate || null,
+          receivedDate: data.receivedDate || new Date().toISOString().split('T')[0],
           expirationDate: data.expirationDate || null,
           location: data.freezerLocation,
+          conformanceDocumentLink: data.conformanceDocumentLink || null,
           notes: data.notes,
-          receivedDate: new Date().toISOString(),
         }),
       });
     },
     onSuccess: () => {
-      toast({ title: "Received", description: "Fabric added and assigned to freezer location." });
+      toast({ title: "Received", description: "Fabric roll added with AS9100 traceability data." });
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
       setIsReceivingDialogOpen(false);
       setReceivingForm({
@@ -606,8 +613,11 @@ export default function CuttingTableControlCenter() {
         batchNumber: "",
         rollNumber: "",
         squareMeters: "",
+        manufactureDate: "",
+        receivedDate: new Date().toISOString().split('T')[0],
         expirationDate: "",
         freezerLocation: "",
+        conformanceDocumentLink: "",
         notes: "",
       });
     },
@@ -2044,6 +2054,353 @@ export default function CuttingTableControlCenter() {
     );
   };
 
+  // Fabric Inventory Tab - Full CRUD with visual freezer display
+  const [editingFabric, setEditingFabric] = useState<FabricInventoryItem | null>(null);
+  const [isEditFabricDialogOpen, setIsEditFabricDialogOpen] = useState(false);
+  const [fabricToDelete, setFabricToDelete] = useState<FabricInventoryItem | null>(null);
+  const [fabricFilter, setFabricFilter] = useState("");
+
+  const updateFabricMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<FabricInventoryItem> }) => {
+      return apiRequest(`/api/cutting-table/fabric-inventory/${id}`, {
+        method: 'PATCH',
+        body: data,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
+      toast({ title: 'Success', description: 'Fabric roll updated successfully' });
+      setIsEditFabricDialogOpen(false);
+      setEditingFabric(null);
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to update fabric roll', variant: 'destructive' });
+    },
+  });
+
+  const deleteFabricMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/cutting-table/fabric-inventory/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory-full'] });
+      toast({ title: 'Success', description: 'Fabric roll deleted' });
+      setFabricToDelete(null);
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Failed to delete fabric roll', variant: 'destructive' });
+    },
+  });
+
+  // Group fabric by freezer for visual display
+  const fabricByFreezer = useMemo(() => {
+    const grouped: Record<string, FabricInventoryItem[]> = { 'Unassigned': [] };
+    fabricInventory.forEach(item => {
+      const freezer = item.freezerLocation || 'Unassigned';
+      if (!grouped[freezer]) grouped[freezer] = [];
+      grouped[freezer].push(item);
+    });
+    return grouped;
+  }, [fabricInventory]);
+
+  // Get unique fabric types for summary
+  const fabricTypeSummary = useMemo(() => {
+    const summary: Record<string, { count: number; totalSqMeters: number }> = {};
+    fabricInventory.forEach(item => {
+      const type = item.fabricType || item.commonName || 'Unknown';
+      if (!summary[type]) summary[type] = { count: 0, totalSqMeters: 0 };
+      summary[type].count += 1;
+      summary[type].totalSqMeters += item.squareMeters || 0;
+    });
+    return summary;
+  }, [fabricInventory]);
+
+  const filteredFabricInventory = useMemo(() => {
+    if (!fabricFilter) return fabricInventory;
+    const lower = fabricFilter.toLowerCase();
+    return fabricInventory.filter(f => 
+      f.fabricType?.toLowerCase().includes(lower) ||
+      f.commonName?.toLowerCase().includes(lower) ||
+      f.rollNumber?.toLowerCase().includes(lower) ||
+      f.lotNumber?.toLowerCase().includes(lower) ||
+      f.freezerLocation?.toLowerCase().includes(lower) ||
+      f.barcodeValue?.toLowerCase().includes(lower)
+    );
+  }, [fabricInventory, fabricFilter]);
+
+  const renderFabricTab = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="relative flex-1 min-w-[300px]">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search fabric by type, roll, lot, freezer..."
+              value={fabricFilter}
+              onChange={(e) => setFabricFilter(e.target.value)}
+              className="pl-10"
+              data-testid="input-fabric-filter"
+            />
+          </div>
+          <Button onClick={() => refetchFabric()} variant="outline" size="sm" data-testid="btn-refresh-fabric">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+        <Button onClick={() => setIsReceivingDialogOpen(true)} data-testid="btn-add-fabric">
+          <Plus className="h-4 w-4 mr-2" />
+          Add Fabric Roll
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Rolls</p>
+                <p className="text-2xl font-bold">{fabricInventory.length}</p>
+              </div>
+              <Package className="h-8 w-8 text-blue-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">In Freezers</p>
+                <p className="text-2xl font-bold">{fabricInventory.filter(f => f.freezerLocation).length}</p>
+              </div>
+              <Snowflake className="h-8 w-8 text-cyan-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Expiring Soon</p>
+                <p className="text-2xl font-bold text-orange-600">{fabricInventory.filter(f => f.status === 'expiring').length}</p>
+              </div>
+              <AlertCircle className="h-8 w-8 text-orange-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Expired</p>
+                <p className="text-2xl font-bold text-red-600">{fabricInventory.filter(f => f.status === 'expired').length}</p>
+              </div>
+              <AlertTriangle className="h-8 w-8 text-red-500" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Snowflake className="h-5 w-5 text-cyan-600" />
+            Freezer Inventory Visual
+          </CardTitle>
+          <CardDescription>Fabric rolls organized by freezer location</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Object.entries(fabricByFreezer).sort(([a], [b]) => {
+              if (a === 'Unassigned') return 1;
+              if (b === 'Unassigned') return -1;
+              return a.localeCompare(b);
+            }).map(([freezer, rolls]) => (
+              <Card key={freezer} className={cn(
+                "border-2",
+                freezer === 'Unassigned' ? "border-dashed border-gray-300" : "border-cyan-200 bg-cyan-50/30 dark:bg-cyan-950/20"
+              )}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      {freezer !== 'Unassigned' && <Snowflake className="h-4 w-4 text-cyan-600" />}
+                      {freezer}
+                    </span>
+                    <Badge variant="secondary">{rolls.length} rolls</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex flex-wrap gap-2">
+                    {rolls.slice(0, 12).map((roll) => (
+                      <div
+                        key={roll.id}
+                        className={cn(
+                          "w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold cursor-pointer transition-all hover:scale-110 border-2",
+                          roll.status === 'expired' ? "bg-red-100 border-red-400 text-red-700" :
+                          roll.status === 'expiring' ? "bg-orange-100 border-orange-400 text-orange-700" :
+                          roll.status === 'low' ? "bg-yellow-100 border-yellow-400 text-yellow-700" :
+                          "bg-green-100 border-green-400 text-green-700"
+                        )}
+                        title={`${roll.fabricType || roll.commonName}\nRoll: ${roll.rollNumber}\nLot: ${roll.lotNumber || 'N/A'}\n${roll.squareMeters?.toFixed(1) || 0} m²`}
+                        onClick={() => {
+                          setEditingFabric(roll);
+                          setIsEditFabricDialogOpen(true);
+                        }}
+                        data-testid={`fabric-roll-${roll.id}`}
+                      >
+                        {roll.rollNumber?.slice(-2) || '?'}
+                      </div>
+                    ))}
+                    {rolls.length > 12 && (
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold bg-gray-100 border-2 border-gray-300">
+                        +{rolls.length - 12}
+                      </div>
+                    )}
+                  </div>
+                  {rolls.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">No rolls</p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-purple-600" />
+            Fabric Type Summary
+          </CardTitle>
+          <CardDescription>Roll counts and total square meters by fabric type</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {Object.entries(fabricTypeSummary).map(([type, data]) => (
+              <div key={type} className="p-3 rounded-lg border bg-card">
+                <p className="text-sm font-medium truncate" title={type}>{type}</p>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-bold">{data.count}</span>
+                  <span className="text-xs text-muted-foreground">rolls</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{data.totalSqMeters.toFixed(1)} m² total</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Layers className="h-5 w-5" />
+            All Fabric Rolls
+          </CardTitle>
+          <CardDescription>Complete inventory with CRUD operations</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingFabric ? (
+            <div className="text-center py-8 text-muted-foreground">Loading fabric inventory...</div>
+          ) : filteredFabricInventory.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">No fabric rolls found</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fabric Type</TableHead>
+                    <TableHead>Roll #</TableHead>
+                    <TableHead>Lot/Batch</TableHead>
+                    <TableHead>Freezer</TableHead>
+                    <TableHead className="text-right">Sq Meters</TableHead>
+                    <TableHead>Expiration</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredFabricInventory.map((fabric) => (
+                    <TableRow key={fabric.id} data-testid={`fabric-row-${fabric.id}`}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{fabric.fabricType || fabric.commonName || 'Unknown'}</p>
+                          {fabric.fabricPartNumber && (
+                            <p className="text-xs text-muted-foreground">PN: {fabric.fabricPartNumber}</p>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono">{fabric.rollNumber || '-'}</TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {fabric.lotNumber && <p>Lot: {fabric.lotNumber}</p>}
+                          {fabric.batchNumber && <p>Batch: {fabric.batchNumber}</p>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {fabric.freezerLocation ? (
+                          <Badge variant="outline" className="flex items-center gap-1 w-fit">
+                            <Snowflake className="h-3 w-3" />
+                            {fabric.freezerLocation}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{fabric.squareMeters?.toFixed(2) || '0'}</TableCell>
+                      <TableCell>
+                        {fabric.expirationDate ? (
+                          <span className={cn(
+                            fabric.status === 'expired' ? "text-red-600" :
+                            fabric.status === 'expiring' ? "text-orange-600" : ""
+                          )}>
+                            {new Date(fabric.expirationDate).toLocaleDateString()}
+                          </span>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={
+                          fabric.status === 'expired' ? 'destructive' :
+                          fabric.status === 'expiring' ? 'secondary' :
+                          fabric.status === 'low' ? 'outline' : 'default'
+                        }>
+                          {fabric.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingFabric(fabric);
+                              setIsEditFabricDialogOpen(true);
+                            }}
+                            data-testid={`btn-edit-fabric-${fabric.id}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => setFabricToDelete(fabric)}
+                            data-testid={`btn-delete-fabric-${fabric.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -2092,7 +2449,7 @@ export default function CuttingTableControlCenter() {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="run" className="flex items-center gap-2" data-testid="tab-run">
             <PlayCircle className="h-4 w-4" />
             Run
@@ -2105,11 +2462,16 @@ export default function CuttingTableControlCenter() {
             <Calendar className="h-4 w-4" />
             Plan
           </TabsTrigger>
+          <TabsTrigger value="fabric" className="flex items-center gap-2" data-testid="tab-fabric">
+            <Layers className="h-4 w-4" />
+            Fabric
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="run">{renderRunTab()}</TabsContent>
         <TabsContent value="build">{renderBuildTab()}</TabsContent>
         <TabsContent value="plan">{renderPlanTab()}</TabsContent>
+        <TabsContent value="fabric">{renderFabricTab()}</TabsContent>
       </Tabs>
 
       <Dialog open={isProductionDialogOpen} onOpenChange={setIsProductionDialogOpen}>
@@ -2199,17 +2561,41 @@ export default function CuttingTableControlCenter() {
       </Dialog>
 
       <Dialog open={isReceivingDialogOpen} onOpenChange={setIsReceivingDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Snowflake className="h-5 w-5" />
-              Receive Fabric to Freezer
+              Receive Fabric Roll
             </DialogTitle>
             <DialogDescription>
-              Add new fabric and assign to freezer location
+              Enter all required information for AS9100 traceability compliance
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="fabric-part-number" className="flex items-center gap-1">
+                  Part Number <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="fabric-part-number"
+                  value={receivingForm.fabricPartNumber}
+                  onChange={(e) => setReceivingForm({ ...receivingForm, fabricPartNumber: e.target.value })}
+                  placeholder="e.g., 011798"
+                  data-testid="input-part-number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="supplier-part-number">Supplier Part Number</Label>
+                <Input
+                  id="supplier-part-number"
+                  value={receivingForm.supplierPartNumber}
+                  onChange={(e) => setReceivingForm({ ...receivingForm, supplierPartNumber: e.target.value })}
+                  placeholder="e.g., 14002"
+                  data-testid="input-supplier-part-number"
+                />
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="fabric-type">Fabric Type</Label>
@@ -2232,26 +2618,79 @@ export default function CuttingTableControlCenter() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="roll-number">Roll Number</Label>
+                <Label htmlFor="roll-number" className="flex items-center gap-1">
+                  Roll Number <span className="text-red-500">*</span>
+                </Label>
                 <Input
                   id="roll-number"
                   value={receivingForm.rollNumber}
                   onChange={(e) => setReceivingForm({ ...receivingForm, rollNumber: e.target.value })}
-                  placeholder="Roll #"
+                  placeholder="e.g., 1140620043"
                   data-testid="input-roll-number"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="batch-number">Batch/Lot Number</Label>
+                <Label htmlFor="batch-number">Lot/Batch Number</Label>
                 <Input
                   id="batch-number"
                   value={receivingForm.batchNumber}
                   onChange={(e) => setReceivingForm({ ...receivingForm, batchNumber: e.target.value })}
-                  placeholder="Batch/Lot #"
+                  placeholder="Lot or Batch #"
                   data-testid="input-batch-number"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="internal-control-number" className="flex items-center gap-1">
+                  Internal Control # <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="internal-control-number"
+                  value={receivingForm.internalControlNumber}
+                  onChange={(e) => setReceivingForm({ ...receivingForm, internalControlNumber: e.target.value })}
+                  placeholder="e.g., ICN-12345"
+                  data-testid="input-internal-control-number"
+                />
+              </div>
+            </div>
+            <div className="p-3 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20">
+              <Label className="text-sm font-medium mb-3 block">Key Dates</Label>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="manufacture-date" className="text-xs text-muted-foreground">Manufacture Date</Label>
+                  <Input
+                    id="manufacture-date"
+                    type="date"
+                    value={receivingForm.manufactureDate}
+                    onChange={(e) => setReceivingForm({ ...receivingForm, manufactureDate: e.target.value })}
+                    data-testid="input-manufacture-date"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="received-date" className="text-xs text-muted-foreground">
+                    Received Date <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="received-date"
+                    type="date"
+                    value={receivingForm.receivedDate}
+                    onChange={(e) => setReceivingForm({ ...receivingForm, receivedDate: e.target.value })}
+                    data-testid="input-received-date"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="expiration-date" className="text-xs text-muted-foreground">
+                    Expiration Date <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="expiration-date"
+                    type="date"
+                    value={receivingForm.expirationDate}
+                    onChange={(e) => setReceivingForm({ ...receivingForm, expirationDate: e.target.value })}
+                    data-testid="input-expiration-date"
+                  />
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -2260,34 +2699,49 @@ export default function CuttingTableControlCenter() {
                 <Input
                   id="square-meters"
                   type="number"
+                  step="0.01"
                   value={receivingForm.squareMeters}
                   onChange={(e) => setReceivingForm({ ...receivingForm, squareMeters: e.target.value })}
-                  placeholder="0"
+                  placeholder="0.00"
                   data-testid="input-square-meters"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="expiration-date">Expiration Date</Label>
-                <Input
-                  id="expiration-date"
-                  type="date"
-                  value={receivingForm.expirationDate}
-                  onChange={(e) => setReceivingForm({ ...receivingForm, expirationDate: e.target.value })}
-                  data-testid="input-expiration-date"
-                />
+                <Label htmlFor="freezer-location" className="flex items-center gap-2">
+                  <Snowflake className="h-4 w-4" />
+                  Freezer Location
+                </Label>
+                <Select
+                  value={receivingForm.freezerLocation || 'none'}
+                  onValueChange={(val) => setReceivingForm({ ...receivingForm, freezerLocation: val === 'none' ? '' : val })}
+                >
+                  <SelectTrigger data-testid="select-freezer-location">
+                    <SelectValue placeholder="Select freezer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Not Assigned</SelectItem>
+                    <SelectItem value="Freezer 1">Freezer 1</SelectItem>
+                    <SelectItem value="Freezer 2">Freezer 2</SelectItem>
+                    <SelectItem value="Freezer 3">Freezer 3</SelectItem>
+                    <SelectItem value="Freezer 4">Freezer 4</SelectItem>
+                    <SelectItem value="Freezer 5">Freezer 5</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="freezer-location" className="flex items-center gap-2">
-                <Snowflake className="h-4 w-4" />
-                Freezer Location
+            <div className="p-3 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20">
+              <Label className="text-sm font-medium mb-2 flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                COC Document (Certificate of Conformance)
               </Label>
+              <p className="text-xs text-muted-foreground mb-3">
+                Link the COC document for AS9100 traceability
+              </p>
               <Input
-                id="freezer-location"
-                value={receivingForm.freezerLocation}
-                onChange={(e) => setReceivingForm({ ...receivingForm, freezerLocation: e.target.value })}
-                placeholder="e.g., Freezer A - Shelf 2"
-                data-testid="input-freezer-location"
+                value={receivingForm.conformanceDocumentLink}
+                onChange={(e) => setReceivingForm({ ...receivingForm, conformanceDocumentLink: e.target.value })}
+                placeholder="Enter COC document link or file path"
+                data-testid="input-coc-link"
               />
             </div>
             <div className="space-y-2">
@@ -2307,10 +2761,17 @@ export default function CuttingTableControlCenter() {
             </Button>
             <Button
               onClick={() => receiveFabricMutation.mutate(receivingForm)}
-              disabled={!receivingForm.fabricType || !receivingForm.rollNumber || receiveFabricMutation.isPending}
+              disabled={
+                !receivingForm.fabricPartNumber || 
+                !receivingForm.rollNumber || 
+                !receivingForm.internalControlNumber ||
+                !receivingForm.receivedDate || 
+                !receivingForm.expirationDate || 
+                receiveFabricMutation.isPending
+              }
               data-testid="btn-confirm-receive"
             >
-              {receiveFabricMutation.isPending ? 'Saving...' : 'Receive & Assign'}
+              {receiveFabricMutation.isPending ? 'Saving...' : 'Receive Fabric Roll'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3271,6 +3732,231 @@ export default function CuttingTableControlCenter() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={isEditFabricDialogOpen} onOpenChange={setIsEditFabricDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Fabric Roll</DialogTitle>
+            <DialogDescription>
+              Update fabric roll details for AS9100 traceability
+            </DialogDescription>
+          </DialogHeader>
+          {editingFabric && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Part Number</Label>
+                  <Input
+                    value={editingFabric.fabricPartNumber || ''}
+                    onChange={(e) => setEditingFabric({ ...editingFabric, fabricPartNumber: e.target.value })}
+                    placeholder="e.g., 011798"
+                    data-testid="input-edit-part-number"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Supplier Part Number</Label>
+                  <Input
+                    value={editingFabric.supplierPartNumber || ''}
+                    onChange={(e) => setEditingFabric({ ...editingFabric, supplierPartNumber: e.target.value })}
+                    placeholder="e.g., 14002"
+                    data-testid="input-edit-supplier-part"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Fabric Type</Label>
+                  <Input
+                    value={editingFabric.fabricType || ''}
+                    onChange={(e) => setEditingFabric({ ...editingFabric, fabricType: e.target.value })}
+                    data-testid="input-edit-fabric-type"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Common Name</Label>
+                  <Input
+                    value={editingFabric.commonName || ''}
+                    onChange={(e) => setEditingFabric({ ...editingFabric, commonName: e.target.value })}
+                    data-testid="input-edit-common-name"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Roll Number</Label>
+                  <Input
+                    value={editingFabric.rollNumber || ''}
+                    onChange={(e) => setEditingFabric({ ...editingFabric, rollNumber: e.target.value })}
+                    placeholder="e.g., 1140620043"
+                    data-testid="input-edit-roll-number"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Lot/Batch Number</Label>
+                  <Input
+                    value={editingFabric.lotNumber || editingFabric.batchNumber || ''}
+                    onChange={(e) => setEditingFabric({ ...editingFabric, lotNumber: e.target.value, batchNumber: e.target.value })}
+                    data-testid="input-edit-lot-number"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Internal Control #</Label>
+                  <Input
+                    value={editingFabric.internalControlNumber || ''}
+                    onChange={(e) => setEditingFabric({ ...editingFabric, internalControlNumber: e.target.value })}
+                    placeholder="e.g., ICN-12345"
+                    data-testid="input-edit-icn"
+                  />
+                </div>
+              </div>
+              <div className="p-3 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20">
+                <Label className="text-sm font-medium mb-3 block">Key Dates</Label>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Manufacture Date</Label>
+                    <Input
+                      type="date"
+                      value={editingFabric.manufactureDate?.split('T')[0] || ''}
+                      onChange={(e) => setEditingFabric({ ...editingFabric, manufactureDate: e.target.value || null })}
+                      data-testid="input-edit-manufacture-date"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Received Date</Label>
+                    <Input
+                      type="date"
+                      value={editingFabric.receivedDate?.split('T')[0] || ''}
+                      onChange={(e) => setEditingFabric({ ...editingFabric, receivedDate: e.target.value })}
+                      data-testid="input-edit-received-date"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Expiration Date</Label>
+                    <Input
+                      type="date"
+                      value={editingFabric.expirationDate?.split('T')[0] || ''}
+                      onChange={(e) => setEditingFabric({ ...editingFabric, expirationDate: e.target.value || null })}
+                      data-testid="input-edit-expiration"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Square Meters</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={editingFabric.squareMeters || 0}
+                    onChange={(e) => setEditingFabric({ ...editingFabric, squareMeters: parseFloat(e.target.value) || 0 })}
+                    data-testid="input-edit-square-meters"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Snowflake className="h-4 w-4" />
+                    Freezer Location
+                  </Label>
+                  <Select
+                    value={editingFabric.freezerLocation || 'none'}
+                    onValueChange={(val) => setEditingFabric({ ...editingFabric, freezerLocation: val === 'none' ? null : val })}
+                  >
+                    <SelectTrigger data-testid="select-edit-freezer">
+                      <SelectValue placeholder="Select freezer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No Freezer</SelectItem>
+                      <SelectItem value="Freezer 1">Freezer 1</SelectItem>
+                      <SelectItem value="Freezer 2">Freezer 2</SelectItem>
+                      <SelectItem value="Freezer 3">Freezer 3</SelectItem>
+                      <SelectItem value="Freezer 4">Freezer 4</SelectItem>
+                      <SelectItem value="Freezer 5">Freezer 5</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="p-3 rounded-lg border bg-amber-50/50 dark:bg-amber-950/20">
+                <Label className="text-sm font-medium mb-2 flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  COC Document (Certificate of Conformance)
+                </Label>
+                <Input
+                  value={editingFabric.conformanceDocumentLink || ''}
+                  onChange={(e) => setEditingFabric({ ...editingFabric, conformanceDocumentLink: e.target.value || null })}
+                  placeholder="Enter COC document link or file path"
+                  data-testid="input-edit-coc-link"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setIsEditFabricDialogOpen(false); setEditingFabric(null); }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (editingFabric) {
+                  updateFabricMutation.mutate({
+                    id: editingFabric.id,
+                    data: {
+                      fabricType: editingFabric.fabricType || null,
+                      commonName: editingFabric.commonName || null,
+                      rollNumber: editingFabric.rollNumber || null,
+                      lotNumber: editingFabric.lotNumber || null,
+                      batchNumber: editingFabric.batchNumber || null,
+                      internalControlNumber: editingFabric.internalControlNumber || null,
+                      squareMeters: editingFabric.squareMeters,
+                      freezerLocation: editingFabric.freezerLocation,
+                      manufactureDate: editingFabric.manufactureDate || null,
+                      receivedDate: editingFabric.receivedDate || null,
+                      expirationDate: editingFabric.expirationDate || null,
+                      fabricPartNumber: editingFabric.fabricPartNumber || null,
+                      supplierPartNumber: editingFabric.supplierPartNumber || null,
+                      conformanceDocumentLink: editingFabric.conformanceDocumentLink || null,
+                    },
+                  });
+                }
+              }}
+              disabled={
+                !editingFabric?.rollNumber || 
+                !editingFabric?.expirationDate || 
+                updateFabricMutation.isPending
+              }
+              data-testid="btn-save-fabric"
+            >
+              {updateFabricMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!fabricToDelete} onOpenChange={(open) => !open && setFabricToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Fabric Roll?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this fabric roll? This action cannot be undone.
+              {fabricToDelete && (
+                <div className="mt-2 p-2 bg-muted rounded">
+                  <p><strong>Type:</strong> {fabricToDelete.fabricType || fabricToDelete.commonName}</p>
+                  <p><strong>Roll:</strong> {fabricToDelete.rollNumber}</p>
+                  <p><strong>Lot:</strong> {fabricToDelete.lotNumber || 'N/A'}</p>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => fabricToDelete && deleteFabricMutation.mutate(fabricToDelete.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="btn-confirm-delete-fabric"
+            >
+              {deleteFabricMutation.isPending ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

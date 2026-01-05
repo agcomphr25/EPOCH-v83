@@ -25,7 +25,6 @@ const PUBLIC_ROUTES = [
 
 const PUBLIC_ROUTE_PREFIXES = [
   '/sign-order',  // Customer signature page - no auth required
-  '/sign-pollard-pdf',  // Pollard PDF signature page - public access
   '/p2-traveler', // P2 traveler viewer - public access for customers/vendors
 ];
 

@@ -711,6 +711,7 @@ export default function TravelerExecution() {
                                               // Handle manual entry (free text control number)
                                               if (result?.entryMethod === 'manual') {
                                                 const traceFieldVals: Record<string, string> = {
+                                                  internalControlNumber: result.internalControlNumber || '',
                                                   material_icn: result.internalControlNumber || '',
                                                   material_lot: '',
                                                   qty_used: '',

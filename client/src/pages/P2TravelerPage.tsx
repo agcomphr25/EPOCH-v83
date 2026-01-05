@@ -21,7 +21,10 @@ import {
   ArrowRight,
   AlertCircle,
   Clipboard,
+  QrCode,
+  FileText,
 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type ScanState = 'READY' | 'BADGE_SCANNED' | 'PART_SCANNED' | 'TASK_ACTIVE';
 
@@ -107,6 +110,7 @@ export default function P2TravelerPage() {
   }>>([]);
   const [customData, setCustomData] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
+  const [traceabilityMode, setTraceabilityMode] = useState<'scan' | 'manual'>('scan');
 
   // Get active tasks for current employee
   const { data: activeTasks } = useQuery<ActiveTask[]>({
@@ -125,6 +129,7 @@ export default function P2TravelerPage() {
     setTraceabilityData([]);
     setCustomData({});
     setNotes('');
+    setTraceabilityMode('scan');
   };
 
   // Handle badge scan
@@ -479,25 +484,72 @@ export default function P2TravelerPage() {
 
               {verificationData.isCertified && (
                 <>
-                  {/* Traceability Fields */}
-                  {traceabilityData.length > 0 && (
-                    <div className="space-y-3">
-                      <Label className="text-base font-semibold">Traceable Materials & Components</Label>
-                      {traceabilityData.map((item, index) => (
-                        <div key={index} className="space-y-2">
-                          <Label htmlFor={`trace-${index}`}>{item.label}</Label>
-                          <Input
-                            id={`trace-${index}`}
-                            type="text"
-                            value={item.value}
-                            onChange={(e) => updateTraceabilityField(index, e.target.value)}
-                            placeholder={`Scan or enter ${item.label}...`}
-                            data-testid={`input-trace-${index}`}
-                          />
-                        </div>
-                      ))}
+                  {/* Material Traceability Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-semibold">Material Traceability</Label>
+                      <Tabs value={traceabilityMode} onValueChange={(v) => setTraceabilityMode(v as 'scan' | 'manual')}>
+                        <TabsList className="h-8">
+                          <TabsTrigger value="scan" className="text-xs px-3 gap-1" data-testid="tab-scan-mode">
+                            <QrCode className="h-3 w-3" />
+                            Scan Barcode
+                          </TabsTrigger>
+                          <TabsTrigger value="manual" className="text-xs px-3 gap-1" data-testid="tab-manual-mode">
+                            <FileText className="h-3 w-3" />
+                            Control Number
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
                     </div>
-                  )}
+
+                    {traceabilityMode === 'scan' ? (
+                      <div className="space-y-3">
+                        <Alert>
+                          <QrCode className="h-4 w-4" />
+                          <AlertDescription>
+                            Scan material packet barcode to capture lot/batch traceability data
+                          </AlertDescription>
+                        </Alert>
+                        {traceabilityData.map((item, index) => (
+                          <div key={index} className="space-y-2">
+                            <Label htmlFor={`trace-${index}`}>{item.label}</Label>
+                            <Input
+                              id={`trace-${index}`}
+                              type="text"
+                              value={item.value}
+                              onChange={(e) => updateTraceabilityField(index, e.target.value)}
+                              placeholder={`Scan barcode for ${item.label}...`}
+                              autoFocus={index === 0}
+                              data-testid={`input-trace-${index}`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <Alert>
+                          <FileText className="h-4 w-4" />
+                          <AlertDescription>
+                            Enter internal control number to link traceability records
+                          </AlertDescription>
+                        </Alert>
+                        {traceabilityData.map((item, index) => (
+                          <div key={index} className="space-y-2">
+                            <Label htmlFor={`trace-manual-${index}`}>{item.label} - Control Number</Label>
+                            <Input
+                              id={`trace-manual-${index}`}
+                              type="text"
+                              value={item.value}
+                              onChange={(e) => updateTraceabilityField(index, e.target.value)}
+                              placeholder="Enter internal control number..."
+                              autoFocus={index === 0}
+                              data-testid={`input-trace-manual-${index}`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Custom Data Fields */}
                   {verificationData.departmentConfig.customDataFields && verificationData.departmentConfig.customDataFields.length > 0 && (

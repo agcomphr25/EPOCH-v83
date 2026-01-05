@@ -945,17 +945,28 @@ router.post('/:orderId/resend-email', async (req, res) => {
       
       console.log(`✅ Created followup_order for ${orderId} with fresh token ${newSignatureToken.substring(0, 8)}...`);
     } else {
-      // Update existing followup order with fresh token (allows resending even if already signed)
+      // Update existing followup order with fresh token
       console.log(`🔄 Updating followup_order for ${orderId} with fresh signature token`);
       
-      followupOrder = await storage.updateFollowupOrder(followupOrder.id, {
+      const updateData: any = {
         signatureToken: newSignatureToken,
-        // Reset signature status to allow re-signing if needed
-        signatureSigned: false,
-        signatureData: null,
-        signedAt: null,
-        signedPdfPath: null,
-      });
+      };
+
+      // ONLY reset signature state if the order is NOT already signed
+      // This preserves signature data for already-signed orders
+      if (!followupOrder.signatureSigned) {
+        updateData.signatureData = null;
+        updateData.signedAt = null;
+        updateData.signedPdfPath = null;
+      } else {
+        console.log(`📋 Order ${orderId} already signed - preserving signature data`);
+      }
+
+      // NEVER reset signatureSigned once true
+      followupOrder = await storage.updateFollowupOrder(
+        followupOrder.id,
+        updateData
+      );
       
       console.log(`✅ Updated followup_order with fresh token ${newSignatureToken.substring(0, 8)}...`);
     }

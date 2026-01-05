@@ -1,0 +1,45 @@
+I am debugging a regression in the digital signature workflow where a customer successfully signs an order, but downstream effects are inconsistent.
+
+Observed behavior:
+- Customer completes the digital signature successfully.
+- Order status updates from PENDING_SIGNATURE → FINALIZED.
+- The order does NOT move into the production queue as expected.
+- “View Signed Confirmation” exists, but reports that the customer has NOT signed.
+- This behavior used to work previously.
+
+I need you to trace the COMPLETE post-signature workflow and show me exactly where state diverges.
+
+Please provide the following, verbatim, with file paths and line numbers:
+
+1) The backend route/controller that handles submission of a completed digital signature:
+   - Endpoint path
+   - How signature data is saved
+   - How signatureSigned / signedAt fields are updated
+   - What table(s) are written to (followupOrders, orders, salesOrders, etc.)
+
+2) The logic that transitions an order from:
+   - PENDING_SIGNATURE → FINALIZED
+   - And any additional side effects triggered by this transition
+
+3) The code responsible for moving an order into the production queue:
+   - What function or service does this
+   - What condition(s) trigger it
+   - Whether it is tied to order status, signatureSigned flag, or both
+
+4) The code path used by “View Signed Confirmation”:
+   - What endpoint it calls
+   - Which table/fields it checks to determine whether the customer has signed
+   - Whether it relies on signatureSigned, signedAt, or signatureData
+
+5) A comparison of:
+   - Where signature completion is recorded
+   - Where production eligibility is checked
+   - Where “signed” status is read for the confirmation view
+
+6) Any recent changes or refactors in the signature workflow that could cause:
+   - Order status to update
+   - But signature metadata to be missing or reset
+
+Do NOT summarize.
+Do NOT suggest fixes yet.
+Return exact code snippets and describe the data flow step-by-step from “customer clicks Sign” to “order enters production”.

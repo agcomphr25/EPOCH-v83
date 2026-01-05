@@ -1826,6 +1826,11 @@ export const insertPunchEventSchema = createInsertSchema(punchEvents)
     signature: z.string().optional().nullable(),
   });
 
+const optionalDateSchema = z.preprocess(
+  (val) => (val === '' || val === null || val === undefined ? undefined : val),
+  z.coerce.date().optional().nullable()
+);
+
 export const insertEmployeeSchema = createInsertSchema(employees)
   .omit({
     id: true,
@@ -1841,8 +1846,8 @@ export const insertEmployeeSchema = createInsertSchema(employees)
     jobTitle: z.string().optional().nullable(), // Informational job title
     userRole: z.enum(['ADMIN', 'EMPLOYEE', 'OWNER']).default('EMPLOYEE'), // System role
     department: z.string().optional().nullable(),
-    hireDate: z.coerce.date().optional().nullable(),
-    dateOfBirth: z.coerce.date().optional().nullable(),
+    hireDate: optionalDateSchema,
+    dateOfBirth: optionalDateSchema,
     address: z.string().optional().nullable(),
     emergencyContact: z.string().optional().nullable(),
     emergencyPhone: z.string().optional().nullable(),
@@ -8559,6 +8564,7 @@ export const preproductionChecklistTasks = pgTable('preproduction_checklist_task
   assignedTo: text('assigned_to'), // Username or employee name
   assignedToEmployeeId: integer('assigned_to_employee_id').references(() => employees.id),
   notes: text('notes'),
+  link: text('link'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({

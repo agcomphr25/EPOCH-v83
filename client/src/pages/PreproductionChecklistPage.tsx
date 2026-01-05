@@ -64,6 +64,9 @@ import {
   AlertCircle,
   CheckCheck,
   RefreshCw,
+  Link2,
+  ExternalLink,
+  StickyNote,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -145,6 +148,7 @@ interface ChecklistTask {
   completedAt: string | null;
   completedBy: string | null;
   notes: string | null;
+  link: string | null;
 }
 
 interface Employee {
@@ -1118,78 +1122,14 @@ function ChecklistDetailView({
                 <AccordionContent className="px-4 pb-4">
                   <div className="space-y-2">
                     {section.tasks.map((task) => (
-                      <div 
-                        key={task.id} 
-                        className={`flex items-start gap-3 p-3 rounded-lg border ${task.isCompleted ? 'bg-green-50 border-green-200' : 'bg-white'}`}
-                        data-testid={`task-${task.id}`}
-                      >
-                        <Checkbox
-                          checked={task.isCompleted}
-                          onCheckedChange={(checked) => 
-                            updateTaskMutation.mutate({ 
-                              taskId: task.id, 
-                              data: { isCompleted: checked } 
-                            })
-                          }
-                          disabled={!!isSigned}
-                          data-testid={`checkbox-task-${task.id}`}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className={task.isCompleted ? 'line-through text-muted-foreground' : ''}>
-                            {task.description}
-                          </p>
-                          {task.assignedTo && (
-                            <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                              <Users className="h-3 w-3" />
-                              Assigned to: {task.assignedTo}
-                            </p>
-                          )}
-                          {task.completedAt && (
-                            <p className="text-xs text-green-600 mt-1">
-                              Completed {format(new Date(task.completedAt), 'MMM d, yyyy h:mm a')}
-                              {task.completedBy && ` by ${task.completedBy}`}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Select
-                            value={task.assignedToEmployeeId?.toString() || 'unassigned'}
-                            onValueChange={(v) => {
-                              const emp = employees.find(e => e.id.toString() === v);
-                              updateTaskMutation.mutate({
-                                taskId: task.id,
-                                data: { 
-                                  assignedToEmployeeId: v && v !== 'unassigned' ? parseInt(v) : null,
-                                  assignedTo: emp?.name || null,
-                                }
-                              });
-                            }}
-                            disabled={!!isSigned}
-                          >
-                            <SelectTrigger className="w-36 h-8 text-xs">
-                              <SelectValue placeholder="Assign to..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="unassigned">Unassigned</SelectItem>
-                              {employees.map((emp) => (
-                                <SelectItem key={emp.id} value={emp.id.toString()}>
-                                  {emp.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {!isSigned && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => deleteTaskMutation.mutate(task.id)}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
+                      <TaskRow
+                        key={task.id}
+                        task={task}
+                        isSigned={!!isSigned}
+                        employees={employees}
+                        onUpdateTask={(taskId, data) => updateTaskMutation.mutate({ taskId, data })}
+                        onDeleteTask={(taskId) => deleteTaskMutation.mutate(taskId)}
+                      />
                     ))}
                     
                     {!isSigned && (
@@ -1349,6 +1289,210 @@ function ChecklistDetailView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// ===============================
+// TASK ROW COMPONENT
+// ===============================
+
+function TaskRow({
+  task,
+  isSigned,
+  employees,
+  onUpdateTask,
+  onDeleteTask,
+}: {
+  task: ChecklistTask;
+  isSigned: boolean;
+  employees: Employee[];
+  onUpdateTask: (taskId: string, data: any) => void;
+  onDeleteTask: (taskId: string) => void;
+}) {
+  const [isExpanded, setIsExpanded] = useState(task.isCompleted);
+  const [notes, setNotes] = useState(task.notes || '');
+  const [link, setLink] = useState(task.link || '');
+  const [hasChanges, setHasChanges] = useState(false);
+
+  const showNotesLinkFields = task.assignedTo || task.isCompleted;
+
+  const handleSaveNotesLink = () => {
+    onUpdateTask(task.id, { notes: notes || null, link: link || null });
+    setHasChanges(false);
+  };
+
+  const handleTaskComplete = (checked: boolean | "indeterminate") => {
+    onUpdateTask(task.id, { isCompleted: checked });
+    if (checked === true) {
+      setIsExpanded(true);
+    }
+  };
+
+  return (
+    <div 
+      className={`rounded-lg border ${task.isCompleted ? 'bg-green-50 border-green-200' : 'bg-white'}`}
+      data-testid={`task-${task.id}`}
+    >
+      <div className="flex items-start gap-3 p-3">
+        <Checkbox
+          checked={task.isCompleted}
+          onCheckedChange={handleTaskComplete}
+          disabled={isSigned}
+          data-testid={`checkbox-task-${task.id}`}
+        />
+        <div className="flex-1 min-w-0">
+          <p className={task.isCompleted ? 'line-through text-muted-foreground' : ''}>
+            {task.description}
+          </p>
+          {task.assignedTo && (
+            <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+              <Users className="h-3 w-3" />
+              Assigned to: {task.assignedTo}
+            </p>
+          )}
+          {task.completedAt && (
+            <p className="text-xs text-green-600 mt-1">
+              Completed {format(new Date(task.completedAt), 'MMM d, yyyy h:mm a')}
+              {task.completedBy && ` by ${task.completedBy}`}
+            </p>
+          )}
+          {(task.notes || task.link) && !isExpanded && (
+            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+              {task.notes && (
+                <span className="flex items-center gap-1">
+                  <StickyNote className="h-3 w-3" />
+                  Has notes
+                </span>
+              )}
+              {task.link && (
+                <a 
+                  href={task.link} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-blue-600 hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Link2 className="h-3 w-3" />
+                  View link
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {showNotesLinkFields && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setIsExpanded(!isExpanded)}
+              data-testid={`button-expand-task-${task.id}`}
+            >
+              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </Button>
+          )}
+          <Select
+            value={task.assignedToEmployeeId?.toString() || 'unassigned'}
+            onValueChange={(v) => {
+              const emp = employees.find(e => e.id.toString() === v);
+              onUpdateTask(task.id, { 
+                assignedToEmployeeId: v && v !== 'unassigned' ? parseInt(v) : null,
+                assignedTo: emp?.name || null,
+              });
+            }}
+            disabled={isSigned}
+          >
+            <SelectTrigger className="w-36 h-8 text-xs">
+              <SelectValue placeholder="Assign to..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {employees.map((emp) => (
+                <SelectItem key={emp.id} value={emp.id.toString()}>
+                  {emp.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {!isSigned && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => onDeleteTask(task.id)}
+            >
+              <Trash2 className="h-4 w-4 text-red-500" />
+            </Button>
+          )}
+        </div>
+      </div>
+      
+      {showNotesLinkFields && isExpanded && (
+        <div className="px-3 pb-3 pt-0 border-t mx-3 mt-1">
+          <div className="space-y-3 pt-3">
+            <div className="space-y-2">
+              <Label className="text-sm flex items-center gap-2">
+                <StickyNote className="h-4 w-4" />
+                Notes
+              </Label>
+              <Textarea
+                value={notes}
+                onChange={(e) => {
+                  setNotes(e.target.value);
+                  setHasChanges(true);
+                }}
+                placeholder="Add notes about this task..."
+                className="min-h-[80px] text-sm"
+                disabled={isSigned}
+                data-testid={`input-notes-${task.id}`}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm flex items-center gap-2">
+                <Link2 className="h-4 w-4" />
+                Link
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  value={link}
+                  onChange={(e) => {
+                    setLink(e.target.value);
+                    setHasChanges(true);
+                  }}
+                  placeholder="https://example.com/document"
+                  className="text-sm"
+                  disabled={isSigned}
+                  data-testid={`input-link-${task.id}`}
+                />
+                {link && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    asChild
+                    className="shrink-0"
+                  >
+                    <a href={link} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </div>
+            {hasChanges && !isSigned && (
+              <Button 
+                size="sm" 
+                onClick={handleSaveNotesLink}
+                data-testid={`button-save-notes-${task.id}`}
+              >
+                <Save className="h-4 w-4 mr-2" />
+                Save Notes & Link
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

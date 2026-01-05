@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import DiscountAdmin from '@/components/DiscountAdmin';
 import DiscountCalculator from '@/components/DiscountCalculator';
 import CustomerTypeManager from '@/components/CustomerTypeManager';
 import PersistentDiscountManager from '@/components/PersistentDiscountManager';
+import ExpiredPromoCodesAdmin from '@/components/ExpiredPromoCodesAdmin';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calculator, TrendingDown } from 'lucide-react';
+import { Calculator, TrendingDown, AlertTriangle } from 'lucide-react';
 
 interface ShortTermSale {
   id: number;
@@ -85,16 +86,24 @@ export default function DiscountManagement() {
 
       {/* Discount Management Tabs */}
       <Tabs defaultValue="short-term-sales" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="short-term-sales">Short-Term Sales</TabsTrigger>
-          <TabsTrigger value="customer-types">Customer Types</TabsTrigger>
-          <TabsTrigger value="persistent-discounts">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="short-term-sales" data-testid="tab-short-term-sales">Short-Term Sales</TabsTrigger>
+          <TabsTrigger value="expired-overrides" data-testid="tab-expired-overrides" className="flex items-center gap-1">
+            <AlertTriangle className="h-3 w-3" />
+            Expired Overrides
+          </TabsTrigger>
+          <TabsTrigger value="customer-types" data-testid="tab-customer-types">Customer Types</TabsTrigger>
+          <TabsTrigger value="persistent-discounts" data-testid="tab-persistent-discounts">
             Persistent Discounts
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="short-term-sales" className="space-y-4">
           <DiscountAdmin onSalesChange={handleSalesChange} />
+        </TabsContent>
+
+        <TabsContent value="expired-overrides" className="space-y-4">
+          <ExpiredPromoCodesAdmin />
         </TabsContent>
 
         <TabsContent value="customer-types" className="space-y-4">

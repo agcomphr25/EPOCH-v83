@@ -119,7 +119,7 @@ export default function P2ProductionQueue() {
   const [selectedItem, setSelectedItem] = useState<QueueItem | null>(null);
   const [holdReason, setHoldReason] = useState('');
   const [scrapReason, setScrapReason] = useState('');
-  const [expandedDepartments, setExpandedDepartments] = useState<string[]>(['Layup', 'Pending Layup']);
+  const [expandedDepartments, setExpandedDepartments] = useState<string[]>([]);
 
   const { data: queueData, isLoading } = useQuery<ProductionQueueData>({
     queryKey: ['/api/p2/control-center/production-queue'],

@@ -1310,7 +1310,7 @@ function TaskRow({
   onUpdateTask: (taskId: string, data: any) => void;
   onDeleteTask: (taskId: string) => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(task.isCompleted);
   const [notes, setNotes] = useState(task.notes || '');
   const [link, setLink] = useState(task.link || '');
   const [hasChanges, setHasChanges] = useState(false);
@@ -1322,6 +1322,13 @@ function TaskRow({
     setHasChanges(false);
   };
 
+  const handleTaskComplete = (checked: boolean | "indeterminate") => {
+    onUpdateTask(task.id, { isCompleted: checked });
+    if (checked === true) {
+      setIsExpanded(true);
+    }
+  };
+
   return (
     <div 
       className={`rounded-lg border ${task.isCompleted ? 'bg-green-50 border-green-200' : 'bg-white'}`}
@@ -1330,9 +1337,7 @@ function TaskRow({
       <div className="flex items-start gap-3 p-3">
         <Checkbox
           checked={task.isCompleted}
-          onCheckedChange={(checked) => 
-            onUpdateTask(task.id, { isCompleted: checked })
-          }
+          onCheckedChange={handleTaskComplete}
           disabled={isSigned}
           data-testid={`checkbox-task-${task.id}`}
         />

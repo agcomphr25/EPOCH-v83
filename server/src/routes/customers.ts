@@ -71,17 +71,35 @@ router.post(
         return res.status(400).json({ error: 'Customer not found' });
       }
       
-      // Generate unique PO number (P2PO-XXXX format)
+      // Generate unique PO number (AAA-001 format: 3 letters + 3 numbers)
       const allPOs = await storage.getAllP2PurchaseOrders();
       const maxPoNum = allPOs.reduce((max, po) => {
-        const match = po.poNumber?.match(/P2PO-(\d+)/);
-        if (match) {
-          const num = parseInt(match[1], 10);
+        // Match both old format (P2PO-XXXX) and new format (AAA-NNN)
+        const oldMatch = po.poNumber?.match(/P2PO-(\d+)/);
+        const newMatch = po.poNumber?.match(/^([A-Z]{3})-(\d{3})$/);
+        if (oldMatch) {
+          const num = parseInt(oldMatch[1], 10);
+          return num > max ? num : max;
+        }
+        if (newMatch) {
+          // Convert letter prefix to number (AAA=0, AAB=1, etc.) * 1000 + numeric part
+          const letters = newMatch[1];
+          const letterValue = (letters.charCodeAt(0) - 65) * 676 + (letters.charCodeAt(1) - 65) * 26 + (letters.charCodeAt(2) - 65);
+          const num = letterValue * 1000 + parseInt(newMatch[2], 10);
           return num > max ? num : max;
         }
         return max;
       }, 0);
-      const poNumber = `P2PO-${String(maxPoNum + 1).padStart(4, '0')}`;
+      
+      // Generate next PO number in AAA-001 format
+      const nextNum = maxPoNum + 1;
+      const letterValue = Math.floor(nextNum / 1000);
+      const numericPart = (nextNum % 1000) || 1000;
+      const adjustedLetterValue = numericPart === 1000 ? letterValue - 1 : letterValue;
+      const letter1 = String.fromCharCode(65 + Math.floor(adjustedLetterValue / 676) % 26);
+      const letter2 = String.fromCharCode(65 + Math.floor(adjustedLetterValue / 26) % 26);
+      const letter3 = String.fromCharCode(65 + adjustedLetterValue % 26);
+      const poNumber = `${letter1}${letter2}${letter3}-${String(numericPart === 1000 ? 1000 : numericPart).padStart(3, '0')}`;
       
       // Build the complete PO data with all required fields
       const poData = {

@@ -5480,6 +5480,24 @@ export const orderStatusEnum = pgEnum('order_status', [
   'RESERVED',
 ]);
 
+// Survey Engine Enums - Generic survey system for reuse across applications
+export const surveyRespondentTypeEnum = pgEnum('survey_respondent_type', [
+  'customer',
+  'employee',
+  'vendor',
+  'anonymous',
+  'other',
+]);
+
+export const surveyContextTypeEnum = pgEnum('survey_context_type', [
+  'order',
+  'project',
+  'service',
+  'event',
+  'general',
+  'other',
+]);
+
 // BOM (Bill of Materials) Management Tables for P2
 export const bomDefinitions = pgTable('bom_definitions', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -6397,6 +6415,144 @@ export type InsertCustomerSatisfactionResponse = z.infer<
 >;
 export type CustomerSatisfactionResponse =
   typeof customerSatisfactionResponses.$inferSelect;
+
+// ============================================================================
+// SURVEY ENGINE - Generic reusable survey system
+// ============================================================================
+
+// Generic Surveys table - application-agnostic survey definitions
+export const surveys = pgTable('surveys', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  title: text('title').notNull(),
+  description: text('description'),
+  isActive: boolean('is_active').default(true),
+  questions: jsonb('questions').notNull().default('[]'),
+  settings: jsonb('settings').default('{}'),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Generic Survey Responses table - uses respondent/context abstraction
+export const surveyResponses = pgTable('survey_responses', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  surveyId: uuid('survey_id')
+    .references(() => surveys.id)
+    .notNull(),
+  // Respondent abstraction - who is responding
+  respondentId: text('respondent_id').notNull(),
+  respondentType: surveyRespondentTypeEnum('respondent_type')
+    .notNull()
+    .default('customer'),
+  respondentName: text('respondent_name'),
+  respondentEmail: text('respondent_email'),
+  // Context abstraction - what the survey is about
+  contextId: text('context_id'),
+  contextType: surveyContextTypeEnum('context_type').default('general'),
+  // Survey responses stored as JSON
+  responses: jsonb('responses').notNull().default('{}'),
+  // Calculated scores
+  overallSatisfaction: integer('overall_satisfaction'),
+  npsScore: integer('nps_score'),
+  aggregateScore: integer('aggregate_score'),
+  // Metadata
+  responseTimeSeconds: integer('response_time_seconds'),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  submittedBy: text('submitted_by'),
+  surveyDate: timestamp('survey_date'),
+  // Status tracking
+  isComplete: boolean('is_complete').default(false),
+  submittedAt: timestamp('submitted_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Insert schema for Generic Surveys
+export const insertSurveySchema = createInsertSchema(surveys)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    title: z.string().min(1, 'Survey title is required'),
+    description: z.string().optional().nullable(),
+    isActive: z.boolean().default(true),
+    questions: z
+      .array(
+        z.object({
+          id: z.string(),
+          type: z.enum([
+            'rating',
+            'multiple_choice',
+            'text',
+            'textarea',
+            'yes_no',
+            'nps',
+          ]),
+          question: z.string().min(1, 'Question text is required'),
+          required: z.boolean().default(false),
+          options: z.array(z.string()).optional(),
+          scale: z
+            .object({
+              min: z.number(),
+              max: z.number(),
+              minLabel: z.string().optional(),
+              maxLabel: z.string().optional(),
+            })
+            .optional(),
+        })
+      )
+      .default([]),
+    settings: z
+      .object({
+        allowAnonymous: z.boolean().default(false),
+        sendEmailReminders: z.boolean().default(true),
+        showProgressBar: z.boolean().default(true),
+        autoSave: z.boolean().default(true),
+      })
+      .default({}),
+    createdBy: z.string().optional().nullable(),
+  });
+
+// Insert schema for Generic Survey Responses
+export const insertSurveyResponseSchema = createInsertSchema(surveyResponses)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    surveyId: z.string().uuid('Survey ID must be a valid UUID'),
+    respondentId: z.string().min(1, 'Respondent ID is required'),
+    respondentType: z
+      .enum(['customer', 'employee', 'vendor', 'anonymous', 'other'])
+      .default('customer'),
+    respondentName: z.string().optional().nullable(),
+    respondentEmail: z.string().email().optional().nullable(),
+    contextId: z.string().optional().nullable(),
+    contextType: z
+      .enum(['order', 'project', 'service', 'event', 'general', 'other'])
+      .default('general'),
+    responses: z.record(z.any()).default({}),
+    overallSatisfaction: z.number().min(1).max(10).optional().nullable(),
+    npsScore: z.number().min(0).max(10).optional().nullable(),
+    aggregateScore: z.number().optional().nullable(),
+    responseTimeSeconds: z.number().optional().nullable(),
+    ipAddress: z.string().optional().nullable(),
+    userAgent: z.string().optional().nullable(),
+    submittedBy: z.string().optional().nullable(),
+    surveyDate: z.string().optional().nullable(),
+    isComplete: z.boolean().default(false),
+    submittedAt: z.string().optional().nullable(),
+  });
+
+// Types for Generic Survey Engine
+export type InsertSurvey = z.infer<typeof insertSurveySchema>;
+export type Survey = typeof surveys.$inferSelect;
+export type InsertSurveyResponse = z.infer<typeof insertSurveyResponseSchema>;
+export type SurveyResponse = typeof surveyResponses.$inferSelect;
 
 // PO Products table for Purchase Order product configurations - Updated for P1 PO Queue System
 export const poProducts = pgTable('po_products', {

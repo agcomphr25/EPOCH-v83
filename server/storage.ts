@@ -422,6 +422,7 @@ import {
   projectNotifications,
   projectStepAttachments,
   preproductionChecklists,
+  manufacturingQueue,
   type Project,
   type InsertProject,
   type ProjectStep,
@@ -11223,6 +11224,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteP2PurchaseOrder(id: number): Promise<void> {
+    // Delete/nullify related records first to avoid foreign key constraint violations
+    
+    // 1. Nullify project step references (FK constraint on projectSteps.linkedP2OrderId)
+    await db.update(projectSteps)
+      .set({ linkedP2OrderId: null })
+      .where(eq(projectSteps.linkedP2OrderId, id));
+    
+    // 2. Nullify manufacturing queue references
+    await db.update(manufacturingQueue)
+      .set({ p2PoId: null, p2PoItemId: null })
+      .where(eq(manufacturingQueue.p2PoId, id));
+    
+    // 3. Delete serialized items that reference this PO directly
+    await db.delete(p2SerializedItems).where(eq(p2SerializedItems.poId, id));
+    
+    // 4. Delete production orders for this PO (uses p2PoId column)
+    await db.delete(p2ProductionOrders).where(eq(p2ProductionOrders.p2PoId, id));
+    
+    // 5. Get all PO items and delete their remaining serialized items by poItemId
+    const items = await this.getP2PurchaseOrderItems(id);
+    for (const item of items) {
+      await db.delete(p2SerializedItems).where(eq(p2SerializedItems.poItemId, item.id));
+    }
+    
+    // 6. Delete PO items
+    await db.delete(p2PurchaseOrderItems).where(eq(p2PurchaseOrderItems.poId, id));
+    
+    // 7. Finally delete the PO itself
     await db.delete(p2PurchaseOrders).where(eq(p2PurchaseOrders.id, id));
   }
 

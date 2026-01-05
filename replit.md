@@ -1,7 +1,7 @@
 # EPOCH v8 - Manufacturing ERP System
 
 ## Overview
-EPOCH v8 is a comprehensive Manufacturing ERP system designed for small manufacturing companies specializing in customizable products. Its primary purpose is to streamline operations, enhance efficiency, and improve scalability. Key capabilities include end-to-end order management, robust inventory tracking, an employee portal, and quality control workflows, a powerful Bill of Materials (BOM) system, Google OAuth integration, global search, and a comprehensive Parts List Management System. The business vision is to establish EPOCH v8 as the leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms.
+EPOCH v8 is a comprehensive Manufacturing ERP system for small manufacturing companies specializing in customizable products. It aims to streamline operations, enhance efficiency, and improve scalability through end-to-end order management, robust inventory tracking, an employee portal, quality control workflows, a powerful Bill of Materials (BOM) system, Google OAuth integration, global search, and a comprehensive Parts List Management System. The vision is to be the leading ERP solution for small-to-medium customizable product manufacturers, offering a full-stack TypeScript PWA with a React frontend and Express backend, deployable to web and mobile platforms.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -20,59 +20,40 @@ Tikka compatibility guardrails: On the Order Entry page, Tikka stock models ONLY
 Navbar-permissions alignment: The userPermissions.ts file is the source of truth for user route access. Navigation.tsx filters navbar items based on these permissions. Users not in the permissions list default to only seeing the Employee Portal. Each user sees only their own dashboard in the User Dashboards dropdown (admins see all). Any new navbar items must be added to both Navigation.tsx AND the appropriate user permission lists in userPermissions.ts to stay in sync.
 
 ## System Architecture
-The application is built as a monorepo using a full-stack TypeScript approach, emphasizing type safety and cross-platform compatibility.
+The application is a full-stack TypeScript monorepo, emphasizing type safety, data consistency, and cross-platform compatibility with PWA support via Capacitor.
 
 ### Core Architectural Decisions
 - **Type Safety & Data Consistency**: Utilizes shared TypeScript schemas (Drizzle, Zod) and a `features` object as a single source of truth.
-- **Cross-Platform Deployment**: PWA capabilities are supported with Capacitor for web, iOS, and Android.
 - **Authentication**: Hybrid JWT + Session authentication with a 3-role (ADMIN, EMPLOYEE, OWNER) capability-based access control system.
-- **UI/UX**: Employs ShadCN UI components, Tailwind CSS, and Framer Motion for a modern and animated user experience.
-- **BOM System**: Robust Bill of Materials system with UUID-based architecture and revision control.
-- **Order Management**: Features atomic order ID reservation, rush fee adjustments, and an urgency/priority system.
-- **Inventory & Production**: Includes comprehensive parts list management, P1 Purchase Orders Queue, vendor purchase order management with Zod validation, inventory CSV import with two-phase validation, and enhanced layup scheduling.
-- **Quality Control**: Implements a Nonconformance Record System and a Vendor Evaluation System with automated scoring and monthly resets.
-- **Cutting Table Operations**: Features FIFO-based packet building with two-phase allocation, AS9100 traceability via barcode scanning, dynamic inventory status thresholds, a packet scheduling system, and demand-filtered BOM assignment display (only shows packets with active manufacturing demand from the weekly queue).
-- **Barcode Strategy**: Uses CODE128 for serialized items (P1-SWS2502-147-1) and CODE39 for regular order barcodes (EJ234), with an automatic helper function at `client/src/lib/barcodeFormat.ts`.
-- **P2 Serialized Item Tracking**: Complete P2 purchase order serialized item tracking with customizable department workflows, barcode scanning, fail-closed traceability gating, and an AS9100-compliant Traveler Viewer System and Electronic Signature System.
-- **Financial & Reporting**: Incorporates a Cost Center Management System, dynamic discount system, Credit Memo Management with immediate balance updates, Payment Analytics with month-over-month comparison, and Refund Request/Queue system with Accept.Blue integration for automated refund processing.
-- **Help Center**: FAQ-based help system accessible to all users via navbar Help button. Covers Order Entry, Production Queue, BOM, and other key workflow areas with searchable Q&A format.
-- **PDF Management**: Centralized PDF configuration and a flexible PDF Template Library System.
-- **Smart Data Entry**: Streamlined traceability data entry with recent lot number recall, autocomplete, and barcode quick-fill lookup.
-- **Control Centers**: Unified interfaces for P2 Purchase Orders and Cutting Table operations, offering dashboards, guided wizards, scheduling, and progress tracking.
-- **Order Audit System**: Comprehensive audit tracking for both P1 orders and P2 serialized items. Features include: configurable audit event categories (production, finance, QC, shipping, P2 operations), automatic field change detection with before/after diffs, department transition timing with duration tracking, scrap/restart cycle linkage, and a unified Audit Drawer component with timeline views. Access via Orders List dropdown menu "View Audit Trail" option. Settings managed at /audit-settings (admin only).
-- **Media Library System**: Centralized image storage with camera capture and file upload capabilities. Features include: device camera access with file upload fallback, browse/search/filter media by category (packing slip, invoice, receipt, photo, document), reference-based attachments linking images to orders and other entities. Media can be attached to multiple documents. Access via /media-library page. Integration available in Order Entry via the Order Attachments section.
-- **Document Scanner**: Built-in document scanning with OpenCV.js for automatic edge detection and perspective correction. Features include: automatic document boundary detection, draggable corner handles for manual adjustment, perspective transformation (deskewing), image enhancement modes (original, enhanced with contrast/brightness controls, grayscale, black & white), and PDF conversion. Accessible via the Camera Capture dialog by enabling "Document Scanner Mode" toggle.
-- **Voice Notes System**: Voice-activated note recording for tracking production issues. Features include: browser-based Web Speech API for push-to-talk recording, automatic order ID extraction from speech (e.g., "problem with order EL069"), issue categorization (metal insert, duratec, thickness, paint, etc.), resolution tracking, and analytics dashboard with issue frequency and trends. Access restricted to specific users (agrace, glennj, tasham). Access via /voice-notes page.
-- **Customer Watch Rules System**: Configurable monitoring rules for tracking specific customer orders through departments. Features include: order-specific tracking (select individual orders or track all), multi-person visibility sharing (Only Me, Everyone, or Specific People), visibility badges on dashboard cards, and shared rule support (users see rules owned by them AND rules shared with them). Access via /watch-rules page. Dashboard integration shows watch rule cards with real-time order counts.
-- **Time Clock Integration**: External Time Clock system integration with canonical identity management, punch event mirroring, and labor analytics. Features include: Proteus trust boundary for secure inter-app communication (HMAC signatures, source headers, 5-minute staleness window), webhook endpoints for punch event ingestion, labor summary derivation (IN→OUT pairing), pay period calculations (semi-monthly 1-15, 16-end), and open punch detection. Employee Portal Time Clock card opens external system with email prefill.
-- **Missed Punch Awareness (IC-I1)**: Gentle, non-punitive detection of potential time clock issues. Features include: read-only detection of open punches and consecutive punch anomalies, supportive messaging ("Just a heads up — you might still be clocked in"), subtle amber indicators on Employee Portal Time Clock card, configurable threshold hours (default 10), and single action to open Time Clock for review. Never blocks, blames, or auto-notifies managers.
-- **Filtered Orders Report**: Advanced order filtering and export tool. Features include: multi-select status filter (Draft, Finalized, In Progress, etc.), optional date range filter (start/end dates), customer exclusion with type-to-search functionality, results table matching All Orders list columns (500 max display, unlimited CSV), and CSV export with proper field escaping. Access restricted to specific users via ALLOWED_USERS constant at page level (currently glennj only). Access via /filtered-orders-report page in Forms & Reports navigation.
+- **UI/UX**: Modern UI using ShadCN UI, Tailwind CSS, and Framer Motion for a dynamic user experience.
+- **BOM System**: Robust Bill of Materials with UUID architecture and revision control.
+- **Order Management**: Features atomic order ID reservation, rush fees, and an urgency/priority system.
+- **Inventory & Production**: Includes parts list management, P1 Purchase Orders, vendor POs with Zod validation, inventory CSV import, and enhanced layup scheduling.
+- **Quality Control**: Nonconformance Record System and Vendor Evaluation System with automated scoring.
+- **Cutting Table Operations**: FIFO-based packet building with two-phase allocation, AS9100 traceability via barcode scanning, dynamic inventory thresholds, packet scheduling, and demand-filtered BOM assignment.
+- **Barcode Strategy**: CODE128 for serialized items, CODE39 for regular orders, with an automatic helper function.
+- **P2 Serialized Item Tracking**: Complete P2 purchase order serialized item tracking with customizable workflows, barcode scanning, fail-closed traceability gating, a Traveler Viewer, and Electronic Signature System.
+- **Financial & Reporting**: Cost Center Management, dynamic discount system, Credit Memo Management, Payment Analytics, and Refund Request/Queue with Accept.Blue integration.
+- **Help Center**: FAQ-based system accessible via navbar, covering key workflows.
+- **PDF Management**: Centralized PDF configuration and a flexible Template Library System.
+- **Smart Data Entry**: Streamlined traceability with recent lot number recall, autocomplete, and barcode quick-fill.
+- **Control Centers**: Unified interfaces for P2 Purchase Orders and Cutting Table with dashboards, wizards, and progress tracking.
+- **Order Audit System**: Comprehensive audit tracking for P1 orders and P2 serialized items, including configurable event categories, field change detection, department transition timing, and a unified Audit Drawer.
+- **Media Library System**: Centralized image storage with camera capture, file upload, and reference-based attachments linking media to entities.
+- **Document Scanner**: Built-in scanning with OpenCV.js for automatic edge detection, perspective correction, image enhancement, and PDF conversion.
+- **Voice Notes System**: Voice-activated note recording for production issues, with automatic order ID extraction, issue categorization, resolution tracking, and analytics dashboard.
+- **Customer Watch Rules System**: Configurable monitoring rules for tracking customer orders through departments, with multi-person visibility sharing and dashboard integration.
+- **Time Clock Integration**: External Time Clock system integration with canonical identity management, punch event mirroring, and labor analytics, including Missed Punch Awareness for detecting anomalies.
+- **Filtered Orders Report**: Advanced order filtering and export tool with multi-select status, date range, customer exclusion, and CSV export.
+- **Survey Engine**: Generic, reusable survey system with UUID-based tables, respondent and context abstraction, designed for broad reuse.
+- **P2 Projects Module**: Multi-step workflow tracking for P2 purchase orders with sequential step enforcement, project manager assignments, reminders, activity logging, and automatic notifications.
 
 ### Technical Implementations
 - **Frontend**: React 18, TypeScript, Vite, ShadCN UI, Tailwind CSS, Framer Motion, Wouter.
 - **Backend**: Express.js, TypeScript, TanStack Query, Zod, Axios.
 - **Database**: PostgreSQL (Neon serverless), Drizzle ORM, Drizzle-kit.
-- **Key Features**: Order Management, Layup Scheduler, Production Queue Manager, Department Manager, Customer Management, Inventory Management, Barcode System, Employee Management, Quality Control, Reporting, Payment Tracking, Shipping Integration, Communications System, Personalized Dashboards, Training Management System, AI-Powered Smart Sorting, Calendar Integration, Magic Link Authentication, Global Search, and P2 Projects Module.
-- **P2 Projects Module**: Multi-step workflow tracking for P2 purchase orders with sequential step enforcement (RFQ Risk Assessment → Quote → Purchase Review → Pre-production Checklist → P2 Order). Features project manager assignments, customizable reminder days per project, activity logging, and automatic notifications to project managers when steps are completed. Steps can only be completed in order - all previous steps must be completed before advancing. Routes at `/projects` and `/projects/:id`.
-
-### Database Schema Standards
-- **Primary Key Pattern**: All new tables must use UUID for primary keys; `serial` is forbidden for new tables.
-- **Migration Safety**: Existing tables with `serial` IDs should not be modified, and existing ID column types must never be changed.
-
-### Security Architecture
-- **Authentication Model**: Dual-condition authentication bypass requiring `NODE_ENV != 'production'` AND `DEV_AUTH_BYPASS=true`.
-- **Global API Authentication**: All `/api` routes require authentication except public routes.
-- **JWT Secret**: Required in production.
-- **Password Hashing**: Uses bcrypt with 12 salt rounds.
-- **Input Validation**: Zod schemas validate all user input.
-- **Bypass Routes**: Legacy bypass routes use `softAuth` middleware requiring `DEV_AUTH_BYPASS=true` for bypass.
-- **Route Authorization**: Backend middleware mirrors frontend `userPermissions.ts`.
-- **Admin-Only Routes**: Credit memos, vendors, cost accounting, discounts, and user management require admin role.
-- **Development Mode**: `DEV_AUTH_BYPASS=true` only in development.
-- **Production Deployment**: `NODE_ENV=production` and `DEV_AUTH_BYPASS` NOT set.
-
-### Feature Flags
-Experimental features are gated behind environment variables for controlled rollout.
+- **Security**: Dual-condition authentication bypass for development, global API authentication, JWT secret in production, bcrypt password hashing, Zod input validation, backend middleware mirroring frontend permissions, admin-only routes, and feature flags for experimental features.
+- **Database Schema Standards**: All new tables use UUID for primary keys; existing `serial` IDs are untouched.
 
 ## External Dependencies
 

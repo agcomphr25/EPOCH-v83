@@ -1,0 +1,61 @@
+index-CUDf1i2l.js:4049 React initialized: Object
+index-CUDf1i2l.js:4049 React hooks: Object
+index-CUDf1i2l.js:4046 App component is rendering...
+index-CUDf1i2l.js:4046 Environment: production
+index-CUDf1i2l.js:4046 Base URL: /
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+index-CUDf1i2l.js:235 🌐 API Request to /api/signature-workflow/pending/6 (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 🌐 API Request to /api/preproduction-checklists/my-tasks/6?status=pending (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 🌐 API Request to /api/signature-workflow/stats/6 (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/preproduction-checklists/my-tasks/6?status=pending: 200
+index-CUDf1i2l.js:235 ✅ API Response from /api/signature-workflow/pending/6: 200
+index-CUDf1i2l.js:235 ✅ API Response from /api/signature-workflow/stats/6: 200
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2-purchase-orders-bypass/11 (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2-purchase-orders-bypass/11: 200
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2/purchase-orders/12/items (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2/purchase-orders/12/items: 200
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2/purchase-orders/12/items (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2/purchase-orders/12/items: 201
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2/purchase-orders/12/items (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2/purchase-orders/12/items: 200
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2-purchase-orders-bypass/12 (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2-purchase-orders-bypass/12: 200
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2/purchase-orders/12/items (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2/purchase-orders/12/items: 200
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2/layup-schedules/generate-serialized-items/7 (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2/layup-schedules/generate-serialized-items/7: 200
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2/customers/1 (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2/customers/1: 500
+index-CUDf1i2l.js:4049 API error raw body: {"error":"Failed to update P2 customer"}
+console.error @ index-CUDf1i2l.js:4049
+index-CUDf1i2l.js:4049 💥 API Request failed for /api/p2/customers/1: Error: Failed to update P2 customer
+    at We (index-CUDf1i2l.js:235:6164)
+console.error @ index-CUDf1i2l.js:4049
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2/bom/7 (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2/bom/7: 200
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2/schedule-items (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2/schedule-items: 200
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2/purchase-orders/12/items (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2/purchase-orders/12/items: 200
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2-purchase-orders-bypass/5 (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2-purchase-orders-bypass/5: 500
+index-CUDf1i2l.js:4049 API error raw body: {"_error":"Failed to delete P2 purchase order via bypass route"}
+console.error @ index-CUDf1i2l.js:4049
+index-CUDf1i2l.js:4049 💥 API Request failed for /api/p2-purchase-orders-bypass/5: Error: {"_error":"Failed to delete P2 purchase order via bypass route"}
+    at We (index-CUDf1i2l.js:235:6164)
+console.error @ index-CUDf1i2l.js:4049
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2-purchase-orders-bypass/5 (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2-purchase-orders-bypass/5: 500
+index-CUDf1i2l.js:4049 API error raw body: {"_error":"Failed to delete P2 purchase order via bypass route"}
+console.error @ index-CUDf1i2l.js:4049
+index-CUDf1i2l.js:4049 💥 API Request failed for /api/p2-purchase-orders-bypass/5: Error: {"_error":"Failed to delete P2 purchase order via bypass route"}
+    at We (index-CUDf1i2l.js:235:6164)
+console.error @ index-CUDf1i2l.js:4049
+index-CUDf1i2l.js:235 🌐 API Request to /api/p2-purchase-orders-bypass/3 (timeout: 15000ms, deployment: true)
+index-CUDf1i2l.js:235 ✅ API Response from /api/p2-purchase-orders-bypass/3: 500
+index-CUDf1i2l.js:4049 API error raw body: {"_error":"Failed to delete P2 purchase order via bypass route"}
+console.error @ index-CUDf1i2l.js:4049
+index-CUDf1i2l.js:4049 💥 API Request failed for /api/p2-purchase-orders-bypass/3: Error: {"_error":"Failed to delete P2 purchase order via bypass route"}
+    at We (index-CUDf1i2l.js:235:6164)
+console.error @ index-CUDf1i2l.js:4049

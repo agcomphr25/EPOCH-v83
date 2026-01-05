@@ -500,6 +500,12 @@ export default function Navigation() {
       icon: Filter,
       description: 'Filter orders by status with customer exclusions and CSV export',
     },
+    {
+      path: '/order-heat-map',
+      label: 'Order Heat Map',
+      icon: MapPin,
+      description: 'Visualize order distribution by customer location',
+    },
   ];
 
   const travelerItems = [

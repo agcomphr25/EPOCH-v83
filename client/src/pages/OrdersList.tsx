@@ -1390,8 +1390,9 @@ export default function OrdersList() {
                               >
                                 {order.status}
                               </Badge>
-                              {/* Resend Email Button - Show on hover for PENDING_SIGNATURE and FINALIZED */}
-                              {(order.status?.toUpperCase() === 'PENDING_SIGNATURE' || order.status?.toUpperCase() === 'FINALIZED') && (
+                              {/* Resend Email Button - Show on hover for PENDING_SIGNATURE (any user) or FINALIZED (admin only) */}
+                              {(order.status?.toUpperCase() === 'PENDING_SIGNATURE' || 
+                                (order.status?.toUpperCase() === 'FINALIZED' && currentUser?.role === 'ADMIN')) && (
                                 <div className="absolute left-full top-0 ml-2 opacity-0 group-hover/status:opacity-100 pointer-events-none group-hover/status:pointer-events-auto transition-opacity z-20">
                                   <Button
                                     size="sm"
@@ -1406,28 +1407,10 @@ export default function OrdersList() {
                                       resendSignatureEmailMutation.mutate(order.orderId);
                                     }}
                                     disabled={resendSignatureEmailMutation.isPending}
-                                    title="Resend Review and Sign Email"
+                                    title={order.status?.toUpperCase() === 'PENDING_SIGNATURE' 
+                                      ? "Resend Review and Sign Email" 
+                                      : "Resend Review and Confirm Email"}
                                     data-testid={`button-resend-email-${order.orderId}`}
-                                  >
-                                    <Mail className="h-3 w-3 mr-1" />
-                                    Resend Email
-                                  </Button>
-                                </div>
-                              )}
-                              {/* Resend Email Button - Show on hover for FINALIZED (admin only) */}
-                              {order.status?.toUpperCase() === 'FINALIZED' && currentUser?.role === 'ADMIN' && (
-                                <div className="absolute left-full top-0 ml-2 opacity-0 group-hover/status:opacity-100 pointer-events-none group-hover/status:pointer-events-auto transition-opacity z-20">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 px-2 bg-white hover:bg-blue-50 border-blue-300 text-blue-700"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      resendSignatureEmailMutation.mutate(order.orderId);
-                                    }}
-                                    disabled={resendSignatureEmailMutation.isPending}
-                                    title="Resend Review and Confirm Email"
-                                    data-testid={`button-resend-email-finalized-${order.orderId}`}
                                   >
                                     <Mail className="h-3 w-3 mr-1" />
                                     Resend Email

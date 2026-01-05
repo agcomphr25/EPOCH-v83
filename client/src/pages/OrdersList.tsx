@@ -1392,7 +1392,7 @@ export default function OrdersList() {
                               </Badge>
                               {/* Resend Email Button - Show on hover for PENDING_SIGNATURE and FINALIZED */}
                               {(order.status?.toUpperCase() === 'PENDING_SIGNATURE' || order.status?.toUpperCase() === 'FINALIZED') && (
-                                <div className="absolute left-full top-0 ml-2 hidden group-hover/status:block z-20">
+                                <div className="absolute left-full top-0 ml-2 opacity-0 group-hover/status:opacity-100 pointer-events-none group-hover/status:pointer-events-auto transition-opacity z-20">
                                   <Button
                                     size="sm"
                                     variant="outline"
@@ -1416,7 +1416,7 @@ export default function OrdersList() {
                               )}
                               {/* Resend Email Button - Show on hover for FINALIZED (admin only) */}
                               {order.status?.toUpperCase() === 'FINALIZED' && currentUser?.role === 'ADMIN' && (
-                                <div className="absolute left-full top-0 ml-2 hidden group-hover/status:block z-20">
+                                <div className="absolute left-full top-0 ml-2 opacity-0 group-hover/status:opacity-100 pointer-events-none group-hover/status:pointer-events-auto transition-opacity z-20">
                                   <Button
                                     size="sm"
                                     variant="outline"

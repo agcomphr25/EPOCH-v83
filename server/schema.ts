@@ -8564,6 +8564,7 @@ export const preproductionChecklistTasks = pgTable('preproduction_checklist_task
   assignedTo: text('assigned_to'), // Username or employee name
   assignedToEmployeeId: integer('assigned_to_employee_id').references(() => employees.id),
   notes: text('notes'),
+  link: text('link'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({

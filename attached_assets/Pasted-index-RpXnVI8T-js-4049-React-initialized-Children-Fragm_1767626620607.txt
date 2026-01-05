@@ -1,0 +1,82 @@
+index-RpXnVI8T.js:4049 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-RpXnVI8T.js:4049 React hooks: {useState: ƒ, useEffect: ƒ}
+index-RpXnVI8T.js:4046 App component is rendering...
+index-RpXnVI8T.js:4046 Environment: production
+index-RpXnVI8T.js:4046 Base URL: /
+feature_collector.js:23 using deprecated parameters for the initialization function; pass a single object instead
+U @ feature_collector.js:23
+main @ feature_collector.js:23
+mainFunction @ feature_collector.js:23
+(anonymous) @ feature_collector.js:23
+index-RpXnVI8T.js:235 🌐 API Request to /api/p2-traveler/verify-certification/EMP001/P2PO-0001-711-006 (timeout: 15000ms, deployment: true)
+index-RpXnVI8T.js:235 ✅ API Response from /api/p2-traveler/verify-certification/EMP001/P2PO-0001-711-006: 403
+index-RpXnVI8T.js:4049 API error raw body: {"error":"Invalid or expired token"}
+console.error @ index-RpXnVI8T.js:4049
+We @ index-RpXnVI8T.js:235
+await in We
+N @ index-RpXnVI8T.js:2677
+Kat @ index-RpXnVI8T.js:37
+Yat @ index-RpXnVI8T.js:37
+Xat @ index-RpXnVI8T.js:37
+nme @ index-RpXnVI8T.js:37
+SDe @ index-RpXnVI8T.js:37
+(anonymous) @ index-RpXnVI8T.js:37
+cie @ index-RpXnVI8T.js:40
+YBe @ index-RpXnVI8T.js:37
+ZG @ index-RpXnVI8T.js:37
+Rae @ index-RpXnVI8T.js:37
+fit @ index-RpXnVI8T.js:37
+index-RpXnVI8T.js:4049 💥 API Request failed for /api/p2-traveler/verify-certification/EMP001/P2PO-0001-711-006: Error: Invalid or expired token
+    at We (index-RpXnVI8T.js:235:6164)
+    at async N (index-RpXnVI8T.js:2677:71898)
+console.error @ index-RpXnVI8T.js:4049
+We @ index-RpXnVI8T.js:235
+await in We
+N @ index-RpXnVI8T.js:2677
+Kat @ index-RpXnVI8T.js:37
+Yat @ index-RpXnVI8T.js:37
+Xat @ index-RpXnVI8T.js:37
+nme @ index-RpXnVI8T.js:37
+SDe @ index-RpXnVI8T.js:37
+(anonymous) @ index-RpXnVI8T.js:37
+cie @ index-RpXnVI8T.js:40
+YBe @ index-RpXnVI8T.js:37
+ZG @ index-RpXnVI8T.js:37
+Rae @ index-RpXnVI8T.js:37
+fit @ index-RpXnVI8T.js:37
+index-RpXnVI8T.js:235 🌐 API Request to /api/p2-traveler/verify-certification/EMP001/P2PO-0001-711-006 (timeout: 15000ms, deployment: true)
+index-RpXnVI8T.js:235 ✅ API Response from /api/p2-traveler/verify-certification/EMP001/P2PO-0001-711-006: 403
+index-RpXnVI8T.js:4049 API error raw body: {"error":"Invalid or expired token"}
+console.error @ index-RpXnVI8T.js:4049
+We @ index-RpXnVI8T.js:235
+await in We
+N @ index-RpXnVI8T.js:2677
+Kat @ index-RpXnVI8T.js:37
+Yat @ index-RpXnVI8T.js:37
+Xat @ index-RpXnVI8T.js:37
+nme @ index-RpXnVI8T.js:37
+SDe @ index-RpXnVI8T.js:37
+(anonymous) @ index-RpXnVI8T.js:37
+cie @ index-RpXnVI8T.js:40
+YBe @ index-RpXnVI8T.js:37
+ZG @ index-RpXnVI8T.js:37
+Rae @ index-RpXnVI8T.js:37
+fit @ index-RpXnVI8T.js:37
+index-RpXnVI8T.js:4049 💥 API Request failed for /api/p2-traveler/verify-certification/EMP001/P2PO-0001-711-006: Error: Invalid or expired token
+    at We (index-RpXnVI8T.js:235:6164)
+    at async N (index-RpXnVI8T.js:2677:71898)
+console.error @ index-RpXnVI8T.js:4049
+We @ index-RpXnVI8T.js:235
+await in We
+N @ index-RpXnVI8T.js:2677
+Kat @ index-RpXnVI8T.js:37
+Yat @ index-RpXnVI8T.js:37
+Xat @ index-RpXnVI8T.js:37
+nme @ index-RpXnVI8T.js:37
+SDe @ index-RpXnVI8T.js:37
+(anonymous) @ index-RpXnVI8T.js:37
+cie @ index-RpXnVI8T.js:40
+YBe @ index-RpXnVI8T.js:37
+ZG @ index-RpXnVI8T.js:37
+Rae @ index-RpXnVI8T.js:37
+fit @ index-RpXnVI8T.js:37

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { Eye, EyeOff, Scan } from 'lucide-react';
+import { Eye, EyeOff, Scan, Settings } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -281,19 +281,35 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => setLocation('/p2-traveler')}
-              data-testid="button-p2-traveler"
-            >
-              <Scan className="w-4 h-4 mr-2" />
-              P2 Traveler
-            </Button>
-            <p className="text-xs text-muted-foreground text-center">
-              Production tracking with AS9100 traceability
-            </p>
+            <div className="space-y-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => setLocation('/p2-traveler')}
+                data-testid="button-p2-traveler"
+              >
+                <Scan className="w-4 h-4 mr-2" />
+                P2 Traveler
+              </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                Production tracking with AS9100 traceability
+              </p>
+              
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={() => setLocation('/p2-control-center')}
+                data-testid="button-p2-control-center"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                P2 Control Center
+              </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                Full workflow management - routing, travelers, and certifications (login required)
+              </p>
+            </div>
           </form>
         </CardContent>
       </Card>

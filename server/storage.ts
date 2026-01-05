@@ -3,6 +3,7 @@ import {
   customerTypes,
   persistentDiscounts,
   shortTermSales,
+  promoCodeOverrideAudit,
   featureCategories,
   featureSubCategories,
   features,
@@ -144,6 +145,8 @@ import {
   type InsertPersistentDiscount,
   type ShortTermSale,
   type InsertShortTermSale,
+  type PromoCodeOverrideAudit,
+  type InsertPromoCodeOverrideAudit,
   type FeatureCategory,
   type InsertFeatureCategory,
   type FeatureSubCategory,
@@ -539,6 +542,8 @@ export interface IStorage {
 
   // Short Term Sales CRUD
   getAllShortTermSales(): Promise<ShortTermSale[]>;
+  getAllShortTermSalesIncludingExpired(): Promise<ShortTermSale[]>;
+  getExpiredShortTermSales(): Promise<ShortTermSale[]>;
   getShortTermSale(id: number): Promise<ShortTermSale | undefined>;
   createShortTermSale(data: InsertShortTermSale): Promise<ShortTermSale>;
   updateShortTermSale(
@@ -546,6 +551,20 @@ export interface IStorage {
     data: Partial<InsertShortTermSale>
   ): Promise<ShortTermSale>;
   deleteShortTermSale(id: number): Promise<void>;
+  reactivatePromoCode(
+    id: number,
+    userId: string,
+    reason: string
+  ): Promise<ShortTermSale>;
+  deactivatePromoCodeOverride(
+    id: number,
+    userId: string,
+    reason: string
+  ): Promise<ShortTermSale>;
+  
+  // Promo Code Override Audit
+  getPromoCodeOverrideAuditHistory(promoCodeId: number): Promise<PromoCodeOverrideAudit[]>;
+  createPromoCodeOverrideAudit(data: InsertPromoCodeOverrideAudit): Promise<PromoCodeOverrideAudit>;
 
   // Feature Categories CRUD
   getAllFeatureCategories(): Promise<FeatureCategory[]>;
@@ -2186,6 +2205,105 @@ export class DatabaseStorage implements IStorage {
 
   async deleteShortTermSale(id: number): Promise<void> {
     await db.delete(shortTermSales).where(eq(shortTermSales.id, id));
+  }
+
+  // Get all short-term sales including expired ones (for admin view)
+  async getAllShortTermSalesIncludingExpired(): Promise<ShortTermSale[]> {
+    const result = await db
+      .select()
+      .from(shortTermSales)
+      .where(eq(shortTermSales.isActive, 1))
+      .orderBy(desc(shortTermSales.createdAt));
+    return result;
+  }
+
+  // Get expired short-term sales for CSR override management
+  async getExpiredShortTermSales(): Promise<ShortTermSale[]> {
+    const now = new Date();
+    const result = await db
+      .select()
+      .from(shortTermSales)
+      .where(
+        and(
+          eq(shortTermSales.isActive, 1),
+          lt(shortTermSales.endDate, now)
+        )
+      )
+      .orderBy(desc(shortTermSales.endDate));
+    return result;
+  }
+
+  // Reactivate an expired promo code via override (CSR admin correction)
+  async reactivatePromoCode(
+    id: number,
+    userId: string,
+    reason: string
+  ): Promise<ShortTermSale> {
+    const current = await this.getShortTermSale(id);
+    if (!current) {
+      throw new Error('Promo code not found');
+    }
+
+    // Record the audit entry
+    await this.createPromoCodeOverrideAudit({
+      promoCodeId: id,
+      userId,
+      previousStatus: current.overrideActive,
+      newStatus: true,
+      reason,
+    });
+
+    // Update the promo code with override_active = true
+    const [result] = await db
+      .update(shortTermSales)
+      .set({ overrideActive: true })
+      .where(eq(shortTermSales.id, id))
+      .returning();
+    return result;
+  }
+
+  // Deactivate the override on a promo code
+  async deactivatePromoCodeOverride(
+    id: number,
+    userId: string,
+    reason: string
+  ): Promise<ShortTermSale> {
+    const current = await this.getShortTermSale(id);
+    if (!current) {
+      throw new Error('Promo code not found');
+    }
+
+    // Record the audit entry
+    await this.createPromoCodeOverrideAudit({
+      promoCodeId: id,
+      userId,
+      previousStatus: current.overrideActive,
+      newStatus: false,
+      reason,
+    });
+
+    // Update the promo code with override_active = false
+    const [result] = await db
+      .update(shortTermSales)
+      .set({ overrideActive: false })
+      .where(eq(shortTermSales.id, id))
+      .returning();
+    return result;
+  }
+
+  // Promo Code Override Audit methods
+  async getPromoCodeOverrideAuditHistory(promoCodeId: number): Promise<PromoCodeOverrideAudit[]> {
+    const result = await db
+      .select()
+      .from(promoCodeOverrideAudit)
+      .where(eq(promoCodeOverrideAudit.promoCodeId, promoCodeId))
+      .orderBy(desc(promoCodeOverrideAudit.createdAt));
+    return result;
+  }
+
+  async createPromoCodeOverrideAudit(data: InsertPromoCodeOverrideAudit): Promise<PromoCodeOverrideAudit> {
+    const [result] = await db.insert(promoCodeOverrideAudit).values(data).returning();
+    return result;
   }
 
   // Feature Categories CRUD

@@ -1,5 +1,6 @@
 import { storage } from '../storage.js';
 import { sendEmailViaSendGrid } from './sendgrid.js';
+import { nanoid } from 'nanoid';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -30,9 +31,18 @@ export async function sendReminderForOverdueOrders() {
       try {
         console.log(`📨 Sending reminder for order ${followupOrder.orderId} to ${followupOrder.customerEmail}`);
         
-        // Generate signature link using unified URL resolution
+        // Generate a fresh token for the reminder email
         const { createMagicLink } = await import('./magicLink');
-        const signatureUrl = createMagicLink(followupOrder.signatureToken || '');
+        const newToken = nanoid(32);
+        
+        // Persist the new token and mark reminder as sent
+        await storage.updateFollowupOrder(followupOrder.id, {
+          signatureToken: newToken,
+          reminderSent: true,
+          reminderSentAt: new Date(),
+        });
+        
+        const signatureUrl = createMagicLink(newToken);
         
         // Create reminder email
         const emailHtml = `
@@ -115,12 +125,6 @@ This is an automated reminder. Please do not reply to this email.
           subject: `REMINDER: Order ${followupOrder.orderId} - Signature Required`,
           text: emailText,
           html: emailHtml,
-        });
-        
-        // Update the followup order to mark reminder as sent
-        await storage.updateFollowupOrder(followupOrder.id, {
-          reminderSent: true,
-          reminderSentAt: new Date(),
         });
         
         sentCount++;

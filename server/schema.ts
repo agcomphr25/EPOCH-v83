@@ -310,6 +310,19 @@ export const shortTermSales = pgTable('short_term_sales', {
   endDate: timestamp('end_date').notNull(),
   appliesTo: text('applies_to').default('total').notNull(), // "total" or "stock_model"
   isActive: integer('is_active').default(1).notNull(),
+  // Override fields for CSR administrative corrections
+  overrideActive: boolean('override_active').default(false).notNull(), // When true, allows use regardless of expiration
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Audit table for promo code override actions
+export const promoCodeOverrideAudit = pgTable('promo_code_override_audit', {
+  id: serial('id').primaryKey(),
+  promoCodeId: integer('promo_code_id').references(() => shortTermSales.id).notNull(),
+  userId: text('user_id').notNull(), // Username of CSR who made the override
+  previousStatus: boolean('previous_status').notNull(), // overrideActive value before change
+  newStatus: boolean('new_status').notNull(), // overrideActive value after change
+  reason: text('reason').notNull(), // Required reason for the override
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -1376,6 +1389,7 @@ export const insertShortTermSaleSchema = z.object({
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   isActive: z.number().default(1),
+  overrideActive: z.boolean().default(false),
 });
 
 export const insertFeatureCategorySchema = createInsertSchema(featureCategories)
@@ -2314,6 +2328,17 @@ export type InsertPersistentDiscount = z.infer<
 export type PersistentDiscount = typeof persistentDiscounts.$inferSelect;
 export type InsertShortTermSale = z.infer<typeof insertShortTermSaleSchema>;
 export type ShortTermSale = typeof shortTermSales.$inferSelect;
+
+// Promo code override audit types
+export const insertPromoCodeOverrideAuditSchema = z.object({
+  promoCodeId: z.number(),
+  userId: z.string().min(1, 'User ID is required'),
+  previousStatus: z.boolean(),
+  newStatus: z.boolean(),
+  reason: z.string().min(1, 'Reason is required'),
+});
+export type InsertPromoCodeOverrideAudit = z.infer<typeof insertPromoCodeOverrideAuditSchema>;
+export type PromoCodeOverrideAudit = typeof promoCodeOverrideAudit.$inferSelect;
 export type InsertFeatureCategory = z.infer<typeof insertFeatureCategorySchema>;
 export type FeatureCategory = typeof featureCategories.$inferSelect;
 export type InsertFeatureSubCategory = z.infer<

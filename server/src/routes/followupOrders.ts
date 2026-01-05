@@ -1253,18 +1253,177 @@ router.get('/signed-pdf/:orderId', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Order has not been signed yet' });
     }
     
-    if (!followupOrder.signedPdfPath) {
-      return res.status(404).json({ error: 'Signed PDF file path not found' });
+    // Check if signed PDF exists on disk
+    if (followupOrder.signedPdfPath && fs.existsSync(followupOrder.signedPdfPath)) {
+      // Signed PDF exists, serve it directly
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="signed_order_${orderId}.pdf"`);
+      return res.sendFile(path.resolve(followupOrder.signedPdfPath));
     }
     
-    if (!fs.existsSync(followupOrder.signedPdfPath)) {
-      return res.status(404).json({ error: 'Signed PDF file not found on disk' });
+    // Signed PDF is missing - attempt to regenerate from stored signature data
+    console.log(`⚠️ Signed PDF missing for order ${orderId}, attempting to regenerate...`);
+    
+    if (!followupOrder.signatureData) {
+      return res.status(404).json({ 
+        error: 'Cannot regenerate signed PDF - signature data not found' 
+      });
     }
     
-    // Send the signed PDF file
+    // Get order and customer data to regenerate PDF
+    const order = await storage.getOrderById(orderId);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    const customer = await storage.getCustomerById(order.customerId || '');
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    
+    // Get customer address
+    const addresses = await storage.getCustomerAddresses(order.customerId || '');
+    const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
+    
+    // Get stock model information
+    const stockModels = await storage.getAllStockModels();
+    const stockModel = stockModels.find(m => m.id === order.modelId);
+    
+    // Get features information for pricing and display names
+    const allFeatures = await storage.getAllFeatures();
+    
+    // Helper function to create a fallback display name from a value
+    const createFallbackDisplayName = (value: string): string => {
+      return value
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    };
+    
+    // Build comprehensive feature data for PDF
+    const featurePrices: Record<string, number> = {};
+    const featureDisplayNames: Record<string, string> = {};
+    const featureSelectionDisplayNames: Record<string, string> = {};
+    const featureSelectionPrices: Record<string, number> = {};
+
+    if (order.features && typeof order.features === 'object') {
+      for (const [featureKey, featureValue] of Object.entries(order.features)) {
+        if (featureValue && featureValue !== false && featureValue !== '') {
+          const featureDetail = allFeatures.find((f: any) => f.id === featureKey);
+          if (featureDetail) {
+            featureDisplayNames[featureKey] = featureDetail.displayName || featureDetail.name || featureKey;
+            const featureOptions = (featureDetail as any).options || [];
+            
+            if (Array.isArray(featureValue)) {
+              let totalPrice = 0;
+              for (const selectionValue of featureValue) {
+                const option = featureOptions.find((opt: any) => opt.value === selectionValue);
+                if (option) {
+                  featureSelectionDisplayNames[selectionValue] = option.displayName || option.label || selectionValue;
+                  const selectionPrice = option.price || 0;
+                  featureSelectionPrices[selectionValue] = selectionPrice;
+                  totalPrice += selectionPrice;
+                } else {
+                  featureSelectionDisplayNames[selectionValue] = createFallbackDisplayName(selectionValue);
+                }
+              }
+              featurePrices[featureKey] = totalPrice;
+            } else {
+              const option = featureOptions.find((opt: any) => opt.value === featureValue);
+              if (option) {
+                featureSelectionDisplayNames[featureValue] = option.displayName || option.label || featureValue;
+                const selectionPrice = option.price || 0;
+                featureSelectionPrices[featureValue] = selectionPrice;
+                featurePrices[featureKey] = selectionPrice;
+              } else {
+                featureSelectionDisplayNames[featureValue] = createFallbackDisplayName(featureValue);
+                featurePrices[featureKey] = featureDetail.price || 0;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Extract miscellaneous items from features object
+    const miscItems = (order.features as any)?.miscItems || [];
+
+    // Prepare order data for PDF regeneration
+    const orderData = {
+      orderId: order.orderId,
+      orderDate: new Date(order.orderDate),
+      dueDate: new Date(order.dueDate),
+      customerId: order.customerId || '',
+      customerPO: order.customerPO || undefined,
+      customerName: customer.name,
+      customerEmail: customer.email || undefined,
+      customerPhone: customer.phone || undefined,
+      customerCompany: customer.company || undefined,
+      customerAddress: defaultAddress ? {
+        street: defaultAddress.street,
+        street2: defaultAddress.street2 || undefined,
+        city: defaultAddress.city,
+        state: defaultAddress.state,
+        zipCode: defaultAddress.zipCode,
+        country: defaultAddress.country,
+      } : undefined,
+      modelId: order.modelId || undefined,
+      modelName: stockModel?.name || undefined,
+      modelDisplayName: stockModel?.displayName || undefined,
+      modelPrice: stockModel?.price || 0,
+      handedness: order.handedness || undefined,
+      features: order.features as Record<string, any> || undefined,
+      featurePrices,
+      featureDisplayNames,
+      featureSelectionDisplayNames,
+      featureSelectionPrices,
+      featureQuantities: order.featureQuantities as Record<string, number> || undefined,
+      miscItems: miscItems.length > 0 ? miscItems : undefined,
+      notes: order.notes || undefined,
+      shipping: order.shipping || 0,
+      paymentStatus: 'PENDING' as const,
+      discountCode: order.discountCode || undefined,
+      customDiscountType: order.customDiscountType || undefined,
+      customDiscountValue: order.customDiscountValue || undefined,
+      showCustomDiscount: order.showCustomDiscount || undefined,
+    };
+
+    console.log(`📄 Regenerating base PDF for order ${orderId}...`);
+    
+    // Generate the base PDF (with signature box)
+    const basePdfBuffer = await generateSalesOrderPDF(orderData, true);
+    
+    // Write the base PDF to a temp file so we can embed signature
+    const tempPdfFilename = `temp_sales_order_${orderId}_${Date.now()}.pdf`;
+    const tempPdfPath = path.join(uploadsDir, tempPdfFilename);
+    fs.writeFileSync(tempPdfPath, basePdfBuffer);
+    
+    console.log(`✍️ Embedding signature into PDF for order ${orderId}...`);
+    
+    // Embed the stored signature into the PDF
+    const signedPdfBuffer = await embedSignatureInPDF(tempPdfPath, followupOrder.signatureData);
+    
+    // Clean up temp file
+    if (fs.existsSync(tempPdfPath)) {
+      fs.unlinkSync(tempPdfPath);
+    }
+    
+    // Save the regenerated signed PDF
+    const signedPdfFilename = `signed_sales_order_${orderId}_${Date.now()}.pdf`;
+    const signedPdfPath = path.join(uploadsDir, signedPdfFilename);
+    fs.writeFileSync(signedPdfPath, signedPdfBuffer);
+    
+    // Update the followup order with the new signed PDF path
+    await storage.updateFollowupOrder(followupOrder.id, {
+      signedPdfPath,
+    });
+    
+    console.log(`✅ Regenerated signed PDF for order ${orderId} at ${signedPdfPath}`);
+    
+    // Serve the regenerated signed PDF
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="signed_order_${orderId}.pdf"`);
-    res.sendFile(path.resolve(followupOrder.signedPdfPath));
+    res.sendFile(path.resolve(signedPdfPath));
   } catch (error) {
     console.error('Error fetching signed PDF:', error);
     res.status(500).json({ 
@@ -1289,10 +1448,16 @@ router.get('/signature-info/:orderId', authenticateToken, async (req, res) => {
       });
     }
     
+    // Signed PDF is available if:
+    // 1. The file exists on disk, OR
+    // 2. We have the signature data stored (can regenerate on-demand)
+    const signedPdfOnDisk = !!(followupOrder.signedPdfPath && fs.existsSync(followupOrder.signedPdfPath));
+    const canRegeneratePdf = !!followupOrder.signatureData;
+    
     res.json({
       hasSignature: followupOrder.signatureSigned || false,
       signedAt: followupOrder.signedAt,
-      signedPdfAvailable: !!(followupOrder.signedPdfPath && fs.existsSync(followupOrder.signedPdfPath)),
+      signedPdfAvailable: signedPdfOnDisk || canRegeneratePdf,
       orderId
     });
   } catch (error) {

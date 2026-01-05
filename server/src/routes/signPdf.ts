@@ -409,6 +409,172 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
+// Route for signing a PDF and emailing it
+router.post('/sign-and-email', async (req, res) => {
+  try {
+    const { 
+      tempId, 
+      signatureData, 
+      typedSignature,
+      signerName, 
+      recipientEmail 
+    } = req.body;
+
+    if (!tempId) {
+      return res.status(400).json({ error: 'tempId is required' });
+    }
+
+    const tempPdf = tempPdfStorage.get(tempId);
+    if (!tempPdf) {
+      return res.status(404).json({ error: 'PDF not found. It may have expired. Please upload again.' });
+    }
+
+    if (!signatureData && !typedSignature) {
+      return res.status(400).json({ error: 'Signature (drawn or typed) is required' });
+    }
+
+    if (!signerName) {
+      return res.status(400).json({ error: 'Printed name is required' });
+    }
+
+    if (!recipientEmail) {
+      return res.status(400).json({ error: 'Recipient email is required' });
+    }
+
+    const pdfDoc = await PDFDocument.load(tempPdf.buffer);
+    const pages = pdfDoc.getPages();
+    const lastPage = pages[pages.length - 1];
+    const { width, height } = lastPage.getSize();
+
+    const signedDate = new Date().toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const margin = 50;
+    const sigBlockHeight = 100;
+    const yPosition = margin;
+
+    // Draw signature block background line
+    lastPage.drawLine({
+      start: { x: margin, y: yPosition + sigBlockHeight },
+      end: { x: width - margin, y: yPosition + sigBlockHeight },
+      thickness: 1,
+      color: rgb(0.7, 0.7, 0.7),
+    });
+
+    // If we have a drawn signature
+    if (signatureData) {
+      const base64Match = signatureData.match(/^data:image\/(png|jpe?g);base64,(.+)$/i);
+      if (base64Match) {
+        const signatureBytes = Buffer.from(base64Match[2], 'base64');
+        const pngMagic = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+        const isPng = signatureBytes.slice(0, 8).equals(pngMagic);
+
+        let signatureImage;
+        if (isPng) {
+          signatureImage = await pdfDoc.embedPng(signatureBytes);
+        } else {
+          signatureImage = await pdfDoc.embedJpg(signatureBytes);
+        }
+
+        // Draw signature image
+        lastPage.drawImage(signatureImage, {
+          x: margin,
+          y: yPosition + 40,
+          width: 150,
+          height: 50,
+        });
+      }
+    } else if (typedSignature) {
+      // Draw typed signature in an italic style
+      lastPage.drawText(typedSignature, {
+        x: margin,
+        y: yPosition + 55,
+        size: 24,
+        color: rgb(0, 0, 0.4),
+      });
+    }
+
+    // Draw "Printed Name:" label and value
+    lastPage.drawText('Printed Name:', {
+      x: margin,
+      y: yPosition + 25,
+      size: 10,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+
+    lastPage.drawText(signerName, {
+      x: margin + 80,
+      y: yPosition + 25,
+      size: 12,
+      color: rgb(0, 0, 0),
+    });
+
+    // Draw "Date:" label and value
+    lastPage.drawText('Date:', {
+      x: margin,
+      y: yPosition + 8,
+      size: 10,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+
+    lastPage.drawText(signedDate, {
+      x: margin + 35,
+      y: yPosition + 8,
+      size: 10,
+      color: rgb(0, 0, 0),
+    });
+
+    const signedPdfBytes = await pdfDoc.save();
+
+    // Clean up temp storage
+    tempPdfStorage.delete(tempId);
+
+    // Send email with attachment
+    const { sendEmailViaSendGrid } = await import('../../utils/sendgrid');
+    
+    const emailResult = await sendEmailViaSendGrid({
+      to: recipientEmail,
+      subject: `Signed Document: ${tempPdf.originalname}`,
+      text: `Please find attached the signed document "${tempPdf.originalname}".\n\nSigned by: ${signerName}\nDate: ${signedDate}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Signed Document</h2>
+          <p>Please find attached the signed document "<strong>${tempPdf.originalname}</strong>".</p>
+          <p><strong>Signed by:</strong> ${signerName}<br/>
+          <strong>Date:</strong> ${signedDate}</p>
+        </div>
+      `,
+      attachments: [{
+        content: Buffer.from(signedPdfBytes).toString('base64'),
+        filename: `${tempPdf.originalname.replace('.pdf', '')}-signed.pdf`,
+        type: 'application/pdf',
+        disposition: 'attachment',
+      }],
+    });
+
+    if (!emailResult.success) {
+      console.error('Failed to send email:', emailResult.error);
+      return res.status(500).json({ error: 'Failed to send email. Please try again.' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Document signed and emailed successfully',
+      signedBy: signerName,
+      signedAt: signedDate,
+      emailSentTo: recipientEmail,
+    });
+  } catch (error: any) {
+    console.error('Error signing and emailing PDF:', error);
+    res.status(500).json({ error: error.message || 'Failed to sign and email PDF' });
+  }
+});
+
 router.post('/sign-pdf', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {

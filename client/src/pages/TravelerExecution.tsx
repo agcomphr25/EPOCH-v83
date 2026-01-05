@@ -706,7 +706,24 @@ export default function TravelerExecution() {
                                           <MaterialScanner
                                             travelerId={traveler.id}
                                             travelerStepId={currentStep.id}
+                                            allowFreeTextEntry={true}
                                             onMaterialConsumed={(result) => {
+                                              // Handle manual entry (free text control number)
+                                              if (result?.entryMethod === 'manual') {
+                                                const traceFieldVals: Record<string, string> = {
+                                                  material_icn: result.internalControlNumber || '',
+                                                  material_lot: '',
+                                                  qty_used: '',
+                                                  unit_of_measure: '',
+                                                  material_part_number: '',
+                                                };
+                                                completeTaskMutation.mutate({ 
+                                                  taskId: task.id, 
+                                                  fieldVals: traceFieldVals 
+                                                });
+                                                return;
+                                              }
+                                              // Handle validated scan entry
                                               const consumption = result?.consumption;
                                               const lot = result?.updatedLot;
                                               const traceFieldVals: Record<string, string> = {

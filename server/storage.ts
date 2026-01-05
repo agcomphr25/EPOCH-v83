@@ -422,6 +422,7 @@ import {
   projectNotifications,
   projectStepAttachments,
   preproductionChecklists,
+  manufacturingQueue,
   type Project,
   type InsertProject,
   type ProjectStep,
@@ -11225,14 +11226,10 @@ export class DatabaseStorage implements IStorage {
   async deleteP2PurchaseOrder(id: number): Promise<void> {
     // Delete/nullify related records first to avoid foreign key constraint violations
     
-    // 1. Nullify optional references in other tables
-    await db.update(purchaseReviewChecklists)
-      .set({ customerPoId: null })
-      .where(eq(purchaseReviewChecklists.customerPoId, id));
-    
-    await db.update(projects)
+    // 1. Nullify project step references (FK constraint on projectSteps.linkedP2OrderId)
+    await db.update(projectSteps)
       .set({ linkedP2OrderId: null })
-      .where(eq(projects.linkedP2OrderId, id));
+      .where(eq(projectSteps.linkedP2OrderId, id));
     
     // 2. Nullify manufacturing queue references
     await db.update(manufacturingQueue)

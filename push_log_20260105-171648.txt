@@ -1,0 +1,16 @@
+Your branch is behind 'origin/main' by 10 commits, and can be fast-forwarded.
+  (use "git pull" to update your local branch)
+Updating 0cab5ae8..e46202f3
+Fast-forward
+ .autosave-20260105-160219                     |   0
+ attached_assets/pollard0186_1767627130359.pdf | Bin 0 -> 292754 bytes
+ client/src/App.tsx                            |   5 +-
+ client/src/components/auth/RouteGuard.tsx     |   1 +
+ client/src/pages/SignPollardPDFPage.tsx       | 344 ++++++++++++++++++++++++++
+ push_log_20260105-160921.txt                  |   3 +
+ server/src/routes/signPdf.ts                  | 166 +++++++++++++
+ 7 files changed, 518 insertions(+), 1 deletion(-)
+ create mode 100644 .autosave-20260105-160219
+ create mode 100644 attached_assets/pollard0186_1767627130359.pdf
+ create mode 100644 client/src/pages/SignPollardPDFPage.tsx
+ create mode 100644 push_log_20260105-160921.txt

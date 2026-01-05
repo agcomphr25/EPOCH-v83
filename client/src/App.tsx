@@ -36,7 +36,6 @@ import AuditSettings from './pages/AuditSettings';
 import OrderTimeline from './pages/OrderTimeline';
 import MediaLibrary from './pages/MediaLibrary';
 import SignPDFPage from './pages/SignPDFPage';
-import SignPollardPDFPage from './pages/SignPollardPDFPage';
 import SignedDocumentsLibrary from './pages/SignedDocumentsLibrary';
 import SignatureWorkflowPage from './pages/SignatureWorkflowPage';
 import ReferenceDocsPage from './pages/ReferenceDocsPage';
@@ -192,8 +191,7 @@ function ConditionalNavigation() {
     location === '/ag-dashboard' ||
     location === '/staciw-dashboard' ||
     location === '/login' ||
-    location.startsWith('/sign-order') || // Hide navigation on customer sign order page
-    location.startsWith('/sign-pollard-pdf'); // Hide navigation on Pollard PDF signing page
+    location.startsWith('/sign-order'); // Hide navigation on customer sign order page
 
   return hideNavigation ? null : <Navigation />;
 }
@@ -370,7 +368,6 @@ function App() {
                   <Route path="/order-timeline/:entityType/:entityId" component={OrderTimeline} />
                   <Route path="/media-library" component={MediaLibrary} />
                   <Route path="/sign-pdf" component={SignPDFPage} />
-                  <Route path="/sign-pollard-pdf" component={SignPollardPDFPage} />
                   <Route path="/signed-documents" component={SignedDocumentsLibrary} />
                   <Route path="/signature-workflow" component={SignatureWorkflowPage} />
                   <Route path="/reference-docs" component={ReferenceDocsPage} />

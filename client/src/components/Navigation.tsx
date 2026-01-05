@@ -63,6 +63,7 @@ import {
   Eye,
   Boxes,
   Filter,
+  Layers,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -901,6 +902,12 @@ export default function Navigation() {
       label: 'Cutting Table Control Center',
       icon: Scissors,
       description: 'Unified control for production, materials, and planning',
+    },
+    {
+      path: '/fabric-inventory',
+      label: 'Fabric Inventory Admin',
+      icon: Layers,
+      description: 'AS9100 compliant fabric inventory management',
     },
     {
       path: '/production-tracking',

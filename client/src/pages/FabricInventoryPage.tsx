@@ -64,6 +64,9 @@ type FabricInventory = {
   productionLineId: string | null;
   source: string | null;
   fabric: string | null;
+  fabricPartNumber: string | null;
+  supplierPartNumber: string | null;
+  rollNumber: string | null;
   batchNumber: string | null;
   internalControlNumber: string | null;
   manufactureDate: string | null;
@@ -101,6 +104,9 @@ const emptyForm = {
   productionLineId: "",
   source: "",
   fabric: "",
+  fabricPartNumber: "",
+  supplierPartNumber: "",
+  rollNumber: "",
   batchNumber: "",
   internalControlNumber: "",
   manufactureDate: "",
@@ -154,6 +160,9 @@ export default function FabricInventoryPage() {
           productionLineId: data.productionLineId || null,
           source: data.source || null,
           fabric: data.fabric || null,
+          fabricPartNumber: data.fabricPartNumber || null,
+          supplierPartNumber: data.supplierPartNumber || null,
+          rollNumber: data.rollNumber || null,
           batchNumber: data.batchNumber || null,
           internalControlNumber: data.internalControlNumber || null,
           manufactureDate: data.manufactureDate || null,
@@ -188,6 +197,9 @@ export default function FabricInventoryPage() {
           productionLineId: data.productionLineId || null,
           source: data.source || null,
           fabric: data.fabric || null,
+          fabricPartNumber: data.fabricPartNumber || null,
+          supplierPartNumber: data.supplierPartNumber || null,
+          rollNumber: data.rollNumber || null,
           batchNumber: data.batchNumber || null,
           internalControlNumber: data.internalControlNumber || null,
           manufactureDate: data.manufactureDate || null,
@@ -243,6 +255,9 @@ export default function FabricInventoryPage() {
       productionLineId: item.productionLineId || "",
       source: item.source || "",
       fabric: item.fabric || "",
+      fabricPartNumber: item.fabricPartNumber || "",
+      supplierPartNumber: item.supplierPartNumber || "",
+      rollNumber: item.rollNumber || "",
       batchNumber: item.batchNumber || "",
       internalControlNumber: item.internalControlNumber || "",
       manufactureDate: item.manufactureDate ? item.manufactureDate.split('T')[0] : "",
@@ -524,6 +539,9 @@ export default function FabricInventoryPage() {
     return (
       (item.fabric || "").toLowerCase().includes(query) ||
       (item.source || "").toLowerCase().includes(query) ||
+      (item.fabricPartNumber || "").toLowerCase().includes(query) ||
+      (item.supplierPartNumber || "").toLowerCase().includes(query) ||
+      (item.rollNumber || "").toLowerCase().includes(query) ||
       (item.batchNumber || "").toLowerCase().includes(query) ||
       (item.internalControlNumber || "").toLowerCase().includes(query) ||
       (item.location || "").toLowerCase().includes(query) ||
@@ -604,6 +622,43 @@ export default function FabricInventoryPage() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+      </div>
+
+      {/* AS9100 Traceability Section */}
+      <div className="border-t pt-4 mt-2">
+        <h4 className="text-sm font-medium text-muted-foreground mb-3">AS9100 Traceability Information</h4>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="fabricPartNumber">Part Number *</Label>
+            <Input
+              id="fabricPartNumber"
+              value={form.fabricPartNumber}
+              onChange={(e) => setForm({ ...form, fabricPartNumber: e.target.value })}
+              placeholder="e.g., 011798"
+              data-testid="input-part-number"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="supplierPartNumber">Supplier Part Number</Label>
+            <Input
+              id="supplierPartNumber"
+              value={form.supplierPartNumber}
+              onChange={(e) => setForm({ ...form, supplierPartNumber: e.target.value })}
+              placeholder="e.g., 14002"
+              data-testid="input-supplier-part-number"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="rollNumber">Roll Number *</Label>
+            <Input
+              id="rollNumber"
+              value={form.rollNumber}
+              onChange={(e) => setForm({ ...form, rollNumber: e.target.value })}
+              placeholder="e.g., 1140620043"
+              data-testid="input-roll-number"
+            />
+          </div>
         </div>
       </div>
 

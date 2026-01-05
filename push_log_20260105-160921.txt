@@ -1,3 +1,58 @@
 Your branch is ahead of 'origin/main' by 22 commits.
   (use "git push" to publish your local commits)
 Already up to date.
+[feature-20260105-1609-my-change 9f8d2e4a] feat: my-change
+ 1 file changed, 3 insertions(+)
+ create mode 100644 push_log_20260105-160921.txt
+branch 'feature-20260105-1609-my-change' set up to track 'origin/feature-20260105-1609-my-change'.
+> 9f8d2e4a (HEAD -> feature-20260105-1609-my-change, origin/feature-20260105-1609-my-change) feat: my-change
+> 0cab5ae8 (gitsafe-backup/main, gitsafe-backup/HEAD, main) Fix errors preventing purchase orders from being deleted correctly
+> 7b4ab1f3 Allow production floor access to the traveler system
+> 17edbc0c Add P2 Control Center access to the login page with updated icons
+> 15048ac7 Correctly delete purchase orders and their related data
+> 9aa40232 Published your App
+> d273fb87 Improve purchase order deletion to handle all related records
+> 36d102b7 Published your App
+> 7c5faa95 Fix purchase order deletion and customer update errors
+> 10bbaef4 Published your App
+> dba0401f Update purchase order numbering to a new three-letter and three-number format
+> 0881cfe4 Add a dedicated tab for managing purchase orders with full CRUD functionality
+> 20a5b19f Make P2 traveler pages accessible without login
+> abb9becf Allow public access to the P2 traveler pages
+> 22e7a6a6 Update system documentation to reflect recent architectural changes
+> 24cdd5a4 Update survey system to a generic reusable survey engine
+> 12bd4d65 Fix order plotting and data retrieval for the heat map feature
+> 1367cf2a Saved progress at the end of the loop
+> f7e047cd Add order heat map for visualizing customer order distribution
+> 69e63280 Published your App
+> 6eb6cfdc Published your App
+> f825df08 Published your App
+> 5fe4489b Published your App
+ ...ct-initialized-Children-Fragm_1767569363728.txt |  56 ++
+ ...ct-initialized-Children-Fragm_1767556230305.txt |  56 ++
+ ...ct-initialized-Object-index-C_1767552881865.txt |  61 ++
+ ...ct-initialized-Children-Fragm_1767626620607.txt |  82 +++
+ attached_assets/image_1767456192028.png            | Bin 0 -> 38383 bytes
+ attached_assets/image_1767545001059.png            | Bin 0 -> 137090 bytes
+ client/src/App.tsx                                 |   2 +
+ .../src/components/CustomerSatisfactionSurvey.tsx  |  50 +-
+ client/src/components/Navigation.tsx               |   6 +
+ client/src/components/auth/RouteGuard.tsx          |   1 +
+ client/src/config/userPermissions.ts               |   2 +
+ client/src/pages/CustomerSatisfaction.tsx          |  89 +--
+ client/src/pages/LoginPage.tsx                     |  44 +-
+ client/src/pages/OrderHeatMap.tsx                  | 297 ++++++++++
+ client/src/pages/P2ControlCenter.tsx               |  21 +
+ package-lock.json                                  |  29 +
+ package.json                                       |   3 +
+ push_log_20260105-160921.txt                       |   3 +
+ replit.md                                          |  71 +--
+ server/index.ts                                    |   1 +
+ server/schema.ts                                   | 156 +++++
+ server/src/routes/customers.ts                     |  28 +-
+ server/src/routes/index.ts                         |  34 +-
+ server/src/routes/orders.ts                        | 374 +++++++++++-
+ server/src/routes/surveyEngine.ts                  | 648 +++++++++++++++++++++
+ server/storage.ts                                  |  29 +
+ 26 files changed, 2009 insertions(+), 134 deletions(-)
+Open PR: https://github.com/agcomphr25/EPOCH-v83/compare/feature-20260105-1609-my-change?expand=1

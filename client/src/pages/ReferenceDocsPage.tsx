@@ -45,7 +45,8 @@ export default function ReferenceDocsPage() {
   const [uploadTitle, setUploadTitle] = useState('');
 
   const { data: documents = [], isLoading } = useQuery<MediaItem[]>({
-    queryKey: ['/api/media-library?category=document'],
+    queryKey: ['/api/media', { category: 'document' }],
+    queryFn: () => fetch('/api/media?category=document', { credentials: 'include' }).then(r => r.json()),
   });
 
   const filteredDocs = documents.filter(doc => 
@@ -76,7 +77,7 @@ export default function ReferenceDocsPage() {
 
       console.log('[UPLOAD DEBUG] Sending FormData with category: document');
 
-      const response = await fetch('/api/media-library/upload', {
+      const response = await fetch('/api/media/upload', {
         method: 'POST',
         body: formData,
         credentials: 'include',
@@ -94,7 +95,7 @@ export default function ReferenceDocsPage() {
       }
 
       toast({ title: 'Document uploaded successfully' });
-      queryClient.invalidateQueries({ queryKey: ['/api/media-library?category=document'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/media', { category: 'document' }] });
       setShowUploadDialog(false);
       setUploadFile(null);
       setUploadTitle('');
@@ -110,9 +111,9 @@ export default function ReferenceDocsPage() {
     if (!confirm('Are you sure you want to delete this document?')) return;
     
     try {
-      await apiRequest(`/api/media-library/${id}`, { method: 'DELETE' });
+      await apiRequest(`/api/media/${id}`, { method: 'DELETE' });
       toast({ title: 'Document deleted' });
-      queryClient.invalidateQueries({ queryKey: ['/api/media-library?category=document'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/media', { category: 'document' }] });
     } catch (error: any) {
       toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
     }

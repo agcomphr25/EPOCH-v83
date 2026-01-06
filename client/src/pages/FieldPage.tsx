@@ -55,10 +55,12 @@ const GROUP_COLORS = [
 export default function FieldPage() {
   const [, setLocation] = useLocation();
   const [fieldData, setFieldData] = useState<FieldData>({ nodes: [], connections: [], groups: [] });
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [dragState, setDragState] = useState<{ nodeId: string; startX: number; startY: number; nodeStartX: number; nodeStartY: number } | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const { data: stateData, isLoading } = useQuery<{ fieldData: FieldData; updatedAt: string | null }>({
@@ -113,7 +115,7 @@ export default function FieldPage() {
       ...fieldData,
       nodes: [...fieldData.nodes, newNode],
     });
-    setSelectedNodeId(newNode.id);
+    setSelectedNodeIds(new Set([newNode.id]));
   };
 
   const handleMove = (nodeId: string, x: number, y: number) => {
@@ -142,9 +144,7 @@ export default function FieldPage() {
   };
 
   const handleGroup = () => {
-    if (!selectedNodeId) return;
-    const node = fieldData.nodes.find(n => n.id === selectedNodeId);
-    if (!node) return;
+    if (selectedNodeIds.size === 0) return;
 
     const newGroup: FieldGroup = {
       id: `group-${Date.now()}`,
@@ -155,18 +155,27 @@ export default function FieldPage() {
     updateFieldData({
       ...fieldData,
       groups: [...fieldData.groups, newGroup],
-      nodes: fieldData.nodes.map(n => n.id === selectedNodeId ? { ...n, groupId: newGroup.id } : n),
+      nodes: fieldData.nodes.map(n => selectedNodeIds.has(n.id) ? { ...n, groupId: newGroup.id } : n),
     });
   };
 
-  const handleArchive = (nodeId: string) => {
+  const handleArchive = () => {
+    if (selectedNodeIds.size === 0) return;
     updateFieldData({
       ...fieldData,
-      nodes: fieldData.nodes.map(n => n.id === nodeId ? { ...n, archived: true } : n),
-      connections: fieldData.connections.filter(c => c.fromId !== nodeId && c.toId !== nodeId),
+      nodes: fieldData.nodes.map(n => selectedNodeIds.has(n.id) ? { ...n, archived: true } : n),
+      connections: fieldData.connections.filter(c => !selectedNodeIds.has(c.fromId) && !selectedNodeIds.has(c.toId)),
     });
-    setSelectedNodeId(null);
+    setSelectedNodeIds(new Set());
   };
+
+  const handleWheel = useCallback((e: WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      setZoom(z => Math.min(2, Math.max(0.25, z + delta)));
+    }
+  }, []);
 
   const handleTextChange = (nodeId: string, text: string) => {
     updateFieldData({
@@ -199,7 +208,20 @@ export default function FieldPage() {
       nodeStartX: node.x,
       nodeStartY: node.y,
     });
-    setSelectedNodeId(nodeId);
+    
+    if (e.shiftKey) {
+      setSelectedNodeIds(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(nodeId)) {
+          newSet.delete(nodeId);
+        } else {
+          newSet.add(nodeId);
+        }
+        return newSet;
+      });
+    } else {
+      setSelectedNodeIds(new Set([nodeId]));
+    }
   };
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -223,6 +245,14 @@ export default function FieldPage() {
       };
     }
   }, [dragState, handleMouseMove, handleMouseUp]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.addEventListener('wheel', handleWheel, { passive: false });
+      return () => canvas.removeEventListener('wheel', handleWheel);
+    }
+  }, [handleWheel]);
 
   const visibleNodes = fieldData.nodes.filter(n => showArchived || !n.archived);
 
@@ -266,30 +296,37 @@ export default function FieldPage() {
             variant="outline"
             size="sm"
             onClick={handleGroup}
-            disabled={!selectedNodeId}
+            disabled={selectedNodeIds.size === 0}
             data-testid="button-group"
           >
-            Group
+            Group{selectedNodeIds.size > 1 ? ` (${selectedNodeIds.size})` : ''}
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => selectedNodeId && setConnectingFrom(selectedNodeId)}
-            disabled={!selectedNodeId}
+            onClick={() => {
+              if (selectedNodeIds.size === 2) {
+                const ids = Array.from(selectedNodeIds);
+                handleConnect(ids[0], ids[1]);
+              } else if (selectedNodeIds.size === 1) {
+                setConnectingFrom(Array.from(selectedNodeIds)[0]);
+              }
+            }}
+            disabled={selectedNodeIds.size === 0}
             data-testid="button-connect"
           >
             <Link2 className="h-4 w-4 mr-1" />
-            Connect
+            Connect{selectedNodeIds.size === 2 ? ' Selected' : ''}
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => selectedNodeId && handleArchive(selectedNodeId)}
-            disabled={!selectedNodeId}
+            onClick={handleArchive}
+            disabled={selectedNodeIds.size === 0}
             data-testid="button-archive"
           >
             <Archive className="h-4 w-4 mr-1" />
-            Archive
+            Archive{selectedNodeIds.size > 1 ? ` (${selectedNodeIds.size})` : ''}
           </Button>
           <Button
             variant="ghost"
@@ -315,7 +352,7 @@ export default function FieldPage() {
         style={{ cursor: connectingFrom ? 'crosshair' : 'default' }}
         onClick={() => {
           if (!dragState) {
-            setSelectedNodeId(null);
+            setSelectedNodeIds(new Set());
             setConnectingFrom(null);
           }
         }}
@@ -327,9 +364,18 @@ export default function FieldPage() {
         tabIndex={0}
         data-testid="field-canvas"
       >
+        <div
+          style={{
+            transform: `scale(${zoom})`,
+            transformOrigin: 'top left',
+            minWidth: '3000px',
+            minHeight: '2000px',
+            position: 'relative',
+          }}
+        >
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
-          style={{ minWidth: '2000px', minHeight: '2000px' }}
+          style={{ minWidth: '3000px', minHeight: '2000px' }}
         >
           {fieldData.connections.map(conn => {
             const fromNode = fieldData.nodes.find(n => n.id === conn.fromId);
@@ -369,7 +415,7 @@ export default function FieldPage() {
               key={node.id}
               className={cn(
                 'absolute rounded-lg border-2 p-3 shadow-sm transition-shadow',
-                selectedNodeId === node.id
+                selectedNodeIds.has(node.id)
                   ? 'border-blue-500 shadow-lg'
                   : 'border-gray-200 dark:border-gray-600',
                 node.archived && 'opacity-50',
@@ -412,15 +458,24 @@ export default function FieldPage() {
             </div>
           );
         })}
+        </div>
       </div>
 
-      <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-400">
-        {saveMutation.isPending ? 'Saving...' : 'Auto-saved'}
-        {' · '}
-        {visibleNodes.length} nodes
-        {showArchived && ` (${fieldData.nodes.filter(n => n.archived).length} archived)`}
-        {' · '}
-        {fieldData.connections.length} connections
+      <div className="px-4 py-2 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-gray-400 flex justify-between">
+        <div>
+          {saveMutation.isPending ? 'Saving...' : 'Auto-saved'}
+          {' · '}
+          {visibleNodes.length} nodes
+          {showArchived && ` (${fieldData.nodes.filter(n => n.archived).length} archived)`}
+          {' · '}
+          {fieldData.connections.length} connections
+          {selectedNodeIds.size > 0 && ` · ${selectedNodeIds.size} selected`}
+        </div>
+        <div className="flex items-center gap-2">
+          <span>Zoom: {Math.round(zoom * 100)}%</span>
+          <span className="text-gray-300">|</span>
+          <span>Ctrl+Scroll to zoom · Shift+Click for multi-select</span>
+        </div>
       </div>
     </div>
   );

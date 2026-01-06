@@ -7229,6 +7229,8 @@ export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
   fabricPartNumber: text('fabric_part_number'), // Part number for the fabric type
   nickname: text('nickname'), // In-house nickname for the fabric
   supplierPartNumber: text('supplier_part_number'), // Supplier's part number
+  supplierPoNumber: text('supplier_po_number'), // Supplier's purchase order number
+  manufacturerPoNumber: text('manufacturer_po_number'), // Manufacturer's PO/reference number
   internalControlNumber: text('internal_control_number'), // Internal control number
   lotNumber: text('lot_number'), // Lot number for traceability
   batchNumber: text('batch_number'), // Batch number

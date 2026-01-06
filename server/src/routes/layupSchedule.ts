@@ -63,6 +63,8 @@ router.post('/generate', async (req: Request, res: Response) => {
         moldId: m.moldId, 
         modelName: m.modelName, 
         stockModels: m.stockModels,
+        stockModelsType: typeof m.stockModels,
+        stockModelsIsArray: Array.isArray(m.stockModels),
         capacity: m.multiplier
       })));
     }
@@ -88,6 +90,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       console.log(`📦 Found ${ordersResults.length} regular orders in database`);
       if (ordersResults.length > 0) {
         console.log('🔍 Sample order:', ordersResults[0]);
+        console.log('🔍 Regular order stock models:', ordersResults.slice(0, 5).map(o => ({ orderId: o.orderId, stockModel: o.stockModel })));
       }
       
       // Process badge information
@@ -252,12 +255,28 @@ router.post('/generate', async (req: Request, res: Response) => {
       let scheduled = false;
       
       // Find compatible molds for this stock model
-      const compatibleMolds = activeMolds.filter(mold => 
-        mold.stockModels && mold.stockModels.includes(item.stockModel)
-      );
+      // Handle both array and string formats for mold.stockModels (in case Drizzle returns different formats)
+      const compatibleMolds = activeMolds.filter(mold => {
+        if (!mold.stockModels || !item.stockModel) return false;
+        
+        // If it's an array, use includes
+        if (Array.isArray(mold.stockModels)) {
+          return mold.stockModels.includes(item.stockModel);
+        }
+        
+        // If it's a string (postgres array format like "{a,b,c}"), parse and check
+        if (typeof mold.stockModels === 'string') {
+          const modelsStr = mold.stockModels as string;
+          // Handle postgres array format: {model1,model2,model3}
+          const cleanedModels = modelsStr.replace(/^\{|\}$/g, '').split(',');
+          return cleanedModels.includes(item.stockModel);
+        }
+        
+        return false;
+      });
       
       if (compatibleMolds.length === 0) {
-        console.log(`⚠️ No compatible molds for ${item.orderId} (${item.stockModel})`);
+        console.log(`⚠️ No compatible molds for ${item.orderId} (stockModel: ${item.stockModel}, type: ${typeof item.stockModel})`);
         overflowItems.push({
           ...item,
           reason: `No compatible molds for stock model: ${item.stockModel}`,

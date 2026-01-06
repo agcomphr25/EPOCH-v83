@@ -42,6 +42,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
 import { useUpload } from "@/hooks/use-upload";
 import { 
@@ -74,6 +80,8 @@ type FabricInventory = {
   fabric: string | null;
   fabricPartNumber: string | null;
   supplierPartNumber: string | null;
+  supplierPoNumber: string | null;
+  manufacturerPoNumber: string | null;
   rollNumber: string | null;
   batchNumber: string | null;
   internalControlNumber: string | null;
@@ -117,6 +125,8 @@ const emptyForm = {
   fabric: "",
   fabricPartNumber: "",
   supplierPartNumber: "",
+  supplierPoNumber: "",
+  manufacturerPoNumber: "",
   rollNumber: "",
   batchNumber: "",
   internalControlNumber: "",
@@ -134,6 +144,13 @@ const emptyForm = {
 type PrintSelection = {
   id: string;
   quantity: number;
+};
+
+type FabricGroup = {
+  fabricName: string;
+  totalQuantity: number;
+  rollCount: number;
+  rolls: FabricInventory[];
 };
 
 export default function FabricInventoryPage() {
@@ -207,6 +224,8 @@ export default function FabricInventoryPage() {
           fabric: data.fabric || null,
           fabricPartNumber: data.fabricPartNumber || null,
           supplierPartNumber: data.supplierPartNumber || null,
+          supplierPoNumber: data.supplierPoNumber || null,
+          manufacturerPoNumber: data.manufacturerPoNumber || null,
           rollNumber: data.rollNumber || null,
           batchNumber: data.batchNumber || null,
           internalControlNumber: data.internalControlNumber || null,
@@ -244,6 +263,8 @@ export default function FabricInventoryPage() {
           fabric: data.fabric || null,
           fabricPartNumber: data.fabricPartNumber || null,
           supplierPartNumber: data.supplierPartNumber || null,
+          supplierPoNumber: data.supplierPoNumber || null,
+          manufacturerPoNumber: data.manufacturerPoNumber || null,
           rollNumber: data.rollNumber || null,
           batchNumber: data.batchNumber || null,
           internalControlNumber: data.internalControlNumber || null,
@@ -321,6 +342,8 @@ export default function FabricInventoryPage() {
       fabric: item.fabric || "",
       fabricPartNumber: item.fabricPartNumber || "",
       supplierPartNumber: item.supplierPartNumber || "",
+      supplierPoNumber: item.supplierPoNumber || "",
+      manufacturerPoNumber: item.manufacturerPoNumber || "",
       rollNumber: item.rollNumber || "",
       batchNumber: item.batchNumber || "",
       internalControlNumber: item.internalControlNumber || "",
@@ -650,6 +673,53 @@ export default function FabricInventoryPage() {
     return material?.materialName || "-";
   };
 
+  // Group fabrics by name, calculate totals, and sort rolls by FIFO (oldest manufacture date first)
+  const fabricGroups: FabricGroup[] = (() => {
+    const groupMap: Record<string, FabricGroup> = {};
+    
+    filteredInventory.forEach(item => {
+      const fabricName = item.fabric?.trim() || "Unknown";
+      const key = fabricName.toLowerCase();
+      
+      if (!groupMap[key]) {
+        groupMap[key] = {
+          fabricName,
+          totalQuantity: 0,
+          rollCount: 0,
+          rolls: [],
+        };
+      }
+      
+      groupMap[key].rolls.push(item);
+      groupMap[key].totalQuantity += item.quantityInStock || 0;
+      groupMap[key].rollCount += 1;
+    });
+    
+    // Sort rolls within each group by FIFO (oldest manufacture date first)
+    Object.values(groupMap).forEach(group => {
+      group.rolls.sort((a, b) => {
+        const getDateValue = (item: FabricInventory): number => {
+          if (item.manufactureDate) return new Date(item.manufactureDate).getTime();
+          if (item.receivedDate) return new Date(item.receivedDate).getTime();
+          if (item.createdAt) return new Date(item.createdAt).getTime();
+          return 0; // Fallback for missing dates - sort to beginning
+        };
+        return getDateValue(a) - getDateValue(b); // Oldest first (FIFO)
+      });
+    });
+    
+    // Sort groups alphabetically by fabric name
+    return Object.values(groupMap).sort((a, b) => 
+      a.fabricName.localeCompare(b.fabricName)
+    );
+  })();
+
+  const getRollCount = (fabricName: string | null) => {
+    if (!fabricName) return 0;
+    const group = fabricGroups.find(g => g.fabricName.toLowerCase() === fabricName.toLowerCase().trim());
+    return group?.rollCount || 0;
+  };
+
   const fabricFormContent = (
     <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
       <div className="grid grid-cols-2 gap-4">
@@ -770,6 +840,29 @@ export default function FabricInventoryPage() {
             onChange={(e) => setForm({ ...form, internalControlNumber: e.target.value })}
             placeholder="e.g., ICN-12345"
             data-testid="input-internal-control"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="supplierPoNumber">Supplier PO#</Label>
+          <Input
+            id="supplierPoNumber"
+            value={form.supplierPoNumber}
+            onChange={(e) => setForm({ ...form, supplierPoNumber: e.target.value })}
+            placeholder="e.g., PO-2024-0001"
+            data-testid="input-supplier-po"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="manufacturerPoNumber">Manufacturer PO#</Label>
+          <Input
+            id="manufacturerPoNumber"
+            value={form.manufacturerPoNumber}
+            onChange={(e) => setForm({ ...form, manufacturerPoNumber: e.target.value })}
+            placeholder="e.g., MFG-PO-12345"
+            data-testid="input-manufacturer-po"
           />
         </div>
       </div>
@@ -1057,128 +1150,175 @@ export default function FabricInventoryPage() {
               <Button variant="link" onClick={handleAdd}>Add your first fabric</Button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">
-                      <Checkbox
-                        checked={selectedForPrint.size > 0 && selectedForPrint.size === filteredInventory.filter(i => i.barcode).length}
-                        onCheckedChange={toggleSelectAll}
-                        data-testid="checkbox-select-all"
-                        title="Select all for printing"
-                      />
-                    </TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Fabric</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Batch #</TableHead>
-                    <TableHead>Line</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead className="text-right">Qty</TableHead>
-                    <TableHead>Expires</TableHead>
-                    <TableHead>Barcode</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredInventory.map((item) => (
-                    <TableRow key={item.id} data-testid={`row-fabric-${item.id}`} className={selectedForPrint.has(item.id) ? 'bg-blue-50 dark:bg-blue-950' : ''}>
-                      <TableCell>
-                        {item.barcode ? (
-                          <Checkbox
-                            checked={selectedForPrint.has(item.id)}
-                            onCheckedChange={() => toggleSelectForPrint(item.id)}
-                            data-testid={`checkbox-print-${item.id}`}
-                          />
-                        ) : (
-                          <span className="text-gray-300" title="No barcode">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(item)}</TableCell>
-                      <TableCell className="font-medium">{item.fabric || "-"}</TableCell>
-                      <TableCell>{item.source || "-"}</TableCell>
-                      <TableCell>{item.batchNumber || "-"}</TableCell>
-                      <TableCell>{getProductionLineName(item.productionLineId)}</TableCell>
-                      <TableCell>{item.location || "-"}</TableCell>
-                      <TableCell className="text-right font-mono">{item.quantityInStock}</TableCell>
-                      <TableCell>
-                        {item.expirationDate ? (
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {new Date(item.expirationDate).toLocaleDateString()}
-                          </span>
-                        ) : "-"}
-                      </TableCell>
-                      <TableCell>
-                        {item.barcode ? (
-                          <Badge variant="outline" className="font-mono text-xs">
-                            {item.barcode}
-                          </Badge>
-                        ) : "-"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          {item.conformanceDocumentLink && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => window.open(item.conformanceDocumentLink!, '_blank')}
-                              title="View conformance document"
-                              data-testid={`button-view-doc-${item.id}`}
+            <Accordion type="multiple" className="w-full space-y-2">
+              {fabricGroups.map((group) => (
+                <AccordionItem 
+                  key={group.fabricName} 
+                  value={group.fabricName}
+                  className="border rounded-lg px-4"
+                  data-testid={`accordion-fabric-${group.fabricName.toLowerCase().replace(/\s+/g, '-')}`}
+                >
+                  <AccordionTrigger className="hover:no-underline">
+                    <div className="flex items-center justify-between w-full pr-4">
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-lg">{group.fabricName}</span>
+                        <Badge variant="outline" className="font-mono">
+                          {group.rollCount} roll{group.rollCount !== 1 ? 's' : ''}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">
+                          Total Qty: <span className="font-mono font-medium">{group.totalQuantity}</span>
+                        </span>
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="pt-2 pb-4">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-12">
+                              <Checkbox
+                                checked={group.rolls.filter(r => r.barcode).every(r => selectedForPrint.has(r.id))}
+                                onCheckedChange={() => {
+                                  const rollsWithBarcodes = group.rolls.filter(r => r.barcode);
+                                  const allSelected = rollsWithBarcodes.every(r => selectedForPrint.has(r.id));
+                                  setSelectedForPrint(prev => {
+                                    const newSet = new Set(prev);
+                                    rollsWithBarcodes.forEach(r => {
+                                      if (allSelected) {
+                                        newSet.delete(r.id);
+                                      } else {
+                                        newSet.add(r.id);
+                                      }
+                                    });
+                                    return newSet;
+                                  });
+                                }}
+                                data-testid={`checkbox-select-all-${group.fabricName.toLowerCase().replace(/\s+/g, '-')}`}
+                                title="Select all rolls in this group"
+                              />
+                            </TableHead>
+                            <TableHead>Roll #</TableHead>
+                            <TableHead>Batch #</TableHead>
+                            <TableHead>Mfg Date</TableHead>
+                            <TableHead>Expires</TableHead>
+                            <TableHead>Supplier PO#</TableHead>
+                            <TableHead>Mfg PO#</TableHead>
+                            <TableHead className="text-right">Qty</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {group.rolls.map((item, index) => (
+                            <TableRow 
+                              key={item.id} 
+                              data-testid={`row-roll-${item.id}`}
+                              className={`${selectedForPrint.has(item.id) ? 'bg-blue-50 dark:bg-blue-950' : ''} ${index === 0 ? 'bg-green-50 dark:bg-green-950/30' : ''}`}
+                              title={index === 0 ? 'FIFO: Use this roll first' : ''}
                             >
-                              <ExternalLink className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {item.barcode && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handlePrintLabel(item)}
-                              title="Print barcode label"
-                              data-testid={`button-print-${item.id}`}
-                            >
-                              <Printer className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(item)}
-                            title="Edit"
-                            data-testid={`button-edit-${item.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          {item.status !== 'depleted' && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeplete(item)}
-                              title="Mark as Depleted (preserves traceability)"
-                              className="text-gray-600 hover:text-gray-800"
-                              data-testid={`button-deplete-${item.id}`}
-                            >
-                              <Archive className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(item)}
-                            title="Delete permanently"
-                            className="text-destructive hover:text-destructive"
-                            data-testid={`button-delete-${item.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                              <TableCell>
+                                {item.barcode ? (
+                                  <Checkbox
+                                    checked={selectedForPrint.has(item.id)}
+                                    onCheckedChange={() => toggleSelectForPrint(item.id)}
+                                    data-testid={`checkbox-print-${item.id}`}
+                                  />
+                                ) : (
+                                  <span className="text-gray-300" title="No barcode">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="font-mono">
+                                {index === 0 && (
+                                  <Badge className="bg-green-600 hover:bg-green-700 mr-2 text-xs">FIFO</Badge>
+                                )}
+                                {item.rollNumber || "-"}
+                              </TableCell>
+                              <TableCell>{item.batchNumber || "-"}</TableCell>
+                              <TableCell>
+                                {item.manufactureDate ? new Date(item.manufactureDate).toLocaleDateString() : "-"}
+                              </TableCell>
+                              <TableCell>
+                                {item.expirationDate ? (
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {new Date(item.expirationDate).toLocaleDateString()}
+                                  </span>
+                                ) : "-"}
+                              </TableCell>
+                              <TableCell>{item.supplierPoNumber || "-"}</TableCell>
+                              <TableCell>{item.manufacturerPoNumber || "-"}</TableCell>
+                              <TableCell className="text-right font-mono">{item.quantityInStock}</TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  {getStatusBadge(item)}
+                                  <div className="flex gap-1">
+                                    {item.conformanceDocumentLink && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => window.open(item.conformanceDocumentLink!, '_blank')}
+                                        title="View conformance document"
+                                        data-testid={`button-view-doc-${item.id}`}
+                                      >
+                                        <ExternalLink className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    {item.barcode && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handlePrintLabel(item)}
+                                        title="Print barcode label"
+                                        data-testid={`button-print-${item.id}`}
+                                      >
+                                        <Printer className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleEdit(item)}
+                                      title="Edit"
+                                      data-testid={`button-edit-${item.id}`}
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                    {item.status !== 'depleted' && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleDeplete(item)}
+                                        title="Mark as Depleted (preserves traceability)"
+                                        className="text-gray-600 hover:text-gray-800"
+                                        data-testid={`button-deplete-${item.id}`}
+                                      >
+                                        <Archive className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleDelete(item)}
+                                      title="Delete permanently"
+                                      className="text-destructive hover:text-destructive"
+                                      data-testid={`button-delete-${item.id}`}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
           )}
         </CardContent>
       </Card>

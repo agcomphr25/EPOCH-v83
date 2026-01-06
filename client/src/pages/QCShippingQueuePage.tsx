@@ -25,6 +25,7 @@ import {
   ChevronRight,
   Zap,
   Printer,
+  MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -1044,6 +1045,19 @@ export default function QCShippingQueuePage() {
             </div>
           ))}
         </div>
+
+        {/* Show Notes Badge if order has notes */}
+        {order.notes && (
+          <div className="mb-2">
+            <Badge
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs flex items-center gap-1"
+              title={order.notes}
+            >
+              <MessageSquare className="w-3 h-3" />
+              Has Notes
+            </Badge>
+          </div>
+        )}
 
         {/* Show Kickback Badge if order has kickbacks */}
         {hasKickbacks(order.orderId) && (

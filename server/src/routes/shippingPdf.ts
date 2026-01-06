@@ -570,6 +570,50 @@ router.get('/qc-checklist/:orderId', async (req: Request, res: Response) => {
     const shippingAddress = getShippingAddress((order as any).customerId || '');
     const orderFeatures = formatOrderFeatures(order.features || {});
 
+    // Display order notes if present
+    if (order.notes) {
+      currentY -= 30;
+      
+      // Notes header
+      page.drawText('ORDER NOTES', {
+        x: margin,
+        y: currentY,
+        size: FONT_SIZES.SECTION_HEADER,
+        font: boldFont,
+        color: COLORS.TEXT_PRIMARY,
+      });
+      
+      currentY -= SPACING.SECTION_GAP_SMALL;
+      
+      // Notes box with yellow background for visibility
+      const notesText = order.notes as string;
+      const notesLines = notesText.split('\n');
+      const notesBoxHeight = Math.max(30, notesLines.length * 14 + 16);
+      
+      page.drawRectangle({
+        x: margin,
+        y: currentY - notesBoxHeight + 8,
+        width: printableWidth,
+        height: notesBoxHeight,
+        color: rgb(1, 0.98, 0.8), // Light yellow background
+        borderColor: rgb(0.9, 0.7, 0.1), // Yellow border
+        borderWidth: 1,
+      });
+      
+      // Draw each line of notes
+      notesLines.forEach((line, index) => {
+        page.drawText(line, {
+          x: margin + SPACING.BOX_PADDING_SMALL,
+          y: currentY - (index * 14) - 4,
+          size: FONT_SIZES.BODY_LARGE,
+          font: font,
+          color: COLORS.TEXT_PRIMARY,
+        });
+      });
+      
+      currentY -= notesBoxHeight + SPACING.SECTION_GAP_SMALL;
+    }
+
     // Build order-specific checklist items
     currentY -= 40;
     const checklistItems = [

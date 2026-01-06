@@ -120,35 +120,42 @@ router.post('/complete-upload', async (req, res) => {
 });
 
 // Legacy upload endpoint (for backward compatibility - uses local storage)
-router.post('/upload', upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+router.post('/upload', (req, res, next) => {
+  upload.single('file')(req, res, async (err) => {
+    if (err) {
+      console.error('Multer upload error:', err.message);
+      return res.status(400).json({ error: err.message });
     }
+    
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
 
-    const { title, notes, tags, category } = req.body;
-    const user = (req as any).user;
+      const { title, notes, tags, category } = req.body;
+      const user = (req as any).user;
 
-    const parsedTags = tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : null;
+      const parsedTags = tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : null;
 
-    const [newMedia] = await db.insert(mediaLibrary).values({
-      filename: req.file.originalname,
-      storagePath: `uploads/media-library/${req.file.filename}`,
-      mimeType: req.file.mimetype,
-      fileSize: req.file.size,
-      capturedById: user?.id || null,
-      capturedByName: user?.username || 'Unknown',
-      title: title || req.file.originalname,
-      notes: notes || null,
-      tags: parsedTags,
-      category: category || 'other',
-    }).returning();
+      const [newMedia] = await db.insert(mediaLibrary).values({
+        filename: req.file.originalname,
+        storagePath: `uploads/media-library/${req.file.filename}`,
+        mimeType: req.file.mimetype,
+        fileSize: req.file.size,
+        capturedById: user?.id || null,
+        capturedByName: user?.username || 'Unknown',
+        title: title || req.file.originalname,
+        notes: notes || null,
+        tags: parsedTags,
+        category: category || 'other',
+      }).returning();
 
-    res.json(newMedia);
-  } catch (error) {
-    console.error('Error uploading media:', error);
-    res.status(500).json({ error: 'Failed to upload media' });
-  }
+      res.json(newMedia);
+    } catch (error) {
+      console.error('Error uploading media:', error);
+      res.status(500).json({ error: 'Failed to upload media' });
+    }
+  });
 });
 
 // Get all media items (with filtering)

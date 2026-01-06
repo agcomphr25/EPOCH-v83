@@ -2766,18 +2766,18 @@ export const customers = pgTable('customers', {
 
 export const customerAddresses = pgTable('customer_addresses', {
   id: serial('id').primaryKey(),
-  customerId: text('customer_id').notNull(),
+  customerId: integer('customer_id').notNull(),
   street: text('street').notNull(),
-  street2: text('street2'), // Suite, Apt, Unit number
+  street2: text('street2'),
   city: text('city').notNull(),
   state: text('state').notNull(),
   zipCode: text('zip_code').notNull(),
-  country: text('country').notNull().default('United States'),
-  type: text('type').notNull().default('shipping'), // shipping, billing, both
-  isDefault: boolean('is_default').default(false),
-  isValidated: boolean('is_validated').default(false),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  country: text('country'),
+  type: text('type'),
+  isDefault: boolean('is_default'),
+  isValidated: boolean('is_validated'),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
 });
 
 // Vendors table for supplier management
@@ -4097,34 +4097,30 @@ export const travelerMaterialConsumption = pgTable('traveler_material_consumptio
 
 // Travelers - Header/controlled record for production execution
 export const travelers = pgTable('travelers', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  travelerNumber: text('traveler_number').notNull().unique(), // TRV-2025-000123
+  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerNumber: varchar('traveler_number').notNull().unique(),
   travelerRevision: integer('traveler_revision').default(1).notNull(),
 
-  // What are we building?
-  inventoryItemId: text('inventory_item_id').notNull(),
-  partNumber: text('part_number').notNull(),
-  partName: text('part_name').notNull(),
+  inventoryItemId: varchar('inventory_item_id'),
+  partNumber: varchar('part_number'),
+  partName: varchar('part_name'),
 
-  // Optional linkage to orders
-  salesOrderId: text('sales_order_id'),
-  workOrderId: text('work_order_id'),
+  salesOrderId: varchar('sales_order_id'),
+  workOrderId: varchar('work_order_id'),
 
-  // Traceability at traveler level
-  lotNumber: text('lot_number'),
-  serialNumber: text('serial_number'),
-  internalControlNumber: text('internal_control_number'), // ICN for the unit/lot
-  quantity: integer('quantity').default(1).notNull(),
+  lotNumber: varchar('lot_number'),
+  serialNumber: varchar('serial_number'),
+  internalControlNumber: varchar('internal_control_number'),
+  quantity: integer('quantity').default(1),
 
-  status: text('status').default('DRAFT').notNull(), // DRAFT | IN_PROGRESS | COMPLETED | BLOCKED | CANCELED
+  status: varchar('status').default('DRAFT').notNull(),
 
-  // Which routing template created this traveler?
-  partRoutingId: uuid('part_routing_id'),
-  partRoutingRevision: integer('part_routing_revision'), // Snapshot of routing revision at creation
+  partRoutingId: varchar('part_routing_id'),
+  partRoutingRevision: integer('part_routing_revision'),
 
-  createdBy: text('created_by').notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  createdBy: varchar('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
 }, (table) => ({
   travelerNumberIdx: index('travelers_number_idx').on(table.travelerNumber),
   statusIdx: index('travelers_status_idx').on(table.status),
@@ -4134,21 +4130,24 @@ export const travelers = pgTable('travelers', {
 
 // Traveler Steps - Departments in sequence
 export const travelerSteps = pgTable('traveler_steps', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  travelerId: uuid('traveler_id')
+  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerId: varchar('traveler_id')
     .references(() => travelers.id, { onDelete: 'cascade' })
     .notNull(),
 
-  departmentName: text('department_name').notNull(), // "Layup"
-  stepNumber: integer('step_number').notNull(), // 10,20,30 (makes insertions easy)
-  status: text('status').default('NOT_STARTED').notNull(), // NOT_STARTED | IN_PROGRESS | COMPLETED | BLOCKED
+  departmentName: varchar('department_name').notNull(),
+  stepNumber: integer('step_number').notNull(),
+  status: varchar('status').default('NOT_STARTED').notNull(),
 
-  assignedTechnicianId: integer('assigned_technician_id'), // Optional preferred technician
+  assignedTechnicianId: varchar('assigned_technician_id'),
   
-  startedAt: timestamp('started_at'),
-  startedBy: text('started_by'),
-  completedAt: timestamp('completed_at'),
-  completedBy: text('completed_by'),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  startedBy: varchar('started_by'),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  completedBy: varchar('completed_by'),
+  blockedAt: timestamp('blocked_at', { withTimezone: true }),
+  blockedReason: text('blocked_reason'),
+  notes: text('notes'),
 }, (table) => ({
   travelerIdIdx: index('traveler_steps_traveler_id_idx').on(table.travelerId),
   stepNumberIdx: index('traveler_steps_step_number_idx').on(table.stepNumber),
@@ -4156,22 +4155,22 @@ export const travelerSteps = pgTable('traveler_steps', {
 
 // Traveler Tasks - Start/end tasks, QC tasks, special process tasks per step
 export const travelerTasks = pgTable('traveler_tasks', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  travelerStepId: uuid('traveler_step_id')
+  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerStepId: varchar('traveler_step_id')
     .references(() => travelerSteps.id, { onDelete: 'cascade' })
     .notNull(),
 
-  taskType: text('task_type').notNull(), // TRACE | QC | CUSTOM_FIELD | QUESTIONS | SPECIAL_PROCESS | NOTES | START_GATE | END_GATE
-  taskPhase: text('task_phase').notNull().default('WORK'), // START | WORK | FINISH - controls execution order enforcement
+  taskType: varchar('task_type').notNull(),
+  taskPhase: text('task_phase').notNull().default('WORK'),
 
-  title: text('title').notNull(),
+  title: varchar('title').notNull(),
   instructions: text('instructions'),
-  required: boolean('required').default(true).notNull(),
-  sortOrder: integer('sort_order').default(0).notNull(),
+  required: boolean('required').default(true),
+  sortOrder: integer('sort_order').default(0),
 
-  status: text('status').default('NOT_STARTED').notNull(), // NOT_STARTED | IN_PROGRESS | COMPLETED | FAILED | SKIPPED
-  completedAt: timestamp('completed_at'),
-  completedBy: text('completed_by'), // employee id/username
+  status: varchar('status').default('NOT_STARTED').notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  completedBy: varchar('completed_by'),
 }, (table) => ({
   stepIdIdx: index('traveler_tasks_step_id_idx').on(table.travelerStepId),
   taskTypeIdx: index('traveler_tasks_type_idx').on(table.taskType),
@@ -4180,57 +4179,57 @@ export const travelerTasks = pgTable('traveler_tasks', {
 
 // Traveler Task Fields - Data capture per task (flexible, AS9100 evidence)
 export const travelerTaskFields = pgTable('traveler_task_fields', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  travelerTaskId: uuid('traveler_task_id')
+  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerTaskId: varchar('traveler_task_id')
     .references(() => travelerTasks.id, { onDelete: 'cascade' })
     .notNull(),
 
-  fieldKey: text('field_key').notNull(), // "lot_number", "vacuum_start", etc.
-  fieldLabel: text('field_label').notNull(), // UI label
-  fieldType: text('field_type').notNull(), // text|number|date|yes_no|dropdown|barcode|attachment|json
-  required: boolean('required').default(false).notNull(),
+  fieldKey: varchar('field_key').notNull(),
+  fieldLabel: varchar('field_label').notNull(),
+  fieldType: varchar('field_type').default('text'),
+  required: boolean('required').default(false),
 
-  value: jsonb('value'), // Store values in a consistent flexible format
-  validation: jsonb('validation'), // min/max/options/regex/etc.
+  value: text('value'),
+  validation: jsonb('validation'),
   
-  recordedBy: text('recorded_by'),
-  recordedAt: timestamp('recorded_at'),
+  recordedBy: varchar('recorded_by'),
+  recordedAt: timestamp('recorded_at', { withTimezone: true }),
 }, (table) => ({
   taskIdIdx: index('traveler_task_fields_task_id_idx').on(table.travelerTaskId),
 }));
 
 // Traveler Signatures - Digital signature required for step completion
 export const travelerSignatures = pgTable('traveler_signatures', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  travelerStepId: uuid('traveler_step_id')
+  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerStepId: varchar('traveler_step_id')
     .references(() => travelerSteps.id, { onDelete: 'cascade' })
     .notNull(),
 
-  signedBy: text('signed_by').notNull(), // employee id/username
-  signedByName: text('signed_by_name'), // Display name
-  badgeScan: text('badge_scan'), // Optional badge scan value
-  signedAt: timestamp('signed_at').defaultNow(),
+  signedBy: varchar('signed_by').notNull(),
+  signedByName: varchar('signed_by_name'),
+  badgeScan: varchar('badge_scan'),
+  signedAt: timestamp('signed_at', { withTimezone: true }).default(sql`now()`),
 
-  meaning: text('meaning').notNull(), // PERFORMED | INSPECTED | VERIFIED | RELEASED
-  signatureHash: text('signature_hash'), // Optional integrity hash
+  meaning: varchar('meaning').notNull(),
   notes: text('notes'),
+  signatureHash: text('signature_hash'),
 }, (table) => ({
   stepIdIdx: index('traveler_signatures_step_id_idx').on(table.travelerStepId),
 }));
 
 // Traveler Events - Audit trail for all actions
 export const travelerEvents = pgTable('traveler_events', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  travelerId: uuid('traveler_id')
+  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerId: varchar('traveler_id')
     .references(() => travelers.id, { onDelete: 'cascade' })
     .notNull(),
 
-  actor: text('actor').notNull(), // Who performed the action
-  actorName: text('actor_name'), // Display name
-  action: text('action').notNull(), // CREATED|EDITED|TASK_COMPLETED|SIGNED|STATUS_CHANGED|BLOCKED|UNBLOCKED|...
-  details: jsonb('details'), // Before/after deltas, context data
+  actor: varchar('actor').notNull(),
+  actorName: varchar('actor_name'),
+  action: varchar('action').notNull(),
+  details: jsonb('details'),
 
-  createdAt: timestamp('created_at').defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
 }, (table) => ({
   travelerIdIdx: index('traveler_events_traveler_id_idx').on(table.travelerId),
   actionIdx: index('traveler_events_action_idx').on(table.action),
@@ -7942,14 +7941,14 @@ export type InsertCustomerWatchRule = z.infer<typeof insertCustomerWatchRuleSche
 // Account Categories - Classifications for chart of accounts
 export const accountCategories = pgTable('account_categories', {
   id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::text`),
-  name: text('name').notNull().unique(), // e.g., 'Assets', 'Liabilities', 'Revenue', 'COGS', 'Operating Expenses'
-  code: text('code').notNull().unique(), // e.g., '1000', '2000', '3000', '4000', '5000'
-  type: text('type').notNull(), // 'asset', 'liability', 'equity', 'revenue', 'expense', 'cogs'
+  name: varchar('name').notNull().unique(),
+  code: varchar('code').notNull().unique(),
+  type: varchar('type').notNull(),
   description: text('description'),
   sortOrder: integer('sort_order').default(0),
   isActive: boolean('is_active').default(true).notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const insertAccountCategorySchema = createInsertSchema(accountCategories).omit({
@@ -7963,16 +7962,16 @@ export type InsertAccountCategory = z.infer<typeof insertAccountCategorySchema>;
 
 // Chart of Accounts - Individual accounting line items
 export const accounts = pgTable('accounts', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  accountNumber: text('account_number').notNull().unique(), // Auto-generated (e.g., '5100-001')
-  name: text('name').notNull(), // e.g., 'Direct Materials - Carbon Fiber'
-  categoryId: uuid('category_id').references(() => accountCategories.id).notNull(),
+  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::text`),
+  accountNumber: varchar('account_number').notNull().unique(),
+  name: varchar('name').notNull(),
+  categoryId: varchar('category_id').references(() => accountCategories.id).notNull(),
   description: text('description'),
-  isAllocated: boolean('is_allocated').default(false), // True for items like overhead, indirect materials
-  allocationBasis: text('allocation_basis'), // 'direct_labor_hours', 'machine_hours', 'direct_materials', etc.
+  isAllocated: boolean('is_allocated').default(false),
+  allocationBasis: varchar('allocation_basis'),
   isActive: boolean('is_active').default(true).notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
   categoryIdIdx: index('accounts_category_id_idx').on(table.categoryId),
   isActiveIdx: index('accounts_is_active_idx').on(table.isActive),
@@ -7990,15 +7989,15 @@ export type InsertAccount = z.infer<typeof insertAccountSchema>;
 
 // Monthly Account Entries - Actual monthly amounts for each account
 export const monthlyAccountEntries = pgTable('monthly_account_entries', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'cascade' }).notNull(),
+  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::text`),
+  accountId: varchar('account_id').references(() => accounts.id, { onDelete: 'cascade' }).notNull(),
   year: integer('year').notNull(),
-  month: integer('month').notNull(), // 1-12
-  amount: numeric('amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  month: integer('month').notNull(),
+  amount: numeric('amount').notNull().default('0'),
   notes: text('notes'),
-  source: text('source').default('manual'), // 'manual', 'quickbooks', 'imported'
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  source: varchar('source').default('manual'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
   accountIdIdx: index('monthly_entries_account_id_idx').on(table.accountId),
   yearMonthIdx: index('monthly_entries_year_month_idx').on(table.year, table.month),
@@ -8016,16 +8015,15 @@ export type InsertMonthlyAccountEntry = z.infer<typeof insertMonthlyAccountEntry
 
 // Allocation Rules - Define how to allocate overhead, indirect materials, etc.
 export const allocationRules = pgTable('allocation_rules', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(), // e.g., 'Manufacturing Overhead Allocation'
-  sourceAccountId: uuid('source_account_id').references(() => accounts.id).notNull(), // Account to allocate from
-  allocationBasis: text('allocation_basis').notNull(), // 'direct_labor_hours', 'machine_hours', 'direct_materials', etc.
-  targetAccountIds: uuid('target_account_ids').array(), // Accounts to allocate to
-  allocationMethod: text('allocation_method').notNull(), // 'proportional', 'equal', 'custom'
-  customRatios: jsonb('custom_ratios'), // Custom allocation ratios if method is 'custom'
+  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::text`),
+  name: varchar('name').notNull(),
+  sourceAccountId: varchar('source_account_id').references(() => accounts.id).notNull(),
+  targetAccountId: varchar('target_account_id').references(() => accounts.id).notNull(),
+  allocationMethod: varchar('allocation_method').notNull(),
+  allocationValue: numeric('allocation_value').notNull(),
   isActive: boolean('is_active').default(true).notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
   sourceAccountIdIdx: index('allocation_rules_source_account_id_idx').on(table.sourceAccountId),
   isActiveIdx: index('allocation_rules_is_active_idx').on(table.isActive),
@@ -8042,22 +8040,21 @@ export type InsertAllocationRule = z.infer<typeof insertAllocationRuleSchema>;
 
 // Allocation Results - Store calculated allocations for each period
 export const allocationResults = pgTable('allocation_results', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  ruleId: uuid('rule_id').references(() => allocationRules.id, { onDelete: 'cascade' }).notNull(),
+  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::text`),
+  allocationRuleId: varchar('allocation_rule_id').references(() => allocationRules.id, { onDelete: 'cascade' }).notNull(),
   year: integer('year').notNull(),
   month: integer('month').notNull(),
-  totalAmount: numeric('total_amount', { precision: 12, scale: 2 }).notNull(),
-  allocations: jsonb('allocations').notNull(), // { accountId: amount, ... }
-  calculatedAt: timestamp('calculated_at').defaultNow(),
+  allocatedAmount: numeric('allocated_amount').notNull().default('0'),
+  createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
-  ruleIdIdx: index('allocation_results_rule_id_idx').on(table.ruleId),
+  ruleIdIdx: index('allocation_results_rule_id_idx').on(table.allocationRuleId),
   yearMonthIdx: index('allocation_results_year_month_idx').on(table.year, table.month),
-  uniqueRuleYearMonth: unique('unique_rule_year_month').on(table.ruleId, table.year, table.month),
+  uniqueRuleYearMonth: unique('unique_rule_year_month').on(table.allocationRuleId, table.year, table.month),
 }));
 
 export const insertAllocationResultSchema = createInsertSchema(allocationResults).omit({
   id: true,
-  calculatedAt: true,
+  createdAt: true,
 });
 
 export type AllocationResult = typeof allocationResults.$inferSelect;

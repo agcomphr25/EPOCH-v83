@@ -8519,10 +8519,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCustomerAddresses(customerId: string): Promise<CustomerAddress[]> {
+    const numericId = parseInt(customerId, 10);
+    if (isNaN(numericId)) {
+      return [];
+    }
     return await db
       .select()
       .from(customerAddresses)
-      .where(eq(customerAddresses.customerId, customerId))
+      .where(eq(customerAddresses.customerId, numericId))
       .orderBy(customerAddresses.isDefault, customerAddresses.id);
   }
 

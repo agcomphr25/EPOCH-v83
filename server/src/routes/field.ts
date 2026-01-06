@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { storage } from '../../storage';
-import { authenticateToken } from '../../middleware/auth';
+import { sessionAwareAuth } from '../../middleware/auth';
 
 // ============================================================
 // FIELD API Routes - Calm Thinking Surface (Unstructured, Opaque)
@@ -15,7 +15,7 @@ const router = Router();
 // Single user only: glennj
 const FIELD_ALLOWED_USER = 'glennj';
 
-router.get('/state', authenticateToken, async (req, res) => {
+router.get('/state', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
     const username = user?.username;
@@ -36,7 +36,7 @@ router.get('/state', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/state', authenticateToken, async (req, res) => {
+router.post('/state', sessionAwareAuth, async (req, res) => {
   try {
     const user = (req as any).user;
     const username = user?.username;

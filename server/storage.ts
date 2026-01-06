@@ -16489,7 +16489,7 @@ export class DatabaseStorage implements IStorage {
     return state || null;
   }
 
-  async saveFieldState(userId: string, fieldData: object): Promise<FieldState> {
+  async saveFieldState(userId: string, stateData: object): Promise<FieldState> {
     // Upsert: insert or update the field state for this user
     // Field data is opaque - no schema, no validation, no interpretation
     const existing = await this.getFieldState(userId);
@@ -16498,7 +16498,7 @@ export class DatabaseStorage implements IStorage {
       const [updated] = await db
         .update(fieldState)
         .set({ 
-          fieldData,
+          state: stateData,
           updatedAt: new Date()
         })
         .where(eq(fieldState.userId, userId))
@@ -16509,7 +16509,7 @@ export class DatabaseStorage implements IStorage {
         .insert(fieldState)
         .values({
           userId,
-          fieldData,
+          state: stateData,
           updatedAt: new Date()
         })
         .returning();

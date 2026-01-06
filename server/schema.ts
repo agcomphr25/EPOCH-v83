@@ -9629,9 +9629,9 @@ export type InsertProgramRun = typeof programRuns.$inferInsert;
 
 export const fieldState = pgTable('field_state', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: text('user_id').notNull().unique(), // Single user only: admin_glennj
-  fieldData: jsonb('field_data').notNull().default({}), // Opaque JSON blob - no schema, no validation
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  userId: varchar('user_id', { length: 255 }).notNull().unique(), // Single user only: admin_glennj
+  state: jsonb('state').notNull().default({}), // Opaque JSON blob - no schema, no validation
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   userIdx: index('field_state_user_idx').on(table.userId),
 }));

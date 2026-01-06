@@ -24,11 +24,11 @@ router.get('/state', sessionAwareAuth, async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const state = await storage.getFieldState(username);
+    const savedState = await storage.getFieldState(username);
     
     res.json({
-      fieldData: state?.fieldData || {},
-      updatedAt: state?.updatedAt || null
+      fieldData: savedState?.state || {},
+      updatedAt: savedState?.updatedAt || null
     });
   } catch (error) {
     console.error('Error fetching field state:', error);

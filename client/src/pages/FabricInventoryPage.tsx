@@ -650,6 +650,20 @@ export default function FabricInventoryPage() {
     return material?.materialName || "-";
   };
 
+  // Calculate roll counts per fabric name (only active rolls)
+  const rollCountsByFabric = fabricInventory.reduce((acc, item) => {
+    if (item.status !== 'depleted' && item.fabric) {
+      const fabricName = item.fabric.toLowerCase().trim();
+      acc[fabricName] = (acc[fabricName] || 0) + 1;
+    }
+    return acc;
+  }, {} as Record<string, number>);
+
+  const getRollCount = (fabricName: string | null) => {
+    if (!fabricName) return 0;
+    return rollCountsByFabric[fabricName.toLowerCase().trim()] || 0;
+  };
+
   const fabricFormContent = (
     <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
       <div className="grid grid-cols-2 gap-4">
@@ -1070,6 +1084,7 @@ export default function FabricInventoryPage() {
                       />
                     </TableHead>
                     <TableHead>Fabric</TableHead>
+                    <TableHead className="text-center">Rolls</TableHead>
                     <TableHead>Source</TableHead>
                     <TableHead>Batch #</TableHead>
                     <TableHead>Line</TableHead>
@@ -1095,6 +1110,11 @@ export default function FabricInventoryPage() {
                         )}
                       </TableCell>
                       <TableCell className="font-medium">{item.fabric || "-"}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="font-mono">
+                          {getRollCount(item.fabric)}
+                        </Badge>
+                      </TableCell>
                       <TableCell>{item.source || "-"}</TableCell>
                       <TableCell>{item.batchNumber || "-"}</TableCell>
                       <TableCell>{getProductionLineName(item.productionLineId)}</TableCell>

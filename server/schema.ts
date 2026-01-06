@@ -642,25 +642,6 @@ export const inventoryScans = pgTable('inventory_scans', {
   scannedAt: timestamp('scanned_at').defaultNow(),
 });
 
-// Department-specific consumption rates for parts
-export const departmentConsumptionRates = pgTable('department_consumption_rates', {
-  id: serial('id').primaryKey(),
-  agPartNumber: text('ag_part_number')
-    .references(() => inventoryItems.agPartNumber, { onDelete: 'cascade' })
-    .notNull(),
-  departmentId: integer('department_id')
-    .references(() => departments.id, { onDelete: 'cascade' })
-    .notNull(),
-  consumptionRate: real('consumption_rate').notNull(), // Units consumed per time period
-  ratePeriod: text('rate_period').default('weekly'), // daily, weekly, monthly
-  usageUnit: text('usage_unit'), // Unit of measurement (ea, lbs, oz, etc.)
-  notes: text('notes'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-}, (table) => ({
-  uniquePartDepartment: unique().on(table.agPartNumber, table.departmentId),
-}));
-
 export const partsRequests = pgTable('parts_requests', {
   id: serial('id').primaryKey(),
   agPartNumber: text('ag_part_number').references(() => inventoryItems.agPartNumber), // Link to inventory item (nullable for ad-hoc requests)
@@ -2269,21 +2250,6 @@ export const insertOnboardingDocSchema = createInsertSchema(onboardingDocs)
     signatureDataURL: z.string().optional().nullable(),
   });
 
-export const insertDepartmentConsumptionRateSchema = createInsertSchema(departmentConsumptionRates)
-  .omit({
-    id: true,
-    createdAt: true,
-    updatedAt: true,
-  })
-  .extend({
-    agPartNumber: z.string().min(1, 'Part number is required'),
-    departmentId: z.number().positive('Department ID is required'),
-    consumptionRate: z.number().positive('Consumption rate must be positive'),
-    ratePeriod: z.enum(['daily', 'weekly', 'monthly']).default('weekly'),
-    usageUnit: z.string().optional().nullable(),
-    notes: z.string().optional().nullable(),
-  });
-
 export const insertPartsRequestSchema = createInsertSchema(partsRequests)
   .omit({
     id: true,
@@ -2494,8 +2460,6 @@ export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
 export type ChecklistItem = typeof checklistItems.$inferSelect;
 export type InsertOnboardingDoc = z.infer<typeof insertOnboardingDocSchema>;
 export type OnboardingDoc = typeof onboardingDocs.$inferSelect;
-export type InsertDepartmentConsumptionRate = z.infer<typeof insertDepartmentConsumptionRateSchema>;
-export type DepartmentConsumptionRate = typeof departmentConsumptionRates.$inferSelect;
 export type InsertPartsRequest = z.infer<typeof insertPartsRequestSchema>;
 export type PartsRequest = typeof partsRequests.$inferSelect;
 

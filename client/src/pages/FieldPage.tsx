@@ -170,6 +170,8 @@ export default function FieldPage() {
   };
 
   const handleWheel = useCallback((e: WheelEvent) => {
+    // Only zoom when Ctrl key is held, otherwise allow native scroll/pan
+    if (!e.ctrlKey) return;
     e.preventDefault();
     e.stopPropagation();
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -473,7 +475,7 @@ export default function FieldPage() {
         <div className="flex items-center gap-2">
           <span>Zoom: {Math.round(zoom * 100)}%</span>
           <span className="text-gray-300">|</span>
-          <span>Scroll to zoom · Shift+Click for multi-select</span>
+          <span>Scroll to pan · Ctrl+Scroll to zoom · Shift+Click for multi-select</span>
         </div>
       </div>
     </div>

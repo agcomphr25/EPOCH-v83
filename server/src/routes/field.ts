@@ -12,8 +12,8 @@ import { authenticateToken } from '../../middleware/auth';
 
 const router = Router();
 
-// Single user only: admin_glennj
-const FIELD_ALLOWED_USER = 'admin_glennj';
+// Single user only: glennj
+const FIELD_ALLOWED_USER = 'glennj';
 
 router.get('/state', authenticateToken, async (req, res) => {
   try {

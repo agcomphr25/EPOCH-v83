@@ -2022,7 +2022,7 @@ export default function Navigation() {
             )}
             {/* Field - Calm thinking surface (single user: admin_glennj only) */}
             {/* Field does not affect EPOCH data - no integration allowed */}
-            {currentUser?.username === 'admin_glennj' && (
+            {currentUser?.username === 'glennj' && (
               <Button
                 variant="ghost"
                 size="sm"

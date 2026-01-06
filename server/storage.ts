@@ -8526,7 +8526,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(customerAddresses)
-      .where(sql`${customerAddresses.customerId} = ${numericId}`)
+      .where(eq(customerAddresses.customerId, numericId))
       .orderBy(customerAddresses.isDefault, customerAddresses.id);
   }
 

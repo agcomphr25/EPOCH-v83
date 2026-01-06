@@ -2398,15 +2398,6 @@ router.patch(
       const orderIdParam = req.params.orderId;
       const { fieldName, value } = req.body;
 
-      // DEBUG: Log the incoming request
-      console.log('🔍 PATCH /field request:', {
-        orderId: orderIdParam,
-        fieldName,
-        value,
-        valueType: typeof value,
-        body: req.body
-      });
-
       if (!fieldName) {
         return res.status(400).json({ error: 'Field name is required' });
       }
@@ -2522,17 +2513,6 @@ router.patch(
         updateData.isManualUrgency = true;
       }
 
-      // DEBUG: Log what we're about to update
-      console.log('💾 UPDATE DEBUG:', {
-        orderId: orderIdParam,
-        isFinalized,
-        isNumericId,
-        jsField,
-        oldValue,
-        newValue: validatedValue,
-        updateData,
-      });
-
       // Update the appropriate table using the correct identifier
       let updateResult;
       if (isFinalized) {
@@ -2560,8 +2540,6 @@ router.patch(
             .where(eq(orders.orderId, orderIdParam));
         }
       }
-
-      console.log('💾 UPDATE RESULT:', updateResult);
 
       // Log the change to audit logs
       await storage.createAdminAuditLog({

@@ -1,0 +1,134 @@
+COPY–PASTE PROMPT FOR REPLIT AGENT
+You are implementing a reusable Digital Signature system inside EPOCH.
+
+GOALS
+- Simple user flow
+- No document version explosion
+- One document, signature as an event
+- Reusable across Orders, Admin, HR, Compliance
+- No DocuSign-level complexity
+
+CORE PRINCIPLE
+There is ONLY ONE document.
+A signature is an EVENT applied to it.
+Signed PDFs are GENERATED, not stored as separate states.
+
+ARCHITECTURE
+1) Create a Document model
+2) Create a SignatureEvent model
+3) Render signed PDFs dynamically by overlaying signatures
+
+--------------------------------
+DATABASE CHANGES
+--------------------------------
+
+1) Create documents table
+
+documents
+- id (uuid, primary key)
+- ownerType (text)         // 'order', 'admin', 'customer', etc.
+- ownerId (text)
+- originalPdfPath (text)
+- createdAt (timestamp)
+
+2) Create signature_events table
+
+signature_events
+- id (uuid, primary key)
+- documentId (uuid, FK -> documents.id)
+- signedByType (text)      // 'customer', 'admin', 'employee'
+- signedById (text, nullable)
+- signatureType (text)    // 'drawn' | 'typed'
+- signatureData (text)    // base64 PNG or SVG
+- signedAt (timestamp)
+- ipAddress (text, nullable)
+- userAgent (text, nullable)
+
+--------------------------------
+BACKEND API
+--------------------------------
+
+Implement the following routes:
+
+1) POST /api/documents
+- Accept PDF upload
+- Save file
+- Create document record
+- Return documentId
+
+2) POST /api/documents/:id/sign
+- Body:
+  {
+    signatureType: 'drawn' | 'typed',
+    signatureData: 'base64...',
+    signedByType: 'customer' | 'admin',
+    signedById?: string
+  }
+- Create a signature_event record
+- Do NOT modify the PDF file
+- Return success
+
+3) GET /api/documents/:id/signed-pdf
+- Load original PDF
+- Load all signature_events for document
+- Overlay signatures in order
+- Generate signed PDF dynamically
+- Stream PDF response
+- (Optional) cache generated PDF
+
+--------------------------------
+PDF RENDERING
+--------------------------------
+
+Create a function:
+
+renderSignedPdf(documentId):
+- Read original PDF from disk
+- Read signature_events ordered by signedAt
+- For each signature:
+  - Embed image onto PDF at default bottom-right
+- Return PDF buffer
+
+Do NOT create or track separate PDF states.
+
+--------------------------------
+FRONTEND
+--------------------------------
+
+Create a reusable React component:
+
+<DigitalSignatureFlow
+  documentId?
+  onComplete={(documentId) => {}}
+/>
+
+Flow:
+1) Upload PDF OR use existing documentId
+2) Choose signature type (drawn / typed)
+3) Capture signature
+4) Confirm signature
+5) Call POST /documents/:id/sign
+6) Success message
+
+Signature Capture:
+- Drawn: canvas → base64
+- Typed: name input → render to canvas → base64
+
+--------------------------------
+RULES
+--------------------------------
+- Never store “signed PDF” as state
+- Never reset signature data
+- Never duplicate documents
+- Signature acceptance = creating a SignatureEvent
+- Signed status is DERIVED from presence of signature_events
+
+--------------------------------
+INTEGRATION NOTES
+--------------------------------
+- This must coexist cleanly with existing followup order signatures
+- No breaking changes to existing order logic
+- Prefer shared utilities where possible
+- Keep naming consistent with EPOCH conventions
+
+IMPLEMENT THIS CLEANLY AND MINIMALLY.

@@ -446,6 +446,9 @@ import {
   type InsertMaterialLotTransaction,
   type TravelerMaterialConsumption,
   type InsertTravelerMaterialConsumption,
+  // Field - Calm thinking surface (unstructured, opaque)
+  fieldState,
+  type FieldState,
 } from './schema';
 import { db, pool } from './db';
 import {
@@ -16457,6 +16460,51 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTravelerMaterialConsumption(id: string): Promise<void> {
     await db.delete(travelerMaterialConsumption).where(eq(travelerMaterialConsumption.id, id));
+  }
+
+  // ============================================================
+  // FIELD - Calm Thinking Surface (Unstructured, Opaque)
+  // Field is intentionally unstructured
+  // Field does not affect EPOCH data
+  // No automation or integration is allowed here
+  // All transitions out of Field are human-initiated
+  // ============================================================
+
+  async getFieldState(userId: string): Promise<FieldState | null> {
+    const [state] = await db
+      .select()
+      .from(fieldState)
+      .where(eq(fieldState.userId, userId))
+      .limit(1);
+    return state || null;
+  }
+
+  async saveFieldState(userId: string, fieldData: object): Promise<FieldState> {
+    // Upsert: insert or update the field state for this user
+    // Field data is opaque - no schema, no validation, no interpretation
+    const existing = await this.getFieldState(userId);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(fieldState)
+        .set({ 
+          fieldData,
+          updatedAt: new Date()
+        })
+        .where(eq(fieldState.userId, userId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(fieldState)
+        .values({
+          userId,
+          fieldData,
+          updatedAt: new Date()
+        })
+        .returning();
+      return created;
+    }
   }
 }
 

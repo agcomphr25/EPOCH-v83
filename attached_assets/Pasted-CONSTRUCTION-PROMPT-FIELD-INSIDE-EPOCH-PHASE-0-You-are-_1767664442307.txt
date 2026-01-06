@@ -1,0 +1,144 @@
+CONSTRUCTION PROMPT — FIELD INSIDE EPOCH (PHASE 0)
+
+You are implementing Field inside the EPOCH application.
+
+This is NOT a new feature. This is a scoped embed of an already-defined system.
+You must follow all constraints exactly.
+
+==================================================
+CORE DEFINITION
+==================================================
+
+Field is a calm, unstructured thinking surface that exists alongside EPOCH.
+It allows users to think near work without affecting work.
+
+Field MUST:
+- Be optional
+- Be safe to ignore
+- Never affect EPOCH data
+- Never require completion
+- Never enforce structure
+
+==================================================
+SCOPE (LOCKED)
+==================================================
+
+- One global Field per EPOCH instance
+- Single user only: admin_glennj
+- No area-scoped or record-scoped Fields
+- No automatic syncing to EPOCH records
+
+==================================================
+NAVIGATION
+==================================================
+
+- Add Field as a utility icon in the EPOCH top bar
+- Label: "Field"
+- Tooltip: "Think before acting."
+- Clicking opens Field in a full-page view
+- Field does NOT auto-open
+- Field is NEVER required for any workflow
+
+==================================================
+VISUAL IDENTITY
+==================================================
+
+- Reuse the exact Field UI and interaction model from DOMEN
+- Identical behavior and gestures
+- Subtle header text: "Field — EPOCH"
+- No additional controls, metrics, or indicators
+
+==================================================
+ALLOWED VERBS (NO OTHERS)
+==================================================
+
+- Place
+- Move
+- Group
+- Connect
+- Archive
+- Convert (HIDDEN / STUB ONLY)
+
+Do NOT add:
+- Tasks
+- Notes
+- Status
+- Checkboxes
+- Due dates
+- Automation
+- Suggestions
+
+==================================================
+CONVERT RULE (IMPORTANT)
+==================================================
+
+- Convert is HIDDEN initially
+- No buttons or affordances for converting to EPOCH data
+- Manual copy/paste is the ONLY allowed bridge
+
+==================================================
+PERSISTENCE (LOCKED)
+==================================================
+
+- Field state is persisted server-side
+- One opaque JSON blob per user
+- No schema
+- No relational tables
+- No foreign keys to EPOCH data
+- No validation or interpretation of contents
+
+Example shape:
+{
+  "fieldState": { ...opaque JSON... }
+}
+
+==================================================
+STRICT PROHIBITIONS
+==================================================
+
+DO NOT:
+- Add backend models related to EPOCH entities
+- Read EPOCH operational data into Field
+- Write Field data into EPOCH records
+- Add search, filters, dashboards, or summaries
+- Add notifications, reminders, or alerts
+- Add collaboration
+- Add permissions logic beyond single-user access
+
+==================================================
+IMPLEMENTATION STEPS
+==================================================
+
+1. Embed Field UI as a routed view within EPOCH
+2. Add top-bar icon entry point
+3. Load/save Field state as a single JSON blob
+4. Ensure Field works identically to DOMEN Field
+5. Ensure no EPOCH workflows depend on Field
+
+==================================================
+GUARDRAIL COMMENTS (ADD THESE IN CODE)
+==================================================
+
+Add comments stating:
+
+- "Field is intentionally unstructured"
+- "Field does not affect EPOCH data"
+- "No automation or integration is allowed here"
+- "All transitions out of Field are human-initiated"
+
+==================================================
+DELIVERABLE
+==================================================
+
+After implementation, respond ONLY with:
+
+- Confirmation Field is embedded and accessible
+- Confirmation persistence is opaque and isolated
+- Confirmation no EPOCH data is read or written
+- List of files touched
+
+Do NOT propose enhancements.
+Do NOT suggest next steps.
+Do NOT refactor beyond what is required.
+
+Build exactly this. Nothing more.

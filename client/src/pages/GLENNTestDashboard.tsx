@@ -556,15 +556,7 @@ function LightModeDashboard({
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Glenn's Dashboard
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Welcome to your comprehensive manufacturing management system
-          </p>
-        </div>
+      <div className="flex items-center justify-end">
         <div className="flex items-center gap-4">
           <div className="text-sm text-gray-500">
             EPOCH v8 Manufacturing ERP

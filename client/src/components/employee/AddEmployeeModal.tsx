@@ -5,6 +5,7 @@ import { Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -108,8 +109,9 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <ScrollArea className="max-h-[70vh] pr-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="name">Full Name *</Label>
           <Input
@@ -406,14 +408,15 @@ export default function AddEmployeeModal({ onClose }: AddEmployeeModalProps) {
         </p>
       </div>
 
-      <div className="flex justify-end space-x-2 pt-4">
-        <Button type="button" variant="outline" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={createEmployeeMutation.isPending}>
-          {createEmployeeMutation.isPending ? 'Creating...' : 'Create Employee'}
-        </Button>
-      </div>
-    </form>
+        <div className="flex justify-end space-x-2 pt-4">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={createEmployeeMutation.isPending}>
+            {createEmployeeMutation.isPending ? 'Creating...' : 'Create Employee'}
+          </Button>
+        </div>
+      </form>
+    </ScrollArea>
   );
 }

@@ -446,6 +446,19 @@ import {
   type InsertMaterialLotTransaction,
   type TravelerMaterialConsumption,
   type InsertTravelerMaterialConsumption,
+  // Field - Calm thinking surface (unstructured, opaque)
+  fieldState,
+  type FieldState,
+  // Ticketing System
+  tickets,
+  ticketOrders,
+  ticketActivity,
+  type Ticket,
+  type InsertTicket,
+  type TicketOrder,
+  type InsertTicketOrder,
+  type TicketActivity,
+  type InsertTicketActivity,
 } from './schema';
 import { db, pool } from './db';
 import {
@@ -16457,6 +16470,223 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTravelerMaterialConsumption(id: string): Promise<void> {
     await db.delete(travelerMaterialConsumption).where(eq(travelerMaterialConsumption.id, id));
+  }
+
+  // ============================================================
+  // FIELD - Calm Thinking Surface (Unstructured, Opaque)
+  // Field is intentionally unstructured
+  // Field does not affect EPOCH data
+  // No automation or integration is allowed here
+  // All transitions out of Field are human-initiated
+  // ============================================================
+
+  async getFieldState(userId: string): Promise<FieldState | null> {
+    const [state] = await db
+      .select()
+      .from(fieldState)
+      .where(eq(fieldState.userId, userId))
+      .limit(1);
+    return state || null;
+  }
+
+  async saveFieldState(userId: string, stateData: object): Promise<FieldState> {
+    // Upsert: insert or update the field state for this user
+    // Field data is opaque - no schema, no validation, no interpretation
+    const existing = await this.getFieldState(userId);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(fieldState)
+        .set({ 
+          state: stateData,
+          updatedAt: new Date()
+        })
+        .where(eq(fieldState.userId, userId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(fieldState)
+        .values({
+          userId,
+          state: stateData,
+          updatedAt: new Date()
+        })
+        .returning();
+      return created;
+    }
+  }
+
+  // ============================================================
+  // TICKETING SYSTEM - Internal CSR Tool
+  // Phase 0: Basic ticket tracking for complaints, order status, internal issues
+  // ============================================================
+
+  async getTickets(filters?: {
+    status?: string;
+    ticketType?: string;
+    priority?: string;
+    ownerUserId?: number;
+    slaBreached?: boolean;
+    archived?: boolean;
+  }): Promise<Ticket[]> {
+    let query = db.select().from(tickets);
+    const conditions: any[] = [];
+    
+    if (filters?.archived === false) {
+      conditions.push(isNull(tickets.archivedAt));
+    } else if (filters?.archived === true) {
+      conditions.push(isNotNull(tickets.archivedAt));
+    }
+    
+    if (filters?.status) {
+      conditions.push(eq(tickets.status, filters.status as any));
+    }
+    if (filters?.ticketType) {
+      conditions.push(eq(tickets.ticketType, filters.ticketType as any));
+    }
+    if (filters?.priority) {
+      conditions.push(eq(tickets.priority, filters.priority as any));
+    }
+    if (filters?.ownerUserId) {
+      conditions.push(eq(tickets.ownerUserId, filters.ownerUserId));
+    }
+    if (filters?.slaBreached !== undefined) {
+      conditions.push(eq(tickets.slaBreached, filters.slaBreached));
+    }
+    
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    
+    return await query.orderBy(desc(tickets.createdAt));
+  }
+
+  async getTicketById(id: string): Promise<Ticket | null> {
+    const [ticket] = await db.select().from(tickets).where(eq(tickets.id, id)).limit(1);
+    return ticket || null;
+  }
+
+  async createTicket(data: InsertTicket): Promise<Ticket> {
+    // Default SLA is 48 hours from creation
+    const slaDueAt = new Date();
+    slaDueAt.setHours(slaDueAt.getHours() + 48);
+    
+    const [ticket] = await db.insert(tickets).values({
+      ...data,
+      slaDueAt: data.slaDueAt || slaDueAt,
+    }).returning();
+    return ticket;
+  }
+
+  async updateTicket(id: string, data: Partial<InsertTicket>): Promise<Ticket> {
+    const [ticket] = await db.update(tickets).set({
+      ...data,
+      updatedAt: new Date(),
+    }).where(eq(tickets.id, id)).returning();
+    return ticket;
+  }
+
+  async archiveTicket(id: string): Promise<Ticket> {
+    const [ticket] = await db.update(tickets).set({
+      archivedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(tickets.id, id)).returning();
+    return ticket;
+  }
+
+  // Ticket Orders (linking tickets to orders)
+  async getTicketOrders(ticketId: string): Promise<TicketOrder[]> {
+    return await db.select().from(ticketOrders).where(eq(ticketOrders.ticketId, ticketId));
+  }
+
+  async linkOrderToTicket(ticketId: string, orderId: string): Promise<TicketOrder> {
+    const [link] = await db.insert(ticketOrders).values({
+      ticketId,
+      orderId,
+    }).returning();
+    return link;
+  }
+
+  async unlinkOrderFromTicket(ticketId: string, orderId: string): Promise<void> {
+    await db.delete(ticketOrders).where(
+      and(eq(ticketOrders.ticketId, ticketId), eq(ticketOrders.orderId, orderId))
+    );
+  }
+
+  // Ticket Activity
+  async getTicketActivity(ticketId: string): Promise<TicketActivity[]> {
+    return await db.select().from(ticketActivity)
+      .where(eq(ticketActivity.ticketId, ticketId))
+      .orderBy(asc(ticketActivity.createdAt));
+  }
+
+  async createTicketActivity(data: InsertTicketActivity): Promise<TicketActivity> {
+    const [activity] = await db.insert(ticketActivity).values(data).returning();
+    return activity;
+  }
+
+  // Ticket Metrics
+  async getTicketMetrics(): Promise<{
+    openByAge: { under24h: number; under48h: number; over48h: number };
+    slaBreached: number;
+    totalOpen: number;
+  }> {
+    const now = new Date();
+    const h24Ago = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const h48Ago = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+
+    // Get open tickets (not resolved, not closed, not archived)
+    const openTickets = await db.select().from(tickets).where(
+      and(
+        isNull(tickets.archivedAt),
+        not(eq(tickets.status, 'resolved')),
+        not(eq(tickets.status, 'closed'))
+      )
+    );
+
+    let under24h = 0, under48h = 0, over48h = 0, slaBreached = 0;
+    
+    for (const ticket of openTickets) {
+      const createdAt = new Date(ticket.createdAt);
+      if (createdAt > h24Ago) {
+        under24h++;
+      } else if (createdAt > h48Ago) {
+        under48h++;
+      } else {
+        over48h++;
+      }
+      if (ticket.slaBreached) {
+        slaBreached++;
+      }
+    }
+
+    return {
+      openByAge: { under24h, under48h, over48h },
+      slaBreached,
+      totalOpen: openTickets.length,
+    };
+  }
+
+  // Check and update SLA breaches
+  async checkSlaBreaches(): Promise<number> {
+    const now = new Date();
+    
+    // Find tickets that should be marked as breached
+    // SLA applies to 'new' and 'in_progress' statuses only
+    const result = await db.update(tickets).set({
+      slaBreached: true,
+      updatedAt: new Date(),
+    }).where(
+      and(
+        isNull(tickets.archivedAt),
+        eq(tickets.slaBreached, false),
+        or(eq(tickets.status, 'new'), eq(tickets.status, 'in_progress')),
+        lt(tickets.slaDueAt, now)
+      )
+    ).returning();
+
+    return result.length;
   }
 }
 

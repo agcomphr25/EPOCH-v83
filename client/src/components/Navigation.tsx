@@ -64,6 +64,7 @@ import {
   Boxes,
   Filter,
   Layers,
+  Ticket,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -271,6 +272,12 @@ export default function Navigation() {
       label: 'Customer Management',
       icon: Users,
       description: 'Manage customer database',
+    },
+    {
+      path: '/tickets',
+      label: 'Tickets',
+      icon: Ticket,
+      description: 'Internal ticketing for complaints and issues',
     },
     // {
     //   path: '/bom-administration',
@@ -2019,6 +2026,24 @@ export default function Navigation() {
               >
                 {currentUser.firstName || currentUser.username}
               </span>
+            )}
+            {/* Field - Calm thinking surface (single user: admin_glennj only) */}
+            {/* Field does not affect EPOCH data - no integration allowed */}
+            {currentUser?.username === 'glennj' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  closeAllDropdowns();
+                  setLocation('/field');
+                }}
+                className="gap-2"
+                data-testid="button-field"
+                title="Think before acting."
+              >
+                <Layers className="h-4 w-4" />
+                <span className="hidden lg:inline">Field</span>
+              </Button>
             )}
             <Button
               variant="ghost"

@@ -45,7 +45,8 @@ export default function ReferenceDocsPage() {
   const [uploadTitle, setUploadTitle] = useState('');
 
   const { data: documents = [], isLoading } = useQuery<MediaItem[]>({
-    queryKey: ['/api/media-library?category=document'],
+    queryKey: ['/api/media', { category: 'document' }],
+    queryFn: () => fetch('/api/media?category=document', { credentials: 'include' }).then(r => r.json()),
   });
 
   const filteredDocs = documents.filter(doc => 
@@ -59,6 +60,12 @@ export default function ReferenceDocsPage() {
       return;
     }
 
+    console.log('[UPLOAD DEBUG] Starting upload:', {
+      fileName: uploadFile.name,
+      fileSize: uploadFile.size,
+      fileType: uploadFile.type
+    });
+
     setUploading(true);
     try {
       const formData = new FormData();
@@ -68,22 +75,32 @@ export default function ReferenceDocsPage() {
         formData.append('title', uploadTitle);
       }
 
-      const response = await fetch('/api/media-library/upload', {
+      console.log('[UPLOAD DEBUG] Sending FormData with category: document');
+
+      const response = await fetch('/api/media/upload', {
         method: 'POST',
         body: formData,
         credentials: 'include',
       });
 
-      if (!response.ok) {
-        throw new Error('Upload failed');
+      const data = await response.json();
+      console.log('[UPLOAD DEBUG] Server response:', data);
+
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      if (!data.documentId) {
+        throw new Error('Upload succeeded but no document ID returned');
       }
 
       toast({ title: 'Document uploaded successfully' });
-      queryClient.invalidateQueries({ queryKey: ['/api/media-library?category=document'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/media', { category: 'document' }] });
       setShowUploadDialog(false);
       setUploadFile(null);
       setUploadTitle('');
     } catch (error: any) {
+      console.error('[UPLOAD DEBUG] Upload error:', error);
       toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
     } finally {
       setUploading(false);
@@ -94,9 +111,9 @@ export default function ReferenceDocsPage() {
     if (!confirm('Are you sure you want to delete this document?')) return;
     
     try {
-      await apiRequest(`/api/media-library/${id}`, { method: 'DELETE' });
+      await apiRequest(`/api/media/${id}`, { method: 'DELETE' });
       toast({ title: 'Document deleted' });
-      queryClient.invalidateQueries({ queryKey: ['/api/media-library?category=document'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/media', { category: 'document' }] });
     } catch (error: any) {
       toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
     }

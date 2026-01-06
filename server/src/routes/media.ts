@@ -31,11 +31,24 @@ const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+    const allowedTypes = [
+      'image/jpeg', 
+      'image/png', 
+      'image/gif', 
+      'image/webp', 
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/plain',
+      'text/csv',
+      'application/csv',
+    ];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WebP, and PDF are allowed.'));
+      cb(new Error(`Invalid file type: ${file.mimetype}. Allowed types: images, PDF, Word, Excel, text, and CSV files.`));
     }
   }
 });
@@ -107,35 +120,119 @@ router.post('/complete-upload', async (req, res) => {
 });
 
 // Legacy upload endpoint (for backward compatibility - uses local storage)
-router.post('/upload', upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+router.post('/upload', (req, res, next) => {
+  console.log('[UPLOAD DEBUG] Starting upload request');
+  
+  upload.single('file')(req, res, async (err) => {
+    console.log('[UPLOAD DEBUG] Multer callback triggered');
+    console.log('[UPLOAD DEBUG] req.file:', req.file ? { 
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      filename: req.file.filename
+    } : 'NO FILE');
+    console.log('[UPLOAD DEBUG] req.body:', req.body);
+    
+    if (err) {
+      console.error('[UPLOAD DEBUG] Multer error:', err.message);
+      return res.status(400).json({ 
+        success: false, 
+        fileReceived: false, 
+        fileStored: false, 
+        documentId: null,
+        error: err.message 
+      });
     }
+    
+    try {
+      if (!req.file) {
+        console.error('[UPLOAD DEBUG] No file in request');
+        return res.status(400).json({ 
+          success: false, 
+          fileReceived: false, 
+          fileStored: false, 
+          documentId: null,
+          error: 'No file uploaded' 
+        });
+      }
 
-    const { title, notes, tags, category } = req.body;
-    const user = (req as any).user;
+      const { title, notes, tags, category } = req.body;
+      const user = (req as any).user;
+      const finalCategory = category || 'other';
 
-    const parsedTags = tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : null;
+      console.log('[UPLOAD DEBUG] Category received:', category, '-> Using:', finalCategory);
+      console.log('[UPLOAD DEBUG] User:', user?.username || 'Unknown');
 
-    const [newMedia] = await db.insert(mediaLibrary).values({
-      filename: req.file.originalname,
-      storagePath: `uploads/media-library/${req.file.filename}`,
-      mimeType: req.file.mimetype,
-      fileSize: req.file.size,
-      capturedById: user?.id || null,
-      capturedByName: user?.username || 'Unknown',
-      title: title || req.file.originalname,
-      notes: notes || null,
-      tags: parsedTags,
-      category: category || 'other',
-    }).returning();
+      const parsedTags = tags ? (typeof tags === 'string' ? JSON.parse(tags) : tags) : null;
 
-    res.json(newMedia);
-  } catch (error) {
-    console.error('Error uploading media:', error);
-    res.status(500).json({ error: 'Failed to upload media' });
-  }
+      // Verify file exists on disk
+      const filePath = path.join(process.cwd(), 'uploads', 'media-library', req.file.filename);
+      const fileExists = fs.existsSync(filePath);
+      console.log('[UPLOAD DEBUG] File path:', filePath);
+      console.log('[UPLOAD DEBUG] File exists on disk:', fileExists);
+
+      if (!fileExists) {
+        console.error('[UPLOAD DEBUG] File not found on disk after upload');
+        return res.status(500).json({ 
+          success: false, 
+          fileReceived: true, 
+          fileStored: false, 
+          documentId: null,
+          error: 'File storage failed' 
+        });
+      }
+
+      const insertValues = {
+        filename: req.file.originalname,
+        storagePath: `uploads/media-library/${req.file.filename}`,
+        mimeType: req.file.mimetype,
+        fileSize: req.file.size,
+        capturedById: user?.id || null,
+        capturedByName: user?.username || 'Unknown',
+        title: title || req.file.originalname,
+        notes: notes || null,
+        tags: parsedTags,
+        category: finalCategory,
+      };
+
+      console.log('[UPLOAD DEBUG] Inserting into DB:', insertValues);
+
+      const result = await db.insert(mediaLibrary).values(insertValues).returning();
+      
+      console.log('[UPLOAD DEBUG] DB insert result:', result);
+
+      if (!result || result.length === 0) {
+        console.error('[UPLOAD DEBUG] DB insert returned no rows');
+        return res.status(500).json({ 
+          success: false, 
+          fileReceived: true, 
+          fileStored: true, 
+          documentId: null,
+          error: 'Database insert failed' 
+        });
+      }
+
+      const newMedia = result[0];
+      console.log('[UPLOAD DEBUG] SUCCESS - Document ID:', newMedia.id);
+
+      res.json({ 
+        success: true, 
+        fileReceived: true, 
+        fileStored: true, 
+        documentId: newMedia.id,
+        ...newMedia 
+      });
+    } catch (error: any) {
+      console.error('[UPLOAD DEBUG] Exception:', error);
+      res.status(500).json({ 
+        success: false, 
+        fileReceived: !!req.file, 
+        fileStored: false, 
+        documentId: null,
+        error: error.message || 'Failed to upload media' 
+      });
+    }
+  });
 });
 
 // Get all media items (with filtering)

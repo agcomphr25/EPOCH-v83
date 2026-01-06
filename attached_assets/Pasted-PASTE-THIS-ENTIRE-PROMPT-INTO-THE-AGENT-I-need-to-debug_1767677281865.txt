@@ -1,0 +1,121 @@
+PASTE THIS ENTIRE PROMPT INTO THE AGENT
+
+I need to debug why orders are NOT being moved to the production queue after a customer successfully signs the order, even though the status updates to FINALIZED.
+
+Please gather and return ONLY the following items, with exact code and logs. Do not refactor anything yet.
+
+1️⃣ CONFIRM THE SIGNATURE ROUTE IS ACTUALLY REACHED
+
+In server/src/routes/followupOrders.ts, locate:
+
+POST /api/followup-orders/:id/sign
+
+
+Please:
+
+Add a temporary console.log at the very top of the handler:
+
+console.log('🟢 SIGN ROUTE ENTERED', { id: req.params.id });
+
+
+Tell me whether this log appears when a real customer signs via the magic link
+
+2️⃣ CONFIRM updateFinalizedOrder IS EXECUTING
+
+Immediately before and after this call:
+
+await storage.updateFinalizedOrder(followupOrder.orderId, {
+  status: 'FINALIZED',
+  currentDepartment: 'P1 Production Queue',
+  ...
+});
+
+
+Please add:
+
+console.log('➡️ BEFORE updateFinalizedOrder', followupOrder.orderId);
+console.log('⬅️ AFTER updateFinalizedOrder', result);
+
+
+Then report:
+
+Whether the logs appear
+
+What result contains
+
+3️⃣ VERIFY ROWS ARE ACTUALLY UPDATED
+
+In storage.updateFinalizedOrder, modify it temporarily to return:
+
+{
+  updatedOrder,
+  rowCount
+}
+
+
+Then log:
+
+console.log('📦 updateFinalizedOrder rowCount:', rowCount);
+
+
+I need to know:
+
+Is rowCount === 1 or 0
+
+4️⃣ CHECK FOR A LATER OVERWRITE (VERY IMPORTANT)
+
+Search the entire codebase for ANY of the following executed after signature:
+
+updateOrderStatus(
+updateOrderDepartment(
+updateOrder(
+updateFinalizedOrder(
+
+
+Especially in:
+
+cron jobs
+
+notifications
+
+reminder logic
+
+audit services
+
+Return only the matching snippets.
+
+5️⃣ CONFIRM UI DATA SOURCE
+
+In the page that shows the production queue, confirm:
+
+Which endpoint supplies the data
+
+Which table it reads from (allOrders vs orders)
+
+Include:
+
+queryKey:
+endpoint:
+
+6️⃣ CONFIRM FINAL STATE IN DATABASE
+
+Run (or simulate) the equivalent of:
+
+SELECT orderId, status, currentDepartment
+FROM all_orders
+WHERE orderId = '<SIGNED ORDER ID>';
+
+
+And tell me:
+
+status value
+
+currentDepartment value
+
+⚠️ DO NOT propose fixes yet.
+⚠️ DO NOT refactor.
+⚠️ DO NOT add fallbacks.
+
+I need raw facts only so we can pinpoint the exact failure point.
+
+Return results section-by-section.

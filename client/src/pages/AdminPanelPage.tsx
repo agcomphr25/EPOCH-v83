@@ -256,6 +256,13 @@ export default function AdminPanelPage() {
         header: 'Department',
         cell: ({ row }) => {
           const deptValue = row.getValue('currentDepartment') as string;
+          // TEMPORARY DEBUG: Log values on each render
+          console.log('🔍 DEPT SELECT RENDER:', {
+            orderId: row.original.orderId,
+            currentDepartment: row.original.currentDepartment,
+            valuePassedToSelect: deptValue || '',
+            timestamp: new Date().toISOString(),
+          });
           return (
             <Select
               value={deptValue || ''}
@@ -468,7 +475,7 @@ export default function AdminPanelPage() {
         },
       },
     ],
-    [statusTypes, employees, departmentTypes, updateFieldMutation]
+    [statusTypes, employees, departmentTypes, updateFieldMutation, orders]
   );
 
   const table = useReactTable({

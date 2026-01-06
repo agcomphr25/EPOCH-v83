@@ -4097,28 +4097,28 @@ export const travelerMaterialConsumption = pgTable('traveler_material_consumptio
 
 // Travelers - Header/controlled record for production execution
 export const travelers = pgTable('travelers', {
-  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::character varying`),
-  travelerNumber: varchar('traveler_number').notNull().unique(),
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerNumber: varchar('traveler_number', { length: 255 }).notNull().unique(),
   travelerRevision: integer('traveler_revision').default(1).notNull(),
 
-  inventoryItemId: varchar('inventory_item_id'),
-  partNumber: varchar('part_number'),
-  partName: varchar('part_name'),
+  inventoryItemId: varchar('inventory_item_id', { length: 255 }),
+  partNumber: varchar('part_number', { length: 255 }),
+  partName: varchar('part_name', { length: 255 }),
 
-  salesOrderId: varchar('sales_order_id'),
-  workOrderId: varchar('work_order_id'),
+  salesOrderId: varchar('sales_order_id', { length: 255 }),
+  workOrderId: varchar('work_order_id', { length: 255 }),
 
-  lotNumber: varchar('lot_number'),
-  serialNumber: varchar('serial_number'),
-  internalControlNumber: varchar('internal_control_number'),
+  lotNumber: varchar('lot_number', { length: 255 }),
+  serialNumber: varchar('serial_number', { length: 255 }),
+  internalControlNumber: varchar('internal_control_number', { length: 255 }),
   quantity: integer('quantity').default(1),
 
-  status: varchar('status').default('DRAFT').notNull(),
+  status: varchar('status', { length: 50 }).default('DRAFT').notNull(),
 
-  partRoutingId: varchar('part_routing_id'),
+  partRoutingId: varchar('part_routing_id', { length: 255 }),
   partRoutingRevision: integer('part_routing_revision'),
 
-  createdBy: varchar('created_by').notNull(),
+  createdBy: varchar('created_by', { length: 255 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
   updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
 }, (table) => ({
@@ -4130,21 +4130,21 @@ export const travelers = pgTable('travelers', {
 
 // Traveler Steps - Departments in sequence
 export const travelerSteps = pgTable('traveler_steps', {
-  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::character varying`),
-  travelerId: varchar('traveler_id')
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerId: varchar('traveler_id', { length: 255 })
     .references(() => travelers.id, { onDelete: 'cascade' })
     .notNull(),
 
-  departmentName: varchar('department_name').notNull(),
+  departmentName: varchar('department_name', { length: 255 }).notNull(),
   stepNumber: integer('step_number').notNull(),
-  status: varchar('status').default('NOT_STARTED').notNull(),
+  status: varchar('status', { length: 50 }).default('NOT_STARTED').notNull(),
 
-  assignedTechnicianId: varchar('assigned_technician_id'),
+  assignedTechnicianId: varchar('assigned_technician_id', { length: 255 }),
   
   startedAt: timestamp('started_at', { withTimezone: true }),
-  startedBy: varchar('started_by'),
+  startedBy: varchar('started_by', { length: 255 }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
-  completedBy: varchar('completed_by'),
+  completedBy: varchar('completed_by', { length: 255 }),
   blockedAt: timestamp('blocked_at', { withTimezone: true }),
   blockedReason: text('blocked_reason'),
   notes: text('notes'),
@@ -4155,22 +4155,22 @@ export const travelerSteps = pgTable('traveler_steps', {
 
 // Traveler Tasks - Start/end tasks, QC tasks, special process tasks per step
 export const travelerTasks = pgTable('traveler_tasks', {
-  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::character varying`),
-  travelerStepId: varchar('traveler_step_id')
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerStepId: varchar('traveler_step_id', { length: 255 })
     .references(() => travelerSteps.id, { onDelete: 'cascade' })
     .notNull(),
 
-  taskType: varchar('task_type').notNull(),
+  taskType: varchar('task_type', { length: 100 }).notNull(),
   taskPhase: text('task_phase').notNull().default('WORK'),
 
-  title: varchar('title').notNull(),
+  title: varchar('title', { length: 255 }).notNull(),
   instructions: text('instructions'),
   required: boolean('required').default(true),
   sortOrder: integer('sort_order').default(0),
 
-  status: varchar('status').default('NOT_STARTED').notNull(),
+  status: varchar('status', { length: 50 }).default('NOT_STARTED').notNull(),
   completedAt: timestamp('completed_at', { withTimezone: true }),
-  completedBy: varchar('completed_by'),
+  completedBy: varchar('completed_by', { length: 255 }),
 }, (table) => ({
   stepIdIdx: index('traveler_tasks_step_id_idx').on(table.travelerStepId),
   taskTypeIdx: index('traveler_tasks_type_idx').on(table.taskType),
@@ -4179,20 +4179,20 @@ export const travelerTasks = pgTable('traveler_tasks', {
 
 // Traveler Task Fields - Data capture per task (flexible, AS9100 evidence)
 export const travelerTaskFields = pgTable('traveler_task_fields', {
-  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::character varying`),
-  travelerTaskId: varchar('traveler_task_id')
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerTaskId: varchar('traveler_task_id', { length: 255 })
     .references(() => travelerTasks.id, { onDelete: 'cascade' })
     .notNull(),
 
-  fieldKey: varchar('field_key').notNull(),
-  fieldLabel: varchar('field_label').notNull(),
-  fieldType: varchar('field_type').default('text'),
+  fieldKey: varchar('field_key', { length: 255 }).notNull(),
+  fieldLabel: varchar('field_label', { length: 255 }).notNull(),
+  fieldType: varchar('field_type', { length: 50 }).default('text'),
   required: boolean('required').default(false),
 
   value: text('value'),
   validation: jsonb('validation'),
   
-  recordedBy: varchar('recorded_by'),
+  recordedBy: varchar('recorded_by', { length: 255 }),
   recordedAt: timestamp('recorded_at', { withTimezone: true }),
 }, (table) => ({
   taskIdIdx: index('traveler_task_fields_task_id_idx').on(table.travelerTaskId),
@@ -4200,17 +4200,17 @@ export const travelerTaskFields = pgTable('traveler_task_fields', {
 
 // Traveler Signatures - Digital signature required for step completion
 export const travelerSignatures = pgTable('traveler_signatures', {
-  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::character varying`),
-  travelerStepId: varchar('traveler_step_id')
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerStepId: varchar('traveler_step_id', { length: 255 })
     .references(() => travelerSteps.id, { onDelete: 'cascade' })
     .notNull(),
 
-  signedBy: varchar('signed_by').notNull(),
-  signedByName: varchar('signed_by_name'),
-  badgeScan: varchar('badge_scan'),
+  signedBy: varchar('signed_by', { length: 255 }).notNull(),
+  signedByName: varchar('signed_by_name', { length: 255 }),
+  badgeScan: varchar('badge_scan', { length: 255 }),
   signedAt: timestamp('signed_at', { withTimezone: true }).default(sql`now()`),
 
-  meaning: varchar('meaning').notNull(),
+  meaning: varchar('meaning', { length: 100 }).notNull(),
   notes: text('notes'),
   signatureHash: text('signature_hash'),
 }, (table) => ({
@@ -4219,14 +4219,14 @@ export const travelerSignatures = pgTable('traveler_signatures', {
 
 // Traveler Events - Audit trail for all actions
 export const travelerEvents = pgTable('traveler_events', {
-  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::character varying`),
-  travelerId: varchar('traveler_id')
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::character varying`),
+  travelerId: varchar('traveler_id', { length: 255 })
     .references(() => travelers.id, { onDelete: 'cascade' })
     .notNull(),
 
-  actor: varchar('actor').notNull(),
-  actorName: varchar('actor_name'),
-  action: varchar('action').notNull(),
+  actor: varchar('actor', { length: 255 }).notNull(),
+  actorName: varchar('actor_name', { length: 255 }),
+  action: varchar('action', { length: 100 }).notNull(),
   details: jsonb('details'),
 
   createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
@@ -7940,10 +7940,10 @@ export type InsertCustomerWatchRule = z.infer<typeof insertCustomerWatchRuleSche
 
 // Account Categories - Classifications for chart of accounts
 export const accountCategories = pgTable('account_categories', {
-  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::text`),
-  name: varchar('name').notNull().unique(),
-  code: varchar('code').notNull().unique(),
-  type: varchar('type').notNull(),
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::text`),
+  name: varchar('name', { length: 255 }).notNull().unique(),
+  code: varchar('code', { length: 10 }).notNull().unique(),
+  type: varchar('type', { length: 50 }).notNull(),
   description: text('description'),
   sortOrder: integer('sort_order').default(0),
   isActive: boolean('is_active').default(true).notNull(),
@@ -7962,13 +7962,13 @@ export type InsertAccountCategory = z.infer<typeof insertAccountCategorySchema>;
 
 // Chart of Accounts - Individual accounting line items
 export const accounts = pgTable('accounts', {
-  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::text`),
-  accountNumber: varchar('account_number').notNull().unique(),
-  name: varchar('name').notNull(),
-  categoryId: varchar('category_id').references(() => accountCategories.id).notNull(),
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::text`),
+  accountNumber: varchar('account_number', { length: 20 }).notNull().unique(),
+  name: varchar('name', { length: 255 }).notNull(),
+  categoryId: varchar('category_id', { length: 255 }).references(() => accountCategories.id).notNull(),
   description: text('description'),
   isAllocated: boolean('is_allocated').default(false),
-  allocationBasis: varchar('allocation_basis'),
+  allocationBasis: varchar('allocation_basis', { length: 100 }),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -7989,13 +7989,13 @@ export type InsertAccount = z.infer<typeof insertAccountSchema>;
 
 // Monthly Account Entries - Actual monthly amounts for each account
 export const monthlyAccountEntries = pgTable('monthly_account_entries', {
-  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::text`),
-  accountId: varchar('account_id').references(() => accounts.id, { onDelete: 'cascade' }).notNull(),
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::text`),
+  accountId: varchar('account_id', { length: 255 }).references(() => accounts.id, { onDelete: 'cascade' }).notNull(),
   year: integer('year').notNull(),
   month: integer('month').notNull(),
-  amount: numeric('amount').notNull().default('0'),
+  amount: numeric('amount', { precision: 12, scale: 2 }).notNull().default('0'),
   notes: text('notes'),
-  source: varchar('source').default('manual'),
+  source: varchar('source', { length: 50 }).default('manual'),
   createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
@@ -8015,12 +8015,12 @@ export type InsertMonthlyAccountEntry = z.infer<typeof insertMonthlyAccountEntry
 
 // Allocation Rules - Define how to allocate overhead, indirect materials, etc.
 export const allocationRules = pgTable('allocation_rules', {
-  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::text`),
-  name: varchar('name').notNull(),
-  sourceAccountId: varchar('source_account_id').references(() => accounts.id).notNull(),
-  targetAccountId: varchar('target_account_id').references(() => accounts.id).notNull(),
-  allocationMethod: varchar('allocation_method').notNull(),
-  allocationValue: numeric('allocation_value').notNull(),
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::text`),
+  name: varchar('name', { length: 255 }).notNull(),
+  sourceAccountId: varchar('source_account_id', { length: 255 }).references(() => accounts.id).notNull(),
+  targetAccountId: varchar('target_account_id', { length: 255 }).references(() => accounts.id).notNull(),
+  allocationMethod: varchar('allocation_method', { length: 100 }).notNull(),
+  allocationValue: numeric('allocation_value', { precision: 12, scale: 2 }).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -8040,11 +8040,11 @@ export type InsertAllocationRule = z.infer<typeof insertAllocationRuleSchema>;
 
 // Allocation Results - Store calculated allocations for each period
 export const allocationResults = pgTable('allocation_results', {
-  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::text`),
-  allocationRuleId: varchar('allocation_rule_id').references(() => allocationRules.id, { onDelete: 'cascade' }).notNull(),
+  id: varchar('id', { length: 255 }).primaryKey().default(sql`(gen_random_uuid())::text`),
+  allocationRuleId: varchar('allocation_rule_id', { length: 255 }).references(() => allocationRules.id, { onDelete: 'cascade' }).notNull(),
   year: integer('year').notNull(),
   month: integer('month').notNull(),
-  allocatedAmount: numeric('allocated_amount').notNull().default('0'),
+  allocatedAmount: numeric('allocated_amount', { precision: 12, scale: 2 }).notNull().default('0'),
   createdAt: timestamp('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
   ruleIdIdx: index('allocation_results_rule_id_idx').on(table.allocationRuleId),

@@ -2766,7 +2766,7 @@ export const customers = pgTable('customers', {
 
 export const customerAddresses = pgTable('customer_addresses', {
   id: serial('id').primaryKey(),
-  customerId: integer('customer_id').notNull(),
+  customerId: text('customer_id').notNull(),
   street: text('street').notNull(),
   street2: text('street2'), // Suite, Apt, Unit number
   city: text('city').notNull(),
@@ -3466,7 +3466,7 @@ export const insertCustomerAddressSchema = createInsertSchema(customerAddresses)
     updatedAt: true,
   })
   .extend({
-    customerId: z.coerce.number().int().positive('Customer ID is required'),
+    customerId: z.string().min(1, 'Customer ID is required'),
     street: z.string().min(1, 'Street address is required'),
     city: z.string().min(1, 'City is required'),
     state: z.string().min(1, 'State is required'),

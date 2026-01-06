@@ -224,6 +224,8 @@ export default function FabricInventoryPage() {
           fabric: data.fabric || null,
           fabricPartNumber: data.fabricPartNumber || null,
           supplierPartNumber: data.supplierPartNumber || null,
+          supplierPoNumber: data.supplierPoNumber || null,
+          manufacturerPoNumber: data.manufacturerPoNumber || null,
           rollNumber: data.rollNumber || null,
           batchNumber: data.batchNumber || null,
           internalControlNumber: data.internalControlNumber || null,
@@ -261,6 +263,8 @@ export default function FabricInventoryPage() {
           fabric: data.fabric || null,
           fabricPartNumber: data.fabricPartNumber || null,
           supplierPartNumber: data.supplierPartNumber || null,
+          supplierPoNumber: data.supplierPoNumber || null,
+          manufacturerPoNumber: data.manufacturerPoNumber || null,
           rollNumber: data.rollNumber || null,
           batchNumber: data.batchNumber || null,
           internalControlNumber: data.internalControlNumber || null,
@@ -338,6 +342,8 @@ export default function FabricInventoryPage() {
       fabric: item.fabric || "",
       fabricPartNumber: item.fabricPartNumber || "",
       supplierPartNumber: item.supplierPartNumber || "",
+      supplierPoNumber: item.supplierPoNumber || "",
+      manufacturerPoNumber: item.manufacturerPoNumber || "",
       rollNumber: item.rollNumber || "",
       batchNumber: item.batchNumber || "",
       internalControlNumber: item.internalControlNumber || "",
@@ -692,13 +698,13 @@ export default function FabricInventoryPage() {
     // Sort rolls within each group by FIFO (oldest manufacture date first)
     Object.values(groupMap).forEach(group => {
       group.rolls.sort((a, b) => {
-        const dateA = a.manufactureDate ? new Date(a.manufactureDate).getTime() : 
-                      a.receivedDate ? new Date(a.receivedDate).getTime() : 
-                      new Date(a.createdAt).getTime();
-        const dateB = b.manufactureDate ? new Date(b.manufactureDate).getTime() : 
-                      b.receivedDate ? new Date(b.receivedDate).getTime() : 
-                      new Date(b.createdAt).getTime();
-        return dateA - dateB; // Oldest first (FIFO)
+        const getDateValue = (item: FabricInventory): number => {
+          if (item.manufactureDate) return new Date(item.manufactureDate).getTime();
+          if (item.receivedDate) return new Date(item.receivedDate).getTime();
+          if (item.createdAt) return new Date(item.createdAt).getTime();
+          return 0; // Fallback for missing dates - sort to beginning
+        };
+        return getDateValue(a) - getDateValue(b); // Oldest first (FIFO)
       });
     });
     
@@ -834,6 +840,29 @@ export default function FabricInventoryPage() {
             onChange={(e) => setForm({ ...form, internalControlNumber: e.target.value })}
             placeholder="e.g., ICN-12345"
             data-testid="input-internal-control"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="supplierPoNumber">Supplier PO#</Label>
+          <Input
+            id="supplierPoNumber"
+            value={form.supplierPoNumber}
+            onChange={(e) => setForm({ ...form, supplierPoNumber: e.target.value })}
+            placeholder="e.g., PO-2024-0001"
+            data-testid="input-supplier-po"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="manufacturerPoNumber">Manufacturer PO#</Label>
+          <Input
+            id="manufacturerPoNumber"
+            value={form.manufacturerPoNumber}
+            onChange={(e) => setForm({ ...form, manufacturerPoNumber: e.target.value })}
+            placeholder="e.g., MFG-PO-12345"
+            data-testid="input-manufacturer-po"
           />
         </div>
       </div>

@@ -59,6 +59,12 @@ export default function ReferenceDocsPage() {
       return;
     }
 
+    console.log('[UPLOAD DEBUG] Starting upload:', {
+      fileName: uploadFile.name,
+      fileSize: uploadFile.size,
+      fileType: uploadFile.type
+    });
+
     setUploading(true);
     try {
       const formData = new FormData();
@@ -68,14 +74,23 @@ export default function ReferenceDocsPage() {
         formData.append('title', uploadTitle);
       }
 
+      console.log('[UPLOAD DEBUG] Sending FormData with category: document');
+
       const response = await fetch('/api/media-library/upload', {
         method: 'POST',
         body: formData,
         credentials: 'include',
       });
 
-      if (!response.ok) {
-        throw new Error('Upload failed');
+      const data = await response.json();
+      console.log('[UPLOAD DEBUG] Server response:', data);
+
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      if (!data.documentId) {
+        throw new Error('Upload succeeded but no document ID returned');
       }
 
       toast({ title: 'Document uploaded successfully' });
@@ -84,6 +99,7 @@ export default function ReferenceDocsPage() {
       setUploadFile(null);
       setUploadTitle('');
     } catch (error: any) {
+      console.error('[UPLOAD DEBUG] Upload error:', error);
       toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
     } finally {
       setUploading(false);

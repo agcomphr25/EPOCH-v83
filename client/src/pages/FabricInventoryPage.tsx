@@ -650,7 +650,7 @@ export default function FabricInventoryPage() {
     return material?.materialName || "-";
   };
 
-  const FabricForm = ({ isEdit = false }: { isEdit?: boolean }) => (
+  const fabricFormContent = (
     <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
@@ -1191,7 +1191,7 @@ export default function FabricInventoryPage() {
               Add a new fabric item to the cutting table inventory.
             </DialogDescription>
           </DialogHeader>
-          <FabricForm />
+          {fabricFormContent}
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
               Cancel
@@ -1215,7 +1215,7 @@ export default function FabricInventoryPage() {
               Update the fabric inventory item details.
             </DialogDescription>
           </DialogHeader>
-          <FabricForm isEdit />
+          {fabricFormContent}
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Cancel

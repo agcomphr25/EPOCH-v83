@@ -9639,4 +9639,96 @@ export const fieldState = pgTable('field_state', {
 export type FieldState = typeof fieldState.$inferSelect;
 export type InsertFieldState = typeof fieldState.$inferInsert;
 
+// ============================================================
+// TICKETING SYSTEM - Internal CSR Tool
+// Phase 0: Basic ticket tracking for complaints, order status, internal issues
+// ============================================================
+
+export const ticketTypeEnum = pgEnum('ticket_type', ['customer', 'internal']);
+export const ticketPriorityEnum = pgEnum('ticket_priority', ['low', 'normal', 'high']);
+export const ticketStatusEnum = pgEnum('ticket_status', [
+  'new',
+  'in_progress',
+  'waiting_on_customer',
+  'waiting_on_production',
+  'resolved',
+  'closed'
+]);
+export const ticketActivityTypeEnum = pgEnum('ticket_activity_type', [
+  'comment',
+  'status_change',
+  'assignment',
+  'priority_change'
+]);
+
+export const tickets = pgTable('tickets', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  ticketType: ticketTypeEnum('ticket_type').notNull().default('customer'),
+  category: text('category'),
+  priority: ticketPriorityEnum('priority').notNull().default('normal'),
+  status: ticketStatusEnum('status').notNull().default('new'),
+  title: text('title').notNull(),
+  description: text('description'),
+  customerId: integer('customer_id'), // Nullable - tickets may not have a customer
+  ownerUserId: integer('owner_user_id').notNull(),
+  slaDueAt: timestamp('sla_due_at'),
+  slaBreached: boolean('sla_breached').default(false),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  archivedAt: timestamp('archived_at'),
+}, (table) => ({
+  statusIdx: index('tickets_status_idx').on(table.status),
+  priorityIdx: index('tickets_priority_idx').on(table.priority),
+  ownerIdx: index('tickets_owner_idx').on(table.ownerUserId),
+  slaIdx: index('tickets_sla_idx').on(table.slaDueAt),
+  typeIdx: index('tickets_type_idx').on(table.ticketType),
+}));
+
+export const insertTicketSchema = createInsertSchema(tickets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Ticket = typeof tickets.$inferSelect;
+export type InsertTicket = z.infer<typeof insertTicketSchema>;
+
+// Junction table for many-to-many relationship between tickets and orders
+export const ticketOrders = pgTable('ticket_orders', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  ticketId: uuid('ticket_id').notNull().references(() => tickets.id, { onDelete: 'cascade' }),
+  orderId: text('order_id').notNull(), // Order ID string (e.g., "AG589")
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  ticketIdx: index('ticket_orders_ticket_idx').on(table.ticketId),
+  orderIdx: index('ticket_orders_order_idx').on(table.orderId),
+  uniqueTicketOrder: unique('unique_ticket_order').on(table.ticketId, table.orderId),
+}));
+
+export type TicketOrder = typeof ticketOrders.$inferSelect;
+export type InsertTicketOrder = typeof ticketOrders.$inferInsert;
+
+// Activity log for tickets - all changes and comments
+export const ticketActivity = pgTable('ticket_activity', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  ticketId: uuid('ticket_id').notNull().references(() => tickets.id, { onDelete: 'cascade' }),
+  activityType: ticketActivityTypeEnum('activity_type').notNull(),
+  message: text('message'),
+  previousValue: text('previous_value'), // For tracking changes
+  newValue: text('new_value'), // For tracking changes
+  createdBy: integer('created_by').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  ticketIdx: index('ticket_activity_ticket_idx').on(table.ticketId),
+  createdAtIdx: index('ticket_activity_created_at_idx').on(table.createdAt),
+}));
+
+export const insertTicketActivitySchema = createInsertSchema(ticketActivity).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TicketActivity = typeof ticketActivity.$inferSelect;
+export type InsertTicketActivity = z.infer<typeof insertTicketActivitySchema>;
+
 export * from './calendar.schema';

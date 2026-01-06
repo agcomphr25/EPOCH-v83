@@ -1,0 +1,231 @@
+PASTE THIS DIRECTLY INTO THE REPLIT AGENT
+EPOCH – Phase 0 Ticketing System (Internal CSR Tool)
+
+You are extending EPOCH with a new internal ticketing system for CSRs and Admins to track complaints, order status requests, and internal issues (including EPOCH tech/ops problems).
+
+This is internal-only. There is no customer portal, no emails, no automation, and no AI interpretation.
+
+1. Core Requirements
+Ticket Types
+
+Tickets may represent:
+
+Customer complaints
+
+Order status requests
+
+Internal issues (EPOCH tech / ops)
+
+Tickets:
+
+May exist without a customer
+
+May reference zero, one, or multiple orders
+
+Must be filterable by type
+
+2. Data Model (Create Explicit Migration)
+
+Create a new table: tickets
+
+tickets
+-------
+id (uuid, pk)
+ticket_type (enum: 'customer' | 'internal')
+category (text)
+priority (enum: 'low' | 'normal' | 'high')
+status (enum:
+  'new',
+  'in_progress',
+  'waiting_on_customer',
+  'waiting_on_production',
+  'resolved',
+  'closed'
+)
+customer_id (int, nullable)
+owner_user_id (int, not null)
+sla_due_at (timestamp, nullable)
+created_at (timestamp)
+updated_at (timestamp)
+archived_at (timestamp, nullable)
+
+
+Create a second table: ticket_orders
+
+ticket_orders
+-------------
+ticket_id (fk -> tickets.id)
+order_id (text)
+
+
+Create a third table: ticket_activity
+
+ticket_activity
+---------------
+id (uuid, pk)
+ticket_id (fk)
+activity_type (enum: 'comment' | 'status_change' | 'assignment' | 'priority_change')
+message (text)
+created_by (user id)
+created_at (timestamp)
+
+
+⚠️ Important
+
+Do NOT edit existing tables
+
+Generate and apply a migration for these new tables only
+
+Tickets are never deleted (archivable only)
+
+3. SLA Rules
+
+Default SLA: 48 hours
+
+SLA applies to:
+
+new
+
+in_progress
+
+SLA pauses when status is:
+
+waiting_on_customer
+
+waiting_on_production
+
+SLA breach:
+
+Flag ticket
+
+Notify Admins (no reassignment, no automation)
+
+4. Ticket Ownership & Visibility
+
+Each ticket has exactly one owner
+
+Ownership can be changed (logged in activity)
+
+All CSRs and Admins can see all tickets
+
+Accountability is required, but no performance ranking
+
+5. Activity Rules
+
+Unified activity stream per ticket
+
+Original ticket description is immutable
+
+Only append activity entries
+
+All changes (status, priority, owner) must create activity entries
+
+6. UI – Tickets Page
+
+Create a new page:
+
+/tickets
+
+Left Pane
+
+Ticket list
+
+Filters:
+
+Status
+
+Type (customer / internal)
+
+Priority
+
+Owner
+
+SLA breached
+
+Sort by:
+
+Age
+
+Priority
+
+SLA due
+
+Right Pane (Ticket Detail)
+
+Ticket metadata (type, status, priority, owner)
+
+Linked customer (if any)
+
+Linked orders (if any)
+
+Unified activity feed
+
+Add comment input
+
+Status change dropdown
+
+Owner reassignment
+
+Archive button (no delete)
+
+7. Metrics (Read-Only)
+
+Add a small dashboard section:
+
+Open tickets by age bucket:
+
+<24h
+
+24–48h
+
+48h+
+
+Count of SLA-breached tickets
+
+Real-time updates
+
+8. Permissions
+
+Only CSRs and Admins can create or edit tickets
+
+All CSRs/Admins can view all tickets
+
+No customer-facing access
+
+9. Explicit Non-Goals (Do NOT Build)
+
+No customer emails
+
+No email ingestion
+
+No auto-close
+
+No AI classification
+
+No public links
+
+No customer submission forms
+
+10. Migration Safety
+
+Generate migrations explicitly
+
+Do NOT assume production schema changes
+
+Ensure publishing includes the migration approval step
+
+Completion Criteria
+
+When complete:
+
+CSRs can create tickets from phone/email/internal issues
+
+Admins can monitor SLA and ticket age
+
+Internal communication is centralized
+
+“Where is my order?” noise is reduced
+
+Build this as Phase 0 only.
+
+No future phases, no speculative features.

@@ -105,6 +105,7 @@ import signPdfRoutes from './signPdf';
 import signatureWorkflowRoutes from './signatureWorkflow';
 import fieldRoutes from './field';
 import timerRoutes from './timer';
+import ticketsRoutes from './tickets';
 import { registerProcessRunnerRoutes } from './processRunner';
 import { registerTimeClockRoutes } from './timeClock';
 import { registerOutreachEngineRoutes } from './outreachEngine';
@@ -268,6 +269,9 @@ export function registerRoutes(app: Express): Server {
   // Field - Calm thinking surface (unstructured, opaque)
   // Field does not affect EPOCH data - no integration allowed
   app.use('/api/field', fieldRoutes);
+
+  // Ticketing System - Internal CSR Tool for complaints, order status, internal issues
+  app.use('/api/tickets', ticketsRoutes);
   
   // Object storage routes - cloud file uploads
   registerObjectStorageRoutes(app);

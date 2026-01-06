@@ -1,3 +1,22 @@
 Your branch is ahead of 'origin/main' by 5 commits.
   (use "git push" to publish your local commits)
 Already up to date.
+[feature-20260106-1604-my-change 96a22898] feat: my-change
+ 1 file changed, 3 insertions(+)
+ create mode 100644 push_log_20260106-160415.txt
+branch 'feature-20260106-1604-my-change' set up to track 'origin/feature-20260106-1604-my-change'.
+> 96a22898 (HEAD -> feature-20260106-1604-my-change, origin/feature-20260106-1604-my-change) feat: my-change
+> cba3bdf7 (gitsafe-backup/main, gitsafe-backup/HEAD, main) Fix issue where typing in fabric material field causes focus loss
+> ac31f697 Add missing backend route to generate employee portal tokens
+> 00cc6c64 Add functionality to mark fabric inventory rolls as depleted
+> fbf1cef4 Update document list refresh after uploads and deletions
+> 45e5595c Expand task details automatically for assigned checklist items
+ client/src/pages/FabricInventoryPage.tsx        | 99 +++++++++++++++++++++++--
+ client/src/pages/PreproductionChecklistPage.tsx |  2 +-
+ client/src/pages/ReferenceDocsPage.tsx          |  6 +-
+ push_log_20260106-160415.txt                    |  3 +
+ server/schema.ts                                |  4 +
+ server/src/routes/cuttingTable.ts               |  9 ++-
+ server/src/routes/employees.ts                  | 15 ++++
+ 7 files changed, 125 insertions(+), 13 deletions(-)
+Open PR: https://github.com/agcomphr25/EPOCH-v83/compare/feature-20260106-1604-my-change?expand=1

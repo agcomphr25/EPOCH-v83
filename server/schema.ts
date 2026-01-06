@@ -7244,10 +7244,14 @@ export const cuttingFabricInventory = pgTable('cutting_fabric_inventory', {
   lowStockThreshold: integer('low_stock_threshold').default(10),
   barcode: text('barcode').unique(), // Auto-generated for P2 items
   notes: text('notes'),
+  status: text('status').default('active'), // active, depleted - for traceability
+  depletedAt: timestamp('depleted_at'), // When the roll was marked as depleted
+  depletedBy: text('depleted_by'), // Who marked it as depleted
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => ({
   expirationIdx: index('cutting_fabric_inventory_expiration_idx').on(table.expirationDate),
+  statusIdx: index('cutting_fabric_inventory_status_idx').on(table.status),
 }));
 
 // Cutting Table - Packet Sessions (tracks when packets are built)

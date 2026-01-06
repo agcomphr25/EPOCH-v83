@@ -1310,7 +1310,7 @@ function TaskRow({
   onUpdateTask: (taskId: string, data: any) => void;
   onDeleteTask: (taskId: string) => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(task.isCompleted);
+  const [isExpanded, setIsExpanded] = useState(task.isCompleted || !!task.assignedTo);
   const [notes, setNotes] = useState(task.notes || '');
   const [link, setLink] = useState(task.link || '');
   const [hasChanges, setHasChanges] = useState(false);

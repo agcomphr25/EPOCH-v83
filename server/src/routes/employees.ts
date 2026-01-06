@@ -772,6 +772,21 @@ router.delete('/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Employee Portal Token Generation
+router.post('/:id/portal-token', async (req: Request, res: Response) => {
+  try {
+    const employeeId = parseInt(req.params.id);
+    const token = await storage.generateEmployeePortalToken(employeeId);
+    res.json({ 
+      token, 
+      portalUrl: `${req.protocol}://${req.get('host')}/employee-portal/${token}` 
+    });
+  } catch (error) {
+    console.error('Generate portal token error:', error);
+    res.status(500).json({ error: 'Failed to generate portal token' });
+  }
+});
+
 // Certification Management
 router.get('/:id/certifications', async (req: Request, res: Response) => {
   try {

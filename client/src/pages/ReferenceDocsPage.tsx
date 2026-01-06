@@ -95,7 +95,8 @@ export default function ReferenceDocsPage() {
       }
 
       toast({ title: 'Document uploaded successfully' });
-      queryClient.invalidateQueries({ queryKey: ['/api/media', { category: 'document' }] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/media'] });
+      await queryClient.refetchQueries({ queryKey: ['/api/media', { category: 'document' }] });
       setShowUploadDialog(false);
       setUploadFile(null);
       setUploadTitle('');
@@ -113,7 +114,8 @@ export default function ReferenceDocsPage() {
     try {
       await apiRequest(`/api/media/${id}`, { method: 'DELETE' });
       toast({ title: 'Document deleted' });
-      queryClient.invalidateQueries({ queryKey: ['/api/media', { category: 'document' }] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/media'] });
+      await queryClient.refetchQueries({ queryKey: ['/api/media', { category: 'document' }] });
     } catch (error: any) {
       toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
     }

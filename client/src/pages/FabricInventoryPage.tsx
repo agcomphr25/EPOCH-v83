@@ -60,7 +60,9 @@ import {
   Upload,
   Link,
   FileCheck,
-  Loader2
+  Loader2,
+  Archive,
+  Filter
 } from "lucide-react";
 import JsBarcode from "jsbarcode";
 
@@ -85,6 +87,9 @@ type FabricInventory = {
   lowStockThreshold: number | null;
   barcode: string | null;
   notes: string | null;
+  status: string | null;
+  depletedAt: string | null;
+  depletedBy: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -137,8 +142,10 @@ export default function FabricInventoryPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDepleteDialogOpen, setIsDepleteDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<FabricInventory | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "depleted">("active");
   
   // Multi-select for barcode printing
   const [selectedForPrint, setSelectedForPrint] = useState<Set<string>>(new Set());
@@ -281,6 +288,23 @@ export default function FabricInventoryPage() {
     },
   });
 
+  const depleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/cutting-table/fabric-inventory/${id}/deplete`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Roll marked as depleted - traceability preserved" });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
+      setIsDepleteDialogOpen(false);
+      setSelectedItem(null);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to mark roll as depleted", variant: "destructive" });
+    },
+  });
+
   const handleAdd = () => {
     setForm(emptyForm);
     setConformanceLinkType("url");
@@ -328,6 +352,11 @@ export default function FabricInventoryPage() {
   const handleDelete = (item: FabricInventory) => {
     setSelectedItem(item);
     setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeplete = (item: FabricInventory) => {
+    setSelectedItem(item);
+    setIsDepleteDialogOpen(true);
   };
 
   const handlePrintLabel = async (item: FabricInventory) => {
@@ -574,6 +603,9 @@ export default function FabricInventoryPage() {
     const expDate = item.expirationDate ? new Date(item.expirationDate) : null;
     const isExpired = expDate && expDate < new Date();
 
+    if (item.status === 'depleted') {
+      return <Badge className="bg-gray-500 hover:bg-gray-600 flex items-center gap-1"><Archive className="h-3 w-3" />Depleted</Badge>;
+    }
     if (isExpired) {
       return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Expired</Badge>;
     }
@@ -588,7 +620,7 @@ export default function FabricInventoryPage() {
 
   const filteredInventory = fabricInventory.filter(item => {
     const query = searchQuery.toLowerCase();
-    return (
+    const matchesSearch = (
       (item.fabric || "").toLowerCase().includes(query) ||
       (item.source || "").toLowerCase().includes(query) ||
       (item.fabricPartNumber || "").toLowerCase().includes(query) ||
@@ -599,6 +631,11 @@ export default function FabricInventoryPage() {
       (item.location || "").toLowerCase().includes(query) ||
       (item.barcode || "").toLowerCase().includes(query)
     );
+    
+    const itemStatus = item.status || 'active';
+    const matchesStatus = statusFilter === 'all' || itemStatus === statusFilter;
+    
+    return matchesSearch && matchesStatus;
   });
 
   const getProductionLineName = (lineId: string | null) => {
@@ -613,7 +650,7 @@ export default function FabricInventoryPage() {
     return material?.materialName || "-";
   };
 
-  const FabricForm = ({ isEdit = false }: { isEdit?: boolean }) => (
+  const fabricFormContent = (
     <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
@@ -984,6 +1021,17 @@ export default function FabricInventoryPage() {
                   Print Labels ({selectedForPrint.size})
                 </Button>
               )}
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | "active" | "depleted")}>
+                <SelectTrigger className="w-36" data-testid="select-status-filter">
+                  <Filter className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Filter status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="depleted">Depleted</SelectItem>
+                  <SelectItem value="all">All Rolls</SelectItem>
+                </SelectContent>
+              </Select>
               <div className="relative w-64">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -1102,11 +1150,23 @@ export default function FabricInventoryPage() {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
+                          {item.status !== 'depleted' && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeplete(item)}
+                              title="Mark as Depleted (preserves traceability)"
+                              className="text-gray-600 hover:text-gray-800"
+                              data-testid={`button-deplete-${item.id}`}
+                            >
+                              <Archive className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDelete(item)}
-                            title="Delete"
+                            title="Delete permanently"
                             className="text-destructive hover:text-destructive"
                             data-testid={`button-delete-${item.id}`}
                           >
@@ -1131,7 +1191,7 @@ export default function FabricInventoryPage() {
               Add a new fabric item to the cutting table inventory.
             </DialogDescription>
           </DialogHeader>
-          <FabricForm />
+          {fabricFormContent}
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
               Cancel
@@ -1155,7 +1215,7 @@ export default function FabricInventoryPage() {
               Update the fabric inventory item details.
             </DialogDescription>
           </DialogHeader>
-          <FabricForm isEdit />
+          {fabricFormContent}
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Cancel
@@ -1178,6 +1238,8 @@ export default function FabricInventoryPage() {
             <AlertDialogDescription>
               Are you sure you want to delete "{selectedItem?.fabric}"? 
               This action cannot be undone and will remove all associated tracking data.
+              <br /><br />
+              <strong>Tip:</strong> If you want to keep traceability records, use "Mark as Depleted" instead.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1187,7 +1249,30 @@ export default function FabricInventoryPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-delete"
             >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              {deleteMutation.isPending ? "Deleting..." : "Delete Permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isDepleteDialogOpen} onOpenChange={setIsDepleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark Roll as Depleted?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark "{selectedItem?.fabric}" (Roll: {selectedItem?.rollNumber || 'N/A'}, Batch: {selectedItem?.batchNumber || 'N/A'}) as depleted.
+              <br /><br />
+              <strong>Traceability will be preserved:</strong> The roll's information, batch numbers, and conformance documents will remain accessible for auditing and AS9100 compliance.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => selectedItem && depleteMutation.mutate(selectedItem.id)}
+              className="bg-gray-600 text-white hover:bg-gray-700"
+              data-testid="button-confirm-deplete"
+            >
+              {depleteMutation.isPending ? "Marking..." : "Mark as Depleted"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

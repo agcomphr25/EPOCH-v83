@@ -797,15 +797,18 @@ router.post('/fabric-inventory/:id/deplete', async (req, res) => {
     const depletedBy = (req as any).user?.username || 'unknown';
     
     const inventory = await storage.updateCuttingFabricInventory(rollId, {
-      squareMeters: '0',
-      notes: `DEPLETED by ${depletedBy} on ${new Date().toISOString()}`,
+      status: 'depleted',
+      depletedAt: new Date(),
+      depletedBy: depletedBy,
+      quantityInStock: 0,
     });
     
     res.json({ 
       success: true, 
-      message: 'Roll marked as depleted',
+      message: 'Roll marked as depleted - traceability preserved',
       rollId,
       depletedBy,
+      depletedAt: inventory?.depletedAt,
     });
   } catch (error) {
     console.error('Error depleting fabric roll:', error);

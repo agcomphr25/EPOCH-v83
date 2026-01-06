@@ -1069,7 +1069,6 @@ export default function FabricInventoryPage() {
                         title="Select all for printing"
                       />
                     </TableHead>
-                    <TableHead>Status</TableHead>
                     <TableHead>Fabric</TableHead>
                     <TableHead>Source</TableHead>
                     <TableHead>Batch #</TableHead>
@@ -1095,7 +1094,6 @@ export default function FabricInventoryPage() {
                           <span className="text-gray-300" title="No barcode">-</span>
                         )}
                       </TableCell>
-                      <TableCell>{getStatusBadge(item)}</TableCell>
                       <TableCell className="font-medium">{item.fabric || "-"}</TableCell>
                       <TableCell>{item.source || "-"}</TableCell>
                       <TableCell>{item.batchNumber || "-"}</TableCell>
@@ -1118,60 +1116,63 @@ export default function FabricInventoryPage() {
                         ) : "-"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          {item.conformanceDocumentLink && (
+                        <div className="flex items-center justify-end gap-2">
+                          {getStatusBadge(item)}
+                          <div className="flex gap-1">
+                            {item.conformanceDocumentLink && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => window.open(item.conformanceDocumentLink!, '_blank')}
+                                title="View conformance document"
+                                data-testid={`button-view-doc-${item.id}`}
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {item.barcode && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handlePrintLabel(item)}
+                                title="Print barcode label"
+                                data-testid={`button-print-${item.id}`}
+                              >
+                                <Printer className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => window.open(item.conformanceDocumentLink!, '_blank')}
-                              title="View conformance document"
-                              data-testid={`button-view-doc-${item.id}`}
+                              onClick={() => handleEdit(item)}
+                              title="Edit"
+                              data-testid={`button-edit-${item.id}`}
                             >
-                              <ExternalLink className="h-4 w-4" />
+                              <Pencil className="h-4 w-4" />
                             </Button>
-                          )}
-                          {item.barcode && (
+                            {item.status !== 'depleted' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeplete(item)}
+                                title="Mark as Depleted (preserves traceability)"
+                                className="text-gray-600 hover:text-gray-800"
+                                data-testid={`button-deplete-${item.id}`}
+                              >
+                                <Archive className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handlePrintLabel(item)}
-                              title="Print barcode label"
-                              data-testid={`button-print-${item.id}`}
+                              onClick={() => handleDelete(item)}
+                              title="Delete permanently"
+                              className="text-destructive hover:text-destructive"
+                              data-testid={`button-delete-${item.id}`}
                             >
-                              <Printer className="h-4 w-4" />
+                              <Trash2 className="h-4 w-4" />
                             </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(item)}
-                            title="Edit"
-                            data-testid={`button-edit-${item.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          {item.status !== 'depleted' && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeplete(item)}
-                              title="Mark as Depleted (preserves traceability)"
-                              className="text-gray-600 hover:text-gray-800"
-                              data-testid={`button-deplete-${item.id}`}
-                            >
-                              <Archive className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(item)}
-                            title="Delete permanently"
-                            className="text-destructive hover:text-destructive"
-                            data-testid={`button-delete-${item.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          </div>
                         </div>
                       </TableCell>
                     </TableRow>

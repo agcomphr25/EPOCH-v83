@@ -139,7 +139,6 @@ export default function AdminPanelPage() {
   // Mutation for updating individual fields
   const updateFieldMutation = useMutation({
     mutationFn: async ({ orderId, fieldName, value }: { orderId: string; fieldName: string; value: any }) => {
-      console.log('🚀 MUTATION CALLED:', { orderId, fieldName, value, valueType: typeof value });
       return await apiRequest(`/api/orders/${orderId}/field`, {
         method: 'PATCH',
         body: { fieldName, value },
@@ -162,10 +161,12 @@ export default function AdminPanelPage() {
     },
   });
 
-  // Define columns
-  const columns = useMemo<ColumnDef<Order>[]>(
-    () => [
-      {
+  // NOTE: Columns are intentionally NOT memoized.
+  // Editable tables with mutations can cause stale closures when using useMemo.
+  // After PATCH + refetch, memoized column renderers may reference old data.
+  // This is an intentional EPOCH convention for mutation-driven tables.
+  const columns: ColumnDef<Order>[] = [
+    {
         id: 'select',
         header: ({ table }) => (
           <Checkbox
@@ -467,9 +468,7 @@ export default function AdminPanelPage() {
           );
         },
       },
-    ],
-    [statusTypes, employees, departmentTypes, updateFieldMutation, orders]
-  );
+  ];
 
   const table = useReactTable({
     data: orders,

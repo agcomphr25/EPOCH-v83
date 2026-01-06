@@ -2398,15 +2398,6 @@ router.patch(
       const orderIdParam = req.params.orderId;
       const { fieldName, value } = req.body;
 
-      // DEBUG: Log the incoming request
-      console.log('🔍 PATCH /field request:', {
-        orderId: orderIdParam,
-        fieldName,
-        value,
-        valueType: typeof value,
-        body: req.body
-      });
-
       if (!fieldName) {
         return res.status(400).json({ error: 'Field name is required' });
       }
@@ -2522,30 +2513,6 @@ router.patch(
         updateData.isManualUrgency = true;
       }
 
-      // DEBUG: Log what we're about to update
-      console.log('💾 UPDATE DEBUG:', {
-        orderId: orderIdParam,
-        isFinalized,
-        isNumericId,
-        jsField,
-        oldValue,
-        newValue: validatedValue,
-        updateData,
-      });
-
-      // TEMPORARY ENHANCED LOGGING - captures table, WHERE clause, and rowCount
-      const tableName = isFinalized ? 'all_orders' : 'orders';
-      const whereClause = isNumericId 
-        ? `id = ${parseInt(orderIdParam, 10)}` 
-        : `order_id = '${orderIdParam}'`;
-      console.log('🔍 DEBUG UPDATE TARGET:', {
-        tableName,
-        whereClause,
-        fieldBeingUpdated: jsField,
-        valueBeingWritten: validatedValue,
-        dbField: fieldConfig.dbField,
-      });
-
       // Update the appropriate table using the correct identifier
       let updateResult;
       if (isFinalized) {
@@ -2574,14 +2541,6 @@ router.patch(
         }
       }
 
-      // TEMPORARY ENHANCED LOGGING - rowCount from Drizzle result
-      const rowCount = (updateResult as any)?.rowCount ?? (updateResult as any)?.changes ?? 'N/A';
-      console.log('💾 UPDATE RESULT:', {
-        updateResult,
-        rowCount,
-        rawResult: JSON.stringify(updateResult),
-      });
-
       // Log the change to audit logs
       await storage.createAdminAuditLog({
         orderId: orderStringId,
@@ -2609,21 +2568,6 @@ router.patch(
           updatedOrder = await db.select().from(orders).where(eq(orders.orderId, orderIdParam)).limit(1);
         }
       }
-
-      // TEMPORARY ENHANCED LOGGING - read-back verification
-      const readBackValue = updatedOrder[0] ? (updatedOrder[0] as any)[jsField] : 'ORDER_NOT_FOUND';
-      console.log('🔍 READ-BACK VERIFICATION:', {
-        orderId: orderIdParam,
-        fieldName: jsField,
-        valueWritten: validatedValue,
-        valueReadBack: readBackValue,
-        matchesExpected: validatedValue === readBackValue,
-        fullOrder: updatedOrder[0] ? {
-          orderId: (updatedOrder[0] as any).orderId,
-          currentDepartment: (updatedOrder[0] as any).currentDepartment,
-          status: (updatedOrder[0] as any).status,
-        } : null,
-      });
 
       res.json({ 
         success: true,

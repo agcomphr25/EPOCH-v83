@@ -170,11 +170,10 @@ export default function FieldPage() {
   };
 
   const handleWheel = useCallback((e: WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      setZoom(z => Math.min(2, Math.max(0.25, z + delta)));
-    }
+    e.preventDefault();
+    e.stopPropagation();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setZoom(z => Math.min(2, Math.max(0.25, z + delta)));
   }, []);
 
   const handleTextChange = (nodeId: string, text: string) => {
@@ -474,7 +473,7 @@ export default function FieldPage() {
         <div className="flex items-center gap-2">
           <span>Zoom: {Math.round(zoom * 100)}%</span>
           <span className="text-gray-300">|</span>
-          <span>Ctrl+Scroll to zoom · Shift+Click for multi-select</span>
+          <span>Scroll to zoom · Shift+Click for multi-select</span>
         </div>
       </div>
     </div>

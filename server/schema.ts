@@ -7941,7 +7941,7 @@ export type InsertCustomerWatchRule = z.infer<typeof insertCustomerWatchRuleSche
 
 // Account Categories - Classifications for chart of accounts
 export const accountCategories = pgTable('account_categories', {
-  id: uuid('id').defaultRandom().primaryKey(),
+  id: varchar('id').primaryKey().default(sql`(gen_random_uuid())::text`),
   name: text('name').notNull().unique(), // e.g., 'Assets', 'Liabilities', 'Revenue', 'COGS', 'Operating Expenses'
   code: text('code').notNull().unique(), // e.g., '1000', '2000', '3000', '4000', '5000'
   type: text('type').notNull(), // 'asset', 'liability', 'equity', 'revenue', 'expense', 'cogs'

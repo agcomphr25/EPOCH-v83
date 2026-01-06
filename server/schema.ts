@@ -162,6 +162,8 @@ export const allOrders = pgTable('all_orders', {
   rtsSaleId: uuid('rts_sale_id'), // Reference to RTS sale if applicable
   // BOM Reference for Costing and MRP
   bomDefinitionId: text('bom_definition_id'), // Store BOM definition ID as text for production compatibility
+  // Production Queue Eligibility
+  productionReadinessStatus: text('production_readiness_status').default('pending'), // 'ready', 'missing_model', 'missing_action_length', 'pending'
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

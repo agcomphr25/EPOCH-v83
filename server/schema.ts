@@ -9619,4 +9619,24 @@ export const programRuns = pgTable('program_runs', {
 export type ProgramRun = typeof programRuns.$inferSelect;
 export type InsertProgramRun = typeof programRuns.$inferInsert;
 
+// ============================================================
+// FIELD - Calm Thinking Surface (Unstructured, Opaque)
+// Field is intentionally unstructured
+// Field does not affect EPOCH data
+// No automation or integration is allowed here
+// All transitions out of Field are human-initiated
+// ============================================================
+
+export const fieldState = pgTable('field_state', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull().unique(), // Single user only: admin_glennj
+  fieldData: jsonb('field_data').notNull().default({}), // Opaque JSON blob - no schema, no validation
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index('field_state_user_idx').on(table.userId),
+}));
+
+export type FieldState = typeof fieldState.$inferSelect;
+export type InsertFieldState = typeof fieldState.$inferInsert;
+
 export * from './calendar.schema';

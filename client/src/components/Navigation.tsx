@@ -64,6 +64,7 @@ import {
   Boxes,
   Filter,
   Layers,
+  Ticket,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -271,6 +272,12 @@ export default function Navigation() {
       label: 'Customer Management',
       icon: Users,
       description: 'Manage customer database',
+    },
+    {
+      path: '/tickets',
+      label: 'Tickets',
+      icon: Ticket,
+      description: 'Internal ticketing for complaints and issues',
     },
     // {
     //   path: '/bom-administration',

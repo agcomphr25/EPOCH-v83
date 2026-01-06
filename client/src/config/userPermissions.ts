@@ -112,6 +112,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/filtered-orders-report',
   '/order-heat-map',
   '/fabric-inventory',
+  '/tickets',
 ];
 
 export const USER_PERMISSIONS: Record<string, UserPermissions> = {
@@ -145,6 +146,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/inventory/parts-request',
       '/inventory/consolidated-needs',
       '/customers',
+      '/tickets',
       '/gateway-reports',
       '/layup-scheduler',
       '/all-orders',
@@ -166,6 +168,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-list',
       '/orders-management',
       '/customers',
+      '/tickets',
       '/customer-management',
       '/inventory/parts-request',
       '/shipping-tracker',
@@ -217,6 +220,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-list',
       '/orders-management',
       '/customers',
+      '/tickets',
       '/customer-satisfaction',
       '/shipping-tracker',
       '/discounts',

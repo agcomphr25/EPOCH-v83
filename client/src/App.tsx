@@ -485,6 +485,10 @@ function App() {
                     component={EmployeePortalPage}
                   />
                   <Route
+                    path="/employee-portal/:portalId"
+                    component={EmployeePortal}
+                  />
+                  <Route
                     path="/employee-dashboard"
                     component={EmployeeDashboard}
                   />

@@ -2020,6 +2020,24 @@ export default function Navigation() {
                 {currentUser.firstName || currentUser.username}
               </span>
             )}
+            {/* Field - Calm thinking surface (single user: admin_glennj only) */}
+            {/* Field does not affect EPOCH data - no integration allowed */}
+            {currentUser?.username === 'admin_glennj' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  closeAllDropdowns();
+                  setLocation('/field');
+                }}
+                className="gap-2"
+                data-testid="button-field"
+                title="Think before acting."
+              >
+                <Layers className="h-4 w-4" />
+                <span className="hidden lg:inline">Field</span>
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"

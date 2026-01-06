@@ -41,6 +41,7 @@ import SignatureWorkflowPage from './pages/SignatureWorkflowPage';
 import ReferenceDocsPage from './pages/ReferenceDocsPage';
 import VoiceNotesPage from './pages/VoiceNotesPage';
 import ProcessRuns from './pages/ProcessRuns';
+import FieldPage from './pages/FieldPage';
 import MaintenancePage from './pages/MaintenancePage';
 import EmployeePortalPage from './pages/EmployeePortalPage';
 import TimeClockAdminPage from './pages/TimeClockAdminPage';
@@ -373,6 +374,9 @@ function App() {
                   <Route path="/reference-docs" component={ReferenceDocsPage} />
                   <Route path="/voice-notes" component={VoiceNotesPage} />
                   <Route path="/process-runs" component={ProcessRuns} />
+                  
+                  {/* Field - Calm thinking surface (single user: admin_glennj) */}
+                  <Route path="/field" component={FieldPage} />
 
                   {/* Vendor Management Routes */}
                   <Route path="/vendor-management" component={VendorManagement} />

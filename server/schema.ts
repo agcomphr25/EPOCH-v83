@@ -856,36 +856,6 @@ export const certifications = pgTable('certifications', {
   workInstructions: text('work_instructions'),
 });
 
-// Employee-Certification Junction Table
-export const employeeCertifications = pgTable('employee_certifications', {
-  id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
-  employeeId: integer('employee_id')
-    .references(() => employees.id)
-    .notNull(),
-  certificationId: integer('certification_id')
-    .references(() => certifications.id)
-    .notNull(),
-  dateObtained: date('date_obtained').notNull(),
-  expiryDate: date('expiry_date'),
-  certificateNumber: varchar('certificate_number'),
-  issuingAuthority: varchar('issuing_authority'),
-  status: varchar('status'),
-  createdAt: timestamp('created_at'),
-  updatedAt: timestamp('updated_at'),
-  dateExpiry: date('date_expiry'),
-  documentUrl: text('document_url'),
-  isActive: boolean('is_active'),
-  notes: text('notes'),
-  trainerName: varchar('trainer_name'),
-  trainerSignature: varchar('trainer_signature'),
-  trainingDate: date('training_date'),
-  criticalPointsCompleted: jsonb('critical_points_completed'),
-  completedByUserId: integer('completed_by_user_id'),
-  formCompletedAt: timestamp('form_completed_at'),
-  workInstructionsCompleted: jsonb('work_instructions_completed'),
-  uploadedFiles: jsonb('uploaded_files').default(sql`'[]'::jsonb`),
-});
-
 // Employee Evaluations
 export const evaluations = pgTable('evaluations', {
   id: serial('id').primaryKey(),
@@ -1859,25 +1829,6 @@ export const insertCertificationSchema = createInsertSchema(certifications)
     isActive: z.boolean().default(true),
   });
 
-export const insertEmployeeCertificationSchema = createInsertSchema(
-  employeeCertifications
-)
-  .omit({
-    id: true,
-    createdAt: true,
-    updatedAt: true,
-  })
-  .extend({
-    employeeId: z.number().min(1, 'Employee ID is required'),
-    certificationId: z.number().min(1, 'Certification ID is required'),
-    dateObtained: z.coerce.date(),
-    expiryDate: z.coerce.date().optional().nullable(),
-    certificateNumber: z.string().optional().nullable(),
-    documentUrl: z.string().optional().nullable(),
-    notes: z.string().optional().nullable(),
-    isActive: z.boolean().default(true),
-  });
-
 // Evaluations schemas
 export const insertEvaluationSchema = createInsertSchema(evaluations)
   .omit({
@@ -2393,10 +2344,6 @@ export type UserIntegration = typeof userIntegrations.$inferSelect;
 // New employee-related types
 export type InsertCertification = z.infer<typeof insertCertificationSchema>;
 export type Certification = typeof certifications.$inferSelect;
-export type InsertEmployeeCertification = z.infer<
-  typeof insertEmployeeCertificationSchema
->;
-export type EmployeeCertification = typeof employeeCertifications.$inferSelect;
 export type InsertEvaluation = z.infer<typeof insertEvaluationSchema>;
 export type Evaluation = typeof evaluations.$inferSelect;
 // User session types removed with authentication system

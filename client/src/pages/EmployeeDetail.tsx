@@ -971,7 +971,7 @@ export default function EmployeeDetail() {
         {/* Main Content Tabs */}
         <div className="lg:col-span-2">
           <Tabs defaultValue="details" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-7">
+            <TabsList className="grid w-full grid-cols-8">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="permissions">Permissions</TabsTrigger>
               <TabsTrigger value="certifications">Certifications</TabsTrigger>
@@ -979,6 +979,7 @@ export default function EmployeeDetail() {
               <TabsTrigger value="training">Training</TabsTrigger>
               <TabsTrigger value="documents">Documents</TabsTrigger>
               <TabsTrigger value="badge">Badge</TabsTrigger>
+              <TabsTrigger value="journal">Journal</TabsTrigger>
             </TabsList>
 
             <TabsContent value="details">
@@ -1691,6 +1692,25 @@ export default function EmployeeDetail() {
                     employeeCode={employee.employeeCode}
                     employeeName={employee.name}
                   />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="journal">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Employee Journal</CardTitle>
+                  <CardDescription>
+                    Notes, observations, and records for this employee
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center py-8">
+                    <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">
+                      Journal entries coming soon
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>

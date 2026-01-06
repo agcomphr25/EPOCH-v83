@@ -332,6 +332,7 @@ router.get('/prioritized', async (req: Request, res: Response) => {
         COALESCE(o.priority_score, 9999) as priorityScore,
         o.urgency,
         o.is_manual_urgency as isManualUrgency,
+        o.production_readiness_status as productionReadinessStatus,
         0 as queuePosition,
         o.created_at as createdAt,
         c.name as customerName
@@ -340,6 +341,10 @@ router.get('/prioritized', async (req: Request, res: Response) => {
       WHERE o.current_department = 'P1 Production Queue'
         AND o.status IN ('FINALIZED', 'Active')
         AND (o.is_cancelled IS NULL OR o.is_cancelled = false)
+        AND (
+          o.production_readiness_status = 'ready'
+          OR o.production_readiness_status IS NULL
+        )
         AND o.model_id IS NOT NULL 
         AND o.model_id != '' 
         AND o.model_id != 'None'

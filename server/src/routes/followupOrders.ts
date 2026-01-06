@@ -16,6 +16,29 @@ import { nanoid } from 'nanoid';
 
 const router = express.Router();
 
+// Helper function to evaluate production readiness status
+// Returns: 'ready', 'missing_model', 'missing_action_length', or 'pending'
+// Note: Handles both camelCase (from API) and snake_case (from storage) field names
+function evaluateProductionReadiness(order: any): string {
+  // Handle both camelCase and snake_case field names
+  const modelId = order?.modelId || order?.model_id || order?.stockModelId || order?.stock_model_id;
+  const features = order?.features || {};
+  const actionLength = features?.action_length;
+  
+  // Check for missing or invalid model
+  if (!modelId || modelId === '' || modelId === 'None' || 
+      modelId.toLowerCase() === 'no stock' || modelId.toLowerCase() === 'no_stock') {
+    return 'missing_model';
+  }
+  
+  // Check for missing action_length
+  if (!actionLength || actionLength === '' || actionLength === 'null') {
+    return 'missing_action_length';
+  }
+  
+  return 'ready';
+}
+
 // Ensure uploads directory exists
 const uploadsDir = 'uploads/followup-orders';
 if (!fs.existsSync(uploadsDir)) {
@@ -1044,16 +1067,21 @@ router.post('/:id/sign', async (req, res) => {
       
       console.log(`📊 Calculated priority score for order ${followupOrder.orderId}: ${priorityScore}`);
       
+      // Evaluate production readiness status
+      const productionReadinessStatus = evaluateProductionReadiness(currentOrder);
+      console.log(`📋 Production readiness status for order ${followupOrder.orderId}: ${productionReadinessStatus}`);
+      
       // Update the order status to FINALIZED, set current department, copy signature data, and set priority
       await storage.updateFinalizedOrder(followupOrder.orderId, {
         status: 'FINALIZED',
         currentDepartment: 'P1 Production Queue',
         signatureData,
         signedAt: new Date(),
-        priorityScore
+        priorityScore,
+        productionReadinessStatus
       });
       
-      console.log(`🎯 Order ${followupOrder.orderId} finalized and in production queue with signature (priority: ${priorityScore})`);
+      console.log(`🎯 Order ${followupOrder.orderId} finalized and in production queue with signature (priority: ${priorityScore}, readiness: ${productionReadinessStatus})`);
       
       // Log audit event for customer signature
       try {

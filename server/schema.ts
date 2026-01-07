@@ -246,7 +246,7 @@ export const followupOrders = pgTable('followup_orders', {
   pdfPath: text('pdf_path'),
   pdfGeneratedAt: timestamp('pdf_generated_at'),
   // Signature Tracking
-  signatureToken: text('signature_token').unique(), // Unique token for signature link
+  signatureToken: text('signature_token'), // Unique token for signature link
   signatureSigned: boolean('signature_signed').default(false),
   signatureData: text('signature_data'), // Base64 signature image
   signedAt: timestamp('signed_at'),

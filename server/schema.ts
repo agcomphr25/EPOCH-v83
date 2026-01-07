@@ -73,7 +73,7 @@ export const allOrders = pgTable('all_orders', {
   tikkaOption: text('tikka_option'),
   status: text('status').default('FINALIZED'), // Legacy - will be removed after migration
   statusId: integer('status_id').references(() => orderStatusTypes.id), // New FK reference
-  barcode: text('barcode').unique(), // Code 39 barcode for order identification
+  barcode: text('barcode'), // Code 39 barcode for order identification
   // Department Progression Fields
   currentDepartment: text('current_department').default('P1 Production Queue'), // Default to P1 Production Queue until scheduled
   currentDepartmentId: integer('current_department_id').references(

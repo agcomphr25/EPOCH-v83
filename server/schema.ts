@@ -1088,7 +1088,7 @@ export const users = pgTable('users', {
 // User Sessions Table
 export const userSessions = pgTable('user_sessions', {
   id: serial('id').primaryKey(),
-  sessionToken: text('session_token').notNull().unique(),
+  sessionToken: text('session_token').notNull(),
   userId: integer('user_id')
     .references(() => users.id)
     .notNull(),

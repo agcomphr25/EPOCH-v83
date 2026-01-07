@@ -23,7 +23,7 @@ import { z } from 'zod';
 // Order Department Types Reference Table (separate from order_departments tracking table)
 export const orderDepartmentTypes = pgTable('order_department_types', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull().unique(),
+  name: text('name').notNull(),
   displayName: text('display_name').notNull(),
   sortOrder: integer('sort_order').default(0),
   isActive: boolean('is_active').default(true),

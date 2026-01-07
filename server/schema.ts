@@ -2917,9 +2917,7 @@ export const vendorPOItems = pgTable('vendor_po_items', {
   otherIdentifier: text('other_identifier'), // Optional identifier when no customer PO (internal tracking only)
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, (table) => ({
-  uniquePoLine: unique().on(table.vendorPoId, table.lineNumber),
-}));
+});
 
 // Central Company Settings (singleton table for company-wide information)
 export const companySettings = pgTable('company_settings', {

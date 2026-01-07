@@ -3621,7 +3621,7 @@ export const purchaseOrderItems = pgTable('purchase_order_items', {
 // P2 Customer Management - separate customer database for P2 operations
 export const p2Customers = pgTable('p2_customers', {
   id: integer('id').generatedByDefaultAsIdentity().primaryKey(),
-  customerId: text('customer_id').notNull().unique(),
+  customerId: text('customer_id').notNull(),
   customerName: text('customer_name').notNull(),
   contactEmail: text('contact_email'),
   contactPhone: text('contact_phone'),

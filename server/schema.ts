@@ -5706,7 +5706,7 @@ export type InsertBomLine = z.infer<typeof insertBomLineSchema>;
 // Order ID Reservation System - Eliminates race conditions for concurrent order creation
 export const orderIdReservations = pgTable('order_id_reservations', {
   id: serial('id').primaryKey(),
-  orderId: text('order_id').notNull().unique(), // The reserved Order ID (e.g., AG003)
+  orderId: text('order_id').notNull(), // The reserved Order ID (e.g., AG003)
   yearMonthPrefix: text('year_month_prefix').notNull(), // Year-month prefix (e.g., AG)
   sequenceNumber: integer('sequence_number').notNull(), // Sequential number (e.g., 3 for AG003)
   reservedAt: timestamp('reserved_at').defaultNow().notNull(), // When ID was reserved

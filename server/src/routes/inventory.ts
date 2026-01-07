@@ -11,7 +11,6 @@ import {
   insertVendorPartSchema,
   insertItemGroupSchema,
   insertDepartmentSchema,
-  insertDepartmentConsumptionRateSchema,
   DEPARTMENT_LOCATION_MAP,
   EnrichedInventoryBalance,
   DepartmentBalanceBreakdown,
@@ -870,68 +869,13 @@ router.delete('/departments/:id', async (req: Request, res: Response) => {
   }
 });
 
-// Department Consumption Rates
-router.get('/consumption-rates/part/:agPartNumber', async (req: Request, res: Response) => {
-  try {
-    const agPartNumber = req.params.agPartNumber;
-    const rates = await storage.getConsumptionRatesByPart(agPartNumber);
-    res.json(rates);
-  } catch (error) {
-    console.error('Get consumption rates by part error:', error);
-    res.status(500).json({ error: 'Failed to fetch consumption rates' });
-  }
-});
-
-router.get('/consumption-rates/department/:departmentId', async (req: Request, res: Response) => {
-  try {
-    const departmentId = parseInt(req.params.departmentId);
-    const rates = await storage.getConsumptionRatesByDepartment(departmentId);
-    res.json(rates);
-  } catch (error) {
-    console.error('Get consumption rates by department error:', error);
-    res.status(500).json({ error: 'Failed to fetch consumption rates' });
-  }
-});
-
-router.post('/consumption-rates', async (req: Request, res: Response) => {
-  try {
-    const rateData = insertDepartmentConsumptionRateSchema.parse(req.body);
-    const newRate = await storage.createConsumptionRate(rateData);
-    res.status(201).json(newRate);
-  } catch (error) {
-    console.error('Create consumption rate error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to create consumption rate' });
-  }
-});
-
-router.put('/consumption-rates/:id', async (req: Request, res: Response) => {
-  try {
-    const rateId = parseInt(req.params.id);
-    const updates = insertDepartmentConsumptionRateSchema.partial().parse(req.body);
-    const updatedRate = await storage.updateConsumptionRate(rateId, updates);
-    res.json(updatedRate);
-  } catch (error) {
-    console.error('Update consumption rate error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to update consumption rate' });
-  }
-});
-
-router.delete('/consumption-rates/:id', async (req: Request, res: Response) => {
-  try {
-    const rateId = parseInt(req.params.id);
-    await storage.deleteConsumptionRate(rateId);
-    res.status(204).end();
-  } catch (error) {
-    console.error('Delete consumption rate error:', error);
-    res.status(500).json({ error: 'Failed to delete consumption rate' });
-  }
-});
+// Department Consumption Rates - DISABLED (table removed from production)
+const CONSUMPTION_DISABLED = { error: 'Department consumption rates feature disabled' };
+router.get('/consumption-rates/part/:agPartNumber', (_req: Request, res: Response) => res.status(501).json(CONSUMPTION_DISABLED));
+router.get('/consumption-rates/department/:departmentId', (_req: Request, res: Response) => res.status(501).json(CONSUMPTION_DISABLED));
+router.post('/consumption-rates', (_req: Request, res: Response) => res.status(501).json(CONSUMPTION_DISABLED));
+router.put('/consumption-rates/:id', (_req: Request, res: Response) => res.status(501).json(CONSUMPTION_DISABLED));
+router.delete('/consumption-rates/:id', (_req: Request, res: Response) => res.status(501).json(CONSUMPTION_DISABLED));
 
 // Get inventory items filtered by department
 router.get('/items/department/:departmentName', async (req: Request, res: Response) => {

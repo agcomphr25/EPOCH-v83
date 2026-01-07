@@ -9483,38 +9483,7 @@ export const epochOutreachAttempts = pgTable('epoch_outreach_attempts', {
 export type EpochOutreachAttempt = typeof epochOutreachAttempts.$inferSelect;
 export type InsertEpochOutreachAttempt = typeof epochOutreachAttempts.$inferInsert;
 
-// Timer Programs - Configurable step-based timing programs
-export const programs = pgTable('programs', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(),
-  description: text('description'),
-  steps: jsonb('steps').notNull().default([]), // Array of step definitions
-  isActive: boolean('is_active').default(true).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
 
-export type Program = typeof programs.$inferSelect;
-export type InsertProgram = typeof programs.$inferInsert;
-
-// Timer Program Runs - Active instances of running programs
-export const programRuns = pgTable('program_runs', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  programId: uuid('program_id').references(() => programs.id), // Nullable for external timer entries
-  programName: text('program_name').notNull(),
-  steps: jsonb('steps').notNull().default([]),
-  currentStepIndex: integer('current_step_index').default(0).notNull(),
-  status: text('status').default('running').notNull(), // 'running' | 'paused' | 'completed'
-  instanceName: text('instance_name'),
-  sku: text('sku'),
-  notes: text('notes'),
-  lastUpdated: timestamp('last_updated').defaultNow(),
-  startedAt: timestamp('started_at').defaultNow().notNull(),
-  completedAt: timestamp('completed_at'),
-});
-
-export type ProgramRun = typeof programRuns.$inferSelect;
-export type InsertProgramRun = typeof programRuns.$inferInsert;
 
 // ============================================================
 // FIELD - Calm Thinking Surface (Unstructured, Opaque)

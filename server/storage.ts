@@ -84,7 +84,6 @@ import {
   documentCollectionRelations,
   // New employee management tables
   certifications,
-  employeeCertifications,
   evaluations,
   employeeDocuments,
   employeeAuditLog,
@@ -5104,40 +5103,25 @@ export class DatabaseStorage implements IStorage {
     await db.delete(departments).where(eq(departments.id, id));
   }
 
-  // Department Consumption Rates
-  async getConsumptionRatesByPart(agPartNumber: string): Promise<DepartmentConsumptionRate[]> {
-    return await db
-      .select()
-      .from(departmentConsumptionRates)
-      .where(eq(departmentConsumptionRates.agPartNumber, agPartNumber));
+  // Department Consumption Rates - DISABLED (table removed from production)
+  async getConsumptionRatesByPart(_agPartNumber: string): Promise<DepartmentConsumptionRate[]> {
+    throw new Error("Department consumption rates feature disabled");
   }
 
-  async getConsumptionRatesByDepartment(departmentId: number): Promise<DepartmentConsumptionRate[]> {
-    return await db
-      .select()
-      .from(departmentConsumptionRates)
-      .where(eq(departmentConsumptionRates.departmentId, departmentId));
+  async getConsumptionRatesByDepartment(_departmentId: number): Promise<DepartmentConsumptionRate[]> {
+    throw new Error("Department consumption rates feature disabled");
   }
 
-  async createConsumptionRate(data: InsertDepartmentConsumptionRate): Promise<DepartmentConsumptionRate> {
-    const [rate] = await db
-      .insert(departmentConsumptionRates)
-      .values(data)
-      .returning();
-    return rate;
+  async createConsumptionRate(_data: InsertDepartmentConsumptionRate): Promise<DepartmentConsumptionRate> {
+    throw new Error("Department consumption rates feature disabled");
   }
 
-  async updateConsumptionRate(id: number, data: Partial<InsertDepartmentConsumptionRate>): Promise<DepartmentConsumptionRate> {
-    const [rate] = await db
-      .update(departmentConsumptionRates)
-      .set(data)
-      .where(eq(departmentConsumptionRates.id, id))
-      .returning();
-    return rate;
+  async updateConsumptionRate(_id: number, _data: Partial<InsertDepartmentConsumptionRate>): Promise<DepartmentConsumptionRate> {
+    throw new Error("Department consumption rates feature disabled");
   }
 
-  async deleteConsumptionRate(id: number): Promise<void> {
-    await db.delete(departmentConsumptionRates).where(eq(departmentConsumptionRates.id, id));
+  async deleteConsumptionRate(_id: number): Promise<void> {
+    throw new Error("Department consumption rates feature disabled");
   }
 
   // Department-filtered Inventory
@@ -5595,114 +5579,40 @@ export class DatabaseStorage implements IStorage {
       .where(eq(certifications.id, id));
   }
 
-  // Employee Certifications CRUD
+  // Employee Certifications CRUD - DISABLED (table removed from production)
   async getEmployeeCertifications(
-    employeeId?: number
+    _employeeId?: number
   ): Promise<EmployeeCertification[]> {
-    let query = db
-      .select()
-      .from(employeeCertifications)
-      .where(eq(employeeCertifications.isActive, true));
-
-    if (employeeId) {
-      query = db
-        .select()
-        .from(employeeCertifications)
-        .where(
-          and(
-            eq(employeeCertifications.isActive, true),
-            eq(employeeCertifications.employeeId, employeeId)
-          )
-        );
-    }
-
-    return await query.orderBy(employeeCertifications.dateObtained);
+    throw new Error("Employee certifications feature disabled");
   }
 
   async getEmployeeCertification(
-    id: number
+    _id: number
   ): Promise<EmployeeCertification | undefined> {
-    const [empCert] = await db
-      .select()
-      .from(employeeCertifications)
-      .where(eq(employeeCertifications.id, id));
-    return empCert || undefined;
+    throw new Error("Employee certifications feature disabled");
   }
 
   async createEmployeeCertification(
-    data: InsertEmployeeCertification
+    _data: InsertEmployeeCertification
   ): Promise<EmployeeCertification> {
-    // Convert Date objects to strings for date fields
-    const insertData: any = { ...data };
-    if (insertData.dateObtained instanceof Date) {
-      insertData.dateObtained = insertData.dateObtained
-        .toISOString()
-        .split('T')[0];
-    }
-    if (insertData.expiryDate instanceof Date) {
-      insertData.expiryDate = insertData.expiryDate.toISOString().split('T')[0];
-    }
-
-    const [empCert] = await db
-      .insert(employeeCertifications)
-      .values(insertData)
-      .returning();
-    return empCert;
+    throw new Error("Employee certifications feature disabled");
   }
 
   async updateEmployeeCertification(
-    id: number,
-    data: Partial<InsertEmployeeCertification>
+    _id: number,
+    _data: Partial<InsertEmployeeCertification>
   ): Promise<EmployeeCertification> {
-    // Convert Date objects to strings for date fields
-    const updateData: any = { ...data };
-    if (updateData.dateObtained instanceof Date) {
-      updateData.dateObtained = updateData.dateObtained
-        .toISOString()
-        .split('T')[0];
-    }
-    if (updateData.expiryDate instanceof Date) {
-      updateData.expiryDate = updateData.expiryDate.toISOString().split('T')[0];
-    }
-
-    const [empCert] = await db
-      .update(employeeCertifications)
-      .set({ ...updateData, updatedAt: new Date() })
-      .where(eq(employeeCertifications.id, id))
-      .returning();
-    return empCert;
+    throw new Error("Employee certifications feature disabled");
   }
 
-  async deleteEmployeeCertification(id: number): Promise<void> {
-    await db
-      .update(employeeCertifications)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(employeeCertifications.id, id));
+  async deleteEmployeeCertification(_id: number): Promise<void> {
+    throw new Error("Employee certifications feature disabled");
   }
 
   async getExpiringCertifications(
-    days: number
+    _days: number
   ): Promise<EmployeeCertification[]> {
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + days);
-
-    return await db
-      .select()
-      .from(employeeCertifications)
-      .where(
-        and(
-          eq(employeeCertifications.isActive, true),
-          lte(
-            employeeCertifications.expiryDate,
-            futureDate.toISOString().split('T')[0]
-          ),
-          gte(
-            employeeCertifications.expiryDate,
-            new Date().toISOString().split('T')[0]
-          )
-        )
-      )
-      .orderBy(employeeCertifications.expiryDate);
+    throw new Error("Employee certifications feature disabled");
   }
 
   // Evaluations CRUD

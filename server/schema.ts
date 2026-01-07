@@ -811,10 +811,10 @@ export const punchEvents = pgTable('punch_events', {
 // Enhanced Employee Management System
 export const employees = pgTable('employees', {
   id: serial('id').primaryKey(),
-  employeeCode: text('employee_code').unique(),
+  employeeCode: text('employee_code'), // Constraint exists in production as employees_employee_code_unique
   canonicalId: uuid('canonical_id'), // Link to canonical identity for cross-system deduplication
   name: text('name').notNull(),
-  email: text('email').unique(),
+  email: text('email'),
   phone: text('phone'),
   jobTitle: text('job_title'), // Informational only - e.g., "Department Manager", "HR Specialist"
   userRole: text('user_role').notNull().default('EMPLOYEE'), // ADMIN, EMPLOYEE, OWNER - system access level

@@ -829,7 +829,7 @@ export const employees = pgTable('employees', {
   buildingKeyAccess: boolean('building_key_access').default(false),
   tciAccess: boolean('tci_access').default(false),
   employmentType: text('employment_type').default('FULL_TIME'), // FULL_TIME, PART_TIME, CONTRACT
-  portalToken: text('portal_token').unique(), // UUID for employee portal access
+  portalToken: text('portal_token'), // UUID for employee portal access
   portalTokenExpiry: timestamp('portal_token_expiry'),
   isFinishTechnician: boolean('is_finish_technician').default(false), // Mark employee as Finish technician for department assignments
   isToleranceAuthorizer: boolean('is_tolerance_authorizer').default(false), // Can approve tolerance deviations for P2 orders
